@@ -1,0 +1,180 @@
+﻿<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Qi · 综合数字平台</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 135'%3E%3Crect width='160' height='135' fill='%23232a3a' rx='28'/%3E%3Ccircle cx='61' cy='68' r='30' stroke='%23eef2f7' stroke-width='11' fill='none'/%3E%3Cpath d='M78 84 L92 98' stroke='%23eef2f7' stroke-width='11' stroke-linecap='round'/%3E%3Crect x='106.5' y='61' width='11' height='37' rx='5.5' fill='%23eef2f7'/%3E%3Ccircle cx='112' cy='43' r='9' fill='%234a9bff'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<template id="__bundler_thumbnail">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 135">
+    <rect width="160" height="135" fill="#1a1d2b"/>
+    <ellipse cx="65" cy="68" rx="56" ry="22" transform="rotate(-28 65 68)" stroke="#3a4156" stroke-width="2.5" fill="none"/>
+    <circle cx="61" cy="68" r="30" stroke="#eef2f7" stroke-width="11" fill="none"/>
+    <path d="M78 84 L92 98" stroke="#eef2f7" stroke-width="11" stroke-linecap="round"/>
+    <rect x="106.5" y="61" width="11" height="37" rx="5.5" fill="#eef2f7"/>
+    <circle cx="112" cy="43" r="9" fill="#4a9bff"/>
+  </svg>
+</template>
+<style>
+  :root { --qi-glow: oklch(0.72 0.15 242 / 0.7); --qi-blue: oklch(0.72 0.15 242); }
+  * { box-sizing: border-box; }
+  html, body { width: 100%; min-height: 100%; margin: 0; padding: 0; overflow-x: hidden; }
+  body { min-height: 100vh; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; background: oklch(0.165 0.013 265); }
+
+  .ph {
+    background-image: repeating-linear-gradient(45deg, var(--ph-a, rgba(0,0,0,0.05)) 0, var(--ph-a, rgba(0,0,0,0.05)) 1px, transparent 1px, transparent 9px);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ph-t, rgba(0,0,0,0.35));
+    font-family: "IBM Plex Mono", "Space Mono", monospace;
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  }
+
+  #stage { width: 100%; min-height: 100vh; overflow-x: hidden; }
+  #frame { width: 100%; min-height: 100vh; }
+
+  /* ---- brand motion ---- */
+  @keyframes qiTravel { to { offset-distance: 100%; } }
+  /* the i-dot: travels at constant speed (linear -> no slowdown at the orbit
+     seam), and only truly pauses at the i tittle (offset 50%), where it blinks
+     twice over ~1s before setting off again */
+  @keyframes qiOrbitDot {
+    0%     { offset-distance: 50%; opacity: 1; }
+    42.2%  { offset-distance: 100%; opacity: 1; }  /* half loop -> seam (leftmost) */
+    42.21% { offset-distance: 0%; }                /* seamless jump, same point */
+    84.4%  { offset-distance: 50%; opacity: 1; }   /* full loop done, back at i */
+    /* hold ~1s at i, blink twice */
+    88%    { offset-distance: 50%; opacity: 1; }
+    90.5%  { offset-distance: 50%; opacity: 0.12; }  /* blink 1 off */
+    93%    { offset-distance: 50%; opacity: 1; }     /* blink 1 on */
+    95.5%  { offset-distance: 50%; opacity: 0.12; }  /* blink 2 off */
+    98%    { offset-distance: 50%; opacity: 1; }     /* blink 2 on */
+    100%   { offset-distance: 50%; opacity: 1; }     /* then travels again */
+  }
+  .qi-spark {
+    offset-path: path('M 11.8 68 a 53.2 22 0 1 0 106.4 0 a 53.2 22 0 1 0 -106.4 0');
+    offset-rotate: 0deg;
+    offset-distance: 50%;
+    animation: qiOrbitDot 6.4s linear infinite;
+    filter: drop-shadow(0 0 5px var(--qi-glow));
+  }
+  .qi-hero-spark {
+    offset-path: path('M 50 160 a 330 120 0 1 0 660 0 a 330 120 0 1 0 -660 0');
+    offset-rotate: 0deg;
+    animation: qiTravel 14s linear infinite;
+    filter: drop-shadow(0 0 6px var(--qi-glow));
+    opacity: 0.7;
+  }
+  @keyframes qiPulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.55); opacity: 0.55; }
+  }
+  .qi-pulse { animation: qiPulse 2.4s ease-in-out infinite; }
+  @keyframes qiBreath {
+    0%, 100% { opacity: 0.85; }
+    50% { opacity: 1; }
+  }
+  .qi-breath { animation: qiBreath 6s ease-in-out infinite; }
+
+  /* hover life */
+  .qi-tile { transition: transform .25s ease, border-color .25s ease; }
+  .qi-tile:hover { transform: translateY(-4px); border-color: oklch(0.45 0.08 250) !important; }
+  .qi-arrow { transition: transform .2s ease; }
+  .qi-arrow:hover { transform: translateX(3px); }
+  .qi-pillar { transition: background .3s ease; }
+  .qi-pillar:hover { background: oklch(0.2 0.014 265 / 0.5); }
+
+  /* Product design convergence pass 2026-07-05: visual only */
+  :root {
+    --dq-home-bg: #10131a;
+    --dq-home-panel: rgba(24, 28, 37, 0.82);
+    --dq-home-line: rgba(221, 230, 244, 0.12);
+    --dq-home-line-strong: rgba(221, 230, 244, 0.22);
+    --dq-home-text: #f3f6fb;
+    --dq-home-muted: rgba(226, 232, 242, 0.66);
+  }
+
+  body,
+  body * {
+    letter-spacing: 0 !important;
+  }
+
+  html,
+  body,
+  #stage,
+  #frame {
+    background: var(--dq-home-bg) !important;
+  }
+
+  #stage {
+    background:
+      linear-gradient(180deg, #111821 0%, #10131a 48%, #0f1218 100%) !important;
+  }
+
+  .qi-breath {
+    opacity: 0.42 !important;
+  }
+
+  .qi-hero-orbit {
+    opacity: 0.72 !important;
+  }
+
+  .qi-pillar,
+  .qi-tile {
+    border-radius: 8px !important;
+    border-color: var(--dq-home-line) !important;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.052), rgba(255,255,255,0.020)),
+      var(--dq-home-panel) !important;
+    box-shadow: 0 16px 38px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.045) !important;
+  }
+
+  .qi-pillar:hover,
+  .qi-tile:hover {
+    transform: translateY(-2px);
+    border-color: var(--dq-home-line-strong) !important;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.066), rgba(255,255,255,0.026)),
+      rgba(28, 33, 43, 0.88) !important;
+  }
+
+  .ph {
+    background:
+      linear-gradient(135deg, rgba(74,155,255,0.12), rgba(166,123,255,0.10)),
+      rgba(255,255,255,0.026) !important;
+    color: var(--dq-home-muted) !important;
+    border-bottom: 1px solid var(--dq-home-line);
+  }
+
+  a,
+  button,
+  input {
+    border-radius: 8px !important;
+  }
+
+  button,
+  a {
+    transition: transform .18s ease, border-color .18s ease, background .18s ease, color .18s ease !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .qi-spark, .qi-hero-spark, .qi-pulse, .qi-breath { animation: none; }
+    .qi-spark { offset-distance: 50%; opacity: 1; }   /* rest at the i tittle */
+    .qi-hero-spark { opacity: 0; }                     /* decorative only */
+  }
+</style>
+</head>
+<body>
+<div id="stage"><div id="frame"></div></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="qi-home.compiled.js?v=20260706-chat-board-redesign"></script>
+<script>
+  ReactDOM.createRoot(document.getElementById('frame')).render(React.createElement(window.QiHome));
+</script>
+</body>
+</html>
+
+

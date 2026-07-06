@@ -1,0 +1,16 @@
+dreamerqi.com, www.dreamerqi.com {
+	encode gzip
+	reverse_proxy 127.0.0.1:8765
+}
+
+market.dreamerqi.com {
+	encode gzip
+	@root path /
+	rewrite @root /kpl
+	reverse_proxy 127.0.0.1:8765
+}
+
+stanning.dreamerqi.com, explore.dreamerqi.com {
+	encode gzip
+	reverse_proxy 127.0.0.1:8765
+}

@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Qi · Orbit + i v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: oklch(0.165 0.013 265);
+    --panel: oklch(0.205 0.014 265);
+    --panel2: oklch(0.245 0.015 265);
+    --line: oklch(0.31 0.014 265);
+    --ink: oklch(0.97 0.002 265);
+    --sub: oklch(0.71 0.015 265);
+    --faint: oklch(0.56 0.015 265);
+    --blue: oklch(0.72 0.15 242);
+    --blueSoft: oklch(0.8 0.12 240);
+    --glow: oklch(0.72 0.15 242 / 0.6);
+    --disp: "Space Grotesk", "Helvetica Neue", sans-serif;
+    --mono: "Space Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--disp); }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 72px 56px 96px; }
+
+  .eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--blueSoft); }
+  h1 { font-size: 46px; font-weight: 600; letter-spacing: -0.03em; margin: 16px 0 0; }
+  .lede { font-size: 18px; line-height: 1.6; color: var(--sub); max-width: 640px; margin: 18px 0 0; }
+
+  .sec-label { font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); margin: 64px 0 22px; display: flex; align-items: center; gap: 14px; }
+  .sec-label::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  .hero { background: radial-gradient(ellipse at 38% 45%, oklch(0.72 0.15 242 / 0.1), transparent 65%), var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 52px 56px; display: flex; align-items: center; gap: 56px; margin-top: 36px; }
+  .hero .copy .t { font-family: var(--mono); font-size: 12px; letter-spacing: 0.1em; color: var(--blueSoft); }
+  .hero .copy h2 { font-size: 26px; font-weight: 600; margin: 12px 0 0; letter-spacing: -0.02em; }
+  .hero .copy p { font-size: 15.5px; line-height: 1.65; color: var(--sub); margin: 12px 0 0; max-width: 340px; }
+
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+  .stage { height: 230px; display: flex; align-items: center; justify-content: center; background: radial-gradient(ellipse at 50% 42%, oklch(0.72 0.15 242 / 0.07), transparent 70%), var(--panel2); }
+  .meta { padding: 20px 24px 24px; border-top: 1px solid var(--line); }
+  .meta .n { font-family: var(--mono); font-size: 11px; color: var(--blueSoft); letter-spacing: 0.08em; }
+  .meta .ti { font-size: 19px; font-weight: 600; margin-top: 8px; }
+  .meta .d { font-size: 14px; line-height: 1.55; color: var(--sub); margin-top: 7px; }
+
+  svg .ring { stroke: var(--ink); fill: none; }
+  svg .orbit { stroke: var(--line); fill: none; }
+  svg .stem { fill: var(--ink); }
+  svg .node { fill: var(--blue); }
+  .glowdot { filter: drop-shadow(0 0 6px var(--glow)); }
+  .ghost { fill: var(--blue); opacity: 0.16; }
+
+  /* node traveling the SAME orbit (matches the homepage: constant speed, then
+     pause ~1s at the i tittle and blink twice) */
+  @keyframes travel {
+    0%     { offset-distance: 50%; opacity: 1; }
+    42.2%  { offset-distance: 100%; opacity: 1; }
+    42.21% { offset-distance: 0%; }
+    84.4%  { offset-distance: 50%; opacity: 1; }
+    88%    { offset-distance: 50%; opacity: 1; }
+    90.5%  { offset-distance: 50%; opacity: 0.12; }
+    93%    { offset-distance: 50%; opacity: 1; }
+    95.5%  { offset-distance: 50%; opacity: 0.12; }
+    98%    { offset-distance: 50%; opacity: 1; }
+    100%   { offset-distance: 50%; opacity: 1; }
+  }
+  .anim-node {
+    offset-path: path('M 11.8 68 a 53.2 22 0 1 0 106.4 0 a 53.2 22 0 1 0 -106.4 0');
+    offset-rotate: 0deg;
+    offset-distance: 50%;
+    animation: travel 6.4s linear infinite;
+  }
+
+  .icons { display: flex; gap: 24px; align-items: flex-end; }
+  .appicon { width: 116px; height: 116px; border-radius: 26px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+  .cap { font-family: var(--mono); font-size: 11px; color: var(--faint); text-align: center; margin-top: 14px; }
+  .ai-blue { background: linear-gradient(155deg, oklch(0.62 0.16 250), oklch(0.5 0.16 258)); box-shadow: 0 12px 36px oklch(0.5 0.16 258 / 0.4); }
+  .ai-dark { background: var(--panel2); border: 1px solid var(--line); }
+
+  .footnote { font-family: var(--mono); font-size: 12px; color: var(--faint); margin-top: 30px; line-height: 1.7; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">Brand · Orbit Q + i · v2</div>
+  <h1>i,长在轨道上</h1>
+  <p class="lede">Q 和它的环轨完全保留 —— 只在轨道右上那颗节点下面接一根竖笔,节点就成了 i 的那一点。Q 没动,i 自然站上了轨道。再把"节点绕圈跑"的动效叠进来。</p>
+
+  <!-- HERO: static recommended -->
+  <div class="hero">
+    <svg width="300" height="240" viewBox="0 0 160 135" fill="none">
+      <ellipse class="orbit" cx="65" cy="68" rx="53.2" ry="22" transform="rotate(-28 65 68)" stroke-width="2.5"/>
+      <circle class="ring" cx="61" cy="68" r="30" stroke-width="11"/>
+      <path class="ring" d="M78 84 L92 98" stroke-width="11" stroke-linecap="round"/>
+      <!-- i stem under the node -->
+      <rect class="stem" x="106.5" y="61" width="11" height="37" rx="5.5"/>
+      <!-- node = i dot, sitting on the orbit -->
+      <circle class="node glowdot" cx="112" cy="43" r="9"/>
+    </svg>
+    <div class="copy">
+      <div class="t">推荐主标识 · Static Lockup</div>
+      <h2>Q 不变,i 接上轨道</h2>
+      <p>原来的环轨 Q 一笔未改,节点保留在轨道右上 —— 在它下方加一根竖笔,"i" 就成型了。Q + i 读得清清楚楚。</p>
+    </div>
+  </div>
+
+  <div class="sec-label">静态 vs. 动效 · Two States</div>
+  <div class="grid">
+
+    <!-- static -->
+    <div class="card">
+      <div class="stage">
+        <svg width="260" height="190" viewBox="0 0 160 135" fill="none">
+          <ellipse class="orbit" cx="65" cy="68" rx="53.2" ry="22" transform="rotate(-28 65 68)" stroke-width="2.5"/>
+          <circle class="ring" cx="61" cy="68" r="30" stroke-width="11"/>
+          <path class="ring" d="M78 84 L92 98" stroke-width="11" stroke-linecap="round"/>
+          <rect class="stem" x="106.5" y="61" width="11" height="37" rx="5.5"/>
+          <circle class="node glowdot" cx="112" cy="43" r="9"/>
+        </svg>
+      </div>
+      <div class="meta">
+        <div class="n">A / Static</div>
+        <div class="ti">静态标识</div>
+        <div class="d">成品形态。节点停在 i 的位置,任何场景都稳定读作 Qi。用于导航、名片、印刷。</div>
+      </div>
+    </div>
+
+    <!-- animated -->
+    <div class="card">
+      <div class="stage">
+        <svg width="260" height="190" viewBox="0 0 160 135" fill="none">
+          <ellipse class="orbit" cx="65" cy="68" rx="53.2" ry="22" transform="rotate(-28 65 68)" stroke-width="2.5"/>
+          <circle class="ring" cx="61" cy="68" r="30" stroke-width="11"/>
+          <path class="ring" d="M78 84 L92 98" stroke-width="11" stroke-linecap="round"/>
+          <rect class="stem" x="106.5" y="61" width="11" height="37" rx="5.5"/>
+          <!-- single full-size node travels the orbit and forms the i's dot when it passes -->
+          <g transform="rotate(-28 65 68)">
+            <circle class="node glowdot anim-node" r="9"/>
+          </g>
+        </svg>
+      </div>
+      <div class="meta">
+        <div class="n">B / Motion</div>
+        <div class="ti">动效演示</div>
+        <div class="d">蓝点沿轨道匀速运行,每圈回到 i 正上方就停约 1 秒、闪烁两下,再继续 —— 与主页左上角 logo 完全一致。用于加载、欢迎页、favicon。</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="sec-label">App 图标 & 适配</div>
+  <div class="icons">
+    <div>
+      <div class="appicon ai-blue">
+        <svg width="80" height="68" viewBox="0 0 160 135" fill="none">
+          <ellipse cx="65" cy="68" rx="53.2" ry="22" transform="rotate(-28 65 68)" stroke="rgba(255,255,255,0.45)" stroke-width="3" fill="none"/>
+          <circle cx="61" cy="68" r="30" stroke="#fff" stroke-width="11" fill="none"/>
+          <path d="M78 84 L92 98" stroke="#fff" stroke-width="11" stroke-linecap="round"/>
+          <rect x="106.5" y="61" width="11" height="37" rx="5.5" fill="#fff"/>
+          <circle cx="112" cy="43" r="9" fill="#fff"/>
+        </svg>
+      </div>
+      <div class="cap">蓝底白标</div>
+    </div>
+    <div>
+      <div class="appicon ai-dark">
+        <svg width="80" height="68" viewBox="0 0 160 135" fill="none">
+          <ellipse cx="65" cy="68" rx="53.2" ry="22" transform="rotate(-28 65 68)" stroke="var(--line)" stroke-width="3" fill="none"/>
+          <circle cx="61" cy="68" r="30" stroke="var(--ink)" stroke-width="11" fill="none"/>
+          <path d="M78 84 L92 98" stroke="var(--ink)" stroke-width="11" stroke-linecap="round"/>
+          <rect x="106.5" y="61" width="11" height="37" rx="5.5" fill="var(--ink)"/>
+          <circle cx="112" cy="43" r="9" fill="var(--blue)"/>
+        </svg>
+      </div>
+      <div class="cap">深底蓝点</div>
+    </div>
+    <div>
+      <div class="appicon" style="background:oklch(0.965 0.005 250)">
+        <svg width="80" height="68" viewBox="0 0 160 135" fill="none">
+          <ellipse cx="65" cy="68" rx="53.2" ry="22" transform="rotate(-28 65 68)" stroke="oklch(0.8 0.01 260)" stroke-width="3" fill="none"/>
+          <circle cx="61" cy="68" r="30" stroke="#11141c" stroke-width="11" fill="none"/>
+          <path d="M78 84 L92 98" stroke="#11141c" stroke-width="11" stroke-linecap="round"/>
+          <rect x="106.5" y="61" width="11" height="37" rx="5.5" fill="#11141c"/>
+          <circle cx="112" cy="43" r="9" fill="var(--blue)"/>
+        </svg>
+      </div>
+      <div class="cap">浅底深标</div>
+    </div>
+    <div>
+      <div class="appicon ai-dark" style="background:var(--panel)">
+        <svg width="44" height="44" viewBox="0 0 160 135" fill="none">
+          <circle cx="61" cy="68" r="30" stroke="var(--ink)" stroke-width="11" fill="none"/>
+          <path d="M78 84 L92 98" stroke="var(--ink)" stroke-width="11" stroke-linecap="round"/>
+          <rect x="106.5" y="61" width="11" height="37" rx="5.5" fill="var(--ink)"/>
+          <circle cx="112" cy="43" r="9" fill="var(--blue)"/>
+        </svg>
+      </div>
+      <div class="cap">极小尺寸<br>(去轨道)</div>
+    </div>
+  </div>
+
+  <div class="footnote">
+    字体 Space Grotesk · 主色 电光蓝 oklch(0.72 0.15 242) ≈ #3F9BFF<br>
+    极小尺寸下可省略轨道线,只留 Q + i + 蓝点,保证清晰。确认后我精修弧度并替换进网站导航与页脚。
+  </div>
+</div>
+</body>
+</html>

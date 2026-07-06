@@ -1,0 +1,166 @@
+[
+  {
+    "path": ".gitignore",
+    "bytes": 579
+  },
+  {
+    "path": "CLAUDE.md",
+    "bytes": 3024
+  },
+  {
+    "path": "Caddyfile",
+    "bytes": 277
+  },
+  {
+    "path": "Qi/assets/chatter-cute-preview.png",
+    "bytes": 102915
+  },
+  {
+    "path": "Qi/build-home.js",
+    "bytes": 1110
+  },
+  {
+    "path": "Qi/games/掼蛋.html",
+    "bytes": 87994
+  },
+  {
+    "path": "Qi/index.html",
+    "bytes": 7441
+  },
+  {
+    "path": "Qi/logo.html",
+    "bytes": 11139
+  },
+  {
+    "path": "Qi/qi-home.compiled.js",
+    "bytes": 109914
+  },
+  {
+    "path": "Qi/qi-home.jsx",
+    "bytes": 99614
+  },
+  {
+    "path": "README.md",
+    "bytes": 1987
+  },
+  {
+    "path": "consistency-gate.js",
+    "bytes": 5019
+  },
+  {
+    "path": "docs/CLAUDE_HANDOFF_EN.md",
+    "bytes": 5422
+  },
+  {
+    "path": "docs/EXCLUDED_FILES.md",
+    "bytes": 554
+  },
+  {
+    "path": "docs/FILE_INVENTORY.json",
+    "bytes": 2949
+  },
+  {
+    "path": "docs/PROJECT_HANDOFF.sanitized.md",
+    "bytes": 5918
+  },
+  {
+    "path": "docs/PROJECT_MAP.md",
+    "bytes": 1827
+  },
+  {
+    "path": "docs/SANITIZATION.md",
+    "bytes": 694
+  },
+  {
+    "path": "docs/SECRET_SCAN_REVIEW_REQUIRED.txt",
+    "bytes": 979
+  },
+  {
+    "path": "docs/TOOLS_RUNTIME_NOT_INCLUDED.md",
+    "bytes": 427
+  },
+  {
+    "path": "docs/cloud-change-log-20260705.sanitized.md",
+    "bytes": 23551
+  },
+  {
+    "path": "docs/panda-cloud-ops-2026-06-19.sanitized.md",
+    "bytes": 221138
+  },
+  {
+    "path": "favicon.ico",
+    "bytes": 14670
+  },
+  {
+    "path": "kpl-dashboard_17_apple.html",
+    "bytes": 509919
+  },
+  {
+    "path": "kpl-dashboard_17_apple_hierarchy.html",
+    "bytes": 270652
+  },
+  {
+    "path": "kpl-stats-server.js",
+    "bytes": 910990
+  },
+  {
+    "path": "l2-focus-scanner.js",
+    "bytes": 19755
+  },
+  {
+    "path": "package-lock.json",
+    "bytes": 20158
+  },
+  {
+    "path": "package.json",
+    "bytes": 98
+  },
+  {
+    "path": "panda-admin.html",
+    "bytes": 74105
+  },
+  {
+    "path": "panda-l2-config.example.json",
+    "bytes": 215
+  },
+  {
+    "path": "qmt-order-stats.js",
+    "bytes": 3018
+  },
+  {
+    "path": "site.webmanifest",
+    "bytes": 488
+  },
+  {
+    "path": "strategy-backend.js",
+    "bytes": 22630
+  },
+  {
+    "path": "sub-theme-taxonomy.json",
+    "bytes": 3527
+  },
+  {
+    "path": "theme-taxonomy.json",
+    "bytes": 44332
+  },
+  {
+    "path": "wind-close-db-sync.py",
+    "bytes": 6278
+  },
+  {
+    "path": "winrt-ocr.ps1",
+    "bytes": 2480
+  },
+  {
+    "path": "yule-admin.html",
+    "bytes": 10227
+  },
+  {
+    "path": "yule-server.js",
+    "bytes": 98161
+  },
+  {
+    "path": "yule.html",
+    "bytes": 40253
+  }
+]

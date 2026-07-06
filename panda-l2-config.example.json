@@ -1,0 +1,12 @@
+{
+  "host": "lv2.base32.cn",
+  "port": 1883,
+  "username": "",
+  "password": "",
+  "clientId": "",
+  "batchSize": 50,
+  "scanMs": 45000,
+  "minAmount": 500000,
+  "maxSubscribePerMinute": 3,
+  "cleanSession": true
+}

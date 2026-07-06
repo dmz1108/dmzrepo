@@ -1,0 +1,22 @@
+{
+  "name": "热点dashborad",
+  "short_name": "热点dashborad",
+  "start_url": "./kpl-dashboard_17_apple.html",
+  "display": "standalone",
+  "background_color": "#0f1118",
+  "theme_color": "#0f1118",
+  "icons": [
+    {
+      "src": "./qi-nav-xl-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./qi-nav-xl-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

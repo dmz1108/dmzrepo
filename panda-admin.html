@@ -1,0 +1,1703 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Panda 管理后台</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #1f2026;
+      --panel: rgba(255,255,255,.07);
+      --panel2: rgba(255,255,255,.1);
+      --line: rgba(255,255,255,.14);
+      --text: rgba(247,248,252,.94);
+      --muted: rgba(247,248,252,.62);
+      --blue: #75c7ff;
+      --violet: #8d7cff;
+      --green: #67d78f;
+      --red: #ff3347;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at 20% 10%, rgba(117,199,255,.12), transparent 32%), var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+    }
+    header {
+      height: 88px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 42px;
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(24px);
+    }
+    h1 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: 0; }
+    main { padding: 32px 42px 56px; }
+    .panel {
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,.1), rgba(255,255,255,.045));
+      border-radius: 22px;
+      box-shadow: 0 24px 70px rgba(0,0,0,.22);
+      padding: 24px;
+      margin-bottom: 22px;
+    }
+    .login { max-width: 420px; margin: 70px auto; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+    label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+    input {
+      width: 100%;
+      height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(0,0,0,.22);
+      color: var(--text);
+      padding: 0 13px;
+      outline: none;
+      font: inherit;
+    }
+    select {
+      width: 100%;
+      height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(0,0,0,.22);
+      color: var(--text);
+      padding: 0 13px;
+      outline: none;
+      font: inherit;
+    }
+    button {
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 0 16px;
+      background: rgba(255,255,255,.08);
+      color: var(--text);
+      cursor: pointer;
+      font: inherit;
+      font-weight: 650;
+    }
+    button.primary { border-color: transparent; background: var(--blue); color: #111821; }
+    button.danger { color: var(--red); }
+    button:hover { background: rgba(255,255,255,.13); }
+    button.primary:hover { background: #91d3ff; }
+    button:disabled { opacity: .48; cursor: not-allowed; }
+    .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .status { color: var(--muted); font-size: 14px; }
+    .status.ok { color: var(--green); }
+    .tabs { display: flex; gap: 10px; margin-bottom: 16px; }
+    .tabs button.active { background: var(--panel2); border-color: rgba(117,199,255,.38); color: var(--blue); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,.08); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-size: 12px; font-weight: 650; }
+    .event-filters {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(120px, 1fr));
+      gap: 12px;
+      align-items: end;
+      margin-bottom: 14px;
+    }
+    .event-actions { justify-content: space-between; margin-bottom: 12px; }
+    .event-actions .row { gap: 8px; }
+    .compact-check { width: 16px; height: 16px; accent-color: var(--blue); }
+    .user-filters {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(120px, 1fr));
+      gap: 12px;
+      align-items: end;
+      margin: 0 0 14px;
+    }
+    .pill { display: inline-flex; align-items: center; height: 24px; padding: 0 9px; border-radius: 999px; background: rgba(255,255,255,.08); color: var(--muted); font-size: 12px; }
+    .pill.admin { color: var(--blue); background: rgba(117,199,255,.12); }
+    .pill.success { color: var(--green); background: rgba(103,215,143,.11); }
+    .pill.fail { color: var(--red); background: rgba(255,51,71,.1); }
+    .sync-config {
+      display: grid;
+      grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: end;
+      margin-top: 18px;
+    }
+    .sync-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 20px;
+    }
+    .content-sync-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+    .sync-card {
+      border: 1px solid rgba(255,255,255,.11);
+      background: rgba(255,255,255,.045);
+      border-radius: 18px;
+      padding: 18px;
+    }
+    .sync-card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .sync-title { font-size: 18px; font-weight: 750; margin-bottom: 4px; }
+    .sync-desc { color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .sync-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin: 14px 0;
+    }
+    .sync-metric {
+      min-height: 58px;
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 14px;
+      padding: 9px 10px;
+      background: rgba(0,0,0,.15);
+    }
+    .sync-metric b { display: block; font-size: 16px; margin-bottom: 3px; }
+    .sync-metric span { color: var(--muted); font-size: 12px; }
+    .sync-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+    .sync-status {
+      min-height: 36px;
+      display: flex;
+      align-items: center;
+      padding: 8px 11px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.045);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    .sync-status.ok { color: var(--green); background: rgba(103,215,143,.08); }
+    .sync-status.warn { color: #ffd66b; background: rgba(255,214,107,.08); }
+    .sync-status.fail { color: var(--red); background: rgba(255,51,71,.08); }
+    .source-auth-card {
+      margin-top: 18px;
+      border: 1px solid rgba(255,255,255,.11);
+      background: rgba(255,255,255,.04);
+      border-radius: 18px;
+      padding: 18px;
+    }
+    .source-auth-grid {
+      display: grid;
+      grid-template-columns: 120px minmax(0, 1fr) minmax(0, 1fr) auto auto;
+      gap: 12px;
+      align-items: end;
+      margin-top: 14px;
+    }
+    .smtp-config-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      align-items: end;
+      margin-top: 14px;
+    }
+    .smtp-config-grid .wide { grid-column: span 2; }
+    .smtp-config-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+    .admin-account-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      min-height: 44px;
+      padding: 7px 8px 7px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: oklch(0.205 0.014 265 / 0.72);
+      color: var(--text);
+      box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.08), 0 14px 34px rgba(0,0,0,0.20);
+      backdrop-filter: blur(18px) saturate(150%);
+      -webkit-backdrop-filter: blur(18px) saturate(150%);
+    }
+    .admin-account-pill.is-hidden {
+      display: none;
+    }
+    .account-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      min-width: 0;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 650;
+    }
+    .account-chip-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+      color: #111821;
+      background: linear-gradient(135deg, var(--blue), var(--violet));
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .account-chip-name {
+      max-width: 136px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 650;
+    }
+    .account-chip-role {
+      border: 1px solid rgba(117,199,255,.36);
+      border-radius: 999px;
+      padding: 4px 9px;
+      color: rgba(185,220,255,.94);
+      font-size: 12px;
+      line-height: 1;
+      white-space: nowrap;
+    }
+    .admin-account-pill #logout-btn {
+      height: 30px;
+      padding: 0 11px;
+      border-radius: 999px;
+      border-color: rgba(255,255,255,.12);
+      background: rgba(255,255,255,.045);
+      color: rgba(246,247,251,.78);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+    }
+    .ops-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin: 16px 0 18px;
+    }
+    .ops-summary-card,
+    .ops-check-card,
+    .ops-source-card {
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 16px;
+      background: rgba(255,255,255,.045);
+      padding: 14px;
+    }
+    .ops-summary-card b {
+      display: block;
+      font-size: 24px;
+      margin-bottom: 4px;
+    }
+    .ops-summary-card span,
+    .ops-check-card small,
+    .ops-source-card small {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .ops-check-grid,
+    .ops-source-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+    .ops-check-card strong,
+    .ops-source-card strong {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .ops-log-box {
+      min-height: 220px;
+      max-height: 420px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 16px;
+      background: rgba(0,0,0,.2);
+      color: rgba(247,248,252,.78);
+      padding: 14px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .hidden-board-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .hidden-board-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border: 1px solid rgba(255,255,255,.09);
+      border-radius: 14px;
+      background: rgba(0,0,0,.14);
+      padding: 10px 12px;
+    }
+    .hidden-board-row b { display: block; font-size: 14px; margin-bottom: 2px; }
+    .hidden-board-row small { color: var(--muted); }
+    .hidden { display: none !important; }
+    .muted { color: var(--muted); }
+    @media (max-width: 900px) {
+      header, main { padding-left: 18px; padding-right: 18px; }
+      .grid { grid-template-columns: 1fr; }
+      .sync-grid, .content-sync-grid, .sync-config, .source-auth-grid, .smtp-config-grid, .ops-summary-grid, .ops-check-grid, .ops-source-grid, .hidden-board-list { grid-template-columns: 1fr; }
+      .smtp-config-grid .wide { grid-column: auto; }
+      table { font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Panda 管理后台</h1>
+      <div class="status" id="top-status">检查登录状态...</div>
+    </div>
+    <div class="row">
+      <a href="/"><button type="button">主页</button></a>
+      <a href="/kpl?v=6"><button type="button">返回看盘页</button></a>
+      <div class="admin-account-pill is-hidden" id="admin-account-pill">
+        <span class="account-chip" id="admin-account-chip">未登录</span>
+        <button type="button" id="logout-btn" class="danger hidden">退出</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel login" id="login-panel">
+      <h2>管理员登录</h2>
+      <p class="muted">登录后可以查看用户、登录记录、修改用户密码和查看服务器邮件 outbox。</p>
+      <div style="display:grid;gap:14px;margin-top:20px;">
+        <div>
+          <label>管理员账号</label>
+          <input id="login-username" autocomplete="username">
+        </div>
+        <div>
+          <label>管理员密码</label>
+          <input id="login-password" type="password" autocomplete="current-password">
+        </div>
+        <button class="primary" id="login-btn" type="button">登录后台</button>
+      </div>
+    </section>
+
+    <section id="admin-panel" class="hidden">
+      <div class="panel">
+        <div class="row" style="justify-content:space-between;">
+          <div>
+            <h2 style="margin:0 0 6px;">账户与安全</h2>
+            <div class="muted">登录 IP 和登录时间只保留最近 60 天。密码只保存哈希，不保存明文。</div>
+          </div>
+          <button type="button" id="refresh-btn" class="primary">刷新</button>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button type="button" data-tab="users" class="active">用户</button>
+        <button type="button" data-tab="events">登录记录</button>
+        <button type="button" data-tab="outbox">重置邮件</button>
+        <button type="button" data-tab="sync">同步</button>
+        <button type="button" data-tab="ops">运维中心</button>
+      </div>
+
+      <section class="panel" data-page="users">
+        <div class="panel" style="margin-bottom:18px;background:rgba(255,255,255,.045);box-shadow:none;">
+          <div class="row" style="justify-content:space-between;margin-bottom:16px;">
+            <div>
+              <h3 style="margin:0 0 6px;">新建账户</h3>
+              <div class="muted">管理员可创建普通用户，也可创建同权限管理员。</div>
+            </div>
+            <button type="button" class="primary" id="create-user-btn">创建账户</button>
+          </div>
+          <div class="grid">
+            <div>
+              <label>账号</label>
+              <input id="new-username" autocomplete="off">
+            </div>
+            <div>
+              <label>角色</label>
+              <select id="new-role">
+                <option value="user">普通用户</option>
+                <option value="admin">管理员</option>
+              </select>
+            </div>
+            <div>
+              <label>邮箱</label>
+              <input id="new-email" type="email" autocomplete="off">
+            </div>
+            <div>
+              <label>手机</label>
+              <input id="new-phone" autocomplete="off">
+            </div>
+            <div>
+              <label>初始密码</label>
+              <input id="new-password" type="password" autocomplete="new-password">
+            </div>
+          </div>
+        </div>
+        <div class="user-filters">
+          <div>
+            <label>关键词</label>
+            <input id="user-filter-q" placeholder="账号、邮箱、手机">
+          </div>
+          <div>
+            <label>账号</label>
+            <input id="user-filter-username" placeholder="账号">
+          </div>
+          <div>
+            <label>角色</label>
+            <select id="user-filter-role">
+              <option value="">全部</option>
+              <option value="admin">管理员</option>
+              <option value="user">普通用户</option>
+            </select>
+          </div>
+          <div>
+            <label>联系方式</label>
+            <input id="user-filter-contact" placeholder="邮箱或手机">
+          </div>
+          <button type="button" class="primary" id="user-filter-apply-btn">搜索</button>
+          <button type="button" id="user-filter-reset-btn">重置</button>
+        </div>
+        <div class="status" id="users-summary" style="margin-bottom:12px;">正在读取用户...</div>
+        <div style="overflow:auto;">
+          <table>
+            <thead><tr><th>账号</th><th>角色</th><th>邮箱</th><th>手机</th><th>创建时间</th><th>最后登录</th><th>操作</th></tr></thead>
+            <tbody id="users-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel hidden" data-page="events">
+        <div class="event-filters">
+          <div>
+            <label>关键词</label>
+            <input id="event-filter-q" placeholder="账号、IP、原因、设备">
+          </div>
+          <div>
+            <label>账号</label>
+            <input id="event-filter-username" placeholder="账号">
+          </div>
+          <div>
+            <label>类型</label>
+            <select id="event-filter-type">
+              <option value="">全部</option>
+              <option value="admin-login">管理员登录</option>
+              <option value="login">用户登录</option>
+              <option value="register-code">注册验证码</option>
+              <option value="register">注册</option>
+              <option value="password-reset">密码重置</option>
+            </select>
+          </div>
+          <div>
+            <label>结果</label>
+            <select id="event-filter-success">
+              <option value="">全部</option>
+              <option value="true">成功</option>
+              <option value="false">失败</option>
+            </select>
+          </div>
+          <div>
+            <label>IP</label>
+            <input id="event-filter-ip" placeholder="IP">
+          </div>
+          <div>
+            <label>起始日期</label>
+            <input id="event-filter-from" type="date">
+          </div>
+          <div>
+            <label>结束日期</label>
+            <input id="event-filter-to" type="date">
+          </div>
+          <button type="button" class="primary" id="event-filter-apply-btn">筛选</button>
+          <button type="button" id="event-filter-reset-btn">重置</button>
+        </div>
+        <div class="row event-actions">
+          <div class="status" id="events-summary">正在读取登录记录...</div>
+          <div class="row">
+            <button type="button" id="events-clear-selected-btn">清空选中</button>
+            <button type="button" class="danger" id="events-clear-filtered-btn">清空筛选结果</button>
+            <button type="button" class="danger" id="events-clear-all-btn">清空全部</button>
+          </div>
+        </div>
+        <div style="overflow:auto;">
+          <table>
+            <thead><tr><th><input class="compact-check" id="events-select-all" type="checkbox" title="全选当前记录"></th><th>时间</th><th>账号</th><th>类型</th><th>结果</th><th>IP</th><th>设备</th><th>原因</th></tr></thead>
+            <tbody id="events-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel hidden" data-page="outbox">
+        <p class="muted">这里保留服务器端验证码邮件发送失败时的排查记录。公网注册和忘记密码必须配置真实 SMTP 后才能发送验证码。</p>
+        <div style="overflow:auto;">
+          <table>
+            <thead><tr><th>时间</th><th>收件人</th><th>标题</th><th>内容预览</th><th>服务器文件</th></tr></thead>
+            <tbody id="outbox-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel hidden" data-page="sync">
+        <div class="source-auth-card" style="margin-top:0;margin-bottom:18px;">
+          <div class="sync-card-head" style="margin-bottom:0;">
+            <div>
+              <div class="sync-title">内容同步</div>
+              <div class="sync-desc">手动刷新站内内容。娱乐会在后台重新采集当天热点；探索会重新整理当天城市新店和好去处。这里不影响前端/数据库/后端程序文件同步。</div>
+            </div>
+            <span class="pill success">内容更新</span>
+          </div>
+          <div class="content-sync-grid">
+            <article class="sync-card">
+              <div class="sync-card-head">
+                <div>
+                  <div class="sync-title">娱乐内容</div>
+                  <div class="sync-desc">刷新追星、影视综艺、音乐、时尚等娱乐栏目，后台采集完成后前台自动读取新内容。</div>
+                </div>
+                <span class="pill" id="content-sync-yule-pill">读取中</span>
+              </div>
+              <div class="sync-status" id="content-sync-yule-status">正在读取娱乐内容状态...</div>
+              <div class="sync-actions">
+                <button type="button" class="primary" id="content-sync-yule-btn">同步娱乐</button>
+              </div>
+            </article>
+            <article class="sync-card">
+              <div class="sync-card-head">
+                <div>
+                  <div class="sync-title">探索内容</div>
+                  <div class="sync-desc">刷新城市探索数据，按城市和细分栏目重新整理具体店铺、地点和活动内容。</div>
+                </div>
+                <span class="pill" id="content-sync-discovery-pill">读取中</span>
+              </div>
+              <div class="sync-status" id="content-sync-discovery-status">正在读取探索内容状态...</div>
+              <div class="sync-actions">
+                <button type="button" class="primary" id="content-sync-discovery-btn">同步探索</button>
+              </div>
+            </article>
+          </div>
+        </div>
+        <div class="row" style="justify-content:space-between;align-items:flex-start;">
+          <div>
+            <h2 style="margin:0 0 6px;">本机与云端同步</h2>
+            <div class="muted">前端网页、后台数据库、后端程序分开同步。每次从对端覆盖当前机器前，系统会自动备份一次，可回退到当前机器上一次覆盖前版本。</div>
+          </div>
+          <button type="button" class="primary" id="site-sync-refresh-btn">刷新状态</button>
+        </div>
+        <div class="sync-config">
+          <div>
+            <label>云端服务地址</label>
+            <input id="site-sync-remote-url" placeholder="例如：https://your-domain.com">
+          </div>
+          <div>
+            <label>同步密钥</label>
+            <input id="site-sync-token" type="password" placeholder="留空则保留原密钥">
+          </div>
+          <button type="button" class="primary" id="site-sync-save-btn">保存配置</button>
+        </div>
+        <p class="muted" id="site-sync-config-note" style="margin:12px 0 0;">正在读取同步配置...</p>
+        <div class="source-auth-card">
+          <div class="sync-card-head" style="margin-bottom:0;">
+            <div>
+              <div class="sync-title">服务重启</div>
+              <div class="sync-desc">后端程序同步后需要重启服务才会运行新代码。本机按钮重启当前打开的这台机器，云端按钮重启同步配置里的云端服务。</div>
+            </div>
+            <span class="pill success">手动确认</span>
+          </div>
+          <div class="sync-actions">
+            <button type="button" class="primary" id="service-restart-local-btn">重启本机服务</button>
+            <button type="button" id="service-restart-remote-btn">重启云端服务</button>
+          </div>
+          <p class="muted" id="service-restart-note" style="margin:12px 0 0;">同步后如提示需要重启，可在这里执行。重启期间页面可能短暂无法访问。</p>
+        </div>
+        <div class="source-auth-card">
+          <div class="sync-card-head" style="margin-bottom:0;">
+            <div>
+              <div class="sync-title">验证码发信邮箱</div>
+              <div class="sync-desc">用于发送注册验证码和忘记密码验证码。邮箱密码/授权码只保存在当前机器，不参与前端、数据库或后端程序同步。</div>
+            </div>
+            <span class="pill" id="smtp-config-pill">读取中</span>
+          </div>
+          <div class="smtp-config-grid">
+            <div class="wide">
+              <label>SMTP 服务器</label>
+              <input id="smtp-host" placeholder="例如 smtp.qq.com">
+            </div>
+            <div>
+              <label>端口</label>
+              <input id="smtp-port" type="number" value="465">
+            </div>
+            <div>
+              <label>安全连接</label>
+              <select id="smtp-secure">
+                <option value="1">SSL/TLS</option>
+                <option value="0">STARTTLS/普通端口</option>
+              </select>
+            </div>
+            <div class="wide">
+              <label>SMTP 用户名</label>
+              <input id="smtp-user" autocomplete="off" placeholder="通常是完整邮箱">
+            </div>
+            <div class="wide">
+              <label>邮箱授权码/密码</label>
+              <input id="smtp-password" type="password" autocomplete="new-password" placeholder="留空则保留原密码">
+            </div>
+            <div class="wide">
+              <label>发件人地址</label>
+              <input id="smtp-from" autocomplete="off" placeholder="例如 name@example.com">
+            </div>
+            <div class="wide">
+              <label>测试收件邮箱</label>
+              <input id="smtp-test-to" type="email" autocomplete="off" placeholder="保存并测试时发送到这里">
+            </div>
+          </div>
+          <div class="smtp-config-actions">
+            <button type="button" class="primary" id="smtp-save-btn">保存配置</button>
+            <button type="button" id="smtp-test-btn">保存并发送测试邮件</button>
+            <button type="button" id="smtp-refresh-btn">刷新</button>
+          </div>
+          <p class="muted" id="smtp-config-note" style="margin:12px 0 0;">正在读取发信邮箱配置...</p>
+        </div>
+        <div class="source-auth-card">
+          <div class="sync-card-head" style="margin-bottom:0;">
+            <div>
+              <div class="sync-title">韭研账号自动登录</div>
+              <div class="sync-desc">用于 Cookie 失效时自动重新登录韭研公社，并继续收取韭研涨停简图数据。账号密码只保存在当前云服务器，不参与前端或数据库同步。</div>
+            </div>
+            <span class="pill" id="jyg-auth-pill">读取中</span>
+          </div>
+          <div class="source-auth-grid">
+            <div>
+              <label>区号</label>
+              <input id="jyg-auth-country" value="+86" autocomplete="off">
+            </div>
+            <div>
+              <label>韭研手机号</label>
+              <input id="jyg-auth-phone" autocomplete="off" placeholder="请输入韭研手机号">
+            </div>
+            <div>
+              <label>韭研密码</label>
+              <input id="jyg-auth-password" type="password" autocomplete="new-password" placeholder="留空则保留原密码">
+            </div>
+            <button type="button" class="primary" id="jyg-auth-save-btn">保存并测试</button>
+            <button type="button" id="jyg-auth-refresh-btn">刷新</button>
+          </div>
+          <p class="muted" id="jyg-auth-note" style="margin:12px 0 0;">正在读取韭研自动登录配置...</p>
+        </div>
+        <div class="sync-grid" id="site-sync-grid"></div>
+      </section>
+
+      <section class="panel hidden" data-page="ops">
+        <div class="row" style="justify-content:space-between;align-items:flex-start;">
+          <div>
+            <h2 style="margin:0 0 6px;">云端运维中心</h2>
+            <div class="muted">集中查看云端配置、数据源健康、永久隐藏板块、回退状态和每日交接日志。这里不显示任何密钥、密码或 Cookie 明文。</div>
+          </div>
+          <div class="row">
+            <button type="button" class="primary" id="ops-refresh-btn">刷新运维状态</button>
+            <button type="button" id="ops-cleanup-btn">执行30日清理</button>
+          </div>
+        </div>
+
+        <div class="ops-summary-grid" id="ops-summary-grid"></div>
+        <div class="ops-check-grid" id="ops-check-grid"></div>
+
+        <div class="source-auth-card">
+          <div class="sync-card-head" style="margin-bottom:0;">
+            <div>
+              <div class="sync-title">涨停复盘数据源健康</div>
+              <div class="sync-desc">检查最近 30 个交易日的复盘啦、韭研、选股宝、淘股吧底层库和综合主因库是否缺失。同步按钮会优先补缺失来源，再生成综合主因库。</div>
+            </div>
+            <span class="pill" id="ops-review-health-pill">读取中</span>
+          </div>
+          <div class="sync-actions">
+            <button type="button" class="primary" id="ops-review-sync-btn">补齐30个交易日</button>
+            <button type="button" id="ops-review-health-btn">刷新数据源健康</button>
+          </div>
+          <div class="ops-source-grid" id="ops-review-source-grid"></div>
+        </div>
+
+        <div class="source-auth-card">
+          <div class="sync-card-head" style="margin-bottom:0;">
+            <div>
+              <div class="sync-title">永久隐藏板块</div>
+              <div class="sync-desc">从行情页“已删除卡片”里永久删除的板块会进入这里。恢复后，下一次刷新看板和策略时可以重新出现。</div>
+            </div>
+            <span class="pill" id="ops-hidden-pill">读取中</span>
+          </div>
+          <div class="hidden-board-list" id="ops-hidden-list"></div>
+        </div>
+
+        <div class="source-auth-card">
+          <div class="sync-card-head" style="margin-bottom:0;">
+            <div>
+              <div class="sync-title">云端交接日志</div>
+              <div class="sync-desc">每天在云服务器上的重要改动会写在这里，公司主机和家里主机都应优先查看这份记录。</div>
+            </div>
+            <button type="button" id="ops-log-refresh-btn">刷新日志</button>
+          </div>
+          <pre class="ops-log-box" id="ops-log-box">正在读取交接日志...</pre>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const TOKEN_KEY = 'panda_admin_token_v1';
+    const $ = id => document.getElementById(id);
+    let token = localStorage.getItem(TOKEN_KEY) || '';
+    let siteSyncStatus = null;
+
+    function headers() {
+      return token ? { 'x-admin-token': token } : {};
+    }
+
+    async function api(path, options = {}) {
+      const res = await fetch(path, {
+        cache: 'no-store',
+        ...options,
+        headers: { ...(options.headers || {}), ...headers() },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      return data;
+    }
+
+    function setLoggedIn(isAdmin, username = '') {
+      $('login-panel').classList.toggle('hidden', isAdmin);
+      $('admin-panel').classList.toggle('hidden', !isAdmin);
+      $('logout-btn').classList.toggle('hidden', !isAdmin);
+      $('admin-account-pill').classList.toggle('is-hidden', !isAdmin);
+      $('top-status').textContent = isAdmin ? `管理员 ${username} 已登录` : '未登录管理员';
+      $('top-status').classList.toggle('ok', isAdmin);
+      if (isAdmin) {
+        const cleanName = username || '账户';
+        const avatarText = String(cleanName).slice(0, 1).toUpperCase();
+        $('admin-account-chip').innerHTML = `
+          <span class="account-chip-avatar">${escapeHtml(avatarText)}</span>
+          <span class="account-chip-name">${escapeHtml(cleanName)}</span>
+          <span class="account-chip-role">管理员</span>
+        `;
+      } else {
+        $('admin-account-chip').textContent = '未登录';
+      }
+      $('admin-account-chip').classList.toggle('ok', isAdmin);
+    }
+
+    async function checkStatus() {
+      if (!token) return setLoggedIn(false);
+      try {
+        const data = await api('/api/admin/status');
+        if (!data.admin) throw new Error('not admin');
+        setLoggedIn(true, data.username || '');
+        await refreshAll();
+      } catch {
+        localStorage.removeItem(TOKEN_KEY);
+        token = '';
+        setLoggedIn(false);
+      }
+    }
+
+    async function login() {
+      const username = $('login-username').value.trim();
+      const password = $('login-password').value.trim();
+      if (!username || !password) return alert('请输入账号和密码');
+      const data = await api('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      token = data.token;
+      localStorage.setItem(TOKEN_KEY, token);
+      $('login-password').value = '';
+      setLoggedIn(true, data.username || username);
+      await refreshAll();
+    }
+
+    function currentUserFilters() {
+      return {
+        q: $('user-filter-q').value.trim(),
+        username: $('user-filter-username').value.trim(),
+        role: $('user-filter-role').value,
+        contact: $('user-filter-contact').value.trim(),
+      };
+    }
+
+    function hasUserFilters(filters = currentUserFilters()) {
+      return Object.values(filters).some(Boolean);
+    }
+
+    function userQuery(filters = currentUserFilters()) {
+      const params = new URLSearchParams();
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value) params.set(key, value);
+      });
+      return params.toString();
+    }
+
+    async function refreshUsers() {
+      const query = userQuery();
+      const data = await api(`/api/auth/admin/users${query ? `?${query}` : ''}`);
+      const users = data.users || [];
+      $('users-summary').textContent = hasUserFilters()
+        ? `匹配 ${data.matched || 0} / 共 ${data.total || 0} 个用户`
+        : `共 ${data.total || 0} 个用户`;
+      $('users-body').innerHTML = users.map(user => `
+        <tr${user.disabled ? ' style="opacity:0.5;"' : ''}>
+          <td>${escapeHtml(user.username)}${user.disabled ? ' <span class="pill fail">已禁用</span>' : ''}</td>
+          <td><span class="pill ${user.role === 'admin' ? 'admin' : ''}">${escapeHtml(user.role)}</span></td>
+          <td>${escapeHtml(user.email || '')}</td>
+          <td>${escapeHtml(user.phone || '')}</td>
+          <td>${formatTime(user.createdAt)}</td>
+          <td>${formatTime(user.lastLoginAt)}</td>
+          <td>
+            <button type="button" onclick="changePassword('${user.id}', '${escapeAttr(user.username)}')">修改密码</button>
+            <button type="button" onclick="toggleUserDisabled('${user.id}', '${escapeAttr(user.username)}', ${user.disabled ? 'false' : 'true'})">${user.disabled ? '启用' : '禁用'}</button>
+            <button type="button" onclick="deleteUser('${user.id}', '${escapeAttr(user.username)}')">删除</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function toggleUserDisabled(id, username, disabled) {
+      const action = disabled ? '禁用' : '启用';
+      if (!confirm(`确定${action}用户「${username}」？${disabled ? '禁用后该用户将无法登录。' : ''}`)) return;
+      try {
+        await api('/api/auth/admin/user-disable', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: id, disabled }),
+        });
+        await refreshUsers();
+      } catch (e) { alert(`${action}失败：${e.message || e}`); }
+    }
+
+    async function deleteUser(id, username) {
+      if (!confirm(`确定删除用户「${username}」？此操作不可恢复。`)) return;
+      try {
+        await api('/api/auth/admin/delete-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: id }),
+        });
+        await refreshUsers();
+      } catch (e) { alert(`删除失败：${e.message || e}`); }
+    }
+
+    function currentEventFilters() {
+      return {
+        q: $('event-filter-q').value.trim(),
+        username: $('event-filter-username').value.trim(),
+        type: $('event-filter-type').value,
+        success: $('event-filter-success').value,
+        ip: $('event-filter-ip').value.trim(),
+        from: $('event-filter-from').value,
+        to: $('event-filter-to').value,
+      };
+    }
+
+    function hasEventFilters(filters = currentEventFilters()) {
+      return Object.values(filters).some(Boolean);
+    }
+
+    function eventQuery(filters = currentEventFilters()) {
+      const params = new URLSearchParams({ limit: '500' });
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value) params.set(key, value);
+      });
+      return params.toString();
+    }
+
+    async function refreshEvents() {
+      const data = await api(`/api/auth/admin/login-events?${eventQuery()}`);
+      const events = data.events || [];
+      const summary = hasEventFilters()
+        ? `匹配 ${data.matched || 0} / 共 ${data.total || 0} 条，当前显示 ${events.length} 条`
+        : `共 ${data.total || 0} 条，当前显示 ${events.length} 条`;
+      $('events-summary').textContent = summary;
+      $('events-select-all').checked = false;
+      $('events-body').innerHTML = events.map(event => `
+        <tr>
+          <td><input class="compact-check event-check" type="checkbox" value="${escapeAttr(event.id || '')}"></td>
+          <td>${formatTime(event.at)}</td>
+          <td>${escapeHtml(event.username || '')}</td>
+          <td>${escapeHtml(event.type || '')}</td>
+          <td><span class="pill ${event.success ? 'success' : 'fail'}">${event.success ? '成功' : '失败'}</span></td>
+          <td>${escapeHtml(event.ip || '')}</td>
+          <td>${escapeHtml(event.userAgent || '')}</td>
+          <td>${escapeHtml(event.reason || '')}</td>
+        </tr>
+      `).join('');
+    }
+
+    function selectedEventIds() {
+      return [...document.querySelectorAll('.event-check:checked')].map(input => input.value).filter(Boolean);
+    }
+
+    async function clearLoginEvents(mode) {
+      const ids = mode === 'selected' ? selectedEventIds() : [];
+      if (mode === 'selected' && !ids.length) return alert('请先勾选要清空的登录记录');
+      const filters = mode === 'filtered' ? currentEventFilters() : {};
+      if (mode === 'filtered' && !hasEventFilters(filters)) {
+        return alert('当前没有筛选条件。如需清空全部，请点“清空全部”。');
+      }
+      const text = mode === 'selected'
+        ? `确定清空选中的 ${ids.length} 条登录记录？`
+        : (mode === 'filtered' ? '确定清空当前筛选结果里的登录记录？' : '确定清空全部登录记录？');
+      if (!confirm(text)) return;
+      const data = await api('/api/auth/admin/login-events', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(mode === 'selected' ? { ids } : { filters }),
+      });
+      alert(`已清空 ${data.deleted || 0} 条登录记录`);
+      await refreshEvents();
+    }
+
+    async function refreshOutbox() {
+      const data = await api('/api/auth/admin/mail-outbox?limit=100');
+      $('outbox-body').innerHTML = (data.outbox || []).map(mail => `
+        <tr>
+          <td>${formatTime(mail.createdAt)}</td>
+          <td>${escapeHtml(mail.to || '')}</td>
+          <td>${escapeHtml(mail.subject || '')}</td>
+          <td style="white-space:pre-wrap;">${escapeHtml(mail.text || '')}</td>
+          <td>${escapeHtml(mail.file || '')}</td>
+        </tr>
+      `).join('');
+    }
+
+    function renderSmtpConfig(data = {}) {
+      const smtp = data.smtp || data || {};
+      const pill = $('smtp-config-pill');
+      const note = $('smtp-config-note');
+      if ($('smtp-host') && smtp.host && !$('smtp-host').value) $('smtp-host').value = smtp.host;
+      if ($('smtp-port') && smtp.port) $('smtp-port').value = smtp.port;
+      if ($('smtp-secure')) $('smtp-secure').value = smtp.secure ? '1' : '0';
+      if ($('smtp-user') && smtp.user && !$('smtp-user').value) $('smtp-user').value = smtp.user;
+      if ($('smtp-from') && smtp.from && !$('smtp-from').value) $('smtp-from').value = smtp.from;
+      if (pill) {
+        pill.textContent = smtp.configured ? '已配置' : '未配置';
+        pill.className = `pill ${smtp.configured ? 'success' : 'fail'}`;
+      }
+      if (note) {
+        const parts = [];
+        parts.push(smtp.configured ? `已保存：${smtp.host}:${smtp.port || ''}` : '尚未保存验证码发信邮箱');
+        if (smtp.from) parts.push(`发件人：${smtp.from}`);
+        if (smtp.user) parts.push(`用户名：${smtp.user}`);
+        parts.push(smtp.hasPassword ? '授权码：已保存' : '授权码：未保存');
+        if (smtp.savedAt) parts.push(`更新时间：${formatTime(smtp.savedAt)}`);
+        note.textContent = parts.join('；');
+        note.style.color = smtp.configured ? 'var(--green)' : '#ffd66b';
+      }
+    }
+
+    async function refreshSmtpConfig() {
+      const data = await api('/api/auth/admin/smtp-config');
+      renderSmtpConfig(data);
+    }
+
+    async function saveSmtpConfig(testSend = false) {
+      const host = $('smtp-host').value.trim();
+      const port = Number($('smtp-port').value || 465);
+      const secure = $('smtp-secure').value === '1';
+      const user = $('smtp-user').value.trim();
+      const password = $('smtp-password').value;
+      const from = $('smtp-from').value.trim();
+      const testTo = $('smtp-test-to').value.trim();
+      if (!host) return alert('请输入 SMTP 服务器');
+      if (!from) return alert('请输入发件人地址');
+      if (testSend && !testTo) return alert('请输入测试收件邮箱');
+      const btn = testSend ? $('smtp-test-btn') : $('smtp-save-btn');
+      const oldText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = testSend ? '测试中...' : '保存中...';
+      try {
+        const data = await api('/api/auth/admin/smtp-config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ host, port, secure, starttls: !secure, user, password, from, testTo, testSend }),
+        });
+        $('smtp-password').value = '';
+        renderSmtpConfig(data);
+        if (testSend) {
+          alert(data.test?.delivery === 'smtp' ? '测试邮件发送成功' : `配置已保存，但测试失败：${data.test?.error || '未知原因'}`);
+        } else {
+          alert('发信邮箱配置已保存');
+        }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = oldText;
+      }
+    }
+
+    const SITE_SYNC_SCOPES = {
+      frontend: {
+        title: '前端网页',
+        desc: '主页、行情页、管理后台、图标和静态页面资源；新增页面和常见前端资源会自动纳入同步。',
+      },
+      database: {
+        title: '后台数据库',
+        desc: '涨停库、主因库、收盘价库、概念库、快照和业务配置；新增业务数据目录会自动纳入，不包含云服务器启动、SSH、日志、账号密码、Cookie、API Key 等专用配置。',
+      },
+      backend: {
+        title: '后端程序',
+        desc: '后端服务代码、采集脚本和规则逻辑，例如 kpl-stats-server.js；不包含同步密钥、管理员账号、Cookie、API Key、SSH、防火墙、计划任务等机器专用配置。',
+      },
+    };
+
+    function formatBytes(bytes) {
+      const n = Number(bytes || 0);
+      if (n >= 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
+      if (n >= 1024) return `${(n / 1024).toFixed(1)} KB`;
+      return `${n} B`;
+    }
+
+    function formatSyncDirection(value) {
+      const map = {
+        push: '本机到云端',
+        pull: '云端到本机',
+        receive: '接收覆盖',
+        rollback: '已回退',
+      };
+      return map[value] || value || '暂无';
+    }
+
+    function renderSiteSyncStatus(data) {
+      siteSyncStatus = data || {};
+      const remoteInput = $('site-sync-remote-url');
+      if (remoteInput && !remoteInput.value) remoteInput.value = siteSyncStatus.remoteBaseUrl || '';
+      const note = $('site-sync-config-note');
+      if (note) {
+        note.textContent = siteSyncStatus.configured
+          ? `云端已配置：${siteSyncStatus.remoteBaseUrl}`
+          : `云端未配置完整。请填写云端服务地址和同步密钥后再同步。配置文件：${siteSyncStatus.configPath || ''}`;
+        note.style.color = siteSyncStatus.configured ? 'var(--green)' : '#ffd66b';
+      }
+      const scopes = siteSyncStatus.scopes || {};
+      $('site-sync-grid').innerHTML = Object.entries(SITE_SYNC_SCOPES).map(([scope, meta]) => {
+        const item = scopes[scope] || {};
+        const local = item.local || {};
+        const last = item.last || {};
+        const rollback = item.rollback || null;
+        const lastState = last.status === 'ok' ? 'ok' : (last.status === 'blocked' ? 'warn' : '');
+        const lastMode = last.mode === 'incremental' ? '增量' : (last.mode ? last.mode : '整包');
+        const changedText = Number.isFinite(Number(last.changedFiles))
+          ? ` · 变更 ${Number(last.changedFiles)} 个`
+          : '';
+        const bytesText = Number(last.totalBytes || 0) > 0
+          ? ` · ${formatBytes(last.totalBytes)}`
+          : '';
+        const lastText = last.updatedAt
+          ? `${lastMode} · ${formatSyncDirection(last.direction)} · ${formatTime(last.updatedAt)}${changedText}${bytesText} · ${escapeHtml(last.message || '')}`
+          : '暂无同步记录';
+        const rollbackText = rollback
+          ? `可回退：${formatTime(rollback.createdAt)} · ${rollback.fileCount || 0} 个文件`
+          : '暂无可回退版本';
+        const syncDisabled = siteSyncStatus.configured ? '' : 'disabled';
+        const rollbackDisabled = rollback ? '' : 'disabled';
+        return `
+          <article class="sync-card" data-sync-scope="${scope}">
+            <div class="sync-card-head">
+              <div>
+                <div class="sync-title">${escapeHtml(meta.title)}</div>
+                <div class="sync-desc">${escapeHtml(meta.desc)}</div>
+              </div>
+              <span class="pill ${siteSyncStatus.configured ? 'success' : 'fail'}">${siteSyncStatus.configured ? '可同步' : '未配置'}</span>
+            </div>
+            <div class="sync-metrics">
+              <div class="sync-metric"><b>${Number(local.fileCount || 0)}</b><span>本机文件</span></div>
+              <div class="sync-metric"><b>${formatBytes(local.totalBytes)}</b><span>本机大小</span></div>
+              <div class="sync-metric"><b>${Number((local.skipped || []).length)}</b><span>跳过文件</span></div>
+            </div>
+            <div class="sync-status ${lastState}" id="site-sync-status-${scope}">${escapeHtml(lastText)}</div>
+            <div class="sync-status ${rollback ? 'warn' : ''}" style="margin-top:8px;">${escapeHtml(rollbackText)}</div>
+            <div class="sync-actions">
+              <button type="button" class="primary" ${syncDisabled} onclick="runSiteSync('${scope}', 'push')">同步到云端</button>
+              <button type="button" ${syncDisabled} onclick="runSiteSync('${scope}', 'pull')">从云端同步回来</button>
+              <button type="button" class="danger" ${rollbackDisabled} onclick="rollbackSiteSync('${scope}')">回退上一次</button>
+            </div>
+          </article>
+        `;
+      }).join('');
+    }
+
+    async function refreshSiteSync() {
+      const data = await api('/api/site-sync/status');
+      renderSiteSyncStatus(data);
+    }
+
+    function setContentSyncStatus(kind, text, state = '') {
+      const status = $(`content-sync-${kind}-status`);
+      const pill = $(`content-sync-${kind}-pill`);
+      if (status) {
+        status.textContent = text || '等待同步';
+        status.className = `sync-status ${state || ''}`.trim();
+      }
+      if (pill && state) {
+        pill.className = `pill ${state === 'ok' ? 'success' : (state === 'fail' ? 'fail' : '')}`.trim();
+        pill.textContent = state === 'ok' ? '正常' : (state === 'fail' ? '异常' : '同步中');
+      }
+    }
+
+    async function refreshContentSyncStatus() {
+      const data = await api('/api/admin/content-sync/status');
+      const yule = data.yule || {};
+      const discovery = data.discovery || {};
+      setContentSyncStatus(
+        'yule',
+        yule.ok
+          ? `当前娱乐内容 ${Number(yule.items || 0)} 条${yule.state?.lastRunAt ? ` · 最近采集 ${formatTime(yule.state.lastRunAt)}` : ''}`
+          : `娱乐服务状态读取失败：${yule.error || '未知原因'}`,
+        yule.ok ? 'ok' : 'fail'
+      );
+      setContentSyncStatus(
+        'discovery',
+        `当前探索内容 ${Number(discovery.itemCount || 0)} 条${discovery.generatedAt ? ` · 最近整理 ${formatTime(discovery.generatedAt)}` : ''}`,
+        discovery.syncState?.running ? 'warn' : (discovery.status === 'ready' ? 'ok' : 'warn')
+      );
+    }
+
+    async function runContentSync(kind) {
+      const isYule = kind === 'yule';
+      const label = isYule ? '娱乐' : '探索';
+      if (!confirm(`确定现在同步${label}当天内容吗？系统会在后台更新，完成后前台会读取新内容。`)) return;
+      const btn = $(`content-sync-${kind}-btn`);
+      const oldText = btn?.textContent || '';
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '同步中...';
+      }
+      setContentSyncStatus(kind, `${label}内容同步已提交，后台正在更新...`, 'warn');
+      try {
+        await api(`/api/admin/content-sync/${isYule ? 'yule' : 'discovery'}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason: 'admin-manual' }),
+        });
+        setContentSyncStatus(kind, `${label}同步已开始。稍等片刻刷新状态即可看到新内容数量。`, 'ok');
+        setTimeout(() => refreshContentSyncStatus().catch(() => {}), isYule ? 3500 : 8000);
+      } catch (err) {
+        setContentSyncStatus(kind, `${label}同步失败：${err.message}`, 'fail');
+        throw err;
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = oldText;
+        }
+      }
+    }
+
+    async function saveSiteSyncConfig() {
+      const remoteBaseUrl = $('site-sync-remote-url').value.trim();
+      const syncToken = $('site-sync-token').value.trim();
+      const data = await api('/api/site-sync/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ remoteBaseUrl, syncToken }),
+      });
+      $('site-sync-token').value = '';
+      renderSiteSyncStatus({ ...(siteSyncStatus || {}), ...data });
+      await refreshSiteSync();
+      alert('同步配置已保存');
+    }
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    function setServiceRestartNote(text, state = '') {
+      const note = $('service-restart-note');
+      if (!note) return;
+      note.textContent = text;
+      note.style.color = state === 'ok'
+        ? 'var(--green)'
+        : (state === 'error' ? 'var(--red)' : '#ffd66b');
+    }
+
+    async function waitForServiceHealth(baseUrl = '', timeoutMs = 30000) {
+      const started = Date.now();
+      await sleep(2500);
+      while (Date.now() - started < timeoutMs) {
+        try {
+          const base = String(baseUrl || '').replace(/\/+$/, '');
+          const res = await fetch(`${base}/health?_=${Date.now()}`, { cache: 'no-store' });
+          if (res.ok) return true;
+        } catch (err) {
+          // Service can be unavailable for a few seconds while restarting.
+        }
+        await sleep(1200);
+      }
+      return false;
+    }
+
+    async function restartService(target, options = {}) {
+      const isRemote = target === 'remote';
+      const label = isRemote ? '云端服务' : '本机服务';
+      if (!options.skipConfirm && !confirm(`确定要重启${label}吗？重启期间页面可能短暂无法访问。`)) return false;
+      const btn = $(isRemote ? 'service-restart-remote-btn' : 'service-restart-local-btn');
+      const oldText = btn?.textContent || '';
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '重启中...';
+      }
+      setServiceRestartNote(`${label}重启请求已发送，正在等待恢复...`, 'running');
+      try {
+        if (isRemote) {
+          await api('/api/site-sync/restart-remote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: 'admin manual restart' }),
+          });
+          const ok = await waitForServiceHealth(siteSyncStatus?.remoteBaseUrl || $('site-sync-remote-url')?.value || '', 35000);
+          setServiceRestartNote(ok ? '云端服务已恢复。' : '云端服务已发送重启请求，但健康检查超时，请稍后手动刷新确认。', ok ? 'ok' : 'error');
+          if (!options.silent) alert(ok ? '云端服务已重启并恢复' : '云端服务重启请求已发送，但暂未确认恢复');
+          return ok;
+        }
+        await api('/api/service/restart', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason: 'admin manual restart' }),
+        });
+        const ok = await waitForServiceHealth('', 35000);
+        setServiceRestartNote(ok ? '本机服务已恢复。' : '本机服务已发送重启请求，但健康检查超时，请稍后手动刷新确认。', ok ? 'ok' : 'error');
+        if (!options.silent) alert(ok ? '本机服务已重启并恢复' : '本机服务重启请求已发送，但暂未确认恢复');
+        return ok;
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = oldText;
+        }
+      }
+    }
+
+    function renderJygAuthConfig(data = {}) {
+      const pill = $('jyg-auth-pill');
+      const note = $('jyg-auth-note');
+      const country = $('jyg-auth-country');
+      const phone = $('jyg-auth-phone');
+      if (country && data.countryCode) country.value = data.countryCode;
+      if (phone && data.phone && !phone.value) phone.placeholder = data.phone;
+      if (pill) {
+        pill.textContent = data.configured ? '已配置' : '未配置';
+        pill.className = `pill ${data.configured ? 'success' : 'fail'}`;
+      }
+      if (note) {
+        const parts = [];
+        parts.push(data.configured ? `已保存：${data.phone || '已脱敏账号'}` : '尚未保存韭研账号密码');
+        if (data.cookieConfigured) parts.push(`Cookie：已保存${data.cookieSavedAt ? `，${formatTime(data.cookieSavedAt)}` : ''}`);
+        else parts.push('Cookie：未保存或已失效');
+        if (data.lastLoginAt) parts.push(`最近自动登录：${formatTime(data.lastLoginAt)}`);
+        note.textContent = parts.join('；');
+        note.style.color = data.configured ? 'var(--green)' : '#ffd66b';
+      }
+    }
+
+    async function refreshJygAuthConfig() {
+      const data = await api('/api/jiuyangongshe-auth/credentials');
+      renderJygAuthConfig(data);
+    }
+
+    async function saveJygAuthConfig() {
+      const countryCode = $('jyg-auth-country').value.trim() || '+86';
+      const phone = $('jyg-auth-phone').value.trim();
+      const password = $('jyg-auth-password').value;
+      if (!phone) return alert('请输入韭研手机号');
+      const btn = $('jyg-auth-save-btn');
+      const oldText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '测试中...';
+      try {
+        const data = await api('/api/jiuyangongshe-auth/credentials?test=1', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ countryCode, phone, password, testLogin: true }),
+        });
+        $('jyg-auth-password').value = '';
+        renderJygAuthConfig(data);
+        alert(data.status?.ok ? '韭研账号已保存，自动登录测试成功' : `韭研账号已保存，但测试未通过：${data.status?.message || '未知原因'}`);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = oldText;
+      }
+    }
+
+    async function runSiteSync(scope, direction) {
+      const meta = SITE_SYNC_SCOPES[scope] || { title: scope };
+      const isPull = direction === 'pull';
+      const message = isPull
+        ? `将用云端的「${meta.title}」同步回本机。系统会按小批次处理并自动备份，本机可回退上一次版本。是否继续？`
+        : `将用本机的「${meta.title}」同步到云端。系统会按小批次处理并自动备份，云端可回退上一次版本。是否继续？`;
+      if (!confirm(message)) return;
+      const statusEl = $(`site-sync-status-${scope}`);
+      const maxBytes = scope === 'database' ? 4 * 1024 * 1024 : 16 * 1024 * 1024;
+      let restartRequired = false;
+      let totalProcessed = 0;
+      let totalBytes = 0;
+      let guard = 0;
+      if (statusEl) {
+        statusEl.textContent = isPull ? '正在从云端同步回来...' : '正在同步到云端...';
+        statusEl.className = 'sync-status warn';
+      }
+      try {
+        while (guard < 200) {
+          guard += 1;
+          const result = await api('/api/site-sync/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ scope, direction, maxBatches: 1, maxBytes }),
+          });
+          restartRequired = restartRequired || !!(result.restartRequired || result.applied?.restartRequired || result.remote?.restartRequired);
+          totalProcessed += Number(result.processed || result.applied || result.sent || 0);
+          totalBytes += Number(result.totalBytes || result.bytes || 0);
+          const remaining = Number(result.remaining || 0);
+          if (statusEl) {
+            statusEl.textContent = remaining > 0
+              ? `同步中：本批 ${Number(result.processed || 0)} 个，剩余 ${remaining} 个，已处理 ${totalProcessed} 个`
+              : `同步完成：已处理 ${totalProcessed} 个，${formatBytes(totalBytes)}`;
+            statusEl.className = remaining > 0 ? 'sync-status warn' : 'sync-status ok';
+          }
+          if (!remaining) break;
+        }
+        if (guard >= 200) throw new Error('同步批次数过多，已自动停止，请刷新状态后继续');
+        await refreshSiteSync();
+        if (restartRequired) {
+          const restartTarget = isPull ? 'local' : 'remote';
+          const restartLabel = isPull ? '本机服务' : '云端服务';
+          if (confirm(`同步完成。后端程序文件已更新，需要重启${restartLabel}后新逻辑才会生效。是否现在重启？`)) {
+            await restartService(restartTarget, { skipConfirm: true, silent: true });
+            alert(`${restartLabel}重启请求已处理`);
+          } else {
+            alert(`同步完成。请稍后在“服务重启”区域手动重启${restartLabel}。`);
+          }
+        } else {
+          alert('同步完成');
+        }
+      } catch (err) {
+        if (statusEl) {
+          statusEl.textContent = `同步失败：${err.message}`;
+          statusEl.className = 'sync-status fail';
+        }
+        throw err;
+      }
+    }
+
+    async function rollbackSiteSync(scope) {
+      const meta = SITE_SYNC_SCOPES[scope] || { title: scope };
+      if (!confirm(`将把本机「${meta.title}」回退到上一次被覆盖前的版本。是否继续？`)) return;
+      const statusEl = $(`site-sync-status-${scope}`);
+      if (statusEl) {
+        statusEl.textContent = '正在回退...';
+        statusEl.className = 'sync-status warn';
+      }
+      try {
+        await api('/api/site-sync/rollback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scope }),
+        });
+        await refreshSiteSync();
+        alert('回退完成');
+      } catch (err) {
+        if (statusEl) {
+          statusEl.textContent = `回退失败：${err.message}`;
+          statusEl.className = 'sync-status fail';
+        }
+        throw err;
+      }
+    }
+
+    function pillClassForState(state) {
+      if (state === 'ok') return 'success';
+      if (state === 'error') return 'fail';
+      return '';
+    }
+
+    function stateText(state) {
+      if (state === 'ok') return '正常';
+      if (state === 'error') return '异常';
+      return '需确认';
+    }
+
+    function renderOpsHealth(data = {}) {
+      const summary = data.summary || {};
+      const state = data.state || 'warn';
+      const node = data.node || {};
+      $('ops-summary-grid').innerHTML = `
+        <div class="ops-summary-card"><b>${escapeHtml(stateText(state))}</b><span>整体状态 · ${formatTime(data.checkedAt)}</span></div>
+        <div class="ops-summary-card"><b>${Number(summary.ok || 0)}</b><span>正常检查项</span></div>
+        <div class="ops-summary-card"><b>${Number(summary.warn || 0)}</b><span>需要确认</span></div>
+        <div class="ops-summary-card"><b>${Number(summary.error || 0)}</b><span>异常检查项 · 端口 ${escapeHtml(node.port || '')}</span></div>
+      `;
+      const checks = Array.isArray(data.checks) ? data.checks : [];
+      $('ops-check-grid').innerHTML = checks.map(item => `
+        <article class="ops-check-card">
+          <strong>
+            <span>${escapeHtml(item.label || item.key || '--')}</span>
+            <span class="pill ${pillClassForState(item.state)}">${escapeHtml(stateText(item.state))}</span>
+          </strong>
+          <small>${escapeHtml(item.message || '')}</small>
+        </article>
+      `).join('') || '<div class="status">暂无运维检查结果</div>';
+    }
+
+    async function refreshOpsHealth() {
+      const data = await api('/api/admin/cloud-health');
+      renderOpsHealth(data);
+      return data;
+    }
+
+    function renderOpsReviewHealth(data = {}) {
+      const rows = Array.isArray(data.rows) ? [...data.rows] : [];
+      const pill = $('ops-review-health-pill');
+      if (pill) {
+        const pending = Number(data.pending || rows.filter(row => row.needsSync).length);
+        pill.textContent = pending ? `待补齐 ${pending}` : '已完整';
+        pill.className = `pill ${pending ? '' : 'success'}`;
+      }
+      const latestRows = rows.sort((a, b) => String(b.day).localeCompare(String(a.day)));
+      $('ops-review-source-grid').innerHTML = latestRows.map(row => {
+        const sourceText = (row.sourceArtifactStats || []).map(source => {
+          const label = source.label || source.group || '--';
+          const value = source.ok ? Number(source.count || 0) : '缺';
+          return `${label}:${value}`;
+        }).join('，');
+        const missing = Array.isArray(row.missingSourceLabels) && row.missingSourceLabels.length
+          ? `缺：${row.missingSourceLabels.join('、')}`
+          : '';
+        const status = row.error ? 'error' : (row.needsSync ? 'warn' : 'ok');
+        return `
+          <article class="ops-source-card">
+            <strong>
+              <span>${escapeHtml(row.day || '--')}</span>
+              <span class="pill ${pillClassForState(status)}">${escapeHtml(row.error ? '异常' : (row.needsSync ? '待补齐' : '完整'))}</span>
+            </strong>
+            <small>涨停 ${Number(row.limitUpCount || 0)} · 主因 ${Number(row.mainReasonCount || 0)}${missing ? ` · ${escapeHtml(missing)}` : ''}</small><br>
+            <small>${escapeHtml(sourceText || row.skipReason || row.error || '暂无来源状态')}</small>
+          </article>
+        `;
+      }).join('') || '<div class="status">暂无数据源健康记录</div>';
+    }
+
+    async function refreshOpsReviewHealth() {
+      const data = await api('/api/admin/review-source-health?days=30');
+      renderOpsReviewHealth(data);
+      return data;
+    }
+
+    async function runOpsReviewSync() {
+      if (!confirm('将检查并补齐最近 30 个交易日的来源底层库，再重建缺失的综合主因库。已有完整日期不会强制重做。是否继续？')) return;
+      const btn = $('ops-review-sync-btn');
+      const oldText = btn?.textContent || '';
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '补齐中...';
+      }
+      try {
+        const data = await api('/api/limit-up-main-reason-db/sync?mode=missing&days=30', {
+          method: 'GET',
+        });
+        await refreshOpsReviewHealth();
+        alert(`完成：扫描 ${data.scanned || 0} 个交易日，同步 ${data.synced || 0}，待补齐 ${data.pending || 0}`);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = oldText;
+        }
+      }
+    }
+
+    function renderOpsHiddenBoards(data = {}) {
+      const boards = data.boards || {};
+      const rows = Object.entries(boards).flatMap(([zsType, items]) => (Array.isArray(items) ? items : []).map(item => ({
+        ...item,
+        zsType,
+      })));
+      const pill = $('ops-hidden-pill');
+      if (pill) {
+        pill.textContent = `${rows.length} 个`;
+        pill.className = 'pill success';
+      }
+      $('ops-hidden-list').innerHTML = rows.map(item => `
+        <div class="hidden-board-row">
+          <div>
+            <b>${escapeHtml(item.name || item.plateId || '--')}</b>
+            <small>${escapeHtml(item.plateId || '')} · 来源 ${escapeHtml(item.zsType || '')}${item.permanentAt ? ` · ${formatTime(item.permanentAt)}` : ''}</small>
+          </div>
+          <button type="button" onclick="restorePermanentHiddenBoard('${escapeAttr(item.plateId)}', '${escapeAttr(item.zsType)}')">恢复</button>
+        </div>
+      `).join('') || '<div class="status">暂无永久隐藏板块</div>';
+    }
+
+    async function refreshOpsHiddenBoards() {
+      const data = await api('/api/permanent-hidden-boards');
+      renderOpsHiddenBoards(data);
+      return data;
+    }
+
+    async function restorePermanentHiddenBoard(plateId, zsType) {
+      if (!confirm(`确定恢复板块 ${plateId}？恢复后刷新行情页即可重新参与看板和策略筛选。`)) return;
+      await api('/api/permanent-hidden-board/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plateId, zsType }),
+      });
+      await refreshOpsHiddenBoards();
+      alert('已恢复');
+    }
+
+    async function refreshOpsLog() {
+      const data = await api('/api/admin/ops-log?lines=180');
+      $('ops-log-box').textContent = data.exists ? (data.text || '') : '未找到云端交接日志文件';
+      return data;
+    }
+
+    async function runOpsCleanup() {
+      if (!confirm('将按最近 30 个交易日保留规则清理过期本地数据。是否继续？')) return;
+      const btn = $('ops-cleanup-btn');
+      const oldText = btn?.textContent || '';
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '清理中...';
+      }
+      try {
+        const data = await api('/api/cleanup-local-data?retention_days=30&cache_retention_days=30');
+        await refreshOpsHealth();
+        alert(`清理完成：检查 ${data.checked || 0}，删除 ${data.deleted || 0}`);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = oldText;
+        }
+      }
+    }
+
+    async function refreshOpsCenter() {
+      await Promise.all([
+        refreshOpsHealth(),
+        refreshOpsReviewHealth(),
+        refreshOpsHiddenBoards(),
+        refreshOpsLog(),
+      ]);
+    }
+
+    async function refreshAll() {
+      const tasks = [refreshUsers(), refreshEvents(), refreshOutbox(), refreshContentSyncStatus(), refreshSiteSync(), refreshSmtpConfig(), refreshJygAuthConfig()];
+      const opsPage = document.querySelector('[data-page="ops"]');
+      if (opsPage && !opsPage.classList.contains('hidden')) tasks.push(refreshOpsCenter());
+      await Promise.all(tasks);
+    }
+
+    async function createUser() {
+      const payload = {
+        username: $('new-username').value.trim(),
+        role: $('new-role').value,
+        email: $('new-email').value.trim(),
+        phone: $('new-phone').value.trim(),
+        password: $('new-password').value,
+      };
+      if (!payload.username || !payload.password) return alert('请输入账号和初始密码');
+      await api('/api/auth/admin/create-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      ['new-username', 'new-email', 'new-phone', 'new-password'].forEach(id => $(id).value = '');
+      $('new-role').value = 'user';
+      alert('账户已创建');
+      await refreshUsers();
+    }
+
+    async function changePassword(userId, username) {
+      const newPassword = prompt(`输入 ${username} 的新密码，至少 8 位`);
+      if (!newPassword) return;
+      await api('/api/auth/admin/user-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, newPassword }),
+      });
+      alert('密码已修改');
+      await refreshUsers();
+    }
+
+    function formatTime(value) {
+      if (!value) return '';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value;
+      return date.toLocaleString('zh-CN', { hour12: false });
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    }
+    function escapeAttr(value) {
+      return escapeHtml(value).replace(/`/g, '&#96;');
+    }
+
+    document.querySelectorAll('.tabs button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tabs button').forEach(item => item.classList.toggle('active', item === btn));
+        document.querySelectorAll('[data-page]').forEach(page => page.classList.toggle('hidden', page.dataset.page !== btn.dataset.tab));
+        if (btn.dataset.tab === 'ops') refreshOpsCenter().catch(err => alert(err.message));
+        if (btn.dataset.tab === 'sync') refreshContentSyncStatus().catch(err => alert(err.message));
+      });
+    });
+    $('login-btn').addEventListener('click', () => login().catch(err => alert(err.message)));
+    $('refresh-btn').addEventListener('click', () => refreshAll().catch(err => alert(err.message)));
+    $('create-user-btn').addEventListener('click', () => createUser().catch(err => alert(err.message)));
+    $('user-filter-apply-btn').addEventListener('click', () => refreshUsers().catch(err => alert(err.message)));
+    $('user-filter-reset-btn').addEventListener('click', () => {
+      ['user-filter-q', 'user-filter-username', 'user-filter-contact'].forEach(id => $(id).value = '');
+      $('user-filter-role').value = '';
+      refreshUsers().catch(err => alert(err.message));
+    });
+    $('event-filter-apply-btn').addEventListener('click', () => refreshEvents().catch(err => alert(err.message)));
+    $('event-filter-reset-btn').addEventListener('click', () => {
+      ['event-filter-q', 'event-filter-username', 'event-filter-ip', 'event-filter-from', 'event-filter-to'].forEach(id => $(id).value = '');
+      $('event-filter-type').value = '';
+      $('event-filter-success').value = '';
+      refreshEvents().catch(err => alert(err.message));
+    });
+    $('events-select-all').addEventListener('change', event => {
+      document.querySelectorAll('.event-check').forEach(input => {
+        input.checked = event.target.checked;
+      });
+    });
+    $('events-clear-selected-btn').addEventListener('click', () => clearLoginEvents('selected').catch(err => alert(err.message)));
+    $('events-clear-filtered-btn').addEventListener('click', () => clearLoginEvents('filtered').catch(err => alert(err.message)));
+    $('events-clear-all-btn').addEventListener('click', () => clearLoginEvents('all').catch(err => alert(err.message)));
+    $('content-sync-yule-btn').addEventListener('click', () => runContentSync('yule').catch(err => alert(err.message)));
+    $('content-sync-discovery-btn').addEventListener('click', () => runContentSync('discovery').catch(err => alert(err.message)));
+    $('site-sync-refresh-btn').addEventListener('click', () => refreshSiteSync().catch(err => alert(err.message)));
+    $('site-sync-save-btn').addEventListener('click', () => saveSiteSyncConfig().catch(err => alert(err.message)));
+    $('service-restart-local-btn').addEventListener('click', () => restartService('local').catch(err => alert(err.message)));
+    $('service-restart-remote-btn').addEventListener('click', () => restartService('remote').catch(err => alert(err.message)));
+    $('smtp-refresh-btn').addEventListener('click', () => refreshSmtpConfig().catch(err => alert(err.message)));
+    $('smtp-save-btn').addEventListener('click', () => saveSmtpConfig(false).catch(err => alert(err.message)));
+    $('smtp-test-btn').addEventListener('click', () => saveSmtpConfig(true).catch(err => alert(err.message)));
+    $('jyg-auth-refresh-btn').addEventListener('click', () => refreshJygAuthConfig().catch(err => alert(err.message)));
+    $('jyg-auth-save-btn').addEventListener('click', () => saveJygAuthConfig().catch(err => alert(err.message)));
+    $('ops-refresh-btn').addEventListener('click', () => refreshOpsCenter().catch(err => alert(err.message)));
+    $('ops-cleanup-btn').addEventListener('click', () => runOpsCleanup().catch(err => alert(err.message)));
+    $('ops-review-health-btn').addEventListener('click', () => refreshOpsReviewHealth().catch(err => alert(err.message)));
+    $('ops-review-sync-btn').addEventListener('click', () => runOpsReviewSync().catch(err => alert(err.message)));
+    $('ops-log-refresh-btn').addEventListener('click', () => refreshOpsLog().catch(err => alert(err.message)));
+    $('logout-btn').addEventListener('click', () => {
+      localStorage.removeItem(TOKEN_KEY);
+      token = '';
+      setLoggedIn(false);
+    });
+    checkStatus();
+  </script>
+</body>
+</html>

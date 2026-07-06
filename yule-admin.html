@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>娱乐后台 · Qi</title>
+<style>
+  :root{
+    --bg:oklch(0.165 0.013 265);--panel:oklch(0.205 0.014 265);--panel2:oklch(0.245 0.015 265);
+    --ink:oklch(0.97 0.002 265);--sub:oklch(0.71 0.015 265);--faint:oklch(0.56 0.015 265);
+    --line:oklch(0.31 0.014 265);--blue:oklch(0.72 0.15 242);--red:oklch(0.66 0.18 25);
+    --green:oklch(0.74 0.12 158);--mono:"Space Mono",ui-monospace,monospace;--sans:"Helvetica Neue",Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font-family:var(--sans)}
+  a{color:inherit;text-decoration:none}
+  .top{height:64px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:18px;padding:0 clamp(16px,4vw,40px);position:sticky;top:0;background:oklch(0.165 0.013 265 / .94);backdrop-filter:blur(14px);z-index:10}
+  .brand{font-size:20px;font-weight:700}
+  .top a{font-size:14px;color:var(--sub)}
+  .top a:hover{color:var(--ink)}
+  .shell{display:grid;grid-template-columns:minmax(320px,420px) minmax(0,1fr);gap:18px;padding:20px clamp(16px,4vw,40px) 40px}
+  .panel{border:1px solid var(--line);background:var(--panel);border-radius:8px;min-width:0}
+  .list-panel{height:calc(100vh - 104px);overflow:hidden;display:flex;flex-direction:column}
+  .toolbar{padding:14px;border-bottom:1px solid var(--line);display:grid;gap:10px}
+  .toolbar-row{display:flex;gap:8px;align-items:center}
+  input,select,textarea{width:100%;border:1px solid var(--line);background:oklch(0.18 0.012 265);color:var(--ink);border-radius:6px;padding:10px 11px;font:14px var(--sans);outline:none}
+  textarea{min-height:150px;resize:vertical;line-height:1.65}
+  input:focus,select:focus,textarea:focus{border-color:oklch(0.72 0.15 242 / .65)}
+  button{border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:6px;padding:9px 12px;font-weight:650;cursor:pointer}
+  button.primary{background:var(--blue);border-color:transparent;color:var(--bg)}
+  button.danger{color:var(--red)}
+  button:hover{filter:brightness(1.08)}
+  .items{overflow:auto;padding:8px}
+  .row{display:grid;grid-template-columns:74px minmax(0,1fr);gap:10px;padding:9px;border:1px solid transparent;border-radius:8px;cursor:pointer}
+  .row:hover,.row.active{background:oklch(0.245 0.015 265 / .74);border-color:var(--line)}
+  .thumb{width:74px;aspect-ratio:1.2/1;object-fit:cover;border-radius:6px;background:var(--panel2)}
+  .row-title{font-size:14px;line-height:1.38;font-weight:650;color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .row-meta{font:11px var(--mono);color:var(--faint);margin-top:7px;display:flex;gap:8px;flex-wrap:wrap}
+  .status{color:var(--green)}
+  .status.hidden{color:var(--red)}
+  .editor{padding:18px;display:grid;gap:14px}
+  .editor-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;border-bottom:1px solid var(--line);padding-bottom:14px}
+  h1{font-size:22px;line-height:1.25;margin:0}
+  .muted{color:var(--faint);font:12px var(--mono)}
+  .fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .field{display:grid;gap:7px}
+  label{font-size:12px;color:var(--faint);font-family:var(--mono)}
+  .full{grid-column:1/-1}
+  .source-box{border:1px solid var(--line);border-radius:8px;padding:12px;background:oklch(0.18 0.012 265)}
+  .source-box a{color:var(--blue);word-break:break-all;font-size:13px}
+  .actions{display:flex;gap:10px;flex-wrap:wrap}
+  .empty{padding:28px;color:var(--faint);text-align:center}
+  @media(max-width:900px){.shell{grid-template-columns:1fr}.list-panel{height:420px}.fields{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="brand">Qi 娱乐后台</div>
+  <a href="/yule">前台娱乐页</a>
+  <a href="/">首页</a>
+</div>
+<main class="shell">
+  <section class="panel list-panel">
+    <div class="toolbar">
+      <div class="toolbar-row">
+        <input id="q" placeholder="搜索标题、正文、来源">
+        <select id="status">
+          <option value="all">全部</option>
+          <option value="visible">前台可见</option>
+          <option value="hidden">已隐藏</option>
+        </select>
+      </div>
+      <select id="cat"></select>
+    </div>
+    <div class="items" id="items"><div class="empty">加载中…</div></div>
+  </section>
+  <section class="panel">
+    <div class="editor" id="editor"><div class="empty">请选择一条内容</div></div>
+  </section>
+</main>
+<script>
+const API = '/api/yule/admin';
+let items = [];
+let categories = [];
+let selectedId = '';
+const $ = id => document.getElementById(id);
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+async function json(url, opts){
+  const res = await fetch(url, Object.assign({ cache:'no-store' }, opts||{}));
+  const data = await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+function catLabel(key){
+  const c = categories.find(x=>x.key===key);
+  return c ? `${c.emoji||''} ${c.label}` : key;
+}
+function filteredItems(){
+  const q = $('q').value.trim().toLowerCase();
+  const cat = $('cat').value;
+  const status = $('status').value;
+  return items.filter(it=>{
+    if(cat !== 'all' && it.category !== cat) return false;
+    if(status === 'visible' && it.hidden) return false;
+    if(status === 'hidden' && !it.hidden) return false;
+    if(!q) return true;
+    return [it.title,it.summary,it.body,it.source,it.sourceUrl].some(v=>String(v||'').toLowerCase().includes(q));
+  });
+}
+function renderList(){
+  const arr = filteredItems();
+  $('items').innerHTML = arr.length ? arr.map(it=>`<div class="row ${it.id===selectedId?'active':''}" data-id="${esc(it.id)}">
+    <img class="thumb" src="${esc(it.cover||'')}" onerror="this.style.visibility='hidden'">
+    <div>
+      <div class="row-title">${esc(it.title)}</div>
+      <div class="row-meta">
+        <span>${esc(catLabel(it.category))}</span>
+        <span class="status ${it.hidden?'hidden':''}">${it.hidden?'已隐藏':'前台可见'}</span>
+        <span>${esc(it.source||'')}</span>
+      </div>
+    </div>
+  </div>`).join('') : '<div class="empty">没有符合条件的内容</div>';
+  $('items').querySelectorAll('.row').forEach(row=>row.onclick=()=>selectItem(row.dataset.id));
+}
+function renderEditor(item){
+  if(!item){ $('editor').innerHTML = '<div class="empty">请选择一条内容</div>'; return; }
+  $('editor').innerHTML = `<div class="editor-head">
+    <div><h1>${esc(item.title)}</h1><div class="muted">${esc(item.id)} · ${esc(item.day||'')}</div></div>
+    <a class="muted" href="/yule/item/${encodeURIComponent(item.id)}" target="_blank">打开站内详情</a>
+  </div>
+  <div class="fields">
+    <div class="field full"><label>标题</label><input id="f-title" value="${esc(item.title)}"></div>
+    <div class="field"><label>分类</label><select id="f-category">${categories.map(c=>`<option value="${esc(c.key)}" ${item.category===c.key?'selected':''}>${esc((c.emoji||'')+' '+c.label)}</option>`).join('')}</select></div>
+    <div class="field"><label>采集源</label><input id="f-source" value="${esc(item.source||'')}"></div>
+    <div class="field full"><label>摘要</label><textarea id="f-summary">${esc(item.summary||'')}</textarea></div>
+    <div class="field full"><label>正文</label><textarea id="f-body">${esc(item.body||'')}</textarea></div>
+    <div class="field full"><label>原文链接（仅后台可见）</label><div class="source-box">${item.sourceUrl?`<a href="${esc(item.sourceUrl)}" target="_blank" rel="noopener">${esc(item.sourceUrl)}</a>`:'暂无'}</div><input id="f-sourceUrl" value="${esc(item.sourceUrl||'')}"></div>
+    <div class="field"><label>热度</label><input id="f-hotScore" type="number" value="${Number(item.hotScore||0)}"></div>
+    <div class="field"><label>前台状态</label><select id="f-hidden"><option value="false" ${!item.hidden?'selected':''}>前台可见</option><option value="true" ${item.hidden?'selected':''}>隐藏</option></select></div>
+  </div>
+  <div class="actions">
+    <button class="primary" id="save">保存</button>
+    <button id="toggle">${item.hidden?'恢复显示':'隐藏'}</button>
+    <button class="danger" id="del">删除</button>
+  </div>`;
+  $('save').onclick=saveSelected;
+  $('toggle').onclick=()=>patchSelected({ hidden: !item.hidden });
+  $('del').onclick=deleteSelected;
+}
+function selectItem(id){
+  selectedId = id;
+  renderList();
+  renderEditor(items.find(it=>it.id===id));
+}
+async function patchSelected(patch){
+  if(!selectedId) return;
+  const data = await json(`${API}/item/${encodeURIComponent(selectedId)}`, {
+    method:'PATCH',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(patch)
+  });
+  items = items.map(it=>it.id===selectedId ? data.item : it);
+  renderList();
+  renderEditor(data.item);
+}
+async function saveSelected(){
+  await patchSelected({
+    title:$('f-title').value,
+    category:$('f-category').value,
+    source:$('f-source').value,
+    summary:$('f-summary').value,
+    body:$('f-body').value,
+    sourceUrl:$('f-sourceUrl').value,
+    hotScore:Number($('f-hotScore').value||0),
+    hidden:$('f-hidden').value === 'true'
+  });
+}
+async function deleteSelected(){
+  if(!selectedId || !confirm('确定删除这条内容？')) return;
+  await json(`${API}/item/${encodeURIComponent(selectedId)}`, { method:'DELETE' });
+  items = items.filter(it=>it.id!==selectedId);
+  selectedId = '';
+  renderList();
+  renderEditor(null);
+}
+async function load(){
+  const data = await json(`${API}/items`);
+  items = data.items || [];
+  categories = data.categories || [];
+  $('cat').innerHTML = '<option value="all">全部分类</option>' + categories.map(c=>`<option value="${esc(c.key)}">${esc((c.emoji||'')+' '+c.label)}</option>`).join('');
+  ['q','cat','status'].forEach(id=>$(id).oninput=renderList);
+  renderList();
+  if(items[0]) selectItem(items[0].id);
+}
+load().catch(err=>{$('items').innerHTML=`<div class="empty">加载失败：${esc(err.message)}</div>`;});
+</script>
+</body>
+</html>

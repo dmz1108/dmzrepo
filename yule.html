@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>娱乐 · Qi</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 135'%3E%3Crect width='160' height='135' fill='%23232a3a' rx='28'/%3E%3Ccircle cx='61' cy='68' r='30' stroke='%23eef2f7' stroke-width='11' fill='none'/%3E%3Cpath d='M78 84 L92 98' stroke='%23eef2f7' stroke-width='11' stroke-linecap='round'/%3E%3Crect x='106.5' y='61' width='11' height='37' rx='5.5' fill='%23eef2f7'/%3E%3Ccircle cx='112' cy='43' r='9' fill='%234a9bff'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:oklch(0.165 0.013 265); --panel:oklch(0.205 0.014 265); --panel2:oklch(0.245 0.015 265);
+    --ink:oklch(0.97 0.002 265); --sub:oklch(0.71 0.015 265); --faint:oklch(0.56 0.015 265);
+    --line:oklch(0.31 0.014 265); --blue:oklch(0.72 0.15 242); --blueSoft:oklch(0.78 0.12 240);
+    --violet:oklch(0.74 0.15 292);
+    --disp:"Space Grotesk","Helvetica Neue",sans-serif; --mono:"Space Mono",monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;width:100%;min-height:100%;overflow-x:hidden;}
+  body{background:var(--bg);color:var(--ink);font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;}
+  a{color:inherit;text-decoration:none;}
+  button{font:inherit;}
+  a:focus-visible,button:focus-visible{outline:2px solid var(--blueSoft);outline-offset:3px;}
+  .nav{min-height:72px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:clamp(14px,3vw,28px);
+       padding:12px clamp(18px,4vw,48px);flex-wrap:wrap;position:sticky;top:0;background:oklch(0.165 0.013 265 / 0.92);
+       backdrop-filter:blur(14px);z-index:40;}
+  .nav a.brand{display:flex;align-items:center;gap:10px;font-family:var(--disp);font-weight:600;font-size:20px;}
+  .nav .links{display:flex;gap:clamp(14px,2.4vw,28px);margin-left:8px;}
+  .nav .links a{font-size:14px;color:var(--sub);font-weight:600;display:inline-flex;align-items:center;justify-content:center;
+                 min-height:36px;padding:0 12px;border-radius:8px;border:1px solid transparent;transition:color .18s,border-color .18s,background .18s,transform .18s;}
+  .nav .links a.active{color:var(--ink);background:oklch(0.245 0.015 265 / .74);border-color:oklch(0.42 0.05 250);}
+  .nav .links a:hover{color:var(--ink);background:oklch(0.225 0.015 265 / .78);border-color:oklch(0.38 0.04 250);transform:translateY(-1px);}
+  .account-area{margin-left:auto;display:flex;align-items:center;gap:8px;min-height:38px;}
+  .account-pill{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:999px;background:oklch(0.205 0.014 265 / .72);
+                min-height:38px;padding:4px 5px 4px 10px;color:var(--sub);max-width:min(360px,42vw);}
+  .account-pill.is-logged-in{border-color:oklch(0.72 0.15 242 / .42);background:oklch(0.205 0.026 250 / .78);}
+  .account-avatar{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:var(--blue);
+                  color:var(--bg);font-family:var(--disp);font-weight:800;font-size:12px;flex:0 0 auto;}
+  .account-name{color:var(--ink);font-size:14px;font-weight:700;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .account-role{color:var(--faint);font-size:12px;white-space:nowrap;}
+  .account-action{height:30px;border:1px solid var(--line);border-radius:999px;background:oklch(0.16 0.012 265 / .7);color:var(--sub);
+                  padding:0 10px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;font-weight:700;
+                  transition:background .18s,border-color .18s,color .18s,transform .18s;white-space:nowrap;}
+  .account-action:hover{color:var(--ink);border-color:oklch(0.58 0.11 245);background:oklch(0.255 0.035 250 / .86);transform:translateY(-1px);}
+  .account-action.primary{background:var(--blue);border-color:transparent;color:var(--bg);}
+  .auth-ov{position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.64);backdrop-filter:blur(14px);display:grid;place-items:center;padding:20px;}
+  .auth-modal{width:min(420px,100%);background:oklch(0.2 0.014 265);border:1px solid var(--line);border-radius:14px;box-shadow:0 28px 90px rgba(0,0,0,.48);padding:22px;}
+  .auth-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:18px;}
+  .auth-head h2{margin:0;font-family:var(--disp);font-size:24px;font-weight:650;}
+  .auth-head p{margin:7px 0 0;color:var(--sub);font-size:14px;line-height:1.6;}
+  .auth-close{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--sub);cursor:pointer;font-size:22px;line-height:1;}
+  .auth-field{display:grid;gap:7px;margin-top:12px;}
+  .auth-field label{font-size:12px;color:var(--faint);font-family:var(--mono);}
+  .auth-field input{width:100%;height:44px;border-radius:9px;border:1px solid var(--line);background:oklch(0.165 0.013 265);color:var(--ink);padding:0 12px;outline:none;}
+  .auth-field input:focus{border-color:oklch(0.58 0.11 245);}
+  .auth-msg{min-height:20px;margin-top:12px;color:oklch(0.72 0.2 28);font-size:13px;line-height:1.5;}
+  .auth-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:16px;}
+  .wrap{padding:clamp(24px,4vw,44px) clamp(18px,4vw,48px) 80px;max-width:1280px;margin:0 auto;}
+  .hero h1{font-family:var(--disp);font-size:clamp(30px,5vw,46px);font-weight:600;letter-spacing:-0.03em;margin:0;}
+  .hero p{color:var(--sub);font-size:16px;margin:12px 0 0;max-width:560px;line-height:1.6;}
+  .tabs{display:flex;gap:10px;flex-wrap:wrap;margin:26px 0 8px;position:sticky;top:72px;background:var(--bg);
+        padding:10px 0;z-index:30;}
+  .tab{font-size:14px;color:var(--sub);border:1px solid var(--line);background:oklch(0.205 0.014 265 / 0.55);
+       min-height:40px;padding:0 11px;border-radius:8px;cursor:pointer;white-space:nowrap;transition:color .18s,border-color .18s,background .18s,transform .18s,box-shadow .18s;
+       display:inline-flex;align-items:center;gap:7px;appearance:none;}
+  .tab:hover{color:var(--ink);border-color:oklch(0.52 0.1 250);background:oklch(0.235 0.016 265 / .86);transform:translateY(-1px);}
+  .tab.active{color:var(--bg);background:linear-gradient(135deg,var(--blue),var(--blueSoft));border-color:transparent;font-weight:700;}
+  .tab .label{letter-spacing:0;}
+  .tab .n{font-family:var(--mono);font-size:11px;color:inherit;opacity:.86;margin-left:0;min-width:22px;height:22px;padding:0 7px;border-radius:999px;
+          display:inline-flex;align-items:center;justify-content:center;background:oklch(0.265 0.018 265 / .82);line-height:1;}
+  .tab.active .n{background:oklch(0.16 0.018 265 / .18);opacity:.95;}
+  .section{margin-top:30px;}
+  .section h2{font-family:var(--disp);font-size:22px;font-weight:600;margin:0 0 4px;display:flex;align-items:center;gap:8px;}
+  .section .sub{color:var(--faint);font-family:var(--mono);font-size:12px;margin-bottom:16px;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr));gap:18px;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;cursor:pointer;
+        transition:transform .22s ease,border-color .22s ease;display:flex;flex-direction:column;}
+  .card:hover{transform:translateY(-4px);border-color:oklch(0.45 0.08 250);}
+  .card .thumb{width:100%;aspect-ratio:4/3;object-fit:cover;background:var(--panel2);display:block;}
+  .card .body{padding:13px 15px 16px;display:flex;flex-direction:column;gap:7px;flex:1;}
+  .card .src{font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;color:var(--faint);text-transform:uppercase;}
+  .card .title{font-size:15px;font-weight:600;line-height:1.4;color:var(--ink);
+               display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .card .summ{font-size:12.5px;color:var(--sub);line-height:1.5;
+              display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .read-action{margin-top:auto;display:inline-flex;align-items:center;gap:8px;width:max-content;max-width:100%;
+               min-height:32px;padding:0 10px;border:1px solid var(--line);border-radius:8px;color:var(--blueSoft);
+               background:oklch(0.19 0.014 265 / .72);font-size:12.5px;font-weight:700;transition:background .18s,border-color .18s,color .18s,transform .18s;}
+  .read-action .arrow{font-family:var(--mono);line-height:1;transform:translateX(0);transition:transform .18s;}
+  .lead-card:hover .read-action,.card:hover .read-action,.story:hover .read-action,.detail .back:hover{
+    color:var(--ink);border-color:oklch(0.58 0.11 245);background:oklch(0.255 0.035 250 / .86);
+  }
+  .lead-card:hover .read-action .arrow,.card:hover .read-action .arrow,.story:hover .read-action .arrow{transform:translateX(2px);}
+  .empty{color:var(--faint);font-size:14px;padding:30px 0;border:1px dashed var(--line);border-radius:12px;text-align:center;}
+  .badge{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px;color:var(--blueSoft);
+         border:1px solid var(--line);border-radius:100px;padding:6px 14px;}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--blue);box-shadow:0 0 8px var(--blue);}
+  /* modal */
+  .ov{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,0.62);backdrop-filter:blur(12px);
+      display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;}
+  .modal{width:min(720px,100%);background:oklch(0.2 0.014 265);border:1px solid var(--line);border-radius:18px;
+         box-shadow:0 30px 90px rgba(0,0,0,.5);overflow:hidden;}
+  .modal .mhead{padding:22px 26px 6px;position:relative;}
+  .modal .mhead .src{font-family:var(--mono);font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;}
+  .modal .mhead h3{font-family:var(--disp);font-size:24px;font-weight:600;margin:8px 0 0;line-height:1.3;}
+  .modal .close{position:absolute;top:16px;right:18px;width:34px;height:34px;border-radius:17px;border:1px solid var(--line);
+                background:transparent;color:var(--sub);font-size:22px;cursor:pointer;line-height:1;}
+  .modal .mbody{padding:14px 26px 26px;}
+  .modal .mbody p{color:var(--sub);font-size:15px;line-height:1.75;white-space:pre-wrap;}
+  .modal .imgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin:18px 0;}
+  .modal .imgs img{width:100%;border-radius:10px;display:block;background:var(--panel2);}
+  .modal .meta{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
+               display:flex;gap:16px;flex-wrap:wrap;}
+  .detail{max-width:860px;margin:0 auto;padding:8px 0 40px;}
+  .detail .back{display:inline-flex;align-items:center;gap:8px;color:var(--blueSoft);font-size:14px;font-weight:700;margin-bottom:28px;
+                min-height:38px;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:oklch(0.205 0.014 265 / .72);
+                transition:background .18s,border-color .18s,color .18s,transform .18s;}
+  .detail .back:hover{transform:translateY(-1px);}
+  .detail .src{font-family:var(--mono);font-size:11.5px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px;}
+  .detail h1{font-family:var(--disp);font-size:clamp(30px,5vw,48px);line-height:1.18;font-weight:600;margin:0;color:var(--ink);letter-spacing:-0.02em;}
+  .detail .summary{font-size:16px;color:var(--sub);line-height:1.7;margin:18px 0 0;max-width:720px;}
+  .detail .imgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr));gap:12px;margin:28px 0;}
+  .detail .imgs img{width:100%;border-radius:12px;display:block;background:var(--panel2);}
+  .detail .body{font-size:16px;color:var(--sub);line-height:1.85;white-space:pre-wrap;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 24px;}
+  .detail .meta{font-family:var(--mono);font-size:12px;color:var(--faint);margin-top:18px;display:flex;gap:14px;flex-wrap:wrap;}
+  .nav{min-height:64px;padding:10px clamp(16px,4vw,42px);}
+  .nav a.brand{font-size:18px;}
+  .nav .links{margin-left:clamp(8px,2vw,20px);}
+  .nav .links a{padding:0 12px;}
+  .wrap{max-width:1180px;padding:clamp(20px,4vw,36px) clamp(16px,4vw,42px) 72px;}
+  .hero{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:end;padding:8px 0 18px;border-bottom:1px solid var(--line);}
+  .hero h1{font-size:clamp(28px,4.8vw,44px);letter-spacing:0!important;}
+  .hero p{max-width:620px;margin-top:10px;}
+  .hero .badge{justify-self:start;}
+  .tabs{top:64px;margin:0 -4px 22px;padding:12px 4px;background:oklch(0.165 0.013 265 / 0.94);backdrop-filter:blur(14px);overflow-x:auto;flex-wrap:nowrap;}
+  .tab{border-radius:8px;padding:0 12px;}
+  .tab.active{box-shadow:0 10px 22px oklch(0.72 0.15 242 / 0.18);}
+  .today{margin:22px 0 28px;}
+  .today-head{display:flex;align-items:end;justify-content:space-between;gap:16px;margin-bottom:14px;}
+  .today-head h2,.section h2{font-family:var(--disp);font-size:22px;letter-spacing:0;font-weight:650;margin:0;color:var(--ink);}
+  .today-head span,.section .sub{font-family:var(--mono);font-size:12px;color:var(--faint);}
+  .feature-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(280px,.85fr);gap:16px;}
+  .lead-card{display:grid;grid-template-columns:minmax(260px,46%) minmax(0,1fr);min-height:292px;background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden;}
+  .lead-card,.story,.card{position:relative;}
+  .lead-card img{width:100%;height:100%;object-fit:cover;background:var(--panel2);}
+  .lead-card.poster img,.card.poster .thumb,.story.poster img,.detail .imgs img.poster{object-fit:contain;background:linear-gradient(135deg,oklch(0.245 0.015 265),oklch(0.18 0.012 265));}
+  .lead-card.poster img{padding:14px;}
+  .card.poster .thumb,.story.poster img{padding:8px;}
+  .lead-card .lead-body{padding:24px;display:flex;flex-direction:column;justify-content:flex-end;gap:12px;}
+  .lead-kicker,.card .src,.story .src{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.04em;text-transform:uppercase;}
+  .lead-card h3{font-family:var(--disp);font-size:clamp(24px,3vw,34px);line-height:1.18;letter-spacing:0;margin:0;color:var(--ink);}
+  .lead-card p{margin:0;color:var(--sub);font-size:15px;line-height:1.65;}
+  .side-list{display:grid;gap:10px;}
+  .story{display:grid;grid-template-columns:96px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px;border:1px solid var(--line);background:oklch(0.205 0.014 265 / .7);border-radius:8px;
+         transition:background .18s,border-color .18s,transform .18s;}
+  .story:hover{background:oklch(0.225 0.016 265 / .86);border-color:oklch(0.58 0.11 245);transform:translateY(-1px);}
+  .story img{width:96px;aspect-ratio:1.2/1;object-fit:cover;border-radius:6px;background:var(--panel2);}
+  .story h3{font-size:15px;line-height:1.36;margin:4px 0 0;color:var(--ink);font-weight:650;}
+  .story .mini-arrow{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border:1px solid var(--line);
+                     border-radius:8px;color:var(--blueSoft);font-family:var(--mono);font-weight:700;background:oklch(0.19 0.014 265 / .72);
+                     transition:background .18s,border-color .18s,color .18s,transform .18s;}
+  .story:hover .mini-arrow{color:var(--ink);border-color:oklch(0.58 0.11 245);background:oklch(0.255 0.035 250 / .86);transform:translateX(2px);}
+  .section{margin-top:28px;padding-top:22px;border-top:1px solid var(--line);}
+  .section-head{display:flex;align-items:end;justify-content:space-between;gap:16px;margin-bottom:14px;}
+  .section h2{display:block;}
+  .grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,252px),1fr));gap:14px;}
+  .card{border-radius:8px;background:oklch(0.205 0.014 265 / .86);transform:none;box-shadow:none;}
+  .card:hover{transform:translateY(-2px);border-color:oklch(0.72 0.15 242 / .46);}
+  .card .thumb{aspect-ratio:16/10;}
+  .card .body{padding:13px 14px 15px;gap:8px;}
+  .card .title{font-size:15.5px;line-height:1.42;}
+  .card .summ{font-size:13px;line-height:1.55;}
+  .empty{border-radius:8px;}
+  .detail{max-width:980px;padding-top:8px;}
+  .detail .back{margin-bottom:24px;}
+  .detail h1{max-width:820px;font-size:clamp(32px,5vw,54px);letter-spacing:0;}
+  .detail .summary{font-size:17px;max-width:780px;}
+  .detail-layout{display:grid;grid-template-columns:minmax(0,680px) minmax(220px,1fr);gap:28px;margin-top:26px;align-items:start;}
+  .detail .imgs{margin:0;grid-template-columns:1fr;gap:12px;}
+  .detail .imgs img{border-radius:8px;}
+  .detail .body{border-radius:8px;padding:24px 26px;font-size:16.5px;background:oklch(0.205 0.014 265 / .82);}
+  .detail .meta{border-top:1px solid var(--line);padding-top:14px;}
+  @media (max-width:900px){
+    .hero{grid-template-columns:1fr;}
+    .feature-grid,.lead-card,.detail-layout{grid-template-columns:1fr;}
+    .lead-card{min-height:auto;}
+    .lead-card img{aspect-ratio:16/10;height:auto;}
+    .nav .links{margin-left:0;width:100%;overflow-x:auto;}
+    .account-area{margin-left:auto;}
+    .account-pill{max-width:calc(100vw - 150px);}
+  }
+  @media (max-width:560px){
+    .story{grid-template-columns:78px minmax(0,1fr);}
+    .story img{width:78px;}
+    .story .mini-arrow{display:none;}
+    .tab{min-height:38px;font-size:13.5px;}
+    .lead-card .lead-body{padding:18px;}
+    .detail .body{padding:20px;}
+    .account-role{display:none;}
+    .account-name{max-width:84px;}
+  }
+  .skeleton{animation:pulse 1.4s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:.5;}50%{opacity:.85;}}
+</style>
+</head>
+<body>
+<div class="nav">
+  <a class="brand" href="https://dreamerqi.com/">
+    <svg width="38" height="32" viewBox="0 0 160 135" fill="none"><circle cx="61" cy="68" r="30" stroke="#eef2f7" stroke-width="11" fill="none"/><path d="M78 84 L92 98" stroke="#eef2f7" stroke-width="11" stroke-linecap="round"/><rect x="106.5" y="61" width="11" height="37" rx="5.5" fill="#eef2f7"/><circle cx="112" cy="43" r="9" fill="#4a9bff"/></svg>
+    Qi
+  </a>
+  <div class="links">
+    <a href="https://dreamerqi.com/">首页</a>
+    <a href="https://market.dreamerqi.com/">行情</a>
+    <a href="/" class="active">娱乐</a>
+    <a href="https://explore.dreamerqi.com/">探索</a>
+  </div>
+  <div class="account-area" id="accountArea" aria-live="polite"></div>
+</div>
+
+<div class="wrap">
+  <div class="hero">
+    <div class="badge"><span class="dot"></span>娱乐热榜 · 每日更新</div>
+    <h1 style="margin-top:18px;">热门娱乐，<span style="color:var(--blue);">一屏追完</span>。</h1>
+    <p>优先聚合明星、影视、音乐、综艺与时尚热点；综合热搜只保留适合娱乐频道的高讨论内容。点开卡片直接阅读站内详情。</p>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+  <div id="content"></div>
+</div>
+
+<div id="modalRoot"></div>
+<div id="authRoot"></div>
+
+<script>
+const API = '/api/yule';
+const BASE_PATH = String(location.pathname || '').startsWith('/yule') ? '/yule' : '';
+const CHANNEL_URL = BASE_PATH || '/';
+const AUTH_API_BASE = (location.protocol === 'file:') ? 'http://127.0.0.1:8765' : 'https://dreamerqi.com';
+const ADMIN_TOKEN_STORAGE = 'panda_admin_token_v1';
+const AUTH_SESSION_KEY = 'qi_home_session_v1';
+const SHARED_AUTH_TOKEN_COOKIE = 'panda_admin_token';
+const SHARED_AUTH_SESSION_COOKIE = 'panda_account_session';
+const AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
+let CATS = [];
+let activeCat = 'all';
+const LIST_CACHE = new Map();
+let renderRunId = 0;
+
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function isDreamerQiHost(){
+  const host = String(location.hostname || '').toLowerCase();
+  return host === 'dreamerqi.com' || host.endsWith('.dreamerqi.com');
+}
+function readCookie(name){
+  const prefix = `${name}=`;
+  const row = String(document.cookie || '').split('; ').find(item => item.startsWith(prefix));
+  if(!row) return '';
+  try{ return decodeURIComponent(row.slice(prefix.length)); }
+  catch(e){ return row.slice(prefix.length); }
+}
+function writeCookie(name,value,maxAge=AUTH_COOKIE_MAX_AGE){
+  const encoded = encodeURIComponent(String(value || ''));
+  const secure = location.protocol === 'https:' ? '; Secure' : '';
+  const domain = isDreamerQiHost() ? '; Domain=.dreamerqi.com' : '';
+  document.cookie = `${name}=${encoded}; Path=/; Max-Age=${maxAge}; SameSite=Lax${secure}${domain}`;
+  if(!domain) document.cookie = `${name}=${encoded}; Path=/; Max-Age=${maxAge}; SameSite=Lax${secure}`;
+}
+function clearCookie(name){
+  writeCookie(name,'',0);
+  document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax`;
+}
+function readJsonStore(key,fallback=null){
+  try{ return JSON.parse(localStorage.getItem(key)) || fallback; }
+  catch(e){ return fallback; }
+}
+function readSharedAuthToken(){
+  return localStorage.getItem(ADMIN_TOKEN_STORAGE) || readCookie(SHARED_AUTH_TOKEN_COOKIE) || '';
+}
+function writeSharedAuthToken(token){
+  if(!token) return;
+  localStorage.setItem(ADMIN_TOKEN_STORAGE, token);
+  writeCookie(SHARED_AUTH_TOKEN_COOKIE, token);
+}
+function readSharedAccountSession(){
+  const saved = readJsonStore(AUTH_SESSION_KEY, null);
+  if(saved && saved.name) return saved;
+  const raw = readCookie(SHARED_AUTH_SESSION_COOKIE);
+  if(!raw) return null;
+  try{
+    const session = JSON.parse(raw);
+    return session && session.name ? session : null;
+  }catch(e){ return null; }
+}
+function writeSharedAccountSession(session){
+  if(!session || !session.name) return;
+  const clean = { name: session.name, admin: !!session.admin };
+  localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(clean));
+  writeCookie(SHARED_AUTH_SESSION_COOKIE, JSON.stringify(clean));
+}
+function clearSharedAuthState(){
+  localStorage.removeItem(ADMIN_TOKEN_STORAGE);
+  localStorage.removeItem(AUTH_SESSION_KEY);
+  clearCookie(SHARED_AUTH_TOKEN_COOKIE);
+  clearCookie(SHARED_AUTH_SESSION_COOKIE);
+}
+function renderAccount(session=readSharedAccountSession()){
+  const area = document.getElementById('accountArea');
+  if(!area) return;
+  if(session && session.name){
+    const role = session.admin ? '管理员' : '用户';
+    area.innerHTML = `<div class="account-pill is-logged-in">
+      <span class="account-avatar">${esc(String(session.name).slice(0,1).toUpperCase())}</span>
+      <span class="account-name">${esc(session.name)}</span>
+      <span class="account-role">${role}</span>
+      ${session.admin ? '<a class="account-action" href="https://dreamerqi.com/admin">后台</a>' : ''}
+      <button type="button" class="account-action" onclick="logoutAccount()">退出</button>
+    </div>`;
+    return;
+  }
+  area.innerHTML = `<div class="account-pill">
+    <span class="account-role">未登录</span>
+    <button type="button" class="account-action" onclick="openAuthModal()">登录</button>
+    <a class="account-action primary" href="https://dreamerqi.com/">注册</a>
+  </div>`;
+}
+function authMessage(error){
+  const raw = String(error || '').trim().toLowerCase();
+  if(!raw) return '登录失败，请稍后再试';
+  if(raw.includes('invalid') || raw.includes('password') || raw.includes('not found')) return '账号或密码不正确';
+  if(raw.includes('disabled')) return '账号已停用，请联系管理员';
+  return String(error || '登录失败，请稍后再试');
+}
+async function refreshAccountStatus(){
+  const token = readSharedAuthToken();
+  const snapshot = readSharedAccountSession();
+  if(snapshot) renderAccount(snapshot);
+  if(!token){
+    clearSharedAuthState();
+    renderAccount(null);
+    return;
+  }
+  try{
+    const data = await getJSON(`${AUTH_API_BASE}/api/auth/me?_=${Date.now()}`, 8000, { 'x-admin-token': token });
+    if(data && data.user){
+      writeSharedAuthToken(token);
+      const session = { name: data.user.username || snapshot?.name || 'user', admin: !!data.admin };
+      writeSharedAccountSession(session);
+      renderAccount(session);
+    }else{
+      clearSharedAuthState();
+      renderAccount(null);
+    }
+  }catch(e){
+    if(snapshot) renderAccount(snapshot);
+  }
+}
+function openAuthModal(){
+  const root = document.getElementById('authRoot');
+  root.innerHTML = `<div class="auth-ov" id="authOverlay">
+    <form class="auth-modal" id="authForm">
+      <div class="auth-head">
+        <div><h2>登录 Qi</h2><p>登录后，主页、行情、娱乐、探索会显示同一个账户。</p></div>
+        <button type="button" class="auth-close" id="authClose" aria-label="关闭">×</button>
+      </div>
+      <div class="auth-field"><label for="authName">账号</label><input id="authName" autocomplete="username" required></div>
+      <div class="auth-field"><label for="authPassword">密码</label><input id="authPassword" type="password" autocomplete="current-password" required></div>
+      <div class="auth-msg" id="authMsg"></div>
+      <div class="auth-actions">
+        <a class="account-action" href="https://dreamerqi.com/">创建账号</a>
+        <button class="account-action primary" type="submit">登录</button>
+      </div>
+    </form>
+  </div>`;
+  document.getElementById('authClose').onclick = closeAuthModal;
+  document.getElementById('authOverlay').onclick = e => { if(e.target.id === 'authOverlay') closeAuthModal(); };
+  document.getElementById('authForm').onsubmit = submitAuthLogin;
+  setTimeout(()=>document.getElementById('authName')?.focus(), 0);
+}
+function closeAuthModal(){
+  document.getElementById('authRoot').innerHTML = '';
+}
+async function submitAuthLogin(event){
+  event.preventDefault();
+  const name = document.getElementById('authName')?.value?.trim() || '';
+  const password = document.getElementById('authPassword')?.value || '';
+  const msg = document.getElementById('authMsg');
+  if(!name || !password){
+    if(msg) msg.textContent = '请输入账号和密码';
+    return;
+  }
+  if(msg) msg.textContent = '正在登录...';
+  try{
+    const res = await fetch(`${AUTH_API_BASE}/api/auth/login`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body:JSON.stringify({ username:name, password })
+    });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok || !data.token) throw new Error(authMessage(data.error || `HTTP ${res.status}`));
+    const user = data.user || {};
+    const session = { name: user.username || data.username || name, admin: !!data.admin || user.role === 'admin' };
+    writeSharedAuthToken(data.token);
+    writeSharedAccountSession(session);
+    renderAccount(session);
+    closeAuthModal();
+  }catch(e){
+    if(msg) msg.textContent = authMessage(e.message);
+  }
+}
+function logoutAccount(){
+  clearSharedAuthState();
+  renderAccount(null);
+}
+function itemUrl(id){ return `${BASE_PATH}/item/${encodeURIComponent(id)}`; }
+function detailIdFromPath(){
+  const m = String(location.pathname || '').match(/^\/(?:yule\/)?item\/([^/]+)$/);
+  return m ? decodeURIComponent(m[1]) : '';
+}
+
+async function getJSON(url, timeoutMs = 8000, headers = {}){
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(()=>ctrl.abort(), timeoutMs) : null;
+  try{
+    const opts = ctrl ? { cache:'no-store', signal: ctrl.signal, headers } : { cache:'no-store', headers };
+    const r = await fetch(url, opts);
+    if(!r.ok) return null;
+    return await r.json();
+  }
+  catch(e){ return null; }
+  finally{ if(timer) clearTimeout(timer); }
+}
+async function ensureCategories(){
+  if(CATS.length) return;
+  const data = await getJSON(`${API}/categories`);
+  CATS = (data&&data.categories)||[];
+}
+
+function renderTabs(){
+  const tabs = document.getElementById('tabs');
+  const visibleCats = CATS.filter(c => Number(c.count || 0) > 0);
+  if(activeCat !== 'all' && !visibleCats.some(c => c.key === activeCat)) activeCat = 'all';
+  const all = `<button type="button" class="tab ${activeCat==='all'?'active':''}" data-k="all" aria-pressed="${activeCat==='all'}"><span class="label">全部</span></button>`;
+  const rest = visibleCats.map(c=>`<button type="button" class="tab ${activeCat===c.key?'active':''}" data-k="${esc(c.key)}" aria-pressed="${activeCat===c.key}"><span class="label">${esc(c.label)}</span><span class="n">${c.count}</span></button>`).join('');
+  tabs.innerHTML = all + rest;
+  tabs.querySelectorAll('.tab').forEach(el=>el.onclick=()=>{ activeCat = el.dataset.k; renderTabs(); renderContent(); });
+}
+
+function catMeta(key){
+  return CATS.find(c=>c.key===key) || { key, label:key || '', emoji:'' };
+}
+function itemScore(it){
+  return Number(it.rankScore || 0) || Number(it.hotScore || 0) || Date.parse(it.createdAt || '') || 0;
+}
+function sortedItems(items){
+  return items.slice().sort((a,b)=>itemScore(b)-itemScore(a));
+}
+function imageClass(it){
+  const w = Number(it.imageWidth || 0), h = Number(it.imageHeight || 0);
+  return w && h && h > w * 1.08 ? 'poster' : 'landscape';
+}
+function imageSrc(src,w,h){
+  const s = String(src || '');
+  if(!s || /^data:/.test(s)) return s;
+  const tag = `${Number(w||0)}x${Number(h||0)}`;
+  return s + (s.includes('?') ? '&' : '?') + 'v=' + encodeURIComponent(tag);
+}
+function dayLabel(day){
+  const s = String(day || '');
+  return /^(\d{4})(\d{2})(\d{2})$/.test(s) ? s.replace(/^(\d{4})(\d{2})(\d{2})$/, '$1.$2.$3') : s;
+}
+function detailText(s){
+  return String(s || '')
+    .replace(/https?:\/\/\S+/g,'')
+    .replace(/爱奇艺总榜/g,'热播总榜')
+    .replace(/爱奇艺电视剧榜/g,'电视剧热播榜')
+    .replace(/爱奇艺综艺榜/g,'综艺热播榜')
+    .replace(/爱奇艺电影榜/g,'电影热播榜')
+    .replace(/爱奇艺风云榜/g,'热播榜')
+    .replace(/爱奇艺/g,'')
+    .replace(/微博热搜/g,'热搜')
+    .replace(/百度电影榜/g,'电影热榜')
+    .replace(/百度电视剧榜/g,'电视剧热榜')
+    .replace(/百度热榜/g,'热榜')
+    .replace(/百度/g,'')
+    .replace(/豆瓣正在上映电影/g,'正在上映电影')
+    .replace(/豆瓣热播剧集/g,'热播剧集')
+    .replace(/豆瓣热门综艺/g,'热门综艺')
+    .replace(/豆瓣热门片单/g,'热门片单')
+    .replace(/豆瓣评分/g,'评分')
+    .replace(/豆瓣/g,'')
+    .replace(/B站热门榜/g,'热门视频榜')
+    .replace(/B站/g,'')
+    .replace(/QQ音乐流行指数榜/g,'流行指数榜')
+    .replace(/QQ音乐/g,'')
+    .replace(/网易云音乐/g,'')
+    .replace(/知乎热榜/g,'热榜')
+    .replace(/知乎/g,'')
+    .replace(/今日头条搜索/g,'热搜')
+    .replace(/今日头条/g,'')
+    .replace(/公开热榜/g,'热榜')
+    .replace(/进入(热播榜|热搜|电影热榜|电视剧热榜|热榜|热门片单|热门视频榜)后/g,'进入当前热榜后')
+    .replace(/出现在(热播榜|热搜|电影热榜|电视剧热榜|热榜|热门片单|热门视频榜)中/g,'进入当前热榜')
+    .replace(/讨论来源/g,'讨论背景')
+    .replace(/标题、来源和热度线索/g,'标题和热度线索')
+    .replace(/来源和/g,'')
+    .replace(/[ \t]{2,}/g,' ')
+    .replace(/。{2,}/g,'。')
+    .trim();
+}
+function cardHTML(it){
+  const cat = catMeta(it.category);
+  const cleanSummary = detailText(it.summary || '');
+  return `<a class="card ${imageClass(it)}" href="${esc(itemUrl(it.id))}" data-id="${esc(it.id)}">
+    <img class="thumb" src="${esc(imageSrc(it.cover,it.imageWidth,it.imageHeight))}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+    <div class="body">
+      <div class="src">${esc(cat.emoji||'')} ${esc(cat.label||'')}</div>
+      <div class="title">${esc(it.title)}</div>
+      ${cleanSummary?`<div class="summ">${esc(cleanSummary)}</div>`:''}
+      <span class="read-action">阅读全文 <span class="arrow">→</span></span>
+    </div>
+  </a>`;
+}
+function storyHTML(it){
+  const cat = catMeta(it.category);
+  return `<a class="story ${imageClass(it)}" href="${esc(itemUrl(it.id))}">
+    <img src="${esc(imageSrc(it.cover,it.imageWidth,it.imageHeight))}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+    <div>
+      <div class="src">${esc(cat.emoji||'')} ${esc(cat.label||'')}</div>
+      <h3>${esc(it.title)}</h3>
+    </div>
+    <span class="mini-arrow">→</span>
+  </a>`;
+}
+function todayHTML(items){
+  const ranked = sortedItems(items).filter(Boolean);
+  if(!ranked.length) return '';
+  const lead = ranked[0];
+  const side = ranked.slice(1,5);
+  const cat = catMeta(lead.category);
+  return `<section class="today">
+    <div class="today-head">
+      <div><h2>娱乐热榜</h2><span>按娱乐相关度、热度与更新时间排序</span></div>
+      <span>${ranked.length} 条站内内容</span>
+    </div>
+    <div class="feature-grid">
+      <a class="lead-card ${imageClass(lead)}" href="${esc(itemUrl(lead.id))}">
+        <img src="${esc(imageSrc(lead.cover,lead.imageWidth,lead.imageHeight))}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+        <div class="lead-body">
+          <div class="lead-kicker">${esc(cat.emoji||'')} ${esc(cat.label||'')}</div>
+          <h3>${esc(lead.title)}</h3>
+          ${lead.summary?`<p>${esc(lead.summary)}</p>`:''}
+          <span class="read-action">阅读全文 <span class="arrow">→</span></span>
+        </div>
+      </a>
+      <div class="side-list">${side.length ? side.map(storyHTML).join('') : '<div class="empty">更多内容采集后自动出现</div>'}</div>
+    </div>
+  </section>`;
+}
+function sectionHTML(cat, items){
+  return `<section class="section" data-sec="${esc(cat.key)}">
+    <div class="section-head">
+      <div><h2>${esc(cat.emoji||'')} ${esc(cat.label)}</h2><div class="sub">热度优先 · ${items.length} 条</div></div>
+    </div>
+    ${items.length ? `<div class="grid">${items.map(cardHTML).join('')}</div>` : '<div class="empty">该板块暂无内容，采集后自动出现</div>'}
+  </section>`;
+}
+function visibleCategories(){
+  return CATS.filter(c => Number(c.count || 0) > 0);
+}
+async function listForCategory(key){
+  if(LIST_CACHE.has(key)) return LIST_CACHE.get(key);
+  const data = await getJSON(`${API}/list?category=${encodeURIComponent(key)}`);
+  const items = (data&&data.items)||[];
+  LIST_CACHE.set(key, items);
+  return items;
+}
+function groupsHTML(groups){
+  const allItems = groups.flatMap(g => g.items);
+  return todayHTML(allItems) + groups.map(g => sectionHTML(g.cat, g.items)).join('');
+}
+
+async function renderContent(){
+  const content = document.getElementById('content');
+  const runId = ++renderRunId;
+  if(activeCat==='all'){
+    const cats = visibleCategories();
+    const cached = cats.filter(c => LIST_CACHE.has(c.key)).map(c => ({ cat:c, items:LIST_CACHE.get(c.key)||[] }));
+    if(cached.length) content.innerHTML = groupsHTML(cached);
+    else content.innerHTML = '<div class="empty skeleton">正在加载内容…</div>';
+    const groups = await Promise.all(cats.map(async c => ({ cat:c, items:await listForCategory(c.key) })));
+    if(runId !== renderRunId || activeCat !== 'all') return;
+    if(groups.some(g => g.items.length)){
+      content.innerHTML = groupsHTML(groups);
+    } else {
+      content.innerHTML = '<div class="empty">暂时没有可显示的内容，请稍后刷新</div>';
+    }
+  } else {
+    const c = CATS.find(x=>x.key===activeCat)||{label:''};
+    if(LIST_CACHE.has(activeCat)){
+      const items = LIST_CACHE.get(activeCat)||[];
+      content.innerHTML = todayHTML(items) + sectionHTML(c, items);
+      return;
+    }
+    content.innerHTML = '<div class="empty skeleton">正在加载内容…</div>';
+    const items = await listForCategory(activeCat);
+    if(runId !== renderRunId || activeCat !== c.key) return;
+    content.innerHTML = todayHTML(items) + sectionHTML(c, items);
+  }
+}
+
+async function renderDetailPage(id){
+  await ensureCategories();
+  const hero = document.querySelector('.hero');
+  const tabs = document.getElementById('tabs');
+  const content = document.getElementById('content');
+  if(hero) hero.style.display = 'none';
+  if(tabs) tabs.style.display = 'none';
+  content.innerHTML = '<div class="detail skeleton">加载中…</div>';
+
+  const data = await getJSON(`${API}/item/${encodeURIComponent(id)}`);
+  const it = data&&data.item;
+  if(!it){
+    document.title = '内容不可用 · 娱乐 · Qi';
+    content.innerHTML = `<div class="empty"><a href="${esc(CHANNEL_URL)}">返回娱乐频道</a><br><br>这条内容暂时不可用</div>`;
+    return;
+  }
+
+  document.title = `${it.title} · 娱乐 · Qi`;
+  const imgs = (it.images||[]).filter(im=>im&&im.src);
+  const cat = catMeta(it.category);
+  const cleanSummary = detailText(it.summary || '');
+  const cleanBody = detailText(it.body || it.summary || '');
+  const meta = [
+    it.day ? `更新：${esc(dayLabel(it.day))}` : '',
+    'Qi 站内内容'
+  ].filter(Boolean);
+  const detailKicker = [
+    `${cat.emoji||''} ${cat.label||'娱乐'}`.trim(),
+    it.day ? `更新 ${dayLabel(it.day)}` : ''
+  ].filter(Boolean).join(' · ');
+  content.innerHTML = `<article class="detail">
+    <a class="back" href="${esc(CHANNEL_URL)}"><span>←</span><span>返回娱乐频道</span></a>
+    <div class="src">${esc(detailKicker)}</div>
+    <h1>${esc(it.title)}</h1>
+    ${cleanSummary ? `<p class="summary">${esc(cleanSummary)}</p>` : ''}
+    <div class="detail-layout">
+      <div>
+        <div class="body">${esc(cleanBody)}</div>
+        <div class="meta">${meta.map(x=>`<span>${x}</span>`).join('')}</div>
+      </div>
+      ${imgs.length ? `<div class="imgs">${imgs.map(im=>`<img class="${Number(im.height||0)>Number(im.width||0)*1.08?'poster':''}" src="${esc(imageSrc(im.src,im.width,im.height))}" loading="lazy" onerror="this.style.display='none'">`).join('')}</div>` : '<div class="empty">暂无配图</div>'}
+    </div>
+  </article>`;
+}
+
+async function openItem(id){
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `<div class="ov" id="ov"><div class="modal"><div class="mhead"><button class="close" id="x">×</button><div class="src">加载中…</div></div></div></div>`;
+  document.getElementById('ov').onclick=(e)=>{ if(e.target.id==='ov') closeModal(); };
+  document.getElementById('x').onclick=closeModal;
+  const data = await getJSON(`${API}/item/${encodeURIComponent(id)}`);
+  const it = data&&data.item;
+  if(!it){ root.querySelector('.src').textContent='内容加载失败'; return; }
+  const imgs = (it.images||[]).filter(im=>im&&im.src);
+  const cat = catMeta(it.category);
+  const cleanBody = detailText(it.body || it.summary || '');
+  root.querySelector('.modal').innerHTML = `
+    <div class="mhead"><button class="close" id="x">×</button>
+      <div class="src">${esc(cat.emoji||'')} ${esc(cat.label||'娱乐')}${it.day ? ' · 更新 ' + esc(dayLabel(it.day)) : ''}</div>
+      <h3>${esc(it.title)}</h3></div>
+    <div class="mbody">
+      ${imgs.length?`<div class="imgs">${imgs.map(im=>`<img src="${esc(imageSrc(im.src,im.width,im.height))}" loading="lazy" onerror="this.style.display='none'">`).join('')}</div>`:''}
+      <p>${esc(cleanBody)}</p>
+      <div class="meta">
+        ${it.day?`<span>更新：${esc(dayLabel(it.day))}</span>`:''}
+        <span>Qi 站内内容</span>
+      </div>
+    </div>`;
+  root.querySelector('#x').onclick=closeModal;
+}
+function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
+renderAccount(readSharedAccountSession());
+refreshAccountStatus();
+window.addEventListener('pageshow', refreshAccountStatus);
+window.addEventListener('focus', refreshAccountStatus);
+
+(async function init(){
+  const detailId = detailIdFromPath();
+  if(detailId){
+    await renderDetailPage(detailId);
+    return;
+  }
+  await ensureCategories();
+  if(!CATS.length){
+    document.getElementById('content').innerHTML='<div class="empty">娱乐频道暂时不可用，请稍后再试</div>';
+    return;
+  }
+  renderTabs();
+  renderContent();
+})();
+</script>
+</body>
+</html>

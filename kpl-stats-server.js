@@ -1,0 +1,21789 @@
+const http = require('http');
+const net = require('net');
+const tls = require('tls');
+const fsSync = require('fs');
+const fs = require('fs/promises');
+const path = require('path');
+const vm = require('vm');
+const crypto = require('crypto');
+const { execFile, spawn } = require('child_process');
+
+const PORT = Number(process.env.KPL_STATS_PORT || 8765);
+const HOST = process.env.KPL_STATS_HOST || '127.0.0.1';
+const PUBLIC_HTTP_PORT = Number(process.env.KPL_PUBLIC_HTTP_PORT || 0);
+const API_BASE = 'https://market.wenap.uk/api';
+const SERVICE_RESTART_TASK_NAME = process.env.PANDA_SERVICE_TASK_NAME || 'Panda Dashboard Server';
+const ADMIN_SESSION_TTL_MS = Number(process.env.KPL_ADMIN_SESSION_TTL_MS || process.env.KPL_AUTH_SESSION_TTL_MS || 7 * 24 * 60 * 60 * 1000);
+const ADMIN_SESSION_RENEW_WINDOW_MS = Math.min(ADMIN_SESSION_TTL_MS / 2, 24 * 60 * 60 * 1000);
+const SNAPSHOT_DIR = path.join(__dirname, 'kpl-snapshots');
+const LIMIT_UP_DB_DIR = path.join(__dirname, 'kpl-limitup-db');
+const LIMIT_UP_MAIN_REASON_DB_DIR = path.join(__dirname, 'kpl-limitup-main-reason-db');
+const LIMIT_UP_MAIN_REASON_EVIDENCE_DIR = path.join(__dirname, 'kpl-limitup-main-reason-evidence');
+const LIMIT_UP_MAIN_REASON_QUALITY_DIR = path.join(__dirname, 'kpl-limitup-main-reason-quality');
+const LIMIT_UP_MAIN_REASON_SOURCE_DIR = path.join(__dirname, 'kpl-limitup-main-reason-sources');
+const LIMIT_UP_MAIN_REASON_AUTO_SOURCE_DIR = path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, 'auto');
+const TGB_HUNAN_OCR_CACHE_DIR = path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, 'tgb-hunan-ocr-cache');
+const TGB_HUNAN_STRUCTURED_SOURCE_DIR = path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, 'tgb-hunan-structured');
+const TGB_HUNAN_RAW_SOURCE_DIR = path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, 'tgb-hunan-raw');
+const JIUYANGONGSHE_STRUCTURED_SOURCE_DIR = path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, 'jiuyangongshe-structured');
+const JIUYANGONGSHE_DIAGRAM_SOURCE_DIR = path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, 'jiuyangongshe-diagram');
+const TONGHUASHUN_STRUCTURED_SOURCE_DIR = path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, 'tonghuashun-structured');
+const TONGHUASHUN_OFFICIAL_IMAGE_SOURCE_DIR = path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, 'tonghuashun-official-images');
+const TONGHUASHUN_API_CANDIDATE_SOURCE_DIR = path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, 'tonghuashun-api-candidates');
+const KAIPANLA_FUPANLA_SOURCE_DIR = path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, 'kaipanla-fupanla');
+const EASTMONEY_FPL_LIMIT_REASON_SOURCE_DIR = path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, 'eastmoney-fpl-limit-reason');
+const XUANGUBAO_LIMIT_UP_SOURCE_DIR = path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, 'xuangubao-limit-up');
+const WINRT_OCR_SCRIPT = path.join(__dirname, 'winrt-ocr.ps1');
+const EASTMONEY_CONCEPT_DIR = path.join(__dirname, 'eastmoney-concepts-db');
+const EASTMONEY_CONCEPT_BOARD_DIR = path.join(EASTMONEY_CONCEPT_DIR, 'boards');
+const EASTMONEY_CLOSE_DIR = path.join(__dirname, 'eastmoney-close-db');
+const WIND_CLOSE_SYNC_SCRIPT = path.join(__dirname, 'wind-close-db-sync.py');
+const THS_CONCEPT_DIR = path.join(__dirname, 'ths-concepts-db');
+const THS_CONCEPT_BOARD_DIR = path.join(THS_CONCEPT_DIR, 'boards');
+const THS_MANUAL_BOARD_DIR = path.join(__dirname, 'ths-manual-boards');
+const THS_LOCAL_BLOCKUPDATE_DIRS = [
+  process.env.THS_BLOCKUPDATE_DIR,
+  'D:\\办公\\新建文件夹\\同花顺软件\\同花顺\\BlockUpdate',
+].filter(Boolean);
+const THS_LOCAL_STOCKNAME_DIRS = [
+  process.env.THS_STOCKNAME_DIR,
+  'D:\\办公\\新建文件夹\\同花顺软件\\同花顺\\stockname',
+].filter(Boolean);
+const THS_LOCAL_FULLVIEWBLOCK_PATHS = [
+  process.env.THS_FULLVIEWBLOCK_PATH,
+  'D:\\iFinD\\etc\\hqplug\\FullViewblock.xml',
+].filter(Boolean);
+const THS_LOCAL_ROOT_CANDIDATE_DIRS = [
+  process.env.THS_ROOT_DIR,
+  path.join('D:\\', '\u529e\u516c', '\u65b0\u5efa\u6587\u4ef6\u5939', '\u540c\u82b1\u987a\u8f6f\u4ef6', '\u540c\u82b1\u987a'),
+].filter(Boolean);
+const THS_LOCAL_STOCKLINK_DIRS = [
+  process.env.THS_STOCKLINK_DIR,
+  ...THS_LOCAL_ROOT_CANDIDATE_DIRS.map(root => path.join(root, 'stocklink')),
+  ...THS_LOCAL_ROOT_CANDIDATE_DIRS.map(root => path.join(root, 'Backup', 'stocklink_bk')),
+].filter(Boolean);
+const PERSIST_CACHE_DIR = path.join(__dirname, 'kpl-persist-cache');
+const RUNTIME_CONFIG_PATH = path.join(__dirname, 'kpl-runtime-config.json');
+const ADMIN_CONFIG_PATH = path.join(__dirname, 'panda-admin-config.json');
+const AUTH_DB_PATH = path.join(__dirname, 'panda-auth-db.json');
+const AUTH_SESSION_PATH = path.join(__dirname, 'panda-auth-sessions.json');
+const CHATTER_DIR = path.join(__dirname, 'panda-chatter');
+const CHATTER_DB_PATH = path.join(CHATTER_DIR, 'posts.json');
+const CHATTER_IMAGE_DIR = path.join(CHATTER_DIR, 'images');
+const SITE_SYNC_CONFIG_PATH = path.join(__dirname, 'panda-sync-config.json');
+const SITE_SYNC_STATE_PATH = path.join(__dirname, 'panda-sync-state.json');
+const SITE_SYNC_MANIFEST_CACHE_PATH = path.join(__dirname, 'panda-site-sync-manifest-cache.json');
+const DOCS_CARDS_PATH = path.join(__dirname, 'panda-docs-cards.json');
+function parseSiteSyncBool(value) {
+  const text = String(value ?? '').trim().toLowerCase();
+  if (!text) return null;
+  if (['1', 'true', 'yes', 'y', 'on', 'allow', 'enabled'].includes(text)) return true;
+  if (['0', 'false', 'no', 'n', 'off', 'deny', 'disabled'].includes(text)) return false;
+  return null;
+}
+function readSiteSyncLocalRoleConfigSync() {
+  try { return JSON.parse(fsSync.readFileSync(SITE_SYNC_CONFIG_PATH, 'utf8')); }
+  catch { return {}; }
+}
+const SITE_SYNC_LOCAL_ROLE_CONFIG = readSiteSyncLocalRoleConfigSync();
+const SITE_SYNC_NODE_ROLE = String(
+  process.env.PANDA_SITE_SYNC_ROLE ||
+  SITE_SYNC_LOCAL_ROLE_CONFIG.nodeRole ||
+  SITE_SYNC_LOCAL_ROLE_CONFIG.role ||
+  ''
+).trim().toLowerCase();
+const ALLOW_INBOUND_SITE_SYNC = (() => {
+  const envDecision = parseSiteSyncBool(process.env.PANDA_ALLOW_INBOUND_SITE_SYNC || process.env.ALLOW_INBOUND_SITE_SYNC);
+  if (envDecision !== null) return envDecision;
+  const configDecision = parseSiteSyncBool(
+    SITE_SYNC_LOCAL_ROLE_CONFIG.allowInboundSiteSync ?? SITE_SYNC_LOCAL_ROLE_CONFIG.allowInbound
+  );
+  if (configDecision !== null) return configDecision;
+  if (['cloud', 'authority', 'source'].includes(SITE_SYNC_NODE_ROLE)) return false;
+  if (['company', 'company-host', 'client', 'workstation', 'puller', 'mirror'].includes(SITE_SYNC_NODE_ROLE)) return true;
+  return false;
+})();
+const AUTH_MAIL_CONFIG_PATH = path.join(__dirname, 'panda-mail-config.json');
+const AUTH_MAIL_OUTBOX_DIR = path.join(__dirname, 'panda-mail-outbox');
+const DISCOVERY_DB_PATH = path.join(__dirname, 'panda-discovery-db.json');
+const DISCOVERY_IMAGE_CACHE_DIR = path.join(PERSIST_CACHE_DIR, 'discovery-images');
+const JIUYANGONGSHE_AUTH_PATH = path.join(__dirname, 'jiuyangongshe-auth.json');
+const SOURCE_STRUCTURER_CONFIG_PATH = path.join(__dirname, 'source-structurer-config.json');
+const JIUYANGONGSHE_AUTH_PROFILE_DIR = path.join(process.env.LOCALAPPDATA || __dirname, 'PandaKplDashboard', 'jiuyangongshe-login-profile');
+const JIUYANGONGSHE_AUTH_CDP_PORT = Number(process.env.JIUYANGONGSHE_AUTH_CDP_PORT || 9227);
+const PERMANENT_HIDDEN_PATH = path.join(__dirname, 'kpl-permanent-hidden-boards.json');
+const OPS_LOG_PATH = path.join(__dirname, 'panda-cloud-ops-2026-06-19.md');
+const DEFAULT_ZS_TYPE = '7';
+const EASTMONEY_ZS_TYPE = '6';
+const THS_ZS_TYPE = '5';
+const DISABLED_ZS_TYPES = new Set([]);
+const AUTO_SNAPSHOT_ZS_TYPES = [DEFAULT_ZS_TYPE, EASTMONEY_ZS_TYPE, THS_ZS_TYPE];
+const BOARD_COUNT = 8;
+const BOARD_INITIAL_CANDIDATE_COUNT = 15;
+const MIN_VISIBLE_BOARD_COUNT = 4;
+const MIN_BOARD_GAIN_PCT = -0.5;
+const BOARD_RANK_FETCH_STEP = 20;
+const SNAPSHOT_BOARD_POOL = 32;
+const MIN_BOARD_ZT_COUNT = 2;
+const CLOSE_DB_MIN_STOCK_COUNT = 5000;
+const CLOSE_DB_SYNC_TRADING_DAYS = 30;
+const AUTO_CLEANUP_RETENTION_DAYS = Number(process.env.KPL_CLEANUP_RETENTION_DAYS || 30);
+const AUTO_CLEANUP_MAX_CACHE_FILE_AGE_DAYS = Number(process.env.KPL_CACHE_FILE_RETENTION_DAYS || 30);
+const AUTO_CLEANUP_RUN_HOUR = Number(process.env.KPL_CLEANUP_RUN_HOUR || 15);
+const AUTO_CLEANUP_RUN_MINUTE = Number(process.env.KPL_CLEANUP_RUN_MINUTE || 45);
+const AUTH_LOGIN_RETENTION_MS = Number(process.env.PANDA_AUTH_LOGIN_RETENTION_DAYS || 60) * 24 * 60 * 60 * 1000;
+const AUTH_PASSWORD_RESET_TTL_MS = Number(process.env.PANDA_AUTH_RESET_TTL_MINUTES || 15) * 60 * 1000;
+const AUTH_REGISTER_VERIFY_TTL_MS = Number(process.env.PANDA_AUTH_REGISTER_VERIFY_TTL_MINUTES || 15) * 60 * 1000;
+const AUTH_PASSWORD_HASH_ITERATIONS = Number(process.env.PANDA_AUTH_PASSWORD_HASH_ITERATIONS || 120000);
+const DISCOVERY_AUTO_SYNC_HOUR = Number(process.env.PANDA_DISCOVERY_AUTO_SYNC_HOUR || 12);
+const DISCOVERY_AUTO_SYNC_MINUTE = Number(process.env.PANDA_DISCOVERY_AUTO_SYNC_MINUTE || 0);
+const DISCOVERY_CITY_LIMIT = Number(process.env.PANDA_DISCOVERY_CITY_LIMIT || 24);
+const DISCOVERY_CATEGORY_PER_CITY_LIMIT = Number(process.env.PANDA_DISCOVERY_CATEGORY_PER_CITY_LIMIT || 3);
+const DISCOVERY_IMAGE_ENHANCE_LIMIT = Number(process.env.PANDA_DISCOVERY_IMAGE_ENHANCE_LIMIT || 24);
+const CHATTER_MAX_POSTS = Number(process.env.PANDA_CHATTER_MAX_POSTS || 500);
+const CHATTER_TEXT_MAX = Number(process.env.PANDA_CHATTER_TEXT_MAX || 1200);
+const CHATTER_COMMENT_MAX = Number(process.env.PANDA_CHATTER_COMMENT_MAX || 600);
+const CHATTER_MAX_COMMENTS_PER_POST = Number(process.env.PANDA_CHATTER_MAX_COMMENTS_PER_POST || 200);
+const CHATTER_IMAGE_MAX_BYTES = Number(process.env.PANDA_CHATTER_IMAGE_MAX_BYTES || 5 * 1024 * 1024);
+const MAIN_ZT_COUNT_RULE_VERSION = 'multi-source-main-reason-v12';
+const MAIN_REASON_DB_COMPATIBLE_RULE_VERSIONS = new Set([
+  'multi-source-main-reason-v4',
+  'multi-source-main-reason-v5',
+  'multi-source-main-reason-v6',
+  'multi-source-main-reason-v7',
+  'multi-source-main-reason-v8',
+  MAIN_ZT_COUNT_RULE_VERSION,
+]);
+const MAIN_REASON_SYNC_DEFAULT_DAYS = 30;
+const MAIN_REASON_SYNC_MAX_DAYS = 30;
+const REQUIRED_REVIEW_SOURCE_GROUPS = [
+  { group: 'kaipanla', label: '复盘啦' },
+  { group: 'jiuyangongshe', label: '韭研' },
+  { group: 'xuangubao', label: '\u9009\u80a1\u5b9d' },
+  { group: 'tgb', label: '淘股吧' },
+];
+// 'ths' 同花顺禁用(2026-06-27 用户决定):同花顺 lu_desc 是每股标签拼接、太碎/噪声,已被降权;
+// 现有 tgb 干净题材源覆盖,去掉同花顺让主因共识更精准。可随时从此集合移除恢复。
+const DISABLED_REVIEW_SOURCE_GROUPS = new Set(['eastmoney', 'ths']);
+const SITE_SYNC_MAX_FILE_BYTES = Number(process.env.PANDA_SYNC_MAX_FILE_BYTES || 24 * 1024 * 1024);
+const SITE_SYNC_OBJECT_BATCH_BYTES = Number(process.env.PANDA_SYNC_OBJECT_BATCH_BYTES || 10 * 1024 * 1024);
+const CHINA_MARKET_CLOSED_RANGES = [
+  { start: '2026-01-01', end: '2026-01-03', label: '元旦休市' },
+  { start: '2026-02-15', end: '2026-02-23', label: '春节休市' },
+  { start: '2026-04-04', end: '2026-04-06', label: '清明节休市' },
+  { start: '2026-05-01', end: '2026-05-05', label: '劳动节休市' },
+  { start: '2026-06-19', end: '2026-06-21', label: '端午节休市' },
+  { start: '2026-09-25', end: '2026-09-27', label: '中秋节休市' },
+  { start: '2026-10-01', end: '2026-10-07', label: '国庆节休市' },
+];
+const EASTMONEY_QUOTE_API_BASE = 'https://push2delay.eastmoney.com/';
+const EASTMONEY_ZT_UT = '7eea3edcaed734bea9cbfc24409ed989';
+const EASTMONEY_ZT_DPT = 'wz.ztzt';
+const THS_JS_URL = 'https://raw.githubusercontent.com/akfamily/akshare/main/akshare/stock_feature/ths.js';
+const BOARD_NAME_FALLBACKS = {
+  '801388': 'VPN',
+};
+const STATIC_FILES = new Map([
+  ['/', 'Qi/index.html'],
+  ['/index.html', 'Qi/index.html'],
+  ['/qi', 'Qi/index.html'],
+  ['/qi/', 'Qi/index.html'],
+  ['/qi/index.html', 'Qi/index.html'],
+  ['/qi-home.jsx', 'Qi/qi-home.jsx'],
+  ['/qi/qi-home.jsx', 'Qi/qi-home.jsx'],
+  ['/qi-home.compiled.js', 'Qi/qi-home.compiled.js'],
+  ['/qi/qi-home.compiled.js', 'Qi/qi-home.compiled.js'],
+  ['/assets/chatter-cute-preview.png', 'Qi/assets/chatter-cute-preview.png'],
+  ['/qi/assets/chatter-cute-preview.png', 'Qi/assets/chatter-cute-preview.png'],
+  ['/kpl', 'kpl-dashboard_17_apple.html'],
+  ['/kpl/', 'kpl-dashboard_17_apple.html'],
+  ['/admin', 'panda-admin.html'],
+  ['/admin/', 'panda-admin.html'],
+  ['/admin.html', 'panda-admin.html'],
+  ['/admin/index.html', 'panda-admin.html'],
+  ['/backend', 'panda-admin.html'],
+  ['/backend/', 'panda-admin.html'],
+  ['/manage', 'panda-admin.html'],
+  ['/manage/', 'panda-admin.html'],
+  ['/panda-admin', 'panda-admin.html'],
+  ['/panda-admin/', 'panda-admin.html'],
+  ['/panda-admin.html', 'panda-admin.html'],
+  ['/kpl-dashboard_17_apple.html', 'kpl-dashboard_17_apple.html'],
+  ['/kpl-dashboard_17_apple_hierarchy.html', 'kpl-dashboard_17_apple_hierarchy.html'],
+  ['/favicon.ico', 'favicon.ico'],
+  ['/apple-touch-icon.png', 'qi-nav-xl-180.png'],
+  ['/android-chrome-192x192.png', 'qi-nav-xl-192.png'],
+  ['/android-chrome-512x512.png', 'qi-nav-xl-512.png'],
+  ['/icon.png', 'qi-nav-xl-512.png'],
+  ['/site.webmanifest', 'site.webmanifest'],
+  ['/qi-orbit-favorite.svg', 'qi-orbit-favorite.svg'],
+  ['/qi-orbit-favorite-32.png', 'qi-orbit-favorite-32.png'],
+  ['/qi-orbit-favorite-180.png', 'qi-orbit-favorite-180.png'],
+  ['/qi-orbit-favorite-192.png', 'qi-orbit-favorite-192.png'],
+  ['/qi-orbit-favorite-512.png', 'qi-orbit-favorite-512.png'],
+  ['/qi-nav-large.svg', 'qi-nav-large.svg'],
+  ['/qi-nav-large-32.png', 'qi-nav-large-32.png'],
+  ['/qi-nav-large-16.png', 'qi-nav-large-16.png'],
+  ['/qi-nav-large-48.png', 'qi-nav-large-48.png'],
+  ['/qi-nav-large-64.png', 'qi-nav-large-64.png'],
+  ['/qi-nav-large-128.png', 'qi-nav-large-128.png'],
+  ['/qi-nav-large-180.png', 'qi-nav-large-180.png'],
+  ['/qi-nav-large-192.png', 'qi-nav-large-192.png'],
+  ['/qi-nav-large-256.png', 'qi-nav-large-256.png'],
+  ['/qi-nav-large-512.png', 'qi-nav-large-512.png'],
+  ['/qi-nav-xl-16.png', 'qi-nav-xl-16.png'],
+  ['/qi-nav-xl-32.png', 'qi-nav-xl-32.png'],
+  ['/qi-nav-xl-48.png', 'qi-nav-xl-48.png'],
+  ['/qi-nav-xl-64.png', 'qi-nav-xl-64.png'],
+  ['/qi-nav-xl-128.png', 'qi-nav-xl-128.png'],
+  ['/qi-nav-xl-180.png', 'qi-nav-xl-180.png'],
+  ['/qi-nav-xl-192.png', 'qi-nav-xl-192.png'],
+  ['/qi-nav-xl-256.png', 'qi-nav-xl-256.png'],
+  ['/qi-nav-xl-512.png', 'qi-nav-xl-512.png'],
+]);
+const SITE_SYNC_FRONTEND_ENTRIES = [
+  'Qi',
+  'kpl-dashboard_17_apple.html',
+  'kpl-dashboard_17_apple_hierarchy.html',
+  'panda-admin.html',
+  'favicon.ico',
+  'site.webmanifest',
+  'qi-favicon.svg',
+  'qi-icon-32.png',
+  'qi-icon-180.png',
+  'qi-icon-192.png',
+  'qi-icon-512.png',
+  'qi-nav-large.svg',
+  'qi-nav-large-16.png',
+  'qi-nav-large-32.png',
+  'qi-nav-large-48.png',
+  'qi-nav-large-64.png',
+  'qi-nav-large-128.png',
+  'qi-nav-large-180.png',
+  'qi-nav-large-192.png',
+  'qi-nav-large-256.png',
+  'qi-nav-large-512.png',
+  'qi-nav-xl-16.png',
+  'qi-nav-xl-32.png',
+  'qi-nav-xl-48.png',
+  'qi-nav-xl-64.png',
+  'qi-nav-xl-128.png',
+  'qi-nav-xl-180.png',
+  'qi-nav-xl-192.png',
+  'qi-nav-xl-256.png',
+  'qi-nav-xl-512.png',
+  'qi-orbit-favorite.svg',
+  'qi-orbit-favorite-32.png',
+  'qi-orbit-favorite-180.png',
+  'qi-orbit-favorite-192.png',
+  'qi-orbit-favorite-512.png',
+  'panda-logo.png',
+  'panda-mainline-star.png',
+  'panda-paw-apple-logo.png',
+];
+const SITE_SYNC_DATABASE_ENTRIES = [
+  'kpl-limitup-db',
+  'kpl-limitup-main-reason-db',
+  'kpl-limitup-main-reason-evidence',
+  'kpl-limitup-main-reason-quality',
+  'kpl-limitup-main-reason-sources',
+  'eastmoney-close-db',
+  'eastmoney-concepts-db',
+  'ths-concepts-db',
+  'ths-manual-boards',
+  'kpl-snapshots',
+  'kpl-permanent-hidden-boards.json',
+  'panda-docs-cards.json',
+  'panda-discovery-db.json',
+];
+const SITE_SYNC_BACKEND_ENTRIES = [
+  'kpl-stats-server.js',
+  'wind-close-db-sync.py',
+  'winrt-ocr.ps1',
+  'package.json',
+  'package-lock.json',
+];
+const SITE_SYNC_LOCAL_ONLY_PATHS = new Set([
+  'start-kpl-stats-server.ps1',
+  'start-kpl-stats-server.bat',
+  'run-kpl-stats-server.cmd',
+  'kpl-runtime-config.json',
+  'panda-admin-config.json',
+  'panda-auth-db.json',
+  'panda-auth-sessions.json',
+  'panda-mail-config.json',
+  'jiuyangongshe-auth.json',
+  'source-structurer-config.json',
+  'panda-sync-config.json',
+  'panda-sync-state.json',
+  'panda-site-sync-manifest-cache.json',
+]);
+const SITE_SYNC_LOCAL_ONLY_PREFIXES = [
+  'logs/',
+  'backups/server-config/',
+  'backups/site-sync/',
+];
+const SITE_SYNC_LOCAL_ONLY_PATTERNS = [
+  /^panda-cloud-ops-\d{4}-\d{2}-\d{2}\.md$/i,
+];
+const SITE_SYNC_AUTO_ROOT_IGNORE_PATTERNS = [
+  /^tmp[-_]/i,
+  /^backup/i,
+  /^bk/i,
+  /before_/i,
+];
+const SITE_SYNC_FRONTEND_AUTO_FILE_EXTS = new Set([
+  '.html',
+  '.css',
+  '.js',
+  '.mjs',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+  '.svg',
+  '.ico',
+  '.woff',
+  '.woff2',
+  '.ttf',
+]);
+const SITE_SYNC_FRONTEND_AUTO_DIR_NAMES = new Set([
+  'assets',
+  'images',
+  'img',
+  'pages',
+  'public',
+  'scripts',
+  'static',
+  'styles',
+]);
+const SITE_SYNC_FRONTEND_AUTO_EXCLUDED_FILES = new Set([
+  'kpl-stats-server.js',
+  'wind-close-db-sync.py',
+]);
+const SITE_SYNC_DATABASE_AUTO_FILE_EXTS = new Set([
+  '.json',
+  '.js',
+  '.mjs',
+  '.cjs',
+  '.py',
+]);
+const SITE_SYNC_DATABASE_AUTO_DIR_PATTERNS = [
+  /(^|[-_])db$/i,
+  /(^|[-_])database$/i,
+  /(^|[-_])sources?$/i,
+  /(^|[-_])snapshots?$/i,
+  /(^|[-_])manual-boards$/i,
+  /(^|[-_])cache$/i,
+];
+const SITE_SYNC_DATABASE_AUTO_FILE_PATTERNS = [
+  /(^|[-_])db\.json$/i,
+  /(^|[-_])hidden[-_]?.*\.json$/i,
+  /(^|[-_])state\.json$/i,
+];
+const SITE_SYNC_BACKEND_AUTO_DIR_NAMES = new Set([
+  'api',
+  'backend',
+  'jobs',
+  'lib',
+  'scripts',
+  'server',
+  'tasks',
+  'workers',
+]);
+const SITE_SYNC_BACKEND_AUTO_FILE_EXTS = new Set([
+  '.js',
+  '.mjs',
+  '.cjs',
+  '.py',
+  '.ps1',
+]);
+const SITE_SYNC_BACKEND_AUTO_FILE_PATTERNS = [
+  /(^|[-_])server\.(js|mjs|cjs)$/i,
+  /(^|[-_])server[-_].*\.(js|mjs|cjs)$/i,
+  /(^|[-_]).*[-_]server\.(js|mjs|cjs)$/i,
+  /(^|[-_]).*[-_]sync\.py$/i,
+  /(^|[-_]).*[-_]job\.(js|mjs|cjs|py)$/i,
+  /(^|[-_]).*[-_]task\.(js|mjs|cjs|py|ps1)$/i,
+];
+const SITE_SYNC_BACKEND_ENTRY_SET = new Set(SITE_SYNC_BACKEND_ENTRIES.map(item => item.toLowerCase()));
+const conceptCache = new Map();
+const dayCache = new Map();
+const plateStocksCache = new Map();
+const klineCache = new Map();
+const reasonCache = new Map();
+const limitUpIndexCache = new Map();
+const gainBaseCache = new Map();
+const closeDbDayCache = new Map();
+const mainZtCountCache = new Map();
+const mainReasonDbCache = new Map();
+const mainReasonSourceCache = new Map();
+const displayLimitUpCodeSetCache = new Map();
+const externalConceptRealtimeStockCache = new Map();
+const eastmoneySingleStockQuoteCache = new Map();
+const adminSessions = new Map();
+let adminSessionsLoaded = false;
+let externalTopicIndexCache = null;
+let externalTopicIndexTask = null;
+let autoSnapshotDay = '';
+let autoCloseDbBackfillDay = '';
+let autoMorningMainReasonDay = '';
+let autoMorningMainReasonLastSlot = '';
+let autoTgbHunanRawEvidenceLastSlot = '';
+let autoTgbVisionLastSlot = '';
+let closeDbSyncTask = null;
+let closeDbSyncState = {
+  running: false,
+  status: 'idle',
+  source: 'close-db',
+};
+let autoEastmoneyConceptSyncDay = '';
+let eastmoneyConceptSyncTask = null;
+let eastmoneyConceptSyncState = {
+  running: false,
+  status: 'idle',
+  source: 'eastmoney',
+};
+let eastmoneyIndexInfoCache = null;
+let autoThsConceptSyncDay = '';
+let thsConceptSyncTask = null;
+let thsConceptSyncState = {
+  running: false,
+  status: 'idle',
+  source: 'ths',
+};
+let thsCookieCache = null;
+let thsJsCache = null;
+let jiuyangongsheAuthCache = null;
+let jiuyangongsheAuthStatusCache = null;
+let jiuyangongsheAuthBrowserProcess = null;
+let jiuyangongsheAutoLoginTask = null;
+let thsConceptBoardsRealtimeCache = null;
+let thsLocalConceptCache = null;
+let thsLocalStockNameCache = null;
+let thsLocalStockLinkCache = null;
+let tencentKlineBlockedUntil = 0;
+let autoCleanupDay = '';
+let autoDiscoverySyncDay = '';
+let discoverySyncTask = null;
+let discoverySyncState = {
+  running: false,
+  status: 'idle',
+  source: 'public-search',
+};
+
+function send(res, status, data) {
+  const body = JSON.stringify(data);
+  res.writeHead(status, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+      'Access-Control-Allow-Headers': 'x-api-key,x-admin-token,x-site-sync-token,content-type',
+  });
+  res.end(body);
+}
+
+function secureEqualText(a, b) {
+  const aa = Buffer.from(String(a || ''));
+  const bb = Buffer.from(String(b || ''));
+  if (!aa.length || aa.length !== bb.length) return false;
+  return crypto.timingSafeEqual(aa, bb);
+}
+
+function authNowIso() {
+  return new Date().toISOString();
+}
+
+function authId(prefix) {
+  return `${prefix}_${crypto.randomBytes(10).toString('hex')}`;
+}
+
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function normalizeLoginName(value) {
+  return String(value || '').trim();
+}
+
+function hashSecret(secret, salt = crypto.randomBytes(16).toString('hex'), iterations = AUTH_PASSWORD_HASH_ITERATIONS) {
+  return {
+    salt,
+    iterations,
+    digest: 'sha256',
+    passwordHash: crypto.pbkdf2Sync(String(secret || ''), salt, iterations, 32, 'sha256').toString('hex'),
+  };
+}
+
+function verifySecret(secret, hashInfo) {
+  if (!hashInfo?.salt || !hashInfo?.passwordHash) return false;
+  const digest = hashInfo.digest || 'sha256';
+  const iterations = Number(hashInfo.iterations || AUTH_PASSWORD_HASH_ITERATIONS);
+  const hash = crypto.pbkdf2Sync(String(secret || ''), hashInfo.salt, iterations, 32, digest).toString('hex');
+  return secureEqualText(hash, hashInfo.passwordHash);
+}
+
+function publicAuthUser(user) {
+  if (!user) return null;
+  return {
+    id: user.id,
+    username: user.username,
+    role: user.role || 'user',
+    email: user.email || '',
+    phone: user.phone || '',
+    disabled: !!user.disabled,
+    emailVerifiedAt: user.emailVerifiedAt || '',
+    createdAt: user.createdAt || '',
+    updatedAt: user.updatedAt || '',
+    passwordChangedAt: user.passwordChangedAt || '',
+    lastLoginAt: user.lastLoginAt || '',
+  };
+}
+
+function pruneAuthDb(db) {
+  const cutoff = Date.now() - AUTH_LOGIN_RETENTION_MS;
+  db.loginEvents = Array.isArray(db.loginEvents)
+    ? db.loginEvents.filter(event => {
+        const ts = Date.parse(event.at || '');
+        return Number.isFinite(ts) && ts >= cutoff;
+      })
+    : [];
+  const resetCutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  db.passwordResets = Array.isArray(db.passwordResets)
+    ? db.passwordResets.filter(item => {
+        const ts = Date.parse(item.requestedAt || '');
+        return Number.isFinite(ts) && ts >= resetCutoff && !item.usedAt;
+      })
+    : [];
+  db.registrationVerifications = Array.isArray(db.registrationVerifications)
+    ? db.registrationVerifications.filter(item => {
+        const expiresAt = Date.parse(item.expiresAt || '');
+        return Number.isFinite(expiresAt) && expiresAt >= Date.now() && !item.usedAt;
+      })
+    : [];
+}
+
+async function readAdminConfigFileOnly() {
+  const envUsername = String(process.env.KPL_ADMIN_USERNAME || process.env.KPL_ADMIN_USER || '').trim();
+  const envPassword = String(process.env.KPL_ADMIN_PASSWORD || '').trim();
+  if (envPassword) {
+    return { source: 'env', username: envUsername || 'admin', password: envPassword };
+  }
+  try {
+    const payload = JSON.parse(await fs.readFile(ADMIN_CONFIG_PATH, 'utf8'));
+    return {
+      source: 'file',
+      username: String(payload.username || 'admin').trim(),
+      salt: String(payload.salt || ''),
+      passwordHash: String(payload.passwordHash || ''),
+      iterations: Number(payload.iterations || 120000),
+      digest: String(payload.digest || 'sha256'),
+    };
+  } catch {}
+  return null;
+}
+
+async function seedAdminUser(db) {
+  db.users = Array.isArray(db.users) ? db.users : [];
+  if (db.users.some(user => user.role === 'admin')) return false;
+  const config = await readAdminConfigFileOnly();
+  if (!config) return false;
+  const now = authNowIso();
+  const hashInfo = config.passwordHash
+    ? {
+        salt: config.salt,
+        passwordHash: config.passwordHash,
+        iterations: config.iterations || 120000,
+        digest: config.digest || 'sha256',
+      }
+    : hashSecret(config.password || '');
+  db.users.push({
+    id: authId('usr'),
+    username: String(config.username || 'admin').trim() || 'admin',
+    role: 'admin',
+    email: String(process.env.PANDA_ADMIN_EMAIL || '').trim(),
+    phone: String(process.env.PANDA_ADMIN_PHONE || '').trim(),
+    disabled: false,
+    ...hashInfo,
+    createdAt: now,
+    updatedAt: now,
+    passwordChangedAt: now,
+    source: config.source || 'seed',
+  });
+  return true;
+}
+
+async function readAuthDb() {
+  let db = null;
+  try {
+    db = JSON.parse(await fs.readFile(AUTH_DB_PATH, 'utf8'));
+  } catch {
+    db = null;
+  }
+  if (!db || typeof db !== 'object') {
+    db = { version: 1, users: [], loginEvents: [], passwordResets: [], registrationVerifications: [] };
+  }
+  db.version = 1;
+  db.users = Array.isArray(db.users) ? db.users : [];
+  db.loginEvents = Array.isArray(db.loginEvents) ? db.loginEvents : [];
+  db.passwordResets = Array.isArray(db.passwordResets) ? db.passwordResets : [];
+  db.registrationVerifications = Array.isArray(db.registrationVerifications) ? db.registrationVerifications : [];
+  const seeded = await seedAdminUser(db);
+  pruneAuthDb(db);
+  if (seeded) await writeAuthDb(db);
+  return db;
+}
+
+async function writeAuthDb(db) {
+  db.version = 1;
+  pruneAuthDb(db);
+  await fs.writeFile(AUTH_DB_PATH, JSON.stringify(db, null, 2), 'utf8');
+}
+
+function findAuthUser(db, login) {
+  const raw = normalizeLoginName(login);
+  const lower = raw.toLowerCase();
+  return (db.users || []).find(user =>
+    String(user.username || '').toLowerCase() === lower ||
+    String(user.email || '').toLowerCase() === lower ||
+    String(user.phone || '') === raw
+  ) || null;
+}
+
+function requestIp(req) {
+  const forwarded = String(req?.headers?.['x-forwarded-for'] || '').split(',')[0].trim();
+  return forwarded || req?.socket?.remoteAddress || '';
+}
+
+function requestUserAgent(req) {
+  return String(req?.headers?.['user-agent'] || '').slice(0, 360);
+}
+
+async function recordLoginEvent(req, event) {
+  const db = await readAuthDb();
+  db.loginEvents.push({
+    id: authId('log'),
+    at: authNowIso(),
+    ip: requestIp(req),
+    userAgent: requestUserAgent(req),
+    ...event,
+  });
+  await writeAuthDb(db);
+}
+
+async function touchAuthUserLogin(userId) {
+  const db = await readAuthDb();
+  const user = db.users.find(item => item.id === userId);
+  if (user) {
+    user.lastLoginAt = authNowIso();
+    user.updatedAt = user.updatedAt || user.lastLoginAt;
+    await writeAuthDb(db);
+  }
+}
+
+function normalizeAuthSession(session) {
+  if (!session || typeof session !== 'object') return null;
+  const token = String(session.token || '').trim();
+  const userId = String(session.userId || '').trim();
+  const username = String(session.username || '').trim();
+  const role = String(session.role || 'user').trim() === 'admin' ? 'admin' : 'user';
+  const expiresAtMs = Number(session.expiresAtMs || 0);
+  if (!token || token.length < 16 || !userId || !Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) return null;
+  return {
+    token,
+    userId,
+    username,
+    role,
+    createdAt: String(session.createdAt || authNowIso()),
+    lastSeenAt: String(session.lastSeenAt || session.createdAt || authNowIso()),
+    expiresAtMs,
+  };
+}
+
+function persistAuthSessionsToDisk() {
+  try {
+    const now = Date.now();
+    const sessions = Array.from(adminSessions.values())
+      .map(normalizeAuthSession)
+      .filter(session => session && session.expiresAtMs > now)
+      .sort((a, b) => b.expiresAtMs - a.expiresAtMs)
+      .slice(0, 500);
+    const payload = {
+      version: 1,
+      updatedAt: authNowIso(),
+      ttlMs: ADMIN_SESSION_TTL_MS,
+      sessions,
+    };
+    fsSync.mkdirSync(path.dirname(AUTH_SESSION_PATH), { recursive: true });
+    const tempPath = `${AUTH_SESSION_PATH}.tmp`;
+    fsSync.writeFileSync(tempPath, JSON.stringify(payload, null, 2), 'utf8');
+    fsSync.renameSync(tempPath, AUTH_SESSION_PATH);
+  } catch (err) {
+    console.warn('persist auth sessions failed:', err.message);
+  }
+}
+
+function loadAuthSessionsFromDisk() {
+  if (adminSessionsLoaded) return;
+  adminSessionsLoaded = true;
+  let shouldPersist = false;
+  try {
+    const payload = JSON.parse(fsSync.readFileSync(AUTH_SESSION_PATH, 'utf8'));
+    const rows = Array.isArray(payload?.sessions)
+      ? payload.sessions
+      : Array.isArray(payload)
+        ? payload
+        : Object.values(payload || {});
+    for (const row of rows) {
+      const session = normalizeAuthSession(row);
+      if (session) adminSessions.set(session.token, session);
+      else shouldPersist = true;
+    }
+  } catch {}
+  if (shouldPersist) persistAuthSessionsToDisk();
+}
+
+function createAuthSession(user) {
+  loadAuthSessionsFromDisk();
+  const token = crypto.randomBytes(32).toString('hex');
+  const expiresAtMs = Date.now() + ADMIN_SESSION_TTL_MS;
+  adminSessions.set(token, {
+    token,
+    userId: user.id,
+    username: user.username,
+    role: user.role || 'user',
+    createdAt: authNowIso(),
+    lastSeenAt: authNowIso(),
+    expiresAtMs,
+  });
+  cleanupAdminSessions();
+  persistAuthSessionsToDisk();
+  return { token, expiresAtMs };
+}
+
+function validateNewPassword(password) {
+  const value = String(password || '');
+  if (value.length < 8) return 'password must be at least 8 characters';
+  if (value.length > 128) return 'password is too long';
+  if (/^\d+$/.test(value)) return 'password cannot be only numbers';
+  if (/^[A-Za-z]+$/.test(value)) return 'password cannot be only letters';
+  return '';
+}
+
+function validateUsername(username) {
+  const value = normalizeLoginName(username);
+  if (value.length < 2 || value.length > 32) return false;
+  return /^[\w.\-\u4e00-\u9fa5]+$/u.test(value);
+}
+
+function validateEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email));
+}
+
+function validatePhone(phone) {
+  return /^\+?\d[\d\s-]{5,19}$/.test(String(phone || '').trim());
+}
+
+async function smtpRead(socket) {
+  return new Promise((resolve, reject) => {
+    let buffer = '';
+    const timeout = setTimeout(() => cleanup(new Error('smtp timeout')), 15000);
+    const cleanup = (err, data) => {
+      clearTimeout(timeout);
+      socket.off('data', onData);
+      socket.off('error', onError);
+      if (err) reject(err);
+      else resolve(data);
+    };
+    const onError = err => cleanup(err);
+    const onData = chunk => {
+      buffer += chunk.toString('utf8');
+      const lines = buffer.split(/\r?\n/).filter(Boolean);
+      const last = lines[lines.length - 1] || '';
+      const match = last.match(/^(\d{3})\s/);
+      if (match) cleanup(null, { code: Number(match[1]), raw: buffer });
+    };
+    socket.on('data', onData);
+    socket.on('error', onError);
+  });
+}
+
+async function smtpCommand(socket, command, okCodes = [250]) {
+  socket.write(`${command}\r\n`);
+  const response = await smtpRead(socket);
+  if (!okCodes.includes(response.code)) {
+    throw new Error(`smtp command failed ${response.code}: ${response.raw}`);
+  }
+  return response;
+}
+
+function smtpMessage({ from, to, subject, text }) {
+  const encodedSubject = `=?UTF-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`;
+  const safeText = String(text || '').replace(/^\./gm, '..');
+  return [
+    `From: ${from}`,
+    `To: ${to}`,
+    `Subject: ${encodedSubject}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: 8bit',
+    '',
+    safeText,
+  ].join('\r\n');
+}
+
+function normalizeSmtpConfig(raw = {}) {
+  const host = String(raw.host || raw.smtpHost || '').trim();
+  const port = Number(raw.port || raw.smtpPort || 465);
+  const secure = raw.secure === true || raw.secure === '1' || raw.secure === 'true' || port === 465;
+  const starttls = raw.starttls === false || raw.starttls === '0' || raw.starttls === 'false' ? false : true;
+  const user = String(raw.user || raw.username || raw.smtpUser || '').trim();
+  const pass = String(raw.pass || raw.password || raw.smtpPass || '');
+  const from = String(raw.from || raw.smtpFrom || user || '').trim();
+  return {
+    host,
+    port: Number.isFinite(port) && port > 0 ? port : 465,
+    secure,
+    starttls,
+    user,
+    pass,
+    from,
+    savedAt: raw.savedAt || '',
+    source: raw.source || '',
+  };
+}
+
+function envSmtpConfig() {
+  const host = String(process.env.SMTP_HOST || '').trim();
+  if (!host) return null;
+  return normalizeSmtpConfig({
+    host,
+    port: process.env.SMTP_PORT || 465,
+    secure: process.env.SMTP_SECURE || '',
+    starttls: process.env.SMTP_STARTTLS ?? '1',
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+    from: process.env.SMTP_FROM || process.env.SMTP_USER || '',
+    source: 'env',
+  });
+}
+
+async function readSavedSmtpConfig() {
+  try {
+    const payload = JSON.parse(await fs.readFile(AUTH_MAIL_CONFIG_PATH, 'utf8'));
+    const config = normalizeSmtpConfig({ ...payload, source: 'file' });
+    return config.host ? config : null;
+  } catch {
+    return null;
+  }
+}
+
+async function getSmtpConfig() {
+  return await readSavedSmtpConfig() || envSmtpConfig();
+}
+
+async function isSmtpConfigured() {
+  const config = await getSmtpConfig();
+  return !!config?.host;
+}
+
+function publicSmtpConfig(config) {
+  const c = config || {};
+  return {
+    configured: !!c.host,
+    source: c.source || '',
+    host: c.host || '',
+    port: c.port || '',
+    secure: !!c.secure,
+    starttls: c.starttls !== false,
+    user: c.user || '',
+    from: c.from || '',
+    hasPassword: !!c.pass,
+    savedAt: c.savedAt || '',
+  };
+}
+
+async function writeSmtpConfig(config) {
+  const payload = {
+    ...normalizeSmtpConfig(config),
+    savedAt: authNowIso(),
+  };
+  if (!payload.host) throw new Error('SMTP host required');
+  if (!payload.from) throw new Error('SMTP from required');
+  await fs.writeFile(AUTH_MAIL_CONFIG_PATH, JSON.stringify(payload, null, 2), 'utf8');
+  return payload;
+}
+
+async function sendSmtpMail({ to, subject, text }, smtpConfig = null) {
+  const config = smtpConfig || await getSmtpConfig();
+  const host = String(config?.host || '').trim();
+  if (!host) return null;
+  const port = Number(config.port || 465);
+  const secure = !!config.secure || port === 465;
+  const user = String(config.user || '').trim();
+  const pass = String(config.pass || '');
+  const from = String(config.from || user || '').trim();
+  if (!from) throw new Error('SMTP_FROM or SMTP_USER is required');
+  let socket = secure ? tls.connect({ host, port, servername: host }) : net.connect({ host, port });
+  await new Promise((resolve, reject) => {
+    socket.once(secure ? 'secureConnect' : 'connect', resolve);
+    socket.once('error', reject);
+  });
+  let greeting = await smtpRead(socket);
+  if (greeting.code !== 220) throw new Error(`smtp greeting failed ${greeting.raw}`);
+  await smtpCommand(socket, 'EHLO panda.local', [250]);
+  if (!secure && config.starttls !== false) {
+    await smtpCommand(socket, 'STARTTLS', [220]);
+    socket = tls.connect({ socket, servername: host });
+    await new Promise((resolve, reject) => {
+      socket.once('secureConnect', resolve);
+      socket.once('error', reject);
+    });
+    await smtpCommand(socket, 'EHLO panda.local', [250]);
+  }
+  if (user && pass) {
+    await smtpCommand(socket, 'AUTH LOGIN', [334]);
+    await smtpCommand(socket, Buffer.from(user).toString('base64'), [334]);
+    await smtpCommand(socket, Buffer.from(pass).toString('base64'), [235]);
+  }
+  await smtpCommand(socket, `MAIL FROM:<${from}>`, [250]);
+  await smtpCommand(socket, `RCPT TO:<${to}>`, [250, 251]);
+  await smtpCommand(socket, 'DATA', [354]);
+  await smtpCommand(socket, `${smtpMessage({ from, to, subject, text })}\r\n.`, [250]);
+  await smtpCommand(socket, 'QUIT', [221]).catch(() => null);
+  socket.end();
+  return { delivery: 'smtp' };
+}
+
+async function writeMailOutbox({ to, subject, text }) {
+  await fs.mkdir(AUTH_MAIL_OUTBOX_DIR, { recursive: true });
+  const file = path.join(AUTH_MAIL_OUTBOX_DIR, `${new Date().toISOString().replace(/[:.]/g, '-')}-${authId('mail')}.json`);
+  await fs.writeFile(file, JSON.stringify({ to, subject, text, createdAt: authNowIso() }, null, 2), 'utf8');
+  return { delivery: 'outbox', file };
+}
+
+async function sendAuthMail(payload) {
+  const sent = await sendSmtpMail(payload).catch(err => ({ delivery: 'smtp-error', error: err.message }));
+  if (sent && sent.delivery === 'smtp') return sent;
+  const outbox = await writeMailOutbox(payload);
+  if (sent?.error) outbox.smtpError = sent.error;
+  return outbox;
+}
+
+async function listMailOutbox(limit = 50) {
+  try {
+    const files = (await fs.readdir(AUTH_MAIL_OUTBOX_DIR))
+      .filter(name => name.endsWith('.json'))
+      .sort()
+      .reverse()
+      .slice(0, Math.max(1, Math.min(200, Number(limit || 50))));
+    const rows = [];
+    for (const name of files) {
+      try {
+        const item = JSON.parse(await fs.readFile(path.join(AUTH_MAIL_OUTBOX_DIR, name), 'utf8'));
+        rows.push({
+          file: name,
+          to: item.to || '',
+          subject: item.subject || '',
+          text: String(item.text || '').slice(0, 800),
+          createdAt: item.createdAt || '',
+        });
+      } catch {}
+    }
+    return rows;
+  } catch {
+    return [];
+  }
+}
+
+async function readAdminConfig() {
+  const envUsername = String(process.env.KPL_ADMIN_USERNAME || process.env.KPL_ADMIN_USER || '').trim();
+  const envPassword = String(process.env.KPL_ADMIN_PASSWORD || '').trim();
+  if (envPassword) {
+    return {
+      source: 'env',
+      username: envUsername || 'admin',
+      password: envPassword,
+    };
+  }
+  try {
+    const payload = JSON.parse(await fs.readFile(ADMIN_CONFIG_PATH, 'utf8'));
+    return {
+      source: 'file',
+      username: String(payload.username || 'admin').trim(),
+      salt: String(payload.salt || ''),
+      passwordHash: String(payload.passwordHash || ''),
+      iterations: Number(payload.iterations || 120000),
+      digest: String(payload.digest || 'sha256'),
+    };
+  } catch {}
+  const legacyPassword = await readSavedApiKey();
+  if (!legacyPassword) return null;
+  return {
+    source: 'legacy-api-key',
+    username: 'admin',
+    password: legacyPassword,
+  };
+}
+
+function verifyAdminPassword(config, password) {
+  if (!config) return false;
+  if (config.password) return secureEqualText(password, config.password);
+  if (!config.salt || !config.passwordHash) return false;
+  const digest = config.digest || 'sha256';
+  const iterations = Number(config.iterations || 120000);
+  const hash = crypto.pbkdf2Sync(String(password || ''), config.salt, iterations, 32, digest).toString('hex');
+  return secureEqualText(hash, config.passwordHash);
+}
+
+async function verifyAdminLogin(username, password) {
+  const db = await readAuthDb();
+  const adminCount = db.users.filter(user => user.role === 'admin').length;
+  if (!adminCount) return { ok: false, configured: false };
+  const user = findAuthUser(db, username);
+  if (!user || user.role !== 'admin') return { ok: false, configured: true };
+  if (user.disabled) return { ok: false, configured: true, disabled: true, user };
+  return {
+    ok: verifySecret(password, user),
+    configured: true,
+    username: user.username,
+    source: user.source || 'auth-db',
+    user,
+  };
+}
+
+function cleanupAdminSessions() {
+  loadAuthSessionsFromDisk();
+  const now = Date.now();
+  let changed = false;
+  for (const [token, session] of adminSessions.entries()) {
+    if (!session?.expiresAtMs || session.expiresAtMs <= now) {
+      adminSessions.delete(token);
+      changed = true;
+    }
+  }
+  if (changed) persistAuthSessionsToDisk();
+}
+
+function readAdminToken(req) {
+  const headerToken = String(req?.headers?.['x-admin-token'] || '').trim();
+  if (headerToken) return headerToken;
+  const cookie = String(req?.headers?.cookie || '');
+  const match = cookie.match(/(?:^|;\s*)panda_admin_token=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
+function adminSessionFromToken(token) {
+  const key = String(token || '');
+  if (!key) return null;
+  cleanupAdminSessions();
+  const session = adminSessions.get(key);
+  if (!session || session.expiresAtMs <= Date.now()) return null;
+  const remainingMs = session.expiresAtMs - Date.now();
+  if (remainingMs <= ADMIN_SESSION_RENEW_WINDOW_MS) {
+    session.expiresAtMs = Date.now() + ADMIN_SESSION_TTL_MS;
+    session.lastSeenAt = authNowIso();
+    adminSessions.set(key, session);
+    persistAuthSessionsToDisk();
+  }
+  return session;
+}
+
+function isAdminRequest(req) {
+  const session = adminSessionFromToken(readAdminToken(req));
+  return !!session && session.role === 'admin';
+}
+
+function requireAdmin(req, res) {
+  if (isAdminRequest(req)) return true;
+  send(res, 403, { error: 'admin required' });
+  return false;
+}
+
+function accountSessionFromRequest(req) {
+  return adminSessionFromToken(readAdminToken(req));
+}
+
+function requireAccount(req, res) {
+  const session = accountSessionFromRequest(req);
+  if (session) return session;
+  send(res, 401, { error: 'login required' });
+  return null;
+}
+
+async function adminLogin(url, req, res) {
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const body = await readJsonBody(req);
+  const username = String(body.username || '').trim();
+  const password = String(body.password || '').trim();
+  const result = await verifyAdminLogin(username, password);
+  if (!result.configured) return send(res, 400, { error: 'admin account not configured' });
+  if (!result.ok) {
+    await recordLoginEvent(req, {
+      type: 'admin-login',
+      username,
+      success: false,
+      reason: result.disabled ? 'disabled' : 'invalid credentials',
+    });
+    return send(res, 401, { error: 'invalid admin credentials' });
+  }
+  const session = createAuthSession(result.user);
+  await touchAuthUserLogin(result.user.id);
+  await recordLoginEvent(req, {
+    type: 'admin-login',
+    userId: result.user.id,
+    username: result.user.username,
+    role: result.user.role,
+    success: true,
+  });
+  return send(res, 200, {
+    ok: true,
+    token: session.token,
+    username: result.username,
+    role: result.user.role,
+    expiresAt: new Date(session.expiresAtMs).toISOString(),
+  });
+}
+
+async function adminStatus(url, req, res) {
+  const db = await readAuthDb();
+  const session = adminSessionFromToken(readAdminToken(req));
+  return send(res, 200, {
+    ok: true,
+    configured: db.users.some(user => user.role === 'admin'),
+    admin: !!session && session.role === 'admin',
+    username: session?.username || '',
+    role: session?.role || '',
+    expiresAt: session ? new Date(session.expiresAtMs).toISOString() : '',
+  });
+}
+
+async function authRegister(url, req, res) {
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const body = await readJsonBody(req);
+  const username = normalizeLoginName(body.username);
+  const email = normalizeEmail(body.email);
+  const phone = String(body.phone || '').trim();
+  const password = String(body.password || '');
+  const emailCode = String(body.emailCode || body.code || '').trim();
+  if (!validateUsername(username)) return send(res, 400, { error: 'invalid username' });
+  if (!validateEmail(email)) return send(res, 400, { error: 'invalid email' });
+  if (!phone) return send(res, 400, { error: 'phone required' });
+  if (!validatePhone(phone)) return send(res, 400, { error: 'invalid phone' });
+  const passwordError = validateNewPassword(password);
+  if (passwordError) return send(res, 400, { error: passwordError });
+  if (!/^\d{6}$/.test(emailCode)) return send(res, 400, { error: 'email verification code required' });
+  const db = await readAuthDb();
+  const usernameLower = username.toLowerCase();
+  if (db.users.some(user => String(user.username || '').toLowerCase() === usernameLower)) {
+    return send(res, 409, { error: 'username already exists' });
+  }
+  if (db.users.some(user => String(user.email || '').toLowerCase() === email)) {
+    return send(res, 409, { error: 'email already exists' });
+  }
+  if (phone && db.users.some(user => String(user.phone || '') === phone)) {
+    return send(res, 409, { error: 'phone already exists' });
+  }
+  const nowMs = Date.now();
+  const verification = [...db.registrationVerifications]
+    .reverse()
+    .find(item => String(item.email || '').toLowerCase() === email && !item.usedAt && Date.parse(item.expiresAt || '') >= nowMs);
+  if (!verification || !verifySecret(emailCode, {
+    salt: verification.salt,
+    passwordHash: verification.codeHash,
+    iterations: verification.iterations,
+    digest: verification.digest,
+  })) {
+    await recordLoginEvent(req, {
+      type: 'register',
+      username,
+      role: 'user',
+      success: false,
+      reason: 'invalid email verification code',
+    });
+    return send(res, 400, { error: 'invalid email verification code' });
+  }
+  const now = authNowIso();
+  const user = {
+    id: authId('usr'),
+    username,
+    role: 'user',
+    email,
+    phone,
+    emailVerifiedAt: now,
+    disabled: false,
+    ...hashSecret(password),
+    createdAt: now,
+    updatedAt: now,
+    passwordChangedAt: now,
+  };
+  db.users.push(user);
+  verification.usedAt = now;
+  await writeAuthDb(db);
+  const session = createAuthSession(user);
+  await touchAuthUserLogin(user.id);
+  await recordLoginEvent(req, {
+    type: 'register',
+    userId: user.id,
+    username: user.username,
+    role: user.role,
+    success: true,
+  });
+  return send(res, 200, {
+    ok: true,
+    token: session.token,
+    user: publicAuthUser(user),
+    expiresAt: new Date(session.expiresAtMs).toISOString(),
+  });
+}
+
+async function authRegisterRequestCode(url, req, res) {
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const body = await readJsonBody(req);
+  const username = normalizeLoginName(body.username);
+  const email = normalizeEmail(body.email);
+  const phone = String(body.phone || '').trim();
+  const password = String(body.password || '');
+  if (!validateUsername(username)) return send(res, 400, { error: 'invalid username' });
+  if (!validateEmail(email)) return send(res, 400, { error: 'invalid email' });
+  if (!phone) return send(res, 400, { error: 'phone required' });
+  if (!validatePhone(phone)) return send(res, 400, { error: 'invalid phone' });
+  const passwordError = validateNewPassword(password);
+  if (passwordError) return send(res, 400, { error: passwordError });
+  const db = await readAuthDb();
+  const usernameLower = username.toLowerCase();
+  if (db.users.some(user => String(user.username || '').toLowerCase() === usernameLower)) {
+    return send(res, 409, { error: 'username already exists' });
+  }
+  if (db.users.some(user => String(user.email || '').toLowerCase() === email)) {
+    return send(res, 409, { error: 'email already exists' });
+  }
+  if (db.users.some(user => String(user.phone || '') === phone)) {
+    return send(res, 409, { error: 'phone already exists' });
+  }
+  if (!await isSmtpConfigured()) {
+    return send(res, 503, { error: 'smtp not configured', smtpConfigured: false });
+  }
+  const code = String(crypto.randomInt(100000, 1000000));
+  const hashInfo = hashSecret(code);
+  const now = Date.now();
+  const verification = {
+    id: authId('reg'),
+    username,
+    email,
+    phone,
+    codeHash: hashInfo.passwordHash,
+    salt: hashInfo.salt,
+    iterations: hashInfo.iterations,
+    digest: hashInfo.digest,
+    requestedAt: new Date(now).toISOString(),
+    expiresAt: new Date(now + AUTH_REGISTER_VERIFY_TTL_MS).toISOString(),
+    usedAt: '',
+    ip: requestIp(req),
+    userAgent: requestUserAgent(req),
+  };
+  db.registrationVerifications.push(verification);
+  await writeAuthDb(db);
+  const mail = await sendAuthMail({
+    to: email,
+    subject: 'Panda 账户注册验证码',
+    text: [
+      `你的 Panda 账户注册验证码是：${code}`,
+      '',
+      `有效期：${Math.round(AUTH_REGISTER_VERIFY_TTL_MS / 60000)} 分钟。`,
+      '如果不是你本人操作，请忽略这封邮件。',
+    ].join('\n'),
+  });
+  if (mail.delivery !== 'smtp') {
+    verification.usedAt = authNowIso();
+    await writeAuthDb(db);
+    await recordLoginEvent(req, {
+      type: 'register-code',
+      username,
+      role: 'user',
+      success: false,
+      reason: mail.smtpError || mail.delivery || 'email delivery failed',
+    });
+    return send(res, 502, {
+      error: 'email delivery failed',
+      delivery: mail.delivery,
+      smtpConfigured: true,
+    });
+  }
+  await recordLoginEvent(req, {
+    type: 'register-code',
+    username,
+    role: 'user',
+    success: true,
+    reason: mail.delivery,
+  });
+  return send(res, 200, {
+    ok: true,
+    delivery: mail.delivery,
+    smtpConfigured: await isSmtpConfigured(),
+    expiresInMinutes: Math.round(AUTH_REGISTER_VERIFY_TTL_MS / 60000),
+  });
+}
+
+async function authLogin(url, req, res) {
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const body = await readJsonBody(req);
+  const login = normalizeLoginName(body.username || body.login);
+  const password = String(body.password || '');
+  const db = await readAuthDb();
+  const user = findAuthUser(db, login);
+  if (!user || user.disabled || !verifySecret(password, user)) {
+    await recordLoginEvent(req, {
+      type: 'login',
+      username: login,
+      userId: user?.id || '',
+      role: user?.role || '',
+      success: false,
+      reason: user?.disabled ? 'disabled' : 'invalid credentials',
+    });
+    return send(res, 401, { error: 'invalid credentials' });
+  }
+  const session = createAuthSession(user);
+  await touchAuthUserLogin(user.id);
+  await recordLoginEvent(req, {
+    type: 'login',
+    userId: user.id,
+    username: user.username,
+    role: user.role,
+    success: true,
+  });
+  return send(res, 200, {
+    ok: true,
+    token: session.token,
+    user: publicAuthUser(user),
+    admin: user.role === 'admin',
+    expiresAt: new Date(session.expiresAtMs).toISOString(),
+  });
+}
+
+async function authMe(url, req, res) {
+  const session = adminSessionFromToken(readAdminToken(req));
+  if (!session) return send(res, 401, { error: 'not logged in' });
+  const db = await readAuthDb();
+  const user = db.users.find(item => item.id === session.userId);
+  if (!user || user.disabled) return send(res, 401, { error: 'session user unavailable' });
+  return send(res, 200, {
+    ok: true,
+    user: publicAuthUser(user),
+    admin: user.role === 'admin',
+    expiresAt: new Date(session.expiresAtMs).toISOString(),
+  });
+}
+
+async function authAdminUsers(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  if (req.method !== 'GET') return send(res, 405, { error: 'method not allowed' });
+  const db = await readAuthDb();
+  const filters = userFiltersFromSearchParams(url.searchParams);
+  const users = db.users.map(publicAuthUser);
+  const filtered = users.filter(user => authUserMatchesFilters(user, filters));
+  return send(res, 200, {
+    ok: true,
+    total: users.length,
+    matched: filtered.length,
+    users: filtered,
+  });
+}
+
+function userFiltersFromSearchParams(params) {
+  return {
+    q: String(params.get('q') || '').trim().toLowerCase(),
+    username: String(params.get('username') || '').trim().toLowerCase(),
+    role: String(params.get('role') || '').trim().toLowerCase(),
+    contact: String(params.get('contact') || '').trim().toLowerCase(),
+  };
+}
+
+function authUserMatchesFilters(user, filters) {
+  if (filters.username && !String(user.username || '').toLowerCase().includes(filters.username)) return false;
+  if (filters.role && String(user.role || '').toLowerCase() !== filters.role) return false;
+  if (filters.contact) {
+    const contact = `${user.email || ''}\n${user.phone || ''}`.toLowerCase();
+    if (!contact.includes(filters.contact)) return false;
+  }
+  if (filters.q) {
+    const haystack = [
+      user.username,
+      user.role,
+      user.email,
+      user.phone,
+      user.createdAt,
+      user.lastLoginAt,
+    ].map(value => String(value || '').toLowerCase()).join('\n');
+    if (!haystack.includes(filters.q)) return false;
+  }
+  return true;
+}
+
+async function authAdminCreateUser(url, req, res) {
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  if (!requireAdmin(req, res)) return;
+  const body = await readJsonBody(req);
+  const username = normalizeLoginName(body.username);
+  const email = normalizeEmail(body.email);
+  const phone = String(body.phone || '').trim();
+  const password = String(body.password || '');
+  const role = String(body.role || 'user').trim() === 'admin' ? 'admin' : 'user';
+  if (!validateUsername(username)) return send(res, 400, { error: 'invalid username' });
+  if (email && !validateEmail(email)) return send(res, 400, { error: 'invalid email' });
+  if (phone && !/^\+?\d[\d\s-]{5,19}$/.test(phone)) return send(res, 400, { error: 'invalid phone' });
+  const passwordError = validateNewPassword(password);
+  if (passwordError) return send(res, 400, { error: passwordError });
+  const db = await readAuthDb();
+  const usernameLower = username.toLowerCase();
+  if (db.users.some(user => String(user.username || '').toLowerCase() === usernameLower)) {
+    return send(res, 409, { error: 'username already exists' });
+  }
+  if (email && db.users.some(user => String(user.email || '').toLowerCase() === email)) {
+    return send(res, 409, { error: 'email already exists' });
+  }
+  if (phone && db.users.some(user => String(user.phone || '') === phone)) {
+    return send(res, 409, { error: 'phone already exists' });
+  }
+  const now = authNowIso();
+  const user = {
+    id: authId('usr'),
+    username,
+    role,
+    email,
+    phone,
+    disabled: false,
+    ...hashSecret(password),
+    createdAt: now,
+    updatedAt: now,
+    passwordChangedAt: now,
+    source: 'admin-create',
+    lastLoginAt: '',
+  };
+  db.users.push(user);
+  await writeAuthDb(db);
+  return send(res, 200, { ok: true, user: publicAuthUser(user) });
+}
+
+async function authAdminLoginEvents(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  if (req.method === 'DELETE') return await authAdminClearLoginEvents(url, req, res);
+  if (req.method !== 'GET') return send(res, 405, { error: 'method not allowed' });
+  const limit = Math.max(1, Math.min(1000, Number(url.searchParams.get('limit') || 300)));
+  const db = await readAuthDb();
+  const filters = loginEventFiltersFromSearchParams(url.searchParams);
+  const filtered = db.loginEvents.filter(event => loginEventMatchesFilters(event, filters));
+  return send(res, 200, {
+    ok: true,
+    retentionDays: Math.round(AUTH_LOGIN_RETENTION_MS / 24 / 60 / 60 / 1000),
+    total: db.loginEvents.length,
+    matched: filtered.length,
+    events: [...filtered].sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, limit),
+  });
+}
+
+function loginEventFiltersFromSearchParams(params) {
+  return normalizeLoginEventFilters({
+    q: params.get('q'),
+    username: params.get('username'),
+    type: params.get('type'),
+    success: params.get('success'),
+    ip: params.get('ip'),
+    from: params.get('from'),
+    to: params.get('to'),
+  });
+}
+
+function normalizeLoginEventFilters(raw = {}) {
+  const successRaw = String(raw.success ?? '').trim().toLowerCase();
+  let success = null;
+  if (successRaw === 'true' || successRaw === '1' || successRaw === 'success') success = true;
+  if (successRaw === 'false' || successRaw === '0' || successRaw === 'fail') success = false;
+  const fromMs = Date.parse(raw.from || '');
+  const toMs = Date.parse(raw.to || '');
+  return {
+    q: String(raw.q || '').trim().toLowerCase(),
+    username: String(raw.username || '').trim().toLowerCase(),
+    type: String(raw.type || '').trim().toLowerCase(),
+    success,
+    ip: String(raw.ip || '').trim().toLowerCase(),
+    fromMs: Number.isFinite(fromMs) ? fromMs : null,
+    toMs: Number.isFinite(toMs) ? toMs + 24 * 60 * 60 * 1000 - 1 : null,
+  };
+}
+
+function loginEventMatchesFilters(event, filters) {
+  const atMs = Date.parse(event.at || '');
+  if (filters.fromMs !== null && (!Number.isFinite(atMs) || atMs < filters.fromMs)) return false;
+  if (filters.toMs !== null && (!Number.isFinite(atMs) || atMs > filters.toMs)) return false;
+  if (filters.username && !String(event.username || '').toLowerCase().includes(filters.username)) return false;
+  if (filters.type && String(event.type || '').toLowerCase() !== filters.type) return false;
+  if (filters.success !== null && !!event.success !== filters.success) return false;
+  if (filters.ip && !String(event.ip || '').toLowerCase().includes(filters.ip)) return false;
+  if (filters.q) {
+    const haystack = [
+      event.username,
+      event.type,
+      event.reason,
+      event.ip,
+      event.userAgent,
+      event.role,
+    ].map(value => String(value || '').toLowerCase()).join('\n');
+    if (!haystack.includes(filters.q)) return false;
+  }
+  return true;
+}
+
+async function authAdminClearLoginEvents(url, req, res) {
+  const body = await readJsonBody(req).catch(() => ({}));
+  const ids = Array.isArray(body.ids) ? new Set(body.ids.map(id => String(id || '').trim()).filter(Boolean)) : null;
+  const filters = normalizeLoginEventFilters(body.filters || {});
+  const db = await readAuthDb();
+  const before = db.loginEvents.length;
+  db.loginEvents = db.loginEvents.filter(event => {
+    if (ids && ids.size) return !ids.has(String(event.id || ''));
+    return !loginEventMatchesFilters(event, filters);
+  });
+  const deleted = before - db.loginEvents.length;
+  await writeAuthDb(db);
+  return send(res, 200, {
+    ok: true,
+    deleted,
+    remaining: db.loginEvents.length,
+  });
+}
+
+async function authAdminChangePassword(url, req, res) {
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  if (!requireAdmin(req, res)) return;
+  const body = await readJsonBody(req);
+  const userId = String(body.userId || '').trim();
+  const username = normalizeLoginName(body.username);
+  const newPassword = String(body.newPassword || '');
+  const passwordError = validateNewPassword(newPassword);
+  if (passwordError) return send(res, 400, { error: passwordError });
+  const db = await readAuthDb();
+  const user = userId
+    ? db.users.find(item => item.id === userId)
+    : findAuthUser(db, username);
+  if (!user) return send(res, 404, { error: 'user not found' });
+  Object.assign(user, hashSecret(newPassword), {
+    updatedAt: authNowIso(),
+    passwordChangedAt: authNowIso(),
+  });
+  await writeAuthDb(db);
+  return send(res, 200, { ok: true, user: publicAuthUser(user) });
+}
+
+async function authAdminSetUserDisabled(url, req, res) {
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  if (!requireAdmin(req, res)) return;
+  const body = await readJsonBody(req);
+  const userId = String(body.userId || '').trim();
+  const username = normalizeLoginName(body.username);
+  const disabled = !!body.disabled;
+  const db = await readAuthDb();
+  const user = userId ? db.users.find(item => item.id === userId) : findAuthUser(db, username);
+  if (!user) return send(res, 404, { error: 'user not found' });
+  // 防止把最后一个仍启用的管理员禁用，导致后台锁死
+  if (disabled && !user.disabled && String(user.role) === 'admin') {
+    const enabledAdmins = db.users.filter(item => String(item.role) === 'admin' && !item.disabled).length;
+    if (enabledAdmins <= 1) return send(res, 400, { error: 'cannot disable the last active admin' });
+  }
+  user.disabled = disabled;
+  user.updatedAt = authNowIso();
+  await writeAuthDb(db);
+  return send(res, 200, { ok: true, user: publicAuthUser(user) });
+}
+
+async function authAdminDeleteUser(url, req, res) {
+  if (req.method !== 'POST' && req.method !== 'DELETE') return send(res, 405, { error: 'method not allowed' });
+  if (!requireAdmin(req, res)) return;
+  const body = await readJsonBody(req).catch(() => ({}));
+  const userId = String((body && body.userId) || url.searchParams.get('userId') || '').trim();
+  const username = normalizeLoginName((body && body.username) || url.searchParams.get('username') || '');
+  const db = await readAuthDb();
+  const idx = userId
+    ? db.users.findIndex(item => item.id === userId)
+    : db.users.findIndex(item => String(item.username || '').toLowerCase() === String(username || '').toLowerCase());
+  if (idx < 0) return send(res, 404, { error: 'user not found' });
+  const user = db.users[idx];
+  // 防止删掉最后一个管理员
+  if (String(user.role) === 'admin') {
+    const admins = db.users.filter(item => String(item.role) === 'admin').length;
+    if (admins <= 1) return send(res, 400, { error: 'cannot delete the last admin' });
+  }
+  db.users.splice(idx, 1);
+  await writeAuthDb(db);
+  return send(res, 200, { ok: true, deleted: publicAuthUser(user) });
+}
+
+async function authAdminMailOutbox(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  const limit = Number(url.searchParams.get('limit') || 50);
+  return send(res, 200, {
+    ok: true,
+    smtpConfigured: await isSmtpConfigured(),
+    outbox: await listMailOutbox(limit),
+  });
+}
+
+async function authAdminSmtpConfig(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  if (req.method === 'GET') {
+    return send(res, 200, {
+      ok: true,
+      smtp: publicSmtpConfig(await getSmtpConfig()),
+    });
+  }
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const body = await readJsonBody(req);
+  const previous = await readSavedSmtpConfig();
+  const password = Object.prototype.hasOwnProperty.call(body, 'password')
+    ? String(body.password || '')
+    : String(body.pass || '');
+  const merged = normalizeSmtpConfig({
+    host: body.host,
+    port: body.port,
+    secure: body.secure,
+    starttls: body.starttls,
+    user: body.user,
+    pass: password || previous?.pass || '',
+    from: body.from,
+    source: 'file',
+  });
+  if (!merged.host) return send(res, 400, { error: 'SMTP host required' });
+  if (!merged.from) return send(res, 400, { error: 'SMTP from required' });
+  const saved = await writeSmtpConfig(merged);
+  let test = null;
+  const testTo = normalizeEmail(body.testTo || body.to || '');
+  if (body.testSend || body.test || testTo) {
+    if (!validateEmail(testTo)) return send(res, 400, { error: 'valid test email required' });
+    try {
+      test = await sendSmtpMail({
+        to: testTo,
+        subject: 'Panda 邮箱验证码发信测试',
+        text: [
+          '这是一封 Panda 行情系统的发信配置测试邮件。',
+          '',
+          `发送时间：${authNowIso()}`,
+          '如果你收到这封邮件，说明注册验证码和忘记密码验证码可以使用该邮箱发送。',
+        ].join('\n'),
+      }, saved);
+    } catch (err) {
+      test = { delivery: 'smtp-error', error: err.message };
+    }
+  }
+  return send(res, 200, {
+    ok: true,
+    smtp: publicSmtpConfig(saved),
+    test,
+  });
+}
+
+async function authPasswordResetRequest(url, req, res) {
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const body = await readJsonBody(req);
+  const email = normalizeEmail(body.email);
+  if (!validateEmail(email)) return send(res, 200, { ok: true });
+  if (!await isSmtpConfigured()) {
+    return send(res, 503, { error: 'smtp not configured', smtpConfigured: false });
+  }
+  const db = await readAuthDb();
+  const user = db.users.find(item => String(item.email || '').toLowerCase() === email && !item.disabled);
+  if (!user) return send(res, 200, { ok: true });
+  const code = String(crypto.randomInt(100000, 1000000));
+  const hashInfo = hashSecret(code);
+  const now = Date.now();
+  db.passwordResets.push({
+    id: authId('rst'),
+    userId: user.id,
+    email,
+    codeHash: hashInfo.passwordHash,
+    salt: hashInfo.salt,
+    iterations: hashInfo.iterations,
+    digest: hashInfo.digest,
+    requestedAt: new Date(now).toISOString(),
+    expiresAt: new Date(now + AUTH_PASSWORD_RESET_TTL_MS).toISOString(),
+    usedAt: '',
+    ip: requestIp(req),
+    userAgent: requestUserAgent(req),
+  });
+  const resetEntry = db.passwordResets[db.passwordResets.length - 1];
+  await writeAuthDb(db);
+  const mail = await sendAuthMail({
+    to: email,
+    subject: 'Panda 账户密码重置验证码',
+    text: [
+      `你的 Panda 账户验证码是：${code}`,
+      '',
+      `有效期：${Math.round(AUTH_PASSWORD_RESET_TTL_MS / 60000)} 分钟。`,
+      '如果不是你本人操作，请忽略这封邮件。',
+    ].join('\n'),
+  });
+  if (mail.delivery !== 'smtp') {
+    if (resetEntry) resetEntry.usedAt = authNowIso();
+    await writeAuthDb(db);
+    return send(res, 502, {
+      error: 'email delivery failed',
+      delivery: mail.delivery,
+      smtpConfigured: true,
+    });
+  }
+  return send(res, 200, {
+    ok: true,
+    delivery: mail.delivery,
+    smtpConfigured: await isSmtpConfigured(),
+  });
+}
+
+async function authPasswordResetConfirm(url, req, res) {
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const body = await readJsonBody(req);
+  const email = normalizeEmail(body.email);
+  const code = String(body.code || '').trim();
+  const newPassword = String(body.newPassword || '');
+  const passwordError = validateNewPassword(newPassword);
+  if (passwordError) return send(res, 400, { error: passwordError });
+  const db = await readAuthDb();
+  const user = db.users.find(item => String(item.email || '').toLowerCase() === email && !item.disabled);
+  if (!user) return send(res, 400, { error: 'invalid reset code' });
+  const now = Date.now();
+  const reset = [...db.passwordResets]
+    .reverse()
+    .find(item => item.userId === user.id && !item.usedAt && Date.parse(item.expiresAt || '') >= now);
+  if (!reset || !verifySecret(code, {
+    salt: reset.salt,
+    passwordHash: reset.codeHash,
+    iterations: reset.iterations,
+    digest: reset.digest,
+  })) {
+    await recordLoginEvent(req, {
+      type: 'password-reset',
+      userId: user.id,
+      username: user.username,
+      role: user.role,
+      success: false,
+      reason: 'invalid reset code',
+    });
+    return send(res, 400, { error: 'invalid reset code' });
+  }
+  Object.assign(user, hashSecret(newPassword), {
+    updatedAt: authNowIso(),
+    passwordChangedAt: authNowIso(),
+  });
+  reset.usedAt = authNowIso();
+  await writeAuthDb(db);
+  await recordLoginEvent(req, {
+    type: 'password-reset',
+    userId: user.id,
+    username: user.username,
+    role: user.role,
+    success: true,
+  });
+  return send(res, 200, { ok: true });
+}
+
+function staticContentType(fileName) {
+  if (fileName.endsWith('.html')) return 'text/html; charset=utf-8';
+  if (fileName.endsWith('.js') || fileName.endsWith('.jsx')) return 'text/javascript; charset=utf-8';
+  if (fileName.endsWith('.webmanifest')) return 'application/manifest+json; charset=utf-8';
+  if (fileName.endsWith('.svg')) return 'image/svg+xml; charset=utf-8';
+  if (fileName === 'favicon.ico') return 'image/x-icon';
+  if (fileName.endsWith('.png')) return 'image/png';
+  return 'application/octet-stream';
+}
+
+async function sendStatic(req, res, fileName) {
+  const body = await fs.readFile(path.join(__dirname, fileName));
+  res.writeHead(200, {
+    'Content-Type': staticContentType(fileName),
+    'Cache-Control': 'no-cache',
+    'Access-Control-Allow-Origin': '*',
+  });
+  if (req.method === 'HEAD') return res.end();
+  res.end(body);
+}
+
+function safePart(value) {
+  return String(value || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function parseDateFromName(name) {
+  const match = String(name || '').match(/(20\d{2})[-_]?(\d{2})[-_]?(\d{2})/);
+  if (!match) return '';
+  return `${match[1]}-${match[2]}-${match[3]}`;
+}
+
+function dayAgeDays(day, nowDay = chinaNowParts().day) {
+  const d = new Date(`${isoFromCompactDate(day)}T00:00:00+08:00`).getTime();
+  const n = new Date(`${isoFromCompactDate(nowDay)}T00:00:00+08:00`).getTime();
+  if (!Number.isFinite(d) || !Number.isFinite(n)) return null;
+  return Math.floor((n - d) / 86400000);
+}
+
+async function cleanupDateNamedEntries(dir, retentionDays, nowDay, options = {}) {
+  const result = { dir, checked: 0, deleted: 0, errors: [] };
+  let entries = [];
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch (err) {
+    if (err.code === 'ENOENT') return result;
+    throw err;
+  }
+  for (const entry of entries) {
+    if (options.keepNames?.has(entry.name)) continue;
+    const day = parseDateFromName(entry.name);
+    if (!day) continue;
+    if (options.keepDays) {
+      const age = dayAgeDays(day, nowDay);
+      if (age === null || age < 0 || options.keepDays.has(day)) continue;
+      result.checked += 1;
+      try {
+        await fs.rm(path.join(dir, entry.name), { recursive: entry.isDirectory(), force: true });
+        result.deleted += 1;
+      } catch (err) {
+        result.errors.push({ name: entry.name, error: err.message });
+      }
+      continue;
+    }
+    const age = dayAgeDays(day, nowDay);
+    if (age === null || age <= retentionDays) continue;
+    result.checked += 1;
+    try {
+      await fs.rm(path.join(dir, entry.name), { recursive: entry.isDirectory(), force: true });
+      result.deleted += 1;
+    } catch (err) {
+      result.errors.push({ name: entry.name, error: err.message });
+    }
+  }
+  return result;
+}
+
+async function cleanupOldFilesByMtime(dir, maxAgeDays, now = new Date()) {
+  const result = { dir, checked: 0, deleted: 0, errors: [] };
+  let entries = [];
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch (err) {
+    if (err.code === 'ENOENT') return result;
+    throw err;
+  }
+  await mapLimit(entries, 6, async entry => {
+    const target = path.join(dir, entry.name);
+    try {
+      if (entry.isDirectory()) {
+        const nested = await cleanupOldFilesByMtime(target, maxAgeDays, now);
+        result.checked += nested.checked;
+        result.deleted += nested.deleted;
+        result.errors.push(...nested.errors);
+        const left = await fs.readdir(target).catch(() => []);
+        if (!left.length) {
+          await fs.rm(target, { recursive: true, force: true });
+          result.deleted += 1;
+        }
+        return;
+      }
+      const stat = await fs.stat(target);
+      const ageDays = (now.getTime() - stat.mtimeMs) / 86400000;
+      result.checked += 1;
+      if (ageDays > maxAgeDays) {
+        await fs.rm(target, { force: true });
+        result.deleted += 1;
+      }
+    } catch (err) {
+      result.errors.push({ path: target, error: err.message });
+    }
+  });
+  return result;
+}
+
+function hashPart(value) {
+  return crypto.createHash('sha1').update(String(value || '')).digest('hex');
+}
+
+function snapshotPath(day, zsType) {
+  return path.join(SNAPSHOT_DIR, safePart(String(zsType || 'default')), `${safePart(day)}.json`);
+}
+
+function limitUpDbPath(day) {
+  return path.join(LIMIT_UP_DB_DIR, `${safePart(day)}.json`);
+}
+
+function limitUpMainReasonDbPath(day) {
+  return path.join(LIMIT_UP_MAIN_REASON_DB_DIR, `${safePart(day)}.json`);
+}
+
+function limitUpMainReasonEvidencePath(day) {
+  return path.join(LIMIT_UP_MAIN_REASON_EVIDENCE_DIR, `${safePart(day)}.json`);
+}
+
+function limitUpMainReasonQualityPath(day) {
+  return path.join(LIMIT_UP_MAIN_REASON_QUALITY_DIR, `${safePart(day)}.json`);
+}
+
+function limitUpMainReasonSourcePath(day) {
+  return path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, `${safePart(day)}.json`);
+}
+
+function limitUpMainReasonAutoSourcePath(day) {
+  return path.join(LIMIT_UP_MAIN_REASON_AUTO_SOURCE_DIR, `${safePart(day)}.json`);
+}
+
+function tgbHunanStructuredSourcePath(day) {
+  return path.join(TGB_HUNAN_STRUCTURED_SOURCE_DIR, `${safePart(day)}.json`);
+}
+
+function jiuyangongsheStructuredSourcePath(day) {
+  return path.join(JIUYANGONGSHE_STRUCTURED_SOURCE_DIR, `${safePart(day)}.json`);
+}
+
+function jiuyangongsheDiagramSourceDir(day) {
+  return path.join(JIUYANGONGSHE_DIAGRAM_SOURCE_DIR, safePart(isoFromCompactDate(day)));
+}
+
+function jiuyangongsheDiagramManifestPath(day) {
+  return path.join(jiuyangongsheDiagramSourceDir(day), 'manifest.json');
+}
+
+function tonghuashunStructuredSourcePath(day) {
+  return path.join(TONGHUASHUN_STRUCTURED_SOURCE_DIR, `${safePart(day)}.json`);
+}
+
+function tonghuashunOfficialImageSourceDir(day) {
+  return path.join(TONGHUASHUN_OFFICIAL_IMAGE_SOURCE_DIR, safePart(isoFromCompactDate(day)));
+}
+
+function tonghuashunOfficialImageManifestPath(day) {
+  return path.join(tonghuashunOfficialImageSourceDir(day), 'manifest.json');
+}
+
+function tonghuashunApiCandidateSourcePath(day) {
+  return path.join(TONGHUASHUN_API_CANDIDATE_SOURCE_DIR, `${safePart(isoFromCompactDate(day))}.json`);
+}
+
+function kaipanlaFupanlaSourcePath(day) {
+  return path.join(KAIPANLA_FUPANLA_SOURCE_DIR, `${safePart(day)}.json`);
+}
+
+function eastmoneyFplLimitReasonSourcePath(day) {
+  return path.join(EASTMONEY_FPL_LIMIT_REASON_SOURCE_DIR, `${safePart(day)}.json`);
+}
+
+function xuangubaoLimitUpSourcePath(day) {
+  return path.join(XUANGUBAO_LIMIT_UP_SOURCE_DIR, `${safePart(day)}.json`);
+}
+
+function tgbHunanRawSourceDir(day) {
+  return path.join(TGB_HUNAN_RAW_SOURCE_DIR, safePart(isoFromCompactDate(day)));
+}
+
+function tgbHunanRawManifestPath(day) {
+  return path.join(tgbHunanRawSourceDir(day), 'manifest.json');
+}
+
+function eastmoneyConceptCatalogPath() {
+  return path.join(EASTMONEY_CONCEPT_DIR, 'catalog.json');
+}
+
+function eastmoneyConceptBoardPath(plateId) {
+  return path.join(EASTMONEY_CONCEPT_BOARD_DIR, `${safePart(plateId)}.json`);
+}
+
+function eastmoneyCloseDbPath(day) {
+  return path.join(EASTMONEY_CLOSE_DIR, `${safePart(day)}.json`);
+}
+
+function thsConceptCatalogPath() {
+  return path.join(THS_CONCEPT_DIR, 'catalog.json');
+}
+
+function thsConceptBoardPath(plateId) {
+  return path.join(THS_CONCEPT_BOARD_DIR, `${safePart(plateId)}.json`);
+}
+
+function thsManualBoardPath(plateId) {
+  return path.join(THS_MANUAL_BOARD_DIR, `${safePart(plateId)}.json`);
+}
+
+function chinaNowParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const map = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return {
+    day: `${map.year}-${map.month}-${map.day}`,
+    hour: Number(map.hour),
+    minute: Number(map.minute),
+  };
+}
+
+function chinaDayWeekday(day) {
+  const text = compactDate(day);
+  if (text.length !== 8) return null;
+  const year = Number(text.slice(0, 4));
+  const month = Number(text.slice(4, 6));
+  const date = Number(text.slice(6, 8));
+  const value = new Date(Date.UTC(year, month - 1, date)).getUTCDay();
+  return Number.isFinite(value) ? value : null;
+}
+
+function chinaMarketDayStatus(day) {
+  const isoDay = isoFromCompactDate(day || chinaNowParts().day);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDay)) {
+    return { isTradingDay: true, marketClosed: false, marketClosedReason: '', marketClosedLabel: '', marketClosedNote: '' };
+  }
+  const holiday = CHINA_MARKET_CLOSED_RANGES.find(range => isoDay >= range.start && isoDay <= range.end);
+  if (holiday) {
+    return {
+      isTradingDay: false,
+      marketClosed: true,
+      marketClosedReason: 'holiday',
+      marketClosedLabel: holiday.label,
+      marketClosedNote: `${holiday.label}，A 股休市，盘后数据无需同步`,
+    };
+  }
+  const weekday = chinaDayWeekday(isoDay);
+  if (weekday === 0 || weekday === 6) {
+    return {
+      isTradingDay: false,
+      marketClosed: true,
+      marketClosedReason: 'weekend',
+      marketClosedLabel: '周末休市',
+      marketClosedNote: '周末休市，盘后数据无需同步',
+    };
+  }
+  return { isTradingDay: true, marketClosed: false, marketClosedReason: '', marketClosedLabel: '', marketClosedNote: '' };
+}
+
+function isChinaMarketTradingDay(day) {
+  return chinaMarketDayStatus(day).isTradingDay;
+}
+
+function marketClosedSkipPayload(day, extra = {}) {
+  const isoDay = isoFromCompactDate(day || chinaNowParts().day);
+  const marketStatus = chinaMarketDayStatus(isoDay);
+  return {
+    ok: true,
+    skipped: true,
+    day: isoDay,
+    count: 0,
+    stocks: [],
+    reason: marketStatus.marketClosedNote || '休市日，数据无需同步',
+    isTradingDay: false,
+    marketClosed: true,
+    marketClosedReason: marketStatus.marketClosedReason,
+    marketClosedLabel: marketStatus.marketClosedLabel,
+    marketClosedNote: marketStatus.marketClosedNote,
+    ...extra,
+  };
+}
+
+function closedAfterCloseStatusItems(day, mainReasonDay, marketStatus) {
+  const note = marketStatus.marketClosedNote || '休市日，盘后数据无需同步';
+  return [
+    { key: 'limitUpDb', label: '涨停库', ok: true, skipped: true, count: 0, note },
+    { key: 'mainReasonDb', label: '主因库', day: mainReasonDay || day, ok: true, skipped: true, pending: false, count: 0, note },
+    { key: 'closeDb', label: '收盘价', ok: true, skipped: true, count: 0, note },
+    { key: 'eastmoneyConcepts', label: '东财概念', ok: true, skipped: true, count: 0, total: 0, note },
+    { key: 'thsConcepts', label: '同花顺概念', ok: true, skipped: true, count: 0, total: 0, note },
+  ];
+}
+
+function isSavedAfterMarketClose(payload, day) {
+  if (!payload?.savedAt) return false;
+  const saved = chinaNowParts(new Date(payload.savedAt));
+  return saved.day === day && (saved.hour > 15 || (saved.hour === 15 && saved.minute >= 0));
+}
+
+function isSavedAtOrAfterMarketCloseForDay(payload, day) {
+  if (!payload?.savedAt) return false;
+  const savedAt = new Date(payload.savedAt).getTime();
+  const closeAt = new Date(afterCloseSavedAtForDay(day)).getTime();
+  return Number.isFinite(savedAt) && Number.isFinite(closeAt) && savedAt >= closeAt;
+}
+
+function afterCloseSavedAtForDay(day) {
+  const d = compactDate(day);
+  if (d.length !== 8) return new Date().toISOString();
+  const year = Number(d.slice(0, 4));
+  const month = Number(d.slice(4, 6));
+  const date = Number(d.slice(6, 8));
+  return new Date(Date.UTC(year, month - 1, date, 7, 30, 0)).toISOString();
+}
+
+function isCompleteCloseDbPayload(payload) {
+  return Number(payload?.count || payload?.stocks?.length || 0) >= CLOSE_DB_MIN_STOCK_COUNT;
+}
+
+function isAfterMarketClose(day) {
+  const now = chinaNowParts();
+  const today = now.day;
+  if (day < today) return true;
+  if (day > today) return false;
+  return now.hour > 15 || (now.hour === 15 && now.minute >= 0);
+}
+
+function mainReasonReviewReadyAtDay(day) {
+  return shiftDay(isoFromCompactDate(day), 1);
+}
+
+function isMainReasonReviewReady(day) {
+  const readyDay = mainReasonReviewReadyAtDay(day);
+  const now = chinaNowParts();
+  if (now.day > readyDay) return true;
+  if (now.day < readyDay) return false;
+  return now.hour > 9 || (now.hour === 9 && now.minute >= 0);
+}
+
+async function resolveMainReasonStatusDay(day, apiKey = '') {
+  const isoDay = isoFromCompactDate(day);
+  const savedApiKey = apiKey || await readSavedApiKey();
+  if (savedApiKey) {
+    const tradingDays = await getRecentTradingDays(isoDay, savedApiKey, 8).catch(() => []);
+    const previousTradingDay = [...tradingDays].reverse().find(item => item < isoDay);
+    if (previousTradingDay) return previousTradingDay;
+  }
+  try {
+    const files = (await fs.readdir(LIMIT_UP_MAIN_REASON_DB_DIR))
+      .filter(name => name.endsWith('.json'))
+      .map(name => name.replace(/\.json$/i, ''))
+      .filter(fileDay => fileDay < isoDay)
+      .sort();
+    if (files.length) return files[files.length - 1];
+  } catch {}
+  return shiftDay(isoDay, -1);
+}
+
+function isPastChinaDay(day) {
+  return String(day || '') < chinaNowParts().day;
+}
+
+function isSelectedChinaToday(day) {
+  return isoFromCompactDate(day || chinaNowParts().day) === chinaNowParts().day;
+}
+
+async function cachedExternalRealtimeStocks(source, plateId, fetcher, ttlMs = 8000) {
+  const key = `${source}:${String(plateId || '').trim()}`;
+  const now = Date.now();
+  const cached = externalConceptRealtimeStockCache.get(key);
+  if (cached && now - cached.savedAtMs < ttlMs) return cached.stocks;
+  const stocks = await fetcher();
+  if (Array.isArray(stocks) && stocks.length) {
+    externalConceptRealtimeStockCache.set(key, {
+      savedAtMs: now,
+      stocks,
+    });
+  }
+  return stocks;
+}
+
+async function readJsonBody(req) {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  if (!chunks.length) return {};
+  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+}
+
+function normalizeDocsCards(cards) {
+  if (!Array.isArray(cards)) return [];
+  return cards
+    .slice(0, 200)
+    .map((card, index) => {
+      const id = String(card?.id || `doc-${index}`).trim().slice(0, 160);
+      const text = String(card?.text ?? '').replace(/\r\n/g, '\n').trimEnd().slice(0, 50000);
+      return {
+        id: id || `doc-${index}`,
+        tone: card?.tone === 'primary' ? 'primary' : 'long',
+        text,
+      };
+    })
+    .filter(card => card.id);
+}
+
+async function readDocsCardsPayload() {
+  try {
+    const payload = JSON.parse(await fs.readFile(DOCS_CARDS_PATH, 'utf8'));
+    return {
+      exists: true,
+      version: Number(payload?.version || 1),
+      updatedAt: payload?.updatedAt || '',
+      cards: normalizeDocsCards(payload?.cards),
+    };
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+    return { exists: false, version: 1, updatedAt: '', cards: [] };
+  }
+}
+
+async function writeDocsCardsPayload(cards) {
+  const payload = {
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    cards: normalizeDocsCards(cards),
+  };
+  const tmp = `${DOCS_CARDS_PATH}.${process.pid}.${Date.now()}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify(payload, null, 2), 'utf8');
+  await fs.rename(tmp, DOCS_CARDS_PATH);
+  return payload;
+}
+
+async function docsCardsApi(url, req, res) {
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    return send(res, 200, { ok: true, ...(await readDocsCardsPayload()) });
+  }
+  if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'method not allowed' });
+  if (!requireAdmin(req, res)) return;
+  const body = await readJsonBody(req).catch(() => null);
+  if (!body) return send(res, 400, { ok: false, error: 'bad body' });
+  const payload = await writeDocsCardsPayload(body.cards);
+  return send(res, 200, { ok: true, exists: true, ...payload });
+}
+
+function normalizeSiteSyncScope(scope) {
+  const value = String(scope || '').trim().toLowerCase();
+  if (value === 'frontend' || value === 'database' || value === 'backend') return value;
+  throw new Error('invalid sync scope');
+}
+
+function siteSyncEntriesForScope(scope) {
+  const normalized = normalizeSiteSyncScope(scope);
+  if (normalized === 'frontend') return SITE_SYNC_FRONTEND_ENTRIES;
+  if (normalized === 'backend') return SITE_SYNC_BACKEND_ENTRIES;
+  return SITE_SYNC_DATABASE_ENTRIES;
+}
+
+function safeSiteSyncRelativePath(relPath) {
+  const raw = String(relPath || '').replace(/\\/g, '/').trim();
+  if (!raw || raw.startsWith('/') || /^[a-zA-Z]:/.test(raw)) throw new Error('invalid sync path');
+  const normalized = path.posix.normalize(raw);
+  if (!normalized || normalized === '.' || normalized.startsWith('../') || normalized === '..') {
+    throw new Error('invalid sync path');
+  }
+  return normalized;
+}
+
+function siteSyncAbsolutePath(relPath) {
+  const safeRel = safeSiteSyncRelativePath(relPath);
+  const root = path.resolve(__dirname);
+  const abs = path.resolve(root, safeRel);
+  if (abs !== root && !abs.startsWith(root + path.sep)) throw new Error('sync path escaped workspace');
+  return abs;
+}
+
+function isSiteSyncLocalOnlyPath(relPath) {
+  const rel = safeSiteSyncRelativePath(relPath).toLowerCase();
+  if (SITE_SYNC_LOCAL_ONLY_PATHS.has(rel)) return true;
+  if (SITE_SYNC_LOCAL_ONLY_PREFIXES.some(prefix => rel.startsWith(prefix))) return true;
+  return SITE_SYNC_LOCAL_ONLY_PATTERNS.some(pattern => pattern.test(rel));
+}
+
+function isIgnoredAutoSyncRootName(name) {
+  const value = String(name || '').trim();
+  if (!value) return true;
+  if (value === '.git' || value === 'node_modules') return true;
+  return SITE_SYNC_AUTO_ROOT_IGNORE_PATTERNS.some(pattern => pattern.test(value));
+}
+
+function isAutoFrontendRootEntry(entry) {
+  const name = entry.name;
+  if (isIgnoredAutoSyncRootName(name)) return false;
+  const rel = safeSiteSyncRelativePath(name);
+  if (isSiteSyncLocalOnlyPath(rel)) return false;
+  if (entry.isDirectory()) return SITE_SYNC_FRONTEND_AUTO_DIR_NAMES.has(name.toLowerCase());
+  if (!entry.isFile()) return false;
+  if (SITE_SYNC_FRONTEND_AUTO_EXCLUDED_FILES.has(name.toLowerCase())) return false;
+  return SITE_SYNC_FRONTEND_AUTO_FILE_EXTS.has(path.extname(name).toLowerCase());
+}
+
+function isAutoDatabaseRootEntry(entry) {
+  const name = entry.name;
+  if (isIgnoredAutoSyncRootName(name)) return false;
+  const rel = safeSiteSyncRelativePath(name);
+  if (isSiteSyncLocalOnlyPath(rel)) return false;
+  if (entry.isDirectory()) {
+    return SITE_SYNC_DATABASE_AUTO_DIR_PATTERNS.some(pattern => pattern.test(name));
+  }
+  if (!entry.isFile()) return false;
+  const ext = path.extname(name).toLowerCase();
+  if (!SITE_SYNC_DATABASE_AUTO_FILE_EXTS.has(ext)) return false;
+  return SITE_SYNC_DATABASE_AUTO_FILE_PATTERNS.some(pattern => pattern.test(name));
+}
+
+function isAutoBackendRootEntry(entry) {
+  const name = entry.name;
+  if (isIgnoredAutoSyncRootName(name)) return false;
+  const rel = safeSiteSyncRelativePath(name);
+  if (isSiteSyncLocalOnlyPath(rel)) return false;
+  if (entry.isDirectory()) return SITE_SYNC_BACKEND_AUTO_DIR_NAMES.has(name.toLowerCase());
+  if (!entry.isFile()) return false;
+  const ext = path.extname(name).toLowerCase();
+  if (!SITE_SYNC_BACKEND_AUTO_FILE_EXTS.has(ext)) return false;
+  return SITE_SYNC_BACKEND_AUTO_FILE_PATTERNS.some(pattern => pattern.test(name));
+}
+
+async function collectSiteSyncAutoEntries(scope) {
+  const normalized = normalizeSiteSyncScope(scope);
+  const rootEntries = await fs.readdir(__dirname, { withFileTypes: true });
+  const matches = [];
+  for (const entry of rootEntries) {
+    const include = normalized === 'frontend'
+      ? isAutoFrontendRootEntry(entry)
+      : (normalized === 'backend' ? isAutoBackendRootEntry(entry) : isAutoDatabaseRootEntry(entry));
+    if (include) matches.push(safeSiteSyncRelativePath(entry.name));
+  }
+  return matches;
+}
+
+async function statIfExists(absPath) {
+  try {
+    return await fs.stat(absPath);
+  } catch (err) {
+    if (err.code === 'ENOENT') return null;
+    throw err;
+  }
+}
+
+async function collectSiteSyncEntryFiles(entryRel, out) {
+  const rel = safeSiteSyncRelativePath(entryRel);
+  if (isSiteSyncLocalOnlyPath(rel)) return true;
+  const abs = siteSyncAbsolutePath(rel);
+  const stat = await statIfExists(abs);
+  if (!stat) return false;
+  if (stat.isFile()) {
+    out.push(rel);
+    return true;
+  }
+  if (!stat.isDirectory()) return false;
+  const entries = await fs.readdir(abs, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name === '.git' || entry.name === 'node_modules') continue;
+    await collectSiteSyncEntryFiles(path.posix.join(rel, entry.name), out);
+  }
+  return true;
+}
+
+let siteSyncManifestCacheMemory = null;
+
+async function readSiteSyncManifestCache() {
+  if (siteSyncManifestCacheMemory) return siteSyncManifestCacheMemory;
+  try {
+    const payload = JSON.parse(await fs.readFile(SITE_SYNC_MANIFEST_CACHE_PATH, 'utf8'));
+    siteSyncManifestCacheMemory = {
+      version: 1,
+      files: payload && typeof payload.files === 'object' && payload.files ? payload.files : {},
+    };
+  } catch (err) {
+    siteSyncManifestCacheMemory = { version: 1, files: {} };
+  }
+  return siteSyncManifestCacheMemory;
+}
+
+async function writeSiteSyncManifestCache(cache) {
+  siteSyncManifestCacheMemory = {
+    version: 1,
+    updatedAt: authNowIso(),
+    files: cache && typeof cache.files === 'object' && cache.files ? cache.files : {},
+  };
+  await fs.writeFile(SITE_SYNC_MANIFEST_CACHE_PATH, JSON.stringify(siteSyncManifestCacheMemory, null, 2), 'utf8').catch(() => {});
+}
+
+async function collectSiteSyncFiles(scope, options = {}) {
+  const includeContent = !!options.includeContent;
+  const includeHash = includeContent || !!options.includeHash;
+  const hashCache = includeHash && !includeContent ? await readSiteSyncManifestCache() : null;
+  let hashCacheChanged = false;
+  const entries = [
+    ...siteSyncEntriesForScope(scope),
+    ...(await collectSiteSyncAutoEntries(scope)),
+  ];
+  const relFiles = [];
+  const skipped = [];
+  for (const entry of entries) {
+    const found = await collectSiteSyncEntryFiles(entry, relFiles).catch(err => {
+      skipped.push({ path: entry, reason: err.message });
+      return true;
+    });
+    if (!found) skipped.push({ path: entry, reason: 'missing' });
+  }
+  const unique = [...new Set(relFiles.map(safeSiteSyncRelativePath))].sort();
+  const files = [];
+  let totalBytes = 0;
+  for (const rel of unique) {
+    const abs = siteSyncAbsolutePath(rel);
+    const stat = await statIfExists(abs);
+    if (!stat || !stat.isFile()) continue;
+    if (stat.size > SITE_SYNC_MAX_FILE_BYTES) {
+      skipped.push({ path: rel, reason: `file too large: ${stat.size}` });
+      continue;
+    }
+    const row = {
+      path: rel,
+      size: stat.size,
+      mtimeMs: Math.round(stat.mtimeMs),
+    };
+    totalBytes += stat.size;
+    if (includeHash || includeContent) {
+      const cacheEntry = hashCache?.files?.[rel];
+      if (hashCache && cacheEntry && Number(cacheEntry.size) === stat.size && Number(cacheEntry.mtimeMs) === row.mtimeMs && cacheEntry.sha256) {
+        row.sha256 = String(cacheEntry.sha256);
+      } else {
+        const buffer = await fs.readFile(abs);
+        row.sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+        if (includeContent) row.content = buffer.toString('base64');
+        if (hashCache) {
+          hashCache.files[rel] = {
+            size: row.size,
+            mtimeMs: row.mtimeMs,
+            sha256: row.sha256,
+          };
+          hashCacheChanged = true;
+        }
+      }
+    }
+    files.push(row);
+  }
+  if (hashCache && hashCacheChanged) await writeSiteSyncManifestCache(hashCache);
+  return { scope: normalizeSiteSyncScope(scope), files, skipped, totalBytes };
+}
+
+async function buildSiteSyncPackage(scope) {
+  const collected = await collectSiteSyncFiles(scope, { includeContent: true });
+  return {
+    version: 1,
+    scope: collected.scope,
+    createdAt: authNowIso(),
+    origin: process.env.COMPUTERNAME || `${HOST}:${PORT}`,
+    maxFileBytes: SITE_SYNC_MAX_FILE_BYTES,
+    files: collected.files,
+    skipped: collected.skipped,
+    summary: {
+      fileCount: collected.files.length,
+      totalBytes: collected.totalBytes,
+    },
+  };
+}
+
+async function readSiteSyncConfig() {
+  let payload = {};
+  try {
+    payload = JSON.parse(await fs.readFile(SITE_SYNC_CONFIG_PATH, 'utf8'));
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+  const remoteBaseUrl = String(process.env.PANDA_SYNC_REMOTE_URL || payload.remoteBaseUrl || '').trim().replace(/\/+$/, '');
+  const syncToken = String(process.env.PANDA_SYNC_TOKEN || payload.syncToken || payload.token || '').trim();
+  return {
+    remoteBaseUrl,
+    syncToken,
+    configured: !!remoteBaseUrl && !!syncToken,
+    tokenConfigured: !!syncToken,
+    configPath: SITE_SYNC_CONFIG_PATH,
+  };
+}
+
+async function readSiteSyncState() {
+  try {
+    const state = JSON.parse(await fs.readFile(SITE_SYNC_STATE_PATH, 'utf8'));
+    return {
+      version: 1,
+      frontend: state.frontend || {},
+      database: state.database || {},
+      backend: state.backend || {},
+      updatedAt: state.updatedAt || '',
+    };
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+    return { version: 1, frontend: {}, database: {}, backend: {}, updatedAt: '' };
+  }
+}
+
+async function writeSiteSyncState(state) {
+  await fs.writeFile(SITE_SYNC_STATE_PATH, JSON.stringify(state, null, 2), 'utf8');
+}
+
+async function updateSiteSyncState(scope, patch) {
+  const normalized = normalizeSiteSyncScope(scope);
+  const state = await readSiteSyncState();
+  state[normalized] = {
+    ...(state[normalized] || {}),
+    ...patch,
+    updatedAt: authNowIso(),
+  };
+  state.updatedAt = authNowIso();
+  await writeSiteSyncState(state);
+  return state[normalized];
+}
+
+function remoteSiteSyncUrl(config, pathname) {
+  return new URL(pathname, `${config.remoteBaseUrl}/`).toString();
+}
+
+async function fetchSiteSyncJson(url, options = {}) {
+  if (typeof fetch !== 'function') throw new Error('current Node.js does not support fetch');
+  const res = await fetch(url, options);
+  const text = await res.text();
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { raw: text };
+  }
+  if (!res.ok) throw new Error(data.error || `remote HTTP ${res.status}`);
+  return data;
+}
+
+async function buildSiteSyncManifest(scope) {
+  const collected = await collectSiteSyncFiles(scope, { includeHash: true });
+  return {
+    version: 2,
+    mode: 'manifest-hash',
+    scope: collected.scope,
+    createdAt: authNowIso(),
+    origin: process.env.COMPUTERNAME || `${HOST}:${PORT}`,
+    files: collected.files.map(file => ({
+      path: safeSiteSyncRelativePath(file.path),
+      size: Number(file.size || 0),
+      mtimeMs: Number(file.mtimeMs || 0),
+      sha256: String(file.sha256 || ''),
+    })),
+    skipped: collected.skipped,
+    summary: {
+      fileCount: collected.files.length,
+      totalBytes: collected.totalBytes,
+    },
+  };
+}
+
+function siteSyncManifestMap(manifest) {
+  const map = new Map();
+  for (const file of Array.isArray(manifest?.files) ? manifest.files : []) {
+    const rel = safeSiteSyncRelativePath(file.path);
+    map.set(rel, {
+      path: rel,
+      size: Number(file.size || 0),
+      mtimeMs: Number(file.mtimeMs || 0),
+      sha256: String(file.sha256 || ''),
+    });
+  }
+  return map;
+}
+
+function diffSiteSyncManifests(sourceManifest, targetManifest) {
+  const source = siteSyncManifestMap(sourceManifest);
+  const target = siteSyncManifestMap(targetManifest);
+  const changed = [];
+  const same = [];
+  const targetOnly = [];
+  for (const file of source.values()) {
+    const current = target.get(file.path);
+    if (!current) {
+      changed.push({ ...file, change: 'missing' });
+    } else if (String(current.sha256 || '') !== String(file.sha256 || '') || Number(current.size || 0) !== Number(file.size || 0)) {
+      changed.push({ ...file, change: 'different', targetSha256: current.sha256 || '', targetSize: current.size || 0 });
+    } else {
+      same.push(file);
+    }
+  }
+  for (const file of target.values()) {
+    if (!source.has(file.path)) targetOnly.push(file);
+  }
+  return {
+    changed,
+    sameCount: same.length,
+    targetOnly,
+    sourceCount: source.size,
+    targetCount: target.size,
+  };
+}
+
+function siteSyncBatchFiles(files, maxBytes = SITE_SYNC_OBJECT_BATCH_BYTES) {
+  const batches = [];
+  let current = [];
+  let currentBytes = 0;
+  for (const file of files || []) {
+    const size = Math.max(0, Number(file.size || 0));
+    if (current.length && currentBytes + size > maxBytes) {
+      batches.push(current);
+      current = [];
+      currentBytes = 0;
+    }
+    current.push(file);
+    currentBytes += size;
+  }
+  if (current.length) batches.push(current);
+  return batches;
+}
+
+async function readSiteSyncObjects(scope, files) {
+  const normalized = normalizeSiteSyncScope(scope);
+  const available = await collectSiteSyncFiles(normalized);
+  const availableMap = siteSyncManifestMap(available);
+  const result = [];
+  const skipped = [];
+  for (const requested of files || []) {
+    let rel = '';
+    try {
+      rel = safeSiteSyncRelativePath(typeof requested === 'string' ? requested : requested?.path);
+    } catch (err) {
+      skipped.push({ path: String(requested?.path || requested || ''), reason: err.message });
+      continue;
+    }
+    const manifestFile = availableMap.get(rel);
+    if (!manifestFile) {
+      skipped.push({ path: rel, reason: 'not in sync scope' });
+      continue;
+    }
+    const abs = siteSyncAbsolutePath(rel);
+    const buffer = await fs.readFile(abs);
+    const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+    result.push({
+      path: rel,
+      size: buffer.length,
+      mtimeMs: manifestFile.mtimeMs,
+      sha256,
+      content: buffer.toString('base64'),
+    });
+  }
+  return {
+    version: 2,
+    mode: 'manifest-hash-objects',
+    scope: normalized,
+    createdAt: authNowIso(),
+    origin: process.env.COMPUTERNAME || `${HOST}:${PORT}`,
+    files: result,
+    skipped,
+    summary: {
+      fileCount: result.length,
+      totalBytes: result.reduce((sum, file) => sum + Number(file.size || 0), 0),
+    },
+  };
+}
+
+async function applySiteSyncObjectsPackage(pkg, scope, options = {}) {
+  if (!ALLOW_INBOUND_SITE_SYNC) throw new Error('inbound site sync disabled: 云端禁止被同步,拒绝写入外部数据');
+  const normalized = normalizeSiteSyncScope(scope);
+  if (!pkg || Number(pkg.version) !== 2) throw new Error('invalid incremental sync package');
+  if (normalizeSiteSyncScope(pkg.scope) !== normalized) throw new Error('incremental sync package scope mismatch');
+  const { allowed: files, skipped } = filterIncomingSiteSyncFiles(pkg.files, normalized);
+  const { allowed: deleteFiles, skipped: deleteSkipped } = filterIncomingSiteSyncFiles(
+    (Array.isArray(pkg.deletePaths) ? pkg.deletePaths : []).map(file => ({ path: typeof file === 'string' ? file : file?.path })),
+    normalized
+  );
+  const backup = options.backup || await backupSiteSyncTargets(normalized, [...files, ...deleteFiles]);
+  let applied = 0;
+  let deleted = 0;
+  let totalBytes = 0;
+  for (const file of files) {
+    const rel = safeSiteSyncRelativePath(file.path);
+    const content = Buffer.from(String(file.content || ''), 'base64');
+    if (Number.isFinite(Number(file.size)) && content.length !== Number(file.size)) {
+      throw new Error(`incremental sync file size mismatch: ${rel}`);
+    }
+    const sha256 = crypto.createHash('sha256').update(content).digest('hex');
+    if (file.sha256 && sha256 !== file.sha256) throw new Error(`incremental sync checksum mismatch: ${rel}`);
+    const abs = siteSyncAbsolutePath(rel);
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    await fs.writeFile(abs, content);
+    applied += 1;
+    totalBytes += content.length;
+  }
+  for (const file of deleteFiles) {
+    const rel = safeSiteSyncRelativePath(file.path);
+    const abs = siteSyncAbsolutePath(rel);
+    const stat = await statIfExists(abs);
+    if (!stat || !stat.isFile()) continue;
+    await fs.rm(abs, { force: true });
+    deleted += 1;
+  }
+  return { applied, deleted, totalBytes, skipped: [...skipped, ...deleteSkipped], backup };
+}
+
+async function fetchRemoteSiteSyncManifest(config, scope) {
+  return await fetchSiteSyncJson(remoteSiteSyncUrl(config, `/api/site-sync/manifest?scope=${encodeURIComponent(scope)}`), {
+    headers: { 'x-site-sync-token': config.syncToken },
+  });
+}
+
+async function fetchRemoteSiteSyncObjects(config, scope, files) {
+  return await fetchSiteSyncJson(remoteSiteSyncUrl(config, '/api/site-sync/objects'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-site-sync-token': config.syncToken,
+    },
+    body: JSON.stringify({
+      version: 2,
+      scope,
+      paths: files.map(file => safeSiteSyncRelativePath(file.path)),
+    }),
+  });
+}
+
+async function sendRemoteSiteSyncObjects(config, scope, pkg) {
+  return await fetchSiteSyncJson(remoteSiteSyncUrl(config, '/api/site-sync/receive-objects'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-site-sync-token': config.syncToken,
+    },
+    body: JSON.stringify(pkg),
+  });
+}
+
+function siteSyncIncrementalBatches(changed, options = {}) {
+  const requestedBytes = Number(options.maxBytes || 0);
+  const maxBytes = requestedBytes > 0
+    ? Math.max(64 * 1024, Math.min(requestedBytes, SITE_SYNC_OBJECT_BATCH_BYTES))
+    : SITE_SYNC_OBJECT_BATCH_BYTES;
+  const batches = siteSyncBatchFiles(changed, maxBytes);
+  const requestedBatches = Number(options.maxBatches || 0);
+  if (requestedBatches > 0) return batches.slice(0, Math.max(1, Math.floor(requestedBatches)));
+  return batches;
+}
+
+function siteSyncSelectedFilesFromBatches(batches) {
+  return batches.reduce((list, batch) => list.concat(batch), []);
+}
+
+async function runSiteSyncIncremental(scope, direction, config, options = {}) {
+  const normalized = normalizeSiteSyncScope(scope);
+  const localManifest = await buildSiteSyncManifest(normalized);
+  const remoteManifest = await fetchRemoteSiteSyncManifest(config, normalized);
+  if (direction === 'pull') {
+    const diff = diffSiteSyncManifests(remoteManifest, localManifest);
+    const changed = diff.changed;
+    const batches = siteSyncIncrementalBatches(changed, options);
+    const selected = siteSyncSelectedFilesFromBatches(batches);
+    const deleteBatches = selected.length < changed.length ? [] : siteSyncIncrementalBatches(diff.targetOnly, options);
+    const selectedDeletes = siteSyncSelectedFilesFromBatches(deleteBatches);
+    const backup = selected.length
+      || selectedDeletes.length
+      ? await backupSiteSyncTargets(normalized, [...selected, ...selectedDeletes])
+      : { backupRoot: '', copied: 0, manifest: { version: 1, scope: normalized, files: [] } };
+    let applied = 0;
+    let deleted = 0;
+    let totalBytes = 0;
+    const skipped = [];
+    for (const batch of batches) {
+      const pkg = await fetchRemoteSiteSyncObjects(config, normalized, batch);
+      const result = await applySiteSyncObjectsPackage(pkg, normalized, { backup });
+      applied += result.applied;
+      deleted += Number(result.deleted || 0);
+      totalBytes += result.totalBytes;
+      skipped.push(...(pkg.skipped || []), ...(result.skipped || []));
+    }
+    if (selectedDeletes.length) {
+      const result = await applySiteSyncObjectsPackage({
+        version: 2,
+        mode: 'manifest-hash-objects',
+        scope: normalized,
+        files: [],
+        deletePaths: selectedDeletes.map(file => file.path),
+      }, normalized, { backup });
+      deleted += Number(result.deleted || 0);
+      skipped.push(...(result.skipped || []));
+    }
+    const restartRequired = normalized === 'backend' && applied > 0;
+    const remaining = Math.max(0, changed.length - selected.length) + Math.max(0, diff.targetOnly.length - selectedDeletes.length);
+    const state = await updateSiteSyncState(normalized, {
+      status: 'ok',
+      mode: 'incremental',
+      direction,
+      source: config.remoteBaseUrl,
+      fileCount: applied,
+      changedFiles: changed.length,
+      targetOnlyFiles: diff.targetOnly.length,
+      deletedFiles: deleted,
+      processedFiles: selected.length + selectedDeletes.length,
+      remainingFiles: remaining,
+      totalBytes,
+      skipped,
+      backupRoot: backup.backupRoot,
+      backupCopied: backup.copied,
+      restartRequired,
+      remoteCreatedAt: remoteManifest.createdAt || '',
+      message: `incremental pull completed: ${applied}/${changed.length} changed files applied, ${deleted}/${diff.targetOnly.length} extra files deleted${remaining ? `, ${remaining} remaining` : ''}${restartRequired ? ', restart required' : ''}`,
+    });
+    return {
+      ok: true,
+      scope: normalized,
+      direction,
+      mode: 'incremental',
+      changed: changed.length,
+      targetOnly: diff.targetOnly.length,
+      processed: selected.length + selectedDeletes.length,
+      remaining,
+      applied,
+      deleted,
+      totalBytes,
+      skipped,
+      batches: batches.length + deleteBatches.length,
+      backup,
+      state,
+      restartRequired,
+      local: localManifest.summary,
+      remote: remoteManifest.summary,
+    };
+  }
+  const diff = diffSiteSyncManifests(localManifest, remoteManifest);
+  const changed = diff.changed;
+  const batches = siteSyncIncrementalBatches(changed, options);
+  const selected = siteSyncSelectedFilesFromBatches(batches);
+  const deleteBatches = selected.length < changed.length ? [] : siteSyncIncrementalBatches(diff.targetOnly, options);
+  const selectedDeletes = siteSyncSelectedFilesFromBatches(deleteBatches);
+  let sent = 0;
+  let deleted = 0;
+  let totalBytes = 0;
+  const skipped = [];
+  const remoteResults = [];
+  for (const batch of batches) {
+    const pkg = await readSiteSyncObjects(normalized, batch);
+    const remote = await sendRemoteSiteSyncObjects(config, normalized, pkg);
+    sent += Number(remote.applied || 0);
+    deleted += Number(remote.deleted || 0);
+    totalBytes += Number(pkg.summary?.totalBytes || 0);
+    skipped.push(...(pkg.skipped || []), ...(remote.skipped || []));
+    remoteResults.push({ applied: remote.applied || 0, totalBytes: remote.totalBytes || 0, backupRoot: remote.backup?.backupRoot || remote.backupRoot || '' });
+  }
+  if (selectedDeletes.length) {
+    const remote = await sendRemoteSiteSyncObjects(config, normalized, {
+      version: 2,
+      mode: 'manifest-hash-objects',
+      scope: normalized,
+      createdAt: authNowIso(),
+      origin: process.env.COMPUTERNAME || `${HOST}:${PORT}`,
+      files: [],
+      deletePaths: selectedDeletes.map(file => file.path),
+      skipped: [],
+      summary: { fileCount: 0, totalBytes: 0 },
+    });
+    deleted += Number(remote.deleted || 0);
+    skipped.push(...(remote.skipped || []));
+    remoteResults.push({ applied: remote.applied || 0, deleted: remote.deleted || 0, totalBytes: remote.totalBytes || 0, backupRoot: remote.backup?.backupRoot || remote.backupRoot || '' });
+  }
+  const remaining = Math.max(0, changed.length - selected.length) + Math.max(0, diff.targetOnly.length - selectedDeletes.length);
+  const state = await updateSiteSyncState(normalized, {
+    status: 'ok',
+    mode: 'incremental',
+    direction,
+    target: config.remoteBaseUrl,
+    fileCount: sent,
+    changedFiles: changed.length,
+    targetOnlyFiles: diff.targetOnly.length,
+    deletedFiles: deleted,
+    processedFiles: selected.length + selectedDeletes.length,
+    remainingFiles: remaining,
+    totalBytes,
+    skipped,
+    remoteResults,
+    message: `incremental push completed: ${sent}/${changed.length} changed files sent, ${deleted}/${diff.targetOnly.length} remote extra files deleted${remaining ? `, ${remaining} remaining` : ''}`,
+  });
+  return {
+    ok: true,
+    scope: normalized,
+    direction,
+    mode: 'incremental',
+    changed: changed.length,
+    targetOnly: diff.targetOnly.length,
+    processed: selected.length + selectedDeletes.length,
+    remaining,
+    sent,
+    deleted,
+    totalBytes,
+    skipped,
+    batches: batches.length,
+    state,
+    local: localManifest.summary,
+    remote: remoteManifest.summary,
+    remoteResults,
+  };
+}
+
+async function backupSiteSyncTargets(scope, files) {
+  const normalized = normalizeSiteSyncScope(scope);
+  const backupId = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupRoot = path.join(__dirname, 'backups', 'site-sync', `${backupId}-${normalized}`);
+  const manifest = {
+    version: 1,
+    scope: normalized,
+    createdAt: authNowIso(),
+    files: [],
+  };
+  let copied = 0;
+  await fs.mkdir(backupRoot, { recursive: true });
+  for (const file of files) {
+    const rel = safeSiteSyncRelativePath(file.path);
+    const abs = siteSyncAbsolutePath(rel);
+    const stat = await statIfExists(abs);
+    manifest.files.push({
+      path: rel,
+      existed: !!stat && stat.isFile(),
+      size: stat?.isFile() ? stat.size : 0,
+      mtimeMs: stat?.isFile() ? Math.round(stat.mtimeMs) : 0,
+    });
+    if (!stat || !stat.isFile()) continue;
+    const backupAbs = path.join(backupRoot, rel);
+    await fs.mkdir(path.dirname(backupAbs), { recursive: true });
+    await fs.copyFile(abs, backupAbs);
+    copied += 1;
+  }
+  await fs.writeFile(path.join(backupRoot, '.site-sync-manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
+  return { backupRoot, copied, manifest };
+}
+
+function siteSyncBackupsRoot() {
+  return path.resolve(__dirname, 'backups', 'site-sync');
+}
+
+function resolveSiteSyncBackupRoot(candidate) {
+  const root = siteSyncBackupsRoot();
+  const abs = path.resolve(String(candidate || ''));
+  if (abs !== root && !abs.startsWith(root + path.sep)) throw new Error('invalid rollback backup path');
+  return abs;
+}
+
+async function readSiteSyncBackupManifest(backupRoot) {
+  const abs = resolveSiteSyncBackupRoot(backupRoot);
+  const manifest = JSON.parse(await fs.readFile(path.join(abs, '.site-sync-manifest.json'), 'utf8'));
+  if (Number(manifest.version) !== 1) throw new Error('invalid rollback manifest');
+  return { ...manifest, backupRoot: abs };
+}
+
+async function listSiteSyncBackups(scope) {
+  const normalized = normalizeSiteSyncScope(scope);
+  const root = siteSyncBackupsRoot();
+  const entries = await fs.readdir(root, { withFileTypes: true }).catch(err => {
+    if (err.code === 'ENOENT') return [];
+    throw err;
+  });
+  const backups = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !entry.name.endsWith(`-${normalized}`)) continue;
+    const backupRoot = path.join(root, entry.name);
+    const manifest = await readSiteSyncBackupManifest(backupRoot).catch(() => null);
+    const stat = await statIfExists(backupRoot);
+    backups.push({
+      backupRoot,
+      createdAt: manifest?.createdAt || stat?.mtime?.toISOString?.() || '',
+      scope: manifest?.scope || normalized,
+      fileCount: Array.isArray(manifest?.files) ? manifest.files.length : 0,
+      copied: Array.isArray(manifest?.files) ? manifest.files.filter(file => file.existed).length : 0,
+    });
+  }
+  return backups.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+}
+
+async function rollbackSiteSyncBackup(scope, backupRoot) {
+  const normalized = normalizeSiteSyncScope(scope);
+  const manifest = await readSiteSyncBackupManifest(backupRoot);
+  if (normalizeSiteSyncScope(manifest.scope) !== normalized) throw new Error('rollback scope mismatch');
+  let restored = 0;
+  let deleted = 0;
+  for (const file of manifest.files || []) {
+    const rel = safeSiteSyncRelativePath(file.path);
+    const targetAbs = siteSyncAbsolutePath(rel);
+    if (file.existed) {
+      const backupAbs = path.join(manifest.backupRoot, rel);
+      await fs.mkdir(path.dirname(targetAbs), { recursive: true });
+      await fs.copyFile(backupAbs, targetAbs);
+      restored += 1;
+    } else {
+      await fs.rm(targetAbs, { force: true }).catch(() => {});
+      deleted += 1;
+    }
+  }
+  const state = await updateSiteSyncState(normalized, {
+    status: 'ok',
+    direction: 'rollback',
+    backupRoot: manifest.backupRoot,
+    backupCreatedAt: manifest.createdAt || '',
+    fileCount: restored,
+    deleted,
+    message: `rollback completed: ${restored} restored, ${deleted} deleted`,
+  });
+  return { ok: true, scope: normalized, backupRoot: manifest.backupRoot, restored, deleted, state };
+}
+
+function isSiteSyncBackendCodePath(relPath) {
+  const rel = safeSiteSyncRelativePath(relPath).toLowerCase();
+  if (SITE_SYNC_BACKEND_ENTRY_SET.has(rel)) return true;
+  const base = path.posix.basename(rel);
+  if (SITE_SYNC_BACKEND_AUTO_FILE_PATTERNS.some(pattern => pattern.test(base))) return true;
+  return SITE_SYNC_BACKEND_AUTO_DIR_NAMES.has(rel.split('/')[0]?.toLowerCase?.() || '');
+}
+
+function filterIncomingSiteSyncFiles(files, scope) {
+  const normalized = normalizeSiteSyncScope(scope);
+  const allowed = [];
+  const skipped = [];
+  for (const file of Array.isArray(files) ? files : []) {
+    let rel = '';
+    try {
+      rel = safeSiteSyncRelativePath(file.path);
+    } catch (err) {
+      skipped.push({ path: String(file?.path || ''), reason: err.message });
+      continue;
+    }
+    if (isSiteSyncLocalOnlyPath(rel)) {
+      skipped.push({ path: rel, reason: 'local-only server config' });
+      continue;
+    }
+    if (normalized !== 'backend' && isSiteSyncBackendCodePath(rel)) {
+      skipped.push({ path: rel, reason: 'backend code must use backend sync scope' });
+      continue;
+    }
+    allowed.push({ ...file, path: rel });
+  }
+  return { allowed, skipped };
+}
+
+async function applySiteSyncPackage(pkg, scope, options = {}) {
+  if (!ALLOW_INBOUND_SITE_SYNC) throw new Error('inbound site sync disabled: 云端禁止被同步,拒绝写入外部数据');
+  const normalized = normalizeSiteSyncScope(scope);
+  if (!pkg || Number(pkg.version) !== 1) throw new Error('invalid sync package');
+  if (normalizeSiteSyncScope(pkg.scope) !== normalized) throw new Error('sync package scope mismatch');
+  const { allowed: files, skipped } = filterIncomingSiteSyncFiles(pkg.files, normalized);
+  const backup = await backupSiteSyncTargets(normalized, files);
+  let applied = 0;
+  let totalBytes = 0;
+  for (const file of files) {
+    const rel = safeSiteSyncRelativePath(file.path);
+    const content = Buffer.from(String(file.content || ''), 'base64');
+    if (Number.isFinite(Number(file.size)) && content.length !== Number(file.size)) {
+      throw new Error(`sync file size mismatch: ${rel}`);
+    }
+    const sha256 = crypto.createHash('sha256').update(content).digest('hex');
+    if (file.sha256 && sha256 !== file.sha256) throw new Error(`sync file checksum mismatch: ${rel}`);
+    const abs = siteSyncAbsolutePath(rel);
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    await fs.writeFile(abs, content);
+    applied += 1;
+    totalBytes += content.length;
+  }
+  const restartRequired = normalized === 'backend';
+  const state = await updateSiteSyncState(normalized, {
+    status: 'ok',
+    direction: options.direction || 'receive',
+    source: options.source || pkg.origin || '',
+    fileCount: applied,
+    totalBytes,
+    backupRoot: backup.backupRoot,
+    backupCopied: backup.copied,
+    packageCreatedAt: pkg.createdAt || '',
+    restartRequired,
+    message: `${applied} files applied${skipped.length ? `, ${skipped.length} local-only skipped` : ''}${restartRequired ? ', restart required' : ''}`,
+  });
+  return { ok: true, scope: normalized, applied, skipped, totalBytes, backup, state, restartRequired };
+}
+
+async function requireSiteSyncToken(req, res) {
+  const config = await readSiteSyncConfig();
+  if (!config.syncToken) {
+    send(res, 403, { error: 'site sync token not configured' });
+    return null;
+  }
+  const token = String(req.headers['x-site-sync-token'] || '').trim();
+  if (!secureEqualText(token, config.syncToken)) {
+    send(res, 403, { error: 'invalid site sync token' });
+    return null;
+  }
+  return config;
+}
+
+async function siteSyncStatus(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  const config = await readSiteSyncConfig();
+  const state = await readSiteSyncState();
+  const frontend = await collectSiteSyncFiles('frontend');
+  const database = await collectSiteSyncFiles('database');
+  const backend = await collectSiteSyncFiles('backend');
+  const frontendBackups = await listSiteSyncBackups('frontend');
+  const databaseBackups = await listSiteSyncBackups('database');
+  const backendBackups = await listSiteSyncBackups('backend');
+  return send(res, 200, {
+    ok: true,
+    configured: config.configured,
+    remoteBaseUrl: config.remoteBaseUrl,
+    tokenConfigured: config.tokenConfigured,
+    configPath: config.configPath,
+    scopes: {
+      frontend: {
+        label: '前端网页',
+        local: { fileCount: frontend.files.length, totalBytes: frontend.totalBytes, skipped: frontend.skipped },
+        last: state.frontend || {},
+        rollback: frontendBackups[0] || null,
+      },
+      database: {
+        label: '后台数据库',
+        local: { fileCount: database.files.length, totalBytes: database.totalBytes, skipped: database.skipped },
+        last: state.database || {},
+        rollback: databaseBackups[0] || null,
+      },
+      backend: {
+        label: '后端程序',
+        local: { fileCount: backend.files.length, totalBytes: backend.totalBytes, skipped: backend.skipped },
+        last: state.backend || {},
+        rollback: backendBackups[0] || null,
+      },
+    },
+  });
+}
+
+async function siteSyncConfig(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  if (req.method === 'GET') {
+    const config = await readSiteSyncConfig();
+    return send(res, 200, {
+      ok: true,
+      remoteBaseUrl: config.remoteBaseUrl,
+      tokenConfigured: config.tokenConfigured,
+      configured: config.configured,
+      nodeRole: SITE_SYNC_NODE_ROLE || '',
+      allowInboundSiteSync: ALLOW_INBOUND_SITE_SYNC,
+      configPath: config.configPath,
+    });
+  }
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const body = await readJsonBody(req);
+  const current = await readSiteSyncConfig();
+  const remoteBaseUrl = String(body.remoteBaseUrl || '').trim().replace(/\/+$/, '');
+  const syncToken = String(body.syncToken || '').trim() || current.syncToken;
+  const payload = {
+    version: 1,
+    remoteBaseUrl,
+    syncToken,
+    savedAt: authNowIso(),
+  };
+  await fs.writeFile(SITE_SYNC_CONFIG_PATH, JSON.stringify(payload, null, 2), 'utf8');
+  return send(res, 200, {
+    ok: true,
+    remoteBaseUrl,
+    tokenConfigured: !!syncToken,
+    configured: !!remoteBaseUrl && !!syncToken,
+    configPath: SITE_SYNC_CONFIG_PATH,
+  });
+}
+
+async function siteSyncRun(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const body = await readJsonBody(req);
+  const scope = normalizeSiteSyncScope(body.scope);
+  const direction = String(body.direction || '').trim().toLowerCase();
+  if (direction !== 'push' && direction !== 'pull') return send(res, 400, { error: 'invalid sync direction' });
+  // pull = 拉远端并写本地 = 被同步,禁。只允许 push(云端→公司主机)。
+  if (direction === 'pull' && !ALLOW_INBOUND_SITE_SYNC) return send(res, 403, { ok: false, error: '云端已禁止 pull(被同步):只允许 push(云端→公司主机单向输出)。云端=唯一权威源。' });
+  const config = await readSiteSyncConfig();
+  if (!config.configured) {
+    const state = await updateSiteSyncState(scope, {
+      status: 'blocked',
+      direction,
+      message: 'cloud sync is not configured',
+    });
+    return send(res, 400, {
+      ok: false,
+      error: 'cloud sync not configured',
+      configPath: config.configPath,
+      state,
+    });
+  }
+  const incrementalOptions = {
+    maxBytes: Number(body.maxBytes || 0),
+    maxBatches: Number(body.maxBatches || 0),
+  };
+  if (!body.legacy) {
+    try {
+      const incremental = await runSiteSyncIncremental(scope, direction, config, incrementalOptions);
+      return send(res, 200, incremental);
+    } catch (err) {
+      if (scope === 'database') {
+        const state = await updateSiteSyncState(scope, {
+          status: 'blocked',
+          mode: 'incremental',
+          direction,
+          message: `incremental database sync failed: ${err.message}`,
+        });
+        return send(res, 502, {
+          ok: false,
+          error: err.message,
+          mode: 'incremental',
+          scope,
+          direction,
+          state,
+          hint: 'database sync requires both endpoints to support manifest/hash incremental sync',
+        });
+      }
+      console.warn(`incremental site sync failed, falling back to legacy package sync: ${err.message}`);
+    }
+  }
+  if (direction === 'push') {
+    const pkg = await buildSiteSyncPackage(scope);
+    const remote = await fetchSiteSyncJson(remoteSiteSyncUrl(config, '/api/site-sync/receive'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-site-sync-token': config.syncToken,
+      },
+      body: JSON.stringify(pkg),
+    });
+    const state = await updateSiteSyncState(scope, {
+      status: 'ok',
+      direction,
+      target: config.remoteBaseUrl,
+      fileCount: pkg.summary.fileCount,
+      totalBytes: pkg.summary.totalBytes,
+      skipped: pkg.skipped,
+      remote,
+      message: 'push completed',
+    });
+    return send(res, 200, { ok: true, scope, direction, local: pkg.summary, remote, state });
+  }
+  const remotePkg = await fetchSiteSyncJson(remoteSiteSyncUrl(config, `/api/site-sync/export?scope=${encodeURIComponent(scope)}`), {
+    headers: { 'x-site-sync-token': config.syncToken },
+  });
+  const applied = await applySiteSyncPackage(remotePkg, scope, {
+    direction,
+    source: config.remoteBaseUrl,
+  });
+  return send(res, 200, { ok: true, scope, direction, remote: remotePkg.summary || {}, applied });
+}
+
+async function siteSyncExport(url, req, res) {
+  const config = await requireSiteSyncToken(req, res);
+  if (!config) return;
+  const scope = normalizeSiteSyncScope(url.searchParams.get('scope'));
+  const pkg = await buildSiteSyncPackage(scope);
+  return send(res, 200, pkg);
+}
+
+async function siteSyncManifest(url, req, res) {
+  const config = await requireSiteSyncToken(req, res);
+  if (!config) return;
+  const scope = normalizeSiteSyncScope(url.searchParams.get('scope'));
+  const manifest = await buildSiteSyncManifest(scope);
+  return send(res, 200, manifest);
+}
+
+async function siteSyncObjects(url, req, res) {
+  const config = await requireSiteSyncToken(req, res);
+  if (!config) return;
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const body = await readJsonBody(req);
+  const scope = normalizeSiteSyncScope(body.scope || url.searchParams.get('scope'));
+  const paths = Array.isArray(body.paths) ? body.paths : [];
+  const pkg = await readSiteSyncObjects(scope, paths);
+  return send(res, 200, pkg);
+}
+
+async function siteSyncReceive(url, req, res) {
+  if (!ALLOW_INBOUND_SITE_SYNC) return send(res, 403, { ok: false, error: '云端已禁止被同步(只出不进):拒绝接收外部推送的配置/数据。云端=唯一权威源。' });
+  const config = await requireSiteSyncToken(req, res);
+  if (!config) return;
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const pkg = await readJsonBody(req);
+  const result = await applySiteSyncPackage(pkg, normalizeSiteSyncScope(pkg.scope), {
+    direction: 'receive',
+    source: pkg.origin || '',
+  });
+  return send(res, 200, result);
+}
+
+async function siteSyncReceiveObjects(url, req, res) {
+  if (!ALLOW_INBOUND_SITE_SYNC) return send(res, 403, { ok: false, error: '云端已禁止被同步(只出不进):拒绝接收外部推送的配置/数据。云端=唯一权威源。' });
+  const config = await requireSiteSyncToken(req, res);
+  if (!config) return;
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const pkg = await readJsonBody(req);
+  const scope = normalizeSiteSyncScope(pkg.scope || url.searchParams.get('scope'));
+  const result = await applySiteSyncObjectsPackage(pkg, scope, {
+    direction: 'receive',
+    source: pkg.origin || '',
+  });
+  const restartRequired = scope === 'backend' && result.applied > 0;
+  const state = await updateSiteSyncState(scope, {
+    status: 'ok',
+    mode: 'incremental',
+    direction: 'receive',
+    source: pkg.origin || '',
+    fileCount: result.applied,
+    deletedFiles: result.deleted,
+    totalBytes: result.totalBytes,
+    skipped: result.skipped,
+    backupRoot: result.backup.backupRoot,
+    backupCopied: result.backup.copied,
+    restartRequired,
+    message: `incremental receive completed: ${result.applied} files applied${restartRequired ? ', restart required' : ''}`,
+  });
+  return send(res, 200, {
+    ok: true,
+    scope,
+    mode: 'incremental',
+    applied: result.applied,
+    deleted: result.deleted,
+    totalBytes: result.totalBytes,
+    skipped: result.skipped,
+    backup: result.backup,
+    state,
+    restartRequired,
+  });
+}
+
+async function siteSyncRollback(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const body = await readJsonBody(req);
+  const scope = normalizeSiteSyncScope(body.scope);
+  const state = await readSiteSyncState();
+  const backups = await listSiteSyncBackups(scope);
+  const backupRoot = body.backupRoot || state[scope]?.backupRoot || backups[0]?.backupRoot;
+  if (!backupRoot) return send(res, 400, { error: 'no rollback backup available' });
+  const result = await rollbackSiteSyncBackup(scope, backupRoot);
+  return send(res, 200, result);
+}
+
+async function isSiteSyncTokenRequest(req) {
+  const token = String(req.headers?.['x-site-sync-token'] || '').trim();
+  if (!token) return false;
+  const config = await readSiteSyncConfig();
+  return !!config.syncToken && secureEqualText(token, config.syncToken);
+}
+
+async function requireServiceRestartPermission(req, res) {
+  if (isAdminRequest(req)) return 'admin';
+  if (await isSiteSyncTokenRequest(req)) return 'site-sync';
+  send(res, 403, { error: 'admin required' });
+  return '';
+}
+
+function psQuote(value) {
+  return `'${String(value || '').replace(/'/g, "''")}'`;
+}
+
+function scheduleLocalServiceRestart(reason = '') {
+  const cwd = __dirname;
+  const nodeExe = process.execPath || 'node';
+  const restartScript = path.join(cwd, 'restart-kpl-stats-server.ps1');
+  const restartRequestPath = path.join(cwd, 'restart-request.json');
+  const restartLog = path.join(cwd, 'server.restart.log');
+  const restartTaskName = 'Panda Dashboard Restart Helper';
+  const writeRestartLog = (message) => {
+    try {
+      fsSync.appendFileSync(restartLog, `${new Date().toISOString()} ${message}\n`);
+    } catch {}
+  };
+  const taskArg = (value) => `"${String(value || '').replace(/"/g, '\\"')}"`;
+  const startAt = new Date(Date.now() + 60000);
+  const startTime = `${String(startAt.getHours()).padStart(2, '0')}:${String(startAt.getMinutes()).padStart(2, '0')}`;
+  const restartCommand = `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ${taskArg(restartScript)}`;
+  try {
+    fsSync.writeFileSync(restartRequestPath, JSON.stringify({
+      oldPid: process.pid,
+      taskName: restartTaskName,
+      mainTaskName: SERVICE_RESTART_TASK_NAME,
+      nodeExe,
+      port: PORT,
+      requestedAt: new Date().toISOString(),
+      reason: String(reason || ''),
+    }, null, 2), 'utf8');
+    writeRestartLog(`restart helper task requested, task=${restartTaskName}, reason=${String(reason || '')}`);
+    execFile('schtasks.exe', [
+      '/Create',
+      '/TN',
+      restartTaskName,
+      '/SC',
+      'ONCE',
+      '/ST',
+      startTime,
+      '/TR',
+      restartCommand,
+      '/RU',
+      'SYSTEM',
+      '/F',
+    ], { windowsHide: true }, (createErr) => {
+      if (createErr) {
+        writeRestartLog(`restart helper task create failed: ${createErr.message}`);
+        return;
+      }
+      execFile('schtasks.exe', ['/Run', '/TN', restartTaskName], { windowsHide: true }, (runErr) => {
+        if (runErr) writeRestartLog(`restart helper task run failed: ${runErr.message}`);
+        else writeRestartLog(`restart helper task run requested: ${restartTaskName}`);
+      });
+    });
+  } catch (err) {
+    writeRestartLog(`restart schedule failed: ${err.message}`);
+  }
+  return {
+    ok: true,
+    scheduled: true,
+    reason: String(reason || ''),
+    taskName: SERVICE_RESTART_TASK_NAME,
+    port: PORT,
+    host: HOST,
+    projectDir: cwd,
+    restartMode: 'independent-scheduled-helper',
+    restartTaskName,
+    scheduledAt: authNowIso(),
+  };
+}
+
+async function serviceRestart(url, req, res) {
+  const authMode = await requireServiceRestartPermission(req, res);
+  if (!authMode) return;
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const body = await readJsonBody(req).catch(() => ({}));
+  const result = scheduleLocalServiceRestart(body.reason || authMode);
+  return send(res, 202, {
+    ...result,
+    authMode,
+    message: 'service restart scheduled',
+  });
+}
+
+async function siteSyncRestartRemoteService(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const config = await readSiteSyncConfig();
+  if (!config.configured) return send(res, 400, { error: 'cloud sync not configured', configPath: config.configPath });
+  const remote = await fetchSiteSyncJson(remoteSiteSyncUrl(config, '/api/service/restart'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-site-sync-token': config.syncToken,
+    },
+    body: JSON.stringify({ reason: 'remote restart from site sync admin' }),
+  });
+  return send(res, 202, {
+    ok: true,
+    remoteBaseUrl: config.remoteBaseUrl,
+    remote,
+    message: 'remote service restart scheduled',
+  });
+}
+
+async function rememberApiKey(apiKey) {
+  if (!apiKey) return;
+  if (process.env.KPL_API_KEY && String(apiKey).trim() === String(process.env.KPL_API_KEY).trim()) return;
+  let existing = {};
+  try { existing = JSON.parse(await fs.readFile(RUNTIME_CONFIG_PATH, 'utf8')) || {}; } catch {}
+  if (existing.apiKey === apiKey) return;   // key 没变就不重写——避免覆盖文件里的其他字段(如 qwenApiKey 视觉模型 key)
+  const payload = { ...existing, savedAt: new Date().toISOString(), apiKey };   // 合并保留其他字段
+  await fs.writeFile(RUNTIME_CONFIG_PATH, JSON.stringify(payload, null, 2), 'utf8').catch(() => {});
+}
+
+async function readSavedApiKey() {
+  const envKey = String(process.env.KPL_API_KEY || '').trim();
+  if (envKey) return envKey;
+  try {
+    const payload = JSON.parse(await fs.readFile(RUNTIME_CONFIG_PATH, 'utf8'));
+    return payload.apiKey || '';
+  } catch {
+    return '';
+  }
+}
+
+async function requestApiKey(req) {
+  const headerKey = String(req?.headers?.['x-api-key'] || '').trim();
+  return headerKey || await readSavedApiKey();
+}
+
+function maskSecret(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  if (text.length <= 10) return `${text.slice(0, 2)}***${text.slice(-2)}`;
+  return `${text.slice(0, 6)}***${text.slice(-4)}`;
+}
+
+async function readSourceStructurerFilePayload() {
+  try {
+    return JSON.parse(await fs.readFile(SOURCE_STRUCTURER_CONFIG_PATH, 'utf8')) || {};
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+    return {};
+  }
+}
+
+function normalizeSourceStructurerConfig(payload = {}) {
+  const envApiKey = String(process.env.PANDA_SOURCE_STRUCTURER_API_KEY || process.env.OPENAI_API_KEY || '').trim();
+  const envBaseUrl = String(process.env.PANDA_SOURCE_STRUCTURER_BASE_URL || '').trim();
+  const envModel = String(process.env.PANDA_SOURCE_STRUCTURER_MODEL || '').trim();
+  const provider = String(payload.provider || process.env.PANDA_SOURCE_STRUCTURER_PROVIDER || 'openai-compatible').trim() || 'openai-compatible';
+  const baseUrl = envBaseUrl || String(payload.baseUrl || 'https://api.openai.com/v1/chat/completions').trim();
+  const model = envModel || String(payload.model || 'gpt-4.1-mini').trim();
+  const apiKey = envApiKey || String(payload.apiKey || '').trim();
+  const maxImages = Math.max(1, Math.min(24, Number(payload.maxImages || process.env.PANDA_TGB_STRUCTURER_MAX_IMAGES || 12) || 12));
+  return {
+    configured: !!apiKey && !!baseUrl && !!model,
+    provider,
+    baseUrl,
+    model,
+    apiKey,
+    apiKeyMasked: maskSecret(apiKey),
+    maxImages,
+    savedAt: envApiKey || envBaseUrl || envModel ? 'env' : (payload.savedAt || ''),
+    configPath: SOURCE_STRUCTURER_CONFIG_PATH,
+  };
+}
+
+async function readSourceStructurerConfig() {
+  return normalizeSourceStructurerConfig(await readSourceStructurerFilePayload());
+}
+
+async function writeSourceStructurerConfig(data = {}) {
+  const current = await readSourceStructurerFilePayload();
+  const provider = String(data.provider || current.provider || 'openai-compatible').trim() || 'openai-compatible';
+  const baseUrl = String(data.baseUrl || current.baseUrl || 'https://api.openai.com/v1/chat/completions').trim();
+  const model = String(data.model || current.model || 'gpt-4.1-mini').trim();
+  const nextKey = String(data.apiKey || '').trim() || String(current.apiKey || '').trim();
+  const maxImages = Math.max(1, Math.min(24, Number(data.maxImages || current.maxImages || 12) || 12));
+  const payload = {
+    version: 1,
+    provider,
+    baseUrl,
+    model,
+    apiKey: nextKey,
+    maxImages,
+    savedAt: new Date().toISOString(),
+  };
+  await fs.writeFile(SOURCE_STRUCTURER_CONFIG_PATH, JSON.stringify(payload, null, 2), 'utf8');
+  return normalizeSourceStructurerConfig(payload);
+}
+
+function publicSourceStructurerConfig(config) {
+  return {
+    ok: true,
+    configured: !!config.configured,
+    provider: config.provider,
+    baseUrl: config.baseUrl,
+    model: config.model,
+    apiKeyConfigured: !!config.apiKey,
+    apiKeyMasked: config.apiKeyMasked,
+    maxImages: config.maxImages,
+    savedAt: config.savedAt,
+    configPath: config.configPath,
+  };
+}
+
+async function sourceStructurerConfigApi(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  if (req.method === 'GET') {
+    return send(res, 200, publicSourceStructurerConfig(await readSourceStructurerConfig()));
+  }
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const body = await readJsonBody(req);
+  const config = await writeSourceStructurerConfig(body);
+  return send(res, 200, publicSourceStructurerConfig(config));
+}
+
+const PUBLIC_KPL_PROXY_PATHS = new Set([
+  '/kpl/hangqing/index_info',
+  '/kpl/hangqing/plate_ranking_realtime',
+  '/hangqing/plate_stocks_realtime',
+  '/kpl/plate/bk_trend_incremental',
+  '/kpl/plate/bk_pankou',
+  '/kpl/hangqing/plate_info_qj',
+  '/kanban/zt_gene',
+]);
+
+function isPublicKplProxyPath(targetPath) {
+  const pathname = String(targetPath || '').split('?')[0].trim();
+  return PUBLIC_KPL_PROXY_PATHS.has(pathname);
+}
+
+function sanitizeCookieHeader(value) {
+  return String(value || '')
+    .split(/\r?\n/)
+    .map(part => part.trim())
+    .filter(Boolean)
+    .join('; ')
+    .replace(/\s*;\s*/g, '; ')
+    .replace(/;{2,}/g, ';')
+    .trim();
+}
+
+async function readJiuyangongsheAuthFilePayload() {
+  try {
+    return JSON.parse(await fs.readFile(JIUYANGONGSHE_AUTH_PATH, 'utf8')) || {};
+  } catch {
+    return {};
+  }
+}
+
+function maskJiuyangongshePhone(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  if (text.length <= 7) return `${text.slice(0, 2)}***${text.slice(-2)}`;
+  return `${text.slice(0, 3)}****${text.slice(-4)}`;
+}
+
+function normalizeJiuyangongsheLoginConfig(payload = {}) {
+  const fileLogin = payload.login || payload.credentials || {};
+  const envPhone = String(process.env.JIUYANGONGSHE_PHONE || process.env.JIUYANGONGSHE_USERNAME || '').trim();
+  const envPassword = String(process.env.JIUYANGONGSHE_PASSWORD || '').trim();
+  const phone = envPhone || String(fileLogin.phone || fileLogin.username || '').trim();
+  const password = envPassword || String(fileLogin.password || '').trim();
+  const countryCode = String(process.env.JIUYANGONGSHE_COUNTRY_CODE || fileLogin.countryCode || fileLogin.country_code || '+86').trim() || '+86';
+  return {
+    configured: !!phone && !!password,
+    phone,
+    phoneMasked: maskJiuyangongshePhone(phone),
+    password,
+    countryCode,
+    savedAt: envPhone || envPassword ? 'env' : (fileLogin.savedAt || payload.loginSavedAt || ''),
+    lastLoginAt: payload.autoLoginAt || fileLogin.lastLoginAt || '',
+    source: envPhone || envPassword ? 'env' : (phone || password ? 'file' : ''),
+  };
+}
+
+async function readJiuyangongsheLoginConfig() {
+  return normalizeJiuyangongsheLoginConfig(await readJiuyangongsheAuthFilePayload());
+}
+
+async function writeJiuyangongsheLoginConfig(data = {}) {
+  const phone = String(data.phone || data.username || '').trim();
+  const password = String(data.password || '').trim();
+  const countryCode = String(data.countryCode || data.country_code || '+86').trim() || '+86';
+  if (!phone) throw new Error('missing phone');
+  const payload = await readJiuyangongsheAuthFilePayload();
+  const previous = payload.login || payload.credentials || {};
+  const nextPassword = password || String(previous.password || '').trim();
+  if (!nextPassword) throw new Error('missing password');
+  payload.version = 1;
+  payload.login = {
+    phone,
+    password: nextPassword,
+    countryCode,
+    savedAt: new Date().toISOString(),
+    lastLoginAt: previous.lastLoginAt || payload.autoLoginAt || '',
+  };
+  delete payload.credentials;
+  await fs.writeFile(JIUYANGONGSHE_AUTH_PATH, JSON.stringify(payload, null, 2), 'utf8');
+  jiuyangongsheAuthCache = null;
+  jiuyangongsheAuthStatusCache = null;
+  return normalizeJiuyangongsheLoginConfig(payload);
+}
+
+async function readJiuyangongsheAuth() {
+  if (jiuyangongsheAuthCache) return jiuyangongsheAuthCache;
+  const envCookie = sanitizeCookieHeader(process.env.JIUYANGONGSHE_COOKIE || '');
+  if (envCookie) {
+    jiuyangongsheAuthCache = {
+      savedAt: 'env',
+      cookie: envCookie,
+    };
+    return jiuyangongsheAuthCache;
+  }
+  try {
+    const payload = await readJiuyangongsheAuthFilePayload();
+    jiuyangongsheAuthCache = {
+      savedAt: payload.savedAt || '',
+      cookie: sanitizeCookieHeader(payload.cookie),
+    };
+    return jiuyangongsheAuthCache;
+  } catch {
+    return { savedAt: '', cookie: '' };
+  }
+}
+
+async function writeJiuyangongsheAuth(cookie) {
+  const sanitized = sanitizeCookieHeader(cookie);
+  if (!sanitized) throw new Error('missing cookie');
+  const existing = await readJiuyangongsheAuthFilePayload();
+  const payload = {
+    ...existing,
+    version: 1,
+    savedAt: new Date().toISOString(),
+    cookie: sanitized,
+  };
+  if (existing.login) {
+    payload.login = {
+      ...existing.login,
+      lastLoginAt: payload.savedAt,
+    };
+  }
+  await fs.writeFile(JIUYANGONGSHE_AUTH_PATH, JSON.stringify(payload, null, 2), 'utf8');
+  jiuyangongsheAuthCache = {
+    savedAt: payload.savedAt,
+    cookie: sanitized,
+  };
+  jiuyangongsheAuthStatusCache = null;
+  return jiuyangongsheAuthCache;
+}
+
+function jiuyangongsheApiToken(timestamp) {
+  return crypto.createHash('md5').update(`Uu0KfOB8iUP69d3c:${timestamp}`).digest('hex');
+}
+
+async function loginJiuyangongsheWithCredentials(day = chinaNowParts().day) {
+  const config = await readJiuyangongsheLoginConfig();
+  if (!config.configured) {
+    const err = new Error('jiuyangongshe account password not configured');
+    err.jygStatus = 'missing-credentials';
+    throw err;
+  }
+  const timestamp = Date.now();
+  const body = {
+    phone: config.phone,
+    password: config.password,
+  };
+  if (config.countryCode) body.country_code = config.countryCode;
+  const res = await fetch('https://app.jiuyangongshe.com/jystock-app/api/v1/user/login', {
+    method: 'POST',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36',
+      'Referer': `https://www.jiuyangongshe.com/action/${isoFromCompactDate(day)}`,
+      'Origin': 'https://www.jiuyangongshe.com',
+      'Content-Type': 'application/json',
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Language': 'en-US, zh; q=0.9, en; q=0.8',
+      'X-Requested-With': 'XMLHttpRequest',
+      'platform': '3',
+      'timestamp': String(timestamp),
+      'token': jiuyangongsheApiToken(timestamp),
+    },
+    body: JSON.stringify(body),
+  });
+  const text = await res.text();
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    const err = new Error(`jiuyangongshe login invalid json: ${text.slice(0, 160)}`);
+    err.jygStatus = 'login-failed';
+    throw err;
+  }
+  if (!res.ok || String(json.errCode) !== '0') {
+    const err = new Error(json.msg || `jiuyangongshe login failed ${res.status}`);
+    err.jygStatus = 'login-failed';
+    err.jygErrCode = String(json.errCode || res.status || '');
+    err.jygPayload = json;
+    throw err;
+  }
+  const sessionToken = String(json?.data?.sessionToken || '').trim();
+  if (!sessionToken) {
+    const err = new Error('jiuyangongshe login did not return sessionToken');
+    err.jygStatus = 'login-failed';
+    err.jygPayload = json;
+    throw err;
+  }
+  const saved = await writeJiuyangongsheAuth(`SESSION=${sessionToken}`);
+  const payload = await readJiuyangongsheAuthFilePayload();
+  if (payload.login) {
+    payload.login.lastLoginAt = saved.savedAt;
+    payload.autoLoginAt = saved.savedAt;
+    await fs.writeFile(JIUYANGONGSHE_AUTH_PATH, JSON.stringify(payload, null, 2), 'utf8').catch(() => {});
+  }
+  jiuyangongsheAuthCache = {
+    savedAt: saved.savedAt,
+    cookie: saved.cookie,
+  };
+  jiuyangongsheAuthStatusCache = null;
+  return {
+    ...jiuyangongsheAuthCache,
+    login: {
+      phoneMasked: config.phoneMasked,
+      countryCode: config.countryCode,
+      source: config.source,
+    },
+  };
+}
+
+async function refreshJiuyangongsheAuthByCredentials(day = chinaNowParts().day) {
+  if (!jiuyangongsheAutoLoginTask) {
+    jiuyangongsheAutoLoginTask = loginJiuyangongsheWithCredentials(day)
+      .finally(() => {
+        jiuyangongsheAutoLoginTask = null;
+      });
+  }
+  return jiuyangongsheAutoLoginTask;
+}
+
+function findJiuyangongsheAuthBrowser() {
+  const programFilesX86 = process.env['ProgramFiles(x86)'] || '';
+  const candidates = [
+    process.env.JIUYANGONGSHE_AUTH_BROWSER_PATH,
+    process.env.QUARK_BROWSER_PATH,
+    path.join(process.env.LOCALAPPDATA || '', 'Quark', 'Application', 'quark.exe'),
+    path.join(process.env.ProgramFiles || '', 'Quark', 'Application', 'quark.exe'),
+    path.join(programFilesX86, 'Quark', 'Application', 'quark.exe'),
+    path.join(process.env.ProgramFiles || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    path.join(programFilesX86, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    path.join(process.env.LOCALAPPDATA || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    path.join(process.env.ProgramFiles || '', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+    path.join(programFilesX86, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+    path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+  ].filter(Boolean);
+  return candidates.find(file => fsSync.existsSync(file)) || '';
+}
+
+async function fetchCdpJson(pathname, options = {}) {
+  const res = await fetch(`http://127.0.0.1:${JIUYANGONGSHE_AUTH_CDP_PORT}${pathname}`, options);
+  if (!res.ok) throw new Error(`CDP ${pathname} ${res.status}`);
+  return res.json();
+}
+
+async function waitForJiuyangongsheCdp(timeoutMs = 8000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    try {
+      return await fetchCdpJson('/json/version');
+    } catch {
+      await sleep(250);
+    }
+  }
+  throw new Error('韭研授权浏览器启动超时');
+}
+
+async function openJiuyangongsheCdpPage(targetUrl) {
+  try {
+    await fetch(`http://127.0.0.1:${JIUYANGONGSHE_AUTH_CDP_PORT}/json/new?${encodeURIComponent(targetUrl)}`, {
+      method: 'PUT',
+    });
+  } catch {}
+}
+
+async function ensureJiuyangongsheAuthBrowser(day = chinaNowParts().day) {
+  const authUrl = `https://www.jiuyangongshe.com/action/${isoFromCompactDate(day)}`;
+  try {
+    await fetchCdpJson('/json/version');
+    await openJiuyangongsheCdpPage(authUrl);
+    return { launched: false, port: JIUYANGONGSHE_AUTH_CDP_PORT, url: authUrl };
+  } catch {}
+  const browserPath = findJiuyangongsheAuthBrowser();
+  if (!browserPath) {
+    throw new Error('未找到可用于自动授权的浏览器，请安装 Edge/Chrome/Quark，或设置 JIUYANGONGSHE_AUTH_BROWSER_PATH');
+  }
+  await fs.mkdir(JIUYANGONGSHE_AUTH_PROFILE_DIR, { recursive: true });
+  const child = spawn(browserPath, [
+    `--remote-debugging-port=${JIUYANGONGSHE_AUTH_CDP_PORT}`,
+    `--user-data-dir=${JIUYANGONGSHE_AUTH_PROFILE_DIR}`,
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--remote-allow-origins=*',
+    '--new-window',
+    authUrl,
+  ], {
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: false,
+  });
+  child.unref();
+  jiuyangongsheAuthBrowserProcess = {
+    pid: child.pid,
+    startedAt: new Date().toISOString(),
+    browserPath,
+  };
+  await waitForJiuyangongsheCdp();
+  return {
+    launched: true,
+    pid: child.pid,
+    browserPath,
+    port: JIUYANGONGSHE_AUTH_CDP_PORT,
+    url: authUrl,
+  };
+}
+
+function cdpEventDataToText(data) {
+  if (typeof data === 'string') return data;
+  if (data instanceof ArrayBuffer) return Buffer.from(data).toString('utf8');
+  if (ArrayBuffer.isView(data)) return Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString('utf8');
+  return String(data || '');
+}
+
+async function cdpCommand(webSocketDebuggerUrl, method, params = {}, timeoutMs = 6000) {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(webSocketDebuggerUrl);
+    const id = Math.floor(Math.random() * 1e9);
+    const timer = setTimeout(() => {
+      try { ws.close(); } catch {}
+      reject(new Error(`CDP command timeout: ${method}`));
+    }, timeoutMs);
+    ws.addEventListener('open', () => {
+      ws.send(JSON.stringify({ id, method, params }));
+    });
+    ws.addEventListener('message', event => {
+      let message;
+      try {
+        message = JSON.parse(cdpEventDataToText(event.data));
+      } catch {
+        return;
+      }
+      if (message.id !== id) return;
+      clearTimeout(timer);
+      try { ws.close(); } catch {}
+      if (message.error) {
+        reject(new Error(message.error.message || `CDP command failed: ${method}`));
+      } else {
+        resolve(message.result || {});
+      }
+    });
+    ws.addEventListener('error', event => {
+      clearTimeout(timer);
+      reject(new Error(event?.message || `CDP websocket error: ${method}`));
+    });
+  });
+}
+
+function jiuyangongsheCookiesToHeader(cookies) {
+  const rows = (cookies || [])
+    .filter(cookie => /jiuyangongshe\.com$/i.test(String(cookie.domain || '').replace(/^\./, '')))
+    .sort((a, b) => String(a.domain || '').length - String(b.domain || '').length);
+  const map = new Map();
+  for (const cookie of rows) {
+    const name = String(cookie.name || '').trim();
+    if (!name) continue;
+    map.set(name, String(cookie.value || ''));
+  }
+  return [...map.entries()].map(([name, value]) => `${name}=${value}`).join('; ');
+}
+
+async function readJiuyangongsheCookieFromAuthBrowser() {
+  const targets = await fetchCdpJson('/json/list').catch(() => []);
+  const pages = (Array.isArray(targets) ? targets : [])
+    .filter(target => target.type === 'page' && target.webSocketDebuggerUrl);
+  const target = pages.find(item => String(item.url || '').includes('jiuyangongshe.com')) || pages[0];
+  if (!target) return '';
+  let cookies = [];
+  try {
+    const result = await cdpCommand(target.webSocketDebuggerUrl, 'Network.getCookies', {
+      urls: [
+        'https://www.jiuyangongshe.com',
+        'https://app.jiuyangongshe.com/jystock-app',
+      ],
+    });
+    cookies = result.cookies || [];
+  } catch {}
+  if (!cookies.length) {
+    try {
+      const result = await cdpCommand(target.webSocketDebuggerUrl, 'Network.getAllCookies', {});
+      cookies = result.cookies || [];
+    } catch {}
+  }
+  return sanitizeCookieHeader(jiuyangongsheCookiesToHeader(cookies));
+}
+
+function cacheFilePath(type, key) {
+  return path.join(PERSIST_CACHE_DIR, safePart(type), `${safePart(key)}.json`);
+}
+
+async function readPersistCache(type, key) {
+  try {
+    return JSON.parse(await fs.readFile(cacheFilePath(type, key), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+async function writePersistCache(type, key, data) {
+  const file = cacheFilePath(type, key);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, JSON.stringify({
+    savedAt: new Date().toISOString(),
+    data,
+  }, null, 2), 'utf8').catch(() => {});
+}
+
+function permanentHiddenKey(zsType) {
+  return String(zsType || DEFAULT_ZS_TYPE);
+}
+
+function normalizePermanentHiddenBoard(input, zsType = DEFAULT_ZS_TYPE) {
+  const plateId = String(input?.plateId ?? input?.id ?? input?.code ?? input ?? '').trim();
+  if (!plateId) return null;
+  const name = String(input?.name ?? input?.plateName ?? input?.plate_name ?? '').trim();
+  return {
+    plateId,
+    name: name || plateId,
+    zsType: String(input?.zsType ?? input?.zs_type ?? zsType ?? DEFAULT_ZS_TYPE),
+    permanentAt: input?.permanentAt || new Date().toISOString(),
+  };
+}
+
+async function readPermanentHiddenMap() {
+  try {
+    return JSON.parse(await fs.readFile(PERMANENT_HIDDEN_PATH, 'utf8')) || {};
+  } catch (e) {
+    if (e && e.code === 'ENOENT') return {};   // 文件不存在=合法空名单
+    // 读失败/解析失败:绝不当空返回——否则保存时会用 {} 覆盖,把整张名单冲掉(11→3 丢失的根因)。抛出由调用方处理。
+    throw e;
+  }
+}
+
+async function writePermanentHiddenMap(map) {
+  // 原子写:先写临时文件再改名,防并发写/中断写出半截损坏文件。
+  const tmp = PERMANENT_HIDDEN_PATH + '.tmp';
+  await fs.writeFile(tmp, JSON.stringify(map || {}, null, 2), 'utf8');
+  await fs.rename(tmp, PERMANENT_HIDDEN_PATH);
+}
+
+async function getPermanentHiddenSet(zsType) {
+  // 读/过滤路径:出错降级为空集(临时不过滤),绝不让它抛错搞坏看板/策略页。
+  // (保存路径 savePermanentHiddenBoardServer 直接用 readPermanentHiddenMap,读失败会抛错→中止保存,保命不覆盖。)
+  let map;
+  try { map = await readPermanentHiddenMap(); } catch { return new Set(); }
+  const rows = map[permanentHiddenKey(zsType)] || [];
+  return new Set(rows
+    .map(item => String(item?.plateId ?? item ?? '').trim())
+    .filter(Boolean));
+}
+
+async function savePermanentHiddenBoardServer(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const data = await readJsonBody(req);
+  const zsType = String(data.zsType || data.zs_type || url.searchParams.get('zs_type') || DEFAULT_ZS_TYPE);
+  const meta = normalizePermanentHiddenBoard(data, zsType);
+  if (!meta) return send(res, 400, { error: 'missing plateId' });
+  const map = await readPermanentHiddenMap();
+  const key = permanentHiddenKey(zsType);
+  const rows = (map[key] || []).map(item => normalizePermanentHiddenBoard(item, zsType)).filter(Boolean);
+  map[key] = rows
+    .filter(item => String(item.plateId) !== String(meta.plateId))
+    .concat(meta);
+  await writePermanentHiddenMap(map);
+  return send(res, 200, { ok: true, board: meta, hiddenCount: map[key].length });
+}
+
+async function getPermanentHiddenBoardsServer(url, req, res) {
+  if (req.method !== 'GET') return send(res, 405, { error: 'method not allowed' });
+  const map = await readPermanentHiddenMap().catch(() => ({}));
+  const normalized = {};
+  let count = 0;
+  for (const [zsType, rows] of Object.entries(map || {})) {
+    const key = permanentHiddenKey(zsType);
+    const seen = new Set();
+    normalized[key] = [];
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const meta = normalizePermanentHiddenBoard(row, key);
+      if (!meta || seen.has(String(meta.plateId))) continue;
+      seen.add(String(meta.plateId));
+      normalized[key].push(meta);
+      count += 1;
+    }
+  }
+  return send(res, 200, { ok: true, count, boards: normalized });
+}
+
+function countPermanentHiddenBoards(map) {
+  let count = 0;
+  for (const rows of Object.values(map || {})) {
+    count += Array.isArray(rows) ? rows.length : 0;
+  }
+  return count;
+}
+
+async function deletePermanentHiddenBoardServer(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  if (req.method !== 'POST' && req.method !== 'DELETE') return send(res, 405, { error: 'method not allowed' });
+  const data = await readJsonBody(req).catch(() => ({}));
+  const plateId = String(data.plateId || data.id || data.code || url.searchParams.get('plateId') || '').trim();
+  const zsType = String(data.zsType || data.zs_type || url.searchParams.get('zs_type') || DEFAULT_ZS_TYPE);
+  if (!plateId) return send(res, 400, { error: 'missing plateId' });
+  const map = await readPermanentHiddenMap();
+  const key = permanentHiddenKey(zsType);
+  const before = Array.isArray(map[key]) ? map[key] : [];
+  map[key] = before.filter(item => String(item?.plateId ?? item ?? '') !== plateId);
+  const removed = before.length - map[key].length;
+  await writePermanentHiddenMap(map);
+  return send(res, 200, {
+    ok: true,
+    plateId,
+    zsType: key,
+    removed,
+    hiddenCount: map[key].length,
+    totalHiddenCount: countPermanentHiddenBoards(map),
+  });
+}
+
+function opsHealthState(checks) {
+  if (checks.some(item => item.state === 'error')) return 'error';
+  if (checks.some(item => item.state === 'warn')) return 'warn';
+  return 'ok';
+}
+
+async function statPathSafe(filePath) {
+  try {
+    const stat = await fs.stat(filePath);
+    return {
+      exists: true,
+      path: filePath,
+      size: stat.size,
+      mtime: stat.mtime.toISOString(),
+      isDirectory: stat.isDirectory(),
+      isFile: stat.isFile(),
+    };
+  } catch (err) {
+    if (err.code === 'ENOENT') return { exists: false, path: filePath };
+    return { exists: false, path: filePath, error: err.message };
+  }
+}
+
+async function jsonFileHealth(label, filePath, options = {}) {
+  const stat = await statPathSafe(filePath);
+  if (!stat.exists) {
+    return {
+      key: options.key || path.basename(filePath),
+      label,
+      state: options.optional ? 'warn' : 'error',
+      message: options.optional ? '未配置或尚未生成' : '文件不存在',
+      stat,
+    };
+  }
+  if (options.parse === false) {
+    return {
+      key: options.key || path.basename(filePath),
+      label,
+      state: 'ok',
+      message: '文件存在',
+      stat,
+    };
+  }
+  try {
+    JSON.parse(await fs.readFile(filePath, 'utf8'));
+    return {
+      key: options.key || path.basename(filePath),
+      label,
+      state: 'ok',
+      message: 'JSON 正常',
+      stat,
+    };
+  } catch (err) {
+    return {
+      key: options.key || path.basename(filePath),
+      label,
+      state: 'error',
+      message: `JSON 解析失败：${err.message}`,
+      stat,
+    };
+  }
+}
+
+async function adminCloudHealth(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  const checks = [];
+  const push = (key, label, state, message, details = {}) => {
+    checks.push({ key, label, state, message, details });
+  };
+
+  checks.push(await jsonFileHealth('永久隐藏板块名单', PERMANENT_HIDDEN_PATH, { key: 'permanent-hidden', optional: true }));
+  checks.push(await jsonFileHealth('同步配置', SITE_SYNC_CONFIG_PATH, { key: 'site-sync-config', optional: true }));
+  checks.push(await jsonFileHealth('同步状态', SITE_SYNC_STATE_PATH, { key: 'site-sync-state', optional: true }));
+  checks.push(await jsonFileHealth('用户数据库', AUTH_DB_PATH, { key: 'auth-db', optional: false }));
+  checks.push(await jsonFileHealth('用户会话文件', AUTH_SESSION_PATH, { key: 'auth-sessions', optional: true }));
+  checks.push(await jsonFileHealth('邮箱 SMTP 配置', AUTH_MAIL_CONFIG_PATH, { key: 'smtp-config', optional: true }));
+  checks.push(await jsonFileHealth('韭研自动登录配置', JIUYANGONGSHE_AUTH_PATH, { key: 'jiuyangongshe-auth', optional: true }));
+  checks.push(await jsonFileHealth('图片结构化服务配置', SOURCE_STRUCTURER_CONFIG_PATH, { key: 'source-structurer', optional: true }));
+
+  const smtp = publicSmtpConfig(await getSmtpConfig());
+  push(
+    'smtp-ready',
+    '注册/忘记密码发信',
+    smtp.configured ? 'ok' : 'warn',
+    smtp.configured ? `${smtp.host}:${smtp.port || ''} 已配置` : '未配置 SMTP，公网注册和忘记密码无法发验证码',
+    { configured: smtp.configured, host: smtp.host || '', from: smtp.from || '', hasPassword: smtp.hasPassword }
+  );
+
+  const syncConfig = await readSiteSyncConfig().catch(err => ({ error: err.message, configured: false }));
+  push(
+    'site-sync-ready',
+    '前端/数据库/后端同步',
+    syncConfig.configured ? 'ok' : 'warn',
+    syncConfig.configured ? `已配置远端：${syncConfig.remoteBaseUrl}` : `未配置完整同步地址或密钥${syncConfig.error ? `：${syncConfig.error}` : ''}`,
+    {
+      configured: !!syncConfig.configured,
+      remoteBaseUrl: syncConfig.remoteBaseUrl || '',
+      tokenConfigured: !!syncConfig.tokenConfigured,
+      allowInboundSiteSync: ALLOW_INBOUND_SITE_SYNC,
+      nodeRole: SITE_SYNC_NODE_ROLE || '',
+    }
+  );
+
+  const backupCounts = {};
+  for (const scope of ['frontend', 'database', 'backend']) {
+    const backups = await listSiteSyncBackups(scope).catch(() => []);
+    backupCounts[scope] = backups.length;
+  }
+  push(
+    'rollback-backups',
+    '同步回退备份',
+    Object.values(backupCounts).some(count => count > 0) ? 'ok' : 'warn',
+    Object.values(backupCounts).some(count => count > 0) ? '存在可回退备份' : '暂无可回退备份，首次覆盖后才会出现',
+    backupCounts
+  );
+
+  const hiddenMap = await readPermanentHiddenMap().catch(() => ({}));
+  push(
+    'hidden-boards',
+    '永久隐藏板块',
+    'ok',
+    `当前 ${countPermanentHiddenBoards(hiddenMap)} 个`,
+    { count: countPermanentHiddenBoards(hiddenMap), byType: Object.fromEntries(Object.entries(hiddenMap || {}).map(([key, rows]) => [key, Array.isArray(rows) ? rows.length : 0])) }
+  );
+
+  const opsLogStat = await statPathSafe(OPS_LOG_PATH);
+  push(
+    'ops-log',
+    '云端交接日志',
+    opsLogStat.exists ? 'ok' : 'warn',
+    opsLogStat.exists ? `已存在，最后更新 ${opsLogStat.mtime || ''}` : '未找到交接日志文件',
+    opsLogStat
+  );
+
+  const cleanupState = {
+    retentionTradingDays: AUTO_CLEANUP_RETENTION_DAYS,
+    cacheRetentionDays: AUTO_CLEANUP_MAX_CACHE_FILE_AGE_DAYS,
+    dailyRunTime: `${String(AUTO_CLEANUP_RUN_HOUR).padStart(2, '0')}:${String(AUTO_CLEANUP_RUN_MINUTE).padStart(2, '0')}`,
+  };
+  push('cleanup', '30 个交易日保留规则', 'ok', `每天 ${cleanupState.dailyRunTime} 自动清理`, cleanupState);
+
+  return send(res, 200, {
+    ok: true,
+    checkedAt: authNowIso(),
+    state: opsHealthState(checks),
+    node: {
+      host: HOST,
+      port: PORT,
+      publicHttpPort: PUBLIC_HTTP_PORT,
+      uptimeSeconds: Math.round(process.uptime()),
+      serviceTaskName: SERVICE_RESTART_TASK_NAME,
+    },
+    checks,
+    summary: {
+      ok: checks.filter(item => item.state === 'ok').length,
+      warn: checks.filter(item => item.state === 'warn').length,
+      error: checks.filter(item => item.state === 'error').length,
+    },
+  });
+}
+
+async function adminOpsLog(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  if (req.method !== 'GET') return send(res, 405, { error: 'method not allowed' });
+  const limit = Math.max(20, Math.min(1000, Number(url.searchParams.get('lines') || 160)));
+  const stat = await statPathSafe(OPS_LOG_PATH);
+  if (!stat.exists) {
+    return send(res, 200, { ok: true, exists: false, file: OPS_LOG_PATH, lines: [], text: '' });
+  }
+  const allLines = (await fs.readFile(OPS_LOG_PATH, 'utf8')).split(/\r?\n/);
+  const lines = allLines.slice(-limit);
+  return send(res, 200, {
+    ok: true,
+    exists: true,
+    file: OPS_LOG_PATH,
+    totalLines: allLines.length,
+    returnedLines: lines.length,
+    lines,
+    text: lines.join('\n'),
+    stat,
+  });
+}
+
+async function adminReviewSourceHealth(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  const apiKey = req.headers['x-api-key'] || await readSavedApiKey().catch(() => '');
+  const days = Math.max(1, Math.min(MAIN_REASON_SYNC_MAX_DAYS, Number(url.searchParams.get('days') || MAIN_REASON_SYNC_MAX_DAYS)));
+  const requestedEndDay = isoFromCompactDate(url.searchParams.get('day') || chinaNowParts().day);
+  const endDay = apiKey ? await resolveCurrentLatestTradingDay(apiKey).catch(() => requestedEndDay) : requestedEndDay;
+  const tradingDays = await getRecentTradingDays(endDay, apiKey, days).catch(() => {
+    const fallback = [];
+    for (let i = 0; i < 60 && fallback.length < days; i += 1) {
+      const candidate = shiftDay(endDay, -i);
+      if (isChinaMarketTradingDay(candidate)) fallback.unshift(candidate);
+    }
+    return fallback.slice(-days);
+  });
+  const rows = await mapLimit(tradingDays, 3, async day => {
+    const inspect = await inspectLimitUpMainReasonDbDay(day, apiKey).catch(err => ({ day, error: err.message, needsSync: true }));
+    const artifacts = Array.isArray(inspect.sourceArtifactStats) ? inspect.sourceArtifactStats : [];
+    return {
+      day,
+      ok: !inspect.needsSync && !inspect.error,
+      needsSync: !!inspect.needsSync,
+      reasonReady: !!inspect.reasonReady,
+      limitUpCount: Number(inspect.limitUpCount || 0),
+      mainReasonCount: Number(inspect.mainReasonCount || 0),
+      missingCount: Number(inspect.missingCount || 0),
+      missingSourceLabels: inspect.missingSourceLabels || [],
+      sourceArtifactStats: artifacts,
+      savedAt: inspect.savedAt || '',
+      ruleVersion: inspect.ruleVersion || '',
+      skipReason: inspect.skipReason || '',
+      error: inspect.error || '',
+    };
+  });
+  return send(res, 200, {
+    ok: true,
+    checkedAt: authNowIso(),
+    requestedEndDay,
+    endDay,
+    scanned: rows.length,
+    complete: rows.filter(item => item.ok).length,
+    pending: rows.filter(item => item.needsSync).length,
+    requiredSourceGroups: REQUIRED_REVIEW_SOURCE_GROUPS,
+    rows,
+  });
+}
+
+async function getSnapshot(url, req, res) {
+  const day = url.searchParams.get('day');
+  const zsType = url.searchParams.get('zs_type') || 'default';
+  if (!day) return send(res, 400, { error: 'missing day' });
+  try {
+    const body = await fs.readFile(snapshotPath(day, zsType), 'utf8');
+    return send(res, 200, JSON.parse(body));
+  } catch (err) {
+    if (err.code === 'ENOENT') return send(res, 404, { error: 'snapshot not found' });
+    throw err;
+  }
+}
+
+function readBoardNameFromSnapshotPayload(payload, plateId) {
+  const target = String(plateId || '');
+  if (!target) return '';
+  const boards = Array.isArray(payload?.boards) ? payload.boards : [];
+  for (const board of boards) {
+    const id = String(board?.plateId ?? board?.id ?? board?.code ?? '');
+    const name = String(board?.name ?? board?.plateName ?? board?.plate_name ?? '').trim();
+    if (id === target && name && name !== target) return name;
+  }
+  return '';
+}
+
+async function findBoardNameInSnapshots(plateId, zsType) {
+  const target = String(plateId || '');
+  if (!target) return '';
+  const scopes = [
+    safePart(String(zsType || DEFAULT_ZS_TYPE)),
+    safePart(DEFAULT_ZS_TYPE),
+    'default',
+  ];
+  const seenScopes = new Set();
+  const allSnapshotScopes = await fs.readdir(SNAPSHOT_DIR, { withFileTypes: true })
+    .then(items => items.filter(item => item.isDirectory()).map(item => item.name))
+    .catch(() => []);
+  scopes.push(...allSnapshotScopes);
+  for (const scope of scopes) {
+    if (!scope || seenScopes.has(scope)) continue;
+    seenScopes.add(scope);
+    const dir = path.join(SNAPSHOT_DIR, scope);
+    const files = await fs.readdir(dir).catch(() => []);
+    const jsonFiles = files.filter(file => file.endsWith('.json')).sort().reverse();
+    for (const file of jsonFiles) {
+      const payload = await fs.readFile(path.join(dir, file), 'utf8').then(JSON.parse).catch(() => null);
+      const name = readBoardNameFromSnapshotPayload(payload, target);
+      if (name) return name;
+    }
+  }
+  return '';
+}
+
+async function resolveBoardNames(url, req, res) {
+  const apiKey = req.headers['x-api-key'] || await readSavedApiKey();
+  const zsType = url.searchParams.get('zs_type') || DEFAULT_ZS_TYPE;
+  const ids = (url.searchParams.get('ids') || url.searchParams.get('plates') || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+  if (!ids.length) return send(res, 400, { error: 'missing ids' });
+
+  const names = {};
+  await Promise.all(ids.map(async id => {
+    if (BOARD_NAME_FALLBACKS[id]) {
+      names[id] = BOARD_NAME_FALLBACKS[id];
+      return;
+    }
+    const name = await findBoardNameInSnapshots(id, zsType);
+    if (name) names[id] = name;
+  }));
+
+  if (isEastmoneyZsType(zsType)) {
+    const catalog = await readEastmoneyConceptCatalog();
+    const byId = new Map((catalog?.boards || []).map(board => [String(board.plateId), String(board.name || '')]));
+    for (const id of ids) {
+      if (!names[id] && byId.get(String(id))) names[id] = byId.get(String(id));
+    }
+  }
+  if (isThsZsType(zsType)) {
+    const catalog = await readThsConceptCatalog();
+    const byId = new Map((catalog?.boards || []).map(board => [String(board.plateId), String(board.name || '')]));
+    for (const id of ids) {
+      if (!names[id] && byId.get(String(id))) names[id] = byId.get(String(id));
+    }
+  }
+
+  const missing = ids.filter(id => !names[id]);
+  if (missing.length && apiKey && !isDisabledZsType(zsType)) {
+    const rankingTypes = [...new Set([String(zsType), DEFAULT_ZS_TYPE].filter(type => !isDisabledZsType(type)))];
+    for (const type of rankingTypes) {
+      const stillMissing = ids.filter(id => !names[id]);
+      if (!stillMissing.length) break;
+      const data = await kplFetch(`/kpl/hangqing/plate_ranking_realtime?rank_type=2&zs_type=${encodeURIComponent(type)}&count=1000`, apiKey).catch(() => null);
+      const list = data?.List || data?.list || data?.data || [];
+      for (const row of list) {
+        const id = String(row?.[0] || '');
+        const name = String(row?.[1] || '').trim();
+        if (id && name && stillMissing.includes(id)) names[id] = name;
+      }
+    }
+  }
+
+  return send(res, 200, {
+    ok: true,
+    zsType,
+    names,
+    missing: ids.filter(id => !names[id]),
+  });
+}
+
+async function saveSnapshot(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  await rememberApiKey(req.headers['x-api-key']);
+  const data = await readJsonBody(req);
+  if (!data || !data.day) return send(res, 400, { error: 'missing day' });
+  const zsType = data.zsType || data.zs_type || 'default';
+  if (!isChinaMarketTradingDay(data.day)) {
+    return send(res, 200, marketClosedSkipPayload(data.day, {
+      zsType,
+      file: snapshotPath(data.day, zsType),
+      savedAt: '',
+    }));
+  }
+  const file = snapshotPath(data.day, zsType);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  const existing = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => null);
+  if (existing?.confirmed && !data.confirmed) {
+    return send(res, 200, {
+      ok: true,
+      skipped: true,
+      reason: 'confirmed snapshot is protected',
+      file,
+      savedAt: existing.savedAt,
+      confirmedAt: existing.confirmedAt,
+    });
+  }
+  if (existing && isPastChinaDay(data.day) && !data.confirmed) {
+    return send(res, 200, {
+      ok: true,
+      skipped: true,
+      reason: 'past snapshot is protected',
+      file,
+      savedAt: existing.savedAt,
+      confirmedAt: existing.confirmedAt,
+    });
+  }
+  const snapshot = {
+    version: 1,
+    savedAt: new Date().toISOString(),
+    ...data,
+    zsType,
+  };
+  await fs.writeFile(file, JSON.stringify(snapshot, null, 2), 'utf8');
+  return send(res, 200, { ok: true, file, savedAt: snapshot.savedAt });
+}
+
+async function writeDashboardSnapshot(data) {
+  if (!data || !data.day) throw new Error('missing snapshot day');
+  const zsType = data.zsType || data.zs_type || DEFAULT_ZS_TYPE;
+  const file = snapshotPath(data.day, zsType);
+  if (!isChinaMarketTradingDay(data.day)) {
+    return {
+      snapshot: {
+        version: 1,
+        savedAt: '',
+        ...data,
+        day: isoFromCompactDate(data.day),
+        zsType,
+        boards: [],
+        cardData: {},
+        ...marketClosedSkipPayload(data.day),
+      },
+      file,
+      skipped: true,
+    };
+  }
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  const existing = await fs.readFile(file, 'utf8').then(JSON.parse).catch(() => null);
+  if (existing?.confirmed && !data.confirmed) {
+    return { snapshot: existing, file, skipped: true };
+  }
+  if (existing && isPastChinaDay(data.day) && !data.confirmed) {
+    return { snapshot: existing, file, skipped: true };
+  }
+  const snapshot = {
+    version: 1,
+    savedAt: new Date().toISOString(),
+    ...data,
+    zsType,
+  };
+  await fs.writeFile(file, JSON.stringify(snapshot, null, 2), 'utf8');
+  return { snapshot, file };
+}
+
+function pickArrayPayload(data) {
+  if (Array.isArray(data)) return data;
+  for (const key of ['list', 'List', 'data', 'items', 'stocks']) {
+    if (Array.isArray(data?.[key])) return data[key];
+  }
+  return [];
+}
+
+function normalizeLimitUpRow(row, day) {
+  if (Array.isArray(row)) {
+    const code = String(row[0] || '');
+    const name = String(row[1] || '');
+    const gain = Number.isFinite(Number(row[4])) ? Number(row[4]) : Number(row[6]);
+    return {
+      code,
+      name,
+      gain,
+      reason: String(row[11] || row[4] || ''),
+      day,
+    };
+  }
+  const code = String(row?.code || row?.stock_id || row?.StockID || row?.stockCode || row?.Code || '');
+  const name = String(row?.name || row?.stock_name || row?.StockName || row?.stockName || row?.Name || '');
+  const gain = Number(row?.gain ?? row?.zf ?? row?.ZDF ?? row?.涨幅 ?? row?.change_pct);
+  return {
+    code,
+    name,
+    gain,
+    reason: String(row?.reason || row?.Reason || row?.zt_reason || ''),
+    day,
+  };
+}
+
+async function readLimitUpDbDay(day) {
+  try {
+    const body = await fs.readFile(limitUpDbPath(day), 'utf8');
+    return JSON.parse(body);
+  } catch (err) {
+    if (err.code === 'ENOENT') return null;
+    throw err;
+  }
+}
+
+function isTrustedLimitUpSource(source) {
+  const s = String(source || '');
+  return s.startsWith('manual_')
+    || s === 'eastmoney/close'
+    || s === 'eastmoney/topic-zt-pool'
+    || s === 'daban/plate_info'
+    || s === 'review/kaipanla-fupanla-limitup'
+    || s === 'review/jiuyangongshe-structured-limitup'
+    || s === 'review/xuangubao-limit-up-limitup';
+}
+
+function stockLooksLikeLimitUp(stock) {
+  const gain = Number(stock?.gain);
+  return Number.isFinite(gain) && gain >= limitUpThreshold(stock?.code, stock?.name);
+}
+
+function isReliableLimitUpDbPayload(payload) {
+  const stocks = Array.isArray(payload?.stocks) ? payload.stocks : [];
+  if (!stocks.length) return false;
+  if (isTrustedLimitUpSource(payload?.source)) return true;
+  const finiteRows = stocks.filter(stock => Number.isFinite(Number(stock?.gain)));
+  if (!finiteRows.length) return false;
+  const limitRows = finiteRows.filter(stockLooksLikeLimitUp);
+  return limitRows.length >= Math.max(1, Math.ceil(finiteRows.length * 0.8));
+}
+
+async function writeLimitUpDbDay(day, stocks, source = 'kpl') {
+  if (!isChinaMarketTradingDay(day)) {
+    return marketClosedSkipPayload(day, { source });
+  }
+  await fs.mkdir(LIMIT_UP_DB_DIR, { recursive: true });
+  const savedAt = isAfterMarketClose(day) ? afterCloseSavedAtForDay(day) : new Date().toISOString();
+  const unique = [...new Map(stocks
+    .filter(s => s.code && s.name && !isStStock(s.name))
+    .map(s => [String(s.code), s])).values()];
+  const payload = {
+    version: 1,
+    day,
+    source,
+    savedAt,
+    count: unique.length,
+    stocks: unique,
+  };
+  await fs.writeFile(limitUpDbPath(day), JSON.stringify(payload, null, 2), 'utf8');
+  return payload;
+}
+
+async function fetchLimitUpDbSource(day, apiKey) {
+  if (!isChinaMarketTradingDay(day)) {
+    return { source: 'market-closed', stocks: [], skipped: true };
+  }
+  const today = chinaNowParts().day;
+  if (day === today && !isAfterMarketClose(day)) {
+    return { source: 'intraday/not-saved-before-close', stocks: [] };
+  }
+
+  const eastmoneyTopicRows = await fetchEastmoneyTopicLimitUps(day).catch(() => []);
+  if (eastmoneyTopicRows.length) return { source: 'eastmoney/topic-zt-pool', stocks: eastmoneyTopicRows };
+
+  if (day === today && isAfterMarketClose(day)) {
+    const eastmoneyRows = await fetchEastmoneyLimitUps().catch(() => []);
+    if (eastmoneyRows.length) return { source: 'eastmoney/close', stocks: eastmoneyRows };
+  }
+
+  const history = await kplFetch(`/history/his_daban?day=${encodeURIComponent(day)}`, apiKey).catch(() => null);
+  const historyRows = pickArrayPayload(history).map(row => normalizeLimitUpRow(row, day))
+    .filter(s => s.code && s.name && !isStStock(s.name));
+  const historyLimitRows = historyRows.filter(stockLooksLikeLimitUp);
+  if (historyLimitRows.length) return { source: 'history/his_daban', stocks: historyLimitRows };
+
+  const live = await kplFetch(`/daban/plate_info?day=${encodeURIComponent(day)}`, apiKey).catch(() => null);
+  const liveRows = pickArrayPayload(live).map(row => normalizeLimitUpRow(row, day))
+    .filter(s => s.code && s.name && !isStStock(s.name))
+    .filter(s => !Number.isFinite(s.gain) || s.gain >= limitUpThreshold(s.code, s.name));
+  if (!liveRows.length) {
+    const sourceFallback = await fetchLimitUpDbSourceFromReviewArtifacts(day).catch(() => null);
+    if (sourceFallback?.stocks?.length) return sourceFallback;
+  }
+  return { source: 'daban/plate_info', stocks: liveRows };
+}
+
+function normalizeLimitUpSourceFallbackRow(row, day, extra = {}) {
+  const code = normalizeReasonSourceCode(row?.code);
+  const name = String(row?.name || '').trim();
+  if (!code || !name || isExcludedFromReview(code, name)) return null;
+  return {
+    code,
+    name,
+    gain: Number.isFinite(Number(row?.gain)) ? Number(row.gain) : null,
+    reason: String(row?.reason || row?.detailReason || row?.reasonText || extra.reason || extra.boardTopic || '').trim(),
+    firstLimitTime: normalizeReviewFirstLimitTime(row?.time || row?.firstLimitTime || extra.firstLimitTime || ''),
+    limitUpCount: String(row?.mark || row?.limitUpCount || extra.limitUpCount || '').trim(),
+    day,
+  };
+}
+
+async function fetchLimitUpDbSourceFromReviewArtifacts(day) {
+  const isoDay = isoFromCompactDate(day);
+  const xuangubao = await ensureXuangubaoLimitUpSourceDay(isoDay).catch(() => null);
+  const xuangubaoRows = (Array.isArray(xuangubao?.rows) ? xuangubao.rows : [])
+    .map(row => normalizeLimitUpSourceFallbackRow(row, isoDay, {
+      boardTopic: row?.boardTopic || row?.primaryRawTopic,
+      firstLimitTime: row?.firstLimitTime,
+      limitUpCount: row?.limitUpCount,
+    }))
+    .filter(Boolean);
+  if (xuangubaoRows.length >= 20) {
+    return {
+      source: 'review/xuangubao-limit-up-limitup',
+      stocks: xuangubaoRows,
+    };
+  }
+
+  const kaipanla = await ensureKaipanlaFupanlaSourceDay(isoDay).catch(() => null);
+  const kaipanlaRows = [];
+  for (const board of kaipanla?.boards || []) {
+    for (const row of board?.rows || []) {
+      const stock = normalizeLimitUpSourceFallbackRow(row, isoDay, { boardTopic: board?.name });
+      if (stock) kaipanlaRows.push(stock);
+    }
+  }
+  if (kaipanlaRows.length >= 20) {
+    return {
+      source: 'review/kaipanla-fupanla-limitup',
+      stocks: kaipanlaRows,
+    };
+  }
+
+  const jiuyangongshe = await fs.readFile(jiuyangongsheStructuredSourcePath(isoDay), 'utf8')
+    .then(JSON.parse)
+    .catch(() => null);
+  const jiuyangongsheRows = (Array.isArray(jiuyangongshe?.rows) ? jiuyangongshe.rows : [])
+    .map(row => normalizeLimitUpSourceFallbackRow(row, isoDay, {
+      boardTopic: row?.boardTopic || row?.primaryRawTopic,
+    }))
+    .filter(Boolean);
+  if (jiuyangongsheRows.length >= 20) {
+    return {
+      source: 'review/jiuyangongshe-structured-limitup',
+      stocks: jiuyangongsheRows,
+    };
+  }
+
+  return { source: 'review-source/unavailable', stocks: [] };
+}
+
+async function getDisplayLimitUpCodeSet(day, apiKey = '') {
+  const isoDay = isoFromCompactDate(day || chinaNowParts().day);
+  const cacheKey = `${compactDate(isoDay)}:${apiKey ? apiKey.slice(-6) : 'public'}`;
+  const cached = displayLimitUpCodeSetCache.get(cacheKey);
+  if (cached && Date.now() - cached.savedAt < 30 * 1000) return cached.set;
+
+  let rows = [];
+  const db = await readLimitUpDbDay(isoDay).catch(() => null);
+  if (isReliableLimitUpDbPayload(db)) rows = db.stocks || [];
+
+  if (!rows.length) {
+    rows = await fetchEastmoneyTopicLimitUps(isoDay).catch(() => []);
+  }
+
+  if (!rows.length && apiKey) {
+    const fetched = await fetchLimitUpDbSource(isoDay, apiKey).catch(() => null);
+    rows = fetched?.stocks || [];
+  }
+
+  const set = new Set((rows || [])
+    .map(stock => String(stock?.code || '').trim())
+    .filter(Boolean));
+  displayLimitUpCodeSetCache.set(cacheKey, { savedAt: Date.now(), set });
+  return set;
+}
+
+function stockMatchesDisplayLimitUpSet(stock, limitUpCodeSet) {
+  if (limitUpCodeSet?.size) return limitUpCodeSet.has(String(stock?.code || '').trim());
+  return stockLooksLikeLimitUp(stock);
+}
+
+async function ensureLimitUpDbDay(day, apiKey, force = false) {
+  if (!isChinaMarketTradingDay(day)) return null;
+  const today = chinaNowParts().day;
+  const cached = await readLimitUpDbDay(day);
+  if (!force && cached?.stocks?.length && day !== today && isReliableLimitUpDbPayload(cached)) return cached;
+  if (!force && cached?.stocks?.length && day === today && isAfterMarketClose(day) && isReliableLimitUpDbPayload(cached)) return cached;
+  if (day === today && !isAfterMarketClose(day)) {
+    return cached?.source === 'eastmoney/close' && isReliableLimitUpDbPayload(cached) ? cached : null;
+  }
+  const fetched = await fetchLimitUpDbSource(day, apiKey);
+  if (!fetched.stocks.length && day === today && isSavedAfterMarketClose(cached, day) && cached?.stocks?.length) {
+    return writeLimitUpDbDay(day, cached.stocks, 'eastmoney/close');
+  }
+  if (!fetched.stocks.length) return null;
+  return writeLimitUpDbDay(day, fetched.stocks, fetched.source);
+}
+
+function isoFromCompactDate(text) {
+  const d = compactDate(text);
+  if (d.length !== 8) return String(text || '');
+  return `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
+}
+
+function recentTradingWindowDayList(kline, endDay, period = 10) {
+  const dates = Array.isArray(kline?.x) ? kline.x.map(compactDate).filter(Boolean) : [];
+  if (!dates.length) return [];
+  const endDateText = compactDate(endDay);
+  let lastIndex = dates.length - 1;
+  while (lastIndex >= 0 && endDateText && dates[lastIndex] > endDateText) {
+    lastIndex -= 1;
+  }
+  if (lastIndex < 0) return [];
+  const lastKlineDate = dates[lastIndex];
+  const hasRealtimeEndDay = endDateText && lastKlineDate && endDateText > lastKlineDate;
+  const startIndex = Math.max(0, hasRealtimeEndDay ? lastIndex - (period - 2) : lastIndex - (period - 1));
+  const windowDates = dates.slice(startIndex, lastIndex + 1);
+  if (hasRealtimeEndDay && isChinaMarketTradingDay(endDateText)) windowDates.push(endDateText);
+  return windowDates.map(isoFromCompactDate).filter(isChinaMarketTradingDay);
+}
+
+async function getRecentTradingDays(endDay, apiKey, needed = 10) {
+  const kline = await fetchKline('000001', apiKey).catch(() => null);
+  const days = recentTradingWindowDayList(kline, endDay, needed);
+  if (days.length) return days;
+  const fallback = [];
+  for (let i = 0; i < 60 && fallback.length < needed; i += 1) {
+    const candidate = shiftDay(endDay, -i);
+    if (!isChinaMarketTradingDay(candidate)) continue;
+    fallback.unshift(candidate);
+  }
+  return fallback.slice(-needed);
+}
+
+async function resolveCurrentLatestTradingDay(apiKey) {
+  const today = chinaNowParts().day;
+  const tradingDays = await getRecentTradingDays(today, apiKey, 1).catch(() => []);
+  if (tradingDays.length) return tradingDays[tradingDays.length - 1];
+  for (let i = 0; i < 35; i += 1) {
+    const candidate = shiftDay(today, -i);
+    if (isChinaMarketTradingDay(candidate)) return candidate;
+  }
+  return today;
+}
+
+async function ensureRecentLimitUpDbDays(endDay, apiKey, needed = 10, options = {}) {
+  const force = !!options.force;
+  const days = [];
+  const tradingDays = await getRecentTradingDays(endDay, apiKey, needed);
+  for (const day of tradingDays) {
+    const payload = await ensureLimitUpDbDay(day, apiKey, force).catch(() => null);
+    if (payload?.stocks?.length && isReliableLimitUpDbPayload(payload)) days.push(payload);
+  }
+  return days;
+}
+
+async function syncLimitUpDb(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  const apiKey = await requestApiKey(req);
+  if (!apiKey) return send(res, 401, { error: 'missing x-api-key' });
+  const day = url.searchParams.get('day') || chinaNowParts().day;
+  const days = Number(url.searchParams.get('days') || 10);
+  const force = url.searchParams.get('force') === '1' || url.searchParams.get('force') === 'true';
+  const synced = await ensureRecentLimitUpDbDays(day, apiKey, Math.max(1, Math.min(30, days)), { force });
+  return send(res, 200, {
+    ok: true,
+    endDay: day,
+    force,
+    days: synced.map(item => ({ day: item.day, count: item.count, source: item.source, savedAt: item.savedAt })),
+  });
+}
+
+async function getLimitUpDbStatus(url, req, res) {
+  await fs.mkdir(LIMIT_UP_DB_DIR, { recursive: true });
+  const files = (await fs.readdir(LIMIT_UP_DB_DIR)).filter(name => name.endsWith('.json')).sort();
+  const days = await mapLimit(files, 5, async file => {
+    const payload = JSON.parse(await fs.readFile(path.join(LIMIT_UP_DB_DIR, file), 'utf8'));
+    return { day: payload.day, count: payload.count, source: payload.source, savedAt: payload.savedAt };
+  });
+  return send(res, 200, { count: days.length, days });
+}
+
+async function ensureRecentLimitUpMainReasonDbDays(endDay, apiKey, needed = 10, options = {}) {
+  const force = !!options.force;
+  const tradingDays = await getRecentTradingDays(endDay, apiKey, needed);
+  const days = [];
+  for (const day of tradingDays) {
+    const payload = await ensureLimitUpMainReasonDbDay(day, apiKey, force).catch(() => null);
+    if (payload?.stocks?.length) days.push(payload);
+  }
+  return days;
+}
+
+async function inspectLimitUpMainReasonDbDay(day, apiKey) {
+  const isoDay = isoFromCompactDate(day);
+  if (!isChinaMarketTradingDay(isoDay)) {
+    return {
+      ...marketClosedSkipPayload(isoDay),
+      needsSync: false,
+      reasonReady: true,
+      compatible: true,
+      limitUpCount: 0,
+      mainReasonCount: 0,
+      missingCount: 0,
+      missingCodes: [],
+      source: 'market-closed',
+      savedAt: '',
+      ruleVersion: MAIN_ZT_COUNT_RULE_VERSION,
+      skipReason: 'market closed',
+    };
+  }
+  const limitUpPayload = await ensureLimitUpDbDay(isoDay, apiKey, false)
+    .catch(() => readLimitUpDbDay(isoDay))
+    .catch(() => null);
+  // 复盘统一口径：覆盖/缺口基准也排除北交所与 ST/退市，
+  // 否则主因库按新口径剔除这些票后，会被误判为“缺票”而一直标记待同步/黄色。
+  const limitStocks = (Array.isArray(limitUpPayload?.stocks) ? limitUpPayload.stocks : [])
+    .filter(stock => !isExcludedFromReview(stock?.code, stock?.name));
+  const limitCodes = new Set(limitStocks.map(stock => normalizeReasonSourceCode(stock?.code)).filter(Boolean));
+  const payload = await readLimitUpMainReasonDbDay(isoDay).catch(() => null);
+  const reasonStocks = Array.isArray(payload?.stocks) ? payload.stocks : [];
+  const reasonCodes = new Set(reasonStocks.map(stock => normalizeReasonSourceCode(stock?.code)).filter(Boolean));
+  const missingCodes = [...limitCodes].filter(code => !reasonCodes.has(code));
+  const compatible = isCompatibleMainReasonDb(payload);
+  const reasonReady = isMainReasonReviewReady(isoDay);
+  const autoPayload = await readLimitUpMainReasonAutoSourceDay(isoDay).catch(() => null);
+  const sourceCompleteness = summarizeRequiredReviewSources(autoPayload, limitStocks);
+  const sourceArtifacts = await summarizeRequiredReviewSourceArtifacts(isoDay);
+  // The source artifact files are the source-layer database of record. Older
+  // auto source rows are kept for diagnostics only; using them for readiness
+  // would keep already repaired days incorrectly marked as pending.
+  const missingSourceGroups = [...sourceArtifacts.missing];
+  const labelByGroup = new Map(REQUIRED_REVIEW_SOURCE_GROUPS.map(source => [source.group, source.label]));
+  const missingSourceLabels = missingSourceGroups.map(group => labelByGroup.get(group) || group);
+  const needsSync = !!limitCodes.size && reasonReady && (!compatible || missingCodes.length > 0 || missingSourceGroups.length > 0);
+  return {
+    day: isoDay,
+    needsSync,
+    reasonReady,
+    compatible,
+    limitUpCount: limitCodes.size,
+    mainReasonCount: reasonCodes.size,
+    missingCount: missingCodes.length,
+    missingCodes: missingCodes.slice(0, 30),
+    source: payload?.source || '',
+    savedAt: payload?.savedAt || '',
+    ruleVersion: payload?.ruleVersion || '',
+    requiredSourceGroups: REQUIRED_REVIEW_SOURCE_GROUPS,
+    sourceGroupStats: sourceCompleteness.required,
+    sourceArtifactStats: sourceArtifacts.required,
+    missingSourceGroups,
+    missingSourceLabels,
+    sourceMissingCount: missingSourceGroups.length,
+    skipReason: !reasonReady
+      ? 'review source not ready'
+      : (!limitCodes.size
+        ? 'no limit-up data'
+        : (needsSync ? (missingSourceLabels.length ? `missing review sources: ${missingSourceLabels.join(', ')}` : '') : 'already complete')),
+  };
+}
+
+async function syncMissingLimitUpMainReasonDbDays(endDay, apiKey, needed = MAIN_REASON_SYNC_DEFAULT_DAYS, options = {}) {
+  const dryRun = !!options.dryRun;
+  const forceAll = !!options.forceAll;
+  const tradingDays = await getRecentTradingDays(endDay, apiKey, needed);
+  const results = [];
+  for (const day of tradingDays) {
+    const limitUpFill = dryRun
+      ? null
+      : await ensureLimitUpDbDay(day, apiKey, !!options.forceLimitUp).catch(err => ({ error: err.message }));
+    const before = await inspectLimitUpMainReasonDbDay(day, apiKey);
+    const withLimitUpFill = {
+      ...before,
+      limitUpFill: limitUpFill
+        ? {
+          ok: !!limitUpFill?.stocks?.length,
+          count: Number(limitUpFill?.count || limitUpFill?.stocks?.length || 0),
+          source: limitUpFill?.source || '',
+          error: limitUpFill?.error || '',
+        }
+        : null,
+    };
+    if (!before.limitUpCount) {
+      results.push({
+        ...withLimitUpFill,
+        synced: false,
+        error: limitUpFill?.error || 'limit-up base db missing',
+      });
+      continue;
+    }
+    if (dryRun) {
+      results.push({ ...withLimitUpFill, synced: false, dryRun: true });
+      continue;
+    }
+    const sourceMissing = Number(before.sourceMissingCount || 0) > 0 || !!before.missingSourceGroups?.length;
+    const canForceReviewReady = !!options.forceReviewReady && isAfterMarketClose(day);
+    const shouldFillSources = forceAll || before.needsSync || sourceMissing || !!options.forceSources;
+    let sourceFill = {
+      ok: true,
+      skipped: true,
+      message: 'source artifacts already complete',
+      results: [],
+      missingGroups: [],
+      missingLabels: [],
+    };
+    let afterSourceFill = before;
+    if (shouldFillSources) {
+      sourceFill = await ensureReviewSourceArtifactsForDay(day, apiKey, {
+        force: !!options.forceSources || forceAll,
+      });
+      afterSourceFill = await inspectLimitUpMainReasonDbDay(day, apiKey).catch(() => null);
+    }
+    if (!sourceFill.ok) {
+      results.push({
+        ...(afterSourceFill || before),
+        limitUpFill: withLimitUpFill.limitUpFill,
+        attempted: true,
+        synced: false,
+        sourceFillOk: false,
+        sourceFill,
+        missingSourceGroups: sourceFill.missingGroups,
+        missingSourceLabels: sourceFill.missingLabels,
+        sourceMissingCount: sourceFill.missingGroups.length,
+        error: sourceFill.message,
+      });
+      continue;
+    }
+    const sourceWasFilled = (sourceFill.results || []).some(item => item.attempted && !item.skipped && item.ok);
+    const needsRebuild = forceAll
+      || before.needsSync
+      || !!before.missingSourceGroups?.length
+      || !!afterSourceFill?.needsSync
+      || sourceWasFilled;
+    if (!before.reasonReady && !canForceReviewReady) {
+      results.push({
+        ...(afterSourceFill || before),
+        limitUpFill: withLimitUpFill.limitUpFill,
+        attempted: shouldFillSources,
+        synced: false,
+        sourceFillOk: true,
+        sourceFill,
+        skipReason: 'review source not ready',
+      });
+      continue;
+    }
+    if (!needsRebuild) {
+      results.push({
+        ...(afterSourceFill || before),
+        limitUpFill: withLimitUpFill.limitUpFill,
+        attempted: false,
+        synced: false,
+        sourceFillOk: true,
+        sourceFill,
+        skipReason: 'already complete',
+      });
+      continue;
+    }
+    const payload = await ensureLimitUpMainReasonDbDay(day, apiKey, true).catch(err => ({ error: err.message }));
+    if (payload?.error) {
+      results.push({ ...withLimitUpFill, synced: false, sourceFillOk: true, sourceFill, error: payload.error });
+      continue;
+    }
+    const after = await inspectLimitUpMainReasonDbDay(day, apiKey).catch(() => null);
+    results.push({
+      ...(after || before),
+      limitUpFill: withLimitUpFill.limitUpFill,
+      attempted: true,
+      synced: after ? !after.needsSync : true,
+      sourceFillOk: true,
+      sourceFill,
+      mainReasonCount: Array.isArray(payload?.stocks) ? payload.stocks.length : before.mainReasonCount,
+      source: payload?.source || after?.source || before.source,
+      savedAt: payload?.savedAt || after?.savedAt || before.savedAt,
+      ruleVersion: payload?.ruleVersion || after?.ruleVersion || before.ruleVersion,
+    });
+  }
+  return results;
+}
+
+async function syncLimitUpMainReasonDb(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  const apiKey = req.headers['x-api-key'] || await readSavedApiKey();
+  if (!apiKey) return send(res, 401, { error: 'missing x-api-key' });
+  const day = url.searchParams.get('day') || chinaNowParts().day;
+  const days = Number(url.searchParams.get('days') || MAIN_REASON_SYNC_DEFAULT_DAYS);
+  const force = url.searchParams.get('force') === '1' || url.searchParams.get('force') === 'true';
+  const exact = url.searchParams.get('exact') === '1' || url.searchParams.get('exact') === 'true';
+  const mode = String(url.searchParams.get('mode') || '').trim();
+  const dryRun = url.searchParams.get('dryRun') === '1' || url.searchParams.get('dryRun') === 'true';
+  if (mode === 'missing') {
+    const checkedDays = Math.max(1, Math.min(MAIN_REASON_SYNC_MAX_DAYS, days));
+    const requestedEndDay = day;
+    const recentEndDay = url.searchParams.has('day')
+      ? isoFromCompactDate(requestedEndDay)
+      : await resolveCurrentLatestTradingDay(apiKey);
+    const results = await syncMissingLimitUpMainReasonDbDays(recentEndDay, apiKey, checkedDays, {
+      dryRun,
+      forceAll: force,
+      forceReviewReady: true,
+      forceSources: true,
+    });
+    return send(res, 200, {
+      ok: true,
+      endDay: recentEndDay,
+      requestedEndDay,
+      mode,
+      dryRun,
+      force,
+      checkedDays,
+      ruleVersion: MAIN_ZT_COUNT_RULE_VERSION,
+      scanned: results.length,
+      synced: results.filter(item => item.synced).length,
+      pending: results.filter(item => item.needsSync && !item.synced && !item.dryRun).length,
+      days: results,
+    });
+  }
+  if (exact) {
+    const payload = await ensureLimitUpMainReasonDbDay(day, apiKey, force);
+    return send(res, 200, {
+      ok: !!payload?.stocks?.length,
+      endDay: day,
+      exact: true,
+      force,
+      ruleVersion: MAIN_ZT_COUNT_RULE_VERSION,
+      days: payload ? [{ day: payload.day, count: payload.count, source: payload.source, savedAt: payload.savedAt }] : [],
+    });
+  }
+  const synced = await ensureRecentLimitUpMainReasonDbDays(day, apiKey, Math.max(1, Math.min(MAIN_REASON_SYNC_MAX_DAYS, days)), { force });
+  return send(res, 200, {
+    ok: true,
+    endDay: day,
+    force,
+    ruleVersion: MAIN_ZT_COUNT_RULE_VERSION,
+    days: synced.map(item => ({ day: item.day, count: item.count, source: item.source, savedAt: item.savedAt })),
+  });
+}
+
+async function getTgbHunanEvidenceStatus(url, req, res) {
+  if (req.method !== 'GET') return send(res, 405, { error: 'method not allowed' });
+  const day = isoFromCompactDate(url.searchParams.get('day') || chinaNowParts().day);
+  const structured = await readTgbHunanStructuredSummary(day);
+  const rawManifest = await readTgbHunanRawManifest(day).catch(() => null);
+  return send(res, 200, {
+    ok: true,
+    day,
+    source: 'review/tgb-hunan-structured',
+    officialTgbOnly: true,
+    ocrDisabled: true,
+    structured,
+    rawEvidence: summarizeTgbRawManifest(rawManifest),
+    note: 'TGB official tab only reads structured red-board source files. Raw evidence stores article/images only.',
+  });
+}
+
+async function syncTgbHunanRawEvidence(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const day = isoFromCompactDate(url.searchParams.get('day') || chinaNowParts().day);
+  const force = url.searchParams.get('force') === '1' || url.searchParams.get('force') === 'true';
+  const result = await fetchTgbHunanRawEvidenceDay(day, { force });
+  return send(res, 200, {
+    ...result,
+    officialTgbOnly: true,
+    ocrDisabled: true,
+  });
+}
+
+async function syncTgbHunanRawEvidenceForDays(days, options = {}) {
+  const uniqueDays = [...new Set((days || []).map(isoFromCompactDate).filter(Boolean))];
+  const results = [];
+  for (const day of uniqueDays) {
+    if (!isChinaMarketTradingDay(day)) {
+      results.push({ ok: false, day, skipped: true, reason: 'market closed' });
+      continue;
+    }
+    if (!options.force && !isMainReasonReviewReady(day)) {
+      results.push({ ok: false, day, skipped: true, reason: 'review source not ready' });
+      continue;
+    }
+    results.push(await fetchTgbHunanRawEvidenceDay(day, { force: !!options.force }).catch(err => ({
+      ok: false,
+      day,
+      error: err.message,
+    })));
+  }
+  return {
+    ocrDisabled: true,
+    officialTgbOnly: true,
+    scanned: results.length,
+    saved: results.filter(item => item.rawEvidence?.downloadedImageCount || item.rawEvidence?.articleCount).length,
+    results,
+  };
+}
+
+async function getLimitUpMainReasonDbStatus(url, req, res) {
+  await fs.mkdir(LIMIT_UP_MAIN_REASON_DB_DIR, { recursive: true });
+  const files = (await fs.readdir(LIMIT_UP_MAIN_REASON_DB_DIR)).filter(name => name.endsWith('.json')).sort();
+  const days = await mapLimit(files, 5, async file => {
+    const payload = JSON.parse(await fs.readFile(path.join(LIMIT_UP_MAIN_REASON_DB_DIR, file), 'utf8'));
+    return {
+      day: payload.day,
+      count: payload.count,
+      source: payload.source,
+      ruleVersion: payload.ruleVersion,
+      savedAt: payload.savedAt,
+    };
+  });
+  return send(res, 200, { count: days.length, ruleVersion: MAIN_ZT_COUNT_RULE_VERSION, days });
+}
+
+// 过期抽查:把某天主因「干跑重算」(reuse-source,不落盘/不写缓存)与存盘库的 finalBoardTopic 比对。
+// 用途=抓「改了源/归一表却忘了重建那天库」导致的存盘主因过期。手填覆盖(overridden)的股跳过——主因被钉死,不算过期。
+async function getMainReasonStalenessCheck(url, req, res) {
+  const isoDay = isoFromCompactDate(url.searchParams.get('day') || chinaNowParts().day);
+  const apiKey = await readSavedApiKey().catch(() => '');
+  const stored = await readLimitUpMainReasonDbDay(isoDay).catch(() => null);
+  if (!stored?.stocks?.length) return send(res, 200, { ok: false, day: isoDay, reason: 'no-stored-db' });
+  const fresh = await ensureLimitUpMainReasonDbDay(isoDay, apiKey, false, { dryRun: true, reuseAutoSource: true }).catch(() => null);
+  if (!fresh?.stocks?.length) return send(res, 200, { ok: false, day: isoDay, reason: 'dryrun-failed' });
+  const freshByCode = new Map(fresh.stocks.map(s => [normalizeReasonSourceCode(s.code), s]));
+  const mismatches = [];
+  let checked = 0, skippedOverride = 0;
+  for (const s of stored.stocks) {
+    if (s.overridden) { skippedOverride++; continue; }
+    const f = freshByCode.get(normalizeReasonSourceCode(s.code));
+    if (!f) continue;
+    checked++;
+    const a = String(s.finalBoardTopic || ''), b = String(f.finalBoardTopic || '');
+    if (a !== b) mismatches.push({ code: s.code, name: s.name, stored: a, fresh: b });
+  }
+  return send(res, 200, {
+    ok: true, day: isoDay, savedAt: stored.savedAt || '', ruleVersion: stored.ruleVersion || '',
+    checked, skippedOverride, mismatchCount: mismatches.length, mismatches: mismatches.slice(0, 50),
+  });
+}
+
+async function getLimitUpMainReasonDbDay(url, req, res) {
+  const day = url.searchParams.get('day') || chinaNowParts().day;
+  const payload = await readLimitUpMainReasonDbDay(day);
+  if (!payload) {
+    return send(res, 200, {
+      ok: false,
+      day: isoFromCompactDate(day),
+      count: 0,
+      stocks: [],
+      topics: [],
+      source: '',
+      savedAt: '',
+      ruleVersion: MAIN_ZT_COUNT_RULE_VERSION,
+      error: 'main reason db not found',
+    });
+  }
+  const stocks = Array.isArray(payload.stocks) ? payload.stocks : [];
+  const topicMap = new Map();
+  for (const stock of stocks) {
+    const topic = String(stock.primaryTopic || stock.primaryRawTopic || stock.primaryReasonName || '未归类').trim() || '未归类';
+    const item = topicMap.get(topic) || {
+      topic,
+      count: 0,
+      stocks: [],
+      sources: new Set(),
+      avgConfidence: 0,
+    };
+    item.count += 1;
+    item.avgConfidence += Number(stock.confidence || 0);
+    const selectedSource = stock.sourceEvidence?.selectedSource || stock.source || '';
+    if (selectedSource) item.sources.add(selectedSource);
+    item.stocks.push({
+      code: stock.code || '',
+      name: stock.name || '',
+      confidence: Number(stock.confidence || 0),
+      reasonText: stock.reasonText || '',
+    });
+    topicMap.set(topic, item);
+  }
+  const topics = [...topicMap.values()]
+    .map(item => ({
+      topic: item.topic,
+      count: item.count,
+      avgConfidence: item.count ? item.avgConfidence / item.count : 0,
+      sources: [...item.sources],
+      stocks: item.stocks.sort((a, b) => b.confidence - a.confidence || String(a.code).localeCompare(String(b.code))),
+    }))
+    .sort((a, b) => b.count - a.count || b.avgConfidence - a.avgConfidence || a.topic.localeCompare(b.topic, 'zh-Hans-CN'));
+  return send(res, 200, {
+    ok: isCompatibleMainReasonDb(payload),
+    day: payload.day || isoFromCompactDate(day),
+    count: Number(payload.count || stocks.length || 0),
+    source: payload.source || '',
+    savedAt: payload.savedAt || '',
+    ruleVersion: payload.ruleVersion || '',
+    sourceCoverage: payload.sourceCoverage || null,
+    topics,
+    stocks,
+  });
+}
+
+async function getLimitUpMainReasonDbQuality(url, req, res) {
+  const day = url.searchParams.get('day') || chinaNowParts().day;
+  const force = url.searchParams.get('force') === '1' || url.searchParams.get('force') === 'true';
+  const { quality } = await ensureLimitUpMainReasonEvidenceAndQualityDay(day, { force });
+  if (!quality) {
+    return send(res, 200, {
+      ok: false,
+      day: isoFromCompactDate(day),
+      error: 'main reason quality not found',
+    });
+  }
+  return send(res, 200, {
+    ok: true,
+    ...quality,
+  });
+}
+
+async function getLimitUpMainReasonDbEvidence(url, req, res) {
+  const day = url.searchParams.get('day') || chinaNowParts().day;
+  const code = normalizeReasonSourceCode(url.searchParams.get('code') || url.searchParams.get('stock') || '');
+  const force = url.searchParams.get('force') === '1' || url.searchParams.get('force') === 'true';
+  const { evidence } = await ensureLimitUpMainReasonEvidenceAndQualityDay(day, { force });
+  if (!evidence) {
+    return send(res, 200, {
+      ok: false,
+      day: isoFromCompactDate(day),
+      error: 'main reason evidence not found',
+    });
+  }
+  if (code) {
+    const stock = (evidence.stocks || []).find(item => normalizeReasonSourceCode(item.code) === code);
+    return send(res, 200, {
+      ok: !!stock,
+      day: evidence.day,
+      code,
+      stock: stock || null,
+      error: stock ? '' : 'stock evidence not found',
+    });
+  }
+  return send(res, 200, {
+    ok: true,
+    ...evidence,
+  });
+}
+
+function limitUpMainReasonSourceViewTabs() {
+  return [
+    { key: 'final', label: '综合归纳', sourceLabel: '综合归纳' },
+    { key: 'kaipanla', label: '复盘啦', sourceLabel: '复盘啦' },
+    { key: 'xuangubao', label: '\u9009\u80a1\u5b9d', sourceLabel: '\u9009\u80a1\u5b9d' },
+    { key: 'ths', label: '同花顺', sourceLabel: '同花顺' },
+    { key: 'jiuyangongshe', label: '韭研', sourceLabel: '韭研' },
+    { key: 'tgb', label: '淘股吧', sourceLabel: '淘股吧' },
+  ];
+}
+
+function limitUpMainReasonSourceViewLabel(source, group = '') {
+  const s = String(source || '').toLowerCase();
+  const g = String(group || reviewSourceGroup(source) || '').toLowerCase();
+  if (s === 'review/tgb-hunan-structured') return 'TGB';
+  if (s === 'review/eastmoney-fpl-limit-reason') return '\u4e1c\u8d22';
+  if (s === 'review/xuangubao-limit-up') return '\u9009\u80a1\u5b9d';
+  if (g === 'xuangubao') return '\u9009\u80a1\u5b9d';
+  if (s === 'review/jiuyangongshe-structured') return '闊爺';
+  if (g === 'kaipanla') return '复盘啦';
+  if (g === 'eastmoney') return '东财';
+  if (g === 'ths') return '同花顺';
+  if (g === 'jiuyangongshe') return '韭研';
+  if (s.includes('review-auto-consensus')) return '复盘多源共识';
+  if (s.includes('multi-source-consensus')) return '多源共识';
+  if (s.includes('kpl')) return 'KPL';
+  if (s.includes('limit-up-db')) return '涨停库';
+  return source || group || '';
+}
+
+function limitUpMainReasonSourceViewKey(row) {
+  const source = String(row?.source || '').toLowerCase();
+  const group = String(row?.group || reviewSourceGroup(row?.source) || '').toLowerCase();
+  if (source === 'review/tgb-hunan-structured') return 'tgb';
+  if (source === 'review/jiuyangongshe-structured') return 'jiuyangongshe';
+  if (source === 'review/xuangubao-limit-up') return 'xuangubao';
+  if (group === 'kaipanla') return 'kaipanla';
+  if (group === 'eastmoney') return 'eastmoney';
+  if (group === 'xuangubao') return 'xuangubao';
+  if (group === 'ths') return 'ths';
+  if (group === 'jiuyangongshe') return 'jiuyangongshe';
+  return '';
+}
+
+function limitUpMainReasonSourceViewRowBase(stock, dbStock = {}) {
+  const selected = stock?.selected || {};
+  return {
+    code: String(stock?.code || dbStock?.code || ''),
+    name: String(stock?.name || dbStock?.name || ''),
+    firstLimitTime: dbStock?.firstLimitTime ?? null,
+    lastLimitTime: dbStock?.lastLimitTime ?? null,
+    limitUpCount: dbStock?.limitUpCount ?? null,
+    gain: Number.isFinite(Number(dbStock?.gain)) ? Number(dbStock.gain) : null,
+    finalBoardTopic: String(selected.finalBoardTopic || dbStock?.finalBoardTopic || selected.primaryRawTopic || dbStock?.primaryRawTopic || ''),
+    finalDetailReason: String(selected.finalDetailReason || dbStock?.finalDetailReason || ''),
+    finalReason: String(selected.finalReason || dbStock?.finalReason || selected.reasonText || dbStock?.reasonText || ''),
+    selectedSource: String(selected.selectedSource || dbStock?.sourceEvidence?.selectedSource || dbStock?.source || ''),
+    evidenceSourceCount: new Set((stock?.reviewEvidence || []).map(row => row.group || reviewSourceGroup(row.source)).filter(Boolean)).size,
+    reviewEvidenceCount: Array.isArray(stock?.reviewEvidence) ? stock.reviewEvidence.length : 0,
+  };
+}
+
+function limitUpMainReasonFinalSourceViewRow(stock, dbStock = {}) {
+  const selected = stock?.selected || {};
+  const base = limitUpMainReasonSourceViewRowBase(stock, dbStock);
+  const boardTopic = base.finalBoardTopic || selected.primaryRawTopic || selected.primaryTopic || dbStock?.primaryRawTopic || dbStock?.primaryTopic || '';
+  const detailReason = base.finalDetailReason || '';
+  return {
+    ...base,
+    sourceKey: 'final',
+    source: base.selectedSource,
+    sourceLabel: limitUpMainReasonSourceViewLabel(base.selectedSource),
+    boardTopic,
+    primaryTopic: selected.primaryTopic || dbStock?.primaryTopic || canonicalTopicName(boardTopic),
+    primaryRawTopic: selected.primaryRawTopic || dbStock?.primaryRawTopic || boardTopic,
+    detailReason,
+    reasonText: base.finalReason || selected.reasonText || dbStock?.reasonText || '',
+    reasonHeadline: selected.reasonHeadline || dbStock?.reasonHeadline || '',
+    confidence: Number(selected.confidence || dbStock?.confidence || 0),
+    limitUpCount: Number(stock?.limitUpCount ?? dbStock?.limitUpCount ?? 0),
+    reasonQuality: '',
+    matchType: '',
+    lowConfidence: Number(selected.confidence || dbStock?.confidence || 0) > 0 && Number(selected.confidence || dbStock?.confidence || 0) < 0.8,
+  };
+}
+
+function limitUpMainReasonEvidenceSourceViewRow(stock, evidence, dbStock = {}) {
+  const base = limitUpMainReasonSourceViewRowBase(stock, dbStock);
+  const boardTopic = String(evidence?.boardTopic || evidence?.primaryRawTopic || evidence?.primaryTopic || '').trim();
+  const detailReason = String(evidence?.detailReason || '').trim();
+  return {
+    ...base,
+    sourceKey: limitUpMainReasonSourceViewKey(evidence),
+    source: String(evidence?.source || ''),
+    sourceLabel: limitUpMainReasonSourceViewLabel(evidence?.source, evidence?.group),
+    group: String(evidence?.group || reviewSourceGroup(evidence?.source) || ''),
+    boardTopic,
+    primaryTopic: String(evidence?.primaryTopic || canonicalTopicName(boardTopic)),
+    primaryRawTopic: String(evidence?.primaryRawTopic || boardTopic),
+    detailReason,
+    reasonText: String(evidence?.reasonText || (detailReason ? `${boardTopic}: ${base.name} - ${detailReason}` : `${boardTopic}: ${base.name}`)),
+    reasonHeadline: String(evidence?.reasonHeadline || ''),
+    confidence: Number(evidence?.confidence || 0),
+    reasonQuality: String(evidence?.reasonQuality || ''),
+    matchType: String(evidence?.matchType || ''),
+    lowConfidence: !!evidence?.lowConfidence,
+    qualityNote: String(evidence?.qualityNote || ''),
+    url: String(evidence?.url || ''),
+    title: String(evidence?.title || ''),
+    imageUrl: String(evidence?.imageUrl || ''),
+  };
+}
+
+function limitUpMainReasonRawSourceViewRow(row, dbStock = {}) {
+  const code = normalizeReasonSourceCode(row?.code);
+  const name = String(row?.name || dbStock?.name || '').trim();
+  const boardTopic = String(row?.boardTopic || row?.primaryRawTopic || row?.primaryTopic || '').trim();
+  const detailReason = String(row?.detailReason || '').trim();
+  const source = String(row?.source || '');
+  const confidence = Number(row?.confidence || 0);
+  return {
+    code,
+    name,
+    firstLimitTime: row?.firstLimitTime || dbStock?.firstLimitTime || null,
+    lastLimitTime: dbStock?.lastLimitTime ?? null,
+    limitUpCount: row?.limitUpCount || dbStock?.limitUpCount || null,
+    gain: Number.isFinite(Number(dbStock?.gain)) ? Number(dbStock.gain) : null,
+    finalBoardTopic: String(dbStock?.finalBoardTopic || ''),
+    finalDetailReason: String(dbStock?.finalDetailReason || ''),
+    finalReason: String(dbStock?.finalReason || ''),
+    selectedSource: String(dbStock?.sourceEvidence?.selectedSource || dbStock?.source || ''),
+    evidenceSourceCount: 0,
+    reviewEvidenceCount: 0,
+    sourceKey: limitUpMainReasonSourceViewKey(row),
+    source,
+    sourceLabel: limitUpMainReasonSourceViewLabel(source, row?.group),
+    group: String(row?.group || reviewSourceGroup(source) || ''),
+    boardTopic,
+    primaryTopic: String(row?.primaryTopic || canonicalTopicName(boardTopic)),
+    primaryRawTopic: String(row?.primaryRawTopic || boardTopic),
+    detailReason,
+    reasonText: String(row?.reasonText || (detailReason ? `${boardTopic}: ${name} - ${detailReason}` : `${boardTopic}: ${name}`)),
+    reasonHeadline: String(row?.reasonHeadline || ''),
+    confidence: Number.isFinite(confidence) ? confidence : 0,
+    reasonQuality: String(row?.reasonQuality || ''),
+    matchType: String(row?.matchType || ''),
+    lowConfidence: !!row?.lowConfidence,
+    qualityNote: String(row?.qualityNote || ''),
+    url: String(row?.url || ''),
+    title: String(row?.title || ''),
+    imageUrl: String(row?.imageUrl || ''),
+  };
+}
+
+function limitUpMainReasonSourceViewTopics(rows) {
+  const topicMap = new Map();
+  for (const row of rows || []) {
+    const topic = String(row?.boardTopic || row?.primaryRawTopic || row?.primaryTopic || '未归类').trim() || '未归类';
+    const item = topicMap.get(topic) || {
+      topic,
+      count: 0,
+      stocks: [],
+      sources: new Set(),
+      avgConfidence: 0,
+    };
+    item.count += 1;
+    item.avgConfidence += Number(row?.confidence || 0);
+    if (row?.source) item.sources.add(row.source);
+    item.stocks.push({
+      code: row?.code || '',
+      name: row?.name || '',
+      detailReason: row?.detailReason || '',
+      confidence: Number(row?.confidence || 0),
+    });
+    topicMap.set(topic, item);
+  }
+  return [...topicMap.values()]
+    .map(item => ({
+      topic: item.topic,
+      count: item.count,
+      avgConfidence: item.count ? Number((item.avgConfidence / item.count).toFixed(4)) : 0,
+      sources: [...item.sources],
+      stocks: item.stocks.sort((a, b) => b.confidence - a.confidence || String(a.code).localeCompare(String(b.code))),
+    }))
+    .sort((a, b) => b.count - a.count || b.avgConfidence - a.avgConfidence || a.topic.localeCompare(b.topic, 'zh-Hans-CN'));
+}
+
+function buildLimitUpMainReasonSourceView(day, evidence, dbPayload = null) {
+  const isoDay = isoFromCompactDate(day);
+  const dbByCode = new Map((dbPayload?.stocks || [])
+    .map(stock => [normalizeReasonSourceCode(stock?.code), stock])
+    .filter(([code]) => code));
+  const tabs = limitUpMainReasonSourceViewTabs().map(tab => ({
+    ...tab,
+    count: 0,
+    topics: [],
+    rows: [],
+  }));
+  const tabByKey = new Map(tabs.map(tab => [tab.key, tab]));
+  const seen = new Set();
+  for (const stock of evidence?.stocks || []) {
+    const code = normalizeReasonSourceCode(stock?.code);
+    const dbStock = dbByCode.get(code) || {};
+    if (tabByKey.has('final')) {
+      tabByKey.get('final').rows.push(limitUpMainReasonFinalSourceViewRow(stock, dbStock));
+    }
+    for (const row of stock?.reviewEvidence || []) {
+      if (isDisabledReviewSource(row?.source, row?.group)) continue;
+      const key = limitUpMainReasonSourceViewKey(row);
+      if (!key || !tabByKey.has(key)) continue;
+      const sourceRow = limitUpMainReasonEvidenceSourceViewRow(stock, row, dbStock);
+      const dedupeKey = [
+        key,
+        sourceRow.code,
+        sourceRow.source,
+        sourceRow.boardTopic,
+        sourceRow.detailReason,
+        sourceRow.reasonText,
+      ].join('\u0001');
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      tabByKey.get(key).rows.push(sourceRow);
+    }
+  }
+  for (const tab of tabs) {
+    tab.rows.sort((a, b) => (
+      String(a.boardTopic || '').localeCompare(String(b.boardTopic || ''), 'zh-Hans-CN') ||
+      Number(a.firstLimitTime || 999999) - Number(b.firstLimitTime || 999999) ||
+      String(a.code || '').localeCompare(String(b.code || ''))
+    ));
+    tab.count = tab.rows.length;
+    tab.topics = limitUpMainReasonSourceViewTopics(tab.rows);
+  }
+  return {
+    ok: true,
+    version: 1,
+    day: evidence?.day || isoDay,
+    generatedAt: new Date().toISOString(),
+    sourceDbSavedAt: evidence?.sourceDbSavedAt || dbPayload?.savedAt || '',
+    ruleVersion: evidence?.ruleVersion || dbPayload?.ruleVersion || MAIN_ZT_COUNT_RULE_VERSION,
+    count: Number(evidence?.count || dbPayload?.count || (evidence?.stocks || []).length || 0),
+    sourceStats: (Array.isArray(evidence?.sourceStats) ? evidence.sourceStats : [])
+      .filter(item => !isDisabledReviewSource(item?.source, item?.group)),
+    sourceErrors: (Array.isArray(evidence?.sourceErrors) ? evidence.sourceErrors : [])
+      .filter(item => !isDisabledReviewSource(item?.source, item?.group)),
+    tabs: tabs.filter(tab => !isDisabledReviewSource('', tab.key)),
+  };
+}
+
+async function mergeRawReviewSourceViewTabs(sourceView, day, dbPayload = null) {
+  const isoDay = isoFromCompactDate(day);
+  const autoPayload = await readLimitUpMainReasonAutoSourceDay(isoDay).catch(() => null);
+  const rawRows = Array.isArray(autoPayload?.rawRows) && autoPayload.rawRows.length
+    ? autoPayload.rawRows
+    : [];
+  if (!rawRows.length) return sourceView;
+  const dbByCode = new Map((dbPayload?.stocks || [])
+    .map(stock => [normalizeReasonSourceCode(stock?.code), stock])
+    .filter(([code]) => code));
+  const byKey = new Map();
+  const seen = new Set();
+  for (const row of rawRows) {
+    if (isDisabledReviewSource(row?.source, row?.group)) continue;
+    const key = limitUpMainReasonSourceViewKey(row);
+    if (!key) continue;
+    const sourceRow = limitUpMainReasonRawSourceViewRow(row, dbByCode.get(normalizeReasonSourceCode(row?.code)) || {});
+    if (!sourceRow.code || !sourceRow.name || !sourceRow.boardTopic) continue;
+    const dedupeKey = [
+      key,
+      sourceRow.code,
+      sourceRow.source,
+      sourceRow.boardTopic,
+      sourceRow.detailReason,
+      sourceRow.reasonText,
+    ].join('\u0001');
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(sourceRow);
+  }
+  for (const tab of sourceView?.tabs || []) {
+    if (tab.key === 'final' || !byKey.has(tab.key)) continue;
+    tab.rows = byKey.get(tab.key).sort((a, b) => (
+      String(a.boardTopic || '').localeCompare(String(b.boardTopic || ''), 'zh-Hans-CN') ||
+      Number(a.firstLimitTime || 999999) - Number(b.firstLimitTime || 999999) ||
+      String(a.code || '').localeCompare(String(b.code || ''))
+    ));
+    tab.count = tab.rows.length;
+    tab.topics = limitUpMainReasonSourceViewTopics(tab.rows);
+    tab.note = tab.note || '该来源标签页优先读取来源原版底层行，不按综合归纳结果截断。';
+  }
+  return sourceView;
+}
+
+async function mergeTgbStructuredSourceViewTab(sourceView, day, dbPayload = null) {
+  const isoDay = isoFromCompactDate(day);
+  const tgbTab = (sourceView?.tabs || []).find(tab => tab.key === 'tgb');
+  if (!tgbTab) return sourceView;
+  let payload = null;
+  try {
+    payload = JSON.parse(await fs.readFile(tgbHunanStructuredSourcePath(isoDay), 'utf8'));
+  } catch (err) {
+    if (err.code === 'ENOENT') return sourceView;
+    throw err;
+  }
+  const dbByCode = new Map((dbPayload?.stocks || [])
+    .map(stock => [normalizeReasonSourceCode(stock?.code), stock])
+    .filter(([code]) => code));
+  const seen = new Set();
+  const rows = [];
+  for (const item of payload?.rows || []) {
+    const code = normalizeReasonSourceCode(item?.code);
+    if (!code) continue;
+    const boardTopic = cleanBoardDetailTopic(item?.boardTopic || item?.primaryRawTopic || '');
+    if (!boardTopic) continue;
+    const dbStock = dbByCode.get(code) || {};
+    const name = String(item?.name || dbStock?.name || '').trim();
+    if (!name) continue;
+    if (isExcludedFromReview(code, name)) continue;
+    const detailReason = String(item?.detailReason || '').trim();
+    const key = [code, boardTopic, detailReason].join('\u0001');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push({
+      code,
+      name,
+      sourceKey: 'tgb',
+      source: 'review/tgb-hunan-structured',
+      sourceLabel: 'TGB',
+      group: 'tgb',
+      boardTopic,
+      primaryTopic: boardTopic,
+      primaryRawTopic: boardTopic,
+      detailReason,
+      reasonText: detailReason ? `${boardTopic}: ${name} - ${detailReason}` : `${boardTopic}: ${name}`,
+      reasonHeadline: detailReason || boardTopic,
+      confidence: 0.99,
+      reasonQuality: detailReason ? 'clear' : 'weak',
+      matchType: 'manual-structured-image',
+      lowConfidence: false,
+      qualityNote: 'Structured from TGB image: red board header + right-side stock detail reason',
+      url: String(payload.url || ''),
+      title: String(payload.title || ''),
+      imageUrl: '',
+      firstLimitTime: item?.firstLimitTime || dbStock?.firstLimitTime || null,
+      lastLimitTime: dbStock?.lastLimitTime ?? null,
+      limitUpCount: item?.limitUpCount || dbStock?.limitUpCount || null,
+      gain: Number.isFinite(Number(dbStock?.gain)) ? Number(dbStock.gain) : null,
+      finalBoardTopic: String(dbStock?.finalBoardTopic || ''),
+      finalDetailReason: String(dbStock?.finalDetailReason || ''),
+      finalReason: String(dbStock?.finalReason || ''),
+      selectedSource: String(dbStock?.sourceEvidence?.selectedSource || dbStock?.source || ''),
+      evidenceSourceCount: 1,
+      reviewEvidenceCount: 1,
+    });
+  }
+  rows.sort((a, b) => (
+    String(a.boardTopic || '').localeCompare(String(b.boardTopic || ''), 'zh-Hans-CN') ||
+    Number(a.firstLimitTime || 999999) - Number(b.firstLimitTime || 999999) ||
+    String(a.code || '').localeCompare(String(b.code || ''))
+  ));
+  tgbTab.rows = rows;
+  tgbTab.count = rows.length;
+  tgbTab.topics = limitUpMainReasonSourceViewTopics(rows);
+  tgbTab.note = 'TGB 标签直接读取湖南人结构化来源；未发布或未录入的日期显示为空，不使用 OCR 兜底。';
+  return sourceView;
+}
+
+async function mergeJiuyangongsheStructuredSourceViewTab(sourceView, day, dbPayload = null) {
+  const isoDay = isoFromCompactDate(day);
+  const tab = (sourceView?.tabs || []).find(item => item.key === 'jiuyangongshe');
+  if (!tab) return sourceView;
+  let payload = null;
+  try {
+    payload = JSON.parse(await fs.readFile(jiuyangongsheStructuredSourcePath(isoDay), 'utf8'));
+  } catch (err) {
+    if (err.code === 'ENOENT') return sourceView;
+    throw err;
+  }
+  const dbByCode = new Map((dbPayload?.stocks || [])
+    .map(stock => [normalizeReasonSourceCode(stock?.code), stock])
+    .filter(([code]) => code));
+  const seen = new Set();
+  const rows = [];
+  for (const item of payload?.rows || []) {
+    const code = normalizeReasonSourceCode(item?.code);
+    if (!code) continue;
+    const boardTopic = cleanBoardDetailTopic(item?.boardTopic || item?.primaryRawTopic || '');
+    if (!boardTopic) continue;
+    const dbStock = dbByCode.get(code) || {};
+    const name = String(item?.name || dbStock?.name || '').trim();
+    if (!name) continue;
+    if (isExcludedFromReview(code, name)) continue;
+    const detailReason = String(item?.detailReason || '').trim();
+    const key = [code, boardTopic, detailReason].join('\u0001');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push({
+      code,
+      name,
+      sourceKey: 'jiuyangongshe',
+      source: 'review/jiuyangongshe-structured',
+      sourceLabel: '闊爺',
+      group: 'jiuyangongshe',
+      boardTopic,
+      primaryTopic: boardTopic,
+      primaryRawTopic: boardTopic,
+      detailReason,
+      reasonText: detailReason ? `${boardTopic}: ${name} - ${detailReason}` : `${boardTopic}: ${name}`,
+      reasonHeadline: detailReason || boardTopic,
+      confidence: 0.99,
+      reasonQuality: detailReason ? 'clear' : 'weak',
+      matchType: 'manual-structured-image',
+      lowConfidence: false,
+      qualityNote: 'Manual structured from Jiuyangongshe limit-up diagram: board header + stock row detail reason',
+      url: String(payload.url || payload.articleUrl || ''),
+      title: String(payload.title || ''),
+      imageUrl: String(payload.imageUrl || ''),
+      firstLimitTime: item?.firstLimitTime || dbStock?.firstLimitTime || null,
+      lastLimitTime: dbStock?.lastLimitTime ?? null,
+      limitUpCount: item?.limitUpCount || dbStock?.limitUpCount || null,
+      gain: Number.isFinite(Number(dbStock?.gain)) ? Number(dbStock.gain) : null,
+      finalBoardTopic: String(dbStock?.finalBoardTopic || ''),
+      finalDetailReason: String(dbStock?.finalDetailReason || ''),
+      finalReason: String(dbStock?.finalReason || ''),
+      selectedSource: String(dbStock?.sourceEvidence?.selectedSource || dbStock?.source || ''),
+      evidenceSourceCount: 1,
+      reviewEvidenceCount: 1,
+      sourceOrder: Number(item?.sourceOrder || 0),
+    });
+  }
+  rows.sort((a, b) => (
+    Number(a.sourceOrder || 999999) - Number(b.sourceOrder || 999999) ||
+    String(a.code || '').localeCompare(String(b.code || ''))
+  ));
+  for (const row of rows) {
+    row.sourceLabel = '\u540c\u82b1\u987a';
+  }
+  tab.rows = rows;
+  tab.count = rows.length;
+  tab.topics = limitUpMainReasonSourceViewTopics(rows);
+  tab.note = '韭研标签直接读取官方涨停简图结构化来源；板块和个股归属以图片原版为准。';
+  return sourceView;
+}
+
+// 同花顺 reason_type 靠前常混入"摘帽/复牌/转债/收购/中标/预增"等事件型噪声(非真题材)；
+// 取第一个"实质题材"token 当同花顺源主因——block_top 板块名常太泛/错配(专精特新/商业航天等)，
+// 第一个细分题材才贴近个股真实涨停原因。用户反馈(2026-06-26):同花顺主因不准，应取后面标注的细分原因第一个。
+// 仅用于源视图/详情面板展示，不改综合归纳共识(改了会翻动沃格光电等已定稿主因)。
+const THS_EVENT_NOISE = /(摘帽|摘星|戴帽|摘牌|复牌|停牌|转债|可转债|控制权|实控人|易主|借壳|竞拍|中标|收购|并购|重组|参股|入股|增资|定增|分红|高送转|送转|回购|增持|减持|预增|预盈|预亏|扭亏|业绩|营收|净利|一季报|中报|年报|季报|更名|改名|股权激励|签约|签订|框架协议|战略合作|战略转型|对外投资|资产重组|实控|转让|入主|要约|举牌|龙虎榜|尾盘|大宗交易|旗下|控股子公司|参股公司|拟投建|拟建设|总部|可转债预案|股份回购|股东减持|公告|美伊|战争|地缘|局势|涨停池|涨停原因|涨停复盘|选股宝|复盘啦)/;
+function thsReasonTokens(reasonType) {
+  return String(reasonType || '')
+    .split(/[+＋、,，/\s]+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+function thsMainTopicFromDetail(reasonType, fallback) {
+  const tokens = thsReasonTokens(reasonType);
+  if (!tokens.length) return String(fallback || '').trim();
+  return tokens.find(t => t.length >= 2 && !THS_EVENT_NOISE.test(t)) || tokens[0] || String(fallback || '').trim();
+}
+async function mergeTonghuashunStructuredSourceViewTab(sourceView, day, dbPayload = null) {
+  const isoDay = isoFromCompactDate(day);
+  const tab = (sourceView?.tabs || []).find(item => item.key === 'ths');
+  if (!tab) return sourceView;
+  let payload = null;
+  try {
+    payload = await ensureTonghuashunStructuredSource(isoDay);
+  } catch (err) {
+    return sourceView;
+  }
+  const dbByCode = new Map((dbPayload?.stocks || [])
+    .map(stock => [normalizeReasonSourceCode(stock?.code), stock])
+    .filter(([code]) => code));
+  const seen = new Set();
+  const rows = [];
+  for (const item of payload?.rows || []) {
+    const code = normalizeReasonSourceCode(item?.code);
+    if (!code) continue;
+    const rawBoardTopic = String(item?.boardTopic || item?.primaryRawTopic || '同花顺涨停池').trim();
+    if (!rawBoardTopic) continue;
+    const dbStock = dbByCode.get(code) || {};
+    const name = String(item?.name || dbStock?.name || '').trim();
+    if (!name) continue;
+    const detailReason = String(item?.detailReason || '').trim();
+    // 同花顺主因取第一个实质细分题材(跳事件噪声)，再用标准库 standardTheme 归并近义题材，减少碎卡片。
+    // (存储芯片/存储芯片封测/存储芯片封装→存储芯片;PCB上游/算力PCB→PCB;但"存储芯片"不会被并到过宽的"半导体")
+    const thsRaw = thsMainTopicFromDetail(detailReason, rawBoardTopic);
+    const boardTopic = standardTheme(thsRaw) || thsRaw;
+    const key = [code, boardTopic, detailReason].join('\u0001');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push({
+      code,
+      name,
+      sourceKey: 'ths',
+      source: 'review/ths-limitup-structured',
+      sourceLabel: '同花顺',
+      group: 'ths',
+      boardTopic,
+      primaryTopic: boardTopic,
+      primaryRawTopic: boardTopic,
+      detailReason,
+      reasonText: detailReason ? `${boardTopic}: ${name} - ${detailReason}` : `${boardTopic}: ${name}`,
+      reasonHeadline: detailReason || boardTopic,
+      confidence: 0.99,
+      reasonQuality: detailReason ? 'clear' : 'weak',
+      matchType: item?.matchType || 'manual-structured-image',
+      lowConfidence: false,
+      qualityNote: item?.qualityNote || 'Structured from Tonghuashun official limit-up diagram: board header + stock row detail reason.',
+      url: String(payload.postUrl || payload.pageUrl || payload.imageUrl || ''),
+      title: String(payload.title || ''),
+      imageUrl: String(payload.imageUrl || ''),
+      firstLimitTime: item?.firstLimitTime || dbStock?.firstLimitTime || null,
+      lastLimitTime: item?.lastLimitTime || dbStock?.lastLimitTime || null,
+      limitUpCount: item?.highDays || dbStock?.limitUpCount || null,
+      gain: Number.isFinite(Number(dbStock?.gain)) ? Number(dbStock.gain) : null,
+      finalBoardTopic: String(dbStock?.finalBoardTopic || ''),
+      finalDetailReason: String(dbStock?.finalDetailReason || ''),
+      finalReason: String(dbStock?.finalReason || ''),
+      selectedSource: String(dbStock?.sourceEvidence?.selectedSource || dbStock?.source || ''),
+      evidenceSourceCount: 1,
+      reviewEvidenceCount: 1,
+      sourceOrder: Number(item?.sourceOrder || 0),
+      officialBoardNames: Array.isArray(item?.officialBoardNames) ? item.officialBoardNames : [],
+    });
+  }
+  rows.sort((a, b) => (
+    Number(a.sourceOrder || 999999) - Number(b.sourceOrder || 999999) ||
+    String(a.code || '').localeCompare(String(b.code || ''))
+  ));
+  tab.rows = rows;
+  tab.count = rows.length;
+  tab.topics = limitUpMainReasonSourceViewTopics(rows);
+  tab.note = '同花顺标签直接读取官方“涨停简图”长图结构化来源；板块归属和个股细分原因以原图为准，不使用旧版 block_top 重叠概念替代。';
+  tab.extra = {
+    reportedLimitUpCount: Number(payload?.imageStats?.reportedLimitUpCount || payload?.count || rows.length),
+    blockTopBoardCount: Number(payload?.blockTop?.boardCount || 0),
+    blockTopRelationCount: Number(payload?.blockTop?.boardRowCount || 0),
+    blockTopUniqueStockCount: Number(payload?.blockTop?.uniqueStockCount || 0),
+    imageUrl: String(payload?.imageUrl || ''),
+    postUrl: String(payload?.postUrl || payload?.pageUrl || ''),
+    sourceMode: 'official-image',
+  };
+  tab.note = '\u540c\u82b1\u987a\u6807\u7b7e\u76f4\u63a5\u8bfb\u53d6\u5b98\u65b9\u6da8\u505c\u6c60 JSON\uff0c\u4ee5 limit_up_pool \u7684\u975e ST \u5168\u91cf\u80a1\u7968\u6c60\u4e3a\u51c6\uff1breason_type \u4f5c\u4e3a\u4e2a\u80a1\u7ec6\u5206\u6da8\u505c\u539f\u56e0\uff0cblock_top \u53ea\u4f5c\u4e3a\u677f\u5757\u8f85\u52a9\u4fe1\u606f\u3002';
+  tab.extra.reportedLimitUpCount = Number(payload?.reportedLimitUpCount || payload?.imageStats?.reportedLimitUpCount || payload?.count || rows.length);
+  tab.extra.sourceMode = String(payload?.sourceMode || payload?.method || 'official-limit-up-pool-json');
+  return sourceView;
+}
+
+async function mergeKaipanlaFupanlaSourceViewTab(sourceView, day, dbPayload = null) {
+  const isoDay = isoFromCompactDate(day);
+  const tab = (sourceView?.tabs || []).find(item => item.key === 'kaipanla');
+  if (!tab) return sourceView;
+  let payload = null;
+  try {
+    payload = await readKaipanlaFupanlaSourceDay(isoDay);
+  } catch (err) {
+    return sourceView;
+  }
+  const dbByCode = new Map((dbPayload?.stocks || [])
+    .map(stock => [normalizeReasonSourceCode(stock?.code), stock])
+    .filter(([code]) => code));
+  const seen = new Set();
+  const sourceRows = [];
+  for (const board of payload?.boards || []) {
+    const boardTopic = String(board?.name || board?.topic || '').trim();
+    if (!boardTopic) continue;
+    for (const item of board?.rows || []) {
+      const code = normalizeReasonSourceCode(item?.code);
+      if (!code) continue;
+      sourceRows.push({ code, board, item, boardTopic });
+    }
+  }
+  const alignment = kaipanlaFupanlaPoolAlignment(sourceRows, dbByCode, isoDay);
+  if (alignment.issue) {
+    tab.rows = [];
+    tab.count = 0;
+    tab.topics = [];
+    tab.note = alignment.issue;
+    tab.extra = {
+      sourceMode: 'official-structured-page',
+      boardCount: Number(payload?.boardCount || payload?.boards?.length || 0),
+      stockRows: Number(payload?.stockRows || sourceRows.length),
+      boardSum: Number(payload?.boardSum || sourceRows.length),
+      matchedCount: alignment.matchedCount,
+      matchRatio: alignment.matchRatio,
+      error: alignment.issue,
+      url: String(payload?.url || ''),
+    };
+    return sourceView;
+  }
+  const rows = [];
+  for (const sourceRow of sourceRows) {
+      const { board, item, boardTopic, code } = sourceRow;
+      const dbStock = dbByCode.get(code) || {};
+      const name = String(item?.name || dbStock?.name || '').trim();
+      if (!name) continue;
+      if (isExcludedFromReview(code, name)) continue;
+      const detailReason = kaipanlaFupanlaDetailReason(item?.reason || board?.explain || '');
+      const key = [code, boardTopic, detailReason].join('\u0001');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push({
+        code,
+        name,
+        sourceKey: 'kaipanla',
+        source: 'review/kaipanla-fupanla',
+        sourceLabel: '复盘啦',
+        group: 'kaipanla',
+        boardTopic,
+        primaryTopic: boardTopic,
+        primaryRawTopic: boardTopic,
+        detailReason,
+        reasonText: detailReason ? `${boardTopic}: ${name} - ${detailReason}` : `${boardTopic}: ${name}`,
+        reasonHeadline: detailReason || boardTopic,
+        confidence: 0.99,
+        reasonQuality: detailReason ? 'clear' : 'weak',
+        matchType: 'official-structured-page',
+        lowConfidence: false,
+        qualityNote: 'Fupanla structured limit-up reason page supplied board and stock detail reason; source tab reads the source-layer file directly.',
+        url: String(payload.url || ''),
+        title: String(payload.title || '复盘啦涨停原因'),
+        imageUrl: '',
+        firstLimitTime: normalizeReviewFirstLimitTime(item?.time || dbStock?.firstLimitTime),
+        lastLimitTime: dbStock?.lastLimitTime ?? null,
+        limitUpCount: item?.mark || dbStock?.limitUpCount || null,
+        gain: Number.isFinite(Number(dbStock?.gain)) ? Number(dbStock.gain) : null,
+        finalBoardTopic: String(dbStock?.finalBoardTopic || ''),
+        finalDetailReason: String(dbStock?.finalDetailReason || ''),
+        finalReason: String(dbStock?.finalReason || ''),
+        selectedSource: String(dbStock?.sourceEvidence?.selectedSource || dbStock?.source || ''),
+        evidenceSourceCount: 1,
+        reviewEvidenceCount: 1,
+      });
+  }
+  rows.sort((a, b) => (
+    String(a.boardTopic || '').localeCompare(String(b.boardTopic || ''), 'zh-Hans-CN') ||
+    Number(a.firstLimitTime || 999999) - Number(b.firstLimitTime || 999999) ||
+    String(a.code || '').localeCompare(String(b.code || ''))
+  ));
+  tab.rows = rows;
+  tab.count = rows.length;
+  tab.topics = limitUpMainReasonSourceViewTopics(rows);
+  tab.note = '复盘啦标签直接读取复盘啦涨停原因结构化底层文件，按原始板块和个股原因展示。';
+  tab.extra = {
+    sourceMode: 'official-structured-page',
+    boardCount: Number(payload?.boardCount || payload?.boards?.length || 0),
+    stockRows: Number(payload?.stockRows || rows.length),
+    boardSum: Number(payload?.boardSum || rows.length),
+    url: String(payload?.url || ''),
+  };
+  return sourceView;
+}
+
+async function mergeEastmoneyFplLimitReasonSourceViewTab(sourceView, day, dbPayload = null) {
+  const isoDay = isoFromCompactDate(day);
+  const tab = (sourceView?.tabs || []).find(item => item.key === 'eastmoney');
+  if (!tab) return sourceView;
+  let payload = null;
+  try {
+    payload = await ensureEastmoneyFplLimitReasonSourceDay(isoDay);
+  } catch (err) {
+    return sourceView;
+  }
+  const dbByCode = new Map((dbPayload?.stocks || [])
+    .map(stock => [normalizeReasonSourceCode(stock?.code), stock])
+    .filter(([code]) => code));
+  const seen = new Set();
+  const rows = [];
+  for (const item of payload?.rows || []) {
+    const code = normalizeReasonSourceCode(item?.code);
+    if (!code) continue;
+    const boardTopic = String(item?.boardTopic || item?.primaryRawTopic || '').trim();
+    if (!boardTopic) continue;
+    const dbStock = dbByCode.get(code) || {};
+    const name = String(item?.name || dbStock?.name || '').trim();
+    if (!name) continue;
+    if (isExcludedFromReview(code, name)) continue;
+    const detailReason = String(item?.detailReason || '').trim();
+    const limitLabel = String(item?.limitLabel || '').trim();
+    const key = [code, boardTopic, detailReason, limitLabel].join('\u0001');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push({
+      code,
+      name,
+      sourceKey: 'eastmoney',
+      source: 'review/eastmoney-fpl-limit-reason',
+      sourceLabel: '\u4e1c\u8d22',
+      group: 'eastmoney',
+      boardTopic,
+      primaryTopic: boardTopic,
+      primaryRawTopic: boardTopic,
+      detailReason,
+      reasonText: detailReason ? `${boardTopic}: ${name} - ${detailReason}` : `${boardTopic}: ${name}`,
+      reasonHeadline: detailReason || boardTopic,
+      confidence: 0.985,
+      reasonQuality: detailReason ? 'clear' : 'weak',
+      matchType: 'official-structured-page',
+      lowConfidence: false,
+      qualityNote: 'Eastmoney Fupanla limit-reason page supplied board and stock detail reason; ST rows are excluded and LIMIT_LABEL is preserved.',
+      url: String(payload.url || payload.pageUrl || ''),
+      title: String(payload.title || ''),
+      imageUrl: '',
+      firstLimitTime: item?.firstLimitTime || dbStock?.firstLimitTime || null,
+      lastLimitTime: item?.lastLimitTime || dbStock?.lastLimitTime || null,
+      limitUpCount: item?.limitUpCount || dbStock?.limitUpCount || null,
+      limitLabel,
+      closeLimitupTime: item?.closeLimitupTime || '',
+      cztLimitupTime: item?.cztLimitupTime || '',
+      gain: Number.isFinite(Number(item?.gain)) ? Number(item.gain) : (Number.isFinite(Number(dbStock?.gain)) ? Number(dbStock.gain) : null),
+      finalBoardTopic: String(dbStock?.finalBoardTopic || ''),
+      finalDetailReason: String(dbStock?.finalDetailReason || ''),
+      finalReason: String(dbStock?.finalReason || ''),
+      selectedSource: String(dbStock?.sourceEvidence?.selectedSource || dbStock?.source || ''),
+      evidenceSourceCount: 1,
+      reviewEvidenceCount: 1,
+      sourceOrder: Number(item?.sourceOrder || 0),
+    });
+  }
+  rows.sort((a, b) => (
+    Number(a.sourceOrder || 999999) - Number(b.sourceOrder || 999999) ||
+    String(a.code || '').localeCompare(String(b.code || ''))
+  ));
+  tab.rows = rows;
+  tab.count = rows.length;
+  tab.topics = limitUpMainReasonSourceViewTopics(rows);
+  tab.note = '东财标签读取官方涨停原因结构化页，保留东财原始行；但该页相对完整非 ST 涨停池可能是局部数据，所以只作为证据来源，不作为全量涨停数量基准。';
+  tab.extra = {
+    sourceMode: 'official-structured-page',
+    partialSource: true,
+    reportedCount: Number(payload?.sourceCount || payload?.count || rows.length),
+    sealedCount: Number(payload?.sealedCount || 0),
+    openedCount: Number(payload?.openedCount || 0),
+    pageUrl: String(payload?.pageUrl || ''),
+    apiUrl: String(payload?.apiUrl || ''),
+  };
+  return sourceView;
+}
+
+async function mergeXuangubaoLimitUpSourceViewTab(sourceView, day, dbPayload = null) {
+  const isoDay = isoFromCompactDate(day);
+  const tab = (sourceView?.tabs || []).find(item => item.key === 'xuangubao');
+  if (!tab) return sourceView;
+  let payload = null;
+  try {
+    payload = await ensureXuangubaoLimitUpSourceDay(isoDay);
+  } catch (err) {
+    return sourceView;
+  }
+  const dbByCode = new Map((dbPayload?.stocks || [])
+    .map(stock => [normalizeReasonSourceCode(stock?.code), stock])
+    .filter(([code]) => code));
+  const seen = new Set();
+  const rows = [];
+  for (const item of payload?.rows || []) {
+    const code = normalizeReasonSourceCode(item?.code);
+    if (!code) continue;
+    const boardTopic = String(item?.boardTopic || item?.primaryRawTopic || '').trim();
+    if (!boardTopic) continue;
+    const dbStock = dbByCode.get(code) || {};
+    const name = String(item?.name || dbStock?.name || '').trim();
+    if (!name) continue;
+    const detailReason = String(item?.detailReason || '').trim();
+    const key = [code, boardTopic, detailReason].join('\u0001');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push({
+      code,
+      name,
+      sourceKey: 'xuangubao',
+      source: 'review/xuangubao-limit-up',
+      sourceLabel: '\u9009\u80a1\u5b9d',
+      group: 'xuangubao',
+      boardTopic,
+      primaryTopic: boardTopic,
+      primaryRawTopic: boardTopic,
+      boardReason: String(item?.boardReason || ''),
+      detailReason,
+      reasonText: detailReason ? `${boardTopic}: ${name} - ${detailReason}` : `${boardTopic}: ${name}`,
+      reasonHeadline: detailReason || boardTopic,
+      confidence: 0.99,
+      reasonQuality: detailReason ? 'clear' : 'weak',
+      matchType: 'official-json-pool',
+      lowConfidence: false,
+      qualityNote: 'Xuangubao structured JSON supplied stock reason and related plates; ST rows are excluded.',
+      url: String(payload.url || payload.apiUrl || ''),
+      title: String(payload.title || ''),
+      imageUrl: '',
+      firstLimitTime: item?.firstLimitTime || dbStock?.firstLimitTime || null,
+      lastLimitTime: item?.lastLimitTime || dbStock?.lastLimitTime || null,
+      limitUpCount: item?.limitUpCount || dbStock?.limitUpCount || null,
+      breakLimitUpTimes: Number(item?.breakLimitUpTimes || 0),
+      gain: Number.isFinite(Number(item?.gain)) ? Number(item.gain) : (Number.isFinite(Number(dbStock?.gain)) ? Number(dbStock.gain) : null),
+      finalBoardTopic: String(dbStock?.finalBoardTopic || ''),
+      finalDetailReason: String(dbStock?.finalDetailReason || ''),
+      finalReason: String(dbStock?.finalReason || ''),
+      selectedSource: String(dbStock?.sourceEvidence?.selectedSource || dbStock?.source || ''),
+      evidenceSourceCount: 1,
+      reviewEvidenceCount: 1,
+      sourceOrder: Number(item?.sourceOrder || 0),
+      relatedPlates: Array.isArray(item?.relatedPlates) ? item.relatedPlates : [],
+    });
+  }
+  rows.sort((a, b) => (
+    Number(a.sourceOrder || 999999) - Number(b.sourceOrder || 999999) ||
+    String(a.code || '').localeCompare(String(b.code || ''))
+  ));
+  tab.rows = rows;
+  tab.count = rows.length;
+  tab.topics = limitUpMainReasonSourceViewTopics(rows);
+  tab.note = '\u9009\u80a1\u5b9d\u6807\u7b7e\u76f4\u63a5\u8bfb\u53d6\u6da8\u505c\u6c60 JSON \u5e95\u5c42\u6587\u4ef6\uff0c\u4fdd\u7559\u539f\u59cb\u9898\u6750\u3001\u677f\u5757\u539f\u56e0\u548c\u4e2a\u80a1\u6da8\u505c\u539f\u56e0\uff0c\u4e0d\u4f7f\u7528 OCR\u3002';
+  tab.extra = {
+    sourceMode: 'official-json-pool',
+    reportedCount: Number(payload?.sourceCount || payload?.rawCount || rows.length),
+    nonStCount: Number(payload?.count || rows.length),
+    apiUrl: String(payload?.apiUrl || ''),
+  };
+  return sourceView;
+}
+
+// 复盘列表龙头指标(按需+缓存):给最终行补 近10日涨幅 gain10 / 近30日涨幅 gain30 / 近10日涨停次数 zt10Count
+// gain 用收盘价库(只 31 天，gain30 仅最近交易日算得出，更早缺则为 null)；涨停次数读近 10 个交易日涨停底库
+async function enrichReviewLeaderMetrics(rows, isoDay, apiKey) {
+  if (!Array.isArray(rows) || !rows.length) return;
+  const codes = new Set(rows.map(r => normalizeReasonSourceCode(r.code)).filter(Boolean));
+  const td = await getRecentTradingDays(isoDay, apiKey, 31).catch(() => []);
+  if (!td.length) return;
+  const last = td.length - 1;
+  const dayBack = n => (last - n >= 0 ? td[last - n] : null);
+  const closeMapOf = async d => {
+    if (!d) return new Map();
+    const cdb = await readEastmoneyCloseDbDay(d).catch(() => null);
+    return new Map((cdb?.stocks || [])
+      .map(s => [normalizeReasonSourceCode(s.code), Number(s.close)])
+      .filter(([c, v]) => c && codes.has(c) && Number.isFinite(v) && v > 0));
+  };
+  const [c0, c10, c30] = await Promise.all([closeMapOf(isoDay), closeMapOf(dayBack(10)), closeMapOf(dayBack(30))]);
+  // 每行「当前综合归纳主因」的归一主题，用于统计「因本主因的近10日主次数」(QI 归属口径)
+  const curTopicByCode = new Map();
+  for (const r of rows) {
+    const c = normalizeReasonSourceCode(r.code);
+    if (c) curTopicByCode.set(c, canonicalTopicName(String(r.finalBoardTopic || r.boardTopic || r.primaryRawTopic || r.primaryTopic || '')));
+  }
+  const ztByCode = new Map();
+  const mainZtByCode = new Map();
+  for (const d of td.slice(Math.max(0, td.length - 10))) {
+    const ldb = await readLimitUpDbDay(d).catch(() => null);
+    for (const s of (ldb?.stocks || [])) {
+      const c = normalizeReasonSourceCode(s.code);
+      if (codes.has(c)) ztByCode.set(c, (ztByCode.get(c) || 0) + 1);
+    }
+    const mdb = await readLimitUpMainReasonDbDay(d).catch(() => null);
+    for (const s of (mdb?.stocks || [])) {
+      const c = normalizeReasonSourceCode(s.code);
+      if (!codes.has(c)) continue;
+      const cur = curTopicByCode.get(c);
+      if (cur && canonicalTopicName(String(s.finalBoardTopic || '')) === cur) {
+        mainZtByCode.set(c, (mainZtByCode.get(c) || 0) + 1);
+      }
+    }
+  }
+  for (const r of rows) {
+    const c = normalizeReasonSourceCode(r.code);
+    const p0 = c0.get(c), p10 = c10.get(c), p30 = c30.get(c);
+    r.gain10 = (Number.isFinite(p0) && Number.isFinite(p10)) ? Number(((p0 / p10 - 1) * 100).toFixed(2)) : null;
+    r.gain30 = (Number.isFinite(p0) && Number.isFinite(p30)) ? Number(((p0 / p30 - 1) * 100).toFixed(2)) : null;
+    r.zt10Count = ztByCode.get(c) || 0;
+    r.mainZt10Count = mainZtByCode.get(c) || 0;
+  }
+}
+
+// 给「综合归纳」最终列表每只股算出"几源共识"档(与个股详情端点同口径):
+// 拿最终主因 finalBoardTopic,逐个源 tab 比对该股的 boardTopic(same/sub=认同),
+// agreeCount≥3→高度认可 / ==2→确认 / 真实源≤1→孤源 / 其余→各源分歧。纯展示、不改主因。
+// B(2026-06-27):把各源的"事件型涨停原因"归到统一事件类型,供"待定但各源一致是某事件"的票标注(显示「待定·控制权变更」)。
+// 顺序由具体到一般;非事件返回 ''。
+function eventCanon(text) {
+  const t = String(text || '');
+  if (/控制权|实控人|易主|入主|借壳|股权转让|股份转让|要约收购/.test(t)) return '控制权变更';
+  if (/摘帽|摘星|撤销退市|撤销.{0,6}风险警示|脱星|脱帽/.test(t)) return 'ST摘帽';
+  if (/并购|资产重组|资产注入|重大资产|重组|收购|定增|增资/.test(t)) return '资产重组';
+  if (/回购|增持/.test(t)) return '回购增持';
+  if (/中标|签约|订单|中标公告|框架协议|战略合作/.test(t)) return '中标订单';
+  if (/业绩|预增|预盈|扭亏|净利|营收|高送转|送转/.test(t)) return '业绩';
+  if (/解禁|减持/.test(t)) return '解禁减持';
+  return '';
+}
+// 事件档判定(公告类)。各源里点名同一事件(控制权变更/资产重组/摘帽…)≥2 即成事件主因。
+// 关键:只写"公告"而没点明哪种的源,视为认同"这是公告类事件"——控制权变更本就是一种公告,
+// 跟具体事件是同一大题材(1+1=2 与 2,结果都是 2),计入一致票,不是中性也不是分歧。
+function detectEventConsensus(getText, foundList) {
+  const ev = new Map();
+  let vague = 0;
+  for (const it of foundList) {
+    const txt = getText(it);
+    const e = eventCanon(txt);
+    if (e) ev.set(e, (ev.get(e) || 0) + 1);
+    else if (/公告/.test(txt)) vague++;
+  }
+  const top = [...ev.entries()].sort((a, b) => b[1] - a[1])[0];
+  if (!top || top[1] < 2) return null;
+  return { eventReason: top[0], eventAgree: top[1] + vague };
+}
+// 某源文本是否认同既定事件:点名了同一事件,或只写"公告"(没细分、同属公告大题材)。
+function agreesWithEvent(text, eventReason) {
+  return eventCanon(text) === eventReason || (/公告/.test(text) && !eventCanon(text));
+}
+function attachFinalConsensusTier(sv) {
+  const tabs = sv?.tabs || [];
+  const finalTab = tabs.find(t => t.key === 'final');
+  if (!finalTab) return sv;
+  const otherTabs = tabs.filter(t => t.key !== 'final');
+  const idx = otherTabs.map(tab => new Map((tab.rows || [])
+    .map(r => [normalizeReasonSourceCode(r.code), r])));
+  for (const row of finalTab.rows || []) {
+    const code = normalizeReasonSourceCode(row.code);
+    const finalTopic = String(row.finalBoardTopic || row.boardTopic || '');
+    let agreeCount = 0, realCount = 0;
+    for (const byCode of idx) {
+      const sr = byCode.get(code) || null;
+      const found = !!sr;
+      const tag = classifyReviewSourceVsFinal(String(sr?.boardTopic || ''), finalTopic, found);
+      if (tag === 'same' || tag === 'sub') agreeCount++;
+      if (found && tag !== 'other') realCount++;
+    }
+    row.agreeCount = agreeCount;
+    row.realCount = realCount;
+    row.consensusTier = agreeCount >= 3 ? 'strong' : (agreeCount === 2 ? 'majority' : (realCount <= 1 ? 'lone' : 'split'));
+    // B:无热点题材(待定/其他)时,若各源一致指向同一"事件"(并购重组/控制权变更/摘帽…),标出事件类型 + 给"事件"档,
+    // 不再冷冰冰显示"分歧"(蓝科高新3源资产重组、返利科技4源控制权变更)。
+    if (!finalTopic || /其他|待定/.test(finalTopic)) {
+      const ec = detectEventConsensus(
+        sr => `${sr.boardTopic || ''}|${sr.detailReason || sr.reasonText || ''}`,
+        idx.map(byCode => byCode.get(code)).filter(Boolean));
+      if (ec) {
+        row.eventReason = ec.eventReason;
+        row.eventAgree = ec.eventAgree;
+        row.consensusTier = 'event';
+        row.agreeCount = ec.eventAgree;
+      }
+    }
+  }
+  return sv;
+}
+
+// 复用件:构建某日完整源视图(4源合并链)并挂上每股共识档(agreeCount/consensusTier)。
+// 综合归纳源视图端点 与 强势板块共振榜 共用此件,保证共识口径完全一致。
+async function buildDaySourceViewWithConsensus(day, opts = {}) {
+  const isoDay = isoFromCompactDate(day);
+  const { evidence } = await ensureLimitUpMainReasonEvidenceAndQualityDay(day, { force: !!opts.force });
+  const dbPayload = await readLimitUpMainReasonDbDay(day).catch(() => null);
+  const baseEvidence = evidence?.stocks?.length ? evidence : {
+    day: isoDay,
+    stocks: [],
+    count: 0,
+    sourceStats: [],
+    sourceErrors: [],
+    ruleVersion: MAIN_ZT_COUNT_RULE_VERSION,
+  };
+  const payload = await mergeTgbStructuredSourceViewTab(
+    await mergeXuangubaoLimitUpSourceViewTab(
+      await mergeKaipanlaFupanlaSourceViewTab(
+        await mergeTonghuashunStructuredSourceViewTab(
+          await mergeJiuyangongsheStructuredSourceViewTab(
+            await mergeRawReviewSourceViewTabs(
+              buildLimitUpMainReasonSourceView(day, baseEvidence, dbPayload),
+              day,
+              dbPayload
+            ),
+            day,
+            dbPayload
+          ),
+          day,
+          dbPayload
+        ),
+        day,
+        dbPayload
+      ),
+      day,
+      dbPayload
+    ),
+    day,
+    dbPayload
+  );
+  attachFinalConsensusTier(payload);
+  return { isoDay, evidence, dbPayload, payload };
+}
+
+async function getLimitUpMainReasonDbSourceView(url, req, res) {
+  const day = url.searchParams.get('day') || chinaNowParts().day;
+  const sourceKey = String(url.searchParams.get('source') || '').trim().toLowerCase();
+  const force = url.searchParams.get('force') === '1' || url.searchParams.get('force') === 'true';
+  const { isoDay, evidence, dbPayload, payload } = await buildDaySourceViewWithConsensus(day, { force });
+  if (!evidence?.stocks?.length) {
+    const sourceCount = Math.max(0, ...payload.tabs.filter(tab => tab.key !== 'final').map(tab => Number(tab.count || 0)));
+    payload.ok = sourceCount > 0;
+    payload.count = sourceCount;
+    payload.sourceLayerOnly = true;
+    payload.error = sourceCount
+      ? 'main reason evidence not found; showing source-layer files only'
+      : (evidence?.marketClosedReason || 'main reason evidence not found');
+  }
+  payload.tabs = (payload.tabs || []).filter(tab => !isDisabledReviewSource('', tab.key));
+  // 统一复盘口径：所有来源（含 final）一律剔除北交所、ST/退市整理、新股前缀个股，并重算数量/题材。
+  for (const tab of payload.tabs) {
+    const rows = (tab.rows || []).filter(row => !isExcludedFromReview(row?.code, row?.name));
+    tab.rows = rows;
+    tab.count = rows.length;
+    tab.topics = limitUpMainReasonSourceViewTopics(rows);
+  }
+  // 让来源统计 sourceStats 走同一个「统一复盘排除」闸口：按过滤后的各来源 tab 重算
+  // 行数/股票数/覆盖率，字段口径与 buildReviewSourceStats 一致。否则数据健康面板会读到
+  // 底稿原始行数（如韭研含北交所 920249 导致显示 86、覆盖率 101.18%）。
+  {
+    const codesOf = rows => {
+      const set = new Set();
+      for (const row of rows || []) {
+        const code = normalizeReasonSourceCode(row?.code);
+        if (code) set.add(code);
+      }
+      return set;
+    };
+    const tabByGroup = new Map(payload.tabs.filter(tab => tab.key !== 'final').map(tab => [String(tab.key), tab]));
+    let reviewTotal = codesOf((payload.tabs.find(tab => tab.key === 'final') || {}).rows).size;
+    if (!reviewTotal) {
+      reviewTotal = Math.max(0, ...[...tabByGroup.values()].map(tab => codesOf(tab.rows).size));
+    }
+    const sourceByGroup = {
+      kaipanla: 'review/kaipanla-fupanla',
+      xuangubao: 'review/xuangubao-limit-up',
+      ths: 'review/ths-limitup-structured',
+      jiuyangongshe: 'review/jiuyangongshe-structured',
+      tgb: 'review/tgb-hunan-structured',
+      eastmoney: 'review/eastmoney-fpl-limit-reason',
+    };
+    const existingStats = Array.isArray(payload.sourceStats) ? payload.sourceStats : [];
+    const statsBase = existingStats.length
+      ? existingStats
+      : [...tabByGroup.entries()]
+        .filter(([, tab]) => Number(tab?.count || (Array.isArray(tab?.rows) ? tab.rows.length : 0)) > 0)
+        .map(([group]) => ({ source: sourceByGroup[group] || `review/${group}`, group }));
+    payload.sourceStats = statsBase.map(stat => {
+      const group = String(stat?.group || reviewSourceGroup(stat?.source || ''));
+      const tab = tabByGroup.get(group);
+      if (!tab) return stat;
+      const rows = tab.rows || [];
+      const stockCodes = new Set();
+      const mainReasonCodes = new Set();
+      const lowConfidenceCodes = new Set();
+      for (const row of rows) {
+        const code = normalizeReasonSourceCode(row?.code);
+        if (code) stockCodes.add(code);
+        const quality = String(row?.reasonQuality || '').toLowerCase();
+        const confidence = Number(row?.confidence || 0);
+        if (code && quality !== 'fallback' && (row?.primaryRawTopic || row?.reasonText)) mainReasonCodes.add(code);
+        if (code && (quality === 'fallback' || confidence < 0.8 || row?.ocrFallback)) lowConfidenceCodes.add(code);
+      }
+      return {
+        ...stat,
+        rowCount: rows.length,
+        stockCount: stockCodes.size,
+        coveragePct: reviewTotal ? Number(((stockCodes.size / reviewTotal) * 100).toFixed(2)) : 0,
+        mainReasonStockCount: mainReasonCodes.size,
+        mainReasonCoveragePct: reviewTotal ? Number(((mainReasonCodes.size / reviewTotal) * 100).toFixed(2)) : 0,
+        lowConfidenceStockCount: lowConfidenceCodes.size,
+      };
+    });
+  }
+  const finalTab = payload.tabs.find(tab => tab.key === 'final');
+  if (payload.sourceLayerOnly) {
+    payload.count = Math.max(0, ...payload.tabs.filter(tab => tab.key !== 'final').map(tab => Number(tab.count || 0)));
+  } else if (finalTab) {
+    payload.count = finalTab.count;
+  }
+  if (finalTab && Array.isArray(finalTab.rows) && finalTab.rows.length) {
+    await enrichReviewLeaderMetrics(finalTab.rows, isoDay, await readSavedApiKey().catch(() => '')).catch(() => {});
+    // 反向关节(主因口径):个股「主因」恰是某强势板块 dominantTheme → 打「💪强势」标(stock 视角，三层漏斗②↔①)
+    try {
+      const { strongThemes, themeBoards } = await getStrongThemeMap(day, finalTab.rows);
+      for (const row of finalTab.rows) {
+        const theme = String(row?.finalBoardTopic || '');
+        if (theme && theme !== '其他' && strongThemes.has(theme)) {
+          row.strongBoard = true;
+          row.strongTheme = theme;
+          row.strongBoards = themeBoards.get(theme) || [];
+        }
+      }
+    } catch {}
+  }
+  if (sourceKey && sourceKey !== 'all') {
+    if (isDisabledReviewSource('', sourceKey)) {
+      return send(res, 404, {
+        ...payload,
+        activeSource: sourceKey,
+        activeTab: null,
+        ok: false,
+        error: 'source tab disabled',
+      });
+    }
+    const tab = payload.tabs.find(item => item.key === sourceKey) || null;
+    return send(res, 200, {
+      ...payload,
+      activeSource: sourceKey,
+      activeTab: tab,
+      ok: !!tab,
+      error: tab ? '' : 'source tab not found',
+    });
+  }
+  return send(res, 200, payload);
+}
+
+// 综合归纳·个股详情：某股某日的最终主因 + 连板 + 4 源各自原因/归类 + 共识等级 + 板块今日只数 + 近10天轨迹（只读）
+function classifyReviewSourceVsFinal(srcTopic, finalTopic, found) {
+  if (!found || !srcTopic) return 'missing';
+  // 「公告/待定/无」这类纯空壳板块没细分,等于「其他」走中性档:既不赞成也不反对,平铺显示,不打红「不同」(公告就是公告)。
+  if (/其他/.test(srcTopic) || /^(公告|待定|未定|未知|未明|无|—|-)$/.test(srcTopic.trim())) return 'other';
+  if (!finalTopic) return 'diff';
+  if (srcTopic === finalTopic) return 'same';
+  // 归一后同主题（如 通信≈光通信≈光模块、芯片概念≈国产芯片≈半导体）判为细分/同主题。
+  // 走标准热点题材库(theme-taxonomy.json，consensusKey)——与 winner 端 aggregateReviewSourceRows 完全同口径，
+  // 修掉旧 bug：原来 tier 用粗映射 canonicalTopicName，与 winner 的 taxonomy 归一不一致 → 同义词被误判分歧。
+  const cs = consensusKey(srcTopic), cf = consensusKey(finalTopic);
+  if (cs && cf && cs === cf) return 'sub';
+  if (srcTopic.includes(finalTopic) || finalTopic.includes(srcTopic)) return 'sub';
+  return 'diff';
+}
+async function getLimitUpMainReasonStockDetail(url, req, res) {
+  const day = url.searchParams.get('day') || chinaNowParts().day;
+  const isoDay = isoFromCompactDate(day);
+  const code = normalizeReasonSourceCode(url.searchParams.get('code') || '');
+  if (!code) return send(res, 400, { ok: false, error: 'missing code' });
+  const apiKey = await readSavedApiKey().catch(() => '');
+  // 近10交易日逐日加载主因库记录（兼作 history 的「查询日及之前」段，与「非当日股回退到最近涨停日」）。
+  // 关键:参考日回退只看这段(查询日及之前),绝不前跳到查询日之后的涨停日。
+  const loadStockSlot = async d => {
+    const ddb = await readLimitUpMainReasonDbDay(d).catch(() => null);
+    const r = (ddb?.stocks || []).find(s => normalizeReasonSourceCode(s.code) === code) || null;
+    return { day: d, db: ddb, rec: r };
+  };
+  const toHistCell = x => ({
+    day: x.day,
+    limitUp: !!x.rec,
+    name: String(x.rec?.name || ''),
+    boardTopic: String(x.rec?.finalBoardTopic || ''),
+    limitUpCount: Number(x.rec?.limitUpCount || 0),
+    confidence: Number(x.rec?.confidence || 0),
+  });
+  const tradingDays = await getRecentTradingDays(isoDay, apiKey, 10).catch(() => []);
+  const dayRecords = [];
+  for (const d of tradingDays) dayRecords.push(await loadStockSlot(d));
+  const history = dayRecords.map(toHistCell);
+  // 历史日期条延伸:查询的是过去某天时,其后已发生的交易日(如查24号,25/26号已过)也显示到「今天」。
+  // 仅扩展可视轨迹,不进 dayRecords(不影响参考日/选中日判定)。
+  const todayIso = isoFromCompactDate(chinaNowParts().day);
+  if (todayIso > isoDay) {
+    const afterDays = (await getRecentTradingDays(todayIso, apiKey, 16).catch(() => []))
+      .filter(d => d > isoDay).slice(0, 8);
+    for (const d of afterDays) history.push(toHistCell(await loadStockSlot(d)));
+  }
+  const ztDays = history.filter(h => h.limitUp);
+
+  // 选中日记录
+  const selSlot = dayRecords.find(x => x.day === isoDay);
+  const selDb = selSlot ? selSlot.db : await readLimitUpMainReasonDbDay(isoDay).catch(() => null);
+  const rec = selSlot ? selSlot.rec : ((selDb?.stocks || []).find(s => normalizeReasonSourceCode(s.code) === code) || null);
+
+  // 参考日：选中日涨停则用选中日；否则用窗口内最近一个涨停日（取综合主因 + 4源原因）
+  let refDay = isoDay, refDb = selDb, refRec = rec;
+  const isSelectedDay = !!rec;
+  if (!rec) {
+    for (let i = dayRecords.length - 1; i >= 0; i--) {
+      if (dayRecords[i].rec) { refDay = dayRecords[i].day; refDb = dayRecords[i].db; refRec = dayRecords[i].rec; break; }
+    }
+  }
+
+  const finalTopic = String(refRec?.finalBoardTopic || refRec?.primaryRawTopic || refRec?.primaryTopic || '');
+  const boardSizeToday = finalTopic
+    ? (refDb?.stocks || []).filter(s => String(s.finalBoardTopic || '') === finalTopic).length
+    : 0;
+  const { evidence } = await ensureLimitUpMainReasonEvidenceAndQualityDay(refDay, {}).catch(() => ({ evidence: null }));
+  const baseEvidence = evidence?.stocks?.length ? evidence : { day: refDay, stocks: [], count: 0, sourceStats: [], sourceErrors: [], ruleVersion: MAIN_ZT_COUNT_RULE_VERSION };
+  const sv = await mergeTgbStructuredSourceViewTab(
+    await mergeXuangubaoLimitUpSourceViewTab(
+      await mergeKaipanlaFupanlaSourceViewTab(
+        await mergeTonghuashunStructuredSourceViewTab(
+          await mergeJiuyangongsheStructuredSourceViewTab(
+            await mergeRawReviewSourceViewTabs(
+              buildLimitUpMainReasonSourceView(refDay, baseEvidence, refDb),
+              refDay, refDb),
+            refDay, refDb),
+          refDay, refDb),
+        refDay, refDb),
+      refDay, refDb),
+    refDay, refDb);
+  const sources = (sv.tabs || []).filter(t => t.key !== 'final').map(tab => {
+    const row = (tab.rows || []).find(r => normalizeReasonSourceCode(r.code) === code) || null;
+    const boardTopic = String(row?.boardTopic || '');
+    const found = !!row;
+    return {
+      group: tab.key,
+      label: tab.label || tab.key,
+      found,
+      boardTopic,
+      detailReason: String(row?.detailReason || ''),
+      tag: classifyReviewSourceVsFinal(boardTopic, finalTopic, found),
+    };
+  });
+  const agreeCount = sources.filter(s => s.tag === 'same' || s.tag === 'sub').length;
+  const realCount = sources.filter(s => s.found && s.tag !== 'other').length;
+  let tier = agreeCount >= 3 ? 'strong' : (agreeCount === 2 ? 'majority' : (realCount <= 1 ? 'lone' : 'split'));
+  // 事件档(同综合归纳口径):无热点题材(待定/其他)但各源一致指向同一事件 → 标事件类型,不再"各源分歧"。
+  let eventReason = '', eventAgree = 0;
+  if (!finalTopic || /其他|待定/.test(finalTopic)) {
+    const getText = s => `${s.boardTopic || ''}|${s.detailReason || ''}`;
+    const ec = detectEventConsensus(getText, sources.filter(s => s.found));
+    if (ec) {
+      eventReason = ec.eventReason; eventAgree = ec.eventAgree; tier = 'event';
+      // 事件股:点名同一事件、或只写"公告"(没细分、同属公告大题材)的源都标 same——结果一回事。
+      for (const s of sources) if (s.found && agreesWithEvent(getText(s), eventReason)) s.tag = 'same';
+    }
+  }
+
+  const topicSet = new Set(ztDays.map(h => h.boardTopic).filter(Boolean));
+  const name = refRec?.name || rec?.name || ztDays.map(h => h.name).find(Boolean) || '';
+  // 细分:① 词典命中(同义词归一) ② 词典没有时按"板块性质"自动发现(本股≥2源+当天≥2只股+非噪声)。独立于主因/共识。
+  const subThemeAutoIndex = getSubThemeAutoIndex(refDay, sv, refDb);
+  const subTheme = detectSubThemeForDetail(finalTopic, sources, subThemeAutoIndex);
+  return send(res, 200, {
+    ok: !!refRec || ztDays.length > 0,
+    day: isoDay,
+    code,
+    name,
+    isSelectedDay,
+    referenceDay: refRec ? refDay : null,
+    today: refRec ? {
+      finalBoardTopic: finalTopic,
+      finalReason: String(refRec.finalReason || ''),
+      limitUpCount: Number(refRec.limitUpCount || 0),
+      gain: Number(refRec.gain || 0),
+      firstLimitTime: refRec.firstLimitTime ?? null,
+      confidence: Number(refRec.confidence || 0),
+      boardSizeToday,
+    } : null,
+    sources,
+    tier,
+    agreeCount,
+    realCount,
+    eventReason,
+    eventAgree,
+    subTheme: subTheme?.name || '',
+    subThemeAgree: subTheme?.agree || 0,
+    subThemes: subTheme?.all || [],
+    windowDays: history.length,
+    ztCount: ztDays.length,
+    topicVariety: topicSet.size,
+    history,
+  });
+}
+
+// 近 N 个交易日涨停股名录（code+name 去重）：用于综合归纳搜索非当日涨停股时把搜索词解析成代码（只读）
+async function getLimitUpMainReasonRecentUniverse(url, req, res) {
+  const day = url.searchParams.get('day') || chinaNowParts().day;
+  const isoDay = isoFromCompactDate(day);
+  const days = Math.max(1, Math.min(30, Number(url.searchParams.get('days') || 10) || 10));
+  const apiKey = await readSavedApiKey().catch(() => '');
+  const tradingDays = await getRecentTradingDays(isoDay, apiKey, days).catch(() => []);
+  const byCode = new Map();
+  for (const d of tradingDays) {
+    const ddb = await readLimitUpMainReasonDbDay(d).catch(() => null);
+    for (const s of (ddb?.stocks || [])) {
+      const code = normalizeReasonSourceCode(s.code);
+      if (!code) continue;
+      const name = String(s.name || '');
+      const prev = byCode.get(code);
+      if (!prev) byCode.set(code, { code, name });
+      else if (!prev.name && name) prev.name = name;
+    }
+  }
+  return send(res, 200, { ok: true, day: isoDay, days, stocks: [...byCode.values()] });
+}
+
+async function resolveAfterCloseSourceCoverage(mainReasonDay, mainReasonDb) {
+  let sourceCoverage = mainReasonDb?.sourceCoverage || null;
+  if (Array.isArray(sourceCoverage?.reviewAutoSources) && sourceCoverage.reviewAutoSources.length) return sourceCoverage;
+  if (!mainReasonDb?.stocks?.length) return sourceCoverage;
+  const { payload } = await buildDaySourceViewWithConsensus(mainReasonDay, {}).catch(() => ({ payload: null }));
+  const sourceStats = (Array.isArray(payload?.sourceStats) ? payload.sourceStats : [])
+    .filter(stat => Number(stat?.stockCount || stat?.rowCount || 0) > 0);
+  if (!sourceStats.length) return sourceCoverage;
+  const total = Number(sourceCoverage?.total || mainReasonDb?.count || mainReasonDb?.stocks?.length || 0);
+  const covered = Math.max(0, ...sourceStats.map(stat => Number(stat?.stockCount || 0)));
+  return {
+    ...(sourceCoverage || {}),
+    total,
+    reviewCoveredCount: Number(sourceCoverage?.reviewCoveredCount || 0) || covered,
+    reviewCoveragePct: Number(sourceCoverage?.reviewCoveragePct || 0) || (total ? Number(((covered / total) * 100).toFixed(2)) : 0),
+    reviewAutoSources: sourceStats,
+    sourceErrors: Array.isArray(sourceCoverage?.sourceErrors) && sourceCoverage.sourceErrors.length
+      ? sourceCoverage.sourceErrors
+      : (Array.isArray(payload?.sourceErrors) ? payload.sourceErrors : []),
+  };
+}
+
+async function afterCloseStatus(url, req, res) {
+  const day = url.searchParams.get('day') || chinaNowParts().day;
+  const apiKey = await readSavedApiKey();
+  const mainReasonMode = String(url.searchParams.get('mainReasonMode') || url.searchParams.get('main_reason') || '').trim();
+  const mainReasonDay = ['same-day', 'sameDay', 'same'].includes(mainReasonMode)
+    ? isoFromCompactDate(day)
+    : await resolveMainReasonStatusDay(day, apiKey);
+  const marketDayStatus = chinaMarketDayStatus(day);
+  if (!marketDayStatus.isTradingDay) {
+    const now = chinaNowParts();
+    return send(res, 200, {
+      ok: true,
+      day: isoFromCompactDate(day),
+      mainReasonDay,
+      mainReasonMode: mainReasonMode || 'previous-trading-day',
+      sourceCoverage: null,
+      isAfterClose: true,
+      isTradingDay: false,
+      marketClosed: true,
+      marketClosedReason: marketDayStatus.marketClosedReason,
+      marketClosedLabel: marketDayStatus.marketClosedLabel,
+      marketClosedNote: marketDayStatus.marketClosedNote,
+      checkedAt: new Date().toISOString(),
+      today: now.day,
+      items: closedAfterCloseStatusItems(isoFromCompactDate(day), mainReasonDay, marketDayStatus),
+    });
+  }
+  const limitUp = await readLimitUpDbDay(day).catch(() => null);
+  const mainReasonDb = await readLimitUpMainReasonDbDay(mainReasonDay).catch(() => null);
+  const sourceCoverage = await resolveAfterCloseSourceCoverage(mainReasonDay, mainReasonDb);
+  const closeDb = await readEastmoneyCloseDbDay(day).catch(() => null);
+  const eastmoneyCatalog = await readEastmoneyConceptCatalog().catch(() => null);
+  const thsCatalog = await readThsConceptCatalog().catch(() => null);
+  const mainReasonReady = isMainReasonReviewReady(mainReasonDay);
+  const mainReasonReadyAtDay = mainReasonReviewReadyAtDay(mainReasonDay);
+  // “数据齐了就绿”：主因库已建 + ruleVersion 兼容 + 完整覆盖当天(剔除北交所/ST后)涨停 universe，
+  // 即视为完成、显示绿色，不再干等次日 09:00。
+  const mainReasonLimitUp = mainReasonDay === day ? limitUp : await readLimitUpDbDay(mainReasonDay).catch(() => null);
+  const mainReasonExpectedCodes = new Set((mainReasonLimitUp?.stocks || [])
+    .filter(stock => !isExcludedFromReview(stock?.code, stock?.name))
+    .map(stock => normalizeReasonSourceCode(stock?.code))
+    .filter(Boolean));
+  const mainReasonCoveredCodes = new Set((mainReasonDb?.stocks || [])
+    .map(stock => normalizeReasonSourceCode(stock?.code))
+    .filter(Boolean));
+  const mainReasonComplete = isCompatibleMainReasonDb(mainReasonDb)
+    && mainReasonExpectedCodes.size > 0
+    && [...mainReasonExpectedCodes].every(code => mainReasonCoveredCodes.has(code));
+  const items = [
+    {
+      key: 'limitUpDb',
+      label: '涨停库',
+      ok: !!limitUp?.stocks?.length && isSavedAfterMarketClose(limitUp, day),
+      count: Number(limitUp?.count || limitUp?.stocks?.length || 0),
+      savedAt: limitUp?.savedAt || '',
+    },
+    {
+      key: 'mainReasonDb',
+      label: '主因库',
+      day: mainReasonDay,
+      ok: mainReasonComplete,
+      pending: !mainReasonComplete,
+      readyAt: `${mainReasonReadyAtDay} 09:00`,
+      note: mainReasonComplete ? '' : `${mainReasonDay} 主因库数据待补全`,
+      count: Number(mainReasonDb?.count || mainReasonDb?.stocks?.length || 0),
+      savedAt: mainReasonDb?.savedAt || '',
+      ruleVersion: mainReasonDb?.ruleVersion || '',
+    },
+    {
+      key: 'closeDb',
+      label: '收盘价',
+      ok: isCompleteCloseDbPayload(closeDb) && isSavedAfterMarketClose(closeDb, day),
+      count: Number(closeDb?.count || closeDb?.stocks?.length || 0),
+      source: closeDb?.source || '',
+      savedAt: closeDb?.savedAt || '',
+    },
+    {
+      key: 'eastmoneyConcepts',
+      label: '东财概念',
+      ok: !!eastmoneyCatalog?.boards?.length && Number(eastmoneyCatalog.failedBoardCount || 0) === 0 && eastmoneyConceptCatalogIsTodayAfterClose(eastmoneyCatalog, day),
+      count: Number(eastmoneyCatalog?.syncedBoardCount || 0),
+      total: Number(eastmoneyCatalog?.boardCount || eastmoneyCatalog?.boards?.length || 0),
+      failed: Number(eastmoneyCatalog?.failedBoardCount || 0),
+      savedAt: eastmoneyCatalog?.savedAt || '',
+    },
+    {
+      key: 'thsConcepts',
+      label: '同花顺概念',
+      ok: !!thsCatalog?.boards?.length && Number(thsCatalog.failedBoardCount || 0) === 0 && thsConceptCatalogIsTodayAfterClose(thsCatalog, day),
+      count: Number(thsCatalog?.syncedBoardCount || 0),
+      total: Number(thsCatalog?.boardCount || thsCatalog?.boards?.length || 0),
+      failed: Number(thsCatalog?.failedBoardCount || 0),
+      savedAt: thsCatalog?.savedAt || '',
+    },
+  ];
+  const now = chinaNowParts();
+  const isAfterClose = isAfterMarketClose(day);
+  return send(res, 200, {
+    ok: isAfterClose && items.every(item => item.ok),
+    day,
+    mainReasonDay,
+    mainReasonMode: mainReasonMode || 'previous-trading-day',
+    sourceCoverage,
+    isAfterClose,
+    isTradingDay: true,
+    marketClosed: false,
+    marketClosedReason: '',
+    marketClosedLabel: '',
+    marketClosedNote: '',
+    checkedAt: new Date().toISOString(),
+    today: now.day,
+    items,
+  });
+}
+
+async function getJiuyangongsheAuthStatus(url, req, res) {
+  const day = url.searchParams.get('day') || chinaNowParts().day;
+  const status = await testJiuyangongsheAuth(day);
+  if (!isAdminRequest(req)) {
+    delete status.credentialPhone;
+  }
+  return send(res, 200, status);
+}
+
+async function saveJiuyangongsheAuth(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const data = await readJsonBody(req);
+  const cookie = sanitizeCookieHeader(data.cookie);
+  if (!cookie) return send(res, 400, { error: 'missing cookie' });
+  const saved = await writeJiuyangongsheAuth(cookie);
+  const status = await testJiuyangongsheAuth(data.day || url.searchParams.get('day') || chinaNowParts().day, { force: true });
+  return send(res, 200, {
+    ok: status.ok,
+    savedAt: saved.savedAt,
+    status,
+  });
+}
+
+async function jiuyangongsheAuthCredentials(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  if (req.method === 'GET') {
+    const credentials = await readJiuyangongsheLoginConfig();
+    const auth = await readJiuyangongsheAuth();
+    return send(res, 200, {
+      ok: true,
+      configured: credentials.configured,
+      phone: credentials.phoneMasked,
+      countryCode: credentials.countryCode,
+      source: credentials.source,
+      savedAt: credentials.savedAt,
+      lastLoginAt: credentials.lastLoginAt,
+      cookieConfigured: !!auth.cookie,
+      cookieSavedAt: auth.savedAt || '',
+    });
+  }
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const data = await readJsonBody(req);
+  const credentials = await writeJiuyangongsheLoginConfig(data);
+  let login = null;
+  let status = null;
+  if (data.testLogin || data.loginNow || url.searchParams.get('test') === '1') {
+    login = await refreshJiuyangongsheAuthByCredentials(data.day || url.searchParams.get('day') || chinaNowParts().day);
+    status = await testJiuyangongsheAuth(data.day || url.searchParams.get('day') || chinaNowParts().day, { force: true });
+  }
+  return send(res, 200, {
+    ok: true,
+    configured: credentials.configured,
+    phone: credentials.phoneMasked,
+    countryCode: credentials.countryCode,
+    savedAt: credentials.savedAt,
+    lastLoginAt: credentials.lastLoginAt,
+    login: login ? {
+      savedAt: login.savedAt,
+      phone: login.login?.phoneMasked || credentials.phoneMasked,
+    } : null,
+    status,
+  });
+}
+
+async function launchJiuyangongsheAuth(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  const day = url.searchParams.get('day') || chinaNowParts().day;
+  const browser = await ensureJiuyangongsheAuthBrowser(day);
+  return send(res, 200, {
+    ok: true,
+    status: 'launched',
+    label: '等待登录',
+    message: '已打开韭研公社专用登录窗口。登录完成后会自动保存授权。',
+    browser,
+  });
+}
+
+async function autoJiuyangongsheAuthStatus(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  const day = url.searchParams.get('day') || chinaNowParts().day;
+  const cookie = await readJiuyangongsheCookieFromAuthBrowser();
+  if (!cookie) {
+    return send(res, 200, {
+      ok: false,
+      configured: false,
+      status: 'waiting-login',
+      label: '等待登录',
+      message: '等待韭研公社登录窗口产生 Cookie',
+      browser: jiuyangongsheAuthBrowserProcess,
+    });
+  }
+  const probe = await probeJiuyangongsheAuth({ cookie, savedAt: '' }, day);
+  if (!probe.ok) {
+    return send(res, 200, {
+      ...probe,
+      status: probe.status === 'login-expired' ? 'waiting-login' : probe.status,
+      label: probe.status === 'login-expired' ? '等待登录' : probe.label,
+      message: probe.status === 'login-expired'
+        ? '已读到 Cookie，但还未完成登录或登录已失效'
+        : probe.message,
+      browser: jiuyangongsheAuthBrowserProcess,
+    });
+  }
+  const saved = await writeJiuyangongsheAuth(cookie);
+  const status = await testJiuyangongsheAuth(day, { force: true });
+  return send(res, 200, {
+    ok: true,
+    configured: true,
+    status: 'saved',
+    label: 'OK',
+    savedAt: saved.savedAt,
+    message: '韭研公社授权已自动保存',
+    authStatus: status,
+  });
+}
+
+async function latestTradingDay(url, req, res) {
+  const apiKey = await requestApiKey(req);
+  if (!apiKey) return send(res, 401, { error: 'missing x-api-key' });
+  const endDay = url.searchParams.get('day') || chinaNowParts().day;
+  for (let i = 0; i < 35; i += 1) {
+    const day = shiftDay(endDay, -i);
+    const dbDay = await readLimitUpDbDay(day).catch(() => null);
+    if (dbDay?.stocks?.length) return send(res, 200, { day, source: 'limit-up-db' });
+    const list = await fetchLimitUpDay(day, apiKey).catch(() => []);
+    if (list.length) return send(res, 200, { day, source: 'history/his_daban' });
+  }
+  return send(res, 404, { error: 'latest trading day not found' });
+}
+
+function formatDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function shiftDay(day, offset) {
+  const d = new Date(`${day}T00:00:00`);
+  d.setDate(d.getDate() + offset);
+  return formatDate(d);
+}
+
+function previousChinaTradingDay(day, maxLookbackDays = 30) {
+  for (let i = 1; i <= maxLookbackDays; i += 1) {
+    const candidate = shiftDay(isoFromCompactDate(day), -i);
+    if (isChinaMarketTradingDay(candidate)) return candidate;
+  }
+  return '';
+}
+
+async function kplFetch(path, apiKey) {
+  await rememberApiKey(apiKey);
+  const res = await fetch(API_BASE + path, {
+    headers: { 'x-api-key': apiKey },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`KPL ${res.status}: ${text.slice(0, 160)}`);
+  }
+  return res.json();
+}
+
+async function kplProxy(url, req, res) {
+  if (req.method !== 'GET') return send(res, 405, { error: 'method not allowed' });
+  const apiKey = await requestApiKey(req);
+  if (!apiKey) return send(res, 401, { error: 'missing x-api-key' });
+  const rawPath = String(url.searchParams.get('path') || '').trim();
+  if (!rawPath) return send(res, 400, { error: 'missing path' });
+  let targetPath = rawPath.startsWith('/api/') ? rawPath.slice(4) : rawPath;
+  if (!targetPath.startsWith('/')) targetPath = `/${targetPath}`;
+  if (!/^\/(kpl|hangqing|kanban|stock|history|daban|global_stock)\//.test(targetPath)) {
+    return send(res, 400, { error: 'unsupported kpl path' });
+  }
+  if (!isAdminRequest(req) && !isPublicKplProxyPath(targetPath)) {
+    return send(res, 403, { error: 'admin required' });
+  }
+  return send(res, 200, await kplFetch(targetPath, apiKey));
+}
+
+function numOrNull(value) {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  if (!text || text === '-' || text === '--') return null;
+  const n = Number(text.replace(/,/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+function isFiniteNumeric(value) {
+  return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
+}
+
+async function eastmoneyFetchJson(apiPath, params = {}, options = {}) {
+  const timeoutMs = Number(options.timeoutMs || 12000);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const url = new URL(apiPath, EASTMONEY_QUOTE_API_BASE);
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
+  }
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+        Referer: 'https://quote.eastmoney.com/center/boardlist.html#concept_board',
+      },
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Eastmoney ${res.status}: ${text.slice(0, 120)}`);
+    }
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function eastmoneyClist(fsParam, fields, options = {}) {
+  const pageSize = Number(options.pageSize || 500);
+  const maxPages = Number(options.maxPages || 50);
+  const rows = [];
+  let total = Infinity;
+  for (let page = 1; page <= maxPages; page += 1) {
+    const data = await eastmoneyFetchJson('api/qt/clist/get', {
+      pn: page,
+      pz: pageSize,
+      po: options.po ?? 1,
+      np: 1,
+      fltt: 2,
+      invt: 2,
+      fid: options.fid || 'f3',
+      fs: fsParam,
+      fields,
+    });
+    const diff = Array.isArray(data?.data?.diff) ? data.data.diff : [];
+    total = Number(data?.data?.total);
+    if (!diff.length) break;
+    rows.push(...diff);
+    if (Number.isFinite(total) && rows.length >= total) break;
+  }
+  return rows;
+}
+
+function normalizeEastmoneyConceptBoard(row, index = 0) {
+  const plateId = String(row?.f12 || '').trim();
+  const name = String(row?.f14 || '').trim();
+  if (!/^BK\d+$/i.test(plateId) || !name) return null;
+  return {
+    source: 'eastmoney',
+    plateId: plateId.toUpperCase(),
+    name,
+    rank: index + 1,
+    gain: numOrNull(row?.f3),
+    netInflow: numOrNull(row?.f62),
+    upCount: numOrNull(row?.f104),
+    downCount: numOrNull(row?.f105),
+    leadStockName: String(row?.f128 || '').trim(),
+    leadStockCode: String(row?.f140 || '').trim(),
+  };
+}
+
+function normalizeEastmoneyConceptStock(row) {
+  const code = String(row?.f12 || '').trim();
+  const name = String(row?.f14 || '').trim();
+  if (!code || !name || isStStock(name)) return null;
+  return {
+    code,
+    name,
+    close: numOrNull(row?.f2),
+    gain: numOrNull(row?.f3),
+  };
+}
+
+function normalizeEastmoneyCloseStock(row) {
+  const code = String(row?.f12 || '').trim();
+  const name = String(row?.f14 || '').trim();
+  const close = numOrNull(row?.f2);
+  if (!code || !name || !Number.isFinite(close)) return null;
+  return {
+    code,
+    name,
+    close,
+    gain: numOrNull(row?.f3),
+  };
+}
+
+function persistEastmoneyConceptBoard(board, stockCount = null) {
+  return {
+    source: 'eastmoney',
+    plateId: board.plateId,
+    name: board.name,
+    rank: board.rank,
+    stockCount,
+  };
+}
+
+function publicEastmoneyConceptBoard(board, quote = null) {
+  return {
+    source: 'eastmoney',
+    plateId: board.plateId,
+    name: board.name,
+    rank: board.rank,
+    stockCount: board.stockCount,
+    gain: numOrNull(quote?.gain ?? board.gain),
+    netInflow: numOrNull(quote?.netInflow ?? board.netInflow),
+    upCount: numOrNull(quote?.upCount ?? board.upCount),
+    downCount: numOrNull(quote?.downCount ?? board.downCount),
+    leadStockName: String(quote?.leadStockName ?? board.leadStockName ?? '').trim(),
+    leadStockCode: String(quote?.leadStockCode ?? board.leadStockCode ?? '').trim(),
+  };
+}
+
+function persistEastmoneyConceptStock(stock) {
+  return {
+    code: stock.code,
+    name: stock.name,
+    close: numOrNull(stock.close ?? stock.price),
+    gain: numOrNull(stock.gain),
+  };
+}
+
+async function fetchEastmoneyConceptBoards() {
+  const fields = 'f12,f14,f3,f62,f104,f105,f128,f140,f141';
+  const rows = await eastmoneyClist('m:90+t:3', fields, { pageSize: 500, fid: 'f3', po: 1 });
+  return rows.map(normalizeEastmoneyConceptBoard).filter(Boolean);
+}
+
+async function fetchEastmoneyConceptStocks(plateId) {
+  const fields = 'f12,f14,f2,f3';
+  const rows = await eastmoneyClist(`b:${String(plateId || '').toUpperCase()}`, fields, {
+    pageSize: 1000,
+    fid: 'f3',
+    po: 1,
+    maxPages: 5,
+  });
+  return rows.map(normalizeEastmoneyConceptStock).filter(Boolean);
+}
+
+async function fetchEastmoneyAllStockCloses() {
+  const fields = 'f12,f14,f2,f3';
+  const fsParam = 'm:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048';
+  const rows = await eastmoneyClist(fsParam, fields, {
+    pageSize: 100,
+    maxPages: 100,
+    fid: 'f3',
+    po: 1,
+  });
+  return rows.map(normalizeEastmoneyCloseStock).filter(Boolean);
+}
+
+async function readEastmoneyConceptCatalog() {
+  try {
+    return JSON.parse(await fs.readFile(eastmoneyConceptCatalogPath(), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+async function readEastmoneyConceptBoard(plateId) {
+  try {
+    return JSON.parse(await fs.readFile(eastmoneyConceptBoardPath(plateId), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+async function ensureEastmoneyConceptBoard(plateId, boardMeta = {}) {
+  const normalizedId = String(plateId || '').toUpperCase();
+  if (!normalizedId) return null;
+  const existing = await readEastmoneyConceptBoard(normalizedId);
+  if (existing?.stocks?.length) return existing;
+  const stocks = await fetchEastmoneyConceptStocks(normalizedId).catch(() => []);
+  if (!stocks.length) return existing || null;
+  const savedAt = new Date().toISOString();
+  return writeEastmoneyConceptBoard({
+    plateId: normalizedId,
+    name: boardMeta.name || existing?.name || normalizedId,
+  }, stocks, savedAt);
+}
+
+async function getEastmoneyConceptBoardForDisplay(plateId, day) {
+  const normalizedId = String(plateId || '').toUpperCase();
+  const payload = isChinaMarketTradingDay(day)
+    ? await ensureEastmoneyConceptBoard(normalizedId)
+    : await readEastmoneyConceptBoard(normalizedId);
+  if (isSelectedChinaToday(day) && isChinaMarketTradingDay(day)) {
+    const liveStocks = await cachedExternalRealtimeStocks(
+      'eastmoney',
+      normalizedId,
+      () => fetchEastmoneyConceptStocks(normalizedId),
+    ).catch(() => []);
+    if (liveStocks.length) {
+      return {
+        ...(payload || {}),
+        source: 'eastmoney',
+        plateId: normalizedId,
+        name: payload?.name || normalizedId,
+        day: chinaNowParts().day,
+        realtime: true,
+        stocks: liveStocks.map(persistEastmoneyConceptStock),
+      };
+    }
+  }
+  return payload;
+}
+
+async function readEastmoneyCloseDbDay(day) {
+  const normalizedDay = isoFromCompactDate(compactDate(day));
+  if (closeDbDayCache.has(normalizedDay)) return closeDbDayCache.get(normalizedDay);
+  try {
+    const payload = JSON.parse(await fs.readFile(eastmoneyCloseDbPath(normalizedDay), 'utf8'));
+    closeDbDayCache.set(normalizedDay, payload);
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+async function writeEastmoneyCloseDbDay(day, rows, savedAt, options = {}) {
+  if (!isChinaMarketTradingDay(day)) {
+    return marketClosedSkipPayload(day, { source: options.source || 'eastmoney' });
+  }
+  const byCode = new Map();
+  if (options.merge) {
+    const existing = await readEastmoneyCloseDbDay(day).catch(() => null);
+    for (const stock of existing?.stocks || []) {
+      const code = String(stock?.code || '').trim();
+      const name = String(stock?.name || '').trim();
+      const close = numOrNull(stock?.close ?? stock?.price);
+      if (!code || !name || !Number.isFinite(close)) continue;
+      byCode.set(code, {
+        code,
+        name,
+        close,
+        gain: numOrNull(stock?.gain),
+      });
+    }
+  }
+  for (const row of rows || []) {
+    const code = String(row?.code || '').trim();
+    const name = String(row?.name || '').trim();
+    const close = numOrNull(row?.close ?? row?.price);
+    if (!code || !name || !Number.isFinite(close)) continue;
+    byCode.set(code, {
+      code,
+      name,
+      close,
+      gain: numOrNull(row?.gain),
+    });
+  }
+  await fs.mkdir(EASTMONEY_CLOSE_DIR, { recursive: true });
+  const payload = {
+    version: 1,
+    source: options.source || 'eastmoney',
+    day,
+    savedAt,
+    updatedAt: new Date().toISOString(),
+    count: byCode.size,
+    stocks: [...byCode.values()].sort((a, b) => String(a.code).localeCompare(String(b.code))),
+  };
+  await fs.writeFile(eastmoneyCloseDbPath(day), JSON.stringify(payload, null, 2), 'utf8');
+  closeDbDayCache.set(day, payload);
+  return payload;
+}
+
+async function collectCloseDbUniverse(seedStocks = []) {
+  const byCode = new Map();
+  for (const stock of seedStocks || []) {
+    const code = String(stock?.code || '').trim();
+    const name = String(stock?.name || '').trim();
+    if (code && name) byCode.set(code, { code, name });
+  }
+  await fs.mkdir(EASTMONEY_CLOSE_DIR, { recursive: true });
+  const files = (await fs.readdir(EASTMONEY_CLOSE_DIR)).filter(name => name.endsWith('.json'));
+  await mapLimit(files, 6, async file => {
+    const payload = await readEastmoneyCloseDbDay(file.replace(/\.json$/i, '')).catch(() => null);
+    for (const stock of payload?.stocks || []) {
+      const code = String(stock?.code || '').trim();
+      const name = String(stock?.name || '').trim();
+      if (code && name && !byCode.has(code)) byCode.set(code, { code, name });
+    }
+  });
+  return [...byCode.values()];
+}
+
+async function ensureEastmoneyCloseDbDay(day, options = {}) {
+  const force = !!options.force;
+  if (!isChinaMarketTradingDay(day)) {
+    return await readEastmoneyCloseDbDay(day);
+  }
+  const today = chinaNowParts().day;
+  if (day === today && !isAfterMarketClose(day)) {
+    return await readEastmoneyCloseDbDay(day);
+  }
+  const existing = await readEastmoneyCloseDbDay(day);
+  if (!force && isCompleteCloseDbPayload(existing)) return existing;
+  if (day !== today) return existing || null;
+  const savedAt = new Date().toISOString();
+  const rows = await fetchEastmoneyAllStockCloses();
+  if (!rows.length) return existing || null;
+  return writeEastmoneyCloseDbDay(day, rows, savedAt, { source: 'eastmoney/full-market', merge: true });
+}
+
+async function buildCloseRowsFromKlines(stocks, targetDays, apiKey = '') {
+  const compactTargets = new Set(targetDays.map(compactDate).filter(Boolean));
+  const rowsByDay = new Map(targetDays.map(day => [isoFromCompactDate(day), new Map()]));
+  let processed = 0;
+  await mapLimit(stocks, 8, async stock => {
+    const code = String(stock?.code || '').trim();
+    const name = String(stock?.name || '').trim();
+    if (!code || !name) return;
+    let kline = await fetchTencentKline(code).catch(() => null);
+    if (!kline?.x?.length && apiKey) kline = await fetchKline(code, apiKey).catch(() => null);
+    if (!kline?.x?.length) kline = await fetchEastmoneyKline(code).catch(() => null);
+    const dates = Array.isArray(kline?.x) ? kline.x : [];
+    const bars = Array.isArray(kline?.y) ? kline.y : [];
+    for (let i = 0; i < dates.length; i += 1) {
+      const dayKey = compactDate(dates[i]);
+      if (!compactTargets.has(dayKey)) continue;
+      const close = numOrNull(bars[i]?.[1]);
+      if (!Number.isFinite(close)) continue;
+      const prevClose = numOrNull(bars[i - 1]?.[1]);
+      const gain = Number.isFinite(prevClose) && prevClose > 0
+        ? ((Number(close) - Number(prevClose)) / Number(prevClose)) * 100
+        : null;
+      const isoDay = isoFromCompactDate(dayKey);
+      rowsByDay.get(isoDay)?.set(code, {
+        code,
+        name,
+        close,
+        gain,
+      });
+    }
+    processed += 1;
+    if (processed % 100 === 0 || processed === stocks.length) {
+      closeDbSyncState = {
+        ...closeDbSyncState,
+        status: 'backfilling-history',
+        processed,
+        total: stocks.length,
+      };
+    }
+  });
+  return rowsByDay;
+}
+
+function resolveWindPython() {
+  if (process.env.WIND_PYTHON) return process.env.WIND_PYTHON;
+  const profile = process.env.USERPROFILE || process.env.HOME || '';
+  const bundled = path.join(
+    profile,
+    '.cache',
+    'codex-runtimes',
+    'codex-primary-runtime',
+    'dependencies',
+    'python',
+    'python.exe',
+  );
+  if (profile && fsSync.existsSync(bundled)) return bundled;
+  return process.env.PYTHON || 'python';
+}
+
+function execFileAsync(file, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    execFile(file, args, options, (error, stdout, stderr) => {
+      if (error) {
+        error.stdout = stdout;
+        error.stderr = stderr;
+        reject(error);
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+  });
+}
+
+async function runWindCloseDbSync(stocks, endDay, days, options = {}) {
+  if (!stocks?.length || !fsSync.existsSync(WIND_CLOSE_SYNC_SCRIPT)) return null;
+  await fs.mkdir(EASTMONEY_CLOSE_DIR, { recursive: true });
+  const tmpDir = path.join(EASTMONEY_CLOSE_DIR, '_tmp');
+  await fs.mkdir(tmpDir, { recursive: true });
+  const stamp = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const inputPath = path.join(tmpDir, `wind-close-input-${stamp}.json`);
+  const outputPath = path.join(tmpDir, `wind-close-output-${stamp}.json`);
+  const input = {
+    endDay: isoFromCompactDate(endDay),
+    days,
+    targetDays: options.targetDays || null,
+    batchSize: options.batchSize || 300,
+    stocks: stocks
+      .map(stock => ({
+        code: String(stock?.code || '').replace(/\D/g, ''),
+        name: String(stock?.name || '').trim(),
+      }))
+      .filter(stock => stock.code && stock.name),
+  };
+  await fs.writeFile(inputPath, JSON.stringify(input), 'utf8');
+  const python = resolveWindPython();
+  const pythonDir = path.dirname(python);
+  const env = {
+    ...process.env,
+    Path: `${pythonDir};${process.env.Path || process.env.PATH || ''}`,
+  };
+  try {
+    await execFileAsync(python, [WIND_CLOSE_SYNC_SCRIPT, inputPath, outputPath], {
+      cwd: __dirname,
+      env,
+      windowsHide: true,
+      timeout: 20 * 60 * 1000,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    return JSON.parse(await fs.readFile(outputPath, 'utf8'));
+  } finally {
+    await fs.unlink(inputPath).catch(() => null);
+    await fs.unlink(outputPath).catch(() => null);
+  }
+}
+
+async function writeWindCloseDbResult(result) {
+  const saved = [];
+  const rowsByDay = result?.rowsByDay || {};
+  for (const [day, rows] of Object.entries(rowsByDay)) {
+    const payload = await writeEastmoneyCloseDbDay(day, rows, afterCloseSavedAtForDay(day), {
+      source: 'wind/wsd',
+      merge: true,
+    });
+    saved.push({
+      day,
+      count: payload.count,
+      source: payload.source,
+      savedAt: payload.savedAt,
+      complete: isCompleteCloseDbPayload(payload),
+    });
+  }
+  return saved;
+}
+
+async function syncCloseDbRecentDays(endDay, apiKey, days = CLOSE_DB_SYNC_TRADING_DAYS, options = {}) {
+  if (closeDbSyncTask) return closeDbSyncTask;
+  closeDbSyncTask = (async () => {
+    const normalizedEndDay = isoFromCompactDate(endDay || chinaNowParts().day);
+    const needed = Math.max(1, Math.min(CLOSE_DB_SYNC_TRADING_DAYS, Number(days || CLOSE_DB_SYNC_TRADING_DAYS)));
+    const startedAt = new Date().toISOString();
+    closeDbSyncState = {
+      running: true,
+      status: 'loading-current-market',
+      source: 'close-db',
+      startedAt,
+      endDay: normalizedEndDay,
+      days: needed,
+      processed: 0,
+      total: 0,
+    };
+
+    const today = chinaNowParts().day;
+    const todayIsTradingDay = isChinaMarketTradingDay(today);
+    const current = todayIsTradingDay
+      ? await ensureEastmoneyCloseDbDay(today, { force: !!options.forceCurrent })
+      : await readEastmoneyCloseDbDay(today);
+    let universe = Array.isArray(current?.stocks) ? current.stocks : [];
+    if (todayIsTradingDay && !isCompleteCloseDbPayload(current)) {
+      universe = await fetchEastmoneyAllStockCloses();
+      await writeEastmoneyCloseDbDay(
+        today,
+        universe,
+        isAfterMarketClose(today) ? afterCloseSavedAtForDay(today) : new Date().toISOString(),
+        { source: 'eastmoney/full-market', merge: true },
+      );
+    }
+    universe = [...new Map(universe
+      .filter(stock => stock?.code && stock?.name)
+      .map(stock => [String(stock.code), stock])).values()];
+    universe = await collectCloseDbUniverse(universe);
+
+    const saved = [];
+    let windResult = null;
+    let windError = '';
+    if (!options.skipWind) {
+      closeDbSyncState = {
+        ...closeDbSyncState,
+        status: 'wind-syncing',
+        source: 'wind/wsd',
+        processed: 0,
+        total: universe.length,
+      };
+      try {
+        windResult = await runWindCloseDbSync(universe, normalizedEndDay, needed);
+        if (windResult?.rowsByDay) {
+          saved.push(...await writeWindCloseDbResult(windResult));
+        }
+      } catch (err) {
+        windError = err?.message || String(err);
+        closeDbSyncState = {
+          ...closeDbSyncState,
+          status: 'wind-failed-fallback',
+          source: 'close-db',
+          windError,
+        };
+      }
+    }
+
+    const tradingDays = (Array.isArray(windResult?.tradingDays) && windResult.tradingDays.length
+      ? windResult.tradingDays
+      : await getRecentTradingDays(normalizedEndDay, apiKey, needed))
+      .map(isoFromCompactDate)
+      .filter(day => day && isChinaMarketTradingDay(day));
+    const missingDays = [];
+    const existingCodeSets = new Map();
+    const forceKlineHistory = options.forceHistory && !windResult;
+    for (const day of tradingDays) {
+      const payload = await readEastmoneyCloseDbDay(day).catch(() => null);
+      existingCodeSets.set(day, new Set((payload?.stocks || []).map(stock => String(stock?.code || '')).filter(Boolean)));
+      if (forceKlineHistory || !isCompleteCloseDbPayload(payload)) missingDays.push(day);
+    }
+
+    if (missingDays.length) {
+      const stocksToBackfill = forceKlineHistory
+        ? universe
+        : universe.filter(stock => missingDays.some(day => !existingCodeSets.get(day)?.has(String(stock.code || ''))));
+      closeDbSyncState = {
+        ...closeDbSyncState,
+        status: 'backfilling-history',
+        missingDays,
+        processed: 0,
+        total: stocksToBackfill.length,
+      };
+      const rowsByDay = await buildCloseRowsFromKlines(stocksToBackfill, missingDays, apiKey);
+      for (const day of missingDays) {
+        const rows = [...(rowsByDay.get(day)?.values() || [])];
+        const payload = await writeEastmoneyCloseDbDay(day, rows, afterCloseSavedAtForDay(day), {
+          source: 'tencent-kline-backfill',
+          merge: true,
+        });
+        saved.push({
+          day,
+          count: payload.count,
+          source: payload.source,
+          savedAt: payload.savedAt,
+          complete: isCompleteCloseDbPayload(payload),
+        });
+      }
+    }
+
+    const allDays = await Promise.all(tradingDays.map(async day => {
+      const payload = await readEastmoneyCloseDbDay(day).catch(() => null);
+      return {
+        day,
+        count: Number(payload?.count || payload?.stocks?.length || 0),
+        source: payload?.source || '',
+        savedAt: payload?.savedAt || '',
+        complete: isCompleteCloseDbPayload(payload),
+      };
+    }));
+    const result = {
+      ok: allDays.every(item => item.complete),
+      source: 'close-db',
+      endDay: normalizedEndDay,
+      tradingDays,
+      wind: windResult
+        ? { ok: true, processed: windResult.processed, total: windResult.total, errors: windResult.errors?.length || 0 }
+        : { ok: false, error: windError },
+      saved,
+      days: allDays,
+      finishedAt: new Date().toISOString(),
+    };
+    closeDbSyncState = {
+      running: false,
+      status: result.ok ? 'ok' : 'partial',
+      source: 'close-db',
+      endDay: normalizedEndDay,
+      days: needed,
+      finishedAt: result.finishedAt,
+      completeDays: allDays.filter(item => item.complete).length,
+      totalDays: allDays.length,
+    };
+    return result;
+  })().finally(() => {
+    closeDbSyncTask = null;
+  });
+  return closeDbSyncTask;
+}
+
+async function syncCloseDb(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  const apiKey = req.headers['x-api-key'] || await readSavedApiKey();
+  if (!apiKey) return send(res, 401, { error: 'missing x-api-key' });
+  const day = url.searchParams.get('day') || chinaNowParts().day;
+  const days = Number(url.searchParams.get('days') || CLOSE_DB_SYNC_TRADING_DAYS);
+  const force = url.searchParams.get('force') === '1' || url.searchParams.get('force') === 'true';
+  const result = await syncCloseDbRecentDays(day, apiKey, days, {
+    forceCurrent: force,
+    forceHistory: force,
+  });
+  return send(res, 200, result);
+}
+
+async function closeDbStatus(url, req, res) {
+  await fs.mkdir(EASTMONEY_CLOSE_DIR, { recursive: true });
+  const files = (await fs.readdir(EASTMONEY_CLOSE_DIR)).filter(name => name.endsWith('.json')).sort();
+  const days = await mapLimit(files, 8, async file => {
+    const payload = JSON.parse(await fs.readFile(path.join(EASTMONEY_CLOSE_DIR, file), 'utf8'));
+    return {
+      day: payload.day || file.replace(/\.json$/i, ''),
+      count: Number(payload.count || payload.stocks?.length || 0),
+      source: payload.source || '',
+      savedAt: payload.savedAt || '',
+      complete: isCompleteCloseDbPayload(payload),
+    };
+  });
+  return send(res, 200, {
+    ok: days.length > 0 && days.slice(-10).every(day => day.complete),
+    minStockCount: CLOSE_DB_MIN_STOCK_COUNT,
+    state: closeDbSyncState,
+    count: days.length,
+    days,
+  });
+}
+
+async function writeEastmoneyConceptBoard(board, stocks, savedAt) {
+  await fs.mkdir(EASTMONEY_CONCEPT_BOARD_DIR, { recursive: true });
+  const payload = {
+    version: 1,
+    source: 'eastmoney',
+    savedAt,
+    day: chinaNowParts(new Date(savedAt)).day,
+    plateId: board.plateId,
+    name: board.name,
+    total: stocks.length,
+    stocks: stocks.map(persistEastmoneyConceptStock),
+  };
+  await fs.writeFile(eastmoneyConceptBoardPath(board.plateId), JSON.stringify(payload, null, 2), 'utf8');
+  return payload;
+}
+
+async function writeEastmoneyConceptCatalog(catalog) {
+  await fs.mkdir(EASTMONEY_CONCEPT_DIR, { recursive: true });
+  await fs.writeFile(eastmoneyConceptCatalogPath(), JSON.stringify(catalog, null, 2), 'utf8');
+  return catalog;
+}
+
+function eastmoneyConceptCatalogIsTodayAfterClose(catalog, day) {
+  if (!catalog?.savedAt || !catalog?.boards?.length) return false;
+  return isSavedAfterMarketClose(catalog, day) || isSavedAtOrAfterMarketCloseForDay(catalog, day);
+}
+
+async function syncEastmoneyConceptsInner(options = {}) {
+  const now = chinaNowParts();
+  const savedAt = new Date().toISOString();
+  const existing = await readEastmoneyConceptCatalog();
+  if (!isChinaMarketTradingDay(now.day)) {
+    const skip = marketClosedSkipPayload(now.day, { source: 'eastmoney' });
+    eastmoneyConceptSyncState = {
+      running: false,
+      status: 'skipped',
+      source: 'eastmoney',
+      skipped: true,
+      savedAt: existing?.savedAt || '',
+      boardCount: existing?.boardCount || existing?.boards?.length || 0,
+      reason: skip.reason,
+    };
+    return existing || {
+      version: 1,
+      source: 'eastmoney',
+      savedAt: '',
+      day: now.day,
+      syncRule: 'skip-market-closed',
+      boardCount: 0,
+      syncedBoardCount: 0,
+      failedBoardCount: 0,
+      boards: [],
+      failures: [],
+      ...skip,
+    };
+  }
+  const existingCloseDb = await readEastmoneyCloseDbDay(now.day);
+  if (
+    !options.force &&
+    eastmoneyConceptCatalogIsTodayAfterClose(existing, now.day) &&
+    isCompleteCloseDbPayload(existingCloseDb)
+  ) {
+    eastmoneyConceptSyncState = {
+      running: false,
+      status: 'ok',
+      source: 'eastmoney',
+      skipped: true,
+      savedAt: existing.savedAt,
+      boardCount: existing.boardCount || existing.boards?.length || 0,
+      reason: 'already synced after 15:00',
+    };
+    return existing;
+  }
+
+  eastmoneyConceptSyncState = {
+    running: true,
+    status: 'loading-catalog',
+    source: 'eastmoney',
+    startedAt: savedAt,
+    processed: 0,
+    failed: 0,
+    total: 0,
+  };
+
+  const boards = await fetchEastmoneyConceptBoards();
+  eastmoneyConceptSyncState = {
+    ...eastmoneyConceptSyncState,
+    status: 'loading-constituents',
+    total: boards.length,
+  };
+
+  const failures = [];
+  const stockCounts = new Map();
+  const closeRows = new Map();
+  await mapLimit(boards, 5, async board => {
+    try {
+      const stocks = await fetchEastmoneyConceptStocks(board.plateId);
+      await writeEastmoneyConceptBoard(board, stocks, savedAt);
+      stockCounts.set(board.plateId, stocks.length);
+      for (const stock of stocks) {
+        const close = numOrNull(stock.close ?? stock.price);
+        if (stock.code && stock.name && Number.isFinite(close)) {
+          closeRows.set(stock.code, {
+            code: stock.code,
+            name: stock.name,
+            close,
+            gain: numOrNull(stock.gain),
+          });
+        }
+      }
+    } catch (err) {
+      failures.push({ plateId: board.plateId, name: board.name, error: err.message });
+    } finally {
+      eastmoneyConceptSyncState.processed += 1;
+      eastmoneyConceptSyncState.failed = failures.length;
+    }
+  });
+
+  const catalogBoards = boards.map(board => persistEastmoneyConceptBoard(
+    board,
+    stockCounts.get(board.plateId) ?? null,
+  ));
+  try {
+    await syncCloseDbRecentDays(now.day, await readSavedApiKey(), CLOSE_DB_SYNC_TRADING_DAYS, { forceCurrent: true });
+  } catch {
+    await writeEastmoneyCloseDbDay(now.day, [...closeRows.values()], savedAt);
+  }
+  const catalog = {
+    version: 1,
+    source: 'eastmoney',
+    savedAt,
+    day: now.day,
+    syncRule: 'once-after-15:00',
+    boardCount: catalogBoards.length,
+    syncedBoardCount: catalogBoards.filter(board => Number.isFinite(Number(board.stockCount))).length,
+    failedBoardCount: failures.length,
+    boards: catalogBoards,
+    failures,
+  };
+  await writeEastmoneyConceptCatalog(catalog);
+  eastmoneyConceptSyncState = {
+    running: false,
+    status: failures.length ? 'partial' : 'ok',
+    source: 'eastmoney',
+    savedAt,
+    boardCount: catalog.boardCount,
+    syncedBoardCount: catalog.syncedBoardCount,
+    failedBoardCount: catalog.failedBoardCount,
+  };
+  return catalog;
+}
+
+async function syncEastmoneyConcepts(options = {}) {
+  if (eastmoneyConceptSyncTask) return eastmoneyConceptSyncTask;
+  eastmoneyConceptSyncTask = syncEastmoneyConceptsInner(options)
+    .catch(err => {
+      eastmoneyConceptSyncState = {
+        running: false,
+        status: 'error',
+        source: 'eastmoney',
+        error: err.message,
+        savedAt: new Date().toISOString(),
+      };
+      throw err;
+    })
+    .finally(() => {
+      eastmoneyConceptSyncTask = null;
+    });
+  return eastmoneyConceptSyncTask;
+}
+
+async function eastmoneyConceptStatus(url, req, res) {
+  const catalog = await readEastmoneyConceptCatalog();
+  const state = eastmoneyConceptSyncState.status === 'idle' && catalog?.boards?.length
+    ? {
+        running: false,
+        status: 'ok',
+        source: 'eastmoney',
+        savedAt: catalog.savedAt,
+        boardCount: catalog.boardCount || catalog.boards?.length || 0,
+        syncedBoardCount: catalog.syncedBoardCount || 0,
+        failedBoardCount: catalog.failedBoardCount || 0,
+      }
+    : eastmoneyConceptSyncState;
+  return send(res, 200, {
+    ok: true,
+    source: 'eastmoney',
+    autoRule: '每天 15:00 后只同步一次',
+    state,
+    catalog: catalog ? {
+      savedAt: catalog.savedAt,
+      day: catalog.day,
+      boardCount: catalog.boardCount || catalog.boards?.length || 0,
+      syncedBoardCount: catalog.syncedBoardCount || 0,
+      failedBoardCount: catalog.failedBoardCount || 0,
+    } : null,
+  });
+}
+
+async function eastmoneyConceptCatalog(url, req, res) {
+  const catalog = await readEastmoneyConceptCatalog();
+  if (!catalog) return send(res, 404, { error: 'eastmoney concept catalog not found' });
+  const quoteBoards = await fetchEastmoneyConceptBoards().catch(() => []);
+  const catalogById = new Map((catalog.boards || []).map(board => [String(board.plateId), board]));
+  const quoteById = new Map(quoteBoards.map(board => [String(board.plateId), board]));
+  const sourceBoards = quoteBoards.length
+    ? quoteBoards.map(board => ({
+        ...board,
+        stockCount: catalogById.get(String(board.plateId))?.stockCount ?? board.stockCount ?? null,
+      }))
+    : (catalog.boards || []);
+  return send(res, 200, {
+    ...catalog,
+    day: quoteBoards.length ? chinaNowParts().day : catalog.day,
+    realtime: !!quoteBoards.length,
+    boards: sourceBoards.map(board => publicEastmoneyConceptBoard(
+      board,
+      quoteById.get(String(board.plateId)),
+    )),
+  });
+}
+
+async function eastmoneyConceptStocks(url, req, res) {
+  const plateId = url.searchParams.get('plate_id') || url.searchParams.get('plateId') || '';
+  const day = url.searchParams.get('day') || chinaNowParts().day;
+  if (!plateId) return send(res, 400, { error: 'missing plate_id' });
+  const payload = await getEastmoneyConceptBoardForDisplay(plateId, day);
+  if (!payload) return send(res, 404, { error: 'eastmoney concept board not found' });
+  const apiKey = await requestApiKey(req);
+  const limitUpCodeSet = await getDisplayLimitUpCodeSet(day, apiKey).catch(() => new Set());
+  return send(res, 200, {
+    ...payload,
+    stocks: (payload.stocks || []).map(stock => ({
+      code: stock.code,
+      name: stock.name,
+      close: numOrNull(stock.close ?? stock.price),
+      price: numOrNull(stock.close ?? stock.price),
+      gain: stock.gain,
+      isLimitUp: stockMatchesDisplayLimitUpSet(stock, limitUpCodeSet),
+    })),
+  });
+}
+
+async function eastmoneyConceptSync(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const force = url.searchParams.get('force') === '1' || url.searchParams.get('force') === 'true';
+  const wait = url.searchParams.get('wait') === '1' || url.searchParams.get('wait') === 'true';
+  const now = chinaNowParts();
+  if (!force && now.hour < 15) {
+    return send(res, 202, {
+      ok: true,
+      skipped: true,
+      reason: 'not after 15:00',
+      autoRule: '每天 15:00 后只同步一次',
+    });
+  }
+  if (!wait) {
+    syncEastmoneyConcepts({ force, reason: 'manual' }).catch(err => {
+      console.error('eastmoney concept sync failed:', err.message);
+    });
+    return send(res, 202, {
+      ok: true,
+      started: true,
+      state: eastmoneyConceptSyncState,
+    });
+  }
+  const catalog = await syncEastmoneyConcepts({ force, reason: 'manual' });
+  return send(res, 200, {
+    ok: true,
+    savedAt: catalog.savedAt,
+    boardCount: catalog.boardCount || catalog.boards?.length || 0,
+    syncedBoardCount: catalog.syncedBoardCount || 0,
+    failedBoardCount: catalog.failedBoardCount || 0,
+  });
+}
+
+function htmlDecode(value) {
+  return String(value || '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&ldquo;|&rdquo;/g, '"')
+    .replace(/&lsquo;|&rsquo;/g, "'")
+    .replace(/&hellip;/g, '...')
+    .replace(/&middot;/g, '·')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)));
+}
+
+function stripHtml(value) {
+  return htmlDecode(String(value || '').replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<[^>]+>/g, '')).trim();
+}
+
+const DISCOVERY_CITIES = [
+  { id: 'beijing', name: '北京', aliases: ['帝都'], districtHints: ['朝阳', '三里屯', '国贸', '望京', '东城', '西城', '海淀', '嘉里中心', '东方新天地'] },
+  { id: 'shanghai', name: '上海', aliases: ['魔都'], districtHints: ['静安', '徐汇', '黄浦', '长宁', '浦东', '巨富长', '武康路', '丰盛里'] },
+  { id: 'guangzhou', name: '广州', aliases: ['羊城'], districtHints: ['天河', '越秀', '海珠', '荔湾', '珠江新城', '东山口'] },
+  { id: 'shenzhen', name: '深圳', aliases: ['鹏城'], districtHints: ['南山', '福田', '罗湖', '宝安', '蛇口', '后海', '海岸城'] },
+  { id: 'chengdu', name: '成都', aliases: ['蓉城'], districtHints: ['锦江', '武侯', '高新', '太古里', '玉林', '宽窄巷子', '天府'] },
+  { id: 'hangzhou', name: '杭州', aliases: ['杭城'], districtHints: ['西湖', '上城', '拱墅', '滨江', '武林', '湖滨', '杭州中心'] },
+  { id: 'chongqing', name: '重庆', aliases: ['山城'], districtHints: ['渝中', '江北', '南岸', '观音桥', '解放碑', '九街'] },
+  { id: 'changsha', name: '长沙', aliases: ['星城'], districtHints: ['五一广场', 'IFS', '开福', '岳麓', '芙蓉', '天心'] },
+];
+
+const DISCOVERY_CATEGORY_KEYWORDS = [
+  { name: '咖啡', keywords: ['咖啡', 'coffee', '拿铁', '烘焙咖啡'] },
+  { name: '餐厅', keywords: ['餐厅', '餐馆', '饭店', '西餐', '日料', '韩餐', '火锅', '烧肉', 'bistro'] },
+  { name: '甜品', keywords: ['甜品', '蛋糕', '冰淇淋', 'gelato', 'dessert'] },
+  { name: '面包烘焙', keywords: ['面包', '烘焙', '贝果', '可颂', '吐司', 'bakery'] },
+  { name: '茶饮', keywords: ['茶饮', '奶茶', '茶馆', '新茶饮'] },
+  { name: '酒吧', keywords: ['酒吧', 'bar', '小酒馆', '鸡尾酒'] },
+  { name: '买手店', keywords: ['买手店', '集合店', '潮牌', '生活方式店'] },
+  { name: '展览空间', keywords: ['展览', '新展', '美术馆', '艺术空间', '市集', '快闪', '活动', '演出', '音乐会', '讲座'] },
+];
+
+const DISCOVERY_CATEGORY_PHOTOS = {
+  '咖啡': 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=900&q=82',
+  '餐厅': 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=900&q=82',
+  '甜品': 'https://images.unsplash.com/photo-1488477181946-6428a0291777?auto=format&fit=crop&w=900&q=82',
+  '面包烘焙': 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=900&q=82',
+  '茶饮': 'https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&w=900&q=82',
+  '酒吧': 'https://images.unsplash.com/photo-1470337458703-46ad1756a187?auto=format&fit=crop&w=900&q=82',
+  '买手店': 'https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=900&q=82',
+  '展览空间': 'https://images.unsplash.com/photo-1531058020387-3be344556be6?auto=format&fit=crop&w=900&q=82',
+  '其他': 'https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=900&q=82',
+};
+
+const DISCOVERY_NAME_CATEGORY_OVERRIDES = {
+  '鼎泰丰': '餐厅',
+  '小杨生煎': '餐厅',
+  '牛New寿喜烧': '餐厅',
+  '炊烟小炒黄牛肉': '餐厅',
+  '费大厨辣椒炒肉': '餐厅',
+  '笨罗卜浏阳菜馆': '餐厅',
+};
+
+const DISCOVERY_REAL_PLACE_SEEDS = {
+  '北京': {
+    '咖啡': ['Metal Hands', 'Soloist Coffee', 'Berry Beans'],
+    '餐厅': ['四季民福烤鸭店', '大董烤鸭店', '京兆尹'],
+    '甜品': ['黑天鹅蛋糕', '鲍师傅糕点', 'Lady M'],
+    '面包烘焙': ['原麦山丘', '味多美', '巴黎贝甜'],
+    '茶饮': ['喜茶', '奈雪的茶', '霸王茶姬'],
+    '酒吧': ['京A Taproom', 'Atmosphere酒吧', 'Long Jing'],
+    '买手店': ['SKP-S', 'Dover Street Market Beijing', 'LABELHOOD蕾虎'],
+    '展览空间': ['UCCA尤伦斯当代艺术中心', '今日美术馆', '红砖美术馆'],
+  },
+  '上海': {
+    '咖啡': ['Pull Tab拉环咖啡', '越南中原传奇咖啡', '一尺花园静安花房店', 'M Stand', 'Punchline Coffee'],
+    '餐厅': ['鼎泰丰', '福和慧', '蟹尊苑'],
+    '甜品': ['Luneurs', 'RAC Coffee & Crepes', 'LCH Le Café Heenoor'],
+    '面包烘焙': ['Pain Chaud', 'Baker & Spice', 'Luneurs Bakery'],
+    '茶饮': ['喜茶', '茉莉奶白', '霸王茶姬'],
+    '酒吧': ['Speak Low', 'Sober Company', 'Union Trading Company'],
+    '买手店': ['DOE', 'LABELHOOD蕾虎', 'ENG'],
+    '展览空间': ['西岸美术馆', '油罐艺术中心', '浦东美术馆'],
+  },
+  '广州': {
+    '咖啡': ['APF.KAFE', '来回咖啡', 'M Stand'],
+    '餐厅': ['炳胜品味', '陶陶居', '广州酒家'],
+    '甜品': ['南信牛奶甜品专家', '百花甜品', '顺记冰室'],
+    '面包烘焙': ['原麦山丘', '面包新语', '巴黎贝甜'],
+    '茶饮': ['喜茶', '奈雪的茶', '霸王茶姬'],
+    '酒吧': ['Hope & Sesame', '庙前冰室', '庙前三酉'],
+    '买手店': ['K11 Select', 'LABELHOOD蕾虎', 'LOOKNOW'],
+    '展览空间': ['广东美术馆', '广东省博物馆', '广州K11'],
+  },
+  '深圳': {
+    '咖啡': ['Gee Coffee', 'Something For', 'M Stand'],
+    '餐厅': ['春满园', '八合里牛肉火锅', '蘩楼'],
+    '甜品': ['Lady M', '好利来', 'Awfully Chocolate'],
+    '面包烘焙': ['Baker & Spice', '原麦山丘', '面包新语'],
+    '茶饮': ['喜茶', '奈雪的茶', '霸王茶姬'],
+    '酒吧': ['The Terrace', 'George & Dragon', 'MOJO'],
+    '买手店': ['LOOKNOW', 'DOE', '深圳万象天地'],
+    '展览空间': ['何香凝美术馆', '海上世界文化艺术中心', '深圳当代艺术与城市规划馆'],
+  },
+  '成都': {
+    '咖啡': ['明堂咖啡', 'Seesaw Coffee', '% Arabica成都太古里'],
+    '餐厅': ['陈麻婆豆腐', '马旺子', '饕林餐厅'],
+    '甜品': ['觅豆豆花', '好利来', '鲍师傅糕点'],
+    '面包烘焙': ['爱达乐', '原麦山丘', '巴黎贝甜'],
+    '茶饮': ['茶颜悦色', '霸王茶姬', '喜茶'],
+    '酒吧': ['The Beer Nest', 'Jellyfish', '贰麻酒馆'],
+    '买手店': ['方所成都店', '栋梁', 'LOOKNOW'],
+    '展览空间': ['成都当代影像馆', '麓湖A4美术馆', '四川美术馆'],
+  },
+  '杭州': {
+    '咖啡': ['M Stand杭州中心', '% Arabica杭州湖滨', '一尺花园'],
+    '餐厅': ['楼外楼', '新白鹿', '绿茶餐厅'],
+    '甜品': ['知味观', '好利来', 'Luneurs'],
+    '面包烘焙': ['原麦山丘', '巴黎贝甜', 'Baker & Spice'],
+    '茶饮': ['喜茶', '霸王茶姬', '茶百道'],
+    '酒吧': ['Eudora Station', 'Mill', '酒隐'],
+    '买手店': ['天目里', '方所杭州店', '湖滨银泰in77'],
+    '展览空间': ['浙江美术馆', '中国美术学院美术馆', '天目里美术馆'],
+  },
+  '重庆': {
+    '咖啡': ['山城巷咖啡', 'M Stand重庆', '续命咖啡'],
+    '餐厅': ['珮姐老火锅', '周师兄火锅', '杨记隆府'],
+    '甜品': ['好利来', '鲍师傅糕点', '山城冰汤圆'],
+    '面包烘焙': ['原麦山丘', '巴黎贝甜', '面包新语'],
+    '茶饮': ['茶颜悦色', '霸王茶姬', '喜茶'],
+    '酒吧': ['Flavor Lounge', 'Space Plus', '贰麻酒馆'],
+    '买手店': ['重庆光环购物公园', '龙湖时代天街', 'LOOKNOW'],
+    '展览空间': ['重庆美术馆', '罗中立美术馆', '四川美术学院美术馆'],
+  },
+  '长沙': {
+    '咖啡': ['鸳央咖啡', '陆光咖啡', '如野cafe'],
+    '餐厅': ['炊烟小炒黄牛肉', '笨罗卜浏阳菜馆', '费大厨辣椒炒肉'],
+    '甜品': ['好利来', '鲍师傅糕点', '茶颜悦色'],
+    '面包烘焙': ['原麦山丘', '巴黎贝甜', '面包新语'],
+    '茶饮': ['茶颜悦色', '果呀呀', '霸王茶姬'],
+    '酒吧': ['MAO Livehouse长沙', '解放西酒吧街', '贰麻酒馆'],
+    '买手店': ['长沙IFS', '国金街', 'LOOKNOW'],
+    '展览空间': ['谢子龙影像艺术馆', '李自健美术馆', '湖南美术馆'],
+  },
+};
+
+const DISCOVERY_PLACE_PROFILE_OVERRIDES = {
+  '北京|Metal Hands': {
+    district: '朝阳',
+    tags: ['精品咖啡', '社区咖啡'],
+    imageQuery: '北京 Metal Hands 咖啡 店面 空间',
+    summary: 'Metal Hands适合作为北京精品咖啡路线里的稳定选项，重点看手冲、奶咖、空间密度和街区动线。',
+    imageCaption: '图片优先匹配Metal Hands的门店外观、吧台或出品，帮助先判断空间风格和到店氛围。',
+  },
+  '北京|Soloist Coffee': {
+    district: '东城',
+    tags: ['胡同咖啡', '精品咖啡'],
+    imageQuery: '北京 Soloist Coffee 咖啡 店面 胡同',
+    summary: 'Soloist Coffee更适合放在东城或胡同漫逛路线里比较，重点看空间气质、咖啡出品和周边步行动线。',
+    imageCaption: '图片会优先选择Soloist Coffee的门店、街区和咖啡出品，避免只用通用咖啡图。',
+  },
+  '北京|Berry Beans': {
+    district: '朝阳',
+    tags: ['咖啡甜品', '拍照打卡'],
+    imageQuery: '北京 Berry Beans 咖啡 店面 甜品',
+    summary: 'Berry Beans适合按咖啡、甜品和拍照友好度来判断是否加入北京咖啡路线。',
+    imageCaption: '图片优先展示Berry Beans相关空间和出品，用来判断是否适合下午茶或拍照打卡。',
+  },
+  '上海|Pull Tab拉环咖啡': {
+    district: '静安',
+    tags: ['社区咖啡', '上海咖啡'],
+    imageQuery: '上海 Pull Tab 拉环咖啡 店面 饮品 探店',
+    summary: 'Pull Tab拉环咖啡适合放进上海街区咖啡路线里，重点看门店质感、杯品呈现和是否适合顺路停留。',
+    imageCaption: '图片优先匹配Pull Tab拉环咖啡的门店、吧台或杯品，不再使用普通咖啡氛围图。',
+  },
+  '上海|越南中原传奇咖啡': {
+    district: '静安',
+    tags: ['越南咖啡', '特色咖啡'],
+    imageQuery: '上海 中原传奇咖啡 店面 探店',
+    summary: '越南中原传奇咖啡更适合按特色咖啡、店内陈列和是否适合短暂停留来判断，和常规精品咖啡店形成区分。',
+    imageCaption: '图片优先选择门店或越南咖啡相关出品，帮助区分它和普通拿铁类咖啡店。',
+  },
+  '上海|一尺花园静安花房店': {
+    district: '静安',
+    tags: ['花房空间', '慢逛'],
+    imageQuery: '上海 一尺花园 静安 花房店 咖啡 空间',
+    summary: '一尺花园静安花房店适合看空间感、绿植花房氛围和是否适合慢坐，适合安排在静安周末路线里。',
+    imageCaption: '图片优先匹配静安花房店的空间、绿植和咖啡场景，突出门店自身辨识度。',
+  },
+  '上海|Punchline Coffee': {
+    district: '徐汇',
+    tags: ['街区咖啡', '精品咖啡'],
+    imageQuery: '上海 Punchline Coffee 咖啡 店面 探店',
+    summary: 'Punchline Coffee适合按街区位置、门店外观、豆单和坐席舒适度来比较，适合加入上海咖啡备选清单。',
+    imageCaption: '图片优先展示Punchline Coffee相关门店和出品，避免重复通用咖啡图片。',
+  },
+  '上海|M Stand': {
+    district: '静安',
+    tags: ['热门咖啡', '商圈咖啡'],
+    imageQuery: '上海 M Stand 咖啡 店面 空间',
+    summary: 'M Stand更适合按商圈便利度、空间设计和出品稳定度来判断，适合顺路打卡而不是专门远行。',
+    imageCaption: '图片优先匹配上海M Stand门店空间或咖啡出品，帮助判断是否值得顺路停留。',
+  },
+  '上海|LCH Le Café Heenoor': {
+    district: '徐汇',
+    tags: ['甜品咖啡', '下午茶'],
+    imageQuery: '上海 LCH 甜品 咖啡 店面',
+    summary: 'LCH Le Café Heenoor适合按甜品、咖啡、空间光线和下午茶氛围来判断，更适合作为逛街或看展后的停留点。',
+    imageCaption: '图片优先匹配LCH相关门店空间、甜品和咖啡出品，帮助判断是否适合下午茶路线。',
+  },
+};
+
+function discoveryPlaceProfile(city, name) {
+  const cityName = typeof city === 'string' ? city : city?.name;
+  const cleanName = normalizeDiscoveryShopName(name || '');
+  return DISCOVERY_PLACE_PROFILE_OVERRIDES[`${cityName || ''}|${cleanName}`] || null;
+}
+
+function cleanDiscoveryText(value) {
+  return stripHtml(String(value || '')
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim());
+}
+
+function cleanDiscoveryCopy(value) {
+  return cleanDiscoveryText(value)
+    .replace(/品牌资讯[丨|｜:：]?/g, '')
+    .replace(/&ldquo;|&rdquo;/g, '"')
+    .replace(/&hellip;/g, '...')
+    .replace(/据报道[,，]?/g, '')
+    .replace(/\.{3,}/g, '...')
+    .replace(/(招聘|加盟|转让|倒闭|闭店|关店|投诉)[^。；;]{0,40}/g, '')
+    .replace(/([。；;])\s*\1+/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function discoveryTextLooksBroken(value) {
+  const raw = String(value || '');
+  if (!raw.trim()) return false;
+  return /�|&(?:ldquo|rdquo|hellip|nbsp|amp|quot)\b|<\/?[a-z][\s\S]*?>/i.test(raw)
+    || /(?:\\u[0-9a-f]{4}){2,}/i.test(raw)
+    || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(raw);
+}
+
+function discoveryPublicNameLooksBad(name) {
+  const text = cleanDiscoveryText(name);
+  if (!text) return true;
+  if (discoveryTextLooksBroken(text)) return true;
+  if (/^(小吃|简餐|盛大|新春|品牌|资讯|专题|榜单|报告|指南|攻略|新店|首店|探店|空间)$/.test(text)) return true;
+  if (/^(北京|上海|广州|深圳|成都|杭州|重庆|长沙).*(清单|精选|合集|汇总|周末新展市集|咖啡探店|餐厅新店|甜品下午茶|生活方式新店|夜间小聚)/.test(text)) return true;
+  if (/^(超|近|约)?\d+/.test(text)) return true;
+  if (/(截至|H1|H2|门店数|400\+|20\d{2}新春|上海出发|网红餐饮|品牌资讯|商业观察|行业报告|招商|财报|业绩|供应链|热潮|生态|强化|专项|正式公示)/i.test(text)) return true;
+  if (/[?？]{2,}/.test(text) || !/[\u4e00-\u9fffA-Za-z0-9]/.test(text)) return true;
+  return false;
+}
+
+function discoveryOriginalText(item) {
+  return cleanDiscoveryText([
+    item?.contentTitle,
+    item?.sourceTitle,
+    item?.summary,
+    item?.contentText,
+    item?.tagline,
+  ].filter(Boolean).join(' '));
+}
+
+function discoveryItemFreshnessScore(item) {
+  const text = discoveryOriginalText(item);
+  let score = 0;
+  for (const word of ['新开', '新店', '开业', '试营业', '首店', '上新', '本周', '最近', '近期', '探店', '打卡', '排队', '热门', '新展', '市集', '快闪']) {
+    if (text.includes(word)) score += 3;
+  }
+  const published = Date.parse(item?.publishedAt || '');
+  if (Number.isFinite(published)) {
+    const ageDays = (Date.now() - published) / 86400000;
+    if (ageDays <= 14) score += 8;
+    else if (ageDays <= 45) score += 5;
+    else if (ageDays <= 120) score += 2;
+    else score -= 5;
+  }
+  const discovered = Date.parse(item?.discoveredAt || '');
+  if (Number.isFinite(discovered) && (Date.now() - discovered) / 86400000 <= 7) score += 2;
+  return score;
+}
+
+function discoveryQualityScore(item) {
+  let score = Number(item?.score || 0);
+  score += discoveryItemFreshnessScore(item);
+  if (item?.imageUrl && !Object.values(DISCOVERY_CATEGORY_PHOTOS).includes(item.imageUrl)) score += 5;
+  if (Array.isArray(item?.photos) && item.photos.length > 1) score += 2;
+  if (/微信|公众号|文章/.test(item?.sourceName || '')) score += 3;
+  if (/大众点评|榜单/.test(item?.sourceName || '')) score += 2;
+  if (item?.district) score += 2;
+  if (item?.category && item.category !== '其他') score += 2;
+  const rawLength = discoveryOriginalText(item).length;
+  if (rawLength >= 80) score += 2;
+  if (rawLength >= 180) score += 2;
+  if (discoveryPublicNameLooksBad(item?.name || '')) score -= 100;
+  if (isBadDiscoveryCandidate(item?.name || '', item?.sourceTitle || '', item?.summary || '')) score -= 40;
+  return score;
+}
+
+function sortDiscoveryItems(a, b) {
+  const diff = discoveryQualityScore(b) - discoveryQualityScore(a);
+  if (diff) return diff;
+  return String(b?.discoveredAt || b?.publishedAt || '').localeCompare(String(a?.discoveredAt || a?.publishedAt || ''));
+}
+
+function isPublicDiscoveryItem(item) {
+  const name = normalizeDiscoveryShopName(item?.name || '');
+  if (!isValidDiscoveryShopName(name)) return false;
+  if (discoveryPublicNameLooksBad(name)) return false;
+  const text = discoveryOriginalText({ ...item, name });
+  if (discoveryTextLooksBroken(text)) return false;
+  if (isBadDiscoveryCandidate(name, item?.sourceTitle || '', item?.summary || '')) return false;
+  const hasFresh = discoveryHasFreshSignal(text) || /新展|市集|快闪|探店|打卡|排队|热门/.test(text);
+  if (!hasFresh && discoveryItemFreshnessScore(item) < 2) return false;
+  const year = Number(String(item?.publishedAt || item?.discoveredAt || '').slice(0, 4));
+  const currentYear = Number(chinaNowParts().day.slice(0, 4));
+  if (Number.isFinite(year) && year > 2000 && year < currentYear - 1) return false;
+  return discoveryQualityScore({ ...item, name }) > -20;
+}
+
+function discoverySceneTagForItem(item) {
+  const text = `${item?.name || ''} ${item?.category || ''} ${item?.district || ''} ${(item?.tags || []).join(' ')} ${item?.sourceTitle || ''} ${item?.summary || ''}`;
+  if (/首店|大陆首店|中国首店|全国首店/.test(text)) return '首店关注';
+  if (/试营业|内测|soft opening/i.test(text)) return '试营业';
+  if (/展览|美术馆|艺术空间|市集|快闪/.test(text)) return '周末去处';
+  if (/酒吧|bar|鸡尾酒|小酒馆/i.test(text)) return '夜间小聚';
+  if (/买手店|集合店|潮牌|生活方式/.test(text)) return '生活方式';
+  if (/甜品|蛋糕|冰淇淋|gelato|dessert/i.test(text)) return '甜品打卡';
+  if (/咖啡|coffee|拿铁/i.test(text)) return '咖啡打卡';
+  if (/新开|新店|开业|上新|本周新|最近新/.test(text)) return '新店打卡';
+  return '城市新去处';
+}
+
+function discoveryCategoryMood(category) {
+  if (category === '咖啡') return '适合工作日下午或周末慢逛，重点看空间感、豆单和招牌饮品。';
+  if (category === '餐厅') return '适合约饭或小聚，重点看菜系特色、排队热度和商圈位置。';
+  if (category === '甜品') return '适合拍照打卡和下午茶，重点看出品稳定度与季节限定。';
+  if (category === '面包烘焙') return '适合早餐、下午茶和囤货，重点看招牌面包与出炉时段。';
+  if (category === '茶饮') return '适合逛街顺路打卡，重点看新品、空间和外带便利度。';
+  if (category === '酒吧') return '适合夜间小聚，重点看酒单、音乐氛围和预约情况。';
+  if (category === '买手店') return '适合看穿搭与生活方式选品，重点看品牌组合和陈列审美。';
+  if (category === '展览空间') return '适合周末安排，重点看展期、预约方式和周边动线。';
+  return '适合作为近期城市探索备选，先收藏再按距离和营业状态筛选。';
+}
+
+function discoveryCategoryFocus(category) {
+  if (category === '咖啡') return '空间感、招牌饮品、豆单和是否适合久坐';
+  if (category === '餐厅') return '菜系特色、位置、排队热度和是否适合聚餐';
+  if (category === '甜品') return '招牌甜品、季节限定、出片度和商圈便利性';
+  if (category === '面包烘焙') return '招牌面包、出炉时段、口味稳定度和外带便利性';
+  if (category === '茶饮') return '新品、门店空间、排队情况和顺路程度';
+  if (category === '酒吧') return '酒单、音乐氛围、预约难度和夜间动线';
+  if (category === '买手店') return '品牌组合、陈列审美、单品风格和街区氛围';
+  if (category === '展览空间') return '展期、预约方式、展览主题和周边路线';
+  return '位置、类型、近期热度和是否适合加入路线';
+}
+
+function discoveryCopyLooksInternal(value) {
+  return /(站内|实际地点|基础卡片|整理为.*卡片|自动用更新的内容覆盖|后续采集到更具体)/.test(String(value || ''));
+}
+
+function escapeRegExpText(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function focusedDiscoveryCopy(item, name) {
+  const category = item.category || '';
+  const city = item.city || '';
+  const district = item.district || '';
+  const raw = cleanDiscoveryCopy(item.contentText || item.summary || item.sourceTitle || '');
+  const stalePlaceTokens = ['香港', '铜锣湾', '九龙', '澳门', '台北', '台中', '高雄'];
+  const pieces = raw
+    .split(/[\n。；;，,｜|!?！？]+/)
+    .map(text => text.trim())
+    .filter(Boolean)
+    .filter(text => text.length >= 8)
+    .filter(text => !/(站内|实际地点|基础卡片|整理为.*卡片|自动用更新的内容覆盖|后续采集到更具体)/.test(text))
+    .filter(text => !/(招聘|加盟|转让|闭店|关店|裁员|业绩|财报)/.test(text))
+    .filter(text => !stalePlaceTokens.some(token => city !== token && text.includes(token)));
+  const hasCategory = (text) => {
+    const categoryConfig = DISCOVERY_CATEGORY_KEYWORDS.find(item => item.name === category);
+    if (!categoryConfig) return !!category && text.includes(category);
+    return categoryConfig.keywords.some(keyword => text.toLowerCase().includes(String(keyword).toLowerCase()));
+  };
+  const strong = pieces.filter(text => name && text.toLowerCase().includes(String(name).toLowerCase()));
+  const medium = pieces.filter(text => {
+    if (strong.includes(text)) return false;
+    if (!/(新店|新开|开业|首店|试营业|探店|打卡|上新)/.test(text)) return false;
+    return (city && text.includes(city)) || (district && text.includes(district)) || hasCategory(text);
+  });
+  const fallback = pieces.filter(text => !strong.includes(text) && !medium.includes(text) && (hasCategory(text) || (district && text.includes(district))));
+  const selected = strong.length ? strong : [...medium, ...fallback];
+  return [...new Set(selected)]
+    .slice(0, 2)
+    .join('。')
+    .slice(0, 190);
+}
+
+function discoveryCategoryVisitAngles(category) {
+  if (category === '咖啡') {
+    return {
+      decision: '先看门店是否有稳定出品、是否适合久坐、座位密度、自然光和周边是否方便继续步行。',
+      route: '如果安排咖啡路线，可以把它和同区另外两家店一起比较：一家负责空间，一家负责豆单，一家负责顺路休息。',
+      note: '咖啡类不要只看店名热度，更要看是否适合你的场景：办公、聊天、拍照、外带或专门喝一杯。',
+    };
+  }
+  if (category === '餐厅') {
+    return {
+      decision: '先看菜系、招牌菜、排队热度、桌距和是否适合两人或多人聚餐。',
+      route: '餐厅类更适合按商圈安排，提前看预约状态和高峰时段，避免到了现场只剩排队。',
+      note: '如果它来自新店或榜单线索，页面会优先保留能帮助你判断是否值得专程去的信息。',
+    };
+  }
+  if (category === '甜品') {
+    return {
+      decision: '先看招牌甜品、季节限定、出片度、是否适合堂食，以及周边是否方便继续逛。',
+      route: '甜品更适合作为下午茶或饭后补充，适合和咖啡、买手店、展览空间串成短路线。',
+      note: '甜品类会优先关注新品、限定口味和空间体验，避免只留下空泛的“好吃打卡”。',
+    };
+  }
+  if (category === '面包烘焙') {
+    return {
+      decision: '先看招牌面包、出炉时段、外带便利度和是否适合作为早餐或下午茶补给。',
+      route: '烘焙类更适合放在早午间路线里，重点看是否值得绕路购买以及附近是否方便短暂停留。',
+      note: '这类内容会重点保留产品、时间和路线价值，而不是只写店铺名称。',
+    };
+  }
+  if (category === '茶饮') {
+    return {
+      decision: '先看新品、排队时间、门店空间和是否适合逛街顺手带走。',
+      route: '茶饮适合做商圈动线补充，不一定值得专程去，但可以作为逛街、看展或饭后的顺路选项。',
+      note: '茶饮类会更看重近期新品和门店便利度，降低纯品牌热度的权重。',
+    };
+  }
+  if (category === '酒吧') {
+    return {
+      decision: '先看酒单方向、音乐氛围、座位和预约难度，再判断适合聊天、小聚还是只是拍照。',
+      route: '酒吧适合按晚间动线安排，最好提前确认营业时间、低消、预约和当天活动。',
+      note: '夜间内容会更关注氛围和可执行性，避免只放一个名字让用户无法判断。',
+    };
+  }
+  if (category === '买手店') {
+    return {
+      decision: '先看品牌组合、陈列审美、单品风格、价格带和街区氛围。',
+      route: '买手店适合和咖啡、展览或生活方式店串联，重点看是否值得慢逛。',
+      note: '这类内容会把“看什么、适合谁、是否值得绕路”放在文案里，而不是只列店名。',
+    };
+  }
+  if (category === '展览空间') {
+    return {
+      decision: '先看展期、预约方式、展览主题、动线和周边是否能安排咖啡或餐厅。',
+      route: '展览空间适合作为半日路线核心，再向周边延伸餐饮、咖啡或市集。',
+      note: '活动类会优先保留时间、地点、主题和是否适合周末前往。',
+    };
+  }
+  return {
+    decision: '先看地点、类型、近期热度和是否适合加入当天路线。',
+    route: '可以把它和同城同类内容一起比较，再按距离、时间和偏好筛选。',
+    note: '页面会优先保留能帮助你做选择的信息。',
+  };
+}
+
+function decorateDiscoveryItem(item) {
+  const name = normalizeDiscoveryShopName(item.name || '');
+  const category = DISCOVERY_NAME_CATEGORY_OVERRIDES[name] || item.category || guessDiscoveryCategory(`${item.summary || ''} ${item.sourceTitle || ''}`);
+  const city = item.city || '';
+  const profile = discoveryPlaceProfile(city, name);
+  const district = profile?.district || item.district || '';
+  const sceneTag = item.sceneTag || discoverySceneTagForItem({ ...item, category, name });
+  const rawCopy = focusedDiscoveryCopy({ ...item, category, city, district }, name);
+  const shortCopy = rawCopy
+    .replace(new RegExp(`^${escapeRegExpText(name)}[：:\\s-]*`), '')
+    .replace(/^[。；;，,\s]+/, '')
+    .replace(/[。；;，,\s]+$/, '')
+    .slice(0, 220);
+  const locationText = [city, district].filter(Boolean).join(' · ') || city || '城市';
+  const fallbackPhoto = DISCOVERY_CATEGORY_PHOTOS[category] || DISCOVERY_CATEGORY_PHOTOS['其他'];
+  const photoList = Array.isArray(item.photos) ? item.photos.filter(Boolean).slice(0, 4) : [];
+  const sourceImage = item.imageUrl || photoList[0] || '';
+  const imageUrl = sourceImage || fallbackPhoto;
+  const imageSource = sourceImage ? (item.imageSource || 'source') : 'category-fallback';
+  const cleanedTags = (Array.isArray(item.tags) ? item.tags : [])
+    .filter(tag => tag && !/(待核验|文章线索|榜单线索|公开搜索|新店线索)/.test(tag))
+    .slice(0, 3);
+  const tags = [...new Set([sceneTag, category, ...cleanedTags].filter(Boolean))].slice(0, 4);
+  const mood = discoveryCategoryMood(category);
+  const originalTitle = cleanDiscoveryText(item.contentTitle || item.sourceTitle || '');
+  const originalText = cleanDiscoveryCopy(item.contentText || item.summary || item.sourceTitle || '');
+  const sourceHint = profile?.summary || shortCopy || (discoveryCopyLooksInternal(originalText) ? '' : originalText.slice(0, 220));
+  const focus = discoveryCategoryFocus(category);
+  const angles = discoveryCategoryVisitAngles(category);
+  const editorialSummary = sourceHint
+    ? `${name}是${locationText}的${category || '城市生活'}去处，近期线索集中在${sceneTag}：${sourceHint}`
+    : `${name}是${locationText}的${category || '城市生活'}去处，适合按${focus}来判断是否加入这次路线。`;
+  const editorialDetail = [
+    `${name}是${locationText}的具体${category || '城市生活'}地点。这个条目只围绕这个店铺或地点展开，适合和同城同类内容放在一起比较，不会把你带到外部文章才能看重点。`,
+    sourceHint
+      ? `目前最值得先看的线索是：${sourceHint}。如果你正在筛选${city || '本地'}${category || '去处'}，可以先把它当作一个具体备选，再和同页其他地点对比。`
+      : `目前可用信息主要集中在地点、类型和适合场景。可以先按距离、时间和喜好放入候选；有新的开业、上新、活动或探店线索时，内容会继续补全。`,
+    `${category || '城市生活'}类内容重点看${focus}。${angles.decision}`,
+    `${angles.route}${mood ? ` ${mood}` : ''}`,
+    `到店前建议再确认营业时间、预约状态、排队情况和当天是否有临时调整。${angles.note}`,
+  ].join('\n\n');
+  const imageCaption = item.imageCaption || profile?.imageCaption || `${name}的图片会优先匹配门店外观、空间或代表性出品；如果当天找不到足够可靠的门店图片，才会退回到同类目的氛围图。`;
+  return {
+    ...item,
+    name,
+    category,
+    district,
+    imageUrl,
+    imageSource,
+    photos: photoList.length ? photoList : (imageUrl ? [imageUrl] : []),
+    tags,
+    sceneTag,
+    tagline: `${locationText} · ${sceneTag}`,
+    qualityScore: discoveryQualityScore({ ...item, name, category, district, imageUrl, photos: photoList }),
+    editorialTitle: `${name}｜${locationText} · ${category || sceneTag}`,
+    editorialSummary,
+    editorialDetail,
+    imageCaption,
+    highlights: [
+      { title: '类型', text: category || sceneTag },
+      { title: '看点', text: sceneTag },
+      { title: '适合', text: mood.replace(/。$/, '') },
+      { title: '位置', text: locationText },
+    ],
+  };
+}
+
+function discoveryDefaultPayload() {
+  return {
+    version: 1,
+    status: 'empty',
+    generatedAt: null,
+    generatedDay: '',
+    source: 'public-search',
+    cityLimit: DISCOVERY_CITY_LIMIT,
+    categories: DISCOVERY_CATEGORY_KEYWORDS.map(item => item.name),
+    cities: DISCOVERY_CITIES.map(city => ({ ...city, items: [] })),
+  };
+}
+
+function normalizeDiscoveryDb(payload) {
+  const cityMap = new Map((payload?.cities || []).map(city => [String(city.id || city.name || ''), city]));
+  const cities = DISCOVERY_CITIES.map(city => {
+    const saved = cityMap.get(city.id) || cityMap.get(city.name) || {};
+    const items = Array.isArray(saved.items)
+      ? saved.items
+        .map(decorateDiscoveryItem)
+        .filter(isPublicDiscoveryItem)
+        .sort(sortDiscoveryItems)
+        .slice(0, DISCOVERY_CITY_LIMIT)
+      : [];
+    return {
+      ...city,
+      updatedAt: saved.updatedAt || payload?.generatedAt || '',
+      freshCount: Number(saved.freshCount || 0),
+      items,
+    };
+  });
+  const itemCount = cities.reduce((sum, city) => sum + (city.items || []).length, 0);
+  return {
+    ...discoveryDefaultPayload(),
+    ...payload,
+    version: 1,
+    cityLimit: DISCOVERY_CITY_LIMIT,
+    categories: DISCOVERY_CATEGORY_KEYWORDS.map(item => item.name),
+    cityCount: cities.length,
+    itemCount,
+    cities,
+  };
+}
+
+async function readDiscoveryDb() {
+  try {
+    return normalizeDiscoveryDb(JSON.parse(await fs.readFile(DISCOVERY_DB_PATH, 'utf8')));
+  } catch {
+    return discoveryDefaultPayload();
+  }
+}
+
+async function writeDiscoveryDb(payload) {
+  await fs.writeFile(DISCOVERY_DB_PATH, JSON.stringify(normalizeDiscoveryDb(payload), null, 2), 'utf8');
+}
+
+function rssTagText(item, tag) {
+  const match = item.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, 'i'));
+  return cleanDiscoveryText(match?.[1] || '');
+}
+
+function parseDiscoveryRss(xml) {
+  return [...String(xml || '').matchAll(/<item\b[\s\S]*?<\/item>/gi)].map(match => {
+    const item = match[0];
+    return {
+      title: rssTagText(item, 'title'),
+      link: rssTagText(item, 'link'),
+      summary: rssTagText(item, 'description'),
+      pubDate: rssTagText(item, 'pubDate'),
+    };
+  }).filter(item => item.title || item.summary);
+}
+
+function guessDiscoveryCategory(text) {
+  const raw = String(text || '').toLowerCase();
+  for (const category of DISCOVERY_CATEGORY_KEYWORDS) {
+    if (category.keywords.some(keyword => raw.includes(String(keyword).toLowerCase()))) return category.name;
+  }
+  return '其他';
+}
+
+function guessDiscoveryDistrict(city, text) {
+  const raw = String(text || '');
+  return (city.districtHints || []).find(hint => raw.includes(hint)) || '';
+}
+
+function discoveryHasFreshSignal(text) {
+  const raw = String(text || '').toLowerCase();
+  return ['新开', '新店', '开业', '试营业', '首店', '上新', '本周新', '最近新', '刚开', '近期', '探店', '打卡', '热门', '排队', '新展', '市集', '快闪'].some(word => raw.includes(word.toLowerCase()));
+}
+
+function discoveryHasPlaceCategory(text) {
+  const raw = String(text || '').toLowerCase();
+  return DISCOVERY_CATEGORY_KEYWORDS.some(category => category.keywords.some(keyword => raw.includes(String(keyword).toLowerCase())));
+}
+
+function isBadDiscoveryCandidate(name, title, summary) {
+  const text = `${name || ''} ${title || ''} ${summary || ''}`;
+  return /(旅游局|文化和旅游|官方网站|官网|政务|招聘|加盟|转让|倒闭|投诉|百度地图|高德地图|地图导航|天气|机场|火车|酒店预订|攻略大全|菜单价格表|地址电话|退出|关闭|关店|闭店|暂停营业|裁员|业绩|财报|商业地产|购物中心|规划正式公示|门店数|截至20\d{2}|H1|H2|招商|行业报告|供应链|餐饮周报|行业周报|今日快报|融资|上市|资本投资|数智节|领袖齐聚|开关店红黑榜)/i.test(text);
+}
+
+function normalizeDiscoveryShopName(value) {
+  return cleanDiscoveryText(value)
+    .replace(/^(TOP|Top|top)\s*\d{1,2}[\s.、：:-]*/i, '')
+    .replace(/^[①②③④⑤⑥⑦⑧⑨⑩]\s*/, '')
+    .replace(/^(店名|商户|门店|推荐)[:：\s]*/i, '')
+    .replace(/[（(].*?(闭店|停业|招聘|加盟).*?[）)]/g, '')
+    .replace(/[（(][^）)]{0,18}[）)]/g, '')
+    .replace(/[-_—].*?(大众点评|小红书|网易|腾讯|知乎|澎湃).*$/i, '')
+    .replace(/^(服务|口味|环境|人均|推荐理由|新店商圈|大众点评榜单|Content type).*$/i, '')
+    .replace(/(大陆|中国|全国|亚洲|华北|华东|华南|西南)$/i, '')
+    .replace(/(?:地址|位于|坐落|营业时间|人均|推荐|主打|特色|#).*$/i, '')
+    .replace(/[。；;，,｜|].*$/, '')
+    .trim();
+}
+
+function isValidDiscoveryShopName(name) {
+  const text = normalizeDiscoveryShopName(name);
+  if (text.length < 2 || text.length > 24) return false;
+  if (/^\d+(\.\d+)?$/.test(text)) return false;
+  if (/^(超|近|约)?\d+/.test(text)) return false;
+  if (/[¥￥]/.test(text)) return false;
+  if (/^[A-Z]{2,5}$/.test(text)) return false;
+  if (/(服务|口味|环境|评分|推荐理由|新店商圈|榜单|大众点评|旅游|地图|官网|官方|招聘|加盟|攻略|酒店预订|TOP)$/i.test(text)) return false;
+  if (/(周报|快讯|资讯|报告|指南|业绩|计划|招商|热点|集锦|动态|观察|行业|安全|强化|发布|规划|正式公示|红黑榜|购物中心|商场|地产|商业|米其林|概念店|首家潮玩店|卖现磨|进深圳|热潮|生态|品牌时装|宣布|完成|包括|启动|施工|全国首|中国首|首个西餐店|家居|空间|落地|正式|将于|已在|至此|退出|清单|精选|合集|汇总|推荐|攻略|实录|体验|分享|人气之选|打卡实录|好好喝|好好吃|没办法|这座|层出不穷|喝不完|一家接一家|新时代|新征程|跟着|春晚|宜宾)/i.test(text)) return false;
+  if (/[与和及]/.test(text) && text.length > 6) return false;
+  if (/^\.+$/.test(text) || text.includes('...') || text.includes('……')) return false;
+  return true;
+}
+
+function discoveryTextHasCitySignal(city, text) {
+  const raw = String(text || '');
+  return [city.name, ...(city.aliases || []), ...(city.districtHints || [])].some(token => token && raw.includes(token));
+}
+
+function discoveryNameHasLocalContext(city, name, text, title = '') {
+  const raw = String(text || '');
+  if (discoveryTextHasCitySignal(city, title)) return true;
+  const nameIndex = raw.indexOf(name);
+  if (nameIndex < 0) return false;
+  const tokens = [city.name, ...(city.aliases || []), ...(city.districtHints || [])].filter(Boolean);
+  return tokens.some(token => {
+    const tokenIndex = raw.indexOf(token);
+    return tokenIndex >= 0 && Math.abs(tokenIndex - nameIndex) <= 48;
+  });
+}
+
+function discoveryNameNearestCityIsTarget(city, name, text) {
+  const raw = String(text || '');
+  const nameIndex = raw.indexOf(name);
+  if (nameIndex < 0) return true;
+  const targetTokens = [city.name, ...(city.aliases || []), ...(city.districtHints || [])].filter(Boolean);
+  let targetDistance = Infinity;
+  for (const token of targetTokens) {
+    let index = raw.indexOf(token);
+    while (index >= 0) {
+      targetDistance = Math.min(targetDistance, Math.abs(index - nameIndex));
+      index = raw.indexOf(token, index + token.length);
+    }
+  }
+  let otherDistance = Infinity;
+  for (const other of DISCOVERY_CITIES) {
+    if (other.id === city.id) continue;
+    const tokens = [other.name, ...(other.aliases || []), ...(other.districtHints || [])].filter(Boolean);
+    for (const token of tokens) {
+      let index = raw.indexOf(token);
+      while (index >= 0) {
+        otherDistance = Math.min(otherDistance, Math.abs(index - nameIndex));
+        index = raw.indexOf(token, index + token.length);
+      }
+    }
+  }
+  return targetDistance <= otherDistance;
+}
+
+function extractDianpingRankedShopNames(summary) {
+  const text = cleanDiscoveryText(summary)
+    .replace(/\s+/g, ' ')
+    .replace(/TOP\s*(\d{1,2})/gi, ' TOP$1 ');
+  const names = [];
+  const add = (candidate) => {
+    const name = normalizeDiscoveryShopName(candidate);
+    if (!isValidDiscoveryShopName(name)) return;
+    if (!names.some(item => item.toLowerCase() === name.toLowerCase())) names.push(name);
+  };
+  for (const match of text.matchAll(/TOP\s*\d{1,2}\s*[.、：:-]?\s*([^。；;｜|]{2,28}?)(?:\s*[。.]|\s+[0-5]\.\d|\s+服务[:：])/gi)) {
+    add(match[1]);
+  }
+  for (const match of text.matchAll(/([^。；;｜|]{2,24}?)[。.]?\s+[0-5]\.\d\s*(?:[。.]?\s*服务[:：]|[。.]?\s*口味[:：]|[。.]?\s*¥|[。.]?\s*￥)/gi)) {
+    add(match[1]);
+  }
+  return names.slice(0, DISCOVERY_CITY_LIMIT);
+}
+
+function parseSogouTimeText(raw) {
+  const tsMatch = String(raw || '').match(/timeConvert\('(\d+)'\)/);
+  if (tsMatch) {
+    const ms = Number(tsMatch[1]) * 1000;
+    if (Number.isFinite(ms)) return new Date(ms).toISOString();
+  }
+  return '';
+}
+
+function isDiscoveryRecentEnough(isoText) {
+  if (!isoText) return false;
+  const year = Number(String(isoText).slice(0, 4));
+  const currentYear = Number(chinaNowParts().day.slice(0, 4));
+  return Number.isFinite(year) && year >= currentYear;
+}
+
+function extractWeixinShopNames(city, title, summary) {
+  const text = cleanDiscoveryText(`${title || ''} ${summary || ''}`)
+    .replace(/&hellip;/g, '...')
+    .replace(/&middot;/g, '·');
+  const names = [];
+  const add = (candidate) => {
+    const name = normalizeDiscoveryShopName(candidate)
+      .replace(/^(百年咖啡|咖啡品牌|知名小笼包品牌|小笼包品牌|餐厅品牌|品牌资讯丨)/, '')
+      .replace(/(大陆|中国|全国|北京|上海|广州|深圳|成都|杭州|重庆|长沙)?首店.*$/, '')
+      .replace(/(新店|开业|试营业|落户|来了|重回).*$/, '')
+      .trim();
+    if (!isValidDiscoveryShopName(name)) return;
+    if (!names.some(item => item.toLowerCase() === name.toLowerCase())) names.push(name);
+  };
+  const cityName = city.name;
+  const patterns = [
+    /据悉[,，]\s*([^，,。；;]{2,24})新店(?:落户|开业|试营业|入驻)/i,
+    /旗下(?:「|“)([^」”]{2,24})(?:」|”)/i,
+    new RegExp(`([A-Za-z0-9%&.'’·\\-\\s]{2,28})\\s*${cityName}首店`, 'i'),
+    new RegExp(`([\\u4e00-\\u9fffA-Za-z0-9%&.'’·\\-\\s]{2,28})(?:大陆|中国|全国)?首店(?:落|开|入驻|亮相|登陆|将开|开业)?${cityName}?`, 'i'),
+    new RegExp(`${cityName}首家([\\u4e00-\\u9fffA-Za-z0-9%&.'’·\\-\\s]{2,24})`, 'i'),
+    /新店\s*[|｜:：]\s*([^，,。；;|｜]{2,28})/i,
+    /(?:“|「|《)([^”」》]{2,28})(?:”|」|》)(?:[^，,。；;]{0,12})(?:新店|开业|首店|试营业|落户)/i,
+    /([A-Za-z0-9%&.'’·\-\s]{2,28})(?:大陆|中国|全国)?首店/i,
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) add(match[1]);
+  }
+  // 摘要里常见“品牌A、品牌B、品牌C等新店”，抽几个明显品牌名作为候选。
+  const listMatch = text.match(/([A-Za-z0-9%&.'’·\-\u4e00-\u9fff]{2,18})(?:、|,|，)([A-Za-z0-9%&.'’·\-\u4e00-\u9fff]{2,18})(?:、|,|，)([A-Za-z0-9%&.'’·\-\u4e00-\u9fff]{2,18}).{0,24}(?:新店|首店|开业)/i);
+  if (listMatch) {
+    add(listMatch[1]);
+    add(listMatch[2]);
+    add(listMatch[3]);
+  }
+  return names.slice(0, DISCOVERY_CITY_LIMIT);
+}
+
+function addDiscoveryName(names, candidate) {
+  const name = normalizeDiscoveryShopName(candidate)
+    .replace(/^(推荐[一二三四五六七八九十\d]+|第[一二三四五六七八九十\d]+站)[:：\s]*/, '')
+    .trim();
+  if (!isValidDiscoveryShopName(name)) return;
+  if (discoveryPublicNameLooksBad(name)) return;
+  if (!names.some(item => item.toLowerCase() === name.toLowerCase())) names.push(name);
+}
+
+function extractDiscoveryPlaceNames(city, category, title, summary) {
+  const text = cleanDiscoveryText(`${title || ''} ${summary || ''}`)
+    .replace(/&amp;/g, '&')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ');
+  const names = [];
+  const add = (candidate) => addDiscoveryName(names, candidate);
+
+  for (const match of text.matchAll(/(?:^|[\s。；;])(?:TOP\s*)?\d{1,2}[\.、)]\s*([^。；;，,#]{2,42}?)(?=(?:地址|位于|坐落|人均|营业|推荐|主打|特色|#|\d{1,2}[\.、)]|$))/gi)) {
+    add(match[1]);
+  }
+  for (const match of text.matchAll(/[①②③④⑤⑥⑦⑧⑨⑩]\s*([^①②③④⑤⑥⑦⑧⑨⑩。；;，,#]{2,42}?)(?=(?:地址|位于|坐落|人均|营业|推荐|主打|特色|#|[①②③④⑤⑥⑦⑧⑨⑩]|$))/g)) {
+    add(match[1]);
+  }
+  for (const match of text.matchAll(/(?:^|[\s。；;])(?:\d{1,2}[\.、)]|[①②③④⑤⑥⑦⑧⑨⑩])\s*([A-Za-z0-9%&.'’·\-\s\u4e00-\u9fff]{2,42}?)(?:（[^）]{0,16}店）|\([^)]{0,16}店\))?\s*(?:地址|位于|坐落于|开在|落在)[:：\s]/gi)) {
+    add(match[1]);
+  }
+  for (const match of text.matchAll(/(?:名叫|名为|叫做|店名是|这家店叫)[“"「]?\s*([^”"」 。；;，,]{2,32})/g)) {
+    add(match[1]);
+  }
+  for (const match of text.matchAll(/(?:新店地址|地址)\s*([A-Za-z0-9%&.'’·\-\s\u4e00-\u9fff]{2,36}?)(?=(?:上海|北京|广州|深圳|成都|杭州|重庆|长沙|市|区|路|街|时间|主打|$))/g)) {
+    add(match[1]);
+  }
+  for (const match of text.matchAll(/推荐[一二三四五六七八九十\d]+[:：]\s*([^，。,；;]{2,36})/g)) {
+    add(match[1]);
+  }
+  for (const match of text.matchAll(/[「『“]([^」』”]{2,32})[」』”]/g)) {
+    const around = text.slice(Math.max(0, match.index - 40), Math.min(text.length, match.index + match[0].length + 60));
+    if (discoveryHasPlaceCategory(around) || /新店|探店|开业|首店|地址|咖啡|餐厅|甜品|面包|茶饮|酒吧|买手店|展览/.test(around)) add(match[1]);
+  }
+
+  if (!names.length && category && category !== '展览空间') {
+    const main = extractDiscoveryName(city, title, summary);
+    if (main && !/(清单|合集|汇总|推荐|攻略|指南|本周|周末|活动|免费|好去处|去哪|几家|\d+家)/.test(main)) add(main);
+  }
+
+  return names.slice(0, Math.max(1, DISCOVERY_CATEGORY_PER_CITY_LIMIT + 2));
+}
+
+function fallbackDiscoveryExperienceName(city, title, summary, category) {
+  const text = cleanDiscoveryText(`${title || ''} ${summary || ''}`);
+  const cityName = city?.name || '';
+  if (!cityName || isBadDiscoveryCandidate('', title, summary)) return '';
+  if (/(周末|本周|近期|7月|6月).{0,18}(新展|展览|市集|快闪|活动|演出|音乐会|讲座)|新展|市集|快闪/.test(text)) {
+    return `${cityName}周末新展市集`;
+  }
+  if (/咖啡/.test(text) && /(探店|清单|地图|新开|新店)/.test(text)) return `${cityName}咖啡探店清单`;
+  if (/(甜品|蛋糕|下午茶|冰淇淋|gelato)/i.test(text) && /(探店|清单|新开|新店)/.test(text)) return `${cityName}甜品下午茶精选`;
+  if (/(面包|烘焙|贝果|可颂|bakery)/i.test(text) && /(探店|清单|新开|新店)/.test(text)) return `${cityName}面包烘焙清单`;
+  if (/(茶饮|奶茶|茶馆)/.test(text) && /(探店|清单|新开|新店)/.test(text)) return `${cityName}茶饮新店清单`;
+  if (/(酒吧|bar|小酒馆|鸡尾酒)/i.test(text) && /(探店|清单|新开|新店)/.test(text)) return `${cityName}夜间小聚清单`;
+  if (/(买手店|集合店|潮牌|生活方式)/.test(text) && /(探店|清单|新开|新店)/.test(text)) return `${cityName}生活方式新店`;
+  if (/(新店|新开|开业|试营业|首店|探店)/.test(text)) {
+    const label = category && category !== '其他' ? category : '城市';
+    return `${cityName}${label}新店精选`;
+  }
+  return '';
+}
+
+function normalizeDiscoveryImageUrl(value) {
+  const raw = htmlDecode(String(value || '').trim());
+  if (!raw) return '';
+  if (raw.startsWith('//')) return `https:${raw}`;
+  if (raw.startsWith('/')) return `https://weixin.sogou.com${raw}`;
+  return raw;
+}
+
+function discoveryImageCacheKey(rawUrl) {
+  return crypto.createHash('sha1').update(String(rawUrl || '')).digest('hex');
+}
+
+async function discoveryImageProxy(url, req, res) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, { ok: false, error: 'method not allowed' });
+  const raw = normalizeDiscoveryImageUrl(url.searchParams.get('url') || '');
+  if (!/^https?:\/\//i.test(raw)) return send(res, 400, { ok: false, error: 'invalid image url' });
+  const key = discoveryImageCacheKey(raw);
+  const bodyPath = path.join(DISCOVERY_IMAGE_CACHE_DIR, `${key}.bin`);
+  const metaPath = path.join(DISCOVERY_IMAGE_CACHE_DIR, `${key}.json`);
+  const sendBuffer = async (buffer, contentType) => {
+    res.writeHead(200, {
+      'Content-Type': contentType || 'image/jpeg',
+      'Cache-Control': 'public, max-age=86400',
+      'Access-Control-Allow-Origin': '*',
+    });
+    if (req.method === 'HEAD') return res.end();
+    return res.end(buffer);
+  };
+  try {
+    const [buffer, metaText] = await Promise.all([
+      fs.readFile(bodyPath),
+      fs.readFile(metaPath, 'utf8').catch(() => '{}'),
+    ]);
+    const meta = JSON.parse(metaText || '{}');
+    if (buffer.length > 512 && Date.now() - Number(meta.savedAt || 0) < 7 * 24 * 60 * 60 * 1000) {
+      return await sendBuffer(buffer, meta.contentType || 'image/jpeg');
+    }
+  } catch { /* cache miss */ }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  try {
+    const referer = raw.includes('image.baidu.com') ? 'https://image.baidu.com/'
+      : raw.includes('weixin') || raw.includes('sogou') ? 'https://weixin.sogou.com/'
+      : new URL(raw).origin + '/';
+    const upstream = await fetch(raw, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) PandaDiscovery/1.0',
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Referer': referer,
+      },
+    });
+    if (!upstream.ok) throw new Error(`image ${upstream.status}`);
+    const contentType = upstream.headers.get('content-type') || 'image/jpeg';
+    if (!/^image\//i.test(contentType)) throw new Error(`not image: ${contentType}`);
+    const buffer = Buffer.from(await upstream.arrayBuffer());
+    if (buffer.length < 512) throw new Error('image too small');
+    await fs.mkdir(DISCOVERY_IMAGE_CACHE_DIR, { recursive: true });
+    await Promise.all([
+      fs.writeFile(bodyPath, buffer),
+      fs.writeFile(metaPath, JSON.stringify({ contentType, savedAt: Date.now(), source: raw }, null, 2), 'utf8'),
+    ]);
+    return await sendBuffer(buffer, contentType);
+  } catch (err) {
+    return send(res, 404, { ok: false, error: 'image unavailable' });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchDiscoveryBaiduImages(query, limit = 2) {
+  const q = cleanDiscoveryText(query).slice(0, 80);
+  if (!q) return [];
+  const rn = Math.max(6, Math.min(18, Number(limit || 2) * 4));
+  const api = new URL('https://image.baidu.com/search/acjson');
+  api.searchParams.set('tn', 'resultjson_com');
+  api.searchParams.set('ipn', 'rj');
+  api.searchParams.set('word', q);
+  api.searchParams.set('pn', '0');
+  api.searchParams.set('rn', String(rn));
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+  try {
+    const res = await fetch(api, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) PandaDiscovery/1.0',
+        'Referer': 'https://image.baidu.com/',
+      },
+    });
+    if (!res.ok) return [];
+    const data = await res.json().catch(() => null);
+    const rows = Array.isArray(data?.data) ? data.data : [];
+    return rows
+      .map(row => ({
+        url: normalizeDiscoveryImageUrl(row.middleURL || row.hoverURL || row.objURL || row.thumbURL || ''),
+        title: cleanDiscoveryText(row.fromPageTitleEnc || row.fromPageTitle || row.title || ''),
+        width: Number(row.width || 0),
+        height: Number(row.height || 0),
+      }))
+      .filter(row => /^https?:\/\//i.test(row.url) && row.width >= 420 && row.height >= 260)
+      .sort((a, b) => (b.width * b.height) - (a.width * a.height))
+      .slice(0, Math.max(1, Math.min(4, Number(limit || 2))));
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function discoveryImageLooksGeneric(url) {
+  if (!url) return true;
+  return Object.values(DISCOVERY_CATEGORY_PHOTOS).includes(url);
+}
+
+function discoveryImageSearchQuery(item, city) {
+  if (item?.imageQuery) return cleanDiscoveryText(item.imageQuery);
+  const name = normalizeDiscoveryShopName(item?.name || '');
+  const profile = discoveryPlaceProfile(city?.name || item?.city || '', name);
+  if (profile?.imageQuery) return profile.imageQuery;
+  const cityName = city?.name || item?.city || '';
+  const category = item?.category || '';
+  const extra = category === '展览空间' ? '现场 展览 活动' : '店面 空间 探店 高清';
+  return [cityName, name, category, extra].filter(Boolean).join(' ');
+}
+
+async function enhanceDiscoveryItemImages(items, city) {
+  const rows = Array.isArray(items) ? items : [];
+  let enhanced = 0;
+  for (const item of rows.sort(sortDiscoveryItems)) {
+    const currentPhotos = Array.isArray(item.photos) ? item.photos.filter(Boolean) : [];
+    const realPhotos = currentPhotos.filter(photo => !discoveryImageLooksGeneric(photo));
+    const hasRealImage = item.imageUrl && item.imageSource !== 'category-fallback' && !discoveryImageLooksGeneric(item.imageUrl);
+    if (hasRealImage || realPhotos.length) continue;
+    if (enhanced >= DISCOVERY_IMAGE_ENHANCE_LIMIT) break;
+    const candidates = await fetchDiscoveryBaiduImages(discoveryImageSearchQuery(item, city), 3);
+    if (candidates.length) {
+      item.imageUrl = candidates[0].url;
+      item.photos = candidates.map(candidate => candidate.url).slice(0, 3);
+      item.imageSource = 'baidu-image';
+      enhanced += 1;
+    }
+    await sleep(220);
+  }
+  return rows;
+}
+
+function parseSogouWeixinArticles(html) {
+  const rows = [];
+  const list = String(html || '');
+  const blocks = list.match(/<li[^>]*>[\s\S]*?<\/li>/gi) || [];
+  for (const block of blocks) {
+    const linkMatch = block.match(/<h3>[\s\S]*?<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+    const summaryMatch = block.match(/<p class="txt-info"[^>]*>([\s\S]*?)<\/p>/i);
+    if (!linkMatch || !summaryMatch) continue;
+    const accountMatch = block.match(/<span class="all-time-y2">([\s\S]*?)<\/span>/i);
+    const timeMatch = block.match(/document\.write\((timeConvert\('\d+'\))\)/i);
+    const imageMatch = block.match(/<div class="img-box">[\s\S]*?<img[^>]+src="([^"]+)"/i)
+      || block.match(/<img[^>]+src="([^"]+)"/i);
+    const href = htmlDecode(linkMatch[1] || '');
+    rows.push({
+      title: cleanDiscoveryText(linkMatch[2] || ''),
+      summary: cleanDiscoveryText(summaryMatch[1] || ''),
+      account: cleanDiscoveryText(accountMatch?.[1] || ''),
+      publishedAt: parseSogouTimeText(timeMatch?.[1] || ''),
+      link: href.startsWith('http') ? href : `https://weixin.sogou.com${href}`,
+      imageUrl: normalizeDiscoveryImageUrl(imageMatch?.[1] || ''),
+    });
+  }
+  return rows;
+}
+
+async function fetchSogouWeixinItems(query) {
+  const url = new URL('https://weixin.sogou.com/weixin');
+  url.searchParams.set('type', '2');
+  url.searchParams.set('query', query);
+  url.searchParams.set('ie', 'utf8');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        'Referer': 'https://weixin.sogou.com/',
+      },
+    });
+    if (!res.ok) throw new Error(`sogou weixin ${res.status}`);
+    return parseSogouWeixinArticles(await res.text());
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchBaiduNewsItems(query) {
+  const url = new URL('https://www.baidu.com/s');
+  url.searchParams.set('wd', query);
+  url.searchParams.set('tn', 'json');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36 PandaDiscovery/1.0',
+        'Accept': 'application/json,text/plain,*/*',
+        'Accept-Language': 'zh-CN,zh;q=0.9',
+        'Referer': 'https://www.baidu.com/',
+      },
+    });
+    if (!res.ok) throw new Error(`baidu news ${res.status}`);
+    const data = await res.json().catch(() => null);
+    const rows = Array.isArray(data?.feed?.entry) ? data.feed.entry : [];
+    return rows.map(row => ({
+      title: cleanDiscoveryText(row.title || ''),
+      summary: cleanDiscoveryText(row.abs || ''),
+      source: cleanDiscoveryText(row.source || row.category?.label || '百度新闻'),
+      link: normalizeDiscoveryImageUrl(row.url || ''),
+      imageUrl: normalizeDiscoveryImageUrl(row.imgUrl || ''),
+      publishedAt: Number(row.time || 0) ? new Date(Number(row.time) * 1000).toISOString() : '',
+    })).filter(row => row.title || row.summary);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function discoveryBaiduNewsRowToItems(city, row) {
+  const text = `${row.title || ''} ${row.summary || ''}`;
+  if (!isDiscoveryRecentEnough(row.publishedAt)) return [];
+  if (!discoveryTextHasCitySignal(city, text)) return [];
+  if (isBadDiscoveryCandidate('', row.title, row.summary)) return [];
+  if (!discoveryHasFreshSignal(text) && !/(活动|展览|市集|快闪|演出|音乐会|周末|本周|7月)/.test(text)) return [];
+  if (!discoveryHasPlaceCategory(text)) return [];
+  const category = guessDiscoveryCategory(text);
+  const names = extractDiscoveryPlaceNames(city, category, row.title, row.summary);
+  return names.map((name, index) => ({
+    id: crypto.createHash('sha1').update(`${city.id}:baidu-news:${name}:${row.link || row.title}`).digest('hex').slice(0, 16),
+    city: city.name,
+    name,
+    category: category === '其他' ? '展览空间' : category,
+    district: guessDiscoveryDistrict(city, text),
+    summary: cleanDiscoveryText(row.summary || row.title).slice(0, 160),
+    contentTitle: row.title || '',
+    contentText: cleanDiscoveryText(`${row.title || ''}\n${row.summary || ''}`).slice(0, 420),
+    imageUrl: row.imageUrl || '',
+    photos: row.imageUrl ? [row.imageUrl] : [],
+    tags: ['当期活动', category === '其他' ? '展览空间' : category].filter(Boolean),
+    sourceName: row.source ? `百度新闻 · ${row.source}` : '百度新闻线索',
+    sourceUrl: row.link || '',
+    sourceTitle: row.title || '',
+    publishedAt: row.publishedAt || '',
+    discoveredAt: new Date().toISOString(),
+    score: 32 - index,
+  }));
+}
+
+function buildDiscoveryFallbackItems(city) {
+  const nowIso = new Date().toISOString();
+  const district = (city.districtHints || [])[0] || '';
+  const rows = [
+    {
+      name: `${city.name}周末新展市集`,
+      category: '展览空间',
+      sceneTag: '周末去处',
+      summary: `${city.name}本周适合优先关注新展、市集、快闪、音乐会和商场活动，适合先收藏作为周末路线。`,
+      text: `${city.name}近期城市活动会重点围绕展览、市集、快闪、音乐会和商场活动筛选。搜索源恢复时会优先替换为具体活动标题和更完整的地点信息。`,
+    },
+    {
+      name: `${city.name}咖啡探店清单`,
+      category: '咖啡',
+      sceneTag: '咖啡打卡',
+      summary: `${city.name}咖啡内容优先看新开门店、社区咖啡、海边/街区空间和近期被反复提到的探店清单。`,
+      text: `${city.name}咖啡探店会优先筛选新开、上新、空间感强、适合拍照或办公的内容。后续同步会继续补充具体店名、图像和体验重点。`,
+    },
+    {
+      name: `${city.name}餐厅新店精选`,
+      category: '餐厅',
+      sceneTag: '新店打卡',
+      summary: `${city.name}餐厅新店会按开业、试营业、首店、排队热度和本地商圈讨论度整理。`,
+      text: `${city.name}餐厅类内容不只看标题热度，还会结合菜系、位置、近期是否开业和是否适合聚餐来筛选。`,
+    },
+    {
+      name: `${city.name}甜品下午茶精选`,
+      category: '甜品',
+      sceneTag: '甜品打卡',
+      summary: `${city.name}甜品下午茶会优先看新开甜品、蛋糕、冰淇淋、季节限定和适合拍照的空间。`,
+      text: `${city.name}甜品内容会重点关注新品、季节限定、出片度和商圈便利性，适合下午茶或逛街顺路收藏。`,
+    },
+    {
+      name: `${city.name}生活方式新店`,
+      category: '买手店',
+      sceneTag: '生活方式',
+      summary: `${city.name}生活方式内容会关注买手店、集合店、潮牌、家居选品和审美空间。`,
+      text: `${city.name}生活方式新店会看品牌组合、陈列审美、街区氛围和是否适合慢逛，作为咖啡与餐厅之外的补充路线。`,
+    },
+    {
+      name: `${city.name}夜间小聚清单`,
+      category: '酒吧',
+      sceneTag: '夜间小聚',
+      summary: `${city.name}夜间小聚会关注小酒馆、鸡尾酒吧、音乐空间和适合下班后的轻社交去处。`,
+      text: `${city.name}酒吧和夜间内容会优先看氛围、位置、预约便利度和近期是否有活动，适合安排晚间路线。`,
+    },
+  ];
+  return rows.map((row, index) => ({
+    id: crypto.createHash('sha1').update(`${city.id}:fallback:${row.name}`).digest('hex').slice(0, 16),
+    city: city.name,
+    name: row.name,
+    category: row.category,
+    district,
+    summary: row.summary,
+    contentTitle: row.name,
+    contentText: row.text,
+    imageUrl: '',
+    photos: [],
+    tags: ['当期主题', row.category],
+    sceneTag: row.sceneTag,
+    sourceName: '站内主题兜底',
+    sourceUrl: '',
+    sourceTitle: row.name,
+    publishedAt: nowIso,
+    discoveredAt: nowIso,
+    score: 12 - index,
+  }));
+}
+
+function buildDiscoverySeedItems(city) {
+  const nowIso = new Date().toISOString();
+  const citySeeds = DISCOVERY_REAL_PLACE_SEEDS[city.name] || {};
+  const defaultDistrict = (city.districtHints || [])[0] || '';
+  const rows = [];
+  for (const category of DISCOVERY_CATEGORY_KEYWORDS.map(item => item.name)) {
+    for (const [index, name] of (citySeeds[category] || []).entries()) {
+      const focus = discoveryCategoryFocus(category);
+      const mood = discoveryCategoryMood(category).replace(/。$/, '');
+      const profile = discoveryPlaceProfile(city.name, name);
+      const district = profile?.district || defaultDistrict;
+      const summary = profile?.summary || `${name}是${city.name}${category}方向的具体去处，适合作为近期探店、打卡或路线备选。`;
+      const contentText = profile?.summary
+        ? `${profile.summary} 选择它时可以重点看${focus}，再结合距离、营业状态和当天排队情况决定是否前往。${mood}。`
+        : `${name}可以作为${city.name}${category}路线里的一个具体备选。先看${focus}，再结合距离、营业状态和当天排队情况决定是否前往。${mood}。`;
+      rows.push({
+        id: crypto.createHash('sha1').update(`${city.id}:seed:${category}:${name}`).digest('hex').slice(0, 16),
+        city: city.name,
+        name,
+        category,
+        district,
+        summary,
+        contentTitle: `${city.name}${category}去处：${name}`,
+        contentText,
+        imageUrl: '',
+        photos: [],
+        imageQuery: profile?.imageQuery || '',
+        imageCaption: profile?.imageCaption || '',
+        tags: ['实际地点', category].concat(profile?.tags || []),
+        sourceName: '站内地点资料',
+        sourceUrl: '',
+        sourceTitle: `${city.name}${category}去处：${name}`,
+        publishedAt: nowIso,
+        discoveredAt: nowIso,
+        score: (profile ? 18 : 10) - index,
+      });
+    }
+  }
+  return rows;
+}
+
+function discoveryWeixinRowToItems(city, row) {
+  const text = `${row.title || ''} ${row.summary || ''}`;
+  if (!isDiscoveryRecentEnough(row.publishedAt)) return [];
+  if (!discoveryHasFreshSignal(text) && !/(首店|新店|开业|试营业|落户|登陆|入驻)/.test(text)) return [];
+  if (!discoveryHasPlaceCategory(text)) return [];
+  if (!discoveryTextHasCitySignal(city, text)) return [];
+  if (isBadDiscoveryCandidate('', row.title, row.summary)) return [];
+  const category = guessDiscoveryCategory(text);
+  let names = [
+    ...extractWeixinShopNames(city, row.title, row.summary),
+    ...extractDiscoveryPlaceNames(city, category, row.title, row.summary),
+  ]
+    .filter((name, index, arr) => arr.findIndex(item => item.toLowerCase() === name.toLowerCase()) === index)
+    .filter(name => discoveryNameHasLocalContext(city, name, text, row.title || ''))
+    .filter(name => discoveryNameNearestCityIsTarget(city, name, text));
+  return names.map((name, index) => {
+    return {
+      id: crypto.createHash('sha1').update(`${city.id}:weixin:${name}:${row.link || row.title}`).digest('hex').slice(0, 16),
+      city: city.name,
+      name,
+      category: category === '其他' ? '餐厅' : category,
+      district: guessDiscoveryDistrict(city, text),
+      summary: cleanDiscoveryText(row.summary || row.title).slice(0, 120),
+      contentTitle: row.title || '',
+      contentText: cleanDiscoveryText(`${row.title || ''}\n${row.summary || ''}`).slice(0, 360),
+      imageUrl: row.imageUrl || '',
+      photos: row.imageUrl ? [row.imageUrl] : [],
+      tags: ['精选线索'].concat(category === '其他' ? [] : [category]),
+      sourceName: row.account ? `微信文章 · ${row.account}` : '微信文章线索',
+      sourceUrl: row.link || '',
+      sourceTitle: row.title || '',
+      publishedAt: row.publishedAt || '',
+      discoveredAt: new Date().toISOString(),
+      score: 18 - index,
+    };
+  });
+}
+
+function discoveryRowToRankedItems(city, row) {
+  const fullText = `${row.title || ''} ${row.summary || ''}`;
+  if (!/大众点评|点评|rankinglist|新店商圈|新店榜|服务榜/i.test(fullText)) return [];
+  if (!/新店|新开|开业|首店|试营业|商圈/i.test(fullText)) return [];
+  const names = extractDianpingRankedShopNames(row.summary || row.title || '');
+  return names.map((name, index) => {
+    const category = guessDiscoveryCategory(fullText);
+    return {
+      id: crypto.createHash('sha1').update(`${city.id}:dianping:${name}:${row.link || row.title}`).digest('hex').slice(0, 16),
+      city: city.name,
+      name,
+      category: category === '其他' ? '餐厅' : category,
+      district: guessDiscoveryDistrict(city, fullText),
+      summary: cleanDiscoveryText(row.summary || row.title).slice(0, 120),
+      contentTitle: row.title || '',
+      contentText: cleanDiscoveryText(`${row.title || ''}\n${row.summary || ''}`).slice(0, 360),
+      imageUrl: '',
+      photos: [],
+      tags: ['榜单线索', '新店商圈'].concat(category === '其他' ? [] : [category]),
+      sourceName: '大众点评榜单线索',
+      sourceUrl: row.link || '',
+      sourceTitle: row.title || '',
+      publishedAt: row.pubDate || '',
+      discoveredAt: new Date().toISOString(),
+      score: 22 - index,
+    };
+  });
+}
+
+function extractDiscoveryName(city, title, summary) {
+  const text = `${title || ''} ${summary || ''}`;
+  const patterns = [
+    /[「『《“]([^」』》”]{2,28})[」』》”]/,
+    /(?:探店|新店|首店|开业|试营业|打卡|推荐)[:：\s]+([^｜|,，。!！?？\-—]{2,24})/,
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) return cleanDiscoveryText(match[1]).replace(new RegExp(`^${city.name}`), '').trim();
+  }
+  const main = cleanDiscoveryText(String(title || '').split(/\s[-_|｜]\s/)[0])
+    .replace(new RegExp(`^${city.name}`), '')
+    .replace(/(新店|网红店|探店|打卡|推荐|开业|试营业)/g, '')
+    .replace(/[，。!！?？].*$/, '')
+    .trim();
+  return main.length > 22 ? `${main.slice(0, 22)}...` : main;
+}
+
+function scoreDiscoveryCandidate(city, title, summary) {
+  const text = `${title || ''} ${summary || ''}`.toLowerCase();
+  let score = 0;
+  if (text.includes(city.name.toLowerCase())) score += 3;
+  for (const word of ['新开', '新店', '开业', '试营业', '首店', '上新', '本周', '最近']) {
+    if (text.includes(word.toLowerCase())) score += 7;
+  }
+  for (const word of ['网红', '打卡', '小红书', '抖音', '爆火', '排队', '种草', '热门']) {
+    if (text.includes(word.toLowerCase())) score += 4;
+  }
+  for (const category of DISCOVERY_CATEGORY_KEYWORDS) {
+    if (category.keywords.some(keyword => text.includes(String(keyword).toLowerCase()))) score += 3;
+  }
+  for (const word of ['招聘', '加盟', '转让', '倒闭', '投诉', '菜单价格表', '地址电话']) {
+    if (text.includes(word.toLowerCase())) score -= 8;
+  }
+  return score;
+}
+
+function selectDiscoveryCityItems(items) {
+  const categoryOrder = DISCOVERY_CATEGORY_KEYWORDS.map(item => item.name);
+  const buckets = new Map(categoryOrder.map(category => [category, []]));
+  for (const item of (items || []).filter(isPublicDiscoveryItem).sort(sortDiscoveryItems)) {
+    const category = categoryOrder.includes(item.category) ? item.category : '其他';
+    if (!buckets.has(category)) buckets.set(category, []);
+    const bucket = buckets.get(category);
+    if (bucket.length < DISCOVERY_CATEGORY_PER_CITY_LIMIT) bucket.push(item);
+  }
+  const selected = [];
+  for (const category of categoryOrder) {
+    selected.push(...(buckets.get(category) || []));
+  }
+  if (selected.length < DISCOVERY_CITY_LIMIT) {
+    for (const item of (items || []).filter(isPublicDiscoveryItem).sort(sortDiscoveryItems)) {
+      if (selected.some(existing => String(existing.id || existing.name) === String(item.id || item.name))) continue;
+      selected.push(item);
+      if (selected.length >= DISCOVERY_CITY_LIMIT) break;
+    }
+  }
+  return selected
+    .map(decorateDiscoveryItem)
+    .filter(isPublicDiscoveryItem)
+    .sort(sortDiscoveryItems)
+    .slice(0, DISCOVERY_CITY_LIMIT);
+}
+
+async function fetchDiscoverySearchItems(query) {
+  const url = new URL(query.includes(' 新闻 ') ? 'https://www.bing.com/news/search' : 'https://www.bing.com/search');
+  url.searchParams.set('q', query);
+  url.searchParams.set('format', 'rss');
+  url.searchParams.set('setlang', 'zh-CN');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) PandaDiscovery/1.0',
+        'Accept': 'application/rss+xml,application/xml,text/xml;q=0.9,*/*;q=0.8',
+      },
+    });
+    if (!res.ok) throw new Error(`search rss ${res.status}`);
+    return parseDiscoveryRss(await res.text());
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function collectDiscoveryCityItems(city) {
+  const baiduNewsQueries = [
+    `${city.name} 7月 周末 活动 展览 市集`,
+    `${city.name} 本周 活动 展览 市集`,
+    `${city.name} 近期 活动 展览 音乐会 市集`,
+    `${city.name} 近期 新店 探店 咖啡 餐厅`,
+    `${city.name} 新店 开业 首店 探店`,
+    `${city.name} 咖啡 新店 探店`,
+    `${city.name} 咖啡店 新开 探店`,
+    `${city.name} 餐厅 新店 探店`,
+    `${city.name} 甜品 新店 探店`,
+    `${city.name} 面包 烘焙 新店 探店`,
+    `${city.name} 茶饮 奶茶 新店 探店`,
+    `${city.name} 酒吧 小酒馆 新店 探店`,
+    `${city.name} 买手店 生活方式 新店 探店`,
+  ];
+  const queries = [
+    `${city.name} 大众点评 新店商圈 咖啡 服务榜`,
+    `${city.name} 大众点评 新店榜 餐厅 咖啡`,
+    `${city.name} 大众点评 必吃榜 新店 首店 探店`,
+    `${city.name} 大众点评 新店 商圈 甜品 面包 酒吧`,
+    `${city.name} 小红书 新店 探店 咖啡 餐厅 展览`,
+    `${city.name} 新开 网红店 咖啡 餐厅`,
+    `${city.name} 新闻 新店 开业 餐厅 咖啡`,
+    `${city.name} 本周新店 探店 小红书`,
+    `${city.name} 试营业 首店 甜品 面包 酒吧`,
+    `${city.name} 近期 新开 首店 探店 咖啡 甜品`,
+    `${city.name} 本周 生活方式 新店 买手店 展览 空间`,
+    `${city.name} 新店 打卡 餐厅 酒吧 面包`,
+    `${city.name} 近期 新展 市集 快闪 生活方式`,
+    `${city.name} 商业首店 开业 新店 买手店`,
+    `${city.name} 本地生活 新店 探店 排队 热门`,
+    `${city.name} 近期新开 店 开业 探店`,
+  ];
+  const weixinQueries = [
+    `${city.name} 7月 周末 活动 展览 市集`,
+    `${city.name} 本周 周末 活动 展览 市集`,
+    `${city.name} 近期 活动 展览 音乐会 市集`,
+    `${city.name} 新店 探店 咖啡 餐厅`,
+    `${city.name} 本周新店 探店`,
+    `${city.name} 新开 咖啡 探店`,
+    `${city.name} 周末 新展 市集`,
+    `${city.name} 近期 首店 开业 餐厅 咖啡`,
+    `${city.name} 新店 甜品 面包 酒吧`,
+    `${city.name} 小红书 探店 新店 必去`,
+    `${city.name} 大众点评 必吃榜 新店`,
+    `${city.name} 探店 新开 生活方式`,
+    `${city.name} 展览 空间 买手店 新店`,
+    `${city.name} 近期 新展 市集 快闪 周末`,
+  ];
+  const seen = new Set();
+  const items = [];
+  for (const query of baiduNewsQueries) {
+    let rows = [];
+    try {
+      rows = await fetchBaiduNewsItems(query);
+    } catch (err) {
+      console.error(`discovery baidu news failed ${city.name}:`, err.message);
+      continue;
+    }
+    for (const row of rows) {
+      const baiduItems = discoveryBaiduNewsRowToItems(city, row);
+      for (const item of baiduItems) {
+        const key = `${city.id}:${String(item.name || '').toLowerCase()}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        items.push(item);
+      }
+    }
+    await sleep(220);
+  }
+  for (const query of queries) {
+    let rows = [];
+    try {
+      rows = await fetchDiscoverySearchItems(query);
+    } catch (err) {
+      console.error(`discovery search failed ${city.name}:`, err.message);
+      continue;
+    }
+    for (const row of rows) {
+      const rankedItems = discoveryRowToRankedItems(city, row);
+      for (const item of rankedItems) {
+        const key = `${city.id}:${String(item.name || '').toLowerCase()}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        items.push(item);
+      }
+      const fullText = `${row.title} ${row.summary}`;
+      if (!discoveryHasFreshSignal(fullText)) continue;
+      if (!discoveryHasPlaceCategory(fullText)) continue;
+      const score = scoreDiscoveryCandidate(city, row.title, row.summary);
+      if (score < 12) continue;
+      const guessedCategory = guessDiscoveryCategory(fullText);
+      const names = extractDiscoveryPlaceNames(city, guessedCategory, row.title, row.summary);
+      for (const name of names) {
+        if (isBadDiscoveryCandidate(name, row.title, row.summary)) continue;
+        const key = `${city.id}:${name.toLowerCase()}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        items.push({
+          id: crypto.createHash('sha1').update(`${city.id}:${name}:${row.link || row.title}`).digest('hex').slice(0, 16),
+          city: city.name,
+          name,
+          category: guessedCategory,
+          district: guessDiscoveryDistrict(city, fullText),
+          summary: cleanDiscoveryText(row.summary || row.title).slice(0, 140),
+          contentTitle: row.title || '',
+          contentText: cleanDiscoveryText(`${row.title || ''}\n${row.summary || ''}`).slice(0, 420),
+          imageUrl: '',
+          photos: [],
+          tags: ['新店线索', score >= 16 ? '高热度' : '待观察'].concat(guessedCategory === '其他' ? [] : [guessedCategory]),
+          sourceName: '公开搜索',
+          sourceUrl: row.link || '',
+          sourceTitle: row.title || '',
+          publishedAt: row.pubDate || '',
+          discoveredAt: new Date().toISOString(),
+          score,
+        });
+      }
+    }
+    await sleep(240);
+  }
+  for (const query of weixinQueries) {
+    let rows = [];
+    try {
+      rows = await fetchSogouWeixinItems(query);
+    } catch (err) {
+      console.error(`discovery weixin search failed ${city.name}:`, err.message);
+      continue;
+    }
+    for (const row of rows) {
+      const weixinItems = discoveryWeixinRowToItems(city, row);
+      for (const item of weixinItems) {
+        const key = `${city.id}:${String(item.name || '').toLowerCase()}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        items.push(item);
+      }
+    }
+    await sleep(360);
+  }
+  for (const item of buildDiscoverySeedItems(city)) {
+    const key = `${city.id}:${String(item.name || '').toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push(item);
+  }
+  const ranked = items
+    .filter(isPublicDiscoveryItem)
+    .sort(sortDiscoveryItems);
+  const selected = selectDiscoveryCityItems(ranked);
+  await enhanceDiscoveryItemImages(selected, city);
+  return selectDiscoveryCityItems(selected);
+}
+
+function mergeDiscoveryCityItems(fresh, previous) {
+  const merged = [];
+  const seen = new Set();
+  for (const item of [...(fresh || []), ...(previous || [])]) {
+    const name = normalizeDiscoveryShopName(item?.name || '');
+    if (!name) continue;
+    if (isBadDiscoveryCandidate(name, item.sourceTitle || '', item.summary || '')) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const photoList = Array.isArray(item.photos) ? item.photos.filter(Boolean).slice(0, 4) : [];
+    const imageUrl = item.imageUrl || photoList[0] || '';
+    const decorated = decorateDiscoveryItem({
+      ...item,
+      name,
+      category: item.category || '其他',
+      contentTitle: item.contentTitle || item.sourceTitle || '',
+      contentText: cleanDiscoveryText(item.contentText || item.summary || item.sourceTitle || '').slice(0, 420),
+      imageUrl,
+      photos: photoList.length ? photoList : (imageUrl ? [imageUrl] : []),
+      tags: Array.isArray(item.tags) ? item.tags.slice(0, 4) : [],
+    });
+    if (isPublicDiscoveryItem(decorated)) merged.push(decorated);
+  }
+  return merged.sort(sortDiscoveryItems).slice(0, DISCOVERY_CITY_LIMIT);
+}
+
+async function syncDiscoveryDb(options = {}) {
+  const force = !!options.force;
+  if (discoverySyncTask) return await discoverySyncTask;
+  discoverySyncTask = (async () => {
+    const now = chinaNowParts();
+    const previous = await readDiscoveryDb();
+    if (!force && previous.generatedDay === now.day && previous.status === 'ready') return previous;
+    discoverySyncState = {
+      running: true,
+      status: 'running',
+      source: 'public-search',
+      startedAt: new Date().toISOString(),
+      reason: options.reason || '',
+    };
+    const previousCityMap = new Map((previous.cities || []).map(city => [city.id, city]));
+    const cities = [];
+    const errors = [];
+    for (const city of DISCOVERY_CITIES) {
+      let fresh = [];
+      try {
+        fresh = await collectDiscoveryCityItems(city);
+      } catch (err) {
+        errors.push({ city: city.name, error: err.message });
+      }
+      const oldCity = previousCityMap.get(city.id) || {};
+      const items = mergeDiscoveryCityItems(fresh, oldCity.items || []);
+      cities.push({
+        ...city,
+        updatedAt: fresh.length ? new Date().toISOString() : (oldCity.updatedAt || previous.generatedAt || ''),
+        freshCount: fresh.length,
+        items,
+      });
+      await sleep(220);
+    }
+    const itemCount = cities.reduce((sum, city) => sum + (city.items || []).length, 0);
+    const payload = {
+      version: 1,
+      status: itemCount ? (errors.length ? 'partial' : 'ready') : 'empty',
+      generatedAt: new Date().toISOString(),
+      generatedDay: now.day,
+      source: 'public-search',
+      cityLimit: DISCOVERY_CITY_LIMIT,
+      categories: DISCOVERY_CATEGORY_KEYWORDS.map(item => item.name),
+      cityCount: cities.length,
+      itemCount,
+      errors,
+      cities,
+    };
+    await writeDiscoveryDb(payload);
+    discoverySyncState = {
+      running: false,
+      status: payload.status,
+      source: 'public-search',
+      savedAt: payload.generatedAt,
+      itemCount,
+      errors,
+    };
+    return normalizeDiscoveryDb(payload);
+  })();
+  try {
+    return await discoverySyncTask;
+  } finally {
+    discoverySyncTask = null;
+  }
+}
+
+async function getDiscoveryData(url, req, res) {
+  const refresh = url.searchParams.get('refresh') === '1' || url.searchParams.get('force') === '1';
+  if (refresh) {
+    if (!requireAdmin(req, res)) return;
+    const payload = await syncDiscoveryDb({ force: true, reason: 'manual-api' });
+    return send(res, 200, { ok: true, ...payload, syncState: discoverySyncState });
+  }
+  const payload = await readDiscoveryDb();
+  const now = chinaNowParts();
+  if (payload.generatedDay !== now.day && !discoverySyncTask) {
+    syncDiscoveryDb({ force: false, reason: 'read-stale' }).catch(err => {
+      discoverySyncState = { running: false, status: 'error', source: 'public-search', error: err.message };
+      console.error('discovery background sync failed:', err.message);
+    });
+  }
+  return send(res, 200, { ok: true, ...payload, syncState: discoverySyncState });
+}
+
+async function syncDiscoveryDataApi(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const wait = url.searchParams.get('wait') === '1';
+  if (!wait) {
+    syncDiscoveryDb({ force: true, reason: 'manual' }).catch(err => {
+      discoverySyncState = { running: false, status: 'error', source: 'public-search', error: err.message };
+      console.error('discovery sync failed:', err.message);
+    });
+    return send(res, 202, { ok: true, started: true, state: discoverySyncState });
+  }
+  const payload = await syncDiscoveryDb({ force: true, reason: 'manual-wait' });
+  return send(res, 200, { ok: true, ...payload, syncState: discoverySyncState });
+}
+
+async function fetchYuleJson(pathname, options = {}) {
+  const target = `http://${YULE_PROXY_HOST}:${YULE_PROXY_PORT}${pathname}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Number(options.timeoutMs || 12000));
+  try {
+    const response = await fetch(target, {
+      method: options.method || 'GET',
+      headers: options.headers || {},
+      body: options.body,
+      signal: controller.signal,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `yule ${response.status}`);
+    return data;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function adminContentSyncStatus(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  const discovery = await readDiscoveryDb();
+  const yule = await fetchYuleJson('/api/yule/health').catch(err => ({ ok: false, error: err.message }));
+  return send(res, 200, {
+    ok: true,
+    yule: {
+      ok: !!yule.ok,
+      items: Number(yule.items || 0),
+      state: yule.state || null,
+      error: yule.error || '',
+    },
+    discovery: {
+      status: discovery.status,
+      itemCount: discovery.itemCount || 0,
+      generatedAt: discovery.generatedAt || '',
+      generatedDay: discovery.generatedDay || '',
+      syncState: discoverySyncState,
+    },
+  });
+}
+
+async function adminContentSyncYule(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const data = await fetchYuleJson('/api/yule/collect', { method: 'POST' });
+  return send(res, 200, {
+    ok: true,
+    service: 'yule',
+    started: !!data.started || !!data.ok,
+    message: '娱乐内容同步已在后台开始',
+    yule: data,
+  });
+}
+
+async function adminContentSyncDiscovery(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  if (!discoverySyncTask) {
+    syncDiscoveryDb({ force: true, reason: 'admin-content-sync' }).catch(err => {
+      discoverySyncState = { running: false, status: 'error', source: 'public-search', error: err.message };
+      console.error('admin discovery content sync failed:', err.message);
+    });
+  }
+  return send(res, 202, {
+    ok: true,
+    service: 'discovery',
+    started: true,
+    message: '探索内容同步已在后台开始',
+    syncState: discoverySyncState,
+  });
+}
+
+async function readChatterDb() {
+  try {
+    const payload = JSON.parse(await fs.readFile(CHATTER_DB_PATH, 'utf8'));
+    return {
+      version: 1,
+      posts: Array.isArray(payload.posts) ? payload.posts : [],
+    };
+  } catch {
+    return { version: 1, posts: [] };
+  }
+}
+
+async function writeChatterDb(payload) {
+  await fs.mkdir(CHATTER_DIR, { recursive: true });
+  const posts = (Array.isArray(payload.posts) ? payload.posts : [])
+    .filter(post => post && post.id)
+    .map(post => ({
+      ...post,
+      comments: (Array.isArray(post.comments) ? post.comments : [])
+        .filter(comment => comment && comment.id)
+        .slice(-CHATTER_MAX_COMMENTS_PER_POST),
+    }))
+    .slice(0, CHATTER_MAX_POSTS);
+  const next = {
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    count: posts.length,
+    posts,
+  };
+  const tmp = `${CHATTER_DB_PATH}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify(next, null, 2), 'utf8');
+  await fs.rename(tmp, CHATTER_DB_PATH);
+  return next;
+}
+
+function chatterPublicComment(comment) {
+  return {
+    id: String(comment.id || ''),
+    text: String(comment.text || '').slice(0, CHATTER_COMMENT_MAX),
+    author: String(comment.author || '用户').slice(0, 40),
+    authorRole: comment.authorRole === 'admin' ? 'admin' : 'user',
+    createdAt: comment.createdAt || '',
+  };
+}
+
+function chatterPublicPost(post, options = {}) {
+  const imageName = String(post.imageName || '').replace(/[^\w.\-]/g, '');
+  const comments = (Array.isArray(post.comments) ? post.comments : []).map(chatterPublicComment);
+  return {
+    id: String(post.id || ''),
+    text: String(post.text || '').slice(0, CHATTER_TEXT_MAX),
+    author: String(post.author || '用户').slice(0, 40),
+    authorRole: post.authorRole === 'admin' ? 'admin' : 'user',
+    createdAt: post.createdAt || '',
+    imageUrl: imageName ? `/api/chatter/image/${encodeURIComponent(imageName)}` : '',
+    commentCount: comments.length,
+    comments: options.includeComments ? comments : comments.slice(-2),
+  };
+}
+
+function parseChatterImage(image) {
+  if (!image || !image.dataUrl) return null;
+  const raw = String(image.dataUrl || '');
+  const match = raw.match(/^data:(image\/(?:png|jpe?g|webp|gif));base64,([a-z0-9+/=\s]+)$/i);
+  if (!match) throw new Error('unsupported image type');
+  const mime = match[1].toLowerCase().replace('image/jpg', 'image/jpeg');
+  const buffer = Buffer.from(match[2].replace(/\s+/g, ''), 'base64');
+  if (!buffer.length) return null;
+  if (buffer.length > CHATTER_IMAGE_MAX_BYTES) throw new Error('image too large');
+  const ext = mime === 'image/png' ? 'png'
+    : mime === 'image/webp' ? 'webp'
+      : mime === 'image/gif' ? 'gif'
+        : 'jpg';
+  return { mime, buffer, ext };
+}
+
+async function listChatterPosts(url, req, res) {
+  const payload = await readChatterDb();
+  return send(res, 200, {
+    ok: true,
+    posts: (payload.posts || []).map(chatterPublicPost),
+    updatedAt: payload.updatedAt || '',
+  });
+}
+
+async function getChatterPost(url, req, res) {
+  if (req.method !== 'GET') return send(res, 405, { error: 'method not allowed' });
+  const id = decodeURIComponent(String(url.pathname || '').slice('/api/chatter/posts/'.length)).replace(/\/.*$/, '').trim();
+  if (!id) return send(res, 400, { error: 'post id required' });
+  const payload = await readChatterDb();
+  const post = (payload.posts || []).find(item => String(item.id) === id);
+  if (!post) return send(res, 404, { error: 'post not found' });
+  return send(res, 200, {
+    ok: true,
+    post: chatterPublicPost(post, { includeComments: true }),
+    updatedAt: payload.updatedAt || '',
+  });
+}
+
+async function createChatterPost(url, req, res) {
+  const session = requireAccount(req, res);
+  if (!session) return;
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const body = await readJsonBody(req).catch(() => null);
+  if (!body) return send(res, 400, { error: 'bad body' });
+  const text = String(body.text || '').replace(/\r\n/g, '\n').trim().slice(0, CHATTER_TEXT_MAX);
+  let image = null;
+  try {
+    image = parseChatterImage(body.image || null);
+  } catch (err) {
+    return send(res, 400, { error: err.message });
+  }
+  if (!text && !image) return send(res, 400, { error: 'content required' });
+  const id = authId('chat');
+  let imageName = '';
+  if (image) {
+    await fs.mkdir(CHATTER_IMAGE_DIR, { recursive: true });
+    imageName = `${id}.${image.ext}`;
+    await fs.writeFile(path.join(CHATTER_IMAGE_DIR, imageName), image.buffer);
+  }
+  const payload = await readChatterDb();
+  const post = {
+    id,
+    text,
+    imageName,
+    author: session.username || '用户',
+    authorRole: session.role === 'admin' ? 'admin' : 'user',
+    userId: session.userId || '',
+    createdAt: new Date().toISOString(),
+  };
+  const next = await writeChatterDb({ posts: [post, ...(payload.posts || [])] });
+  return send(res, 201, {
+    ok: true,
+    post: chatterPublicPost(post),
+    count: next.count,
+  });
+}
+
+async function createChatterComment(url, req, res) {
+  const session = requireAccount(req, res);
+  if (!session) return;
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const match = String(url.pathname || '').match(/^\/api\/chatter\/posts\/([^/]+)\/comments$/);
+  const postId = decodeURIComponent(match?.[1] || '').trim();
+  if (!postId) return send(res, 400, { error: 'post id required' });
+  const body = await readJsonBody(req).catch(() => null);
+  if (!body) return send(res, 400, { error: 'bad body' });
+  const text = String(body.text || '').replace(/\r\n/g, '\n').trim().slice(0, CHATTER_COMMENT_MAX);
+  if (!text) return send(res, 400, { error: 'comment required' });
+  const payload = await readChatterDb();
+  const posts = Array.isArray(payload.posts) ? payload.posts : [];
+  const index = posts.findIndex(item => String(item.id) === postId);
+  if (index < 0) return send(res, 404, { error: 'post not found' });
+  const comment = {
+    id: authId('reply'),
+    text,
+    author: session.username || '用户',
+    authorRole: session.role === 'admin' ? 'admin' : 'user',
+    userId: session.userId || '',
+    createdAt: new Date().toISOString(),
+  };
+  const nextPost = {
+    ...posts[index],
+    comments: [...(Array.isArray(posts[index].comments) ? posts[index].comments : []), comment].slice(-CHATTER_MAX_COMMENTS_PER_POST),
+    updatedAt: new Date().toISOString(),
+  };
+  const nextPosts = posts.slice();
+  nextPosts[index] = nextPost;
+  await writeChatterDb({ posts: nextPosts });
+  return send(res, 201, {
+    ok: true,
+    comment: chatterPublicComment(comment),
+    post: chatterPublicPost(nextPost, { includeComments: true }),
+  });
+}
+
+async function serveChatterImage(url, req, res) {
+  const raw = decodeURIComponent(String(url.pathname || '').slice('/api/chatter/image/'.length));
+  const safe = path.basename(raw).replace(/[^\w.\-]/g, '');
+  if (!safe) {
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
+    res.end('not found');
+    return;
+  }
+  const file = path.join(CHATTER_IMAGE_DIR, safe);
+  try {
+    const buffer = await fs.readFile(file);
+    const ext = path.extname(safe).toLowerCase();
+    const contentType = ext === '.png' ? 'image/png'
+      : ext === '.webp' ? 'image/webp'
+        : ext === '.gif' ? 'image/gif'
+          : 'image/jpeg';
+    res.writeHead(200, {
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      'Access-Control-Allow-Origin': '*',
+    });
+    res.end(buffer);
+  } catch {
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
+    res.end('not found');
+  }
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function parseThsNumber(value) {
+  const text = stripHtml(value).replace(/,/g, '').trim();
+  if (!text || text === '--') return null;
+  const n = Number(text.replace(/[^\d.+-]/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+function parseThsMoneyToYuan(value) {
+  const text = stripHtml(value).replace(/,/g, '').trim();
+  if (!text || text === '--') return null;
+  const n = Number(text.replace(/[^\d.+-]/g, ''));
+  if (!Number.isFinite(n)) return null;
+  if (text.includes('亿')) return n * 1e8;
+  if (text.includes('万')) return n * 1e4;
+  return n;
+}
+
+async function fetchThsJs() {
+  if (thsJsCache) return thsJsCache;
+  const res = await fetch(THS_JS_URL, {
+    headers: { 'User-Agent': 'Mozilla/5.0' },
+  });
+  if (!res.ok) throw new Error(`THS js ${res.status}`);
+  thsJsCache = await res.text();
+  return thsJsCache;
+}
+
+async function getThsCookieV() {
+  const now = Date.now();
+  if (thsCookieCache?.value && thsCookieCache.expiresAt > now) return thsCookieCache.value;
+  const js = await fetchThsJs();
+  const sandbox = {
+    navigator: {
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/89.0.4389.90 Safari/537.36',
+      plugins: [],
+      platform: 'Win32',
+      language: 'zh-CN',
+      vendor: 'Google Inc.',
+    },
+    document: {
+      cookie: '',
+      createElement() {
+        return {
+          getContext() { return {}; },
+          addBehavior() {},
+          load() {},
+          setAttribute() {},
+          getAttribute() {},
+          removeAttribute() {},
+          save() {},
+          style: {},
+        };
+      },
+      getElementsByTagName() {
+        return [{ appendChild() {}, removeChild() {} }];
+      },
+      body: { appendChild() {}, removeChild() {} },
+      head: { appendChild() {}, removeChild() {} },
+    },
+    location: {
+      href: 'https://q.10jqka.com.cn/gn/',
+      hostname: 'q.10jqka.com.cn',
+      protocol: 'https:',
+    },
+    screen: {},
+    setTimeout,
+    clearTimeout,
+  };
+  sandbox.window = sandbox;
+  sandbox.top = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(js, sandbox, { timeout: 5000 });
+  const value = String(vm.runInContext('v()', sandbox, { timeout: 5000 }) || '');
+  if (!value) throw new Error('THS cookie empty');
+  thsCookieCache = {
+    value,
+    expiresAt: now + 10 * 60 * 1000,
+  };
+  return value;
+}
+
+async function thsFetchHtml(url, referer = 'https://q.10jqka.com.cn/gn/') {
+  await sleep(80);
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const v = await getThsCookieV();
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/89.0.4389.90 Safari/537.36',
+        Cookie: `v=${v}`,
+        Referer: referer,
+      },
+    });
+    if (res.ok) {
+      const buf = Buffer.from(await res.arrayBuffer());
+      return new TextDecoder('gbk').decode(buf);
+    }
+    if ((res.status === 401 || res.status === 403) && attempt < 4) {
+      thsCookieCache = null;
+      await sleep(800 + attempt * 1500);
+      continue;
+    }
+    throw new Error(`THS ${res.status}: ${url}`);
+  }
+  throw new Error(`THS request failed: ${url}`);
+}
+
+async function thsFetchPlainHtml(url, referer = 'https://q.10jqka.com.cn/gn/') {
+  await sleep(60);
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/89.0.4389.90 Safari/537.36',
+      Referer: referer,
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`THS ${res.status}: ${url} ${text.slice(0, 120)}`);
+  }
+  const bytes = Buffer.from(await res.arrayBuffer());
+  return new TextDecoder('gb18030').decode(bytes);
+}
+
+function parseThsGnSection(html) {
+  const match = String(html || '').match(/id=["']gnSection["']\s+value='([^']+)'/);
+  if (!match) return [];
+  let data = {};
+  try {
+    data = JSON.parse(htmlDecode(match[1]));
+  } catch {
+    return [];
+  }
+  return Object.values(data).map((item, index) => {
+    const plateId = String(item?.cid || item?.platecode || '').trim();
+    const name = String(item?.platename || '').trim();
+    if (!plateId || !name) return null;
+    return {
+      source: 'ths',
+      plateId,
+      thsPlateCode: String(item?.platecode || '').trim(),
+      name,
+      rank: index + 1,
+      gain: numOrNull(item?.['199112']),
+      netInflow: Number.isFinite(Number(item?.zjjlr)) ? Number(item.zjjlr) * 1e8 : null,
+      upRatio: numOrNull(item?.zfl),
+    };
+  }).filter(Boolean);
+}
+
+function parseThsPageInfo(html) {
+  const match = String(html || '').match(/class=["']page_info["'][^>]*>\s*(\d+)\s*\/\s*(\d+)\s*<\/span>/)
+    || String(html || '').match(/page_info[\s\S]{0,120}?(\d+)\s*\/\s*(\d+)/);
+  return match ? Number(match[2]) : 1;
+}
+
+function parseThsStockRows(html) {
+  const rows = [];
+  const trMatches = String(html || '').match(/<tr[\s\S]*?<\/tr>/gi) || [];
+  for (const tr of trMatches) {
+    const cells = [...tr.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(match => match[1]);
+    if (cells.length < 5) continue;
+    const code = stripHtml(cells[1]).replace(/\D/g, '').slice(0, 6);
+    const name = stripHtml(cells[2]);
+    if (!code || !name || isStStock(name)) continue;
+    rows.push({
+      code,
+      name,
+      close: parseThsNumber(cells[3]),
+      price: parseThsNumber(cells[3]),
+      gain: parseThsNumber(cells[4]),
+      amount: parseThsMoneyToYuan(cells[10]),
+      turnover: parseThsNumber(cells[7]),
+    });
+  }
+  return rows;
+}
+
+function parseThsConceptNavLinks(html) {
+  const seen = new Set();
+  return [...String(html || '').matchAll(/gn\/detail\/code\/(\d+)\/[^>]*>([^<]+)<\/a>/g)]
+    .map(match => ({
+      source: 'ths',
+      plateId: String(match[1] || '').trim(),
+      thsPlateCode: '',
+      name: stripHtml(match[2]),
+    }))
+    .filter(board => {
+      if (!board.plateId || !board.name || seen.has(board.plateId)) return false;
+      seen.add(board.plateId);
+      return true;
+    });
+}
+
+function parseThsDetailBoardMeta(html, fallback = {}) {
+  const text = String(html || '');
+  const titleMatch = text.match(/<h3[^>]*>\s*([^<]+?)\s*<span>(\d+)<\/span>\s*<\/h3>/);
+  const gainMatch = text.match(/<dt>\s*板块涨幅\s*<\/dt>\s*<dd[^>]*>\s*([+-]?\d+(?:\.\d+)?)%/);
+  const rankMatch = text.match(/<dt>\s*涨幅排名\s*<\/dt>\s*<dd[^>]*>\s*(\d+)\s*\/\s*(\d+)/);
+  const upDownMatch = text.match(/<dt>\s*涨跌家数\s*<\/dt>\s*<dd[^>]*>[\s\S]*?<span[^>]*>\s*(\d+)\s*<\/span>[\s\S]*?<span[^>]*>\s*(\d+)\s*<\/span>/);
+  const name = stripHtml(titleMatch?.[1] || fallback.name || '');
+  const thsPlateCode = String(titleMatch?.[2] || fallback.thsPlateCode || '').trim();
+  const upCount = numOrNull(upDownMatch?.[1]);
+  const downCount = numOrNull(upDownMatch?.[2]);
+  const stockCount = Number.isFinite(upCount) && Number.isFinite(downCount) ? upCount + downCount : fallback.stockCount;
+  return {
+    ...fallback,
+    source: 'ths',
+    name: name || fallback.name,
+    thsPlateCode,
+    gain: numOrNull(gainMatch?.[1] ?? fallback.gain),
+    rank: numOrNull(rankMatch?.[1] ?? fallback.rank),
+    stockCount: Number.isFinite(Number(stockCount)) ? Number(stockCount) : fallback.stockCount,
+    upRatio: Number.isFinite(upCount) && Number.isFinite(downCount) && upCount + downCount > 0
+      ? Math.round((upCount / (upCount + downCount)) * 100)
+      : fallback.upRatio,
+  };
+}
+
+async function fetchThsConceptDetailMeta(plateId, fallback = {}) {
+  const normalizedId = String(plateId || fallback.plateId || '').trim();
+  if (!normalizedId) return null;
+  const html = await thsFetchHtml(
+    `https://q.10jqka.com.cn/gn/detail/code/${normalizedId}/`,
+    'https://q.10jqka.com.cn/gn/',
+  );
+  return {
+    plateId: normalizedId,
+    ...parseThsDetailBoardMeta(html, { ...fallback, plateId: normalizedId }),
+  };
+}
+
+async function fetchThsConceptNavBoards(seedPlateId = '') {
+  const code = String(seedPlateId || '300188').trim();
+  const html = await thsFetchHtml(
+    `https://q.10jqka.com.cn/gn/detail/code/${code}/`,
+    'https://q.10jqka.com.cn/gn/',
+  );
+  return parseThsConceptNavLinks(html);
+}
+
+function persistThsConceptBoard(board, stockCount = null) {
+  return {
+    source: 'ths',
+    plateId: board.plateId,
+    thsPlateCode: board.thsPlateCode || '',
+    localBlockCode: board.localBlockCode || '',
+    localSource: board.localSource || '',
+    name: board.name,
+    rank: board.rank,
+    stockCount,
+  };
+}
+
+function publicThsConceptBoard(board, quote = null) {
+  return {
+    source: 'ths',
+    plateId: board.plateId,
+    thsPlateCode: board.thsPlateCode || quote?.thsPlateCode || '',
+    localBlockCode: board.localBlockCode || quote?.localBlockCode || '',
+    localSource: board.localSource || quote?.localSource || '',
+    name: board.name,
+    rank: board.rank,
+    stockCount: board.stockCount,
+    gain: numOrNull(quote?.gain ?? board.gain),
+    netInflow: numOrNull(quote?.netInflow ?? board.netInflow),
+    upRatio: numOrNull(quote?.upRatio ?? board.upRatio),
+  };
+}
+
+function persistThsConceptStock(stock) {
+  return {
+    code: stock.code,
+    name: stock.name,
+    close: numOrNull(stock.close ?? stock.price),
+    gain: numOrNull(stock.gain),
+    mainNet: numOrNull(stock.mainNet),
+    amount: numOrNull(stock.amount),
+    turnover: numOrNull(stock.turnover),
+  };
+}
+
+function looksMojibakeText(value) {
+  const text = String(value || '');
+  return /[\uFFFD]|(?:Ã|Â|Å|Ä|¸|Å)|(?:鍔|炲|叕|鏂|姒|傚|椤|鸿|蒋|禱)/.test(text);
+}
+
+function decodeThsLocalText(buffer) {
+  const utf8 = Buffer.from(buffer).toString('utf8');
+  if (!looksMojibakeText(utf8)) return utf8;
+  try {
+    return new TextDecoder('gb18030').decode(buffer);
+  } catch {
+    return utf8;
+  }
+}
+
+function readThsLocalTextSync(filePath) {
+  return decodeThsLocalText(fsSync.readFileSync(filePath));
+}
+
+function isExistingDirectory(dirPath) {
+  try {
+    return !!dirPath && fsSync.statSync(dirPath).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function isExistingFile(filePath) {
+  try {
+    return !!filePath && fsSync.statSync(filePath).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function uniqueExistingDirs(dirs) {
+  const seen = new Set();
+  return (dirs || [])
+    .map(item => String(item || '').trim())
+    .filter(item => item && !seen.has(item) && seen.add(item) && isExistingDirectory(item));
+}
+
+function thsLocalDirs(kind) {
+  if (kind === 'blockupdate') {
+    return uniqueExistingDirs([
+      ...THS_LOCAL_BLOCKUPDATE_DIRS,
+      ...THS_LOCAL_ROOT_CANDIDATE_DIRS.map(root => path.join(root, 'BlockUpdate')),
+    ]);
+  }
+  if (kind === 'stockname') {
+    return uniqueExistingDirs([
+      ...THS_LOCAL_STOCKNAME_DIRS,
+      ...THS_LOCAL_ROOT_CANDIDATE_DIRS.map(root => path.join(root, 'stockname')),
+    ]);
+  }
+  if (kind === 'stocklink') {
+    return uniqueExistingDirs(THS_LOCAL_STOCKLINK_DIRS);
+  }
+  return [];
+}
+
+function listFilesSafe(dirPath, matcher) {
+  try {
+    return fsSync.readdirSync(dirPath, { withFileTypes: true })
+      .filter(entry => entry.isFile() && matcher(entry.name))
+      .map(entry => path.join(dirPath, entry.name));
+  } catch {
+    return [];
+  }
+}
+
+function parseXmlAttrs(tag) {
+  const attrs = {};
+  for (const match of String(tag || '').matchAll(/([A-Za-z_][\w:-]*)=(["'])(.*?)\2/g)) {
+    attrs[match[1]] = htmlDecode(match[3]);
+  }
+  return attrs;
+}
+
+function loadThsFullViewBlockMap() {
+  const byLocalCode = new Map();
+  for (const filePath of THS_LOCAL_FULLVIEWBLOCK_PATHS) {
+    if (!isExistingFile(filePath)) continue;
+    const text = readThsLocalTextSync(filePath);
+    for (const match of text.matchAll(/<group\b[^>]*>/gi)) {
+      const attrs = parseXmlAttrs(match[0]);
+      const localCode = String(attrs.hqid || '').trim();
+      const sectorMatch = String(attrs.sectorid || '').match(/001042_(\d{6})/);
+      const name = String(attrs.name || '').trim();
+      if (!localCode || !sectorMatch) continue;
+      byLocalCode.set(localCode, {
+        localBlockCode: localCode,
+        plateId: sectorMatch[1],
+        name,
+      });
+    }
+  }
+  return byLocalCode;
+}
+
+function loadThsStockNameMap() {
+  const now = Date.now();
+  if (thsLocalStockNameCache?.expiresAt > now) return thsLocalStockNameCache.names;
+  const names = new Map();
+  for (const dirPath of thsLocalDirs('stockname')) {
+    const files = listFilesSafe(dirPath, name => /^stockname_.*_0\.txt$/i.test(name));
+    for (const filePath of files) {
+      const text = readThsLocalTextSync(filePath);
+      for (const line of text.split(/\r?\n/)) {
+        const match = line.match(/^(\d{6})=([^|@\r\n]+)/);
+        if (!match) continue;
+        const code = match[1];
+        const name = String(match[2] || '').trim();
+        if (!code || !name || isStStock(name)) continue;
+        if (!names.has(code)) names.set(code, name);
+      }
+    }
+  }
+  thsLocalStockNameCache = {
+    expiresAt: now + 60 * 60 * 1000,
+    names,
+  };
+  return names;
+}
+
+function loadThsStockLinkMap() {
+  const now = Date.now();
+  if (thsLocalStockLinkCache?.expiresAt > now) return thsLocalStockLinkCache;
+  const localToPlate = new Map();
+  const plateToLocal = new Map();
+  for (const dirPath of thsLocalDirs('stocklink')) {
+    const files = listFilesSafe(dirPath, name => /^stocklink_.*\.ini$/i.test(name));
+    for (const filePath of files) {
+      const text = readThsLocalTextSync(filePath);
+      for (const line of text.split(/\r?\n/)) {
+        const match = line.match(/^(\d{6})\s*=\s*-?\d+\s*:\s*([A-Za-z][A-Za-z0-9]*)/);
+        if (!match) continue;
+        const plateId = match[1];
+        const localCode = match[2].toUpperCase();
+        if (!plateToLocal.has(plateId)) plateToLocal.set(plateId, localCode);
+        if (!localToPlate.has(localCode)) localToPlate.set(localCode, plateId);
+      }
+    }
+  }
+  thsLocalStockLinkCache = {
+    expiresAt: now + 60 * 60 * 1000,
+    localToPlate,
+    plateToLocal,
+  };
+  return thsLocalStockLinkCache;
+}
+
+function parseThsLocalMemberCodes(value) {
+  const codes = [];
+  const seen = new Set();
+  for (const match of String(value || '').matchAll(/(?:^|,)-?\d+\s*:\s*(\d{6})/g)) {
+    const code = match[1];
+    if (!seen.has(code)) {
+      seen.add(code);
+      codes.push(code);
+    }
+  }
+  return codes;
+}
+
+function loadThsLocalConceptData() {
+  const now = Date.now();
+  if (thsLocalConceptCache?.expiresAt > now) return thsLocalConceptCache.data;
+  const fullViewByLocalCode = loadThsFullViewBlockMap();
+  const stockLinks = loadThsStockLinkMap();
+  const stockNames = loadThsStockNameMap();
+  const nameByLocalCode = new Map();
+  const memberCodesByLocalCode = new Map();
+
+  for (const dirPath of thsLocalDirs('blockupdate')) {
+    const files = listFilesSafe(dirPath, name => /^block_.*\.ini$/i.test(name));
+    for (const filePath of files) {
+      const text = readThsLocalTextSync(filePath);
+      let section = '';
+      for (const rawLine of text.split(/\r?\n/)) {
+        const line = rawLine.trim();
+        if (!line || line.startsWith(';') || line.startsWith('#')) continue;
+        const sectionMatch = line.match(/^\[([^\]]+)\]$/);
+        if (sectionMatch) {
+          section = sectionMatch[1];
+          continue;
+        }
+        const entryMatch = line.match(/^([A-Za-z][A-Za-z0-9]*)\s*=\s*(.*)$/);
+        if (!entryMatch) continue;
+        const localCode = entryMatch[1].toUpperCase();
+        const value = entryMatch[2].trim();
+        if (/NAME_MAP_TABLE/i.test(section) && value && !value.includes(':')) {
+          const name = value.split('|')[0].trim();
+          if (name && !looksMojibakeText(name) && !isStStock(name)) nameByLocalCode.set(localCode, name);
+        } else if (/STOCK_CONTEXT/i.test(section)) {
+          const codes = parseThsLocalMemberCodes(value);
+          if (codes.length && codes.length >= (memberCodesByLocalCode.get(localCode)?.length || 0)) {
+            memberCodesByLocalCode.set(localCode, codes);
+          }
+        }
+      }
+    }
+  }
+
+  const boards = [];
+  const byPlateId = new Map();
+  const byThsPlateCode = new Map();
+  const byLocalBlockCode = new Map();
+  for (const [localCode, memberCodes] of memberCodesByLocalCode.entries()) {
+    const fullView = fullViewByLocalCode.get(localCode);
+    const linkedPlateId = stockLinks.localToPlate.get(localCode);
+    if (!fullView && !linkedPlateId) continue;
+    const name = fullView?.name || nameByLocalCode.get(localCode) || localCode;
+    if (!name || looksMojibakeText(name) || isStStock(name)) continue;
+    const stocks = memberCodes.map(code => {
+      const stockName = stockNames.get(code) || code;
+      if (stockName && isStStock(stockName)) return null;
+      return { code, name: stockName };
+    }).filter(Boolean);
+    if (!stocks.length) continue;
+    const plateId = String(fullView?.plateId || linkedPlateId || localCode);
+    const board = {
+      source: 'ths',
+      localSource: 'ths-local-blockupdate',
+      plateId,
+      thsPlateCode: String(linkedPlateId || ''),
+      localBlockCode: localCode,
+      name,
+      stockCount: stocks.length,
+      stocks,
+    };
+    boards.push(board);
+    byPlateId.set(String(board.plateId), board);
+    if (board.thsPlateCode) byThsPlateCode.set(String(board.thsPlateCode), board);
+    byLocalBlockCode.set(String(localCode), board);
+  }
+
+  const data = {
+    boards,
+    byPlateId,
+    byThsPlateCode,
+    byLocalBlockCode,
+    blockUpdateDirs: thsLocalDirs('blockupdate'),
+    stockNameDirs: thsLocalDirs('stockname'),
+    stockLinkDirs: thsLocalDirs('stocklink'),
+  };
+  thsLocalConceptCache = {
+    expiresAt: now + 5 * 60 * 1000,
+    data,
+  };
+  return data;
+}
+
+function findThsLocalConceptBoardByAnyId(id) {
+  const normalizedId = String(id || '').trim();
+  if (!normalizedId) return null;
+  let localData = null;
+  try {
+    localData = loadThsLocalConceptData();
+  } catch {
+    return null;
+  }
+  if (!localData) return null;
+  return localData.byPlateId.get(normalizedId)
+    || localData.byThsPlateCode.get(normalizedId)
+    || localData.byLocalBlockCode.get(normalizedId.toUpperCase())
+    || null;
+}
+
+async function fetchEastmoneyRealtimeQuotesByCodes(codes) {
+  const normalizedCodes = [...new Set((codes || []).map(code => String(code || '').replace(/\D/g, '').slice(0, 6)).filter(Boolean))];
+  const quotes = new Map();
+  const batches = [];
+  for (let index = 0; index < normalizedCodes.length; index += 80) {
+    batches.push(normalizedCodes.slice(index, index + 80));
+  }
+  await mapLimit(batches, 3, async batch => {
+    const secids = batch.map(eastmoneySecid).filter(Boolean).join(',');
+    if (!secids) return;
+    const data = await eastmoneyFetchJson('api/qt/ulist.np/get', {
+      fltt: 2,
+      invt: 2,
+      fields: 'f12,f14,f2,f3,f6,f8',
+      secids,
+    }, { timeoutMs: 10000 });
+    const rows = Array.isArray(data?.data?.diff) ? data.data.diff : [];
+    for (const row of rows) {
+      const code = String(row?.f12 || '').replace(/\D/g, '').slice(0, 6);
+      if (!code) continue;
+      quotes.set(code, {
+        code,
+        name: String(row?.f14 || '').trim(),
+        close: numOrNull(row?.f2),
+        price: numOrNull(row?.f2),
+        gain: numOrNull(row?.f3),
+        amount: numOrNull(row?.f6),
+        turnover: numOrNull(row?.f8),
+      });
+    }
+  });
+  return quotes;
+}
+
+function eastmoneyScaledQuoteNumber(value) {
+  const n = numOrNull(value);
+  return Number.isFinite(n) ? n / 100 : null;
+}
+
+async function fetchEastmoneySingleStockQuote(code) {
+  const normalizedCode = String(code || '').replace(/\D/g, '').slice(0, 6);
+  if (!normalizedCode) return null;
+  const now = Date.now();
+  const cached = eastmoneySingleStockQuoteCache.get(normalizedCode);
+  if (cached && cached.expiresAt > now) return cached.quote;
+  const data = await eastmoneyFetchJson('api/qt/stock/get', {
+    secid: eastmoneySecid(normalizedCode),
+    fields: 'f43,f57,f58,f60,f169,f170',
+  }, { timeoutMs: 8000 });
+  const row = data?.data || {};
+  const price = eastmoneyScaledQuoteNumber(row.f43);
+  const prevClose = eastmoneyScaledQuoteNumber(row.f60);
+  let gain = eastmoneyScaledQuoteNumber(row.f170);
+  if (!Number.isFinite(gain) && Number.isFinite(price) && Number.isFinite(prevClose) && prevClose > 0) {
+    gain = ((price - prevClose) / prevClose) * 100;
+  }
+  const quote = {
+    code: String(row.f57 || normalizedCode).replace(/\D/g, '').slice(0, 6) || normalizedCode,
+    name: String(row.f58 || '').trim(),
+    price,
+    close: price,
+    gain,
+  };
+  eastmoneySingleStockQuoteCache.set(normalizedCode, {
+    expiresAt: now + 15 * 1000,
+    quote,
+  });
+  return quote;
+}
+
+async function enrichThsLocalStocksWithRealtime(stocks) {
+  const quotes = await fetchEastmoneyRealtimeQuotesByCodes(stocks.map(stock => stock.code)).catch(() => new Map());
+  return stocks.map(stock => {
+    const quote = quotes.get(stock.code);
+    const name = quote?.name || stock.name;
+    if (!stock.code || !name || isStStock(name)) return null;
+    return {
+      ...stock,
+      name,
+      close: numOrNull(quote?.close ?? stock.close),
+      price: numOrNull(quote?.price ?? stock.price ?? stock.close),
+      gain: numOrNull(quote?.gain ?? stock.gain),
+      amount: numOrNull(quote?.amount ?? stock.amount),
+      turnover: numOrNull(quote?.turnover ?? stock.turnover),
+    };
+  }).filter(Boolean);
+}
+
+function mergeThsLocalConceptBoards(localData, quoteBoards) {
+  const quoteByPlateId = new Map();
+  const quoteByThsPlateCode = new Map();
+  const quoteByName = new Map();
+  for (const quote of quoteBoards || []) {
+    if (quote?.plateId) quoteByPlateId.set(String(quote.plateId), quote);
+    if (quote?.thsPlateCode) quoteByThsPlateCode.set(String(quote.thsPlateCode), quote);
+    if (quote?.name) quoteByName.set(String(quote.name), quote);
+  }
+  const merged = [];
+  const seen = new Set();
+  for (const localBoard of localData.boards || []) {
+    const quote = quoteByPlateId.get(String(localBoard.plateId))
+      || quoteByThsPlateCode.get(String(localBoard.thsPlateCode || ''))
+      || quoteByName.get(String(localBoard.name));
+    const board = {
+      ...localBoard,
+      thsPlateCode: localBoard.thsPlateCode || quote?.thsPlateCode || '',
+      rank: quote?.rank ?? localBoard.rank,
+      gain: numOrNull(quote?.gain ?? localBoard.gain),
+      netInflow: numOrNull(quote?.netInflow ?? localBoard.netInflow),
+      upRatio: numOrNull(quote?.upRatio ?? localBoard.upRatio),
+      stockCount: localBoard.stockCount || localBoard.stocks?.length || quote?.stockCount,
+    };
+    merged.push(board);
+    seen.add(String(board.plateId));
+    if (board.thsPlateCode) seen.add(String(board.thsPlateCode));
+  }
+  for (const quote of quoteBoards || []) {
+    if (!quote?.plateId || seen.has(String(quote.plateId)) || seen.has(String(quote.thsPlateCode || ''))) continue;
+    merged.push(quote);
+  }
+  return merged
+    .sort((a, b) => Number(b.gain ?? -Infinity) - Number(a.gain ?? -Infinity))
+    .map((board, index) => ({ ...board, rank: index + 1 }));
+}
+
+async function fetchThsConceptBoards(options = {}) {
+  const now = Date.now();
+  if (!options.force && thsConceptBoardsRealtimeCache?.expiresAt > now) {
+    return thsConceptBoardsRealtimeCache.boards;
+  }
+  let localData = null;
+  try {
+    localData = loadThsLocalConceptData();
+  } catch {
+    localData = null;
+  }
+  const firstHtml = await thsFetchHtml(
+    'https://q.10jqka.com.cn/gn/index/field/199112/order/desc/page/1/ajax/1/',
+    'https://q.10jqka.com.cn/gn/',
+  );
+  const pageCount = Math.max(1, Math.min(80, parseThsPageInfo(firstHtml) || 1));
+  const quoteBoards = parseThsGnSection(firstHtml);
+  if (pageCount > 1) {
+    const pages = Array.from({ length: pageCount - 1 }, (_, index) => index + 2);
+    const pageBoards = await mapLimit(pages, 4, async page => {
+      const html = await thsFetchHtml(
+        `https://q.10jqka.com.cn/gn/index/field/199112/order/desc/page/${page}/ajax/1/`,
+        'https://q.10jqka.com.cn/gn/',
+      ).catch(() => '');
+      return parseThsGnSection(html);
+    });
+    quoteBoards.push(...pageBoards.flat());
+  }
+
+  const byId = new Map();
+  for (const board of quoteBoards) {
+    if (board?.plateId && !byId.has(String(board.plateId))) byId.set(String(board.plateId), board);
+  }
+
+  const seedPlateId = quoteBoards[0]?.plateId || '300188';
+  const navBoards = await fetchThsConceptNavBoards(seedPlateId).catch(() => []);
+  const missingNavBoards = navBoards.filter(board => board.plateId && !byId.has(String(board.plateId)));
+  const detailBoards = await mapLimit(missingNavBoards, 6, board =>
+    fetchThsConceptDetailMeta(board.plateId, board).catch(() => board)
+  );
+  for (const board of detailBoards) {
+    if (board?.plateId && !byId.has(String(board.plateId))) byId.set(String(board.plateId), board);
+  }
+
+  let boards = [...byId.values()]
+    .sort((a, b) => Number(b.gain ?? -Infinity) - Number(a.gain ?? -Infinity))
+    .map((board, index) => ({ ...board, rank: index + 1 }));
+  if (localData?.boards?.length) {
+    boards = mergeThsLocalConceptBoards(localData, boards);
+  }
+  thsConceptBoardsRealtimeCache = {
+    expiresAt: now + 30 * 1000,
+    boards,
+  };
+  return boards;
+}
+
+async function fetchThsConceptStocks(plateId) {
+  const code = String(plateId || '').trim();
+  if (!code) return [];
+  const localBoard = findThsLocalConceptBoardByAnyId(code);
+  if (localBoard?.stocks?.length) {
+    return enrichThsLocalStocksWithRealtime(localBoard.stocks);
+  }
+  const referer = `https://q.10jqka.com.cn/gn/detail/code/${code}/`;
+  const detail = await thsFetchHtml(referer, 'https://q.10jqka.com.cn/gn/').catch(() => '');
+  const first = await thsFetchHtml(`${referer}page/1/ajax/1/`, referer);
+  const pageCountHint = Math.max(parseThsPageInfo(first) || 1, parseThsPageInfo(detail) || 1);
+  const maxPages = Math.max(2, Math.min(80, pageCountHint > 1 ? pageCountHint : 80));
+  const rows = parseThsStockRows(first);
+  const seenCodes = new Set(rows.map(row => row.code).filter(Boolean));
+  for (let page = 2; page <= maxPages; page += 1) {
+    const pageUrls = [
+      `https://q.10jqka.com.cn/gn/detail/code/${code}/field/199112/order/desc/page/${page}/ajax/1/`,
+      `https://q.10jqka.com.cn/gn/detail/field/199112/order/desc/page/${page}/ajax/1/code/${code}/`,
+      `${referer}page/${page}/ajax/1/`,
+    ];
+    let pageRows = [];
+    for (const pageUrl of pageUrls) {
+      const html = await thsFetchHtml(pageUrl, referer).catch(() => '');
+      pageRows = parseThsStockRows(html);
+      if (pageRows.length) break;
+    }
+    if (!pageRows.length) break;
+    let added = 0;
+    for (const row of pageRows) {
+      if (row.code && !seenCodes.has(row.code)) {
+        seenCodes.add(row.code);
+        rows.push(row);
+        added += 1;
+      }
+    }
+    if (!added && pageCountHint <= 1) break;
+  }
+  const byCode = new Map();
+  for (const row of rows) {
+    if (row.code && row.name) byCode.set(row.code, row);
+  }
+  return [...byCode.values()];
+}
+
+async function readThsConceptCatalog() {
+  try {
+    return JSON.parse(await fs.readFile(thsConceptCatalogPath(), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+async function readThsConceptBoard(plateId) {
+  const manual = await readThsManualBoard(plateId);
+  try {
+    const payload = JSON.parse(await fs.readFile(thsConceptBoardPath(plateId), 'utf8'));
+    if (manual?.stocks?.length && manual.stocks.length >= (payload?.stocks?.length || 0)) return manual;
+    return payload;
+  } catch {
+    return manual || null;
+  }
+}
+
+async function readThsManualBoard(plateId) {
+  try {
+    const payload = JSON.parse(await fs.readFile(thsManualBoardPath(plateId), 'utf8'));
+    if (!Array.isArray(payload?.stocks) || !payload.stocks.length) return null;
+    return {
+      ...payload,
+      source: 'ths',
+      manualSource: payload.source || 'ths-manual-export',
+      stocks: payload.stocks.map(persistThsConceptStock),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function findThsBoardByAnyId(boards, id) {
+  const normalizedId = String(id || '').trim();
+  if (!normalizedId) return null;
+  return (boards || []).find(board =>
+    String(board?.plateId || '') === normalizedId ||
+    String(board?.thsPlateCode || '') === normalizedId
+  ) || null;
+}
+
+async function resolveThsBoardMeta(plateId, boardMeta = {}) {
+  const normalizedId = String(plateId || '').trim();
+  let hit = findThsLocalConceptBoardByAnyId(normalizedId);
+  const catalog = await readThsConceptCatalog().catch(() => null);
+  if (!hit) hit = findThsBoardByAnyId(catalog?.boards, normalizedId);
+  if (!hit) {
+    const quoteBoards = await fetchThsConceptBoards().catch(() => []);
+    hit = findThsBoardByAnyId(quoteBoards, normalizedId);
+  }
+  const plate = hit?.plateId || normalizedId;
+  return {
+    ...hit,
+    ...boardMeta,
+    plateId: plate,
+    thsPlateCode: boardMeta.thsPlateCode || hit?.thsPlateCode || '',
+    localBlockCode: boardMeta.localBlockCode || hit?.localBlockCode || '',
+    name: boardMeta.name || hit?.name || boardMeta.name || '',
+    stockCount: boardMeta.stockCount ?? hit?.stockCount,
+  };
+}
+
+function externalTopicCatalogSignature(eastmoneyCatalog, thsCatalog) {
+  return [
+    eastmoneyCatalog?.savedAt || '',
+    eastmoneyCatalog?.syncedBoardCount || eastmoneyCatalog?.boardCount || 0,
+    thsCatalog?.savedAt || '',
+    thsCatalog?.syncedBoardCount || thsCatalog?.boardCount || 0,
+  ].join('|');
+}
+
+function normalizeTopicStockCode(code) {
+  const raw = String(code || '').trim();
+  const match = raw.match(/\d{6}/);
+  return match ? match[0] : raw;
+}
+
+function addExternalTopic(index, stock, source, boardMeta) {
+  const code = normalizeTopicStockCode(stock?.code);
+  const name = String(stock?.name || '').trim();
+  const boardName = String(boardMeta?.name || '').trim();
+  const plateId = String(boardMeta?.plateId || '').trim();
+  if (!code || !name || !boardName || isStStock(name)) return;
+  if (!index.stocks.has(code)) {
+    index.stocks.set(code, {
+      code,
+      name,
+      eastmoney: [],
+      ths: [],
+      all: [],
+    });
+  }
+  const entry = index.stocks.get(code);
+  if (!entry.name) entry.name = name;
+  const topic = {
+    source,
+    plateId,
+    name: boardName,
+    canonical: canonicalTopicName(boardName),
+    rank: Number(boardMeta?.rank || 9999),
+  };
+  const bucket = source === 'ths' ? entry.ths : entry.eastmoney;
+  if (bucket.some(item => item.plateId === topic.plateId || item.name === topic.name)) return;
+  bucket.push(topic);
+  entry.all.push(topic);
+}
+
+async function addExternalTopicSource(index, source, catalog, readBoard) {
+  const boards = Array.isArray(catalog?.boards) ? catalog.boards : [];
+  await mapLimit(boards, 12, async boardMeta => {
+    const plateId = String(boardMeta?.plateId || '').trim();
+    if (!plateId) return;
+    const board = await readBoard(plateId).catch(() => null);
+    const stocks = Array.isArray(board?.stocks) ? board.stocks : [];
+    if (!stocks.length) return;
+    const normalizedBoard = {
+      plateId: board?.plateId || plateId,
+      name: board?.name || boardMeta?.name || plateId,
+    };
+    for (const stock of stocks) addExternalTopic(index, stock, source, normalizedBoard);
+  });
+}
+
+async function buildExternalTopicIndex() {
+  const [eastmoneyCatalog, thsCatalog] = await Promise.all([
+    readEastmoneyConceptCatalog().catch(() => null),
+    readThsConceptCatalog().catch(() => null),
+  ]);
+  const signature = externalTopicCatalogSignature(eastmoneyCatalog, thsCatalog);
+  const index = {
+    signature,
+    stocks: new Map(),
+    sourceCount: {
+      eastmoney: eastmoneyCatalog?.syncedBoardCount || eastmoneyCatalog?.boardCount || 0,
+      ths: thsCatalog?.syncedBoardCount || thsCatalog?.boardCount || 0,
+    },
+    savedAt: new Date().toISOString(),
+  };
+  await Promise.all([
+    addExternalTopicSource(index, 'eastmoney', eastmoneyCatalog, readEastmoneyConceptBoard),
+    addExternalTopicSource(index, 'ths', thsCatalog, readThsConceptBoard),
+  ]);
+  return index;
+}
+
+async function getExternalTopicIndex() {
+  const [eastmoneyCatalog, thsCatalog] = await Promise.all([
+    readEastmoneyConceptCatalog().catch(() => null),
+    readThsConceptCatalog().catch(() => null),
+  ]);
+  const signature = externalTopicCatalogSignature(eastmoneyCatalog, thsCatalog);
+  if (externalTopicIndexCache?.signature === signature) return externalTopicIndexCache;
+  if (!externalTopicIndexTask) {
+    externalTopicIndexTask = buildExternalTopicIndex()
+      .then(index => {
+        externalTopicIndexCache = index;
+        return index;
+      })
+      .finally(() => {
+        externalTopicIndexTask = null;
+      });
+  }
+  return externalTopicIndexTask;
+}
+
+async function writeThsConceptBoard(board, stocks, savedAt) {
+  await fs.mkdir(THS_CONCEPT_BOARD_DIR, { recursive: true });
+  const payload = {
+    version: 1,
+    source: 'ths',
+    savedAt,
+    day: chinaNowParts(new Date(savedAt)).day,
+    plateId: board.plateId,
+    thsPlateCode: board.thsPlateCode || '',
+    localBlockCode: board.localBlockCode || '',
+    localSource: board.localSource || '',
+    name: board.name,
+    total: stocks.length,
+    stocks: stocks.map(persistThsConceptStock),
+  };
+  await fs.writeFile(thsConceptBoardPath(board.plateId), JSON.stringify(payload, null, 2), 'utf8');
+  return payload;
+}
+
+async function writeThsConceptCatalog(catalog) {
+  await fs.mkdir(THS_CONCEPT_DIR, { recursive: true });
+  await fs.writeFile(thsConceptCatalogPath(), JSON.stringify(catalog, null, 2), 'utf8');
+  return catalog;
+}
+
+function thsConceptCatalogIsTodayAfterClose(catalog, day) {
+  if (!catalog?.savedAt || !catalog?.boards?.length) return false;
+  return isSavedAfterMarketClose(catalog, day) || isSavedAtOrAfterMarketCloseForDay(catalog, day);
+}
+
+async function ensureThsConceptBoard(plateId, boardMeta = {}) {
+  const resolved = await resolveThsBoardMeta(plateId, boardMeta);
+  const normalizedId = String(resolved.plateId || plateId || '').trim();
+  if (!normalizedId) return null;
+  boardMeta = resolved;
+  const existing = await readThsConceptBoard(normalizedId);
+  if (existing?.stocks?.length) {
+    const existingNameIsCode = !existing.name || String(existing.name) === normalizedId;
+    const existingNameBad = existingNameIsCode || looksMojibakeText(existing.name);
+    const existingIncomplete = Number(existing.total || existing.stocks.length || 0) <= 50 && Number(boardMeta.stockCount || 0) > Number(existing.stocks.length || 0);
+    if (existingNameBad && boardMeta.name && !existingIncomplete) {
+      return writeThsConceptBoard({
+        plateId: normalizedId,
+        thsPlateCode: boardMeta.thsPlateCode || existing.thsPlateCode || '',
+        name: boardMeta.name,
+      }, existing.stocks, existing.savedAt || new Date().toISOString());
+    }
+    if (!existingIncomplete) return existing;
+  }
+  const stocks = await fetchThsConceptStocks(normalizedId).catch(() => []);
+  if (!stocks.length) return existing || null;
+  const savedAt = new Date().toISOString();
+  return writeThsConceptBoard({
+    plateId: normalizedId,
+    thsPlateCode: boardMeta.thsPlateCode || existing?.thsPlateCode || '',
+    name: boardMeta.name || existing?.name || normalizedId,
+  }, stocks, savedAt);
+}
+
+async function getThsConceptBoardForDisplay(plateId, day) {
+  const resolved = await resolveThsBoardMeta(plateId);
+  const normalizedId = String(resolved.plateId || plateId || '').trim();
+  const payload = isChinaMarketTradingDay(day)
+    ? await ensureThsConceptBoard(normalizedId, resolved)
+    : await readThsConceptBoard(normalizedId);
+  if (isSelectedChinaToday(day) && isChinaMarketTradingDay(day)) {
+    const liveStocks = await cachedExternalRealtimeStocks(
+      'ths',
+      normalizedId,
+      () => fetchThsConceptStocks(normalizedId),
+      15000,
+    ).catch(() => []);
+    if (liveStocks.length) {
+      return {
+        ...(payload || {}),
+        source: 'ths',
+        plateId: normalizedId,
+        thsPlateCode: payload?.thsPlateCode || resolved.thsPlateCode || '',
+        name: payload?.name || resolved.name || normalizedId,
+        day: chinaNowParts().day,
+        realtime: true,
+        stocks: liveStocks.map(persistThsConceptStock),
+      };
+    }
+  }
+  if (payload?.manualSource && payload.stocks?.length) {
+    return {
+      ...payload,
+      source: 'ths',
+      plateId: normalizedId,
+      thsPlateCode: payload.thsPlateCode || resolved.thsPlateCode || '',
+      name: payload.name || resolved.name || normalizedId,
+      realtime: isSelectedChinaToday(day),
+    };
+  }
+  return payload;
+}
+
+async function syncThsConceptsInner(options = {}) {
+  const now = chinaNowParts();
+  const savedAt = new Date().toISOString();
+  const existing = await readThsConceptCatalog();
+  if (!isChinaMarketTradingDay(now.day)) {
+    const skip = marketClosedSkipPayload(now.day, { source: 'ths' });
+    thsConceptSyncState = {
+      running: false,
+      status: 'skipped',
+      source: 'ths',
+      skipped: true,
+      savedAt: existing?.savedAt || '',
+      boardCount: existing?.boardCount || existing?.boards?.length || 0,
+      reason: skip.reason,
+    };
+    return existing || {
+      version: 1,
+      source: 'ths',
+      savedAt: '',
+      day: now.day,
+      syncRule: 'skip-market-closed',
+      boardCount: 0,
+      syncedBoardCount: 0,
+      failedBoardCount: 0,
+      boards: [],
+      failures: [],
+      ...skip,
+    };
+  }
+  if (!options.force && thsConceptCatalogIsTodayAfterClose(existing, now.day)) {
+    thsConceptSyncState = {
+      running: false,
+      status: 'ok',
+      source: 'ths',
+      skipped: true,
+      savedAt: existing.savedAt,
+      boardCount: existing.boardCount || existing.boards?.length || 0,
+      reason: 'already synced after 15:00',
+    };
+    return existing;
+  }
+
+  thsConceptSyncState = {
+    running: true,
+    status: 'loading-catalog',
+    source: 'ths',
+    startedAt: savedAt,
+    processed: 0,
+    failed: 0,
+    total: 0,
+  };
+
+  const boards = await fetchThsConceptBoards();
+  thsConceptSyncState = {
+    ...thsConceptSyncState,
+    status: 'loading-constituents',
+    total: boards.length,
+  };
+
+  const failures = [];
+  const stockCounts = new Map();
+  await mapLimit(boards, 2, async board => {
+    const existing = await readThsConceptBoard(board.plateId).catch(() => null);
+    const existingIncomplete = existing?.stocks?.length
+      && Number(board.stockCount || 0) > Number(existing.stocks.length || existing.total || 0);
+    const existingBadName = existing?.name && looksMojibakeText(existing.name);
+    if ((!options.force || options.reuseExisting) && existing?.stocks?.length && !existingIncomplete && !existingBadName) {
+      stockCounts.set(board.plateId, existing.stocks.length);
+      thsConceptSyncState.processed += 1;
+      thsConceptSyncState.failed = failures.length;
+      return;
+    }
+    try {
+      const stocks = await fetchThsConceptStocks(board.plateId);
+      await writeThsConceptBoard(board, stocks, savedAt);
+      stockCounts.set(board.plateId, stocks.length);
+    } catch (err) {
+      if (existing?.stocks?.length) {
+        stockCounts.set(board.plateId, existing.stocks.length);
+      } else if (String(board.name || '').toUpperCase().includes('ST')) {
+        stockCounts.set(board.plateId, 0);
+      } else {
+        failures.push({ plateId: board.plateId, name: board.name, error: err.message });
+      }
+    } finally {
+      thsConceptSyncState.processed += 1;
+      thsConceptSyncState.failed = failures.length;
+    }
+  });
+
+  const catalogBoards = boards.map(board => persistThsConceptBoard(
+    board,
+    stockCounts.get(board.plateId) ?? null,
+  ));
+  const catalog = {
+    version: 1,
+    source: 'ths',
+    savedAt,
+    day: now.day,
+    syncRule: 'once-after-15:00',
+    boardCount: catalogBoards.length,
+    syncedBoardCount: catalogBoards.filter(board => board.stockCount !== null && board.stockCount !== undefined).length,
+    failedBoardCount: failures.length,
+    boards: catalogBoards,
+    failures,
+  };
+  await writeThsConceptCatalog(catalog);
+  thsConceptSyncState = {
+    running: false,
+    status: failures.length ? 'partial' : 'ok',
+    source: 'ths',
+    savedAt,
+    boardCount: catalog.boardCount,
+    syncedBoardCount: catalog.syncedBoardCount,
+    failedBoardCount: catalog.failedBoardCount,
+  };
+  return catalog;
+}
+
+async function syncThsConcepts(options = {}) {
+  if (thsConceptSyncTask) return thsConceptSyncTask;
+  thsConceptSyncTask = syncThsConceptsInner(options)
+    .catch(err => {
+      thsConceptSyncState = {
+        running: false,
+        status: 'error',
+        source: 'ths',
+        error: err.message,
+        savedAt: new Date().toISOString(),
+      };
+      throw err;
+    })
+    .finally(() => {
+      thsConceptSyncTask = null;
+    });
+  return thsConceptSyncTask;
+}
+
+async function thsConceptStatus(url, req, res) {
+  const catalog = await readThsConceptCatalog();
+  const state = !thsConceptSyncState.running && catalog?.boards?.length
+    ? {
+        running: false,
+        status: Number(catalog.failedBoardCount || 0) ? 'partial' : 'ok',
+        source: 'ths',
+        savedAt: catalog.savedAt,
+        boardCount: catalog.boardCount || catalog.boards?.length || 0,
+        syncedBoardCount: catalog.syncedBoardCount || 0,
+        failedBoardCount: catalog.failedBoardCount || 0,
+      }
+    : thsConceptSyncState;
+  return send(res, 200, {
+    ok: true,
+    source: 'ths',
+    autoRule: 'once after 15:00',
+    state,
+    catalog: catalog ? {
+      savedAt: catalog.savedAt,
+      day: catalog.day,
+      boardCount: catalog.boardCount || catalog.boards?.length || 0,
+      syncedBoardCount: catalog.syncedBoardCount || 0,
+      failedBoardCount: catalog.failedBoardCount || 0,
+    } : null,
+  });
+}
+
+async function thsConceptCatalog(url, req, res) {
+  const catalog = await readThsConceptCatalog();
+  const quoteBoards = await fetchThsConceptBoards().catch(() => []);
+  if (!catalog && !quoteBoards.length) return send(res, 404, { error: 'ths concept catalog not found' });
+  const catalogById = new Map((catalog?.boards || []).map(board => [String(board.plateId), board]));
+  const sourceBoards = quoteBoards.length
+    ? quoteBoards.map(board => ({
+        ...board,
+        stockCount: catalogById.get(String(board.plateId))?.stockCount ?? board.stockCount ?? null,
+      }))
+    : (catalog?.boards || []);
+  return send(res, 200, {
+    ...(catalog || { version: 1, source: 'ths', savedAt: null }),
+    day: quoteBoards.length ? chinaNowParts().day : catalog?.day,
+    realtime: !!quoteBoards.length,
+    boards: sourceBoards.map(board => publicThsConceptBoard(board, board)),
+  });
+}
+
+async function thsConceptStocks(url, req, res) {
+  const plateId = url.searchParams.get('plate_id') || url.searchParams.get('plateId') || '';
+  const day = url.searchParams.get('day') || chinaNowParts().day;
+  const force = url.searchParams.get('force') === '1' || url.searchParams.get('force') === 'true';
+  if (!plateId) return send(res, 400, { error: 'missing plate_id' });
+  let payload = null;
+  if (force) {
+    const resolved = await resolveThsBoardMeta(plateId);
+    const normalizedId = String(resolved.plateId || plateId || '').trim();
+    const stocks = await fetchThsConceptStocks(normalizedId);
+    payload = await writeThsConceptBoard({
+      plateId: normalizedId,
+      thsPlateCode: resolved.thsPlateCode || '',
+      name: resolved.name || normalizedId,
+    }, stocks, new Date().toISOString());
+  } else {
+    payload = await getThsConceptBoardForDisplay(plateId, day);
+  }
+  if (!payload) return send(res, 404, { error: 'ths concept board not found' });
+  const apiKey = await requestApiKey(req);
+  const limitUpCodeSet = await getDisplayLimitUpCodeSet(day, apiKey).catch(() => new Set());
+  return send(res, 200, {
+    ...payload,
+    stocks: (payload.stocks || []).map(stock => ({
+      code: stock.code,
+      name: stock.name,
+      close: numOrNull(stock.close ?? stock.price),
+      price: numOrNull(stock.close ?? stock.price),
+      gain: numOrNull(stock.gain),
+      amount: numOrNull(stock.amount),
+      turnover: numOrNull(stock.turnover),
+      isLimitUp: stockMatchesDisplayLimitUpSet(stock, limitUpCodeSet),
+    })),
+  });
+}
+
+async function thsConceptSync(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const force = url.searchParams.get('force') === '1' || url.searchParams.get('force') === 'true';
+  const reuseExisting = url.searchParams.get('reuse') === '1' || url.searchParams.get('reuse') === 'true';
+  const wait = url.searchParams.get('wait') === '1' || url.searchParams.get('wait') === 'true';
+  const now = chinaNowParts();
+  if (!force && !reuseExisting && now.hour < 15) {
+    return send(res, 202, {
+      ok: true,
+      skipped: true,
+      reason: 'not after 15:00',
+      autoRule: 'once after 15:00',
+    });
+  }
+  if (!wait) {
+    syncThsConcepts({ force, reuseExisting, reason: 'manual' }).catch(err => {
+      console.error('ths concept sync failed:', err.message);
+    });
+    return send(res, 202, {
+      ok: true,
+      started: true,
+      state: thsConceptSyncState,
+    });
+  }
+  const catalog = await syncThsConcepts({ force, reuseExisting, reason: 'manual' });
+  return send(res, 200, {
+    ok: true,
+    savedAt: catalog.savedAt,
+    boardCount: catalog.boardCount || catalog.boards?.length || 0,
+    syncedBoardCount: catalog.syncedBoardCount || 0,
+    failedBoardCount: catalog.failedBoardCount || 0,
+  });
+}
+
+async function fetchEastmoneyTopicPoolCount(endpoint, day) {
+  const params = new URLSearchParams({
+    ut: EASTMONEY_ZT_UT,
+    dpt: EASTMONEY_ZT_DPT,
+    Pageindex: '0',
+    pagesize: '1',
+    sort: 'fbt:asc',
+    date: compactDate(day || chinaNowParts().day),
+  });
+  const res = await fetch(`https://push2ex.eastmoney.com/${endpoint}?${params}`, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0',
+      Referer: 'https://quote.eastmoney.com/ztb/detail',
+    },
+  });
+  if (!res.ok) throw new Error(`Eastmoney ${endpoint} ${res.status}`);
+  const data = await res.json();
+  return Number(data?.data?.tc) || 0;
+}
+
+async function fetchEastmoneyBreadthCounts() {
+  const secids = ['1.000001', '0.399001', '0.899050'];
+  const rows = await mapLimit(secids, 3, async secid => {
+    const data = await eastmoneyFetchJson('api/qt/stock/get', {
+      fltt: 2,
+      invt: 2,
+      secid,
+      fields: 'f57,f58,f113,f114',
+      ut: 'b2884a393a59ad64002292a3e90d46a5',
+    });
+    return data?.data || {};
+  });
+  return rows.reduce((acc, row) => {
+    acc.up += Number(row.f113) || 0;
+    acc.down += Number(row.f114) || 0;
+    return acc;
+  }, { up: 0, down: 0 });
+}
+
+async function fetchEastmoneyIndexInfo(day = chinaNowParts().day) {
+  const cacheDay = compactDate(day);
+  const now = Date.now();
+  if (
+    eastmoneyIndexInfoCache &&
+    eastmoneyIndexInfoCache.day === cacheDay &&
+    now - eastmoneyIndexInfoCache.savedAtMs < 30 * 1000
+  ) {
+    return eastmoneyIndexInfoCache.data;
+  }
+  const [breadth, limitUpCount, limitDownCount] = await Promise.all([
+    fetchEastmoneyBreadthCounts(),
+    fetchEastmoneyTopicPoolCount('getTopicZTPool', day).catch(() => 0),
+    fetchEastmoneyTopicPoolCount('getTopicDTPool', day).catch(() => 0),
+  ]);
+  const data = {
+    source: 'eastmoney',
+    savedAt: new Date().toISOString(),
+    DaBanList: {
+      tZhangTing: limitUpCount,
+      tDieTing: limitDownCount,
+      SZJS: breadth.up,
+      XDJS: breadth.down,
+    },
+  };
+  eastmoneyIndexInfoCache = {
+    day: cacheDay,
+    savedAtMs: now,
+    data,
+  };
+  return data;
+}
+
+async function eastmoneyIndexInfo(url, req, res) {
+  const day = url.searchParams.get('day') || chinaNowParts().day;
+  return send(res, 200, await fetchEastmoneyIndexInfo(day));
+}
+
+async function fetchEastmoneyLimitUps() {
+  const fields = 'f12,f14,f3';
+  const fsParam = 'm:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048';
+  const result = [];
+  const rows = await eastmoneyClist(fsParam, fields, { pageSize: 500, maxPages: 12, fid: 'f3', po: 1 });
+  for (const row of rows) {
+    const stock = {
+      code: String(row.f12 || ''),
+      name: String(row.f14 || ''),
+      gain: Number(row.f3),
+      reason: '',
+      day: formatDate(new Date()),
+    };
+    if (!stock.code || !stock.name || isStStock(stock.name)) continue;
+    if (Number.isFinite(stock.gain) && stock.gain >= limitUpThreshold(stock.code, stock.name)) {
+      result.push(stock);
+    }
+  }
+  return result;
+}
+
+function normalizeEastmoneyTopicLimitUpRow(row, day) {
+  const boardTopic = typeof row?.hybk === 'string' ? row.hybk.trim() : '';
+  const detailReason = typeof row?.gn === 'string' ? row.gn.trim() : '';
+  return {
+    code: String(row?.c || ''),
+    name: String(row?.n || ''),
+    gain: Number(row?.zdp),
+    reason: [boardTopic, detailReason].filter(Boolean).join('、'),
+    boardTopic,
+    detailReason,
+    day,
+    firstLimitTime: row?.fbt ?? null,
+    lastLimitTime: row?.lbt ?? null,
+    limitUpCount: row?.lbc ?? null,
+    raw: row,
+  };
+}
+
+async function fetchEastmoneyTopicLimitUps(day) {
+  const dateText = compactDate(day);
+  if (dateText.length !== 8) return [];
+  const pageSize = 100;
+  const rowsByCode = new Map();
+  let total = Infinity;
+  for (let page = 0; page < 20; page += 1) {
+    const params = new URLSearchParams({
+      ut: EASTMONEY_ZT_UT,
+      dpt: EASTMONEY_ZT_DPT,
+      Pageindex: String(page),
+      pagesize: String(pageSize),
+      sort: 'fbt:asc',
+      date: dateText,
+    });
+    const res = await fetch(`https://push2ex.eastmoney.com/getTopicZTPool?${params}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+        Referer: 'https://quote.eastmoney.com/ztb/detail',
+      },
+    });
+    if (!res.ok) throw new Error(`Eastmoney ZT pool ${res.status}`);
+    const data = await res.json();
+    const pool = Array.isArray(data?.data?.pool) ? data.data.pool : [];
+    total = Number(data?.data?.tc);
+    for (const row of pool) {
+      const stock = normalizeEastmoneyTopicLimitUpRow(row, isoFromCompactDate(dateText));
+      if (!stock.code || !stock.name || isStStock(stock.name)) continue;
+      rowsByCode.set(stock.code, stock);
+    }
+    if (!pool.length) break;
+    if (Number.isFinite(total) && rowsByCode.size >= total) break;
+    if (Number.isFinite(total) && (page + 1) * pageSize >= total) break;
+  }
+  return [...rowsByCode.values()];
+}
+
+const EASTMONEY_GENERIC_CONCEPT_KEYWORDS = [
+  '\u6628\u65e5',
+  '\u8fd1\u671f',
+  '\u5386\u53f2',
+  '\u8d8b\u52bf\u80a1',
+  '\u53cd\u8f6c\u80a1',
+  '\u8d85\u8dcc\u80a1',
+  '\u9898\u6750\u80a1',
+  '\u767e\u65e5',
+  '\u57fa\u91d1',
+  '\u793e\u4fdd',
+  '\u8bc1\u91d1',
+  '\u878d\u8d44',
+  '\u6807\u51c6\u666e\u5c14',
+  'MSCI',
+  'HS300',
+  '\u4e0a\u8bc1',
+  '\u521b\u4e1a\u6210\u4efd',
+  '\u767e\u5143\u80a1',
+  '\u4f4e\u4ef7\u80a1',
+  '\u7834\u51c0',
+  '\u7ea2\u5229',
+  '\u5c0f\u76d8',
+  '\u4e2d\u76d8',
+  '\u5927\u76d8',
+  '\u98ce\u683c',
+  '\u5e74\u62a5',
+  '\u5b63\u62a5',
+  'ST\u80a1',
+  'AH\u80a1',
+];
+
+function isGenericEastmoneyConceptTopicName(name) {
+  const text = String(name || '').trim();
+  if (!text) return true;
+  return EASTMONEY_GENERIC_CONCEPT_KEYWORDS.some(keyword => text.includes(keyword));
+}
+
+function eastmoneyConceptTopicScore(topic, boardTopic) {
+  const name = String(topic?.name || '').trim();
+  if (!name || isGenericEastmoneyConceptTopicName(name)) return -Infinity;
+  let score = 10000 - Math.min(9999, Number(topic?.rank || 9999));
+  if (externalTopicMatchesBoard(topic, boardTopic)) score += 20000;
+  if (hasTopicIntersection(name, boardTopic) || isRelatedReasonName(name, boardTopic)) score += 12000;
+  if (String(topic?.canonical || '') === canonicalTopicName(boardTopic)) score += 12000;
+  return score;
+}
+
+function eastmoneyConceptDetailReasonForStock(code, boardTopic, externalIndex) {
+  const stockTopics = externalIndex?.stocks?.get(normalizeTopicStockCode(code));
+  const topics = Array.isArray(stockTopics?.eastmoney) ? stockTopics.eastmoney : [];
+  if (!topics.length) return '';
+  const scored = topics
+    .map(topic => ({ topic, score: eastmoneyConceptTopicScore(topic, boardTopic) }))
+    .filter(item => Number.isFinite(item.score) && item.score > -Infinity)
+    .sort((a, b) => b.score - a.score || Number(a.topic.rank || 9999) - Number(b.topic.rank || 9999));
+  if (!scored.length) return '';
+  const hasBoardMatch = scored.some(item => item.score >= 20000);
+  const selected = scored
+    .filter(item => !hasBoardMatch || item.score >= 20000)
+    .slice(0, 5)
+    .map(item => String(item.topic.name || '').trim())
+    .filter(Boolean);
+  return [...new Set(selected)].join('+');
+}
+
+async function fetchLimitUpDay(day, apiKey) {
+  const cacheKey = `${apiKey.slice(-6)}:${day}`;
+  if (dayCache.has(cacheKey)) return dayCache.get(cacheKey);
+  const data = await kplFetch(`/history/his_daban?day=${encodeURIComponent(day)}`, apiKey);
+  const list = Array.isArray(data.list) ? data.list : [];
+  dayCache.set(cacheKey, list);
+  return list;
+}
+
+async function recentLimitUpDays(endDay, apiKey, needed = 10) {
+  const days = [];
+  for (let i = 0; i < 45 && days.length < needed; i += 1) {
+    const day = shiftDay(endDay, -i);
+    const list = await fetchLimitUpDay(day, apiKey).catch(() => []);
+    if (list.length) days.push({ day, list });
+  }
+  return days;
+}
+
+async function fetchConcepts(stockId, apiKey, options = {}) {
+  const force = !!options.force;
+  const cacheKey = `${apiKey.slice(-6)}:${stockId}`;
+  if (!force && conceptCache.has(cacheKey)) return conceptCache.get(cacheKey);
+  const persisted = await readPersistCache('concepts', stockId);
+  if (!force && persisted?.data) {
+    conceptCache.set(cacheKey, persisted.data);
+    return persisted.data;
+  }
+  const data = await kplFetch(`/stock/stock_concept?stock_id=${encodeURIComponent(stockId)}`, apiKey).catch(() => null);
+  const list = Array.isArray(data?.List) ? data.List : Array.isArray(persisted?.data) ? persisted.data : [];
+  conceptCache.set(cacheKey, list);
+  if (Array.isArray(data?.List)) await writePersistCache('concepts', stockId, list);
+  return list;
+}
+
+function boardSourceKey(zsType) {
+  return String(zsType || DEFAULT_ZS_TYPE);
+}
+
+function isEastmoneyZsType(zsType) {
+  return String(zsType || '') === EASTMONEY_ZS_TYPE;
+}
+
+function isThsZsType(zsType) {
+  return String(zsType || '') === THS_ZS_TYPE;
+}
+
+function isExternalConceptZsType(zsType) {
+  return isEastmoneyZsType(zsType) || isThsZsType(zsType);
+}
+
+function isDisabledZsType(zsType) {
+  return DISABLED_ZS_TYPES.has(String(zsType || ''));
+}
+
+async function fetchPlateStocks(plateId, endDay, apiKey, zsType = DEFAULT_ZS_TYPE) {
+  const sourceKey = boardSourceKey(zsType);
+  if (isDisabledZsType(sourceKey)) return { day: endDay, list: [] };
+  if (isEastmoneyZsType(sourceKey)) {
+    const payload = await getEastmoneyConceptBoardForDisplay(plateId, endDay);
+    const list = (payload?.stocks || []).map(stock => ([
+      stock.code,
+      stock.name,
+      null,
+      null,
+      null,
+      stock.close ?? stock.price,
+      stock.gain,
+      null,
+      null,
+    ]));
+    return { day: payload?.day || endDay, list };
+  }
+  if (isThsZsType(sourceKey)) {
+    const payload = await getThsConceptBoardForDisplay(plateId, endDay);
+    const list = (payload?.stocks || []).map(stock => ([
+      stock.code,
+      stock.name,
+      null,
+      null,
+      null,
+      stock.close ?? stock.price,
+      stock.gain,
+      stock.amount,
+      stock.turnover,
+    ]));
+    return { day: payload?.day || endDay, list };
+  }
+  for (let i = 0; i < 35; i += 1) {
+    const day = shiftDay(endDay, -i);
+    const cacheKey = `${apiKey.slice(-6)}:${sourceKey}:${plateId}:${day}`;
+    if (plateStocksCache.has(cacheKey)) return plateStocksCache.get(cacheKey);
+    const data = await kplFetch(`/history/his_plate_stocks?plate_id=${encodeURIComponent(plateId)}&day=${encodeURIComponent(day)}&r_start=0925&r_end=1500&count=500`, apiKey).catch(() => null);
+    const list = Array.isArray(data?.list) ? data.list : [];
+    if (list.length) {
+      const value = { day, list };
+      plateStocksCache.set(cacheKey, value);
+      return value;
+    }
+  }
+  return { day: endDay, list: [] };
+}
+
+async function fetchRealtimePlateStocks(plateId, apiKey) {
+  const data = await kplFetch(`/hangqing/plate_stocks_realtime?plate_id=${encodeURIComponent(plateId)}&count=500`, apiKey).catch(() => null);
+  const list = Array.isArray(data?.List) ? data.List : Array.isArray(data?.list) ? data.list : [];
+  return list;
+}
+
+async function fetchRealtimeBoardStocks(plateId, apiKey, zsType = DEFAULT_ZS_TYPE) {
+  if (isDisabledZsType(zsType)) return [];
+  if (isEastmoneyZsType(zsType)) {
+    const payload = await getEastmoneyConceptBoardForDisplay(plateId, chinaNowParts().day);
+    return (payload?.stocks || []).map(stock => ([
+      stock.code,
+      stock.name,
+      null,
+      null,
+      null,
+      stock.close ?? stock.price,
+      stock.gain,
+      null,
+      null,
+    ]));
+  }
+  if (isThsZsType(zsType)) {
+    const payload = await getThsConceptBoardForDisplay(plateId, chinaNowParts().day);
+    return (payload?.stocks || []).map(stock => ([
+      stock.code,
+      stock.name,
+      null,
+      null,
+      null,
+      stock.close ?? stock.price,
+      stock.gain,
+      stock.amount,
+      stock.turnover,
+    ]));
+  }
+  return fetchRealtimePlateStocks(plateId, apiKey);
+}
+
+async function fetchKline(stockId, apiKey) {
+  const cacheKey = `${apiKey.slice(-6)}:${stockId}`;
+  if (klineCache.has(cacheKey)) return await klineCache.get(cacheKey);
+  const persisted = await readPersistCache('kline60', stockId);
+  const nowParts = chinaNowParts();
+  const todayText = compactDate(nowParts.day);
+  const persistedLastDay = compactDate(persisted?.data?.x?.[persisted?.data?.x?.length - 1]);
+  const persistedSavedDay = persisted?.savedAt ? chinaNowParts(new Date(persisted.savedAt)).day : '';
+  if (persisted?.data && (persistedLastDay === todayText || persistedSavedDay === nowParts.day)) {
+    klineCache.set(cacheKey, persisted.data);
+    return persisted.data;
+  }
+  const task = kplFetch(`/hangqing/kline_day?stock_id=${encodeURIComponent(stockId)}&count=60&is_fs=1`, apiKey).catch(() => null);
+  klineCache.set(cacheKey, task);
+  const data = await task;
+  klineCache.set(cacheKey, data);
+  const lastDay = compactDate(data?.x?.[data?.x?.length - 1]);
+  if (data?.x?.length && lastDay !== todayText) await writePersistCache('kline60', stockId, data);
+  return data;
+}
+
+function eastmoneySecid(stockId) {
+  const code = String(stockId || '').replace(/\D/g, '');
+  if (!code) return '';
+  return `${code.startsWith('6') ? '1' : '0'}.${code}`;
+}
+
+function tencentStockSymbol(stockId) {
+  const code = String(stockId || '').replace(/\D/g, '');
+  if (!code) return '';
+  if (code.startsWith('6')) return `sh${code}`;
+  if (code.startsWith('8') || code.startsWith('9') || code.startsWith('4')) return `bj${code}`;
+  return `sz${code}`;
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function fetchTencentKline(stockId) {
+  const code = String(stockId || '').replace(/\D/g, '');
+  const symbol = tencentStockSymbol(code);
+  if (!symbol) return null;
+  if (Date.now() < tencentKlineBlockedUntil) throw new Error('Tencent kline temporarily blocked');
+  const url = new URL('https://web.ifzq.gtimg.cn/appstock/app/fqkline/get');
+  url.searchParams.set('param', `${symbol},day,,,60,qfq`);
+  let data = null;
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      if (Date.now() < tencentKlineBlockedUntil) throw new Error('Tencent kline temporarily blocked');
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0',
+          Referer: 'https://stockapp.finance.qq.com/',
+        },
+      });
+      if (!res.ok) throw new Error(`Tencent kline ${res.status}`);
+      const text = await res.text();
+      if (/^\s*</.test(text)) {
+        tencentKlineBlockedUntil = Date.now() + 30 * 60 * 1000;
+        throw new Error('Tencent kline WAF');
+      }
+      data = JSON.parse(text);
+      break;
+    } catch (err) {
+      lastError = err;
+      if (/blocked|WAF/i.test(String(err?.message || ''))) break;
+      await delay(120 * (attempt + 1));
+    }
+  }
+  if (!data) throw lastError || new Error('Tencent kline failed');
+  const item = data?.data?.[symbol] || {};
+  const klines = Array.isArray(item.qfqday) ? item.qfqday : Array.isArray(item.day) ? item.day : [];
+  const x = [];
+  const y = [];
+  for (const row of klines) {
+    if (!Array.isArray(row) || row.length < 5) continue;
+    x.push(row[0]);
+    y.push([
+      Number(row[1]),
+      Number(row[2]),
+      Number(row[3]),
+      Number(row[4]),
+      Number(row[5]),
+      0,
+    ]);
+  }
+  return x.length ? { source: 'tencent', stockId: code, x, y } : null;
+}
+
+async function fetchEastmoneyKline(stockId) {
+  const code = String(stockId || '').replace(/\D/g, '');
+  const secid = eastmoneySecid(code);
+  if (!secid) return null;
+  const cacheKey = `eastmoney:${code}`;
+  if (klineCache.has(cacheKey)) return await klineCache.get(cacheKey);
+  const persisted = await readPersistCache('eastmoney-kline60', code);
+  const nowParts = chinaNowParts();
+  const todayText = compactDate(nowParts.day);
+  const persistedLastDay = compactDate(persisted?.data?.x?.[persisted?.data?.x?.length - 1]);
+  const persistedSavedDay = persisted?.savedAt ? chinaNowParts(new Date(persisted.savedAt)).day : '';
+  if (persisted?.data && (persistedLastDay === todayText || persistedSavedDay === nowParts.day)) {
+    klineCache.set(cacheKey, persisted.data);
+    return persisted.data;
+  }
+
+  const task = (async () => {
+    const url = new URL('https://push2his.eastmoney.com/api/qt/stock/kline/get');
+    const params = {
+      secid,
+      klt: 101,
+      fqt: 1,
+      lmt: 60,
+      end: '20500101',
+      iscca: 1,
+      fields1: 'f1,f2,f3,f4,f5,f6',
+      fields2: 'f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61',
+    };
+    for (const [key, value] of Object.entries(params)) url.searchParams.set(key, String(value));
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0',
+          Referer: 'https://quote.eastmoney.com/',
+        },
+      });
+      if (!res.ok) throw new Error(`Eastmoney kline ${res.status}`);
+      const data = await res.json();
+      const klines = Array.isArray(data?.data?.klines) ? data.data.klines : [];
+      const x = [];
+      const y = [];
+      for (const line of klines) {
+        const parts = String(line || '').split(',');
+        if (parts.length < 3) continue;
+        x.push(parts[0]);
+        y.push([
+          Number(parts[1]),
+          Number(parts[2]),
+          Number(parts[3]),
+          Number(parts[4]),
+          Number(parts[5]),
+          Number(parts[6]),
+        ]);
+      }
+      if (x.length) return { source: 'eastmoney', stockId: code, x, y };
+    } catch {
+      // Eastmoney's history endpoint occasionally closes TLS abruptly; use Tencent qfq daily K-line as a fallback.
+    }
+    return fetchTencentKline(code).catch(() => null);
+  })().catch(() => null);
+  klineCache.set(cacheKey, task);
+  const data = await task;
+  klineCache.set(cacheKey, data);
+  const lastDay = compactDate(data?.x?.[data?.x?.length - 1]);
+  if (data?.x?.length && (lastDay !== todayText || isAfterMarketClose(nowParts.day))) {
+    await writePersistCache('eastmoney-kline60', code, data);
+  }
+  return data;
+}
+
+async function getEastmoneyStoredClose(stockId, day) {
+  const code = String(stockId || '').replace(/\D/g, '');
+  const payload = await readEastmoneyCloseDbDay(isoFromCompactDate(compactDate(day)));
+  const hit = (payload?.stocks || []).find(stock => String(stock.code) === code);
+  const close = numOrNull(hit?.close ?? hit?.price);
+  return Number.isFinite(close) ? { close, name: hit?.name || '' } : null;
+}
+
+async function getEastmoneyGainBaseFromCloseDb(stockId, endDay, period, apiKey) {
+  const tradingDays = await getRecentTradingDays(endDay, apiKey, period + 1).catch(() => []);
+  if (tradingDays.length < period + 1) return null;
+  const baseDay = tradingDays[0];
+  const latestDay = tradingDays[tradingDays.length - 1];
+  const base = await getEastmoneyStoredClose(stockId, baseDay);
+  if (!isFiniteNumeric(base?.close) || Number(base.close) <= 0) return null;
+  const latest = await getEastmoneyStoredClose(stockId, latestDay);
+  return {
+    period,
+    endDay: latestDay,
+    baseDay,
+    baseClose: Number(base.close),
+    lastKlineDay: latestDay,
+    latestClose: isFiniteNumeric(latest?.close) ? Number(latest.close) : null,
+    source: 'eastmoney-close-db',
+  };
+}
+
+async function fetchZtReason(stockId, day, apiKey, options = {}) {
+  const force = !!options.force;
+  const cacheKey = `${apiKey.slice(-6)}:${stockId}:${day}`;
+  if (!force && reasonCache.has(cacheKey)) return reasonCache.get(cacheKey);
+  const persisted = await readPersistCache('zt-reason', `${stockId}-${day}`);
+  if (!force && persisted?.data) {
+    reasonCache.set(cacheKey, persisted.data);
+    return persisted.data;
+  }
+  const data = await kplFetch(`/daban/zt_reason?stock_id=${encodeURIComponent(stockId)}&day=${encodeURIComponent(day)}`, apiKey).catch(() => null);
+  const list = Array.isArray(data?.List) ? data.List : Array.isArray(persisted?.data) ? persisted.data : [];
+  reasonCache.set(cacheKey, list);
+  if (Array.isArray(data?.List) && data.List.length) await writePersistCache('zt-reason', `${stockId}-${day}`, data.List);
+  return list;
+}
+
+function isRelatedReasonName(boardName, reasonName) {
+  const board = String(boardName || '');
+  const reason = String(reasonName || '');
+  if (!board || !reason) return false;
+  if (reason === board || reason.includes(board) || board.includes(reason)) return true;
+  const synonymGroups = [
+    ['世界杯概念', '世界杯', '足球概念', '足球'],
+    ['物理AI', '机器人概念', '人形机器人', '具身智能', 'AI智能体'],
+  ];
+  if (synonymGroups.some(group =>
+    group.some(name => board.includes(name)) &&
+    group.some(name => reason.includes(name))
+  )) return true;
+  const related = {
+    '电力': ['绿色电力', '火电', '水电', '风电', '风电运营商', '核电', '光伏发电'],
+    '酿酒': ['白酒', '啤酒', '黄酒', '葡萄酒', '酒类'],
+    '医药': ['中药', '创新药', '化学制药', '生物医药', '医药商业', '医疗器械', '疫苗', 'CRO', '辅助生殖', '减肥药'],
+    '食品饮料': ['白酒', '啤酒', '黄酒', '葡萄酒', '预制菜', '乳业', '食品', '饮料', '休闲食品', '调味品'],
+    '零售': ['新零售', '免税', '社区团购', '电子商务', '跨境电商', '黄金零售', '平台经济', '商业百货'],
+    '地产链': ['房地产', '物业服务', '家居', '装修建材', '建筑材料', '水泥', '装配式建筑'],
+    '煤炭': ['煤化工', '焦煤', '动力煤', '煤炭开采'],
+    '芯片': ['半导体', '存储芯片', '集成电路', '光刻机', '先进封装', '第三代半导体', '汽车芯片'],
+    '人工智能': ['算力', '数据中心', '东数西算', 'AI应用', 'AIGC', 'ChatGPT', '大模型', '机器人'],
+    '机器人': ['工业机器人', '人形机器人', '减速器', '机器视觉', '智能制造'],
+    '新能源汽车': ['锂电池', '充电桩', '汽车零部件', '一体化压铸', '固态电池', '汽车电子', '无人驾驶'],
+    '光伏': ['光伏设备', 'TOPCon电池', 'HJT电池', '钙钛矿电池', '光伏发电', '储能'],
+    '风电': ['风电设备', '风电运营商', '绿色电力'],
+    '黄金': ['黄金零售', '贵金属', '有色金属'],
+    '有色金属': ['黄金', '铜', '铝', '稀土永磁', '小金属', '锂矿', '金属铜', '金属铝', '金属锌', '金属铅', '金属钴', '金属镍', '金属钨', '金属钼', '金属锰', '金属锑', '贵金属'],
+    '小金属概念': ['小金属', '金属钨', '金属钼', '金属锰', '金属锌', '金属铅', '金属钴', '金属镍', '金属锑', '金属铟', '金属镓', '金属锗', '稀土永磁'],
+    '化工': ['煤化工', '磷化工', '氟化工', '草甘膦', '化肥', '染料'],
+    '军工': ['低空经济', '无人机', '卫星导航', '商业航天', '大飞机'],
+    '低空经济': ['飞行汽车', 'eVTOL', '无人机', '通用航空'],
+    '算力': ['数据中心', '东数西算', '液冷服务器', 'CPO', '服务器'],
+    '消费电子': ['苹果概念', '智能穿戴', 'VR/AR/MR', '电子烟'],
+    '农业': ['种业', '粮食概念', '猪肉', '养鸡', '水产养殖', '农机'],
+    '传媒': ['短剧游戏', '游戏', '影视院线', '文化传媒', 'AIGC'],
+    '金融概念': ['银行', '证券', '保险', '互联网金融', '多元金融'],
+    '物理AI': ['机器人概念', '人形机器人', '具身智能', 'AI智能体'],
+    'PCB': ['PCB概念', 'PCB铜箔', '印制电路板', '覆铜板', '铜箔', '线路板', 'HDI', 'FPC', '柔性电路板', '电子树脂', '高频高速材料', '高频高速CCL', 'CCL', 'PPE树脂', 'PPO树脂', '碳氢树脂', '双马树脂', '低介电材料'],
+  };
+  return (related[board] || []).some(name => reason === name || reason.includes(name) || name.includes(reason));
+}
+
+const PRIMARY_TOPIC_CLUSTERS = [
+  ['PCB', 'PCB概念', 'PCB铜箔', '印制电路板', '覆铜板', '铜箔', '线路板', 'HDI', 'FPC', '柔性电路板', '电子树脂', '高频高速材料', '高频高速CCL', 'CCL', 'PPE树脂', 'PPO树脂', '碳氢树脂', '双马树脂', '低介电材料'],
+  ['MLCC', '电阻电容', '被动元件', '被动元件概念', '元器件', '电子元件', '超级电容'],
+  ['小金属概念', '小金属', '金属钨', '金属钼', '金属锰', '金属锌', '金属铅', '金属钴', '金属镍', '金属锑', '金属铟', '金属镓', '金属锗'],
+  ['有色金属', '黄金', '贵金属', '小金属', '金属铜', '金属铝', '金属锌', '金属铅', '金属钴', '金属镍', '金属钨', '金属钼', '金属锰', '金属锑', '锂矿'],
+  ['半导体', '芯片', '集成电路', '存储芯片', '先进封装', '光刻机', '第三代半导体', '汽车芯片'],
+  ['机器人', '机器人概念', '人形机器人', '具身智能', '工业机器人', '减速器', '机器视觉', '智能制造'],
+  ['物理AI', '具身智能', '人形机器人', 'AI智能体', '机器人概念'],
+  ['世界杯概念', '世界杯', '足球概念', '足球'],
+  ['新材料', '非金属材料', '氧化锆', '碳纤维', '碳基材料', '气凝胶', '特种陶瓷', '陶瓷材料'],
+  ['玻璃基板封装', '玻璃基板', 'TGV玻璃基板', '玻璃基板上游', 'TGV玻璃', '玻璃基Micro'],
+  ['算力', '东数西算', '数据中心', '数据中心散热', '液冷服务器', '液冷', '算力租赁', '智算中心'],
+  ['大消费', '服装家纺', '职业装', '纺织服装', '皮鞋', '商业百货', '零售连锁'],
+];
+
+function topicAliasSet(name) {
+  const raw = String(name || '').trim();
+  const aliases = new Set();
+  if (!raw) return aliases;
+  aliases.add(raw);
+  const simplified = raw.replace(/概念$/u, '').trim();
+  if (simplified) aliases.add(simplified);
+  for (const cluster of PRIMARY_TOPIC_CLUSTERS) {
+    if (cluster.some(alias => raw === alias || raw.includes(alias) || alias.includes(raw))) {
+      for (const alias of cluster) aliases.add(alias);
+    }
+  }
+  return aliases;
+}
+
+function hasTopicIntersection(boardName, reasonName) {
+  const boardAliases = topicAliasSet(boardName);
+  const reasonAliases = topicAliasSet(reasonName);
+  for (const a of boardAliases) {
+    for (const b of reasonAliases) {
+      if (a === b || a.includes(b) || b.includes(a)) return true;
+    }
+  }
+  return false;
+}
+
+function canonicalTopicName(name) {
+  const raw = String(name || '').trim();
+  if (!raw) return '';
+  const simplified = raw.replace(/概念$/u, '').trim();
+  for (const cluster of PRIMARY_TOPIC_CLUSTERS) {
+    if (cluster.some(alias => raw === alias || raw.includes(alias) || alias.includes(raw))) {
+      return cluster[0];
+    }
+  }
+  return simplified || raw;
+}
+
+// ====== 热点题材标准库(theme-taxonomy.json):把各源题材词映射到统一"热点子题材" ======
+// 关键词子串匹配,具体题材在前、宽兜底在后;新词含已知关键词自动归位,无匹配→''(未归类,供新词榜)。
+const THEME_TAXONOMY_PATH = path.join(__dirname, 'theme-taxonomy.json');
+let THEME_TAXONOMY = { taxonomy: [], dropped: [] };
+let THEME_NONBROAD = [];
+let THEME_BROAD = [];
+let THEME_DROP_RE = null;
+function loadThemeTaxonomy() {  // 可热加载(管理员校准加词后重读,不重启)
+  try { THEME_TAXONOMY = JSON.parse(fsSync.readFileSync(THEME_TAXONOMY_PATH, 'utf8')); }
+  catch (e) { console.error('[theme-taxonomy] load failed:', e.message); }
+  THEME_NONBROAD = (THEME_TAXONOMY.taxonomy || []).filter(t => !t.broad);
+  THEME_BROAD = (THEME_TAXONOMY.taxonomy || []).filter(t => t.broad);
+  THEME_DROP_RE = (THEME_TAXONOMY.dropped || []).length
+    ? new RegExp('(' + (THEME_TAXONOMY.dropped || []).map(w => String(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')')
+    : null;
+}
+loadThemeTaxonomy();
+function themeDisplayName(standard) { return String(standard || '').split('/')[0].trim(); }
+// 全部标准题材显示名(供校准面板下拉)
+function allStandardThemeNames() {
+  return [...new Set((THEME_TAXONOMY.taxonomy || []).map(t => themeDisplayName(t.standard)).filter(Boolean))];
+}
+// 任意来源题材词 → 标准热点题材(显示名);无匹配返回 ''
+function standardTheme(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  for (const t of THEME_NONBROAD) if (t.keywords.some(k => k && s.includes(k))) return themeDisplayName(t.standard);
+  for (const t of THEME_BROAD) if (t.keywords.some(k => k && s.includes(k))) return themeDisplayName(t.standard);
+  return '';
+}
+function isDroppedThemeWord(raw) { return THEME_DROP_RE ? THEME_DROP_RE.test(String(raw || '')) : false; }
+// 综合归纳共识用的归一键:优先标准热点题材,回退旧的题材簇(canonicalTopicName)
+function consensusKey(raw) { return standardTheme(raw) || canonicalTopicName(raw); }
+
+// ====== 细分词典(sub-theme-taxonomy.json):独立于 theme-taxonomy,绝不参与主因/共识 ======
+// 仅供详情卡:某股各源「细分原因」里 ≥2 源命中同一细分、且属当前主因家族、且≠主因本身 → 主因下显示『细分:X』。
+// 真·热加载:按文件 mtime,改文件存盘下次请求即生效,无需重启。
+const SUB_THEME_TAXONOMY_PATH = path.join(__dirname, 'sub-theme-taxonomy.json');
+let SUB_THEME_TAXONOMY = { subThemes: [] };
+let SUB_THEME_TAXONOMY_MTIME = -1;
+function loadSubThemeTaxonomy() {
+  try {
+    const st = fsSync.statSync(SUB_THEME_TAXONOMY_PATH);
+    if (st.mtimeMs !== SUB_THEME_TAXONOMY_MTIME) {
+      const parsed = JSON.parse(fsSync.readFileSync(SUB_THEME_TAXONOMY_PATH, 'utf8'));
+      SUB_THEME_TAXONOMY = (parsed && Array.isArray(parsed.subThemes)) ? parsed : { subThemes: [] };
+      SUB_THEME_TAXONOMY_MTIME = st.mtimeMs;
+    }
+  } catch (e) { /* 文件缺失/坏掉:沿用上次结果,不报错(细分只是锦上添花) */ }
+  return SUB_THEME_TAXONOMY;
+}
+// 某细分的 parents 是否匹配当前主因(空 parents=不限);raw 子串或 consensusKey 任一对上即可。
+function subThemeParentMatches(mainReason, parents) {
+  if (!Array.isArray(parents) || !parents.length) return true;
+  const m = String(mainReason || '');
+  const mk = consensusKey(m) || m;
+  return parents.some(p => { const ps = String(p || ''); return ps && (m.includes(ps) || ps.includes(m) || (consensusKey(ps) || ps) === mk); });
+}
+// 占位/泛词停用表:这些不是题材,绝不能当细分。
+const SUB_THEME_STOPWORDS = /^(其他|待定|未知|未明|无|龙头|概念|题材|板块|方向|预期|利好|利空|消息|传闻|复盘|涨停|连板|首板|二板|次新|人气|情绪|超跌|低位|高位|分歧|一致|跟风|补涨|龙一|龙二|妖股|核心|相关|受益)$/;
+// 从一段细分原因抽「候选细分短语」:按 分隔符 切分,只留 2-7 字、不含数字、非事件噪声、非占位词、非 dropped 的干净题材词。
+function extractSubThemePhrases(text) {
+  const out = new Set();
+  for (let seg of String(text || '').split(/[+＋、，,／/;；:：\s（）()]+/)) {
+    seg = seg.trim();
+    if (seg.length < 2 || seg.length > 7) continue;     // 太短/整句描述不要
+    if (/\d/.test(seg)) continue;                       // 含数字(金额/年份/比例)不要
+    if (SUB_THEME_STOPWORDS.test(seg)) continue;        // 占位/泛词(其他/龙头/概念…)不要
+    if (THS_EVENT_NOISE.test(seg)) continue;            // 事件/噪声不要(公告/重组/业绩/中标/实控人…)
+    if (isDroppedThemeWord(seg)) continue;
+    out.add(seg);
+  }
+  return [...out];
+}
+// 某只股各源细分原因里、按"源"聚合的候选短语命中:Map(短语 → 命中的源集合)
+function stockSubThemePhraseHits(sources) {
+  const pm = new Map();
+  for (const s of (sources || [])) {
+    if (!s || !s.found) continue;
+    const src = s.group || s.label || '';
+    for (const ph of extractSubThemePhrases(`${s.boardTopic || ''} ${s.detailReason || ''}`)) {
+      if (!pm.has(ph)) pm.set(ph, new Set());
+      pm.get(ph).add(src);
+    }
+  }
+  return pm;
+}
+// 「板块性质」自动发现的当日索引:候选短语 → 当天有几只不同的股(各自≥2源)提到它。按 refDay 缓存,
+// 数据取自详情端点已建的 source-view(sv,含当日全部股的各源行),不额外重建。
+const subThemeAutoIndexCache = new Map();
+function getSubThemeAutoIndex(refDay, sv, refDb) {
+  if (subThemeAutoIndexCache.has(refDay)) return subThemeAutoIndexCache.get(refDay);
+  // 每只股的主因家族:用于"细分须集中在同一主因下"判定,滤掉与本次涨停无关的跨题材属性。
+  const mainFamByCode = new Map();
+  for (const s of (refDb && refDb.stocks || [])) {
+    const c = normalizeReasonSourceCode(s.code); if (!c) continue;
+    mainFamByCode.set(c, consensusKey(s.finalBoardTopic || '') || String(s.finalBoardTopic || ''));
+  }
+  const tabs = (sv && sv.tabs || []).filter(t => t.key !== 'final');
+  const perStock = new Map();
+  for (const tab of tabs) {
+    for (const row of (tab.rows || [])) {
+      const code = normalizeReasonSourceCode(row.code); if (!code) continue;
+      if (!perStock.has(code)) perStock.set(code, new Map());
+      const pm = perStock.get(code);
+      for (const ph of extractSubThemePhrases(`${row.boardTopic || ''} ${row.detailReason || ''}`)) {
+        if (!pm.has(ph)) pm.set(ph, new Set());
+        pm.get(ph).add(tab.key);
+      }
+    }
+  }
+  // 索引:短语 → Map(主因家族 → 提到它的股集合);只计该股≥2源提到的。
+  const index = new Map();
+  for (const [code, pm] of perStock) {
+    const fam = mainFamByCode.get(code) || '';
+    for (const [ph, srcSet] of pm) {
+      if (srcSet.size < 2) continue;
+      if (!index.has(ph)) index.set(ph, new Map());
+      const fm = index.get(ph);
+      if (!fm.has(fam)) fm.set(fam, new Set());
+      fm.get(fam).add(code);
+    }
+  }
+  subThemeAutoIndexCache.set(refDay, index);
+  return index;
+}
+// 详情卡细分检测:返回 { name, agree, all, auto } 或 null。
+// 1)词典命中(精准、同义词归一):各源细分原因 ≥2 源命中同一细分、属主因家族、≠主因 → 用它。
+// 2)词典没有时「板块性质」自动发现:某候选短语 本股≥2源 + 当天≥2只股都有 + 非宽筐/非噪声/≠主因 → 自动当细分。
+function detectSubThemeForDetail(mainReason, sources, autoIndex) {
+  const main = String(mainReason || '');
+  if (!main || /其他|待定/.test(main)) return null;   // 无热点主因(其他/待定/事件)不挖细分
+  const tax = loadSubThemeTaxonomy();
+  const hit = new Map();
+  for (const s of (sources || [])) {
+    if (!s || !s.found) continue;
+    const text = `${s.boardTopic || ''} ${s.detailReason || ''}`;
+    for (const st of (tax.subThemes || [])) {
+      const name = String(st.name || ''); if (!name) continue;
+      if (name === main || main.includes(name)) continue;
+      if (!subThemeParentMatches(main, st.parents)) continue;
+      if ((st.keywords || []).some(k => k && text.includes(k))) {
+        if (!hit.has(name)) hit.set(name, new Set());
+        hit.get(name).add(s.group || s.label || name);
+      }
+    }
+  }
+  const dictRanked = [...hit.entries()].map(([name, set]) => ({ name, agree: set.size }))
+    .filter(x => x.agree >= 2).sort((a, b) => b.agree - a.agree);
+  if (dictRanked.length) return { name: dictRanked[0].name, agree: dictRanked[0].agree, all: dictRanked, auto: false };
+  // 2)自动发现(板块性质):词典没覆盖到的新细分
+  if (!autoIndex) return null;
+  const autoRanked = [];
+  const mainStd = standardTheme(main);
+  const mainFam = consensusKey(main) || main;
+  const demandSet = new Set(tax.demandThemes || []);   // 下游/泛需求题材(数据中心/算力…),不是子类,绝不当细分
+  for (const [ph, srcSet] of stockSubThemePhraseHits(sources)) {
+    if (srcSet.size < 2) continue;
+    if (ph === main || main.includes(ph) || ph.includes(main)) continue;
+    if (demandSet.has(ph) || demandSet.has(standardTheme(ph))) continue;  // 下游/泛需求(数据中心是用在哪,不是被动元件的子类)
+    const phStd = standardTheme(ph);
+    if (phStd && mainStd && phStd === mainStd) continue;  // 与主因同一标准题材家族(光通信≈光模块)→ 冗余,不算细分
+    const info = standardThemeWithBroad(ph);
+    if (info && info.broad) continue;                     // 宽筐(半导体/大消费/有色金属…)太粗,不算细分
+    const famMap = autoIndex.get(ph);
+    if (!famMap) continue;
+    let total = 0, same = 0;
+    for (const [fam, set] of famMap) { total += set.size; if (fam === mainFam) same += set.size; }
+    if (same < 2) continue;                               // 跟本股同主因的股<2只 → 不算"该主因的细分"
+    if (same / total < 0.6) continue;                     // 该短语散落在多种主因下 → 跨题材属性,与本次涨停无关,丢
+    autoRanked.push({ name: ph, agree: srcSet.size, stocks: same });
+  }
+  autoRanked.sort((a, b) => b.stocks - a.stocks || b.agree - a.agree || a.name.length - b.name.length);
+  return autoRanked.length ? { name: autoRanked[0].name, agree: autoRanked[0].agree, all: autoRanked, auto: true } : null;
+}
+loadSubThemeTaxonomy();
+// 任意词 → 标准题材并带 broad 标记(供"细分挖掘":判断标签是宽筐还是具体题材)
+function standardThemeWithBroad(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return null;
+  for (const t of THEME_NONBROAD) if (t.keywords.some(k => k && s.includes(k))) return { name: themeDisplayName(t.standard), broad: false };
+  for (const t of THEME_BROAD) if (t.keywords.some(k => k && s.includes(k))) return { name: themeDisplayName(t.standard), broad: true };
+  return null;
+}
+// 细分挖掘:各源「题材标签」常被打宽(半导体/大消费/有色金属),但「细分原因」常含更具体题材(存储芯片/HBM)。
+// 当 标签归到"宽筐(broad)"、而细分能挖到"具体(非broad)标准题材" 时,改用细分的具体题材投票。
+// 由共识机制天然把关:某具体题材要 ≥2 源(各自细分)指向才会胜出,单源细分顶不动宽筐共识。
+// 事件词(摘帽/重组等)在 taxonomy 里没有 keyword(都在 dropped),standardTheme 不会返回它们,故不会被误挖成主因。
+function consensusTopicWithDetail(boardTopic, detailText) {
+  const base = consensusKey(boardTopic);
+  const baseInfo = standardThemeWithBroad(boardTopic);
+  const baseIsBroad = !!(baseInfo && baseInfo.broad);            // 标签归到了宽筐
+  if (!baseIsBroad) return base;                                  // 标签已是具体题材 → 不动
+  const det = standardThemeWithBroad(detailText);
+  if (det && !det.broad) return det.name;                        // 细分挖到具体题材 → 用它(还原被打宽的真题材)
+  return base;
+}
+
+function reasonHeadline(reasonText) {
+  return String(reasonText || '').split(/[；;\r\n]/)[0].trim();
+}
+
+function reasonHeadlineTopics(reasonText) {
+  return reasonHeadline(reasonText)
+    .split(/[+＋/、，,\s]/)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+function isPrimaryTopicRelatedToBoard(plateName, reasonName, reasonText) {
+  const board = String(plateName || '');
+  if (!board) return false;
+  const reasonTopic = String(reasonName || '').trim();
+  if (reasonTopic && (hasTopicIntersection(board, reasonTopic) || isRelatedReasonName(board, reasonTopic))) return true;
+  return reasonHeadlineTopics(reasonText).some(topic => (
+    hasTopicIntersection(board, topic) || isRelatedReasonName(board, topic)
+  ));
+}
+
+function isStrictPrimaryReasonBoard(boardName) {
+  const board = String(boardName || '');
+  return board.includes('黄金');
+}
+
+function firstReasonTopic(reasonText) {
+  return reasonHeadlineTopics(reasonText)[0] || '';
+}
+
+function isPrimaryReasonMatch(boardName, reasonName, reasonText, codeIndex = 0) {
+  const board = String(boardName || '');
+  const reason = String(reasonName || '');
+  if (board.includes('黄金')) {
+    const first = firstReasonTopic(reasonText);
+    return codeIndex === 0 && /黄金|金矿|贵金属/.test(first || reason);
+  }
+  return true;
+}
+
+function isPrimaryTopicMatchBoard(plateName, reasonName, reasonText, codeIndex = 0) {
+  if (!isPrimaryTopicRelatedToBoard(plateName, reasonName, reasonText)) return false;
+  return isPrimaryReasonMatch(plateName, reasonName, reasonText, codeIndex);
+}
+
+function externalTopicMatchesBoard(topic, plateName) {
+  const topicName = String(topic?.name || '').trim();
+  const canonical = String(topic?.canonical || canonicalTopicName(topicName)).trim();
+  const boardCanonical = canonicalTopicName(plateName);
+  if (!topicName || !boardCanonical) return false;
+  return canonical === boardCanonical ||
+    hasTopicIntersection(plateName, topicName) ||
+    isRelatedReasonName(plateName, topicName);
+}
+
+function externalTopicEvidence(stockTopics, plateName) {
+  const eastmoneyMatches = (stockTopics?.eastmoney || []).filter(topic => externalTopicMatchesBoard(topic, plateName));
+  const thsMatches = (stockTopics?.ths || []).filter(topic => externalTopicMatchesBoard(topic, plateName));
+  const matchedTopics = [...eastmoneyMatches, ...thsMatches];
+  return {
+    eastmoneyMatches,
+    thsMatches,
+    matchedTopics,
+    hasAny: matchedTopics.length > 0,
+    hasConsensus: eastmoneyMatches.length > 0 && thsMatches.length > 0,
+  };
+}
+
+function reasonTopicMatchesBoard(plateName, topic, reasonText = '') {
+  const candidate = String(topic || '').trim();
+  if (!candidate) return false;
+  return isPrimaryTopicMatchBoard(plateName, candidate, reasonText || candidate, 0);
+}
+
+function mainReasonRecordBroadMatchesBoard(record, plateName) {
+  if (!record) return false;
+  const reasonText = record.reasonText || record.reasonHeadline || record.fallbackReason || '';
+  const candidates = [
+    record.primaryTopic,
+    record.primaryRawTopic,
+    record.primaryReasonName,
+    ...(Array.isArray(record.allTopics) ? record.allTopics : []),
+    ...(Array.isArray(record.allRawTopics) ? record.allRawTopics : []),
+    ...(Array.isArray(record.reasonNames) ? record.reasonNames : []),
+    ...reasonHeadlineTopics(reasonText || record.reasonHeadline),
+  ];
+  return [...new Set(candidates.map(item => String(item || '').trim()).filter(Boolean))]
+    .some(topic => reasonTopicMatchesBoard(plateName, topic, reasonText));
+}
+
+function reasonListMatchesExternalBoard(reasonList, plateName, evidence) {
+  if (!evidence?.hasAny) return false;
+  return (reasonList || []).some(item => {
+    const reasonText = String(item?.Reason || item?.GNSM || item?.reason || '');
+    const candidates = [
+      item?.ZSName,
+      item?.CName,
+      item?.Name,
+      item?.name,
+      ...reasonHeadlineTopics(reasonText),
+    ];
+    return [...new Set(candidates.map(value => String(value || '').trim()).filter(Boolean))]
+      .some(topic => reasonTopicMatchesBoard(plateName, topic, reasonText));
+  });
+}
+
+function topicMatchesBoardByStandardTheme(plateName, topic) {
+  const board = String(plateName || '').trim();
+  const value = String(topic || '').trim();
+  if (!board || !value) return false;
+  const boardStd = standardTheme(board);
+  const valueStd = standardTheme(value);
+  if (boardStd && valueStd && boardStd === valueStd) return true;
+  const boardKey = consensusKey(board);
+  const valueKey = consensusKey(value);
+  return !!(boardKey && valueKey && boardKey === valueKey);
+}
+
+function mainReasonTopicMatchesBoard(plateName, topic, reasonText = '') {
+  if (topicMatchesBoardByStandardTheme(plateName, topic)) return true;
+  return reasonTopicMatchesBoard(plateName, topic, reasonText);
+}
+
+async function externalMultiSourceMainReasonMatchesBoard(stockId, plateId, plateName, day, apiKey) {
+  const [index, record] = await Promise.all([
+    getExternalTopicIndex().catch(() => null),
+    getMainReasonRecordForStockDay(stockId, day, apiKey).catch(() => null),
+  ]);
+  if (record && mainReasonRecordMatchesBoard(record, plateId, plateName)) return true;
+  const stockTopics = index?.stocks?.get(normalizeTopicStockCode(stockId));
+  const evidence = externalTopicEvidence(stockTopics, plateName);
+  if (record && evidence.hasAny && mainReasonRecordBroadMatchesBoard(record, plateName)) return true;
+  if (record) return false;
+  const reasonList = await fetchZtReason(stockId, day, apiKey).catch(() => []);
+  return reasonListMatchesExternalBoard(reasonList, plateName, evidence);
+}
+
+function mainReasonRecordMatchesBoard(record, plateId, plateName) {
+  if (!record) return false;
+  const mainTopic =
+    record.finalBoardTopic ||
+    record.mainReasonSummary?.boardTopic ||
+    record.primaryTopic ||
+    record.primaryRawTopic ||
+    '';
+  const reasonText = record.finalReason || record.reasonHeadline || mainTopic;
+  if (mainReasonTopicMatchesBoard(plateName, mainTopic, reasonText)) return true;
+  const primaryCode = String(record.primaryReasonCode || '');
+  if (!mainTopic && primaryCode && primaryCode === String(plateId || '')) return true;
+  return false;
+}
+
+function reasonListPrimaryEvidence(reasonList, conceptNameByCode) {
+  const item = Array.isArray(reasonList) ? reasonList[0] : null;
+  if (!item) {
+    return {
+      primaryRawTopic: '',
+      primaryReasonCode: '',
+      primaryReasonName: '',
+      headlineTopics: [],
+      reasonHeadline: '',
+      reasonText: '',
+      reasonCodes: [],
+      reasonNames: [],
+    };
+  }
+  const reasonText = String(item?.Reason || item?.GNSM || item?.reason || '');
+  const headlineTopics = reasonHeadlineTopics(reasonText);
+  const codes = Array.isArray(item?.ZSCode) ? item.ZSCode.map(String).filter(Boolean) : [];
+  const reasonNames = codes
+    .map(code => conceptNameByCode.get(code))
+    .filter(Boolean);
+  const primaryReasonCode = codes[0] || '';
+  const primaryReasonName = conceptNameByCode.get(primaryReasonCode) || String(item?.ZSName || item?.CName || item?.Name || item?.name || '');
+  const primaryRawTopic = headlineTopics[0] || primaryReasonName || '';
+  return {
+    primaryRawTopic,
+    primaryReasonCode,
+    primaryReasonName,
+    headlineTopics,
+    reasonHeadline: reasonHeadline(reasonText),
+    reasonText,
+    reasonCodes: codes,
+    reasonNames,
+  };
+}
+
+function mainReasonTokenList(text) {
+  return String(text || '')
+    .split(/[+\uFF0B\/|,\uFF0C\u3001;\uFF1B\s]+/u)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+function normalizeReasonSourceCode(value) {
+  return String(value || '').replace(/\D/g, '').trim();
+}
+
+function normalizeSourceStockIdentity(row, codeKeys, nameKeys, stocksByCode = new Map(), stocksByName = new Map()) {
+  const code = normalizeReasonSourceCode(pickJiuyangongsheString(row, codeKeys || [
+    'code',
+    'stock_code',
+    'stockCode',
+    'stock_id',
+    'stockId',
+    'StockCode',
+    'stock.code',
+    'stock.stock_code',
+  ]));
+  const name = pickJiuyangongsheString(row, nameKeys || [
+    'name',
+    'stock_name',
+    'stockName',
+    'StockName',
+    'stock.name',
+    'stock.stock_name',
+  ]);
+  if (code && stocksByCode.has(code)) return stocksByCode.get(code);
+  if (name && stocksByName.has(name)) return stocksByName.get(name);
+  if (!code && !name) return null;
+  return { code, name };
+}
+
+function mainReasonSourcePriority(source) {
+  const s = String(source || '').toLowerCase();
+  if (s.includes('manual')) return 80;
+  if (s.includes('review-auto-consensus')) return 74;
+  if (s.includes('ths-limitup-structured')) return 71;
+  if (s.includes('ths-limitup-focus')) return 70;
+  if (s.includes('xuangubao')) return 69;
+  if (s.includes('10jqka-fupan')) return 68;
+  if (s.includes('kaipanla') || s.includes('fupanla')) return 67;
+  if (s.includes('jiuyangongshe-structured')) return 66;
+  if (s.includes('jiuyangongshe-action')) return 64;
+  if (s.includes('jiuyangongshe')) return 62;
+  if (s.includes('tgb-hunan-ocr')) return 60;
+  if (s.includes('tgb-hunan')) return 58;
+  if (s.includes('tgb')) return 56;
+  if (s.includes('review')) return 54;
+  if (s.includes('news') || s.includes('summary')) return 45;
+  if (s.includes('multi-source-consensus')) return 42;
+  if (s.includes('kpl-zt-reason')) return 36;
+  if (s.includes('eastmoney')) return 35;
+  if (s.includes('limit-up-db')) return 24;
+  if (s.includes('concept')) return 10;
+  return 1;
+}
+
+function makeMainReasonCandidate(source, rawTopic, options = {}) {
+  const primaryRawTopic = String(rawTopic || '').trim();
+  if (!primaryRawTopic) return null;
+  const confidence = Number(options.confidence);
+  return {
+    source: String(source || 'unknown'),
+    primaryRawTopic,
+    primaryTopic: canonicalTopicName(primaryRawTopic),
+    reasonText: String(options.reasonText || ''),
+    reasonHeadline: String(options.reasonHeadline || reasonHeadline(options.reasonText || primaryRawTopic)),
+    primaryReasonCode: String(options.primaryReasonCode || ''),
+    primaryReasonName: String(options.primaryReasonName || ''),
+    boardTopic: String(options.boardTopic || primaryRawTopic),
+    detailReason: String(options.detailReason || ''),
+    reasonQuality: String(options.reasonQuality || ''),
+    matchTypes: Array.isArray(options.matchTypes) ? options.matchTypes : [],
+    sourceSupport: options.sourceSupport || null,
+    qualityNote: String(options.qualityNote || ''),
+    confidence: Number.isFinite(confidence) ? confidence : 0.5,
+    evidence: options.evidence || null,
+    consensusTopics: Array.isArray(options.consensusTopics) ? options.consensusTopics : [],
+  };
+}
+
+function chooseMainReasonCandidate(candidates) {
+  // 用户拍板(2026-06-27):主因只由4个复盘源(开盘啦/选股宝/韭研/淘股吧)的"热点板块+细分原因"判定。
+  // 去掉 kpl-zt-reason / limit-up-db-reason / multi-source-consensus 这些"兜底"——它们会误导(国机精工→培育钻石、德尔未来→地产链),
+  // 也没必要。4源判不出来就归"其他/待定",不靠瞎兜底。
+  const NON_REVIEW_FALLBACK = /^(kpl-zt-reason|limit-up-db-reason|multi-source-consensus)$/;
+  const list = (candidates || []).filter(candidate => candidate?.primaryTopic && !NON_REVIEW_FALLBACK.test(String(candidate.source || '')));
+  // 永不输出"其他"作主因：优先非"其他"候选，仅当全部都是"其他"时才退而用之
+  const isOther = c => /其他/.test(String(c.boardTopic || c.primaryRawTopic || c.primaryTopic || ''));
+  // 折中(方向A 第2条):开盘啦涨停原因(kpl-zt-reason)等的"事件型"主因(财报/摘帽/中标/公告…)若无 ≥2 源共识支撑,
+  // 不得当主因——事件不是热点题材,与同花顺孤撑同理。真题材(把噪声股正确并进半导体那种 kpl 救回)不受影响;
+  // 事件若有 ≥2 源共识(走 review-auto-consensus,带 groups)则保留,不误伤。
+  const groupCountOf = c => {
+    const s = c?.evidence?.sourceSupport || c?.sourceSupport || {};
+    return Array.isArray(s.groups) ? s.groups.length : 0;
+  };
+  // 用户拍板(2026-06-27):事件/资本运作词(摘帽/重组/股权转让/公告/美伊战争…)不是热点题材,一律不当主因。
+  // (去掉原来"<2源才算噪声"的闸:噪声凑到2源也不该当主因——4源里没真题材,就该是待定。)
+  const isEventNoise = c => THS_EVENT_NOISE.test(String(c.boardTopic || c.primaryRawTopic || c.primaryTopic || ''));
+  const isWeak = c => isOther(c) || isEventNoise(c);
+  const strong = list.filter(c => !isWeak(c));
+  // 无干净题材候选时,只退到"其他/待定";绝不回落到事件噪声(否则 股权转让/摘帽 又会被选上)。
+  const pool = strong.length ? strong : list.filter(isOther);
+  return pool
+    .sort((a, b) => (
+      mainReasonCandidateScore(b) - mainReasonCandidateScore(a) ||
+      Number(b.confidence || 0) - Number(a.confidence || 0) ||
+      mainReasonSourcePriority(b.source) - mainReasonSourcePriority(a.source)
+    ))[0] || null;
+}
+
+function mainReasonCandidateScore(candidate) {
+  if (!candidate?.primaryTopic) return -Infinity;
+  const source = String(candidate.source || '').toLowerCase();
+  const support = candidate.evidence?.sourceSupport || candidate.sourceSupport || {};
+  const groupCount = Array.isArray(support.groups) ? support.groups.length : 0;
+  const sourceCount = Array.isArray(support.sources) ? support.sources.length : 0;
+  let score = Number(candidate.confidence || 0);
+  score += mainReasonSourcePriority(source) / 1000;
+  if (groupCount >= 3) score += 0.16;
+  else if (groupCount === 2) score += 0.10;
+  score += Math.min(0.06, sourceCount * 0.015);
+  if (source.includes('review-auto-consensus')) score += 0.055;
+  else if (source.includes('ths-limitup-structured')) score += 0.047;
+  else if (source.includes('ths-limitup-focus')) score += 0.045;
+  else if (source.includes('kaipanla') || source.includes('fupanla')) score += 0.042;
+  else if (source.includes('jiuyangongshe-structured')) score += 0.046;
+  else if (source.includes('jiuyangongshe-action')) score += 0.04;
+  else if (source.includes('tgb')) score += 0.03;
+  else if (source.includes('multi-source-consensus')) score += 0.018;
+  else if (source.includes('kpl-zt-reason')) score += 0.006;
+  return score;
+}
+
+function buildConsensusMainReasonCandidate(candidates) {
+  const list = (candidates || []).filter(candidate => candidate?.primaryTopic);
+  const kpl = list.find(candidate => candidate.source === 'kpl-zt-reason');
+  const external = list.find(candidate => candidate.source === 'limit-up-db-reason');
+  if (!kpl || !external) return null;
+  const sameTopic = kpl.primaryTopic === external.primaryTopic ||
+    hasTopicIntersection(kpl.primaryRawTopic, external.primaryRawTopic) ||
+    hasTopicIntersection(kpl.primaryTopic, external.primaryTopic);
+  if (!sameTopic) return null;
+  return makeMainReasonCandidate('multi-source-consensus', kpl.primaryRawTopic, {
+    reasonText: kpl.reasonText || external.reasonText,
+    reasonHeadline: kpl.reasonHeadline || external.reasonHeadline,
+    primaryReasonCode: kpl.primaryReasonCode,
+    primaryReasonName: kpl.primaryReasonName,
+    confidence: Math.max(Number(kpl.confidence || 0), Number(external.confidence || 0)) + 0.04,
+    evidence: {
+      sources: [kpl.source, external.source],
+      topics: [kpl.primaryRawTopic, external.primaryRawTopic],
+    },
+  });
+}
+
+function isReviewConsensusNoiseTopic(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return true;
+  return /其他/.test(text) || THS_EVENT_NOISE.test(text) || isDroppedThemeWord(text);
+}
+
+function topicConsensusKeyForReview(raw) {
+  const text = String(raw || '').trim();
+  if (!text || isReviewConsensusNoiseTopic(text)) return '';
+  const key = consensusKey(text);
+  if (!key || isReviewConsensusNoiseTopic(key)) return '';
+  return key;
+}
+
+function detailConsensusPhrasesFromEvidence(evidence) {
+  const text = [
+    evidence?.detailReason,
+    evidence?.detailText,
+    evidence?.reasonText,
+  ].map(value => String(value || '').trim()).filter(Boolean).join(' ');
+  return extractSubThemePhrases(text);
+}
+
+function buildDetailReasonConsensusItemForCode(code, items) {
+  const rows = [];
+  for (const item of items || []) {
+    for (const evidence of item.evidence || []) {
+      const source = String(evidence?.source || '').trim();
+      const group = reviewSourceGroup(source);
+      if (!source || !group) continue;
+      rows.push({
+        source,
+        group,
+        boardTopic: String(evidence?.boardTopic || evidence?.topic || '').trim(),
+        evidence,
+      });
+    }
+  }
+  const boardByKey = new Map();
+  for (const row of rows) {
+    const key = topicConsensusKeyForReview(row.boardTopic);
+    if (!key) continue;
+    const item = boardByKey.get(key) || { key, rawTopics: new Map(), groups: new Set(), sources: new Set() };
+    item.groups.add(row.group);
+    item.sources.add(row.source);
+    item.rawTopics.set(row.boardTopic, (item.rawTopics.get(row.boardTopic) || 0) + 1);
+    boardByKey.set(key, item);
+  }
+  const detailByKey = new Map();
+  for (const row of rows) {
+    for (const phrase of detailConsensusPhrasesFromEvidence(row.evidence)) {
+      const key = topicConsensusKeyForReview(phrase);
+      if (!key) continue;
+      const item = detailByKey.get(key) || {
+        key,
+        phrases: new Map(),
+        groups: new Set(),
+        sources: new Set(),
+        evidence: [],
+        score: 0,
+      };
+      item.groups.add(row.group);
+      item.sources.add(row.source);
+      item.phrases.set(phrase, (item.phrases.get(phrase) || 0) + 1);
+      item.evidence.push(row.evidence);
+      item.score += Number(row.evidence?.confidence || 0.8) * reviewSourceWeight(row.source);
+      detailByKey.set(key, item);
+    }
+  }
+  let best = null;
+  for (const detail of detailByKey.values()) {
+    if (detail.groups.size < 2) continue;
+    const board = boardByKey.get(detail.key);
+    if (!board || !board.groups.size) continue; // 细分原因必须能和至少一个来源的涨停卡片板块对上。
+    const phrase = [...detail.phrases.entries()].sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)[0]?.[0] || detail.key;
+    const boardRaw = [...board.rawTopics.entries()].sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)[0]?.[0] || detail.key;
+    const candidate = {
+      code,
+      name: items.find(item => item?.name)?.name || '',
+      primaryRawTopic: standardTheme(phrase) || standardTheme(boardRaw) || phrase,
+      primaryTopic: detail.key,
+      score: detail.score + detail.groups.size * 0.36 + board.groups.size * 0.18,
+      sources: [...detail.sources],
+      sourceGroups: new Set(detail.groups),
+      evidence: detail.evidence,
+      detailConsensus: true,
+      detailConsensusPhrase: phrase,
+      detailBoardMatch: boardRaw,
+      seenEvidence: new Set(),
+    };
+    if (!best || candidate.sourceGroups.size > best.sourceGroups.size || candidate.score > best.score) best = candidate;
+  }
+  return best;
+}
+
+function normalizeMainReasonSourceRow(row, fallbackCode = '') {
+  if (!row || typeof row !== 'object') return null;
+  const code = normalizeReasonSourceCode(row.code || row.stock_id || row.stockId || row.StockID || fallbackCode);
+  if (!code) return null;
+  const reasonText = String(row.reasonText || row.reason || row.text || row.summary || row.note || '');
+  const rawTopic = String(
+    row.primaryRawTopic ||
+    row.primaryTopic ||
+    row.topic ||
+    row.mainTopic ||
+    row.reasonTopic ||
+    mainReasonTokenList(reasonText)[0] ||
+    ''
+  ).trim();
+  if (!rawTopic && !reasonText) return null;
+  const confidence = Number(row.confidence ?? row.score);
+  return {
+    code,
+    name: String(row.name || row.stockName || row.StockName || ''),
+    source: String(row.source || row.from || 'review/manual'),
+    primaryRawTopic: rawTopic || mainReasonTokenList(reasonText)[0] || '',
+    primaryTopic: canonicalTopicName(rawTopic || mainReasonTokenList(reasonText)[0] || ''),
+    reasonText,
+    reasonHeadline: String(row.reasonHeadline || reasonHeadline(reasonText || rawTopic)),
+    boardTopic: String(row.boardTopic || (Array.isArray(row.boardNames) ? row.boardNames.join('、') : '') || rawTopic || '').trim(),
+    detailReason: String(row.detailReason || '').trim(),
+    reasonQuality: String(row.reasonQuality || '').trim(),
+    matchTypes: Array.isArray(row.matchTypes) ? row.matchTypes : [],
+    sourceSupport: row.sourceSupport || null,
+    qualityNote: String(row.qualityNote || '').trim(),
+    confidence: Number.isFinite(confidence) ? confidence : 0.98,
+    consensusTopics: Array.isArray(row.consensusTopics) ? row.consensusTopics : [],
+    raw: row,
+  };
+}
+
+function normalizeMainReasonSourcePayload(payload) {
+  const rows = [];
+  if (Array.isArray(payload)) {
+    rows.push(...payload);
+  } else if (Array.isArray(payload?.stocks)) {
+    rows.push(...payload.stocks);
+  } else if (Array.isArray(payload?.rows)) {
+    rows.push(...payload.rows);
+  } else if (payload && typeof payload === 'object') {
+    for (const [key, value] of Object.entries(payload)) {
+      if (value && typeof value === 'object') rows.push({ ...value, code: value.code || key });
+    }
+  }
+  const map = new Map();
+  for (const row of rows) {
+    const normalized = normalizeMainReasonSourceRow(row);
+    if (normalized && isDisabledReviewSource(normalized.source)) continue;
+    if (normalized?.code) map.set(normalized.code, normalized);
+  }
+  return map;
+}
+
+function reviewDayPatterns(day) {
+  const d = compactDate(day);
+  if (d.length !== 8) return [];
+  const month = Number(d.slice(4, 6));
+  const date = Number(d.slice(6, 8));
+  const next = compactDate(shiftDay(isoFromCompactDate(d), 1));
+  const nextMonth = Number(next.slice(4, 6));
+  const nextDate = Number(next.slice(6, 8));
+  return [
+    `${month}月${date}日`,
+    `${String(month).padStart(2, '0')}.${String(date).padStart(2, '0')}`,
+    `${month}.${date}`,
+    `${String(month).padStart(2, '0')}${String(date).padStart(2, '0')}`,
+    `${nextMonth}月${nextDate}日盘前`,
+    `${nextMonth}月${nextDate}日早盘`,
+  ];
+}
+
+function absoluteSourceUrl(baseUrl, href) {
+  try {
+    return new URL(String(href || ''), baseUrl).toString();
+  } catch {
+    return '';
+  }
+}
+
+async function fetchSourceHtml(url, encoding = 'utf8') {
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0',
+      Referer: new URL(url).origin,
+    },
+  });
+  if (!res.ok) throw new Error(`${url} ${res.status}`);
+  if (encoding && encoding.toLowerCase() !== 'utf8' && encoding.toLowerCase() !== 'utf-8') {
+    return new TextDecoder(encoding).decode(await res.arrayBuffer());
+  }
+  return res.text();
+}
+
+async function fetchSourceBuffer(url, referer = '') {
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0',
+      Referer: referer || new URL(url).origin,
+    },
+  });
+  if (!res.ok) throw new Error(`${url} ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
+async function jiuyangongsheActionPost(endpoint, params = {}, options = {}) {
+  const auth = options.auth || await readJiuyangongsheAuth();
+  const cookie = sanitizeCookieHeader(auth.cookie);
+  if (!cookie) {
+    if (!options.noAutoLogin) {
+      const refreshed = await refreshJiuyangongsheAuthByCredentials(params.date || options.day || chinaNowParts().day);
+      return jiuyangongsheActionPost(endpoint, params, {
+        ...options,
+        auth: refreshed,
+        noAutoLogin: true,
+      });
+    }
+    const err = new Error('jiuyangongshe cookie not configured');
+    err.jygStatus = 'missing';
+    throw err;
+  }
+  const timestamp = Date.now();
+  const res = await fetch(`https://app.jiuyangongshe.com/jystock-app${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36',
+      'Referer': `https://www.jiuyangongshe.com/action/${params.date || ''}`,
+      'Origin': 'https://www.jiuyangongshe.com',
+      'Content-Type': 'application/json',
+      'Accept': 'application/json, text/plain, */*',
+      'platform': '3',
+      'timestamp': String(timestamp),
+      'token': jiuyangongsheApiToken(timestamp),
+      'Cookie': cookie,
+    },
+    body: JSON.stringify(params || {}),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`jiuyangongshe ${endpoint} ${res.status}: ${text.slice(0, 160)}`);
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error(`jiuyangongshe ${endpoint} invalid json`);
+  }
+  if (String(json.errCode) !== '0') {
+    const err = new Error(json.msg || `jiuyangongshe ${endpoint} errCode ${json.errCode}`);
+    err.jygErrCode = String(json.errCode);
+    err.jygStatus = String(json.errCode) === '1' ? 'login-expired' : 'error';
+    err.jygPayload = json;
+    if (!options.noAutoLogin && err.jygStatus === 'login-expired') {
+      const refreshed = await refreshJiuyangongsheAuthByCredentials(params.date || options.day || chinaNowParts().day);
+      return jiuyangongsheActionPost(endpoint, params, {
+        ...options,
+        auth: refreshed,
+        noAutoLogin: true,
+      });
+    }
+    throw err;
+  }
+  return json;
+}
+
+async function probeJiuyangongsheAuth(auth, day = chinaNowParts().day) {
+  try {
+    const json = await jiuyangongsheActionPost('/api/v1/action/count-pc', {
+      date: isoFromCompactDate(day),
+    }, { auth });
+    return {
+      configured: true,
+      ok: true,
+      status: 'ok',
+      label: 'OK',
+      savedAt: auth.savedAt || '',
+      checkedAt: new Date().toISOString(),
+      day: json?.data?.date || isoFromCompactDate(day),
+      allCount: Number(json?.data?.all || 0),
+      recommendCount: Number(json?.data?.recommend || 0),
+      message: '',
+    };
+  } catch (err) {
+    return {
+      configured: true,
+      ok: false,
+      status: err.jygStatus || 'error',
+      label: err.jygStatus === 'login-expired' ? '登录失效' : '异常',
+      savedAt: auth.savedAt || '',
+      checkedAt: new Date().toISOString(),
+      message: err.message,
+    };
+  }
+}
+
+async function testJiuyangongsheAuth(day = chinaNowParts().day, options = {}) {
+  const auth = await readJiuyangongsheAuth();
+  const credentials = await readJiuyangongsheLoginConfig();
+  if (!auth.cookie) {
+    if (options.autoLogin !== false && credentials.configured) {
+      try {
+        const refreshed = await refreshJiuyangongsheAuthByCredentials(day);
+        const payload = await probeJiuyangongsheAuth(refreshed, day);
+        return {
+          ...payload,
+          autoLogin: true,
+          credentialConfigured: true,
+          credentialPhone: credentials.phoneMasked,
+        };
+      } catch (err) {
+        return {
+          configured: false,
+          ok: false,
+          status: err.jygStatus || 'login-failed',
+          label: '自动登录失败',
+          savedAt: '',
+          checkedAt: new Date().toISOString(),
+          message: err.message,
+          credentialConfigured: true,
+          credentialPhone: credentials.phoneMasked,
+        };
+      }
+    }
+    return {
+      configured: false,
+      ok: false,
+      status: 'missing',
+      label: '未配置',
+      savedAt: '',
+      message: credentials.configured ? '未配置韭研 Cookie，自动登录未启用' : '未配置韭研 Cookie 或账号密码',
+      credentialConfigured: credentials.configured,
+      credentialPhone: credentials.phoneMasked,
+    };
+  }
+  const cacheKey = `${isoFromCompactDate(day)}:${auth.savedAt || ''}`;
+  const now = Date.now();
+  if (!options.force && jiuyangongsheAuthStatusCache?.key === cacheKey && now - jiuyangongsheAuthStatusCache.checkedAtMs < 5 * 60 * 1000) {
+    return jiuyangongsheAuthStatusCache.payload;
+  }
+  let payload = await probeJiuyangongsheAuth(auth, day);
+  if (!payload.ok && options.autoLogin !== false && credentials.configured && ['login-expired', 'missing'].includes(payload.status)) {
+    try {
+      const refreshed = await refreshJiuyangongsheAuthByCredentials(day);
+      payload = {
+        ...await probeJiuyangongsheAuth(refreshed, day),
+        autoLogin: true,
+      };
+    } catch (err) {
+      payload = {
+        ...payload,
+        autoLogin: false,
+        autoLoginError: err.message,
+        message: `${payload.message || payload.label || '韭研登录失效'}；自动登录失败：${err.message}`,
+      };
+    }
+  }
+  payload = {
+    ...payload,
+    credentialConfigured: credentials.configured,
+    credentialPhone: credentials.phoneMasked,
+  };
+  jiuyangongsheAuthStatusCache = {
+    key: cacheKey,
+    checkedAtMs: now,
+    payload,
+  };
+  return payload;
+}
+
+function pickJiuyangongsheString(row, keys) {
+  for (const key of keys) {
+    const value = key.split('.').reduce((obj, part) => obj?.[part], row);
+    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+  }
+  return '';
+}
+
+function jiuyangongsheActionLimitTime(row) {
+  return pickJiuyangongsheString(row, [
+    'article.action_info.time',
+    'action_info.time',
+    'stock.action_info.time',
+    'firstLimitTime',
+    'first_limit_time',
+    'limit_time',
+    'time',
+  ]);
+}
+
+function jiuyangongsheActionLimitCount(row) {
+  return pickJiuyangongsheString(row, [
+    'article.action_info.num',
+    'action_info.num',
+    'stock.action_info.num',
+    'limitUpCount',
+    'limit_up_count',
+    'num',
+  ]);
+}
+
+function normalizeJiuyangongsheActionStock(row, stocksByCode, stocksByName) {
+  const code = normalizeReasonSourceCode(pickJiuyangongsheString(row, [
+    'code',
+    'stock_code',
+    'stockCode',
+    'stock_id',
+    'stockId',
+    'StockCode',
+    'stock.code',
+    'stock.stock_code',
+  ]));
+  const name = pickJiuyangongsheString(row, [
+    'name',
+    'stock_name',
+    'stockName',
+    'StockName',
+    'stock.name',
+    'stock.stock_name',
+  ]);
+  if (code && stocksByCode.has(code)) return stocksByCode.get(code);
+  if (name && stocksByName.has(name)) return stocksByName.get(name);
+  return null;
+}
+
+function jiuyangongsheActionFieldName(field) {
+  return cleanJiuyangongsheActionTopic(pickJiuyangongsheString(field, [
+    'name',
+    'field_name',
+    'fieldName',
+    'action_field_name',
+    'actionFieldName',
+    'title',
+  ]));
+}
+
+function cleanJiuyangongsheActionTopic(rawTopic) {
+  const text = String(rawTopic || '')
+    .replace(/^[\s\d.、一二三四五六七八九十]+/u, '')
+    .replace(/[：:：、，,。；;]+$/u, '')
+    .trim();
+  if (!text) return '';
+  if (/^(简图|ST板块|ST)$/u.test(text)) return '';
+  if (/^(公告|其他)$/u.test(text)) return text;
+  return cleanReviewTopic(text);
+}
+
+function jiuyangongsheActionFieldId(field) {
+  return pickJiuyangongsheString(field, [
+    'id',
+    'field_id',
+    'fieldId',
+    'action_field_id',
+    'actionFieldId',
+  ]);
+}
+
+function jiuyangongsheActionReasonText(row, fallbackTopic, stockName) {
+  const reason = pickJiuyangongsheString(row, [
+    'reason',
+    'reason_info',
+    'reasonInfo',
+    'expound',
+    'content',
+    'description',
+    'summary',
+    'title',
+    'action_reason',
+    'actionReason',
+    'logic',
+    'article.action_info.reason',
+    'article.action_info.expound',
+    'article.action_info.action_reason',
+    'article.title',
+    'article.summary',
+    'article.content',
+  ]);
+  return reason || `${fallbackTopic}: ${stockName}`;
+}
+
+function countCjkChars(value) {
+  return (String(value || '').match(/[\u3400-\u9fff]/g) || []).length;
+}
+
+function repairMojibakeText(value) {
+  const text = String(value || '');
+  if (!text) return '';
+  if (!/[ÃÂåæçèéä]/u.test(text)) return text;
+  try {
+    const bytes = Uint8Array.from([...text], ch => ch.charCodeAt(0) & 0xff);
+    const fixed = Buffer.from(bytes).toString('utf8');
+    return countCjkChars(fixed) > countCjkChars(text) ? fixed : text;
+  } catch {
+    return text;
+  }
+}
+
+function normalizeJiuyangongsheActionText(value) {
+  let text = reviewHtmlToText(value);
+  text = repairMojibakeText(text);
+  return text
+    .replace(/\u00a0/g, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\r/g, '\n')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+}
+
+function jiuyangongsheActionDetailText(row) {
+  return normalizeJiuyangongsheActionText(pickJiuyangongsheString(row, [
+    'article.action_info.expound',
+    'article.action_info.reason',
+    'article.action_info.action_reason',
+    'article.action_info.content',
+    'article.summary',
+    'expound',
+    'reason',
+    'reason_info',
+    'reasonInfo',
+    'action_reason',
+    'actionReason',
+    'description',
+    'summary',
+  ]));
+}
+
+function jiuyangongsheActionDetailReasonFromText(text) {
+  const prepared = String(text || '')
+    .replace(/([;；。])\s*(?=\d{1,2}[、.．]\s*)/g, '$1\n')
+    .replace(/\s+(?=\d{1,2}[、.．]\s*)/g, '\n');
+  const line = prepared
+    .split(/\n+/)
+    .map(item => item.replace(/^\d{1,2}[、.．]\s*/, '').trim())
+    .filter(Boolean)
+    .find(item => !/(\u80a1\u7968\u5f02\u52a8\u89e3\u6790|\u5f02\u52a8\u89e3\u6790)$/u.test(item));
+  if (!line) return '';
+  const detail = line
+    .replace(/^(?:\u6838\u5fc3\u903b\u8f91|\u5f02\u52a8\u89e3\u6790|\u539f\u56e0|\u89e3\u6790)[:\uff1a]\s*/u, '')
+    .trim();
+  return detail.length > 260 ? detail.slice(0, 260).trim() : detail;
+}
+
+function jiuyangongsheDataArray(json) {
+  if (Array.isArray(json?.data)) return json.data;
+  if (Array.isArray(json?.data?.list)) return json.data.list;
+  if (Array.isArray(json?.data?.items)) return json.data.items;
+  if (Array.isArray(json?.list)) return json.list;
+  if (Array.isArray(json?.items)) return json.items;
+  return [];
+}
+
+async function fetchJiuyangongsheActionRawRows(day, stocks) {
+  const authStatus = await testJiuyangongsheAuth(day);
+  if (!authStatus.ok) {
+    return {
+      rows: [],
+      sourceErrors: [{ source: 'review/jiuyangongshe-action', error: authStatus.message || authStatus.label || 'not available' }],
+    };
+  }
+  const apiDate = authStatus.day || isoFromCompactDate(day);
+  const stocksByCode = new Map((stocks || []).map(stock => [normalizeReasonSourceCode(stock.code), stock]).filter(([code]) => code));
+  const stocksByName = new Map((stocks || []).map(stock => [String(stock.name || '').trim(), stock]).filter(([name]) => name));
+  const fieldJson = await jiuyangongsheActionPost('/api/v1/action/field', { date: apiDate, pc: 1 });
+  const fields = jiuyangongsheDataArray(fieldJson);
+  const rows = [];
+  const sourceErrors = [];
+  await mapLimit(fields, 3, async field => {
+    const fieldId = jiuyangongsheActionFieldId(field);
+    const topic = jiuyangongsheActionFieldName(field);
+    if (!fieldId || !topic) return;
+    const lists = [];
+    if (Array.isArray(field.list)) lists.push(...field.list);
+    if (Array.isArray(field.stocks)) lists.push(...field.stocks);
+    if (Array.isArray(field.items)) lists.push(...field.items);
+    try {
+      const listJson = await jiuyangongsheActionPost('/api/v1/action/list', {
+        action_field_id: fieldId,
+        date: apiDate,
+        pc: 1,
+        start: 1,
+        limit: 999,
+        sort_price: 0,
+        sort_range: 0,
+        sort_time: 0,
+      });
+      lists.push(...jiuyangongsheDataArray(listJson));
+    } catch (err) {
+      sourceErrors.push({ source: 'review/jiuyangongshe-action', field: fieldId, topic, error: err.message });
+    }
+    const seenRows = new Set();
+    const list = lists.filter(item => {
+      const code = normalizeReasonSourceCode(pickJiuyangongsheString(item, ['code', 'stock_code', 'stockCode', 'stock_id', 'stockId', 'StockCode', 'stock.code', 'stock.stock_code']));
+      const name = pickJiuyangongsheString(item, ['name', 'stock_name', 'stockName', 'StockName', 'stock.name', 'stock.stock_name']);
+      const key = `${code}:${name}:${topic}`;
+      if (seenRows.has(key)) return false;
+      seenRows.add(key);
+      return true;
+    });
+    for (const item of list) {
+      const stock = normalizeSourceStockIdentity(item, null, null, stocksByCode, stocksByName);
+      if (!stock) continue;
+      const detailText = jiuyangongsheActionDetailText(item);
+      const detailReason = jiuyangongsheActionDetailReasonFromText(detailText);
+      const code = normalizeReasonSourceCode(stock.code);
+      const name = String(stock.name || '').trim();
+      if (!code || !name) continue;
+      const reasonText = detailReason
+        ? `${topic}: ${name} - ${detailReason}`
+        : jiuyangongsheActionReasonText(item, topic, name);
+      rows.push({
+        code,
+        name,
+        source: 'review/jiuyangongshe-action',
+        primaryRawTopic: topic,
+        primaryTopic: canonicalTopicName(topic),
+        reasonText,
+        reasonHeadline: detailReason || topic,
+        confidence: 0.97,
+        matchType: detailReason ? 'official-action-detail' : 'official-action-board',
+        reasonQuality: detailReason ? 'clear' : 'weak',
+        qualityNote: detailReason
+          ? 'Jiuyangongshe action API supplied board topic and stock detail reason.'
+          : 'Jiuyangongshe action API supplied board topic but no stock detail reason.',
+        boardTopic: topic,
+        detailReason,
+        detailText,
+        firstLimitTime: jiuyangongsheActionLimitTime(item),
+        limitUpCount: jiuyangongsheActionLimitCount(item),
+        url: `https://www.jiuyangongshe.com/action/${apiDate}`,
+        title: `韭研公社异动 ${apiDate}`,
+        title: `\u97ed\u7814\u516c\u793e\u5f02\u52a8 ${apiDate}`,
+        raw: item,
+      });
+    }
+  });
+  return {
+    rows,
+    sourceErrors,
+    apiDate,
+    authStatus,
+  };
+}
+
+async function fetchJiuyangongsheActionRows(day, stocks) {
+  const payload = await fetchJiuyangongsheActionRawRows(day, stocks);
+  return {
+    ...payload,
+    rows: aggregateReviewSourceRows(payload.rows),
+  };
+}
+
+async function buildJiuyangongsheStructuredArtifactFromAction(day, stocks, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  const rawPayload = await fetchJiuyangongsheActionRawRows(isoDay, stocks);
+  const stockByCode = new Map((stocks || [])
+    .map(stock => [normalizeReasonSourceCode(stock?.code), stock])
+    .filter(([code]) => code));
+  const selectedByCode = new Map();
+  for (const item of rawPayload.rows || []) {
+    const code = normalizeReasonSourceCode(item?.code);
+    if (!code || !stockByCode.has(code) || selectedByCode.has(code)) continue;
+    const stock = stockByCode.get(code) || {};
+    const boardTopic = cleanBoardDetailTopic(item?.boardTopic || item?.primaryRawTopic || '');
+    const detailReason = normalizeJiuyangongsheActionText(item?.detailReason || item?.reasonHeadline || '');
+    if (!boardTopic) continue;
+    const name = String(item?.name || stock?.name || '').trim();
+    selectedByCode.set(code, {
+      code,
+      name,
+      boardTopic,
+      detailReason,
+      primaryRawTopic: boardTopic,
+      primaryTopic: canonicalTopicName(boardTopic),
+      reasonText: detailReason ? `${boardTopic}: ${name} - ${detailReason}` : `${boardTopic}: ${name}`,
+      reasonHeadline: detailReason || boardTopic,
+      firstLimitTime: normalizeReviewFirstLimitTime(item?.firstLimitTime || stock?.firstLimitTime),
+      limitUpCount: String(item?.limitUpCount || stock?.limitUpCount || ''),
+      floatingMarketValueYi: Number.isFinite(Number(item?.raw?.price)) ? Number((Number(item.raw.price) / 100).toFixed(2)) : null,
+      turnoverYi: Number.isFinite(Number(item?.raw?.turnover)) ? Number((Number(item.raw.turnover) / 100).toFixed(2)) : null,
+      source: 'review/jiuyangongshe-structured',
+      matchType: 'official-action-limitup-filtered',
+      reasonQuality: detailReason ? 'clear' : 'weak',
+      confidence: detailReason ? 0.99 : 0.94,
+      qualityNote: 'Jiuyangongshe action API rows filtered by the exact non-ST limit-up stock list; this keeps the source layer aligned with the original limit-up diagram scope.',
+      sourceOrder: 0,
+      originalField: item?.raw?.originalField || item?.primaryRawTopic || boardTopic,
+      raw: item?.raw || item,
+    });
+  }
+  const rows = [];
+  let sourceOrder = 1;
+  const sourceStocks = stocks || [];
+  for (const stock of sourceStocks) {
+    const code = normalizeReasonSourceCode(stock?.code);
+    const row = selectedByCode.get(code);
+    if (!row) continue;
+    row.sourceOrder = sourceOrder++;
+    rows.push(row);
+  }
+  const coverage = reviewRowsCoverage(rows, stocks);
+  const payload = {
+    version: 1,
+    day: isoDay,
+    source: 'review/jiuyangongshe-structured',
+    title: `Jiuyangongshe structured limit-up diagram ${isoDay}`,
+    pageUrl: `https://www.jiuyangongshe.com/action/${isoDay}`,
+    generatedAt: new Date().toISOString(),
+    method: 'action-api-filtered-by-limit-up-list',
+    baselineSource: options.baselineSource || '',
+    count: rows.length,
+    topics: buildReviewSourceTopics(rows),
+    coverage,
+    rows,
+    sourceErrors: rawPayload.sourceErrors || [],
+  };
+  if (coverage.missingCodes.length || coverage.extraCodes.length || !rows.length) {
+    return {
+      ok: false,
+      method: payload.method,
+      payload,
+      coverage,
+      sourceErrors: rawPayload.sourceErrors || [],
+      error: `Jiuyangongshe structured generator coverage mismatch: ${coverage.actualCount}/${coverage.expectedCount}`,
+    };
+  }
+  await fs.mkdir(path.dirname(jiuyangongsheStructuredSourcePath(isoDay)), { recursive: true });
+  await fs.writeFile(jiuyangongsheStructuredSourcePath(isoDay), JSON.stringify(payload, null, 2), 'utf8');
+  return {
+    ok: true,
+    method: payload.method,
+    count: rows.length,
+    coverage,
+    targetFile: jiuyangongsheStructuredSourcePath(isoDay),
+  };
+}
+
+function decodeEscapedReviewHtml(html) {
+  return String(html || '')
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '\n')
+    .replace(/\\t/g, ' ')
+    .replace(/\\"/g, '"')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>');
+}
+
+function reviewHtmlToText(html) {
+  return decodeEscapedReviewHtml(html)
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|tr|h[1-6])>/gi, '\n')
+    .replace(/<[^>]+>/g, '\n')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+}
+
+function cleanReviewTopic(topic) {
+  let text = String(topic || '').trim();
+  text = text.replace(/^[\s\d.、一二三四五六七八九十]+/u, '').trim();
+  text = text.replace(/^(No\.\d+|NO\.\d+|昨日热点|今日热点|盘前热点事件|重磅财经信息|大盘|其他强势股|涨停板)\s*/i, '').trim();
+  const parts = text.split(/\s+/).filter(Boolean);
+  if (parts.length > 1) text = parts[parts.length - 1];
+  text = text.replace(/[：:：、，,。；;]+$/u, '').trim();
+  if (!text || text.length > 24) return '';
+  if (/^[①②③④⑤⑥⑦⑧⑨\d]/u.test(text)) return '';
+  if (/成功|研制|发布|预计|消息|供应商|我国|美国|上市|涨幅|缺货|订单|公司|全球|市场规模|刺激|受益/u.test(text)) return '';
+  if (/^(涨停板|其他强势股|文章目录|要闻简讯|龙虎榜|投资日历|今日新股|公司公告|机构|公告|其他|市场点评|强势板块和个股分析|备注|最高板|空间板|核心票|情绪票|连板|首板|二板|三板|四板|五板|高度板)$/u.test(text)) return '';
+  return text;
+}
+
+function looksLikeReviewTopicLine(line) {
+  const text = cleanReviewTopic(line);
+  if (!text || text.length > 18) return false;
+  if (/[：:，,。；;、]/u.test(text)) return false;
+  if (/^(一|二|三|四|五|六|七|八|九|十)$/u.test(text)) return false;
+  return /[A-Za-z0-9\u4e00-\u9fa5]/u.test(text);
+}
+
+function addReviewMatches(rows, body, topic, stocks, sourceMeta, confidence) {
+  const primaryRawTopic = cleanReviewTopic(topic);
+  if (!primaryRawTopic) return;
+  const text = String(body || '');
+  for (const stock of stocks || []) {
+    const name = String(stock?.name || '').trim();
+    const code = normalizeReasonSourceCode(stock?.code);
+    if (!name || !code || !text.includes(name)) continue;
+    rows.push({
+      code,
+      name,
+      source: sourceMeta.source,
+      primaryRawTopic,
+      primaryTopic: canonicalTopicName(primaryRawTopic),
+      reasonText: `${primaryRawTopic}: ${name}`,
+      reasonHeadline: sourceMeta.title || primaryRawTopic,
+      confidence,
+      url: sourceMeta.url,
+      title: sourceMeta.title,
+      boardTopic: primaryRawTopic,
+    });
+  }
+}
+
+function extractReviewRowsFromText(text, stocks, sourceMeta, confidence) {
+  const rows = [];
+  const lines = String(text || '')
+    .split(/\n+/)
+    .map(line => line.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+  let currentTopic = '';
+  for (const line of lines) {
+    const limitMatch = line.match(/^(?:涨停板|涨停股|涨停个股)[：:]\s*(.+)$/u);
+    if (limitMatch && currentTopic) {
+      addReviewMatches(rows, limitMatch[1], currentTopic, stocks, sourceMeta, confidence);
+      continue;
+    }
+    const colonMatch = line.match(/^(.{1,36}?)[：:]\s*(.{1,260})$/u);
+    if (colonMatch) {
+      const topic = cleanReviewTopic(colonMatch[1]);
+      if (/^(涨停板|涨停股|涨停个股|其他强势股)$/u.test(colonMatch[1].trim()) && currentTopic) {
+        addReviewMatches(rows, colonMatch[2], currentTopic, stocks, sourceMeta, confidence);
+      } else if (topic) {
+        addReviewMatches(rows, colonMatch[2], topic, stocks, sourceMeta, confidence);
+        currentTopic = topic;
+      }
+      continue;
+    }
+    for (const sentence of line.split(/[。；;]/u).map(item => item.trim()).filter(Boolean)) {
+      const firstStockIndex = Math.min(...(stocks || [])
+        .map(stock => String(stock?.name || '').trim())
+        .filter(Boolean)
+        .map(name => sentence.indexOf(name))
+        .filter(index => index >= 0));
+      if (!Number.isFinite(firstStockIndex)) continue;
+      const prefix = sentence.slice(0, firstStockIndex);
+      const topicMatches = [...prefix.matchAll(/([A-Za-z0-9\u4e00-\u9fa5]{2,18})(?:概念|板块|方向|题材)/gu)];
+      const topic = cleanReviewTopic(topicMatches[topicMatches.length - 1]?.[1] || '');
+      if (topic) addReviewMatches(rows, sentence, topic, stocks, sourceMeta, Math.max(0.72, confidence - 0.1));
+    }
+    if (looksLikeReviewTopicLine(line)) currentTopic = cleanReviewTopic(line);
+  }
+  return rows;
+}
+
+function aggregateReviewSourceRows(rows) {
+  // 同花顺源主因修正进入共识层：用 reason_type 第一个实质题材替代不准的 block_top 板块名(与源视图同口径)，
+  // 让"≥2源具体共识"在 4 源投票里如实计票(如 沃格光电 同花顺 芯片概念→玻璃基板，玻璃基板成多源共识)。
+  const fixedRows = (rows || []).map(row => {
+    if (row && String(row.source || '').includes('ths-limitup-structured')) {
+      const f = thsMainTopicFromDetail(row.detailReason, row.primaryRawTopic || row.boardTopic);
+      if (f && f !== String(row.primaryRawTopic || '')) {
+        return { ...row, primaryRawTopic: f, primaryTopic: canonicalTopicName(f), boardTopic: f };
+      }
+    }
+    return row;
+  });
+  const grouped = new Map();
+  for (const row of fixedRows) {
+    const code = normalizeReasonSourceCode(row.code);
+    // 共识分组键改用标准热点题材(consensusKey)：4 源映射到统一题材再投票，主因展示用标准题材(细分仍在 detailReason/evidence)
+    const topic = consensusKey(row.primaryRawTopic || row.primaryTopic);
+    if (!code || !topic) continue;
+    const key = `${code}:${topic}`;
+    const existing = grouped.get(key) || {
+      code,
+      name: row.name,
+      primaryRawTopic: topic,
+      primaryTopic: topic,
+      score: 0,
+      sources: [],
+      sourceGroups: new Set(),
+      evidence: [],
+      seenEvidence: new Set(),
+    };
+    const evidenceKey = `${row.source || ''}|${row.url || ''}|${row.primaryRawTopic || row.primaryTopic || ''}`;
+    if (!existing.seenEvidence.has(evidenceKey)) {
+      existing.seenEvidence.add(evidenceKey);
+      const source = String(row.source || '');
+      const sourceGroup = reviewSourceGroup(source);
+      existing.score += Number(row.confidence || 0.8) * reviewSourceWeight(source);
+      existing.sources.push(row.source);
+      if (sourceGroup) existing.sourceGroups.add(sourceGroup);
+      existing.evidence.push({
+        source: row.source,
+        url: row.url,
+        title: row.title,
+        topic: row.primaryRawTopic || row.primaryTopic,
+        reasonText: row.reasonText || '',
+        confidence: Number(row.confidence || 0),
+        matchType: row.matchType || '',
+        reasonQuality: row.reasonQuality || '',
+        qualityNote: row.qualityNote || '',
+        boardTopic: row.boardTopic || (Array.isArray(row.boardNames) ? row.boardNames.join('、') : ''),
+        detailReason: row.detailReason || '',
+        detailText: row.detailText || '',
+        imageUrl: row.imageUrl || '',
+      });
+    }
+    grouped.set(key, existing);
+  }
+  // 综合归纳选主因——严格按用户的共识原理:源共识数优先(2家认可>1家=确认,3家>2家=高度认可),
+  // 同共识数再比原加权得分。不做"具体优先"之类的额外偏好(会把 ST摘帽/某单源niche 误顶上来,反破坏共识)。
+  const agreeScore = it => it.score + it.sourceGroups.size * 0.18 + it.sources.length * 0.03;
+  // 方向A:同花顺孤撑(仅 ths 一个来源组支撑)不得当主因——同花顺只能佐证已有共识,不能孤源造一个新主因。
+  // (同花顺 lu_desc 本质是"给每股贴2-3个标签的拼接",结构性碎/噪声,见调研。)非ths孤撑题材一律优先于ths孤撑;
+  // 仅当某股所有候选题材都只有 ths 支撑(其余源都"其他"/缺)时,ths孤撑才会胜出,随后在输出层降级为"其他"。
+  const isThsLone = it => it.sourceGroups.size === 1 && it.sourceGroups.has('ths');
+  // "其他"和"事件噪声"都不是真题材:同一只股若同时有"真题材组"和"其他/事件组",真题材永远胜出(哪怕另一组源更多)。
+  // 修根bug:① 国机精工 韭研+tgb=数据中心散热(真) vs 开盘啦+选股宝=其他,平手时原来选了"其他"→被KPL趁虚而入;
+  //         ② 京基智农 tgb=大农业(真) vs 某源=股权转让(事件),平手时原来选了事件 → 真题材被挤掉。
+  const isNoiseItem = it => {
+    const t = String(it.primaryRawTopic || it.primaryTopic || '');
+    return /其他/.test(t) || THS_EVENT_NOISE.test(t);
+  };
+  const isBetterConsensus = (a, b) => {
+    if (!b) return true;
+    const ao = isNoiseItem(a), bo = isNoiseItem(b);
+    if (ao !== bo) return !ao;                                       // 真题材 永远优于 "其他"/事件噪声(都不抢主因)
+    const al = isThsLone(a), bl = isThsLone(b);
+    if (al !== bl) return !al;                                       // 非ths孤撑 优于 ths孤撑(哪怕组数相同)
+    if (a.sourceGroups.size !== b.sourceGroups.size) return a.sourceGroups.size > b.sourceGroups.size;
+    return agreeScore(a) > agreeScore(b);
+  };
+  const byCode = new Map();
+  const itemsByCode = new Map();
+  for (const item of grouped.values()) {
+    if (!itemsByCode.has(item.code)) itemsByCode.set(item.code, []);
+    itemsByCode.get(item.code).push(item);
+    if (isBetterConsensus(item, byCode.get(item.code))) byCode.set(item.code, item);
+  }
+  for (const [code, items] of itemsByCode.entries()) {
+    const hasBoardConsensus = items.some(item => item.sourceGroups.size >= 2 && !isNoiseItem(item) && !isThsLone(item));
+    if (hasBoardConsensus) continue;
+    const detailConsensus = buildDetailReasonConsensusItemForCode(code, items);
+    if (detailConsensus) byCode.set(code, detailConsensus);
+  }
+  // 每只股所有 ≥2 个不同来源组共识的具体题材（含板块本身），供下游把"另一个共识细分"浮出来。
+  // 例 沃格光电：芯片(半导体)2组 + 玻璃基板封装2组 —— winner 取芯片，但玻璃基板封装也要透传出去当细分。
+  const consensusTopicsForCode = code => (itemsByCode.get(code) || [])
+    .filter(it => it.sourceGroups.size >= 2)
+    .map(it => ({
+      rawTopic: String(it.primaryRawTopic || it.primaryTopic || '').trim(),
+      canonTopic: it.primaryTopic,
+      groups: [...it.sourceGroups],
+      groupCount: it.sourceGroups.size,
+      sourceCount: it.sources.length,
+      score: Number(it.score.toFixed(4)),
+    }))
+    .filter(it => it.rawTopic)
+    .sort((a, b) => b.groupCount - a.groupCount || b.score - a.score);
+  return [...byCode.values()].map(item => {
+   // 同花顺孤撑或四源没有任何板块/细分共识 → 主因降级"其他"; evidence 仍保留,详情里看得到各源原话。
+   // 这种情况不再进入待手填清单:它代表"多源无共识",不是缺人工补录。
+   const lone = isThsLone(item);
+   const noiseSelected = isNoiseItem(item);
+   const noConsensus = item.sourceGroups.size < 2 && !item.detailConsensus;
+   const demoted = lone || noConsensus || noiseSelected;
+   const outRawTopic = demoted ? '其他' : item.primaryRawTopic;
+   const outTopic = demoted ? (canonicalTopicName('其他') || '其他') : item.primaryTopic;
+   return {
+    code: item.code,
+    name: item.name,
+    source: lone ? 'review-ths-lone-demoted' : ((noConsensus || noiseSelected) ? 'review-no-consensus-demoted' : (item.detailConsensus ? 'review-auto-detail-consensus' : (item.sourceGroups.size > 1 ? 'review-auto-consensus' : item.sources[0]))),
+    primaryRawTopic: outRawTopic,
+    primaryTopic: outTopic,
+    reasonText: item.detailConsensus ? `${outRawTopic}: ${item.name} - ${item.detailConsensusPhrase}` : (item.evidence.find(evidence => evidence.detailReason)?.reasonText || `${item.primaryRawTopic}: ${item.name}`),
+    reasonHeadline: item.detailConsensus ? item.detailConsensusPhrase : (item.evidence.find(evidence => evidence.detailReason)?.reasonHeadline || item.evidence[0]?.title || item.primaryRawTopic),
+    confidence: demoted ? 0.35 : Math.min(0.995, 0.86 + Math.min(0.1, item.sourceGroups.size * 0.04) + Math.min(0.035, item.score / 35)),
+    sourceSupport: {
+      score: Number(item.score.toFixed(4)),
+      groups: [...item.sourceGroups],
+      sources: item.sources,
+    },
+    reasonQuality: item.evidence.some(evidence => evidence.reasonQuality === 'clear')
+      ? 'clear'
+      : (item.evidence.some(evidence => evidence.reasonQuality === 'weak') ? 'weak' : (item.evidence.some(evidence => evidence.reasonQuality === 'fallback') ? 'fallback' : '')),
+    matchTypes: [...new Set(item.evidence.map(evidence => evidence.matchType).filter(Boolean))],
+    lowConfidence: item.evidence.some(evidence => evidence.reasonQuality === 'fallback' || Number(evidence.confidence || 0) < 0.8),
+    boardTopic: demoted ? '其他' : (item.detailBoardMatch || item.evidence.find(evidence => evidence.boardTopic)?.boardTopic || item.primaryRawTopic),
+    detailReason: item.detailConsensus ? item.detailConsensusPhrase : (item.evidence.find(evidence => evidence.detailReason)?.detailReason || ''),
+    detailText: item.evidence.find(evidence => evidence.detailText)?.detailText || '',
+    evidence: item.evidence,
+    consensusTopics: consensusTopicsForCode(item.code),
+    thsLoneDemoted: lone || undefined,
+    noConsensusDemoted: noConsensus || undefined,
+    detailConsensus: item.detailConsensus || undefined,
+    detailConsensusPhrase: item.detailConsensusPhrase || undefined,
+    detailBoardMatch: item.detailBoardMatch || undefined,
+   };
+  });
+}
+
+function buildReviewSourceStats(rows, stocks) {
+  const total = Array.isArray(stocks) ? new Set(stocks.map(stock => normalizeReasonSourceCode(stock.code)).filter(Boolean)).size : 0;
+  const stats = new Map();
+  for (const row of rows || []) {
+    const source = String(row?.source || 'unknown');
+    const code = normalizeReasonSourceCode(row?.code);
+    const item = stats.get(source) || {
+      source,
+      group: reviewSourceGroup(source),
+      rowCount: 0,
+      stockCodes: new Set(),
+      mainReasonCodes: new Set(),
+      lowConfidenceCodes: new Set(),
+    };
+    item.rowCount += 1;
+    if (code) item.stockCodes.add(code);
+    const quality = String(row?.reasonQuality || '').toLowerCase();
+    const confidence = Number(row?.confidence || 0);
+    if (code && quality !== 'fallback' && (row?.primaryRawTopic || row?.reasonText)) item.mainReasonCodes.add(code);
+    if (code && (quality === 'fallback' || confidence < 0.8 || row?.ocrFallback)) item.lowConfidenceCodes.add(code);
+    stats.set(source, item);
+  }
+  return [...stats.values()]
+    .map(item => ({
+      source: item.source,
+      group: item.group,
+      rowCount: item.rowCount,
+      stockCount: item.stockCodes.size,
+      coveragePct: total ? Number(((item.stockCodes.size / total) * 100).toFixed(2)) : 0,
+      mainReasonStockCount: item.mainReasonCodes.size,
+      mainReasonCoveragePct: total ? Number(((item.mainReasonCodes.size / total) * 100).toFixed(2)) : 0,
+      lowConfidenceStockCount: item.lowConfidenceCodes.size,
+    }))
+    .sort((a, b) => b.stockCount - a.stockCount || a.source.localeCompare(b.source));
+}
+
+function summarizeRequiredReviewSources(autoPayload, stocks) {
+  const rawRows = Array.isArray(autoPayload?.rawRows) && autoPayload.rawRows.length
+    ? autoPayload.rawRows
+    : (Array.isArray(autoPayload?.rows) ? autoPayload.rows : []);
+  // 剔除北交所/ST 后再统计，与数据源健康/展示口径一致（避免韭研等含北交所底稿来源显示 86）
+  const fallbackRows = rawRows.filter(row => !isExcludedFromReview(row?.code, row?.name));
+  const stats = fallbackRows.length
+    ? buildReviewSourceStats(fallbackRows, stocks)
+    : (Array.isArray(autoPayload?.sourceStats) && autoPayload.sourceStats.length ? autoPayload.sourceStats : []);
+  const byGroup = new Map();
+  for (const stat of stats || []) {
+    const group = reviewSourceGroup(stat?.group || stat?.source || '');
+    if (!group) continue;
+    const item = byGroup.get(group) || {
+      group,
+      label: REQUIRED_REVIEW_SOURCE_GROUPS.find(source => source.group === group)?.label || group,
+      rowCount: 0,
+      stockCount: 0,
+      mainReasonStockCount: 0,
+      lowConfidenceStockCount: 0,
+      sources: [],
+    };
+    item.rowCount += Number(stat?.rowCount || 0);
+    item.stockCount += Number(stat?.stockCount || 0);
+    item.mainReasonStockCount += Number(stat?.mainReasonStockCount ?? stat?.stockCount ?? 0);
+    item.lowConfidenceStockCount += Number(stat?.lowConfidenceStockCount || 0);
+    if (stat?.source && !item.sources.includes(stat.source)) item.sources.push(stat.source);
+    byGroup.set(group, item);
+  }
+  const required = REQUIRED_REVIEW_SOURCE_GROUPS.map(source => {
+    const item = byGroup.get(source.group) || {
+      group: source.group,
+      label: source.label,
+      rowCount: 0,
+      stockCount: 0,
+      mainReasonStockCount: 0,
+      lowConfidenceStockCount: 0,
+      sources: [],
+    };
+    return {
+      ...item,
+      label: source.label,
+      ok: Number(item.stockCount || 0) > 0 || Number(item.mainReasonStockCount || 0) > 0,
+    };
+  });
+  return {
+    required,
+    missing: required.filter(item => !item.ok).map(item => item.group),
+    missingLabels: required.filter(item => !item.ok).map(item => item.label),
+    stats: [...byGroup.values()].sort((a, b) => b.stockCount - a.stockCount || a.group.localeCompare(b.group)),
+  };
+}
+
+function reviewSourceArtifactCount(group, payload) {
+  if (!payload) return 0;
+  if (group === 'kaipanla') {
+    if (Number(payload.stockRows || 0) > 0) return Number(payload.stockRows);
+    return (payload.boards || []).reduce((sum, board) => sum + Number(board?.rows?.length || 0), 0);
+  }
+  return Number(payload.count || payload.rows?.length || 0);
+}
+
+async function readReviewSourceArtifactStatus(day, group) {
+  const isoDay = isoFromCompactDate(day);
+  const paths = {
+    tgb: tgbHunanStructuredSourcePath(isoDay),
+    kaipanla: kaipanlaFupanlaSourcePath(isoDay),
+    jiuyangongshe: jiuyangongsheStructuredSourcePath(isoDay),
+    xuangubao: xuangubaoLimitUpSourcePath(isoDay),
+    ths: tonghuashunStructuredSourcePath(isoDay),
+    eastmoney: eastmoneyFplLimitReasonSourcePath(isoDay),
+  };
+  const filePath = paths[group] || '';
+  if (!filePath) return { group, exists: false, count: 0, path: '' };
+  try {
+    const payload = JSON.parse(await fs.readFile(filePath, 'utf8'));
+    const count = reviewSourceArtifactCount(group, payload);
+    const current = group !== 'ths' || payload?.sourceMode === 'official-limit-up-pool-json' || payload?.method === 'official-limit-up-pool-json';
+    return {
+      group,
+      exists: true,
+      count,
+      ok: count > 0 && current,
+      path: filePath,
+      savedAt: payload?.savedAt || payload?.generatedAt || '',
+      source: payload?.source || '',
+      outdated: count > 0 && !current,
+    };
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      return { group, exists: false, count: 0, ok: false, path: filePath, savedAt: '', source: '' };
+    }
+    return { group, exists: false, count: 0, ok: false, path: filePath, error: err.message, savedAt: '', source: '' };
+  }
+}
+
+async function summarizeRequiredReviewSourceArtifacts(day) {
+  const statuses = await mapLimit(REQUIRED_REVIEW_SOURCE_GROUPS, 3, async source => {
+    const status = await readReviewSourceArtifactStatus(day, source.group);
+    return {
+      ...status,
+      label: source.label,
+    };
+  });
+  return {
+    required: statuses,
+    missing: statuses.filter(item => !item.ok).map(item => item.group),
+    missingLabels: statuses.filter(item => !item.ok).map(item => item.label),
+  };
+}
+
+function reviewSourceLabel(group) {
+  return REQUIRED_REVIEW_SOURCE_GROUPS.find(source => source.group === group)?.label || group;
+}
+
+function uniqueExistingCandidatePaths(paths) {
+  const seen = new Set();
+  return (paths || [])
+    .filter(Boolean)
+    .map(file => path.resolve(file))
+    .filter(file => {
+      const key = file.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function reviewSourceManualCandidatePaths(group, day) {
+  const isoDay = isoFromCompactDate(day);
+  if (group === 'tgb') {
+    return uniqueExistingCandidatePaths([
+      path.join(__dirname, 'tgb-hunan-manual-structured', `${isoDay}.json`),
+      path.join(__dirname, `tgb-${isoDay}-structured-source.json`),
+      path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, 'tgb-hunan-manual-structured', `${isoDay}.json`),
+      path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, `tgb-${isoDay}-structured-source.json`),
+    ]);
+  }
+  if (group === 'jiuyangongshe') {
+    return uniqueExistingCandidatePaths([
+      path.join(__dirname, 'jiuyangongshe-manual-structured', `${isoDay}.json`),
+      path.join(__dirname, `jiuyangongshe-${isoDay}-structured-source.json`),
+      path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, 'jiuyangongshe-manual-structured', `${isoDay}.json`),
+      path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, `jiuyangongshe-${isoDay}-structured-source.json`),
+    ]);
+  }
+  if (group === 'ths') {
+    return uniqueExistingCandidatePaths([
+      path.join(__dirname, 'tonghuashun-manual-structured', `${isoDay}.json`),
+      path.join(__dirname, `tonghuashun-${isoDay}-structured-source.json`),
+      path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, 'tonghuashun-manual-structured', `${isoDay}.json`),
+      path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, `tonghuashun-${isoDay}-structured-source.json`),
+    ]);
+  }
+  return [];
+}
+
+async function tryCopyReviewSourceArtifact(group, sourceFile, targetFile) {
+  try {
+    const payload = JSON.parse(await fs.readFile(sourceFile, 'utf8'));
+    const count = reviewSourceArtifactCount(group, payload);
+    if (count <= 0) {
+      return { ok: false, error: 'source artifact has no rows', sourceFile, targetFile, count };
+    }
+    await fs.mkdir(path.dirname(targetFile), { recursive: true });
+    if (path.resolve(sourceFile).toLowerCase() !== path.resolve(targetFile).toLowerCase()) {
+      await fs.writeFile(targetFile, JSON.stringify(payload, null, 2), 'utf8');
+    }
+    return {
+      ok: true,
+      count,
+      sourceFile,
+      targetFile,
+    };
+  } catch (err) {
+    if (err.code === 'ENOENT') return { ok: false, error: 'source file not found', sourceFile };
+    return { ok: false, error: err.message, sourceFile };
+  }
+}
+
+async function tryImportReviewSourceArtifactFromCandidates(group, day, targetFile) {
+  const candidates = reviewSourceManualCandidatePaths(group, day);
+  const attempts = [];
+  for (const candidate of candidates) {
+    if (path.resolve(candidate).toLowerCase() === path.resolve(targetFile).toLowerCase()) continue;
+    const copied = await tryCopyReviewSourceArtifact(group, candidate, targetFile);
+    attempts.push(copied);
+    if (copied.ok) {
+      return {
+        ok: true,
+        method: 'exact-structured-cache',
+        copied,
+        attempts,
+      };
+    }
+  }
+  return {
+    ok: false,
+    method: 'exact-structured-cache',
+    attempts,
+    error: 'exact structured cache not found',
+  };
+}
+
+function extractJsonObjectText(text) {
+  const raw = String(text || '').trim()
+    .replace(/^```(?:json)?/i, '')
+    .replace(/```$/i, '')
+    .trim();
+  if (raw.startsWith('{') && raw.endsWith('}')) return raw;
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
+  if (start >= 0 && end > start) return raw.slice(start, end + 1);
+  return raw;
+}
+
+function imageMimeTypeFromFile(file) {
+  const ext = path.extname(String(file || '')).toLowerCase();
+  if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
+  if (ext === '.webp') return 'image/webp';
+  if (ext === '.gif') return 'image/gif';
+  return 'image/png';
+}
+
+function tgbRawImageAbsolutePath(day, image) {
+  const file = String(image?.file || '').trim();
+  return file ? path.join(tgbHunanRawSourceDir(isoFromCompactDate(day)), file) : '';
+}
+
+function pickTgbStructuredImageCandidates(rawManifest, options = {}) {
+  const isoDay = isoFromCompactDate(rawManifest?.day || options.day || '');
+  const compact = compactDate(isoDay);
+  const urlDay = compact ? `${compact.slice(0, 4)}/${compact.slice(4, 6)}/${compact.slice(6, 8)}` : '';
+  const candidates = [];
+  for (const article of rawManifest?.articles || []) {
+    let seenMainPostDateImage = false;
+    let inMainPostBody = true;
+    for (const image of article?.images || []) {
+      const url = String(image?.url || '');
+      const file = String(image?.file || '');
+      const length = Number(image?.length || 0);
+      const isAvatarLike = /user_icon|_60wh|_80wh|avatar|head/i.test(url);
+      if (seenMainPostDateImage && isAvatarLike) {
+        inMainPostBody = false;
+        continue;
+      }
+      if (!image?.saved || image?.error) continue;
+      if (isAvatarLike) continue;
+      if (!inMainPostBody) continue;
+      if (length < 50000) continue;
+      const hasDayHint = !urlDay || url.includes(urlDay) || file.includes(compact);
+      if (!hasDayHint && length < 180000) continue;
+      seenMainPostDateImage = true;
+      candidates.push({
+        articleUrl: article.url || '',
+        articleTitle: article.title || '',
+        imageUrl: url,
+        file,
+        length,
+        absPath: tgbRawImageAbsolutePath(isoDay, image),
+      });
+    }
+  }
+  return candidates
+    .sort((a, b) => b.length - a.length)
+    .slice(0, Math.max(1, Math.min(24, Number(options.maxImages || 12) || 12)));
+}
+
+function normalizeTgbVisionRows(payload, sourceMeta = {}) {
+  const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+  return rows.map(item => {
+    const code = normalizeReasonSourceCode(item?.code || item?.stockCode || item?.symbol);
+    const name = String(item?.name || item?.stockName || '').trim();
+    const boardTopic = cleanBoardDetailTopic(item?.boardTopic || item?.topic || item?.block || item?.plate || item?.primaryRawTopic || '');
+    const detailReason = String(item?.detailReason || item?.reason || item?.detail || item?.reasonHeadline || '').replace(/\s+/g, ' ').trim();
+    const firstLimitTime = String(item?.firstLimitTime || item?.time || '').replace(/\s+/g, '').trim();
+    const limitUpCount = String(item?.limitUpCount || item?.count || item?.mark || '1').replace(/\s+/g, '').trim() || '1';
+    if (!/^\d{6}$/.test(code) || !name || !boardTopic || isStStock(name)) return null;
+    return {
+      code,
+      name,
+      boardTopic,
+      detailReason,
+      primaryRawTopic: boardTopic,
+      primaryTopic: boardTopic,
+      reasonText: detailReason ? `${boardTopic}: ${name} - ${detailReason}` : `${boardTopic}: ${name}`,
+      reasonHeadline: detailReason || boardTopic,
+      firstLimitTime,
+      limitUpCount,
+      source: 'review/tgb-hunan-structured',
+      matchType: 'vision-structured-image',
+      reasonQuality: detailReason ? 'clear' : 'weak',
+      confidence: detailReason ? 0.97 : 0.9,
+      qualityNote: 'Structured from TGB official image by configured vision structurer; saved only after code/count validation.',
+      imageFile: sourceMeta.file || '',
+      imageUrl: sourceMeta.imageUrl || '',
+    };
+  }).filter(Boolean);
+}
+
+function dedupeTgbStructuredRows(rows) {
+  const byCode = new Map();
+  for (const row of rows || []) {
+    const current = byCode.get(row.code);
+    if (!current || String(row.detailReason || '').length > String(current.detailReason || '').length) {
+      byCode.set(row.code, row);
+    }
+  }
+  return [...byCode.values()].sort((a, b) => {
+    const timeCompare = String(a.firstLimitTime || '').localeCompare(String(b.firstLimitTime || ''));
+    return timeCompare || a.code.localeCompare(b.code);
+  });
+}
+
+function validateTgbStructuredRows(day, rows, baselineStocks = [], declaredTotals = []) {
+  const normalizedRows = dedupeTgbStructuredRows(rows);
+  const codes = new Set(normalizedRows.map(row => row.code));
+  const duplicateCodes = (rows || [])
+    .map(row => row.code)
+    .filter((code, index, arr) => code && arr.indexOf(code) !== index);
+  const baselineCodes = new Set((baselineStocks || []).map(stock => normalizeReasonSourceCode(stock?.code)).filter(Boolean));
+  const missingCodes = baselineCodes.size ? [...baselineCodes].filter(code => !codes.has(code)) : [];
+  const extraCodes = baselineCodes.size ? [...codes].filter(code => !baselineCodes.has(code)) : [];
+  const declaredTotal = declaredTotals.find(value => Number.isFinite(Number(value)) && Number(value) > 0) || null;
+  const errors = [];
+  if (!normalizedRows.length) errors.push('no parsed TGB stock rows');
+  if (duplicateCodes.length) errors.push(`duplicate stock codes: ${[...new Set(duplicateCodes)].slice(0, 20).join(',')}`);
+  if (declaredTotal && Number(declaredTotal) !== normalizedRows.length) {
+    const baselineAligned = baselineCodes.size
+      && missingCodes.length === 0
+      && extraCodes.length === 0
+      && Math.abs(Number(declaredTotal) - normalizedRows.length) <= Math.max(1, Math.floor(baselineCodes.size * 0.02));
+    if (!baselineAligned) errors.push(`declared total mismatch: declared ${declaredTotal}, parsed ${normalizedRows.length}`);
+  }
+  if (baselineCodes.size) {
+    const maxMissing = Math.max(0, Math.floor(baselineCodes.size * 0.02));
+    if (missingCodes.length > maxMissing) {
+      errors.push(`baseline coverage mismatch: parsed ${normalizedRows.length}/${baselineCodes.size}, missing ${missingCodes.length}`);
+    }
+    if (extraCodes.length) errors.push(`contains non-baseline codes: ${extraCodes.slice(0, 20).join(',')}`);
+  }
+  const weakRows = normalizedRows.filter(row => !row.boardTopic || !row.detailReason);
+  if (weakRows.length > Math.max(1, Math.floor(normalizedRows.length * 0.05))) {
+    errors.push(`too many weak rows without board/detail reason: ${weakRows.length}`);
+  }
+  return {
+    ok: errors.length === 0,
+    day: isoFromCompactDate(day),
+    count: normalizedRows.length,
+    declaredTotal,
+    baselineCount: baselineCodes.size,
+    missingCodes: missingCodes.slice(0, 50),
+    extraCodes: extraCodes.slice(0, 50),
+    weakCount: weakRows.length,
+    errors,
+    rows: normalizedRows,
+  };
+}
+
+async function callVisionStructurerForTgbImage(config, day, candidate) {
+  const buffer = await fs.readFile(candidate.absPath);
+  const mime = imageMimeTypeFromFile(candidate.absPath);
+  const dataUrl = `data:${mime};base64,${buffer.toString('base64')}`;
+  const prompt = [
+    `Extract the TGB Hunan A-share limit-up review table for ${isoFromCompactDate(day)} from this image.`,
+    'Return only JSON. Do not infer missing rows. Exclude broken-limit/opened-limit/non-limit-up rows.',
+    'Use the board header as boardTopic and the right-side stock detail as detailReason.',
+    'Schema: {"declaredTotal":number|null,"rows":[{"code":"000001","name":"stock name","firstLimitTime":"09:25","limitUpCount":"1","boardTopic":"topic","detailReason":"detail reason"}]}.',
+    'Every row must preserve the original source meaning. If a field is unreadable, omit that row instead of guessing.',
+  ].join('\n');
+  const res = await fetch(config.baseUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: config.model,
+      temperature: 0,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: 'You convert Chinese stock-market limit-up review images into strict source-faithful JSON tables.' },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: dataUrl, detail: 'high' } },
+          ],
+        },
+      ],
+    }),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`vision structurer ${res.status}: ${text.slice(0, 240)}`);
+  const json = JSON.parse(text);
+  const content = json?.choices?.[0]?.message?.content || json?.output_text || json?.content || '';
+  if (!content) throw new Error('vision structurer returned empty content');
+  const parsed = JSON.parse(extractJsonObjectText(content));
+  return {
+    payload: parsed,
+    rows: normalizeTgbVisionRows(parsed, candidate),
+    declaredTotal: parsed?.declaredTotal ?? parsed?.total ?? null,
+  };
+}
+
+function tgbQwenOcrNameKey(value) {
+  return String(value || '').replace(/Ａ/g, 'A').replace(/\s+/g, '').trim();
+}
+
+function decodeTgbQwenOcrHtml(text) {
+  return String(text || '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+function stripTgbQwenOcrHtml(text) {
+  return decodeTgbQwenOcrHtml(String(text || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+}
+
+function cleanTgbQwenOcrSourceTopic(raw) {
+  let text = stripTgbQwenOcrHtml(raw)
+    .replace(/\$\$[\s\S]*?\$\$/g, ' ')
+    .replace(/DATA VISUALIZATION/ig, ' ')
+    .replace(/同花顺数据可视化/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const match = text.match(/([^：:|]+)[：:]/);
+  if (match) text = match[1].trim();
+  text = text
+    .replace(/[【】〖〗\[\]]/g, '')
+    .replace(/[（(]\s*共\s*\d+\s*只\s*[）)]/g, '')
+    .replace(/\s*\d+\s*只.*$/u, '')
+    .replace(/\s*\d+(?:\.\d+)?\s*[亿万].*$/u, '')
+    .trim();
+  if (!text || /涨停个数|总晋级率|热点复盘|A股涨停复盘|一字涨停|T字涨停/u.test(text)) return '';
+  return text;
+}
+
+function normalizeTgbQwenOcrRow(row, sourceMeta = {}) {
+  const code = normalizeReasonSourceCode(row?.code || row?.stockCode || row?.symbol);
+  const name = String(row?.name || row?.stockName || '').trim();
+  const boardTopic = String(row?.boardTopic || row?.topic || row?.plate || row?.primaryRawTopic || '').trim();
+  const detailReason = String(row?.detailReason || row?.reason || row?.mainReason || '').replace(/\s+/g, ' ').trim();
+  if (!code || !name || isStStock(name)) return null;
+  return {
+    code,
+    name,
+    boardTopic,
+    detailReason,
+    primaryRawTopic: boardTopic,
+    primaryTopic: canonicalTopicName(boardTopic),
+    reasonText: detailReason ? `${boardTopic}: ${name} - ${detailReason}` : `${boardTopic}: ${name}`,
+    reasonHeadline: detailReason || boardTopic,
+    firstLimitTime: String(row?.firstLimitTime ?? row?.time ?? '').trim(),
+    limitUpCount: row?.limitUpCount ?? row?.height ?? '',
+    source: 'review/tgb-hunan-structured',
+    matchType: 'qwen-ocr-table-parser',
+    reasonQuality: detailReason ? 'clear' : 'weak',
+    confidence: detailReason ? 0.98 : 0.9,
+    qualityNote: 'Qwen OCR提取TGB原图文字，再按表格规则解析，并与当日涨停池对账后入库。',
+    imageFile: sourceMeta.file || '',
+    imageUrl: sourceMeta.imageUrl || '',
+    ocrParser: row?.ocrParser || '',
+    sourcePriority: Number(row?.sourcePriority || 0) || 0,
+  };
+}
+
+function tgbQwenOcrRowDedupeScore(row) {
+  const topic = String(row?.boardTopic || '').trim();
+  const priority = Number(row?.sourcePriority || 0) || 0;
+  const topicScore = topic && topic !== '市场连板股' ? 30 : (topic ? 10 : 0);
+  const detailScore = Math.min(240, String(row?.detailReason || '').length);
+  return priority * 1000 + topicScore + detailScore;
+}
+
+function dedupeTgbQwenOcrRows(rows) {
+  const byCode = new Map();
+  for (const item of rows || []) {
+    const row = normalizeTgbQwenOcrRow(item) || item;
+    const code = normalizeReasonSourceCode(row?.code);
+    if (!code) continue;
+    const current = byCode.get(code);
+    const currentScore = current ? tgbQwenOcrRowDedupeScore(current) : -1;
+    const nextScore = tgbQwenOcrRowDedupeScore(row);
+    if (!current || nextScore > currentScore) byCode.set(code, { ...current, ...row });
+  }
+  return [...byCode.values()].sort((a, b) => {
+    const timeCompare = String(a.firstLimitTime || '').localeCompare(String(b.firstLimitTime || ''));
+    return timeCompare || String(a.code || '').localeCompare(String(b.code || ''));
+  });
+}
+
+function parseTgbQwenOcrHtmlRows(ocrText, sourceMeta = {}) {
+  const text = String(ocrText || '');
+  const rows = [];
+  const tableRe = /<div\s+class=["']table["'][\s\S]*?<table[^>]*>\s*<tbody[^>]*>([\s\S]*?)<\/tbody>\s*<\/table>/gi;
+  let table;
+  let lastEnd = 0;
+  let currentTopic = '';
+  while ((table = tableRe.exec(text))) {
+    const before = text.slice(lastEnd, table.index);
+    const topicMatches = [...before.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)]
+      .map(match => cleanTgbQwenOcrSourceTopic(match[1]))
+      .filter(Boolean);
+    if (topicMatches.length) currentTopic = topicMatches[topicMatches.length - 1] || currentTopic;
+    const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    let rowMatch;
+    while ((rowMatch = rowRe.exec(table[1]))) {
+      const cells = [];
+      const cellRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+      let cellMatch;
+      while ((cellMatch = cellRe.exec(rowMatch[1]))) cells.push(stripTgbQwenOcrHtml(cellMatch[1]));
+      const topicCell = cells.find(cell => /[【〖\[]|[】〗\]]|\d+\s*只/u.test(cell) && !/\d{6}/.test(cell));
+      const nextTopic = cleanTgbQwenOcrSourceTopic(topicCell || '');
+      if (nextTopic) {
+        currentTopic = nextTopic;
+        continue;
+      }
+      if (!currentTopic) continue;
+      if (cells.length < 5) continue;
+      const firstCode = normalizeReasonSourceCode(cells[0]);
+      const secondCode = normalizeReasonSourceCode(cells[1]);
+      const rowShape = firstCode
+        ? { code: cells[0], name: cells[1], firstLimitTime: cells[2], limitUpCount: cells[3], detailReason: cells.slice(4).join(' ').trim() }
+        : { code: cells[1], name: cells[2], firstLimitTime: cells[3], limitUpCount: cells[0], detailReason: cells.slice(4).join(' ').trim() };
+      const normalized = normalizeTgbQwenOcrRow({
+        ...rowShape,
+        boardTopic: currentTopic,
+      }, sourceMeta);
+      if (normalized) rows.push(normalized);
+    }
+    lastEnd = tableRe.lastIndex;
+  }
+  return dedupeTgbQwenOcrRows(rows);
+}
+
+function cleanTgbQwenOcrBracketTopic(raw) {
+  let text = stripTgbQwenOcrHtml(raw)
+    .replace(/[【】\[\]]/g, '')
+    .replace(/\s*\d+\s*只.*$/u, '')
+    .replace(/\s*\d+\s*亿.*$/u, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!text) return '';
+  if (/星期|涨停复盘|涨停炸板|炸板|跌停|消息面|代码|名称|原因/u.test(text)) return '';
+  return text;
+}
+
+function parseTgbQwenOcrSingleTableRows(ocrText, sourceMeta = {}) {
+  const text = String(ocrText || '')
+    .replace(/^```(?:html)?\s*/i, '')
+    .replace(/```\s*$/i, '');
+  const rows = [];
+  let currentTopic = '';
+  const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  let rowMatch;
+  while ((rowMatch = rowRe.exec(text))) {
+    const cells = [];
+    const cellRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+    let cellMatch;
+    while ((cellMatch = cellRe.exec(rowMatch[1]))) cells.push(stripTgbQwenOcrHtml(cellMatch[1]));
+    if (!cells.length) continue;
+    if (cells.length === 1) {
+      const bracket = String(cells[0] || '').match(/【([^】]+)】/u);
+      if (bracket) {
+        if (/炸板/u.test(bracket[1])) break;
+        const nextTopic = cleanTgbQwenOcrBracketTopic(bracket[1]);
+        if (nextTopic) currentTopic = nextTopic;
+      }
+      continue;
+    }
+    if (!currentTopic || cells.length < 5) continue;
+    const code = normalizeReasonSourceCode(cells[0]);
+    if (!/^\d{5,6}$/.test(code)) continue;
+    const normalized = normalizeTgbQwenOcrRow({
+      code,
+      name: cells[1],
+      firstLimitTime: cells[2],
+      limitUpCount: cells[3],
+      boardTopic: currentTopic,
+      detailReason: cells.slice(4).join(' ').trim(),
+      ocrParser: 'hunan-single-table',
+      sourcePriority: 40,
+    }, sourceMeta);
+    if (normalized) rows.push(normalized);
+  }
+  return dedupeTgbQwenOcrRows(rows);
+}
+
+function parseTgbQwenOcrMarkdownSummaryRows(ocrText, sourceMeta = {}) {
+  const text = String(ocrText || '').replace(/^```(?:markdown)?\s*/i, '').replace(/```\s*$/i, '');
+  const rows = [];
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (/以下炸板|炸板区/u.test(line)) break;
+    if (!line.startsWith('|') || !line.endsWith('|')) continue;
+    const cells = line.slice(1, -1).split('|').map(cell => cell.trim());
+    const code = normalizeReasonSourceCode(cells[0]);
+    if (!code) continue;
+    const rest = cells.slice(3).map(cell => cell.trim()).filter(Boolean);
+    const topicCell = rest.find(cell => /[（(]\s*共\s*\d+\s*只\s*[）)]/.test(cell)) || '';
+    const boardTopic = cleanTgbQwenOcrSourceTopic(topicCell);
+    const detailReason = rest
+      .map(cell => cell.replace(/[（(]\s*共\s*\d+\s*只\s*[）)]/g, '').trim())
+      .filter(cell => cell && !/^[-:]+$/.test(cell))
+      .join('+');
+    const normalized = normalizeTgbQwenOcrRow({
+      code,
+      name: cells[1] || '',
+      limitUpCount: cells[2] || '',
+      boardTopic,
+      detailReason,
+      ocrParser: 'markdown-summary',
+      sourcePriority: 10,
+    }, sourceMeta);
+    if (normalized) rows.push(normalized);
+  }
+  return dedupeTgbQwenOcrRows(rows);
+}
+
+function parseTgbQwenOcrRows(ocrText, sourceMeta = {}) {
+  const singleTableRows = parseTgbQwenOcrSingleTableRows(ocrText, sourceMeta);
+  if (singleTableRows.length) return { parser: 'hunan-single-table', rows: singleTableRows };
+  const htmlRows = parseTgbQwenOcrHtmlRows(ocrText, sourceMeta);
+  if (htmlRows.length) return { parser: 'html-table', rows: htmlRows };
+  const markdownRows = parseTgbQwenOcrMarkdownSummaryRows(ocrText, sourceMeta);
+  if (markdownRows.length) return { parser: 'markdown-summary', rows: markdownRows };
+  return { parser: 'none', rows: [] };
+}
+
+function pickTgbQwenOcrImageCandidates(rawManifest, options = {}) {
+  const isoDay = isoFromCompactDate(rawManifest?.day || options.day || '');
+  const compact = compactDate(isoDay);
+  const urlDay = compact ? `${compact.slice(0, 4)}/${compact.slice(4, 6)}/${compact.slice(6, 8)}` : '';
+  const candidates = [];
+  for (const article of rawManifest?.articles || []) {
+    for (const image of article?.images || []) {
+      const url = String(image?.url || '');
+      const file = String(image?.file || '');
+      const length = Number(image?.length || 0);
+      if (!image?.saved || image?.error) continue;
+      if (/user_icon|_60wh|_80wh|avatar|head/i.test(url)) continue;
+      if (length < 50000) continue;
+      const hasDayHint = !urlDay || url.includes(urlDay) || file.includes(compact);
+      if (!hasDayHint && length < 180000) continue;
+      candidates.push({
+        articleUrl: article.url || '',
+        articleTitle: article.title || '',
+        imageUrl: url,
+        file,
+        length,
+        absPath: tgbRawImageAbsolutePath(isoDay, image),
+      });
+    }
+  }
+  return candidates
+    .sort((a, b) => b.length - a.length)
+    .slice(0, Math.max(1, Math.min(24, Number(options.maxImages || 12) || 12)));
+}
+
+function extractTgbQwenDeclaredTotal(ocrText) {
+  const values = [];
+  const text = String(ocrText || '');
+  for (const match of text.matchAll(/[涨张]停(?:个数)?[：:\s]*(\d{1,3})\s*只?/gu)) {
+    values.push(Number(match[1]));
+  }
+  return values.length ? Math.max(...values) : null;
+}
+
+async function readTgbQwenOcrConfig() {
+  const sourceConfig = await readSourceStructurerConfig().catch(() => ({}));
+  const sourceLooksQwen = /qwen|dashscope|aliyuncs/i.test(`${sourceConfig.model || ''} ${sourceConfig.baseUrl || ''}`);
+  const runtimeKey = await readVisionApiKey().catch(() => '');
+  const apiKey = runtimeKey || (sourceLooksQwen ? String(sourceConfig.apiKey || '').trim() : '');
+  const baseUrl = String(process.env.QWEN_VL_ENDPOINT || (sourceLooksQwen && sourceConfig.baseUrl) || 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions').trim();
+  const model = String(process.env.TGB_QWEN_OCR_MODEL || process.env.QWEN_VL_OCR_MODEL || (sourceLooksQwen && /qwen-vl-ocr/i.test(sourceConfig.model || '') ? sourceConfig.model : '') || 'qwen-vl-ocr-latest').trim();
+  const maxImages = Math.max(1, Math.min(24, Number(sourceConfig.maxImages || process.env.PANDA_TGB_STRUCTURER_MAX_IMAGES || 12) || 12));
+  return {
+    configured: !!apiKey && !!baseUrl && !!model,
+    apiKey,
+    baseUrl,
+    model,
+    provider: 'dashscope-compatible',
+    maxImages,
+  };
+}
+
+async function readTgbQwenOcrText(config, day, candidate) {
+  const isoDay = isoFromCompactDate(day);
+  const cacheName = `${safePart(candidate.file || crypto.createHash('sha1').update(candidate.imageUrl || candidate.absPath || '').digest('hex'))}.${safePart(config.model)}.txt`;
+  const cacheFile = path.join(TGB_HUNAN_OCR_CACHE_DIR, 'qwen-table-parser', isoDay, cacheName);
+  try {
+    const cached = await fs.readFile(cacheFile, 'utf8');
+    if (cached && cached.trim()) return { text: cached, cached: true, cacheFile };
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+  let imageUrl = String(candidate.imageUrl || '').trim();
+  if (!imageUrl) {
+    const buffer = await fs.readFile(candidate.absPath);
+    imageUrl = `data:${imageMimeTypeFromFile(candidate.absPath)};base64,${buffer.toString('base64')}`;
+  }
+  const prompt = [
+    '请对这张中文股票涨停复盘长图做完整 OCR。',
+    '只输出图片里的文字结构，不要总结、不要改写、不要补充。',
+    '必须尽量保留：每个板块标题；每只股票的代码、名称、时间、连板/高度；每只股票右侧的细分原因原文。',
+    '如果能看出表格，请输出 Markdown 表格；否则逐行输出。',
+  ].join('\n');
+  const response = await fetch(config.baseUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: config.model,
+      temperature: 0,
+      max_tokens: Number(process.env.TGB_QWEN_OCR_MAX_TOKENS || 8000),
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: imageUrl } },
+          { type: 'text', text: prompt },
+        ],
+      }],
+    }),
+    signal: AbortSignal.timeout(Number(process.env.TGB_QWEN_OCR_TIMEOUT_MS || 180000)),
+  });
+  const body = await response.text();
+  if (!response.ok) throw new Error(`qwen ocr ${response.status}: ${body.slice(0, 240)}`);
+  const payload = JSON.parse(body);
+  const text = String(payload?.choices?.[0]?.message?.content || payload?.output_text || '');
+  if (!text.trim()) throw new Error('qwen ocr returned empty text');
+  await fs.mkdir(path.dirname(cacheFile), { recursive: true });
+  await fs.writeFile(cacheFile, text, 'utf8');
+  return { text, cached: false, cacheFile };
+}
+
+function correctTgbQwenOcrRowsByLimitPool(rows, baselineStocks = []) {
+  const byCode = new Map();
+  const byName = new Map();
+  for (const stock of baselineStocks || []) {
+    const code = normalizeReasonSourceCode(stock?.code);
+    const name = String(stock?.name || '').trim();
+    if (!code || !name || isStStock(name)) continue;
+    const item = { code, name };
+    byCode.set(code, item);
+    byName.set(tgbQwenOcrNameKey(name), item);
+  }
+  const corrections = [];
+  const dropped = [];
+  const out = [];
+  const hasBaseline = byCode.size > 0;
+  for (const row of dedupeTgbQwenOcrRows(rows)) {
+    const code = normalizeReasonSourceCode(row.code);
+    const codeMatch = byCode.get(code);
+    const nameMatch = byName.get(tgbQwenOcrNameKey(row.name));
+    if (!codeMatch && nameMatch?.code) {
+      corrections.push({ fromCode: code, toCode: nameMatch.code, ocrName: row.name, poolName: nameMatch.name });
+      out.push({ ...row, code: nameMatch.code, name: nameMatch.name, codeOriginal: code, codeCorrectedBy: 'limitup-name-match' });
+      continue;
+    }
+    if (hasBaseline && !codeMatch) {
+      dropped.push({ code, name: row.name, reason: 'not-in-limitup-pool' });
+      continue;
+    }
+    if (codeMatch?.name && row.name !== codeMatch.name) {
+      out.push({ ...row, name: codeMatch.name, nameOriginal: row.name, nameCorrectedBy: 'limitup-code-match' });
+      continue;
+    }
+    out.push(row);
+  }
+  return { rows: dedupeTgbQwenOcrRows(out), corrections, dropped };
+}
+
+async function backupTgbHunanStructuredBeforeWrite(day, targetFile) {
+  try {
+    await fs.access(targetFile);
+  } catch (err) {
+    if (err.code === 'ENOENT') return '';
+    throw err;
+  }
+  const backupId = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupDir = path.join(__dirname, 'backups', 'tgb-hunan-structured-qwen-ocr', `${backupId}-${safePart(isoFromCompactDate(day))}`);
+  await fs.mkdir(backupDir, { recursive: true });
+  const backupFile = path.join(backupDir, path.basename(targetFile));
+  await fs.copyFile(targetFile, backupFile);
+  return backupFile;
+}
+
+async function buildTgbHunanStructuredArtifactFromQwenOcr(day, apiKey, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  const config = await readTgbQwenOcrConfig();
+  if (!config.configured) {
+    return {
+      ok: false,
+      method: 'qwen-ocr-table-parser',
+      configured: false,
+      error: 'TGB Qwen OCR is not configured. Save qwenApiKey/source-structurer settings first.',
+    };
+  }
+  const raw = await readTgbHunanRawManifest(isoDay).catch(() => null);
+  if (!raw?.articles?.length) {
+    return { ok: false, method: 'qwen-ocr-table-parser', configured: true, error: 'TGB raw evidence is missing' };
+  }
+  const candidates = pickTgbQwenOcrImageCandidates(raw, { day: isoDay, maxImages: config.maxImages });
+  if (!candidates.length) {
+    return { ok: false, method: 'qwen-ocr-table-parser', configured: true, error: 'No TGB review diagram image candidate found in raw evidence' };
+  }
+  const baseline = await readSourceBuilderLimitStocks(isoDay, apiKey)
+    .catch(() => readSourceBuilderLimitStocksFromArtifacts(isoDay))
+    .catch(err => ({ source: 'unavailable', error: err.message, stocks: [] }));
+  const imageResults = [];
+  const parsedRows = [];
+  const codeCorrections = [];
+  const droppedRows = [];
+  const declaredTotals = [];
+  for (const candidate of candidates) {
+    const meta = { file: candidate.file, imageUrl: candidate.imageUrl };
+    const result = {
+      file: candidate.file,
+      imageUrl: candidate.imageUrl,
+      length: candidate.length,
+      parser: 'none',
+      ocrChars: 0,
+      rowCountBeforeValidation: 0,
+      rowCount: 0,
+      declaredTotal: null,
+      cached: false,
+      error: '',
+    };
+    try {
+      const ocr = await readTgbQwenOcrText(config, isoDay, candidate);
+      const parsed = parseTgbQwenOcrRows(ocr.text, meta);
+      const corrected = correctTgbQwenOcrRowsByLimitPool(parsed.rows, baseline.stocks || []);
+      const declaredTotal = extractTgbQwenDeclaredTotal(ocr.text);
+      if (Number.isFinite(Number(declaredTotal)) && Number(declaredTotal) > 0) declaredTotals.push(Number(declaredTotal));
+      parsedRows.push(...corrected.rows);
+      codeCorrections.push(...corrected.corrections.map(item => ({ file: candidate.file, ...item })));
+      droppedRows.push(...corrected.dropped.map(item => ({ file: candidate.file, ...item })));
+      Object.assign(result, {
+        parser: parsed.parser,
+        ocrChars: ocr.text.length,
+        rowCountBeforeValidation: parsed.rows.length,
+        rowCount: corrected.rows.length,
+        declaredTotal,
+        cached: !!ocr.cached,
+        cacheFile: path.relative(__dirname, ocr.cacheFile).replace(/\\/g, '/'),
+      });
+    } catch (err) {
+      result.error = err.message;
+    }
+    imageResults.push(result);
+  }
+  const mergedRows = dedupeTgbQwenOcrRows(parsedRows);
+  const baselineCount = Array.isArray(baseline.stocks) ? baseline.stocks.length : 0;
+  const validationDeclaredTotals = baselineCount && declaredTotals.includes(baselineCount)
+    ? [baselineCount]
+    : declaredTotals;
+  const validation = validateTgbStructuredRows(isoDay, mergedRows, baseline.stocks || [], validationDeclaredTotals);
+  if (!validation.ok) {
+    return {
+      ok: false,
+      method: 'qwen-ocr-table-parser',
+      configured: true,
+      baseline: { source: baseline.source, count: baseline.stocks?.length || 0, error: baseline.error || '' },
+      candidates: imageResults,
+      codeCorrections,
+      droppedRows,
+      validation: { ...validation, rows: undefined },
+      error: validation.errors.join('; '),
+    };
+  }
+  const savedAt = new Date().toISOString();
+  const targetFile = tgbHunanStructuredSourcePath(isoDay);
+  const payload = {
+    version: 2,
+    day: isoDay,
+    source: 'review/tgb-hunan-structured',
+    title: `${isoDay} TGB Qwen OCR structured`,
+    generatedAt: savedAt,
+    savedAt,
+    method: 'qwen-ocr-table-parser',
+    provider: config.provider,
+    model: config.model,
+    count: validation.rows.length,
+    rows: validation.rows,
+    evidence: {
+      rawManifest: path.relative(__dirname, tgbHunanRawManifestPath(isoDay)).replace(/\\/g, '/'),
+      candidates: imageResults,
+      codeCorrections,
+      droppedRows,
+    },
+    validation: { ...validation, rows: undefined },
+  };
+  await fs.mkdir(path.dirname(targetFile), { recursive: true });
+  const backupFile = await backupTgbHunanStructuredBeforeWrite(isoDay, targetFile);
+  if (backupFile) payload.backupBeforeWrite = path.relative(__dirname, backupFile).replace(/\\/g, '/');
+  await fs.writeFile(targetFile, JSON.stringify(payload, null, 2), 'utf8');
+  mainReasonSourceCache.delete(isoDay);
+  return {
+    ok: true,
+    method: 'qwen-ocr-table-parser',
+    count: payload.count,
+    targetFile,
+    backupFile,
+    baseline: { source: baseline.source, count: baseline.stocks?.length || 0 },
+    candidates: imageResults,
+    codeCorrections,
+    droppedRows,
+    validation: payload.validation,
+  };
+}
+
+async function buildTgbHunanStructuredArtifactFromVision(day, apiKey, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  const qwenOcr = await buildTgbHunanStructuredArtifactFromQwenOcr(isoDay, apiKey, options)
+    .catch(err => ({ ok: false, method: 'qwen-ocr-table-parser', configured: true, error: err.message }));
+  if (qwenOcr.ok || qwenOcr.configured) return qwenOcr;
+  const config = await readSourceStructurerConfig();
+  if (!config.configured) {
+    return {
+      ok: false,
+      method: 'vision-structured-image',
+      configured: false,
+      error: 'TGB vision structurer is not configured. Save source-structurer API settings in admin first.',
+    };
+  }
+  const raw = await readTgbHunanRawManifest(isoDay).catch(() => null);
+  if (!raw?.articles?.length) {
+    return { ok: false, method: 'vision-structured-image', configured: true, error: 'TGB raw evidence is missing' };
+  }
+  const candidates = pickTgbStructuredImageCandidates(raw, { day: isoDay, maxImages: config.maxImages });
+  if (!candidates.length) {
+    return { ok: false, method: 'vision-structured-image', configured: true, error: 'No TGB review diagram image candidate found in raw evidence' };
+  }
+  const baseline = await readSourceBuilderLimitStocks(isoDay, apiKey)
+    .catch(() => readSourceBuilderLimitStocksFromArtifacts(isoDay))
+    .catch(err => ({ source: 'unavailable', error: err.message, stocks: [] }));
+  const imageResults = [];
+  const rows = [];
+  const declaredTotals = [];
+  for (const candidate of candidates) {
+    const result = await callVisionStructurerForTgbImage(config, isoDay, candidate)
+      .catch(err => ({ error: err.message, rows: [], declaredTotal: null }));
+    imageResults.push({
+      file: candidate.file,
+      imageUrl: candidate.imageUrl,
+      length: candidate.length,
+      rowCount: result.rows?.length || 0,
+      declaredTotal: result.declaredTotal ?? null,
+      error: result.error || '',
+    });
+    if (Array.isArray(result.rows)) rows.push(...result.rows);
+    if (Number.isFinite(Number(result.declaredTotal)) && Number(result.declaredTotal) > 0) declaredTotals.push(Number(result.declaredTotal));
+  }
+  const validation = validateTgbStructuredRows(isoDay, rows, baseline.stocks || [], declaredTotals);
+  if (!validation.ok) {
+    return {
+      ok: false,
+      method: 'vision-structured-image',
+      configured: true,
+      baseline: { source: baseline.source, count: baseline.stocks?.length || 0, error: baseline.error || '' },
+      candidates: imageResults,
+      validation: { ...validation, rows: undefined },
+      error: validation.errors.join('; '),
+    };
+  }
+  const savedAt = new Date().toISOString();
+  const payload = {
+    version: 1,
+    day: isoDay,
+    source: 'review/tgb-hunan-structured',
+    title: `${isoDay} TGB vision structured`,
+    generatedAt: savedAt,
+    savedAt,
+    method: 'vision-structured-image',
+    provider: config.provider,
+    model: config.model,
+    count: validation.rows.length,
+    rows: validation.rows,
+    evidence: {
+      rawManifest: path.relative(__dirname, tgbHunanRawManifestPath(isoDay)).replace(/\\/g, '/'),
+      candidates: imageResults,
+    },
+    validation: { ...validation, rows: undefined },
+  };
+  await fs.mkdir(path.dirname(tgbHunanStructuredSourcePath(isoDay)), { recursive: true });
+  await fs.writeFile(tgbHunanStructuredSourcePath(isoDay), JSON.stringify(payload, null, 2), 'utf8');
+  return {
+    ok: true,
+    method: 'vision-structured-image',
+    count: payload.count,
+    targetFile: tgbHunanStructuredSourcePath(isoDay),
+    baseline: { source: baseline.source, count: baseline.stocks?.length || 0 },
+    candidates: imageResults,
+    validation: payload.validation,
+  };
+}
+
+function extractStockRowsFromReviewArtifactPayload(payload) {
+  const rows = [];
+  if (Array.isArray(payload?.rows)) rows.push(...payload.rows);
+  if (Array.isArray(payload?.stocks)) rows.push(...payload.stocks);
+  if (Array.isArray(payload?.boards)) {
+    for (const board of payload.boards) {
+      if (Array.isArray(board?.rows)) rows.push(...board.rows);
+      if (Array.isArray(board?.items)) rows.push(...board.items);
+    }
+  }
+  return rows;
+}
+
+async function readSourceBuilderLimitStocksFromArtifacts(day) {
+  const isoDay = isoFromCompactDate(day);
+  const candidates = [
+    { source: 'review/kaipanla-fupanla', file: kaipanlaFupanlaSourcePath(isoDay) },
+    { source: 'review/tgb-hunan-structured', file: tgbHunanStructuredSourcePath(isoDay) },
+  ];
+  for (const candidate of candidates) {
+    try {
+      const payload = JSON.parse(await fs.readFile(candidate.file, 'utf8'));
+      const seen = new Set();
+      const stocks = [];
+      for (const row of extractStockRowsFromReviewArtifactPayload(payload)) {
+        const code = normalizeReasonSourceCode(row?.code || row?.stockCode || row?.stock_code);
+        const name = String(row?.name || row?.stockName || row?.stock_name || '').trim();
+        if (!code || !name || isStStock(name) || seen.has(code)) continue;
+        seen.add(code);
+        stocks.push({
+          code,
+          name,
+          firstLimitTime: row?.firstLimitTime || row?.time || '',
+          limitUpCount: row?.limitUpCount || row?.mark || '',
+        });
+      }
+      if (stocks.length) {
+        return {
+          day: isoDay,
+          source: `${candidate.source}/baseline`,
+          count: stocks.length,
+          stocks,
+        };
+      }
+    } catch (err) {
+      if (err.code !== 'ENOENT') continue;
+    }
+  }
+  return { day: isoDay, source: '', count: 0, stocks: [] };
+}
+
+async function readSourceBuilderLimitStocks(day, apiKey) {
+  const isoDay = isoFromCompactDate(day);
+  let payload = null;
+  let primaryError = '';
+  try {
+    payload = await readLimitUpDbDay(isoDay);
+    if (!isReliableLimitUpDbPayload(payload)) {
+      payload = await ensureLimitUpDbDay(isoDay, apiKey, false);
+    }
+  } catch (err) {
+    primaryError = err.message;
+  }
+  const seen = new Set();
+  const stocks = [];
+  for (const stock of payload?.stocks || []) {
+    const code = normalizeReasonSourceCode(stock?.code);
+    const name = String(stock?.name || '').trim();
+    if (!code || !name || isStStock(name) || seen.has(code)) continue;
+    seen.add(code);
+    stocks.push({ ...stock, code, name });
+  }
+  if (stocks.length) {
+    return {
+      day: isoDay,
+      source: payload?.source || '',
+      count: stocks.length,
+      stocks,
+    };
+  }
+  const fallback = await readSourceBuilderLimitStocksFromArtifacts(isoDay);
+  if (fallback.count) return { ...fallback, primaryError };
+  return {
+    day: isoDay,
+    source: payload?.source || '',
+    count: 0,
+    stocks: [],
+    primaryError,
+  };
+}
+
+function normalizeReviewFirstLimitTime(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return '';
+  if (/^\d{1,2}:\d{2}(?::\d{2})?$/.test(text)) return text;
+  const digits = text.replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.length >= 6) {
+    const d = digits.slice(-6);
+    return `${d.slice(0, 2)}:${d.slice(2, 4)}:${d.slice(4, 6)}`;
+  }
+  if (digits.length === 5) {
+    const d = digits.padStart(6, '0');
+    return `${d.slice(0, 2)}:${d.slice(2, 4)}:${d.slice(4, 6)}`;
+  }
+  if (digits.length >= 4) {
+    const d = digits.padStart(4, '0');
+    return `${d.slice(0, 2)}:${d.slice(2, 4)}`;
+  }
+  return text;
+}
+
+function stockCodeSet(stocks) {
+  return new Set((stocks || []).map(stock => normalizeReasonSourceCode(stock?.code)).filter(Boolean));
+}
+
+function buildReviewSourceTopics(rows) {
+  return (rows || []).reduce((acc, row) => {
+    const topic = String(row?.boardTopic || row?.primaryRawTopic || '').trim();
+    if (topic) acc[topic] = (acc[topic] || 0) + 1;
+    return acc;
+  }, {});
+}
+
+function reviewRowsCoverage(rows, stocks) {
+  const expected = stockCodeSet(stocks);
+  const actual = stockCodeSet(rows);
+  return {
+    expectedCount: expected.size,
+    actualCount: actual.size,
+    missingCodes: [...expected].filter(code => !actual.has(code)),
+    extraCodes: [...actual].filter(code => !expected.has(code)),
+  };
+}
+
+function extractFirstUrlFromPayload(value) {
+  if (!value) return '';
+  if (typeof value === 'string') {
+    const match = value.match(/https?:\/\/[^\s"'<>]+/i);
+    return match ? match[0] : '';
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const url = extractFirstUrlFromPayload(item);
+      if (url) return url;
+    }
+    return '';
+  }
+  if (typeof value === 'object') {
+    for (const key of ['url', 'imageUrl', 'imgUrl', 'picUrl', 'shareImg', 'diagramUrl', 'data']) {
+      const url = extractFirstUrlFromPayload(value[key]);
+      if (url) return url;
+    }
+    for (const item of Object.values(value)) {
+      const url = extractFirstUrlFromPayload(item);
+      if (url) return url;
+    }
+  }
+  return '';
+}
+
+async function fetchJiuyangongsheDiagramEvidenceDay(day, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  const dir = jiuyangongsheDiagramSourceDir(isoDay);
+  if (!options.force) {
+    try {
+      const cached = JSON.parse(await fs.readFile(jiuyangongsheDiagramManifestPath(isoDay), 'utf8'));
+      if (cached?.imageUrl || cached?.rawResponse) {
+        return { ok: !!cached.imageUrl, cached: true, manifest: cached };
+      }
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+    }
+  }
+  const response = await jiuyangongsheActionPost('/api/v1/action/diagram-url', {
+    date: isoDay,
+    pc: 1,
+  }, { day: isoDay });
+  const imageUrl = extractFirstUrlFromPayload(response);
+  const manifest = {
+    version: 1,
+    day: isoDay,
+    source: 'review/jiuyangongshe-diagram-url',
+    endpoint: '/api/v1/action/diagram-url',
+    imageUrl,
+    savedAt: new Date().toISOString(),
+    rawResponse: response,
+  };
+  await fs.mkdir(dir, { recursive: true });
+  if (imageUrl) {
+    try {
+      const ext = path.extname(new URL(imageUrl).pathname).match(/^\.[a-z0-9]+$/i)?.[0] || '.png';
+      const imageFile = path.join(dir, `official-limitup-diagram${ext}`);
+      const buffer = await fetchSourceBuffer(imageUrl, `https://www.jiuyangongshe.com/action/${isoDay}`);
+      await fs.writeFile(imageFile, buffer);
+      manifest.imageFile = path.relative(__dirname, imageFile).replace(/\\/g, '/');
+      manifest.imageBytes = buffer.length;
+    } catch (err) {
+      manifest.imageError = err.message;
+    }
+  }
+  await fs.writeFile(jiuyangongsheDiagramManifestPath(isoDay), JSON.stringify(manifest, null, 2), 'utf8');
+  return {
+    ok: !!imageUrl,
+    cached: false,
+    manifest,
+  };
+}
+
+async function readTonghuashunOfficialImageEvidenceDay(day) {
+  try {
+    const manifest = JSON.parse(await fs.readFile(tonghuashunOfficialImageManifestPath(day), 'utf8'));
+    return {
+      ok: !!manifest.imageUrl || !!manifest.imageFile,
+      manifest,
+    };
+  } catch (err) {
+    if (err.code === 'ENOENT') return { ok: false, error: 'official image manifest not found' };
+    return { ok: false, error: err.message };
+  }
+}
+
+async function ensureTgbHunanStructuredArtifactDay(day, apiKey, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  const imported = await tryImportReviewSourceArtifactFromCandidates('tgb', isoDay, tgbHunanStructuredSourcePath(isoDay));
+  if (imported.ok) return imported;
+  const rawEvidence = await fetchTgbHunanRawEvidenceDay(isoDay, { force: !!options.force })
+    .catch(err => ({ ok: false, error: err.message }));
+  const generated = rawEvidence?.ok
+    ? await buildTgbHunanStructuredArtifactFromVision(isoDay, apiKey, options)
+      .catch(err => ({ ok: false, method: 'vision-structured-image', error: err.message }))
+    : { ok: false, method: 'vision-structured-image', error: rawEvidence?.error || rawEvidence?.reason || 'TGB raw evidence is not ready' };
+  if (generated.ok) return {
+    ...generated,
+    importAttempt: imported,
+    rawEvidence,
+  };
+  return {
+    ok: false,
+    method: generated.method || 'raw-evidence-only',
+    importAttempt: imported,
+    rawEvidence,
+    generated,
+    error: generated.error || 'TGB exact structured source is missing. Raw official article/images were saved, but automatic structuring did not pass validation.',
+  };
+}
+
+async function ensureJiuyangongsheStructuredArtifactDay(day, apiKey, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  const imported = await tryImportReviewSourceArtifactFromCandidates('jiuyangongshe', isoDay, jiuyangongsheStructuredSourcePath(isoDay));
+  if (imported.ok) return imported;
+  const authStatus = await testJiuyangongsheAuth(isoDay, { force: true })
+    .catch(err => ({ ok: false, message: err.message }));
+  if (!authStatus?.ok) {
+    return {
+      ok: false,
+      method: 'auth-check',
+      importAttempt: imported,
+      authStatus,
+      error: `Jiuyangongshe auth is not ready: ${authStatus?.message || authStatus?.label || 'unknown error'}`,
+    };
+  }
+  const baseline = await readSourceBuilderLimitStocks(isoDay, apiKey)
+    .catch(err => ({ error: err.message, stocks: [] }));
+  if (baseline.stocks?.length) {
+    const attempts = [];
+    const tryGenerateWithBaseline = async currentBaseline => {
+      const generated = await buildJiuyangongsheStructuredArtifactFromAction(isoDay, currentBaseline.stocks, {
+        force: !!options.force,
+        baselineSource: currentBaseline.source,
+      }).catch(err => ({ ok: false, error: err.message }));
+      attempts.push({
+        baseline: { source: currentBaseline.source, count: currentBaseline.count },
+        ok: !!generated.ok,
+        coverage: generated.coverage || null,
+        error: generated.error || '',
+      });
+      return generated;
+    };
+    let generated = await tryGenerateWithBaseline(baseline);
+    let finalBaseline = baseline;
+    if (!generated.ok) {
+      const fallbackBaseline = await readSourceBuilderLimitStocksFromArtifacts(isoDay)
+        .catch(err => ({ error: err.message, stocks: [] }));
+      if (fallbackBaseline.stocks?.length && fallbackBaseline.source !== baseline.source) {
+        const fallbackGenerated = await tryGenerateWithBaseline(fallbackBaseline);
+        if (fallbackGenerated.ok) {
+          generated = fallbackGenerated;
+          finalBaseline = fallbackBaseline;
+        }
+      }
+    }
+    if (generated.ok) {
+      return {
+        ...generated,
+        importAttempt: imported,
+        authStatus,
+        baseline: { source: finalBaseline.source, count: finalBaseline.count },
+        attempts,
+      };
+    }
+    const diagramEvidence = await fetchJiuyangongsheDiagramEvidenceDay(isoDay, { force: !!options.force })
+      .catch(err => ({ ok: false, error: err.message }));
+    return {
+      ok: false,
+      method: 'action-api-filtered-by-limit-up-list',
+      importAttempt: imported,
+      authStatus,
+      baseline: { source: baseline.source, count: baseline.count },
+      attempts,
+      generated,
+      diagramEvidence,
+      error: generated.error || 'Jiuyangongshe structured generator failed.',
+    };
+  }
+  const diagramEvidence = await fetchJiuyangongsheDiagramEvidenceDay(isoDay, { force: !!options.force })
+    .catch(err => ({ ok: false, error: err.message }));
+  return {
+    ok: false,
+    method: 'diagram-evidence-only',
+    importAttempt: imported,
+    authStatus,
+    baseline,
+    diagramEvidence,
+    error: 'Jiuyangongshe exact structured source is missing and the limit-up baseline is unavailable. Official diagram evidence was saved, but no OCR/fallback builder is used.',
+  };
+}
+
+async function ensureTonghuashunStructuredArtifactDay(day, apiKey, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  const imported = await tryImportReviewSourceArtifactFromCandidates('ths', isoDay, tonghuashunStructuredSourcePath(isoDay));
+  if (imported.ok) return imported;
+  const baseline = await readSourceBuilderLimitStocks(isoDay, apiKey)
+    .catch(err => ({ error: err.message, stocks: [] }));
+  const generated = await buildTonghuashunStructuredArtifactFromOfficialApis(isoDay, baseline.stocks || [], {
+    force: !!options.force,
+    baselineSource: baseline.source,
+  }).catch(err => ({ ok: false, error: err.message }));
+  if (generated.ok) {
+    return {
+      ...generated,
+      importAttempt: imported,
+      baseline: { source: baseline.source || '', count: baseline.count || 0 },
+    };
+  }
+  const officialImageEvidence = await readTonghuashunOfficialImageEvidenceDay(isoDay);
+  return {
+    ok: false,
+    method: 'official-limit-up-pool-json',
+    importAttempt: imported,
+    baseline,
+    generated,
+    officialImageEvidence,
+    error: generated.error || 'Tonghuashun official limit_up_pool source is unavailable.',
+  };
+}
+
+async function ensureReviewSourceArtifactDay(day, group, apiKey, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  const label = reviewSourceLabel(group);
+  if (!isChinaMarketTradingDay(isoDay)) {
+    return {
+      group,
+      label,
+      ok: true,
+      skipped: true,
+      day: isoDay,
+      message: 'market closed',
+    };
+  }
+  const before = await readReviewSourceArtifactStatus(isoDay, group);
+  if (before.ok && !options.force) {
+    return {
+      group,
+      label,
+      ok: true,
+      skipped: true,
+      day: isoDay,
+      before,
+      after: before,
+      count: before.count,
+      message: 'already complete',
+    };
+  }
+  let fill = null;
+  try {
+    if (group === 'kaipanla') {
+      const payload = await ensureKaipanlaFupanlaSourceDay(isoDay, { force: !!options.force });
+      fill = { ok: true, method: 'fetch-kaipanla-fupanla', count: reviewSourceArtifactCount(group, payload) };
+    } else if (group === 'eastmoney') {
+      fill = { ok: false, method: 'disabled-source', error: 'Eastmoney review source is disabled for main-reason analysis.' };
+    } else if (group === 'xuangubao') {
+      const payload = await ensureXuangubaoLimitUpSourceDay(isoDay, { force: !!options.force });
+      fill = { ok: true, method: 'fetch-xuangubao-limit-up', count: reviewSourceArtifactCount(group, payload) };
+    } else if (group === 'tgb') {
+      fill = await ensureTgbHunanStructuredArtifactDay(isoDay, apiKey, options);
+    } else if (group === 'jiuyangongshe') {
+      fill = await ensureJiuyangongsheStructuredArtifactDay(isoDay, apiKey, options);
+    } else if (group === 'ths') {
+      fill = await ensureTonghuashunStructuredArtifactDay(isoDay, apiKey, options);
+    } else {
+      fill = { ok: false, method: 'unknown-source', error: `Unknown review source group: ${group}` };
+    }
+  } catch (err) {
+    fill = { ok: false, error: err.message };
+  }
+  const after = await readReviewSourceArtifactStatus(isoDay, group);
+  return {
+    group,
+    label,
+    ok: !!after.ok,
+    attempted: true,
+    day: isoDay,
+    before,
+    after,
+    count: after.count,
+    method: fill?.method || '',
+    fill,
+    error: after.ok ? '' : (fill?.error || after.error || 'source artifact is still missing'),
+    message: after.ok ? 'ready' : (fill?.error || after.error || 'source artifact is still missing'),
+  };
+}
+
+async function ensureReviewSourceArtifactsForDay(day, apiKey, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  const results = [];
+  for (const source of REQUIRED_REVIEW_SOURCE_GROUPS) {
+    const result = await ensureReviewSourceArtifactDay(isoDay, source.group, apiKey, options);
+    results.push(result);
+  }
+  const missing = results.filter(item => !item.ok);
+  return {
+    ok: missing.length === 0,
+    day: isoDay,
+    results,
+    missingGroups: missing.map(item => item.group),
+    missingLabels: missing.map(item => item.label),
+    message: missing.length
+      ? `source artifacts not ready: ${missing.map(item => `${item.label}: ${item.message || item.error || 'missing'}`).join('; ')}`
+      : 'all source artifacts ready',
+  };
+}
+
+function reviewSourceGroup(source) {
+  const s = String(source || '').toLowerCase();
+  if (s.includes('ths') || s.includes('10jqka')) return 'ths';
+  if (s.includes('xuangubao') || s.includes('xuangutong')) return 'xuangubao';
+  if (s.includes('kaipanla') || s.includes('fupanla') || s.includes('fupanwang')) return 'kaipanla';
+  if (s.includes('jiuyangongshe')) return 'jiuyangongshe';
+  if (s.includes('tgb') || s.includes('taoguba')) return 'tgb';
+  if (s.includes('eastmoney')) return 'eastmoney';
+  return s || 'unknown';
+}
+
+function isDisabledReviewSource(source, group = '') {
+  const sourceGroup = String(group || reviewSourceGroup(source) || '').toLowerCase();
+  return DISABLED_REVIEW_SOURCE_GROUPS.has(sourceGroup);
+}
+
+function reviewSourceWeight(source) {
+  const s = String(source || '').toLowerCase();
+  if (s.includes('ths-limitup-structured')) return 1.28;
+  if (s.includes('ths-limitup-focus')) return 1.26;
+  if (s.includes('kaipanla') || s.includes('fupanla')) return 1.24;
+  if (s.includes('xuangubao') || s.includes('xuangutong')) return 1.23;
+  if (s.includes('10jqka-fupan')) return 1.22;
+  if (s.includes('jiuyangongshe')) return 1.12;
+  if (s.includes('tgb-hunan-ocr')) return 1.08;
+  if (s.includes('tgb-hunan')) return 1.04;
+  if (s.includes('tgb')) return 1;
+  if (s.includes('eastmoney-fpl-limit-reason')) return 1.18;
+  if (s.includes('eastmoney/topic-zt-pool')) return 0.88;
+  return 0.92;
+}
+
+async function fetchJiuyangongsheReviewArticles(day) {
+  const baseUrl = 'https://www.jiuyangongshe.com/study_action/none_101';
+  const patterns = reviewDayPatterns(day);
+  const html = await fetchSourceHtml(baseUrl);
+  const links = [...html.matchAll(/href="([^"]+)"[^>]*>([^<]{0,220})/g)]
+    .map(match => ({
+      url: absoluteSourceUrl(baseUrl, match[1]),
+      title: reviewHtmlToText(match[2]),
+    }))
+    .filter(item => item.url.includes('/a/'))
+    .filter(item => /复盘|涨停|盘前|热点|题材/u.test(item.title) && patterns.some(pattern => item.title.includes(pattern)));
+  return [...new Map(links.map(item => [item.url, item])).values()].slice(0, 8);
+}
+
+async function fetchTgbReviewArticles(day) {
+  const baseUrl = 'https://www.tgb.cn/newIndex/2';
+  const patterns = reviewDayPatterns(day);
+  const html = await fetchSourceHtml(baseUrl);
+  const links = [...html.matchAll(/href="([^"]+)"[^>]*>([^<]{0,220})/g)]
+    .map(match => ({
+      url: absoluteSourceUrl(baseUrl, match[1]),
+      title: reviewHtmlToText(match[2]),
+    }))
+    .filter(item => /tgb\.cn|taoguba\.com\.cn/u.test(item.url))
+    .filter(item => /复盘|涨停|题材|主线/u.test(item.title) && patterns.some(pattern => item.title.includes(pattern)));
+  return [...new Map(links.map(item => [item.url, item])).values()].slice(0, 6);
+}
+
+function normalizeTgbArticleUrl(href) {
+  const raw = String(href || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith('/')) return `https://www.tgb.cn${raw}`;
+  return `https://www.tgb.cn/${raw}`;
+}
+
+async function fetchTgbHunanReviewArticles(day) {
+  const baseUrl = 'https://www.tgb.cn/blog/444409';
+  const patterns = reviewDayPatterns(day);
+  const html = await fetchSourceHtml(baseUrl);
+  const links = [...html.matchAll(/<a\b[^>]*href=['"]([^'"]+)['"][^>]*(?:title=['"]([^'"]+)['"])?[^>]*>([\s\S]{0,220}?)<\/a>/gi)]
+    .map(match => ({
+      url: normalizeTgbArticleUrl(match[1]),
+      title: reviewHtmlToText(match[2] || match[3]),
+    }))
+    .filter(item => item.url.includes('/a/'))
+    .filter(item => item.title.includes('\u6e56\u5357\u4eba') && item.title.includes('\u6da8\u505c\u590d\u76d8'))
+    .filter(item => patterns.some(pattern => item.title.includes(pattern)));
+  return [...new Map(links.map(item => [item.url, item])).values()].slice(0, 3);
+}
+
+function resolvePowerShell() {
+  const systemRoot = process.env.SystemRoot || process.env.windir || '';
+  const bundled = systemRoot ? path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe') : '';
+  return bundled && fsSync.existsSync(bundled) ? bundled : 'powershell.exe';
+}
+
+function tgbHunanOcrCachePaths(day, imageUrl) {
+  const dir = path.join(TGB_HUNAN_OCR_CACHE_DIR, safePart(isoFromCompactDate(day)));
+  const hash = hashPart(imageUrl);
+  return {
+    dir,
+    imagePath: path.join(dir, `${hash}.png`),
+    jsonPath: path.join(dir, `${hash}.json`),
+  };
+}
+
+function extractTgbReviewImageUrls(html, articleUrl) {
+  const urls = [];
+  for (const tagMatch of String(html || '').matchAll(/<img\b[^>]*>/gi)) {
+    const tag = tagMatch[0];
+    for (const attrMatch of tag.matchAll(/\b(?:src|data-src|data-original)=['"]([^'"]+)['"]/gi)) {
+      const url = absoluteSourceUrl(articleUrl, attrMatch[1]);
+      if (/image\.tgb\.cn\/img\//i.test(url) && /\.(png|jpe?g|webp)(?:_|$|\?)/i.test(url)) urls.push(url);
+    }
+  }
+  return [...new Set(urls)];
+}
+
+function imageExtensionFromUrl(url) {
+  try {
+    const pathname = new URL(String(url || '')).pathname;
+    const match = pathname.match(/\.(png|jpe?g|webp|gif|bmp)(?:_|$)/i);
+    if (match) return match[1].toLowerCase().replace('jpeg', 'jpg');
+  } catch {}
+  return 'png';
+}
+
+async function readTgbHunanRawManifest(day) {
+  try {
+    return JSON.parse(await fs.readFile(tgbHunanRawManifestPath(isoFromCompactDate(day)), 'utf8'));
+  } catch (err) {
+    if (err.code === 'ENOENT') return null;
+    throw err;
+  }
+}
+
+async function readTgbHunanStructuredSummary(day) {
+  try {
+    const payload = JSON.parse(await fs.readFile(tgbHunanStructuredSourcePath(isoFromCompactDate(day)), 'utf8'));
+    return {
+      exists: true,
+      count: Number(payload?.count || payload?.rows?.length || 0),
+      savedAt: payload?.savedAt || '',
+      source: payload?.source || 'review/tgb-hunan-structured',
+      url: payload?.url || '',
+      title: payload?.title || '',
+    };
+  } catch (err) {
+    if (err.code === 'ENOENT') return { exists: false, count: 0, savedAt: '', source: 'review/tgb-hunan-structured' };
+    throw err;
+  }
+}
+
+function summarizeTgbRawManifest(payload) {
+  const articles = Array.isArray(payload?.articles) ? payload.articles : [];
+  const imageCount = articles.reduce((sum, article) => sum + Number(article.images?.length || 0), 0);
+  const downloadedImageCount = articles.reduce((sum, article) => (
+    sum + (article.images || []).filter(image => image.saved && !image.error).length
+  ), 0);
+  return {
+    exists: !!payload,
+    status: payload?.status || '',
+    day: payload?.day || '',
+    savedAt: payload?.savedAt || '',
+    articleCount: articles.length,
+    imageCount,
+    downloadedImageCount,
+    structured: payload?.structured || null,
+    note: payload?.note || '',
+    articles: articles.map(article => ({
+      url: article.url || '',
+      title: article.title || '',
+      imageCount: Number(article.images?.length || 0),
+      downloadedImageCount: (article.images || []).filter(image => image.saved && !image.error).length,
+      error: article.error || '',
+    })),
+  };
+}
+
+async function fetchTgbHunanRawEvidenceDay(day, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  if (!isChinaMarketTradingDay(isoDay)) {
+    return {
+      ok: false,
+      day: isoDay,
+      skipped: true,
+      reason: 'market closed',
+      structured: await readTgbHunanStructuredSummary(isoDay),
+    };
+  }
+  const structured = await readTgbHunanStructuredSummary(isoDay);
+  if (!options.force) {
+    const cached = await readTgbHunanRawManifest(isoDay).catch(() => null);
+    if (cached?.articles?.length || structured.exists) {
+      return {
+        ok: true,
+        day: isoDay,
+        cached: !!cached,
+        structured,
+        rawEvidence: summarizeTgbRawManifest(cached),
+      };
+    }
+  }
+  if (!options.force && !isMainReasonReviewReady(isoDay)) {
+    return {
+      ok: false,
+      day: isoDay,
+      skipped: true,
+      reason: 'review source not ready',
+      structured,
+    };
+  }
+
+  const dir = tgbHunanRawSourceDir(isoDay);
+  await fs.mkdir(dir, { recursive: true });
+  let articles = [];
+  const sourceErrors = [];
+  try {
+    articles = await fetchTgbHunanReviewArticles(isoDay);
+  } catch (err) {
+    sourceErrors.push({ source: 'review/tgb-hunan-raw', error: err.message });
+  }
+
+  const savedArticles = [];
+  await mapLimit(articles, 1, async (article, articleIndex) => {
+    const articleItem = {
+      index: articleIndex + 1,
+      url: article.url || '',
+      title: article.title || '',
+      htmlFile: `article-${String(articleIndex + 1).padStart(2, '0')}.html`,
+      images: [],
+    };
+    try {
+      const html = await fetchSourceHtml(article.url);
+      await fs.writeFile(path.join(dir, articleItem.htmlFile), html, 'utf8');
+      const imageUrls = extractTgbReviewImageUrls(html, article.url);
+      await mapLimit(imageUrls, 2, async (imageUrl, imageIndex) => {
+        const ext = imageExtensionFromUrl(imageUrl);
+        const fileName = `image-${String(articleIndex + 1).padStart(2, '0')}-${String(imageIndex + 1).padStart(2, '0')}.${ext}`;
+        const imageItem = {
+          index: imageIndex + 1,
+          url: imageUrl,
+          file: fileName,
+          saved: false,
+          length: 0,
+        };
+        try {
+          const buffer = await fetchSourceBuffer(imageUrl, article.url);
+          await fs.writeFile(path.join(dir, fileName), buffer);
+          imageItem.saved = true;
+          imageItem.length = buffer.length;
+        } catch (err) {
+          imageItem.error = err.message;
+        }
+        articleItem.images.push(imageItem);
+      });
+    } catch (err) {
+      articleItem.error = err.message;
+    }
+    articleItem.images.sort((a, b) => a.index - b.index);
+    savedArticles.push(articleItem);
+  });
+  savedArticles.sort((a, b) => a.index - b.index);
+
+  const payload = {
+    version: 1,
+    day: isoDay,
+    source: 'review/tgb-hunan-raw',
+    status: savedArticles.length ? 'raw-evidence-saved' : 'article-not-found',
+    savedAt: new Date().toISOString(),
+    structured,
+    articles: savedArticles,
+    sourceErrors,
+    note: 'TGB Hunan raw article/images only. No OCR and no pending candidate rows are written to the official TGB reason database.',
+  };
+  await fs.writeFile(tgbHunanRawManifestPath(isoDay), JSON.stringify(payload, null, 2), 'utf8');
+  return {
+    ok: savedArticles.length > 0,
+    day: isoDay,
+    structured,
+    rawEvidence: summarizeTgbRawManifest(payload),
+    sourceErrors,
+  };
+}
+
+function normalizeTgbOcrText(text) {
+  return String(text || '')
+    .replace(/\s+/g, '')
+    .replace(/PC田/gi, 'PCB')
+    .replace(/PCE/gi, 'PCB')
+    .replace(/HVI[_-]?PEE/gi, 'HVLP铜箔')
+    .replace(/HVL[_-]?PEE/gi, 'HVLP铜箔')
+    .replace(/电子洞/g, '电子铜')
+    .replace(/洞箔/g, '铜箔')
+    .replace(/眉洞板/g, '覆铜板')
+    .replace(/沉洞/g, '沉铜')
+    .replace(/洞盾/g, '铜箔')
+    .replace(/铜羟/g, '铜箔')
+    .replace(/兀件/g, '元件')
+    .replace(/全属/g, '金属');
+}
+
+function cleanTgbOcrTopic(topic) {
+  let text = normalizeTgbOcrText(topic)
+    .replace(/[【】〖〗\[\]（）()]/g, '')
+    .replace(/\d+只.*$/u, '')
+    .replace(/\d+亿.*$/u, '')
+    .trim();
+  if (!text) return '';
+  if (!/[A-Za-z0-9\u4e00-\u9fa5]/u.test(text)) return '';
+  if (/[^\u4e00-\u9fa5A-Za-z0-9.+\-]/u.test(text)) return '';
+  if (/PCB/i.test(text)) return 'PCB';
+  if (/被动元件|被动元|MLCC|电阻电容/u.test(text)) return 'MLCC';
+  if (/光通/u.test(text)) return '光通信';
+  if (/半导体/u.test(text)) return '半导体';
+  if (/机器人/u.test(text)) return '机器人';
+  if (/数据中心|算力/u.test(text)) return '数据中心算力';
+  if (/有色|小金属/u.test(text)) return '有色金属';
+  if (/PET.*铜箔|复合铜箔/u.test(text)) return 'PET复合铜箔';
+  if (/玻璃基板/u.test(text)) return '玻璃基板封装';
+  if (/航运/u.test(text)) return '航运';
+  if (/金融/u.test(text)) return '金融';
+  if (/医疗|医药|创新药|医用|中药|药业|药/u.test(text)) return /创新药/u.test(text) ? '创新药' : '医疗医药';
+  if (/AI.*应用/u.test(text)) return 'AI应用';
+  if (text.length > 18) return '';
+  return text;
+}
+
+function cleanBoardDetailTopic(topic) {
+  return cleanReviewTopic(topic) || cleanTgbOcrTopic(topic) || '';
+}
+
+function combineBoardAndDetailTopic(boardTopic, detailTopic, fallbackTopic = '') {
+  const board = cleanBoardDetailTopic(boardTopic);
+  const detail = cleanBoardDetailTopic(detailTopic) || cleanTgbOcrReason(detailTopic);
+  const fallback = cleanBoardDetailTopic(fallbackTopic);
+  if (board && detail && board !== detail && !hasTopicIntersection(board, detail)) return `${board}/${detail}`;
+  return detail || board || fallback || '';
+}
+
+function combineTgbBoardAndDetailTopic(boardTopic, detailTopic, fallbackTopic = '') {
+  return combineBoardAndDetailTopic(boardTopic, detailTopic, fallbackTopic);
+}
+
+function cleanTgbOcrReason(reason) {
+  let text = normalizeTgbOcrText(reason)
+    .replace(/^[：:]+/u, '')
+    .replace(/^\d+\/\d+天\d+板/u, '')
+    .replace(/^\d+天\d+板/u, '')
+    .replace(/^板(?=PCB|MLCC|光|半导体|数据|机器人|电子|玻璃|HVLP|CCL|CBF|PPO|AI|CPO|PET)/u, '')
+    .replace(/^[：:\-—]+/u, '')
+    .trim();
+  if (!text || text === '原因') return '';
+  if (!/[A-Za-z0-9\u4e00-\u9fa5]/u.test(text)) return '';
+  if (/[^\u4e00-\u9fa5A-Za-z0-9.+\-+/]/u.test(text)) return '';
+  if (text.length > 80) text = text.slice(0, 80);
+  return text;
+}
+
+function clusterOcrWordsByLine(words) {
+  const normalized = (words || [])
+    .map(word => ({
+      text: String(word?.text || '').trim(),
+      x: Number(word?.x || 0),
+      y: Number(word?.y || 0),
+      w: Number(word?.w || 0),
+      h: Number(word?.h || 0),
+    }))
+    .filter(word => word.text && Number.isFinite(word.x) && Number.isFinite(word.y))
+    .map(word => ({ ...word, cy: word.y + Math.max(1, word.h) / 2 }))
+    .sort((a, b) => a.cy - b.cy || a.x - b.x);
+  const groups = [];
+  for (const word of normalized) {
+    const last = groups[groups.length - 1];
+    if (!last || Math.abs(word.cy - last.cy) > 11) {
+      groups.push({ cy: word.cy, words: [word] });
+      continue;
+    }
+    last.words.push(word);
+    last.cy = (last.cy * (last.words.length - 1) + word.cy) / last.words.length;
+  }
+  return groups
+    .map(group => ({
+      y: group.cy,
+      words: group.words.sort((a, b) => a.x - b.x),
+    }))
+    .sort((a, b) => a.y - b.y);
+}
+
+function ocrLineText(words) {
+  return normalizeTgbOcrText((words || []).sort((a, b) => a.x - b.x).map(word => word.text).join(''));
+}
+
+function parseTgbOcrHeader(lineText) {
+  const text = normalizeTgbOcrText(lineText);
+  if (!text.includes('只') || !text.includes('亿') || /\d{6}/.test(text)) return '';
+  if (/炸板|开板|跌停/u.test(text)) return '';
+  const bracketMatch = text.match(/[【〖\[(（]?([A-Za-z0-9\u4e00-\u9fa5《》（）()]{1,24})[】〗\])）](\d{1,3})只/u);
+  const looseMatch = bracketMatch || text.match(/^([A-Za-z0-9\u4e00-\u9fa5《》（）()]{2,18})(\d{1,3})只[\d.]+亿/u);
+  return cleanTgbOcrTopic(looseMatch?.[1] || '');
+}
+
+function extractNameFromOcrRow(words) {
+  return normalizeTgbOcrText((words || [])
+    .filter(word => word.x >= 78 && word.x <= 190)
+    .sort((a, b) => a.x - b.x)
+    .map(word => word.text)
+    .join(''))
+    .replace(/股份$/u, '股份')
+    .trim();
+}
+
+function extractTgbHunanOcrRowsFromWords(words, stocks, sourceMeta) {
+  const stockNameByCode = new Map((stocks || [])
+    .map(stock => [normalizeReasonSourceCode(stock?.code), String(stock?.name || '').trim()])
+    .filter(([code, name]) => code && name));
+  const rows = [];
+  let currentTopic = '';
+  for (const line of clusterOcrWordsByLine(words)) {
+    const lineText = ocrLineText(line.words);
+    const headerTopic = parseTgbOcrHeader(lineText);
+    if (headerTopic) {
+      currentTopic = headerTopic;
+      continue;
+    }
+    const codeWord = line.words.find(word => word.x <= 82 && /^\d{6}$/.test(String(word.text || '').trim()));
+    const code = normalizeReasonSourceCode(codeWord?.text);
+    if (!code || !currentTopic) continue;
+    if (!stockNameByCode.has(code)) continue;
+    const reason = cleanTgbOcrReason(line.words
+      .filter(word => word.x >= 300)
+      .sort((a, b) => a.x - b.x)
+      .map(word => word.text)
+      .join(''));
+    if (!reason) continue;
+    const name = stockNameByCode.get(code) || extractNameFromOcrRow(line.words);
+    if (!name) continue;
+    const rawTopic = combineTgbBoardAndDetailTopic(currentTopic, reason);
+    rows.push({
+      code,
+      name,
+      source: 'review/tgb-hunan-ocr',
+      primaryRawTopic: rawTopic,
+      primaryTopic: canonicalTopicName(rawTopic),
+      reasonText: `${currentTopic}: ${name} - ${reason}`,
+      reasonHeadline: sourceMeta.title || currentTopic,
+      confidence: 0.96,
+      url: sourceMeta.url,
+      title: sourceMeta.title,
+      imageUrl: sourceMeta.imageUrl,
+      boardTopic: currentTopic,
+      detailReason: reason,
+      matchType: 'structured-row',
+      reasonQuality: 'clear',
+      qualityNote: 'OCR识别到TGB横向板块、股票代码和右侧个股细分原因，按板块+个股原因入库',
+    });
+  }
+  return rows;
+}
+
+function stockFallbackTopic(stock) {
+  return mainReasonTokenList(stock?.reason)
+    .map(token => cleanTgbOcrTopic(token) || cleanReviewTopic(token))
+    .find(Boolean) || 'TGB复盘';
+}
+
+function tgbLineTopic(lineWords, stock) {
+  const rightText = ocrLineText((lineWords || []).filter(word => Number(word.x || 0) >= 300));
+  const fullText = ocrLineText(lineWords || []);
+  return cleanTgbOcrTopic(rightText) || cleanTgbOcrTopic(fullText) || stockFallbackTopic(stock);
+}
+
+function extractTgbHunanOcrRowsByCode(words, stocks, sourceMeta) {
+  const stockByCode = new Map((stocks || [])
+    .map(stock => [normalizeReasonSourceCode(stock?.code), stock])
+    .filter(([code, stock]) => code && stock?.name));
+  const rows = [];
+  const seen = new Set();
+  let currentTopic = '';
+  for (const line of clusterOcrWordsByLine(words)) {
+    const lineText = ocrLineText(line.words);
+    const headerTopic = parseTgbOcrHeader(lineText);
+    if (headerTopic) {
+      currentTopic = headerTopic;
+      continue;
+    }
+    const codes = [...new Set([...lineText.matchAll(/\d{6}/g)].map(match => normalizeReasonSourceCode(match[0])))];
+    for (const code of codes) {
+      const stock = stockByCode.get(code);
+      if (!stock || seen.has(code)) continue;
+      const rightText = ocrLineText((line.words || []).filter(word => Number(word.x || 0) >= 300));
+      const readableTopic = cleanTgbOcrTopic(rightText);
+      const fallbackTopic = stockFallbackTopic(stock);
+      const detailReason = cleanTgbOcrReason(rightText);
+      const topic = combineTgbBoardAndDetailTopic(currentTopic, readableTopic || detailReason, fallbackTopic);
+      const reasonQuality = readableTopic || detailReason ? (currentTopic ? 'weak' : 'fallback') : 'fallback';
+      seen.add(code);
+      rows.push({
+        code,
+        name: String(stock.name || '').trim(),
+        source: 'review/tgb-hunan-ocr',
+        primaryRawTopic: topic,
+        primaryTopic: canonicalTopicName(topic),
+        reasonText: rightText && rightText !== topic
+          ? `${topic}: ${stock.name} - ${rightText}`
+          : `${topic}: ${stock.name}`,
+        reasonHeadline: sourceMeta.title || topic,
+        confidence: readableTopic ? 0.84 : 0.74,
+        url: sourceMeta.url,
+        title: sourceMeta.title,
+        imageUrl: sourceMeta.imageUrl,
+        boardTopic: currentTopic,
+        detailReason,
+        ocrFallback: true,
+        matchType: currentTopic ? 'code-with-board' : 'code',
+        reasonQuality,
+        qualityNote: readableTopic
+          ? 'OCR按股票代码命中，并结合最近的TGB横向板块标题和右侧个股文字，但未通过完整结构化行校验'
+          : (currentTopic
+            ? 'OCR按股票代码命中，并结合最近的TGB横向板块标题；右侧个股细分原因不清晰'
+            : 'OCR只命中股票代码，中文主因未清晰识别，使用涨停底库原因兜底'),
+      });
+    }
+  }
+  return rows;
+}
+
+async function runWinRtOcr(imagePath) {
+  if (!fsSync.existsSync(WINRT_OCR_SCRIPT)) throw new Error('missing winrt-ocr.ps1');
+  const { stdout } = await execFileAsync(resolvePowerShell(), [
+    '-NoProfile',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-File',
+    WINRT_OCR_SCRIPT,
+    '-ImagePath',
+    imagePath,
+  ], {
+    cwd: __dirname,
+    windowsHide: true,
+    timeout: 120 * 1000,
+    maxBuffer: 16 * 1024 * 1024,
+    encoding: 'utf8',
+  });
+  return JSON.parse(String(stdout || '').trim());
+}
+
+async function readTgbHunanOcrImage(day, articleUrl, imageUrl) {
+  const paths = tgbHunanOcrCachePaths(day, imageUrl);
+  try {
+    return JSON.parse(await fs.readFile(paths.jsonPath, 'utf8'));
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+  await fs.mkdir(paths.dir, { recursive: true });
+  if (!fsSync.existsSync(paths.imagePath)) {
+    await fs.writeFile(paths.imagePath, await fetchSourceBuffer(imageUrl, articleUrl));
+  }
+  const result = await runWinRtOcr(paths.imagePath);
+  const payload = {
+    version: 1,
+    day: isoFromCompactDate(day),
+    articleUrl,
+    imageUrl,
+    savedAt: new Date().toISOString(),
+    width: result.width,
+    height: result.height,
+    language: result.language,
+    text: result.text,
+    words: result.words || [],
+  };
+  await fs.writeFile(paths.jsonPath, JSON.stringify(payload, null, 2), 'utf8');
+  return payload;
+}
+
+async function fetchTgbHunanOcrRows(day, stocks) {
+  return {
+    rows: [],
+    sourceErrors: [{
+      source: 'review/tgb-hunan-ocr',
+      skipped: true,
+      error: 'TGB Hunan OCR is disabled; official TGB data only comes from structured red-board source files',
+    }],
+  };
+}
+
+async function fetchTonghuashunReviewArticles(day) {
+  const url = 'https://stock.10jqka.com.cn/fupan/';
+  const html = await fetchSourceHtml(url, 'gb18030');
+  const patterns = reviewDayPatterns(day);
+  if (!html.includes(compactDate(day)) && !patterns.some(pattern => html.includes(pattern))) return [];
+  return [{
+    url,
+    title: '同花顺复盘',
+    encoding: 'gb18030',
+  }];
+}
+
+function tonghuashunFupanUrl(day) {
+  const dateText = compactDate(day);
+  const todayText = compactDate(chinaNowParts().day);
+  return dateText === todayText
+    ? 'https://stock.10jqka.com.cn/fupan/'
+    : `https://stock.10jqka.com.cn/fupan/${dateText}.shtml`;
+}
+
+function stockIndexFromLimitRows(stocks) {
+  const byCode = new Map();
+  const byName = new Map();
+  for (const stock of stocks || []) {
+    const code = normalizeReasonSourceCode(stock?.code);
+    const name = String(stock?.name || '').trim();
+    if (!code || !name) continue;
+    byCode.set(code, { code, name });
+    byName.set(name, { code, name });
+  }
+  return { byCode, byName };
+}
+
+function addTonghuashunFupanRow(rows, stock, rawTopic, sourceMeta, confidence, reasonText = '') {
+  const primaryRawTopic = cleanReviewTopic(rawTopic);
+  if (!stock?.code || !stock?.name || !primaryRawTopic) return;
+  rows.push({
+    code: stock.code,
+    name: stock.name,
+    source: sourceMeta.source,
+    primaryRawTopic,
+    primaryTopic: canonicalTopicName(primaryRawTopic),
+    reasonText: reasonText || `${primaryRawTopic}: ${stock.name}`,
+    reasonHeadline: sourceMeta.title || '同花顺复盘',
+    confidence,
+    url: sourceMeta.url,
+    title: sourceMeta.title,
+    boardTopic: primaryRawTopic,
+  });
+}
+
+function extractTonghuashunFupanTables(html, stocks, sourceMeta) {
+  const rows = [];
+  const { byCode, byName } = stockIndexFromLimitRows(stocks);
+  const tipboxRegex = /<div[^>]*class=["'][^"']*rise_top3_tipbox[^"']*["'][\s\S]*?<strong[^>]*class=["'][^"']*strong_s[^"']*["'][^>]*>([\s\S]*?)<\/strong>([\s\S]*?)<\/table>/gi;
+  for (const match of String(html || '').matchAll(tipboxRegex)) {
+    const rawTopic = reviewHtmlToText(match[1]);
+    const tableHtml = match[2] || '';
+    for (const link of tableHtml.matchAll(/<a\b[^>]*href=["'][^"']*\/(\d{6})\/?["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+      const code = normalizeReasonSourceCode(link[1]);
+      const name = reviewHtmlToText(link[2]);
+      const stock = byCode.get(code) || byName.get(name);
+      if (!stock) continue;
+      addTonghuashunFupanRow(rows, stock, rawTopic, sourceMeta, 0.86);
+    }
+  }
+  return rows;
+}
+
+function extractTonghuashunFupanSentenceRows(html, stocks, sourceMeta) {
+  const rows = [];
+  const blocks = ['block_1889', 'block_1890', 'block_1891']
+    .map(id => {
+      const match = String(html || '').match(new RegExp(`<div\\\\s+id=["']${id}["'][^>]*>([\\\\s\\\\S]*?)<\\\\/div>`, 'i'));
+      return match ? reviewHtmlToText(match[1]) : '';
+    })
+    .filter(Boolean)
+    .join('\n');
+  if (!blocks) return rows;
+  const { byCode, byName } = stockIndexFromLimitRows(stocks);
+  const stockNames = [...byName.keys()].sort((a, b) => b.length - a.length);
+  const sentences = blocks
+    .split(/[。；;\n]/u)
+    .map(item => item.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+  for (const sentence of sentences) {
+    const matchedNames = stockNames.filter(name => sentence.includes(name));
+    if (!matchedNames.length) continue;
+    for (const name of matchedNames) {
+      const stock = byName.get(name);
+      const beforeName = sentence.slice(0, Math.max(0, sentence.indexOf(name)));
+      const topicMatches = [...beforeName.matchAll(/([A-Za-z0-9\u4e00-\u9fa5]{2,18})(?:板块|概念|方向|题材|产业链)/gu)];
+      const rawTopic = topicMatches[topicMatches.length - 1]?.[1] || '';
+      if (!rawTopic) continue;
+      addTonghuashunFupanRow(rows, stock, rawTopic, sourceMeta, 0.84, `${rawTopic}: ${name} - ${sentence}`);
+    }
+  }
+  return rows;
+}
+
+async function fetchTonghuashunFupanRows(day, stocks) {
+  const url = tonghuashunFupanUrl(day);
+  const html = await fetchSourceHtml(url, 'gb18030');
+  const patterns = reviewDayPatterns(day);
+  if (!html.includes(compactDate(day)) && !patterns.some(pattern => html.includes(pattern))) {
+    return { rows: [], sourceErrors: [] };
+  }
+  const sourceMeta = {
+    source: 'review/10jqka-fupan',
+    url,
+    title: '同花顺复盘',
+  };
+  const rows = [
+    ...extractTonghuashunFupanTables(html, stocks, sourceMeta),
+    ...extractTonghuashunFupanSentenceRows(html, stocks, sourceMeta),
+  ];
+  return { rows, sourceErrors: [] };
+}
+
+function tonghuashunLimitupFocusUrl(day) {
+  return `https://data.10jqka.com.cn/dataapi/limit_up/block_top?date=${encodeURIComponent(compactDate(day))}&filter=HS,GEM2STAR`;
+}
+
+const TONGHUASHUN_LIMIT_UP_POOL_FIELDS = [
+  '199112',
+  '10',
+  '9001',
+  '330323',
+  '330324',
+  '330325',
+  '9002',
+  '330329',
+  '133971',
+  '133970',
+  '1968584',
+  '3475914',
+  '9003',
+  '9004',
+].join(',');
+
+function tonghuashunLimitUpPoolUrl(day) {
+  return `https://data.10jqka.com.cn/dataapi/limit_up/limit_up_pool?page=1&limit=200&field=${TONGHUASHUN_LIMIT_UP_POOL_FIELDS}&filter=HS,GEM2STAR&order_field=330324&order_type=0&date=${encodeURIComponent(compactDate(day))}`;
+}
+
+function normalizeSixDigitStockCode(value) {
+  const text = String(value || '').replace(/\D/g, '');
+  if (!text) return '';
+  return text.length >= 6 ? text.slice(-6) : text.padStart(6, '0');
+}
+
+function buildTonghuashunStructuredPayload(day, poolJson, blockJson) {
+  const isoDay = isoFromCompactDate(day);
+  const poolRows = (Array.isArray(poolJson?.data?.info) ? poolJson.data.info : [])
+    .filter(item => {
+      const code = normalizeReasonSourceCode(item?.code);
+      const name = String(item?.name || '').trim();
+      return code && name && !isExcludedFromReview(code, name);
+    });
+  const boards = Array.isArray(blockJson?.data) ? blockJson.data : [];
+  const boardNamesByCode = new Map();
+  const boardRows = [];
+  for (const [boardIndex, board] of boards.entries()) {
+    const boardTopic = String(board?.name || '').trim();
+    for (const [stockIndex, stockItem] of (board?.stock_list || []).entries()) {
+      const code = normalizeSixDigitStockCode(stockItem?.code);
+      if (!code) continue;
+      const name = String(stockItem?.name || '').trim();
+      if (!name || isExcludedFromReview(code, name)) continue;
+      const names = boardNamesByCode.get(code) || [];
+      if (boardTopic && !names.includes(boardTopic)) names.push(boardTopic);
+      boardNamesByCode.set(code, names);
+      const detailReason = String(stockItem?.reason_type || '').trim();
+      boardRows.push({
+        boardOrder: boardIndex + 1,
+        sourceOrder: stockIndex + 1,
+        code,
+        name,
+        boardCode: String(board?.code || ''),
+        boardTopic,
+        primaryRawTopic: boardTopic,
+        primaryTopic: boardTopic,
+        detailReason,
+        reasonText: detailReason ? `${boardTopic}: ${name} - ${detailReason}` : `${boardTopic}: ${name}`,
+        reasonHeadline: detailReason || boardTopic,
+        firstLimitTime: stockItem?.first_limit_up_time || null,
+        lastLimitTime: stockItem?.last_limit_up_time || null,
+        limitUpType: stockItem?.limit_up_type || '',
+        highDays: stockItem?.high || stockItem?.high_days || '',
+        limitUpNum: board?.limit_up_num ?? null,
+        source: 'review/ths-limitup-structured',
+        matchType: 'official-block-top',
+        reasonQuality: detailReason ? 'clear' : 'weak',
+        confidence: 0.99,
+        qualityNote: 'Official Tonghuashun block_top board-stock relation. One stock may appear in multiple official boards.',
+        raw: stockItem,
+      });
+    }
+  }
+  const rows = poolRows.map((item, index) => {
+    const code = normalizeSixDigitStockCode(item?.code);
+    const detailReason = String(item?.reason_type || '').trim();
+    const boardNames = boardNamesByCode.get(code) || [];
+    const boardTopic = '同花顺涨停池';
+    return {
+      sourceOrder: index + 1,
+      code,
+      name: String(item?.name || '').trim(),
+      boardTopic,
+      primaryRawTopic: boardTopic,
+      primaryTopic: boardTopic,
+      detailReason,
+      reasonText: detailReason ? `${boardTopic}: ${item?.name || ''} - ${detailReason}` : `${boardTopic}: ${item?.name || ''}`,
+      reasonHeadline: detailReason || boardTopic,
+      firstLimitTime: item?.first_limit_up_time || null,
+      lastLimitTime: item?.last_limit_up_time || null,
+      limitUpType: item?.limit_up_type || '',
+      highDays: item?.high_days || '',
+      openNum: item?.open_num ?? null,
+      source: 'review/ths-limitup-structured',
+      matchType: 'official-limit-up-pool',
+      reasonQuality: detailReason ? 'clear' : 'weak',
+      confidence: 0.99,
+      qualityNote: 'Official Tonghuashun limit_up_pool row. Original block_top relations are kept in blockTop and boardRows, not mixed into stock row boardTopic.',
+      officialBoardNames: boardNames,
+      raw: item,
+    };
+  });
+  const topics = rows.reduce((acc, row) => {
+    acc[row.boardTopic] = (acc[row.boardTopic] || 0) + 1;
+    return acc;
+  }, {});
+  const blockTopics = boardRows.reduce((acc, row) => {
+    acc[row.boardTopic] = (acc[row.boardTopic] || 0) + 1;
+    return acc;
+  }, {});
+  return {
+    version: 1,
+    day: isoDay,
+    source: 'review/ths-limitup-structured',
+    title: '同花顺涨停聚焦结构化来源（涨停池 + 最强风口）',
+    pageUrl: 'https://data.10jqka.com.cn/datacenterph/limitup/limtupInfo.html#/bestTureye',
+    note: '未找到新版完整长图静态 URL；旧版 H5 分享通过客户端截图生成。若后续拿到完整长图，按 TGB/韭研同样方式以长图原始结构覆盖同花顺来源层。',
+    generatedAt: new Date().toISOString(),
+    imageUrl: '',
+    limitUpPool: {
+      sourceUrl: tonghuashunLimitUpPoolUrl(isoDay),
+      count: rows.length,
+      total: Number(poolJson?.data?.limit_up_count?.today?.num || rows.length),
+      rows: poolRows,
+    },
+    blockTop: {
+      sourceUrl: tonghuashunLimitupFocusUrl(isoDay),
+      boardCount: boards.length,
+      boardRowCount: boardRows.length,
+      uniqueStockCount: new Set(boardRows.map(row => row.code).filter(Boolean)).size,
+      boards,
+    },
+    count: rows.length,
+    topics,
+    blockTopics,
+    rows,
+    boardRows,
+  };
+}
+
+async function fetchTonghuashunApiJson(url) {
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125 Safari/537.36',
+      'Accept': 'application/json, text/plain, */*',
+      'Referer': 'https://data.10jqka.com.cn/datacenterph/limitup/limtupInfo.html',
+    },
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`${url} ${res.status}: ${text.slice(0, 160)}`);
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`${url} invalid json: ${text.slice(0, 160)}`);
+  }
+}
+
+function tonghuashunStockItemTime(value) {
+  const text = String(value ?? '').trim();
+  if (!/^\d+$/.test(text)) return normalizeReviewFirstLimitTime(text);
+  if (text.length >= 10) {
+    const n = Number(text);
+    const local = new Date((n + 8 * 60 * 60) * 1000);
+    const h = local.getUTCHours();
+    const m = local.getUTCMinutes();
+    const s = local.getUTCSeconds();
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+  return normalizeReviewFirstLimitTime(text);
+}
+
+async function buildTonghuashunStructuredArtifactFromOfficialApis(day, stocks, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  const [poolJson, blockJson] = await Promise.all([
+    fetchTonghuashunApiJson(tonghuashunLimitUpPoolUrl(isoDay)),
+    fetchTonghuashunApiJson(tonghuashunLimitupFocusUrl(isoDay)),
+  ]);
+  const poolRows = Array.isArray(poolJson?.data?.info) ? poolJson.data.info : [];
+  const blocks = Array.isArray(blockJson?.data) ? blockJson.data : [];
+  const stockByCode = new Map((stocks || [])
+    .map(stock => [normalizeReasonSourceCode(stock?.code), stock])
+    .filter(([code]) => code));
+  const requireBaselineMatch = stockByCode.size > 0;
+  const poolByCode = new Map();
+  for (const item of poolRows) {
+    const code = normalizeReasonSourceCode(item?.code);
+    if (code && (!requireBaselineMatch || stockByCode.has(code)) && !poolByCode.has(code)) poolByCode.set(code, item);
+  }
+  const blockByCode = new Map();
+  const blockRows = [];
+  for (const [boardIndex, board] of blocks.entries()) {
+    const boardTopic = String(board?.name || '').trim();
+    for (const [stockIndex, item] of (board?.stock_list || []).entries()) {
+      const code = normalizeReasonSourceCode(item?.code);
+      if (!code || (requireBaselineMatch && !stockByCode.has(code))) continue;
+      const entry = {
+        boardOrder: boardIndex + 1,
+        sourceOrder: stockIndex + 1,
+        code,
+        name: String(item?.name || stockByCode.get(code)?.name || '').trim(),
+        boardCode: String(board?.code || ''),
+        boardTopic,
+        detailReason: String(item?.reason_type || '').trim(),
+        firstLimitTime: tonghuashunStockItemTime(item?.first_limit_up_time),
+        lastLimitTime: tonghuashunStockItemTime(item?.last_limit_up_time),
+        limitUpCount: item?.high || item?.high_days || '',
+        raw: item,
+      };
+      blockRows.push(entry);
+      if (!blockByCode.has(code)) blockByCode.set(code, entry);
+    }
+  }
+  const rows = [];
+  let sourceOrder = 1;
+  for (const stock of stocks || []) {
+    const code = normalizeReasonSourceCode(stock?.code);
+    const pool = poolByCode.get(code);
+    if (!pool) continue;
+    const block = blockByCode.get(code) || {};
+    const name = String(pool?.name || stock?.name || '').trim();
+    const detailReason = String(block.detailReason || pool?.reason_type || '').trim();
+    const boardTopic = String(block.boardTopic || '').trim();
+    rows.push({
+      sourceOrder: sourceOrder++,
+      code,
+      name,
+      boardTopic: boardTopic || '同花顺涨停池',
+      primaryRawTopic: boardTopic || '同花顺涨停池',
+      primaryTopic: canonicalTopicName(boardTopic || '同花顺涨停池'),
+      detailReason,
+      reasonText: detailReason
+        ? `${boardTopic || '同花顺涨停池'}: ${name} - ${detailReason}`
+        : `${boardTopic || '同花顺涨停池'}: ${name}`,
+      reasonHeadline: detailReason || boardTopic || '同花顺涨停池',
+      firstLimitTime: block.firstLimitTime || tonghuashunStockItemTime(pool?.first_limit_up_time) || stock?.firstLimitTime || '',
+      limitUpCount: block.limitUpCount || pool?.high_days || stock?.limitUpCount || '',
+      source: 'review/ths-limitup-structured',
+      matchType: blockByCode.has(code) ? 'official-pool-with-block-top' : 'official-pool-only-candidate',
+      reasonQuality: detailReason ? 'clear' : 'weak',
+      confidence: blockByCode.has(code) ? 0.97 : 0.82,
+      qualityNote: blockByCode.has(code)
+        ? 'Tonghuashun official limit_up_pool row matched with official block_top board relation.'
+        : 'Tonghuashun limit_up_pool supplied the stock row, but block_top did not cover the stock; this is saved as a candidate and is not accepted as final diagram structure.',
+      raw: pool,
+      blockRaw: block.raw || null,
+    });
+  }
+  const poolCoverage = reviewRowsCoverage(rows, stocks);
+  const blockCoverage = reviewRowsCoverage(blockRows, stocks);
+  const thsFallbackTopic = '\u540c\u82b1\u987a\u6da8\u505c\u6c60';
+  for (const row of rows) {
+    const rawReason = String(row?.raw?.reason_type || row?.detailReason || '').trim();
+    const reasonTopic = firstReasonTopic(rawReason) || thsFallbackTopic;
+    const currentTopic = String(row?.boardTopic || '').trim();
+    const fixedTopic = (!currentTopic || currentTopic.includes('鍚岃姳') || currentTopic.includes('涨停池'))
+      ? reasonTopic
+      : currentTopic;
+    row.boardTopic = fixedTopic;
+    row.primaryRawTopic = fixedTopic;
+    row.primaryTopic = canonicalTopicName(fixedTopic);
+    row.reasonText = row.detailReason ? `${fixedTopic}: ${row.name} - ${row.detailReason}` : `${fixedTopic}: ${row.name}`;
+    row.reasonHeadline = row.detailReason || fixedTopic;
+    row.matchType = row.matchType === 'official-pool-only-candidate' ? 'official-limit-up-pool' : row.matchType;
+    row.confidence = 0.99;
+    row.qualityNote = row.matchType === 'official-limit-up-pool'
+      ? 'Tonghuashun official limit_up_pool supplied the full stock row; block_top did not cover this stock, so the first reason_type tag is used as the display topic.'
+      : 'Tonghuashun official limit_up_pool supplied the full stock row; block_top supplied a matching board relation.';
+  }
+  const candidate = {
+    version: 1,
+    day: isoDay,
+    source: 'review/ths-official-api-candidate',
+    title: `Tonghuashun official API candidate ${isoDay}`,
+    pageUrl: 'https://data.10jqka.com.cn/datacenterph/limitup/limtupInfo.html#/bestTureye',
+    generatedAt: new Date().toISOString(),
+    method: 'official-limit-up-pool-json',
+    sourceMode: 'official-limit-up-pool-json',
+    baselineSource: options.baselineSource || '',
+    count: rows.length,
+    topics: buildReviewSourceTopics(rows),
+    poolCoverage,
+    blockCoverage,
+    rows,
+    blockRows,
+    poolSourceUrl: tonghuashunLimitUpPoolUrl(isoDay),
+    blockTopSourceUrl: tonghuashunLimitupFocusUrl(isoDay),
+  };
+  await fs.mkdir(path.dirname(tonghuashunApiCandidateSourcePath(isoDay)), { recursive: true });
+  await fs.writeFile(tonghuashunApiCandidateSourcePath(isoDay), JSON.stringify(candidate, null, 2), 'utf8');
+  if (!rows.length) {
+    return {
+      ok: false,
+      method: candidate.method,
+      candidateFile: tonghuashunApiCandidateSourcePath(isoDay),
+      poolCoverage,
+      blockCoverage,
+      error: 'Tonghuashun official limit_up_pool returned no accepted non-ST rows.',
+    };
+  }
+  const payload = {
+    version: 1,
+    day: isoDay,
+    source: 'review/ths-limitup-structured',
+    title: `Tonghuashun structured limit-up diagram ${isoDay}`,
+    pageUrl: candidate.pageUrl,
+    generatedAt: candidate.generatedAt,
+    method: candidate.method,
+    sourceMode: 'official-limit-up-pool-json',
+    baselineSource: options.baselineSource || '',
+    count: rows.length,
+    reportedLimitUpCount: Number(poolJson?.data?.limit_up_count?.today?.num || poolJson?.data?.page?.total || rows.length),
+    topics: buildReviewSourceTopics(rows),
+    coverage: poolCoverage,
+    blockCoverage,
+    rows,
+    blockRows,
+    limitUpPool: {
+      sourceUrl: tonghuashunLimitUpPoolUrl(isoDay),
+      count: rows.length,
+      total: Number(poolJson?.data?.limit_up_count?.today?.num || poolJson?.data?.page?.total || rows.length),
+      rawCount: poolRows.length,
+    },
+    blockTop: {
+      sourceUrl: tonghuashunLimitupFocusUrl(isoDay),
+      boardCount: blocks.length,
+      boardRowCount: blockRows.length,
+      uniqueStockCount: new Set(blockRows.map(row => row.code).filter(Boolean)).size,
+    },
+  };
+  await fs.mkdir(path.dirname(tonghuashunStructuredSourcePath(isoDay)), { recursive: true });
+  await fs.writeFile(tonghuashunStructuredSourcePath(isoDay), JSON.stringify(payload, null, 2), 'utf8');
+  return {
+    ok: true,
+    method: candidate.method,
+    count: rows.length,
+    targetFile: tonghuashunStructuredSourcePath(isoDay),
+    candidateFile: tonghuashunApiCandidateSourcePath(isoDay),
+    poolCoverage,
+    blockCoverage,
+  };
+}
+
+async function readTonghuashunStructuredSource(day) {
+  return JSON.parse(await fs.readFile(tonghuashunStructuredSourcePath(isoFromCompactDate(day)), 'utf8'));
+}
+
+async function ensureTonghuashunStructuredSource(day, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  try {
+    return await readTonghuashunStructuredSource(isoDay);
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+  throw new Error('Tonghuashun official image structured source is missing. Legacy block_top/limit_up_pool fallback is disabled for source-layer accuracy.');
+}
+
+function normalizeTonghuashunReasonText(text) {
+  return String(text || '')
+    .replace(/（免责声明：[\s\S]*$/u, '')
+    .replace(/（免责声明：[\s\S]*$/u, '')
+    .replace(/\r/g, '\n')
+    .replace(/[|｜]/g, '+')
+    .replace(/\s+\n/g, '\n')
+    .trim();
+}
+
+function tonghuashunReasonHeadlineText(reasonInfo) {
+  const text = normalizeTonghuashunReasonText(reasonInfo);
+  const company = text.split(/公司原因：/u)[1] || '';
+  const industry = text.split(/行业原因：/u)[1]?.split(/公司原因：/u)[0] || '';
+  const source = company || industry || text;
+  return source
+    .split(/\n+/)
+    .map(line => line.replace(/^\d+[、.．]\s*/u, '').trim())
+    .find(Boolean) || '';
+}
+
+function pickTonghuashunFocusTopic(reasonInfo, boardNames = []) {
+  const text = normalizeTonghuashunReasonText(reasonInfo);
+  const topicRules = [
+    ['PCB', /PCB|覆铜板|电子铜箔|HVLP|铜箔|电子布|线路板|印制电路|HDI|FPC|CCL|PPO|PPE|树脂|玻纤|TGV|玻璃基板/i],
+    ['MLCC', /MLCC|被动元件|电阻|电容|超级电容|铝电解电容|薄膜电容/u],
+    ['数据中心算力', /数据中心|AIDC|算力|AI服务器|服务器电源|液冷|东数西算|算电一体/u],
+    ['光通信', /光通信|光模块|CPO|光纤|光缆|光芯片|1\.6T|800G|400G/u],
+    ['半导体', /半导体|芯片|先进封装|光刻胶|湿电子|存储芯片|电子特气|晶圆|晶圆厂/u],
+    ['机器人', /机器人|人形机器人|减速器|机器视觉|智能割草|工业机器人/u],
+    ['电力', /特高压|输配电|电力|变压器|电网|绿电|核电|火电|水电|电源设备/u],
+    ['小金属概念', /小金属|钼|钨|锑|锗|稀土|永磁|锆|铪|钽|铌|镍|铝|铜|黄金|贵金属/u],
+    ['锂电池', /锂电|固态电池|储能|电池|电解液|正极|负极|碳酸锂/u],
+    ['并购重组', /并购|重组|股权转让|控制权|收购|实控人变更|资产注入/u],
+    ['低空经济', /低空|eVTOL|飞行汽车|无人机|通用航空/u],
+    ['商业航天', /商业航天|卫星|航天|6G/u],
+    ['消费', /消费|零售|食品|乳业|宠物经济|百货|跨境电商/u],
+  ];
+  for (const [topic, pattern] of topicRules) {
+    if (pattern.test(text) || boardNames.some(name => pattern.test(String(name || '')))) return topic;
+  }
+  const scoredBoards = [...new Set(boardNames.map(name => String(name || '').trim()).filter(Boolean))]
+    .map(name => ({
+      name,
+      score: (text.includes(name) ? 6 : 0) +
+        (reasonHeadlineTopics(text).some(topic => hasTopicIntersection(name, topic) || isRelatedReasonName(name, topic)) ? 4 : 0) -
+        (/概念|华为|新能源汽车|军工|一带一路|专精特新|2025年报/u.test(name) ? 1 : 0),
+    }))
+    .filter(item => item.score > 0)
+    .sort((a, b) => b.score - a.score);
+  if (scoredBoards[0]?.name) return scoredBoards[0].name;
+  return firstReasonTopic(tonghuashunReasonHeadlineText(text)) || boardNames[0] || '';
+}
+
+async function fetchTonghuashunLimitupFocusRows(day, stocks) {
+  const url = tonghuashunLimitupFocusUrl(day);
+  const json = JSON.parse(await fetchSourceHtml(url));
+  if (Number(json?.status_code) !== 0 || !Array.isArray(json?.data)) {
+    return {
+      rows: [],
+      sourceErrors: [{ source: 'review/ths-limitup-focus', url, error: json?.status_msg || 'empty response' }],
+    };
+  }
+  const stockByCode = new Map((stocks || [])
+    .map(stock => [normalizeReasonSourceCode(stock?.code), stock])
+    .filter(([code]) => code));
+  const grouped = new Map();
+  for (const board of json.data) {
+    const boardName = String(board?.name || '').trim();
+    for (const stockItem of board?.stock_list || []) {
+      const code = normalizeReasonSourceCode(stockItem?.code);
+      if (!code) continue;
+      const current = grouped.get(code) || {
+        code,
+        name: String(stockItem?.name || stockByCode.get(code)?.name || '').trim(),
+        boardNames: [],
+        reasonInfo: '',
+        rawItems: [],
+      };
+      if (boardName && !current.boardNames.includes(boardName)) current.boardNames.push(boardName);
+      const reasonInfo = normalizeTonghuashunReasonText(stockItem?.reason_info);
+      if (reasonInfo.length > current.reasonInfo.length) current.reasonInfo = reasonInfo;
+      current.rawItems.push({
+        boardCode: board?.code,
+        boardName,
+        change: board?.change,
+        limitUpNum: board?.limit_up_num,
+        stock: stockItem,
+      });
+      grouped.set(code, current);
+    }
+  }
+  const rows = [];
+  for (const item of grouped.values()) {
+    const primaryRawTopic = pickTonghuashunFocusTopic(item.reasonInfo, item.boardNames);
+    const headline = tonghuashunReasonHeadlineText(item.reasonInfo);
+    if (!primaryRawTopic || !item.name) continue;
+    rows.push({
+      code: item.code,
+      name: item.name,
+      source: 'review/ths-limitup-focus',
+      primaryRawTopic,
+      primaryTopic: canonicalTopicName(primaryRawTopic),
+      reasonText: `${primaryRawTopic}: ${item.name}${headline ? ` - ${headline}` : ''}`,
+      reasonHeadline: headline || '同花顺涨停聚焦',
+      confidence: 0.985,
+      url,
+      title: '同花顺涨停聚焦',
+      boardTopic: item.boardNames.join('、'),
+      boardNames: item.boardNames,
+      detailReason: item.reasonInfo,
+      raw: item.rawItems,
+    });
+  }
+  return {
+    rows: aggregateReviewSourceRows(rows).map(row => ({
+      ...row,
+      confidence: 0.985,
+    })),
+    sourceErrors: [],
+  };
+}
+
+async function fetchTonghuashunStructuredRows(day, stocks, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  let url = '';
+  let payload = null;
+  try {
+    payload = await ensureTonghuashunStructuredSource(isoDay, { force: !!options.force });
+    url = String(payload?.postUrl || payload?.pageUrl || payload?.imageUrl || '');
+  } catch (err) {
+    return {
+      rows: [],
+      sourceErrors: [{ source: 'review/ths-limitup-structured', url, error: err.message }],
+    };
+  }
+  const stockByCode = new Map((stocks || [])
+    .map(stock => [normalizeReasonSourceCode(stock?.code), stock])
+    .filter(([code]) => code));
+  const rows = [];
+  for (const item of payload?.rows || []) {
+    const code = normalizeReasonSourceCode(item?.code);
+    if (!code) continue;
+    const stock = stockByCode.get(code) || {};
+    const name = String(item?.name || stock?.name || '').trim();
+    const boardTopic = String(item?.boardTopic || item?.primaryRawTopic || '同花顺涨停池').trim();
+    const detailReason = String(item?.detailReason || '').trim();
+    if (!name || !boardTopic) continue;
+    rows.push({
+      code,
+      name,
+      source: 'review/ths-limitup-structured',
+      primaryRawTopic: boardTopic,
+      primaryTopic: boardTopic,
+      reasonText: detailReason ? `${boardTopic}: ${name} - ${detailReason}` : `${boardTopic}: ${name}`,
+      reasonHeadline: detailReason || boardTopic,
+      confidence: 0.99,
+      url,
+      title: String(payload?.title || '同花顺官方涨停简图结构化来源'),
+      boardTopic,
+      detailReason,
+      matchType: item?.matchType || 'manual-structured-image',
+      reasonQuality: detailReason ? 'clear' : 'weak',
+      qualityNote: item?.qualityNote || 'Structured from Tonghuashun official limit-up diagram: board header + stock row detail reason.',
+      imageUrl: String(payload?.imageUrl || ''),
+      raw: item.raw || item,
+    });
+  }
+  rows.sort((a, b) => String(a.code || '').localeCompare(String(b.code || '')));
+  return {
+    rows,
+    sourceErrors: [],
+  };
+}
+
+async function fetchTgbHunanStructuredRows(day, stocks) {
+  const isoDay = isoFromCompactDate(day);
+  let payload = null;
+  try {
+    payload = JSON.parse(await fs.readFile(tgbHunanStructuredSourcePath(isoDay), 'utf8'));
+  } catch (err) {
+    if (err.code === 'ENOENT') return { rows: [], sourceErrors: [] };
+    throw err;
+  }
+  const stockByCode = new Map((stocks || [])
+    .map(stock => [normalizeReasonSourceCode(stock?.code), stock])
+    .filter(([code]) => code));
+  const rows = [];
+  for (const item of payload?.rows || []) {
+    const code = normalizeReasonSourceCode(item?.code);
+    if (!code) continue;
+    const stock = stockByCode.get(code) || {};
+    const name = String(item?.name || stock?.name || '').trim();
+    const boardTopic = cleanBoardDetailTopic(item?.boardTopic || item?.primaryRawTopic || '');
+    const detailReason = String(item?.detailReason || '').trim();
+    const primaryRawTopic = boardTopic;
+    if (!name || !primaryRawTopic || isExcludedFromReview(code, name)) continue;
+    rows.push({
+      code,
+      name,
+      source: 'review/tgb-hunan-structured',
+      primaryRawTopic,
+      primaryTopic: canonicalTopicName(primaryRawTopic),
+      reasonText: detailReason ? `${primaryRawTopic}: ${name} - ${detailReason}` : `${primaryRawTopic}: ${name}`,
+      reasonHeadline: detailReason || primaryRawTopic,
+      confidence: 0.99,
+      url: payload.url || '',
+      title: payload.title || 'TGB结构化复盘',
+      boardTopic,
+      detailReason,
+      firstLimitTime: item?.firstLimitTime || '',
+      limitUpCount: item?.limitUpCount || '',
+      matchType: 'manual-structured-image',
+      reasonQuality: detailReason ? 'clear' : 'weak',
+      qualityNote: item?.qualityNote || 'Structured from TGB image: red board header + right-side stock detail reason',
+      raw: item,
+    });
+  }
+  return {
+    rows,
+    sourceErrors: rows.length ? [] : [{ source: 'review/tgb-hunan-structured', error: 'structured source has no matching stocks' }],
+  };
+}
+
+async function fetchJiuyangongsheStructuredRows(day, stocks) {
+  const isoDay = isoFromCompactDate(day);
+  let payload = null;
+  try {
+    payload = JSON.parse(await fs.readFile(jiuyangongsheStructuredSourcePath(isoDay), 'utf8'));
+  } catch (err) {
+    if (err.code === 'ENOENT') return { rows: [], sourceErrors: [] };
+    throw err;
+  }
+  const stockByCode = new Map((stocks || [])
+    .map(stock => [normalizeReasonSourceCode(stock?.code), stock])
+    .filter(([code]) => code));
+  const rows = [];
+  for (const item of payload?.rows || []) {
+    const code = normalizeReasonSourceCode(item?.code);
+    if (!code) continue;
+    const stock = stockByCode.get(code) || {};
+    const name = String(item?.name || stock?.name || '').trim();
+    const boardTopic = cleanBoardDetailTopic(item?.boardTopic || item?.primaryRawTopic || '');
+    const detailReason = String(item?.detailReason || '').trim();
+    const primaryRawTopic = boardTopic;
+    if (!name || !primaryRawTopic || isExcludedFromReview(code, name)) continue;
+    rows.push({
+      code,
+      name,
+      source: 'review/jiuyangongshe-structured',
+      primaryRawTopic,
+      primaryTopic: canonicalTopicName(primaryRawTopic),
+      reasonText: detailReason ? `${primaryRawTopic}: ${name} - ${detailReason}` : `${primaryRawTopic}: ${name}`,
+      reasonHeadline: detailReason || primaryRawTopic,
+      confidence: 0.99,
+      url: payload.url || payload.articleUrl || '',
+      title: payload.title || 'Jiuyangongshe structured limit-up diagram',
+      imageUrl: payload.imageUrl || '',
+      boardTopic,
+      detailReason,
+      firstLimitTime: item?.firstLimitTime || '',
+      limitUpCount: item?.limitUpCount || '',
+      matchType: 'manual-structured-image',
+      reasonQuality: detailReason ? 'clear' : 'weak',
+      qualityNote: item?.qualityNote || 'Manual structured from Jiuyangongshe limit-up diagram: board header + stock row detail reason',
+      raw: item,
+    });
+  }
+  return {
+    rows,
+    sourceErrors: rows.length ? [] : [{ source: 'review/jiuyangongshe-structured', error: 'structured source has no matching stocks' }],
+  };
+}
+
+const KAIPANLA_FUPANLA_URL = 'https://www.fupanwang.com/fupanla/';
+const KAIPANLA_FUPANLA_API_BASE = 'https://api2.fupanwang.com';
+
+function md5Hex(value) {
+  return crypto.createHash('md5').update(String(value || '')).digest('hex');
+}
+
+function fupanwangRequestSign(uuid) {
+  return md5Hex(md5Hex(md5Hex(`${uuid}fupanwang`)));
+}
+
+function fupanwangSignedForm() {
+  const uuid = crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '') : crypto.randomBytes(16).toString('hex');
+  return new URLSearchParams({
+    uuid,
+    sign: fupanwangRequestSign(uuid),
+    newtime: String(Date.now()),
+    vip_plat: 'vip',
+    vip_version: '6.5.7',
+  });
+}
+
+async function fupanwangApiToken() {
+  const res = await fetch(`${KAIPANLA_FUPANLA_API_BASE}/grace/makeToken`, {
+    method: 'POST',
+    headers: {
+      'User-Agent': 'Mozilla/5.0',
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': 'application/json, text/plain, */*',
+      'Origin': 'https://vip.fupanwang.com',
+      'Referer': 'https://vip.fupanwang.com/',
+    },
+    body: new URLSearchParams({ appKey: 'fupanwang' }),
+  });
+  if (!res.ok) throw new Error(`fupanwang token ${res.status}`);
+  const json = await res.json().catch(() => null);
+  if (!json?.data) throw new Error(`fupanwang token failed: ${json?.msg || 'empty token'}`);
+  return String(json.data);
+}
+
+function decryptFupanwangApiData(json) {
+  const aes = String(json?.aes || '');
+  if (!aes || aes.length < 32 || typeof json?.data !== 'string') return json?.data;
+  const key = Buffer.from(aes.slice(0, 16), 'utf8');
+  const iv = Buffer.from(aes.slice(16, 32), 'utf8');
+  const decipher = crypto.createDecipheriv('aes-128-cbc', key, iv);
+  const decrypted = Buffer.concat([
+    decipher.update(Buffer.from(json.data, 'base64')),
+    decipher.final(),
+  ]).toString('utf8');
+  return JSON.parse(decrypted);
+}
+
+async function fetchFupanwangApiJson(endpoint, options = {}) {
+  const token = await fupanwangApiToken();
+  const url = new URL(endpoint, KAIPANLA_FUPANLA_API_BASE);
+  if (!url.searchParams.has('plat')) url.searchParams.set('plat', 'vip');
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36',
+    'Accept': 'application/json, text/plain, */*',
+    'Content-Type': 'application/x-www-form-urlencoded',
+    'Origin': 'https://vip.fupanwang.com',
+    'Referer': 'https://vip.fupanwang.com/',
+    token,
+  };
+  const loginToken = process.env.FUPANWANG_LOGIN_TOKEN || process.env.FUPANLA_LOGIN_TOKEN || '';
+  if (loginToken) headers.logintoken = loginToken;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: options.signed === false ? new URLSearchParams() : fupanwangSignedForm(),
+  });
+  if (!res.ok) throw new Error(`fupanwang api ${url.pathname} ${res.status}`);
+  const text = await res.text();
+  const json = JSON.parse(text);
+  if (!json?.code) throw new Error(`fupanwang api ${url.pathname}: ${json?.msg || 'request failed'}`);
+  return {
+    ...json,
+    data: decryptFupanwangApiData(json),
+  };
+}
+
+function kaipanlaFupanlaText(html) {
+  return reviewHtmlToText(html)
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function kaipanlaFupanlaLatestDay(html) {
+  const match = String(html || '').match(/title="(\d{4})-(\d{2})-(\d{2})\u590d\u76d8\u5566"/u);
+  return match ? `${match[1]}-${match[2]}-${match[3]}` : '';
+}
+
+function kaipanlaFupanlaLimitReasonSegment(html) {
+  const text = String(html || '');
+  const starts = [...text.matchAll(/<div class="layui-tab-item[^>]*>/g)].map(match => match.index);
+  const segments = starts.map((index, i) => text.slice(index, starts[i + 1] || text.length));
+  if (!segments.length) return text;
+  return segments
+    .map(segment => ({
+      segment,
+      score:
+        ((segment.match(/\/plate_info\//g) || []).length * 3) +
+        ((segment.match(/\/gupiao\/\d{6}\.html/g) || []).length) +
+        (segment.includes('ST\u677f\u5757') ? 100 : 0),
+    }))
+    .sort((a, b) => b.score - a.score)[0]?.segment || text;
+}
+
+function kaipanlaFupanlaDetailReason(reason) {
+  const text = String(reason || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const headline = text.split(/[；;\n]/u)[0]?.trim() || '';
+  return headline.length > 180 ? headline.slice(0, 180).trim() : headline;
+}
+
+function parseKaipanlaFupanlaHtml(html, requestedDay = '') {
+  const isoDay = isoFromCompactDate(requestedDay || kaipanlaFupanlaLatestDay(html));
+  const latestDay = kaipanlaFupanlaLatestDay(html);
+  const segment = kaipanlaFupanlaLimitReasonSegment(html);
+  const boardRe = /<a href="\/plate_info\/([^"#]+)"[\s\S]*?class="[^"]*"[^>]*>([\s\S]*?)<small\s+class="layui-badge">\s*(\d+)\s*<\/small>[\s\S]*?<\/a>/g;
+  const boardMatches = [...segment.matchAll(boardRe)];
+  const boards = [];
+  for (let i = 0; i < boardMatches.length; i += 1) {
+    const boardHtml = segment.slice(boardMatches[i].index, boardMatches[i + 1]?.index || segment.length);
+    const boardName = kaipanlaFupanlaText(boardMatches[i][2]);
+    const boardCount = Number(boardMatches[i][3] || 0);
+    const plateId = String(boardMatches[i][1] || '').replace(/\.html$/i, '');
+    const rowRe = /<a href="\/gupiao\/(\d{6})\.html"[\s\S]*?tooltip="\d{6}"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<small\s+class="layui-badge">([\s\S]*?)<\/small>\s*<br>\s*<small\s+class="my-green">([\s\S]*?)<\/small>[\s\S]*?<td\s+class="my-gray my-f12"[^>]*>([\s\S]*?)<\/td>/g;
+    const rows = [...boardHtml.matchAll(rowRe)]
+      .map(match => ({
+        code: normalizeReasonSourceCode(match[1]),
+        name: kaipanlaFupanlaText(match[2]),
+        mark: kaipanlaFupanlaText(match[3]),
+        time: kaipanlaFupanlaText(match[4]),
+        reason: kaipanlaFupanlaText(match[5]),
+      }))
+      .filter(row => row.code && row.name);
+    boards.push({
+      plateId,
+      name: boardName,
+      count: boardCount,
+      rows,
+    });
+  }
+  const cleanBoards = boards
+    .map(board => ({
+      ...board,
+      // 仅按个股名/代码排除异常个股；不按板块名排除，避免误删“ST摘帽”板块里已摘帽的正常涨停股。
+      rows: (board.rows || []).filter(row => !isExcludedFromReview(row.code, row.name)),
+    }))
+    .filter(board => board.rows.length);
+  const stockRows = cleanBoards.reduce((sum, board) => sum + board.rows.length, 0);
+  return {
+    version: 1,
+    source: 'review/kaipanla-fupanla',
+    url: KAIPANLA_FUPANLA_URL,
+    day: isoDay,
+    latestDay,
+    savedAt: new Date().toISOString(),
+    boardCount: cleanBoards.length,
+    stockRows,
+    boardSum: stockRows,
+    boards: cleanBoards,
+  };
+}
+
+function normalizeKaipanlaFupanlaApiStock(row) {
+  if (Array.isArray(row)) {
+    return {
+      code: normalizeReasonSourceCode(row[0]),
+      name: String(row[1] || '').trim(),
+      mark: String(row[9] || '').trim(),
+      time: row[6] ? String(row[6]).trim() : '',
+      reason: String(row[17] || row[10] || row[8] || '').trim(),
+      raw: row,
+    };
+  }
+  const raw = row || {};
+  return {
+    code: normalizeReasonSourceCode(raw.StockID || raw.StockCode || raw.stock_code || raw.code),
+    name: String(raw.StockName || raw.stock_name || raw.Name || raw.name || '').trim(),
+    mark: String(raw.StockDayTop || raw.stock_day_top || raw.TopType || raw.mark || '').trim(),
+    time: String(raw.TopTime || raw.top_time || raw.firstLimitTime || raw.time || '').trim(),
+    reason: String(raw.Reason || raw.reason || raw.TopReason || raw.desc || raw.logic || '').trim(),
+    raw,
+  };
+}
+
+function parseKaipanlaFupanlaApiPayload(json, requestedDay = '') {
+  const data = json?.data || {};
+  const info = data?.info || data;
+  const ztyy = info?.ztyy || info?.ZTYy || {};
+  const sourceList = Array.isArray(ztyy?.list)
+    ? ztyy.list
+    : (Array.isArray(ztyy?.List) ? ztyy.List : []);
+  const isoDay = isoFromCompactDate(data?.date || requestedDay);
+  const latestDay = data?.newdate ? isoFromCompactDate(data.newdate) : '';
+  const boards = [];
+  for (const item of sourceList) {
+    const boardName = String(item?.ZSName || item?.Name || item?.plate_name || item?.name || '').trim();
+    const stockList = Array.isArray(item?.StockList)
+      ? item.StockList
+      : (Array.isArray(item?.stock) ? item.stock : (Array.isArray(item?.stocks) ? item.stocks : []));
+    // 仅排除异常个股（按个股名/代码），不按板块名排除：复盘啦把刚摘帽的正常股
+    // 归在“ST摘帽”板块下，若按板块名含 ST 整块丢弃，会误删这些已非 ST 的涨停股。
+    if (!boardName) continue;
+    const rows = stockList
+      .map(normalizeKaipanlaFupanlaApiStock)
+      .filter(row => row.code && row.name && !isExcludedFromReview(row.code, row.name));
+    if (!rows.length) continue;
+    boards.push({
+      plateId: String(item?.ZSCode || item?.plate_id || item?.id || '').trim(),
+      name: boardName,
+      count: rows.length,
+      rows,
+      explain: String(item?.TCExplain || item?.plate_reason || item?.reason || '').trim(),
+    });
+  }
+  const stockRows = boards.reduce((sum, board) => sum + board.rows.length, 0);
+  return {
+    version: 1,
+    source: 'review/kaipanla-fupanla',
+    url: `${KAIPANLA_FUPANLA_API_BASE}/kpl/fupanla?date=${encodeURIComponent(isoDay)}&plat=vip`,
+    day: isoDay,
+    latestDay,
+    savedAt: new Date().toISOString(),
+    boardCount: boards.length,
+    stockRows,
+    boardSum: stockRows,
+    boards,
+  };
+}
+
+function kaipanlaFupanlaPayloadIssue(payload, day) {
+  const isoDay = isoFromCompactDate(day);
+  if (!payload) return 'empty payload';
+  if (payload.day && isoFromCompactDate(payload.day) !== isoDay) {
+    return `payload day is ${payload.day}, expected ${isoDay}`;
+  }
+  // latestDay（站点最新交易日）防串日校验只在“请求当天”时生效：它用于确认复盘啦已切换到
+  // 今天、而不是盘中仍返回上一交易日内容。历史日期请求时，站点 latestDay 必然晚于请求日，
+  // 若强制要求相等会把正常的历史补抓全部误判为 invalid payload。历史日期的正确性已由上面
+  // payload.day === 请求日 这条保证，无需再用 latestDay 卡。
+  if (isoDay === chinaNowParts().day && payload.latestDay && isoFromCompactDate(payload.latestDay) !== isoDay) {
+    return `payload latest day is ${payload.latestDay}, expected ${isoDay}`;
+  }
+  if (!isAfterMarketClose(isoDay)) {
+    return `${isoDay} is not after market close`;
+  }
+  if (isoDay === chinaNowParts().day && !isSavedAtOrAfterMarketCloseForDay(payload, isoDay)) {
+    return `${isoDay} payload was saved before market close`;
+  }
+  if (!Number(payload.stockRows || 0) && !(Array.isArray(payload.boards) && payload.boards.length)) {
+    return 'payload has no non-ST rows';
+  }
+  return '';
+}
+
+async function fetchKaipanlaFupanlaApiSourceDay(day) {
+  const isoDay = isoFromCompactDate(day);
+  const json = await fetchFupanwangApiJson(`/kpl/fupanla?date=${encodeURIComponent(isoDay)}`);
+  const payload = parseKaipanlaFupanlaApiPayload(json, isoDay);
+  const issue = kaipanlaFupanlaPayloadIssue(payload, isoDay);
+  if (issue) throw new Error(`fupanla historical api invalid payload: ${issue}`);
+  return payload;
+}
+
+async function readKaipanlaFupanlaSourceDay(day) {
+  try {
+    return JSON.parse(await fs.readFile(kaipanlaFupanlaSourcePath(isoFromCompactDate(day)), 'utf8'));
+  } catch (err) {
+    if (err.code === 'ENOENT') return null;
+    throw err;
+  }
+}
+
+function kaipanlaFupanlaPoolAlignment(sourceRows, stockByCode, day) {
+  const sourceCodes = new Set((sourceRows || []).map(row => normalizeReasonSourceCode(row?.code)).filter(Boolean));
+  const matchedCodes = new Set();
+  for (const code of sourceCodes) {
+    if (stockByCode.has(code)) matchedCodes.add(code);
+  }
+  const sourceCount = sourceCodes.size;
+  const matchedCount = matchedCodes.size;
+  const ratio = sourceCount ? matchedCount / sourceCount : 0;
+  const issue = sourceCount >= 20 && stockByCode.size >= 20 && ratio < 0.5
+    ? `复盘啦疑似串日: 仅 ${matchedCount}/${sourceCount} 只匹配 ${isoFromCompactDate(day)} 涨停池, 已拒收该源`
+    : '';
+  return {
+    sourceCount,
+    matchedCount,
+    matchRatio: Number((ratio * 100).toFixed(2)),
+    issue,
+  };
+}
+
+async function ensureKaipanlaFupanlaSourceDay(day, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  if (!isAfterMarketClose(isoDay)) {
+    throw new Error(`fupanla source is not ready before market close for ${isoDay}`);
+  }
+  if (!options.force) {
+    const cached = await readKaipanlaFupanlaSourceDay(isoDay).catch(() => null);
+    if ((cached?.stockRows || cached?.boards?.length) && !kaipanlaFupanlaPayloadIssue(cached, isoDay)) return cached;
+  }
+  let htmlError = null;
+  let apiError = null;
+  const html = await fetchSourceHtml(KAIPANLA_FUPANLA_URL).catch(err => {
+    htmlError = err;
+    return '';
+  });
+  const latestDay = kaipanlaFupanlaLatestDay(html);
+  if (html && latestDay === isoDay) {
+    const payload = parseKaipanlaFupanlaHtml(html, isoDay);
+    if (payload.stockRows) {
+      await fs.mkdir(KAIPANLA_FUPANLA_SOURCE_DIR, { recursive: true });
+      await fs.writeFile(kaipanlaFupanlaSourcePath(isoDay), JSON.stringify(payload, null, 2), 'utf8');
+      return payload;
+    }
+    htmlError = new Error('fupanla public page has no parsed non-ST rows');
+  } else if (html && !latestDay) {
+    htmlError = new Error('fupanla public page latest day not detected');
+  }
+  const payload = await fetchKaipanlaFupanlaApiSourceDay(isoDay).catch(err => {
+    apiError = err;
+    return null;
+  });
+  if (!payload?.stockRows) {
+    const parts = [];
+    if (latestDay && latestDay !== isoDay) parts.push(`public page latest day is ${latestDay}`);
+    if (htmlError?.message) parts.push(`public page: ${htmlError.message}`);
+    if (apiError?.message) parts.push(`historical api: ${apiError.message}`);
+    throw new Error(`fupanla source unavailable for ${isoDay}${parts.length ? ` (${parts.join('; ')})` : ''}`);
+  }
+  await fs.mkdir(KAIPANLA_FUPANLA_SOURCE_DIR, { recursive: true });
+  await fs.writeFile(kaipanlaFupanlaSourcePath(isoDay), JSON.stringify(payload, null, 2), 'utf8');
+  return payload;
+}
+
+async function fetchKaipanlaFupanlaRows(day, stocks, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  const payload = await ensureKaipanlaFupanlaSourceDay(isoDay, { force: !!options.force });
+  const stockByCode = new Map((stocks || [])
+    .map(stock => [normalizeReasonSourceCode(stock?.code), stock])
+    .filter(([code]) => code));
+  const sourceRows = [];
+  for (const board of payload?.boards || []) {
+    const boardTopic = String(board?.name || '').trim();
+    if (!boardTopic) continue;
+    for (const item of board?.rows || []) {
+      const code = normalizeReasonSourceCode(item?.code);
+      if (!code) continue;
+      sourceRows.push({ code, board, item, boardTopic });
+    }
+  }
+  const alignment = kaipanlaFupanlaPoolAlignment(sourceRows, stockByCode, isoDay);
+  if (alignment.issue) {
+    return {
+      rows: [],
+      sourceErrors: [{
+        source: 'review/kaipanla-fupanla',
+        url: payload.url || KAIPANLA_FUPANLA_URL,
+        error: alignment.issue,
+        sourceCount: alignment.sourceCount,
+        matchedCount: alignment.matchedCount,
+        matchRatio: alignment.matchRatio,
+      }],
+    };
+  }
+  const rows = [];
+  for (const sourceRow of sourceRows) {
+    const { board, item, boardTopic, code } = sourceRow;
+    const stock = stockByCode.get(code);
+    if (!stock) continue;
+    const name = String(item?.name || stock?.name || '').trim();
+    if (!name) continue;
+    const detailReason = kaipanlaFupanlaDetailReason(item?.reason || board?.explain);
+    rows.push({
+      code,
+      name,
+      source: 'review/kaipanla-fupanla',
+      primaryRawTopic: boardTopic,
+      primaryTopic: canonicalTopicName(boardTopic),
+      reasonText: detailReason ? `${boardTopic}: ${name} - ${detailReason}` : `${boardTopic}: ${name}`,
+      reasonHeadline: detailReason || boardTopic,
+      confidence: 0.99,
+      url: payload.url || KAIPANLA_FUPANLA_URL,
+      title: `复盘啦涨停原因 ${isoDay}`,
+      boardTopic,
+      detailReason,
+      detailText: String(item?.reason || '').trim(),
+      firstLimitTime: item?.time || '',
+      limitUpCount: item?.mark || '',
+      matchType: 'official-structured-page',
+      reasonQuality: detailReason ? 'clear' : 'weak',
+      qualityNote: 'Fupanla structured limit-up reason page supplied board and stock detail reason; ST rows are excluded.',
+      raw: item,
+    });
+  }
+  return {
+    rows,
+    sourceErrors: rows.length ? [] : [{ source: 'review/kaipanla-fupanla', error: 'fupanla source has no matching stocks' }],
+  };
+}
+
+function eastmoneyTopicLimitupUrl(day) {
+  const params = new URLSearchParams({
+    ut: EASTMONEY_ZT_UT,
+    dpt: EASTMONEY_ZT_DPT,
+    Pageindex: '0',
+    pagesize: '100',
+    sort: 'fbt:asc',
+    date: compactDate(day),
+  });
+  return `https://push2ex.eastmoney.com/getTopicZTPool?${params}`;
+}
+
+const EASTMONEY_FPL_LIMIT_REASON_PAGE_URL = 'https://emdata.eastmoney.com/appdc/fpl/index.html?appfenxiang=1#/';
+const EASTMONEY_FPL_LIMIT_REASON_API_BASE = 'https://datacenter.eastmoney.com/securities/api/data/v1/get';
+
+function eastmoneyFplLimitReasonApiUrl(day, pageNumber = 1, pageSize = 200) {
+  const isoDay = isoFromCompactDate(day);
+  const url = new URL(EASTMONEY_FPL_LIMIT_REASON_API_BASE);
+  const params = {
+    reportName: 'RPT_PCHOT_LIMITLIST_HSDETIAL',
+    columns: 'ALL',
+    pageNumber,
+    pageSize,
+    source: 'WEB',
+    client: 'WEB',
+    filter: `(TRADE_DATE='${isoDay}')`,
+    sortColumns: 'LAST_LIMITUP_TIME',
+    sortTypes: '1',
+  };
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, String(value));
+  return url.toString();
+}
+
+function eastmoneyFplLimitReasonTime(row) {
+  const last = String(row?.LAST_LIMITUP_TIME || '').trim();
+  if (/^\d{2}:\d{2}/.test(last)) return last;
+  return String(row?.CZT_LIMITUP_TIME || row?.CLOSE_LIMITUP_TIME || row?.RANK_TIME || '').trim();
+}
+
+function normalizeEastmoneyFplLimitReasonRow(row, index = 0) {
+  const code = normalizeReasonSourceCode(row?.SECURITY_CODE || row?.SECUCODE);
+  const name = String(row?.SECURITY_NAME_ABBR || '').trim();
+  const boardTopic = String(row?.BOARD_NAME || '').trim();
+  const detailReason = String(row?.LIMIT_REASON || '').trim();
+  const limitLabel = String(row?.LIMIT_LABEL || '').trim();
+  const firstLimitTime = eastmoneyFplLimitReasonTime(row);
+  return {
+    code,
+    name,
+    source: 'review/eastmoney-fpl-limit-reason',
+    group: 'eastmoney',
+    primaryRawTopic: boardTopic,
+    primaryTopic: boardTopic,
+    reasonText: detailReason ? `${boardTopic}: ${name} - ${detailReason}` : `${boardTopic}: ${name}`,
+    reasonHeadline: detailReason || boardTopic,
+    confidence: 0.985,
+    url: EASTMONEY_FPL_LIMIT_REASON_PAGE_URL,
+    title: 'Eastmoney Fupanla limit reason',
+    boardTopic,
+    detailReason,
+    detailText: String(row?.LIMIT_CONTENT || '').trim(),
+    firstLimitTime,
+    lastLimitTime: String(row?.LAST_LIMITUP_TIME || '').trim(),
+    closeLimitupTime: String(row?.CLOSE_LIMITUP_TIME || '').trim(),
+    cztLimitupTime: String(row?.CZT_LIMITUP_TIME || '').trim(),
+    limitUpCount: row?.NLIMITUP || '',
+    limitLabel,
+    boardCode: String(row?.BOARD_CODE || '').trim(),
+    close: Number.isFinite(Number(row?.CLOSE)) ? Number(row.CLOSE) : null,
+    gain: Number.isFinite(Number(row?.CHANGE_RATE)) ? Number(row.CHANGE_RATE) : null,
+    matchType: 'official-structured-page',
+    reasonQuality: detailReason ? 'clear' : 'weak',
+    qualityNote: 'Eastmoney Fupanla limit-reason page supplied board and stock detail reason; ST rows are excluded and LIMIT_LABEL is preserved.',
+    sourceOrder: Number(index || 0),
+    raw: row,
+  };
+}
+
+async function fetchEastmoneyFplLimitReasonPayload(day, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  const pageSize = Number(options.pageSize || 200);
+  const rawRows = [];
+  let sourceCount = 0;
+  let pages = 1;
+  let lastApiUrl = '';
+  for (let pageNumber = 1; pageNumber <= Math.min(20, pages); pageNumber += 1) {
+    const apiUrl = eastmoneyFplLimitReasonApiUrl(isoDay, pageNumber, pageSize);
+    lastApiUrl = apiUrl;
+    const res = await fetch(apiUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36',
+        Accept: 'application/json, text/plain, */*',
+        Referer: 'https://emdata.eastmoney.com/appdc/fpl/index.html?appfenxiang=1',
+      },
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Eastmoney Fupanla limit reason ${res.status}: ${text.slice(0, 160)}`);
+    }
+    const json = await res.json();
+    if (json?.success === false || Number(json?.code) !== 0) {
+      throw new Error(`Eastmoney Fupanla limit reason failed: ${json?.message || 'request failed'}`);
+    }
+    const data = Array.isArray(json?.result?.data) ? json.result.data : [];
+    pages = Math.max(1, Number(json?.result?.pages || 1));
+    sourceCount = Number(json?.result?.count || sourceCount || data.length);
+    rawRows.push(...data);
+    if (!data.length || rawRows.length >= sourceCount) break;
+  }
+  const rows = rawRows
+    .filter(row => String(row?.IS_ST || '') !== '1')
+    .map((row, index) => normalizeEastmoneyFplLimitReasonRow(row, index + 1))
+    .filter(row => row.code && row.name && row.boardTopic && !isExcludedFromReview(row.code, row.name));
+  const topics = limitUpMainReasonSourceViewTopics(rows);
+  const sealedCount = rows.filter(row => row.limitLabel === '\u6da8\u505c').length;
+  const openedCount = rows.filter(row => String(row.limitLabel || '').includes('\u66fe')).length;
+  return {
+    version: 1,
+    source: 'review/eastmoney-fpl-limit-reason',
+    day: isoDay,
+    savedAt: new Date().toISOString(),
+    pageUrl: EASTMONEY_FPL_LIMIT_REASON_PAGE_URL,
+    apiUrl: lastApiUrl || eastmoneyFplLimitReasonApiUrl(isoDay, 1, pageSize),
+    url: EASTMONEY_FPL_LIMIT_REASON_PAGE_URL,
+    title: 'Eastmoney Fupanla limit reason',
+    sourceCount,
+    count: rows.length,
+    rawCount: rawRows.length,
+    sealedCount,
+    openedCount,
+    topics,
+    rows,
+  };
+}
+
+async function readEastmoneyFplLimitReasonSourceDay(day) {
+  try {
+    return JSON.parse(await fs.readFile(eastmoneyFplLimitReasonSourcePath(isoFromCompactDate(day)), 'utf8'));
+  } catch (err) {
+    if (err.code === 'ENOENT') return null;
+    throw err;
+  }
+}
+
+async function ensureEastmoneyFplLimitReasonSourceDay(day, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  if (!options.force) {
+    const cached = await readEastmoneyFplLimitReasonSourceDay(isoDay).catch(() => null);
+    if (cached?.rows?.length) return cached;
+  }
+  const payload = await fetchEastmoneyFplLimitReasonPayload(isoDay, options);
+  if (!payload?.rows?.length) throw new Error(`Eastmoney Fupanla limit reason has no parsed non-ST rows for ${isoDay}`);
+  await fs.mkdir(EASTMONEY_FPL_LIMIT_REASON_SOURCE_DIR, { recursive: true });
+  await fs.writeFile(eastmoneyFplLimitReasonSourcePath(isoDay), JSON.stringify(payload, null, 2), 'utf8');
+  return payload;
+}
+
+async function fetchEastmoneyFplLimitReasonRows(day, stocks, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  let payload = null;
+  try {
+    payload = await ensureEastmoneyFplLimitReasonSourceDay(isoDay, { force: !!options.force });
+  } catch (err) {
+    return {
+      rows: [],
+      sourceErrors: [{ source: 'review/eastmoney-fpl-limit-reason', url: EASTMONEY_FPL_LIMIT_REASON_PAGE_URL, error: err.message }],
+    };
+  }
+  const rows = (payload.rows || [])
+    .map(row => ({
+      ...row,
+      source: 'review/eastmoney-fpl-limit-reason',
+      group: 'eastmoney',
+      url: payload.pageUrl || payload.url || EASTMONEY_FPL_LIMIT_REASON_PAGE_URL,
+      title: payload.title || 'Eastmoney Fupanla limit reason',
+    }))
+    .filter(row => row.code && row.name && row.boardTopic);
+  return {
+    rows,
+    sourceErrors: rows.length ? [] : [{ source: 'review/eastmoney-fpl-limit-reason', error: 'structured source has no parsed non-ST rows' }],
+  };
+}
+
+const XUANGUBAO_LIMIT_UP_API_BASE = 'https://flash-api.xuangubao.cn/api/pool/detail';
+
+function xuangubaoLimitUpApiUrl(day) {
+  const url = new URL(XUANGUBAO_LIMIT_UP_API_BASE);
+  url.searchParams.set('pool_name', 'limit_up');
+  url.searchParams.set('date', isoFromCompactDate(day));
+  return url.toString();
+}
+
+function xuangubaoTimestampToTime(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  try {
+    return new Date(n * 1000).toLocaleTimeString('zh-CN', {
+      timeZone: 'Asia/Shanghai',
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  } catch {
+    return '';
+  }
+}
+
+function normalizeXuangubaoLimitUpRow(row, index = 0) {
+  const code = normalizeReasonSourceCode(row?.symbol || row?.stock_id || row?.code);
+  const name = String(row?.stock_chi_name || row?.stock_name || row?.name || '').trim();
+  if (!code || !name || isExcludedFromReview(code, name)) return null;
+  const relatedPlates = Array.isArray(row?.surge_reason?.related_plates)
+    ? row.surge_reason.related_plates
+      .map(plate => ({
+        plateName: String(plate?.plate_name || '').trim(),
+        plateReason: String(plate?.plate_reason || '').trim(),
+      }))
+      .filter(plate => plate.plateName && !/ST/i.test(plate.plateName))
+    : [];
+  if (relatedPlates.some(plate => /ST/i.test(plate.plateName))) return null;
+  const boardTopic = relatedPlates[0]?.plateName || '\u9009\u80a1\u5b9d\u6da8\u505c\u6c60';
+  const boardReason = relatedPlates[0]?.plateReason || '';
+  const detailReason = String(row?.surge_reason?.stock_reason || row?.stock_reason || '').trim();
+  return {
+    code,
+    name,
+    source: 'review/xuangubao-limit-up',
+    group: 'xuangubao',
+    primaryRawTopic: boardTopic,
+    primaryTopic: boardTopic,
+    reasonText: detailReason ? `${boardTopic}: ${name} - ${detailReason}` : `${boardTopic}: ${name}`,
+    reasonHeadline: detailReason || boardTopic,
+    confidence: 0.99,
+    url: xuangubaoLimitUpApiUrl(row?.day || ''),
+    title: 'Xuangubao limit-up pool',
+    boardTopic,
+    boardReason,
+    detailReason,
+    detailText: detailReason,
+    firstLimitTime: xuangubaoTimestampToTime(row?.first_limit_up),
+    lastLimitTime: xuangubaoTimestampToTime(row?.last_limit_up),
+    firstBreakLimitUpTime: xuangubaoTimestampToTime(row?.first_break_limit_up),
+    lastBreakLimitUpTime: xuangubaoTimestampToTime(row?.last_break_limit_up),
+    limitUpCount: String(row?.limit_up_days || row?.m_days_n_boards_boards || '').trim(),
+    breakLimitUpTimes: Number(row?.break_limit_up_times || 0),
+    symbol: String(row?.symbol || '').trim(),
+    price: Number.isFinite(Number(row?.price)) ? Number(row.price) : null,
+    gain: Number.isFinite(Number(row?.change_percent)) ? Number(row.change_percent) * 100 : null,
+    relatedPlates,
+    matchType: 'official-json-pool',
+    reasonQuality: detailReason ? 'clear' : 'weak',
+    qualityNote: 'Xuangubao limit-up pool supplied structured stock reason and related plates; ST, delisting and new-listing rows are excluded.',
+    sourceOrder: Number(index || 0),
+    raw: row,
+  };
+}
+
+async function fetchXuangubaoLimitUpPayload(day, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  const apiUrl = xuangubaoLimitUpApiUrl(isoDay);
+  const res = await fetch(apiUrl, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36',
+      Accept: 'application/json, text/plain, */*',
+      Referer: 'https://xuangubao.cn/dingpan',
+      Origin: 'https://xuangubao.cn',
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Xuangubao limit-up pool ${res.status}: ${text.slice(0, 160)}`);
+  }
+  const json = await res.json();
+  if (Number(json?.code) !== 20000 || !Array.isArray(json?.data)) {
+    throw new Error(`Xuangubao limit-up pool failed: ${json?.message || json?.msg || 'request failed'}`);
+  }
+  const rows = json.data
+    .map((row, index) => normalizeXuangubaoLimitUpRow({ ...row, day: isoDay }, index + 1))
+    .filter(Boolean);
+  const topics = limitUpMainReasonSourceViewTopics(rows);
+  return {
+    version: 1,
+    source: 'review/xuangubao-limit-up',
+    day: isoDay,
+    savedAt: new Date().toISOString(),
+    apiUrl,
+    url: apiUrl,
+    title: 'Xuangubao limit-up pool',
+    sourceCount: Number(json.data.length || 0),
+    count: rows.length,
+    rawCount: json.data.length,
+    topics,
+    rows,
+  };
+}
+
+async function readXuangubaoLimitUpSourceDay(day) {
+  try {
+    return JSON.parse(await fs.readFile(xuangubaoLimitUpSourcePath(isoFromCompactDate(day)), 'utf8'));
+  } catch (err) {
+    if (err.code === 'ENOENT') return null;
+    throw err;
+  }
+}
+
+async function ensureXuangubaoLimitUpSourceDay(day, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  if (!options.force) {
+    const cached = await readXuangubaoLimitUpSourceDay(isoDay).catch(() => null);
+    if (cached?.rows?.length) return cached;
+  }
+  const payload = await fetchXuangubaoLimitUpPayload(isoDay, options);
+  if (!payload?.rows?.length) throw new Error(`Xuangubao limit-up pool has no parsed non-ST rows for ${isoDay}`);
+  await fs.mkdir(XUANGUBAO_LIMIT_UP_SOURCE_DIR, { recursive: true });
+  await fs.writeFile(xuangubaoLimitUpSourcePath(isoDay), JSON.stringify(payload, null, 2), 'utf8');
+  return payload;
+}
+
+async function fetchXuangubaoLimitUpRows(day, stocks, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  let payload = null;
+  try {
+    payload = await ensureXuangubaoLimitUpSourceDay(isoDay, { force: !!options.force });
+  } catch (err) {
+    return {
+      rows: [],
+      sourceErrors: [{ source: 'review/xuangubao-limit-up', url: xuangubaoLimitUpApiUrl(isoDay), error: err.message }],
+    };
+  }
+  const rows = (payload.rows || [])
+    .map(row => ({
+      ...row,
+      source: 'review/xuangubao-limit-up',
+      group: 'xuangubao',
+      url: payload.url || payload.apiUrl || xuangubaoLimitUpApiUrl(isoDay),
+      title: payload.title || 'Xuangubao limit-up pool',
+    }))
+    .filter(row => row.code && row.name && row.boardTopic);
+  return {
+    rows,
+    sourceErrors: rows.length ? [] : [{ source: 'review/xuangubao-limit-up', error: 'structured source has no parsed non-ST rows' }],
+  };
+}
+
+async function fetchEastmoneyTopicLimitUpReasonRows(day, stocks) {
+  const url = eastmoneyTopicLimitupUrl(day);
+  const stockByCode = new Map((stocks || [])
+    .map(stock => [normalizeReasonSourceCode(stock?.code), stock])
+    .filter(([code]) => code));
+  const sourceRows = await fetchEastmoneyTopicLimitUps(day);
+  const externalIndex = await getExternalTopicIndex().catch(() => null);
+  const rows = [];
+  for (const stock of sourceRows) {
+    const code = normalizeReasonSourceCode(stock?.code);
+    if (!code) continue;
+    const name = String(stock?.name || stockByCode.get(code)?.name || '').trim();
+    const boardTopic = cleanBoardDetailTopic(stock?.boardTopic || stock?.reason);
+    const apiDetailReason = cleanBoardDetailTopic(stock?.detailReason || '');
+    const conceptDetailReason = eastmoneyConceptDetailReasonForStock(code, boardTopic, externalIndex);
+    const detailReason = apiDetailReason || conceptDetailReason;
+    const primaryRawTopic = combineBoardAndDetailTopic(boardTopic, detailReason, boardTopic);
+    if (!name || !primaryRawTopic) continue;
+    const hasDetailReason = !!detailReason;
+    rows.push({
+      code,
+      name,
+      source: 'eastmoney/topic-zt-pool',
+      primaryRawTopic,
+      primaryTopic: canonicalTopicName(primaryRawTopic),
+      reasonText: hasDetailReason
+        ? `${boardTopic}: ${name} - ${detailReason}`
+        : `${boardTopic}: ${name}`,
+      reasonHeadline: detailReason || boardTopic,
+      confidence: hasDetailReason ? 0.9 : 0.82,
+      url,
+      title: '东财涨停池',
+      boardTopic,
+      detailReason,
+      matchType: hasDetailReason ? 'board-detail' : 'board',
+      reasonQuality: apiDetailReason ? 'clear' : 'weak',
+      qualityNote: hasDetailReason
+        ? '东财涨停池提供热点板块和个股细分原因，按板块+个股原因入库'
+        : '东财涨停池提供热点板块/行业归类，未提供个股细分原因；作为板块层弱证据',
+      qualityNote: hasDetailReason
+        ? (apiDetailReason
+          ? 'Eastmoney ZT pool supplied board and stock detail reason.'
+          : 'Eastmoney ZT pool supplied industry board; stock detail is filled from Eastmoney concept membership, not a direct ZT reason field.')
+        : 'Eastmoney ZT pool supplied industry board only; no stock detail reason field is exposed.',
+      raw: stock.raw || stock,
+    });
+  }
+  return { rows, sourceErrors: [] };
+}
+
+// ===================== 淘股吧「湖南人」复盘 视觉识别 → 对账涨停池 → 结构化 第5源 =====================
+// 链路:抓当日湖南人复盘图 → 视觉模型(Qwen-VL-Max)识别成 题材→个股 → 跟当日真实涨停池逐行对账(自动纠错/丢弃)
+// → 命中率≥闸 才落 tgb-hunan-structured/<day>.json → 经 fetchTgbHunanStructuredRows 进共识。全程云端 cron,无需人工。
+const TGB_VISION_MIN_HIT_RATE = Number(process.env.TGB_VISION_MIN_HIT_RATE || 0.7);   // 对账命中率闸:低于此判识别失败,留空不喂共识
+const TGB_VISION_MIN_ROWS = Number(process.env.TGB_VISION_MIN_ROWS || 12);            // 识别出的有效股数下限
+const QWEN_VL_ENDPOINT = process.env.QWEN_VL_ENDPOINT || 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
+const QWEN_VL_MODEL = process.env.QWEN_VL_MODEL || 'qwen-vl-ocr';   // 实测最优:6/25大图 62s/100%(max 119s/100%、plus 84s/63%)。OCR调优、同key、结构提取无问题、又快又准。
+
+// 视觉模型 key(通义千问 DashScope)。未配置=识别适配器返回 null,骨架就绪、只待注入(同 getOrderStats/L2 模式)。
+async function readVisionApiKey() {
+  const envKey = String(process.env.QWEN_API_KEY || process.env.DASHSCOPE_API_KEY || '').trim();
+  if (envKey) return envKey;
+  try {
+    const cfg = JSON.parse(await fs.readFile(RUNTIME_CONFIG_PATH, 'utf8'));
+    return String(cfg.qwenApiKey || cfg.visionApiKey || '').trim();
+  } catch { return ''; }
+}
+
+// 解析 JPEG/PNG 宽高(挑复盘主表图用,不依赖外部图库)
+function imageDims(buf) {
+  if (!buf || buf.length < 24) return { w: 0, h: 0 };
+  if (buf[0] === 0x89 && buf[1] === 0x50) { // PNG
+    return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+  }
+  for (let p = 2; p < buf.length - 9;) { // JPEG SOF
+    if (buf[p] !== 0xFF) { p++; continue; }
+    const mk = buf[p + 1];
+    if (mk >= 0xC0 && mk <= 0xC3) return { h: buf.readUInt16BE(p + 5), w: buf.readUInt16BE(p + 7) };
+    if (mk === 0xD8 || mk === 0xD9) { p += 2; continue; }
+    p += 2 + buf.readUInt16BE(p + 2);
+  }
+  return { w: 0, h: 0 };
+}
+
+// 抓当日「湖南人」复盘正文里的题材→个股主表图(竖长窄图);返回 [{url,buffer,w,h}],按面积降序。
+async function fetchTgbHunanReviewTableImages(day) {
+  const isoDay = isoFromCompactDate(day);
+  const compact = compactDate(isoDay);                          // 20260624
+  const mm = compact.slice(4, 6), dd = compact.slice(6, 8);
+  const articles = await fetchTgbHunanReviewArticles(isoDay).catch(() => []);
+  if (!articles.length) return [];
+  const out = [];
+  for (const art of articles.slice(0, 2)) {
+    const html = await fetchSourceHtml(art.url).catch(() => '');
+    if (!html) continue;
+    const re = new RegExp(`https?://image\\.tgb\\.cn/img/\\d{4}/${mm}/${dd}/[a-z0-9]+\\.png`, 'gi');
+    const urls = [...new Set([...html.matchAll(re)].map(m => m[0]))];
+    for (const u of urls) {
+      const buf = await fetchSourceBuffer(`${u}_max.png`, art.url).catch(() => null);
+      if (!buf || buf.length < 4000) continue;
+      const { w, h } = imageDims(buf);
+      // 复盘主表=竖长窄(题材→个股清单)。宽 380-720、高>2200 优先;其余按面积兜底。
+      out.push({ url: u, buffer: buf, w, h, isTable: w >= 380 && w <= 720 && h >= 2200, title: art.title, articleUrl: art.url });
+    }
+  }
+  out.sort((a, b) => (b.isTable - a.isTable) || (b.w * b.h - a.w * a.h));
+  return out;
+}
+
+// 视觉识别适配器(Qwen-VL-Max)。未配 key → 返回 null(骨架就绪)。返回 {themes:[{theme,ztCount,netInflow,stocks:[{code,name,lianban,detail,firstLimitTime}]}]}
+async function recognizeTgbReviewImage(images, day) {
+  const key = await readVisionApiKey();
+  if (!key) return { ok: false, reason: 'vision-api-key-not-configured', themes: [] };
+  if (!images || !images.length) return { ok: false, reason: 'no-image', themes: [] };
+  const img = images[0];                                       // 主表图(已按表格优先排序)
+  const b64 = img.buffer.toString('base64');
+  const prompt = [
+    '这是淘股吧"湖南人"某交易日的涨停复盘长图,按题材分块,红色块标题是题材名(可能带"涨停家数/净流入"),',
+    '其下每行是一只涨停个股:6位代码、股票名称、首板时间、连板(如"1/3天3板")、细分原因。',
+    '请把全部题材和个股提取成严格 JSON,不要任何解释文字,只输出 JSON:',
+    '{"themes":[{"theme":"题材名","ztCount":数字或null,"netInflow":"净流入文本或null",',
+    '"stocks":[{"code":"6位代码","name":"股票名","lianban":连板数字或null,"detail":"细分原因或空","firstLimitTime":"时间或空"}]}]}',
+    '代码务必6位数字;读不准的行宁可不输出也不要编造。',
+    '务必输出**紧凑单行JSON**:不要换行、不要缩进空格、不要 markdown 代码块——否则股票多时会超长被截断。',
+  ].join('');
+  let content = '';
+  try {
+    const res = await fetch(QWEN_VL_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: QWEN_VL_MODEL,
+        messages: [{ role: 'user', content: [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: `data:image/png;base64,${b64}` } },
+        ] }],
+        temperature: 0,
+        max_tokens: Number(process.env.QWEN_VL_MAX_TOKENS || 8192),   // 股多的大图输出长、默认上限会截断JSON→解析失败。qwen-vl-ocr 上限8192(约够250只股)。
+      }),
+      signal: AbortSignal.timeout(Number(process.env.QWEN_VL_TIMEOUT_MS || 300000)),   // 防永久挂起(cron 必须);大长图 Qwen 推理可能100-200s,后台任务放宽到300s
+    });
+    if (!res.ok) {
+      const t = await res.text().catch(() => '');
+      return { ok: false, reason: `qwen ${res.status}: ${t.slice(0, 160)}`, themes: [] };
+    }
+    const data = await res.json();
+    content = String(data?.choices?.[0]?.message?.content || '');
+  } catch (err) {
+    return { ok: false, reason: `qwen fetch: ${err.message}`, themes: [] };
+  }
+  // 抽出 JSON(模型可能裹 ```json)
+  const m = content.match(/\{[\s\S]*\}/);
+  if (!m) return { ok: false, reason: 'no-json-in-response', raw: content.slice(0, 200), themes: [] };
+  let themes = null;
+  let salvaged = false;
+  try { themes = JSON.parse(m[0])?.themes; }
+  catch (e) {
+    // 截断救援:输出超 max_tokens 被截断时,从末尾逐个完整 '}' 处试着补全 ]}]} 闭合,恢复尽量多的完整条目
+    const raw = m[0];
+    for (let i = raw.lastIndexOf('}'); i > 50 && themes == null; i = raw.lastIndexOf('}', i - 1)) {
+      for (const tail of [']}]}', '}]}', ']}']) {
+        try { const p = JSON.parse(raw.slice(0, i + 1) + tail); if (Array.isArray(p?.themes)) { themes = p.themes; salvaged = true; break; } } catch {}
+      }
+    }
+    if (themes == null) return { ok: false, reason: `json-parse: ${e.message}`, themes: [] };
+  }
+  return { ok: true, imageUrl: img.url, articleUrl: img.articleUrl, title: img.title, salvaged, themes: Array.isArray(themes) ? themes : [] };
+}
+
+// 对账闸:识别结果跟当日真实涨停池逐行核——代码在池→信;否则用股名找回代码(自动纠错);池里都没有→丢弃(识别噪声)。
+// 返回 {rows(结构化格式),total,matched,hitRate}。rows 仅含对上的票。
+function validateTgbReviewAgainstPool(recognized, poolStocks) {
+  const normName = s => String(s || '').replace(/Ａ/g, 'A').replace(/\s+/g, '').trim();
+  const byCode = new Map();
+  const byName = new Map();
+  for (const s of (poolStocks || [])) {
+    const c = normalizeReasonSourceCode(s.code); if (!c) continue;
+    byCode.set(c, String(s.name || ''));
+    byName.set(normName(s.name), c);
+  }
+  const rows = [];
+  const unmatched = [];
+  const seen = new Set();
+  let total = 0, matched = 0;
+  // 跳过非题材区块:
+  // ① 「市场连板股/连板梯队」=按连板高度汇总所有连板股的**重复块**(这些股在下面各自真实题材块里已统计),
+  //    当题材会造无意义卡 + 重复计数导致涨停数与其他源不一致(用户2026-06-27明确)。
+  // ② 炸板/跌停/消息面/异动等非涨停内容,本就不在涨停池。
+  // 跳过非题材块:标题/复盘汇总(Qwen 常把图标题"X.XX星期X湖南人涨停复盘"当题材,里面是市场连板股全量→与真实题材块重复)、
+  // 兜底桶(其他个股/其他热点/其他)、连板汇总(市场连板/梯队)、炸板/跌停/消息面等非涨停内容。
+  const SKIP_THEME = /湖南人|涨停复盘|复盘|星期|市场连板|连板梯队|连板股|连板高度|高度板|空间板|梯队|其他|炸板|跌停|未封|未涨停|昨日|前一日|退潮|消息面?|异动|涨幅|盘前|题外|跌幅|大跌|核按钮/;
+  for (const blk of (recognized?.themes || [])) {
+    // 题材名清洗:去【】括号、去"N只/N家"、去金额(X亿/X万)、去净流入/括注 → 只留干净题材词(如"医疗医药")
+    const theme = String(blk?.theme || '')
+      .replace(/[【】\[\]]/g, '')
+      .replace(/\d+[只家]|\d+(?:\.\d+)?[亿万]|净流入.*$|[（(].*?[)）]/g, '')
+      .trim();
+    if (!theme) continue;
+    if (SKIP_THEME.test(theme)) continue;
+    for (const st of (blk?.stocks || [])) {
+      total++;
+      let code = normalizeReasonSourceCode(st?.code || '');
+      const nm = normName(st?.name);
+      if (code && byCode.has(code)) { /* 代码命中 */ }
+      else if (nm && byName.has(nm)) { code = byName.get(nm); }   // 名字命中→纠正/补代码
+      else { unmatched.push(`${theme}|${st?.code || ''}${st?.name || ''}`); continue; }   // 池里没有→丢弃
+      matched++;
+      const key = `${code}${theme}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push({
+        code,
+        name: byCode.get(code) || String(st?.name || ''),
+        boardTopic: theme,
+        detailReason: String(st?.detail || st?.detailReason || '').trim(),
+        limitUpCount: Number.isFinite(Number(st?.lianban)) ? Number(st.lianban) : (st?.limitUpCount ?? null),
+        firstLimitTime: st?.firstLimitTime || null,
+      });
+    }
+  }
+  return { rows, total, matched, hitRate: total ? matched / total : 0, unmatched };
+}
+
+// 编排:抓图→识别→对账→(命中率达标才)落结构化文件。返回状态;不达标/无key 一律不写、不污染共识。
+async function buildTgbHunanStructuredFromVision(day, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  // 【2026-06-27 总闸:Qwen 路径默认禁用】Qwen-VL 在湖南人超长密集复盘图(85-132只)上不可靠:输出截断漏读/切片鬼打墙/吐数字垃圾,
+  // 实测最多只拿~72/85。已改用 claude-vision-direct(人工/Mac mini 切图读图,100%全覆盖)落库。
+  // 此处禁用 Qwen 路径,防止 定时同步/手动同步/CLI 用残缺数据覆盖已读准的 tgb-hunan-structured 文件。
+  // 真要临时跑 Qwen 对比时,设环境变量 TGB_VISION_ALLOW_QWEN=1。详见记忆 panda-tgb-vision-source。
+  if (process.env.TGB_VISION_ALLOW_QWEN !== '1') {
+    return { ok: false, day: isoDay, disabled: true, reason: 'qwen-vision-disabled(Qwen已弃用,tgb改由claude-vision-direct人工读图落库,同步不再覆盖)' };
+  }
+  // 涨停池(对账基准):用当日主因库 stocks(权威涨停名单,与综合归纳同口径)
+  const dbPayload = await readLimitUpMainReasonDbDay(isoDay).catch(() => null);
+  const poolStocks = Array.isArray(dbPayload?.stocks) ? dbPayload.stocks : (Array.isArray(options.poolStocks) ? options.poolStocks : []);
+  if (!poolStocks.length) return { ok: false, day: isoDay, reason: 'no-pool(涨停池未就绪)' };
+  const images = await fetchTgbHunanReviewTableImages(isoDay).catch(() => []);
+  if (!images.length) return { ok: false, day: isoDay, reason: 'no-review-image(湖南人当日复盘未发或抓取失败)' };
+  const recognized = await recognizeTgbReviewImage(images, isoDay);
+  if (!recognized.ok) return { ok: false, day: isoDay, reason: recognized.reason, skeletonReady: recognized.reason === 'vision-api-key-not-configured' };
+  const gate = validateTgbReviewAgainstPool(recognized, poolStocks);
+  if (gate.rows.length < TGB_VISION_MIN_ROWS || gate.hitRate < TGB_VISION_MIN_HIT_RATE) {
+    return { ok: false, day: isoDay, reason: 'gate-fail(命中率/股数不足,判识别失败留空)', total: gate.total, matched: gate.matched, hitRate: Number(gate.hitRate.toFixed(3)), rows: gate.rows.length, unmatchedSample: (gate.unmatched || []).slice(0, 40) };
+  }
+  const payload = {
+    day: isoDay,
+    url: recognized.articleUrl || '',
+    title: recognized.title || '淘股吧·湖南人涨停复盘',
+    source: 'review/tgb-hunan-structured',
+    generatedBy: `vision(${QWEN_VL_MODEL})+pool-validation`,
+    imageUrl: recognized.imageUrl || '',
+    total: gate.total, matched: gate.matched, hitRate: Number(gate.hitRate.toFixed(3)),
+    rows: gate.rows,
+  };
+  await fs.mkdir(TGB_HUNAN_STRUCTURED_SOURCE_DIR, { recursive: true });
+  await fs.writeFile(tgbHunanStructuredSourcePath(isoDay), JSON.stringify(payload, null, 2), 'utf8');
+  mainReasonSourceCache.delete(isoDay);
+  return { ok: true, day: isoDay, total: gate.total, matched: gate.matched, hitRate: payload.hitRate, rows: gate.rows.length, wrote: tgbHunanStructuredSourcePath(isoDay) };
+}
+
+// 淘股吧「湖南人」复盘结构化源 → rawRows(进综合归纳共识,作第5源)。
+// 读 tgb-hunan-structured/<day>.json(由 视觉识别+涨停池对账 生成),boardTopic=题材级主因(湖南人本按题材聚类),
+// 与同花顺标签拼接不同,这里直接是干净题材,正好补同花顺降权后的位。文件不存在=返回空(不影响其余4源)。
+async function fetchTgbHunanStructuredRows(day, stocks, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  let payload = null;
+  try {
+    payload = JSON.parse(await fs.readFile(tgbHunanStructuredSourcePath(isoDay), 'utf8'));
+  } catch (err) {
+    if (err.code === 'ENOENT') return { rows: [], sourceErrors: [] };
+    return { rows: [], sourceErrors: [{ source: 'review/tgb-hunan-structured', error: err.message }] };
+  }
+  const rows = [];
+  for (const item of (payload?.rows || [])) {
+    const code = normalizeReasonSourceCode(item?.code);
+    if (!code) continue;
+    const boardTopic = cleanBoardDetailTopic(item?.boardTopic || item?.primaryRawTopic || '');
+    if (!boardTopic) continue;
+    const name = String(item?.name || '').trim();
+    if (!name) continue;
+    const detailReason = String(item?.detailReason || '').trim();
+    const hasDetail = !!detailReason;
+    rows.push({
+      code,
+      name,
+      source: 'review/tgb-hunan-structured',
+      primaryRawTopic: boardTopic,
+      primaryTopic: canonicalTopicName(boardTopic),
+      reasonText: hasDetail ? `${boardTopic}: ${name} - ${detailReason}` : `${boardTopic}: ${name}`,
+      reasonHeadline: detailReason || boardTopic,
+      confidence: 0.99,
+      url: String(payload.url || ''),
+      title: String(payload.title || '淘股吧·湖南人涨停复盘'),
+      boardTopic,
+      detailReason,
+      matchType: hasDetail ? 'board-detail' : 'board',
+      reasonQuality: hasDetail ? 'clear' : 'weak',
+      qualityNote: '淘股吧湖南人复盘(视觉识别+涨停池对账)；题材级主因。',
+      firstLimitTime: item?.firstLimitTime ?? null,
+      limitUpCount: item?.limitUpCount ?? null,
+      raw: item,
+    });
+  }
+  return { rows, sourceErrors: [] };
+}
+
+async function fetchAutoReviewSourceRows(day, stocks, options = {}) {
+  const articleSources = [
+    {
+      source: 'review/kaipanla-fupanla',
+      confidence: 0.99,
+      fetchRows: fetchKaipanlaFupanlaRows,
+    },
+    {
+      source: 'review/jiuyangongshe-structured',
+      confidence: 0.99,
+      fetchRows: fetchJiuyangongsheStructuredRows,
+    },
+    {
+      source: 'review/xuangubao-limit-up',
+      confidence: 0.99,
+      fetchRows: fetchXuangubaoLimitUpRows,
+    },
+    {
+      source: 'review/ths-limitup-structured',
+      confidence: 0.99,
+      fetchRows: fetchTonghuashunStructuredRows,
+    },
+    {
+      source: 'review/tgb-hunan-structured',
+      confidence: 0.99,
+      fetchRows: fetchTgbHunanStructuredRows,   // 读结构化文件、不联网;进存盘 rawRows 让 覆盖/健康/sourceStats/共识 一致
+    },
+  ];
+  const rows = [];
+  const sourceErrors = [];
+  for (const source of articleSources) {
+    if (source.fetchRows) {
+      try {
+        const direct = await source.fetchRows(day, stocks, { force: !!options.force });
+        const directRows = direct.rows || [];
+        rows.push(...directRows);
+        sourceErrors.push(...(direct.sourceErrors || []));
+      } catch (err) {
+        sourceErrors.push({ source: source.source, error: err.message });
+      }
+      continue;
+    }
+    let articles = [];
+    try {
+      articles = await source.fetchArticles(day);
+    } catch (err) {
+      sourceErrors.push({ source: source.source, error: err.message });
+      continue;
+    }
+    await mapLimit(articles, 2, async article => {
+      try {
+        const html = await fetchSourceHtml(article.url, article.encoding);
+        const text = reviewHtmlToText(html);
+        rows.push(...extractReviewRowsFromText(text, stocks, {
+          source: source.source,
+          url: article.url,
+          title: article.title,
+        }, source.confidence));
+      } catch (err) {
+        sourceErrors.push({ source: source.source, url: article.url, error: err.message });
+      }
+    });
+  }
+  const aggregatedRows = aggregateReviewSourceRows(rows);
+  return {
+    rows: aggregatedRows,
+    rawRows: rows,
+    rawCount: rows.length,
+    sourceErrors,
+    sourceStats: buildReviewSourceStats(rows, stocks),
+  };
+}
+
+async function readLimitUpMainReasonAutoSourceDay(day) {
+  try {
+    return JSON.parse(await fs.readFile(limitUpMainReasonAutoSourcePath(isoFromCompactDate(day)), 'utf8'));
+  } catch (err) {
+    if (err.code === 'ENOENT') return null;
+    throw err;
+  }
+}
+
+async function ensureLimitUpMainReasonAutoSourceDay(day, stocks, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  if (!isChinaMarketTradingDay(isoDay)) return null;
+  if (!options.force) {
+    const cached = await readLimitUpMainReasonAutoSourceDay(isoDay).catch(() => null);
+    if (cached?.rows?.length || cached?.stocks?.length) return cached;
+  }
+  if (!isAfterMarketClose(isoDay)) return null;
+  const result = await fetchAutoReviewSourceRows(isoDay, stocks, { force: !!options.force }).catch(err => ({
+    rows: [],
+    sourceErrors: [{ source: 'review-auto', error: err.message }],
+  }));
+  const payload = {
+    version: 1,
+    day: isoDay,
+    source: 'review-auto',
+    savedAt: afterCloseSavedAtForDay(isoDay),
+    count: result.rows.length,
+    rows: result.rows,
+    rawCount: result.rawCount || 0,
+    rawRows: result.rawRows || [],
+    sourceStats: result.sourceStats || [],
+    sourceErrors: result.sourceErrors || [],
+  };
+  await fs.mkdir(LIMIT_UP_MAIN_REASON_AUTO_SOURCE_DIR, { recursive: true });
+  await fs.writeFile(limitUpMainReasonAutoSourcePath(isoDay), JSON.stringify(payload, null, 2), 'utf8');
+  mainReasonSourceCache.delete(isoDay);
+  return payload;
+}
+
+async function readLimitUpMainReasonSourceDay(day) {
+  const isoDay = isoFromCompactDate(day);
+  if (mainReasonSourceCache.has(isoDay)) return mainReasonSourceCache.get(isoDay);
+  const merged = new Map();
+  const autoPayload = await readLimitUpMainReasonAutoSourceDay(isoDay).catch(() => null);
+  // 始终用 rawRows 现聚合(而非读存盘的 .rows)：让同花顺主因修正(进共识)与 consensusTopics 对历史日即时生效、
+  // 与新抓口径一致，无需联网重抓。无 rawRows 的老文件才退回读存盘聚合行。
+  // 淘股吧「湖南人」第5源:把结构化 tgb 行并入 rawRows 再聚合——覆盖 fresh/reuse/历史所有重建,且不依赖网络。
+  const rawAll = (autoPayload && Array.isArray(autoPayload.rawRows)) ? autoPayload.rawRows : [];
+  const baseRaw = rawAll.filter(r => !isDisabledReviewSource(r?.source));   // 禁用源(同花顺/东财)不进共识聚合,与展示层一致
+  // tgb 已在存盘 rawRows(非reuse重建后,articleSources 已含)→ 不重复注入;老文件/--reuse 缺 tgb 时读文件补进来(兜底)
+  const tgbInBase = baseRaw.some(r => String(r?.source || '').includes('tgb-hunan'));
+  const tgbStruct = tgbInBase ? { rows: [] } : await fetchTgbHunanStructuredRows(isoDay).catch(() => ({ rows: [] }));
+  const combinedRaw = (tgbStruct.rows && tgbStruct.rows.length) ? baseRaw.concat(tgbStruct.rows) : baseRaw;
+  const autoMap = combinedRaw.length
+    ? normalizeMainReasonSourcePayload({ rows: aggregateReviewSourceRows(combinedRaw) })
+    : normalizeMainReasonSourcePayload(autoPayload);
+  for (const [code, row] of autoMap.entries()) merged.set(code, row);
+  try {
+    const payload = JSON.parse(await fs.readFile(limitUpMainReasonSourcePath(isoDay), 'utf8'));
+    for (const [code, row] of normalizeMainReasonSourcePayload(payload).entries()) merged.set(code, row);
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+  mainReasonSourceCache.set(isoDay, merged);
+  return merged;
+}
+
+const LIMIT_UP_MAIN_REASON_OVERRIDE_DIR = path.join(__dirname, 'kpl-limitup-main-reason-overrides');
+function mainReasonOverridePath(day) {
+  return path.join(LIMIT_UP_MAIN_REASON_OVERRIDE_DIR, `${safePart(isoFromCompactDate(day))}.json`);
+}
+async function readMainReasonOverrides(day) {
+  try { return JSON.parse(await fs.readFile(mainReasonOverridePath(day), 'utf8')) || {}; }
+  catch { return {}; }
+}
+// 管理员手填的“分歧待定”覆盖：在读取主因库时套用，覆盖该股最终主因（综合归纳归纳不出时用）
+function applyMainReasonOverridesToPayload(payload, overrides) {
+  const codes = Object.keys(overrides || {});
+  if (!codes.length || !Array.isArray(payload?.stocks)) return payload;
+  const byCode = new Map(payload.stocks.map(s => [normalizeReasonSourceCode(s.code), s]));
+  for (const code of codes) {
+    const ov = overrides[code];
+    const rec = byCode.get(normalizeReasonSourceCode(code));
+    if (!rec || !ov || !ov.boardTopic) continue;
+    rec.finalBoardTopic = ov.boardTopic;
+    rec.primaryRawTopic = ov.boardTopic;
+    rec.primaryTopic = canonicalTopicName(ov.boardTopic);
+    rec.finalReason = ov.reason || ov.boardTopic;
+    rec.finalDetailReason = ov.reason || ov.boardTopic;
+    rec.reasonText = ov.reason || ov.boardTopic;
+    rec.overridden = true;
+    rec.overrideBy = ov.by || 'admin';
+    rec.overrideAt = ov.at || '';
+  }
+  return payload;
+}
+async function readLimitUpMainReasonDbDay(day) {
+  const isoDay = isoFromCompactDate(day);
+  try {
+    const payload = JSON.parse(await fs.readFile(limitUpMainReasonDbPath(isoDay), 'utf8'));
+    applyMainReasonOverridesToPayload(payload, await readMainReasonOverrides(isoDay));
+    mainReasonDbCache.set(isoDay, payload);
+    return payload;
+  } catch (err) {
+    if (err.code === 'ENOENT') return null;
+    throw err;
+  }
+}
+
+function buildMainReasonSourceCoverage(rows, autoPayload = null) {
+  const unique = [...new Map((rows || [])
+    .filter(row => row?.code)
+    .map(row => [String(row.code), row])).values()];
+  const total = unique.length;
+  const selected = new Map();
+  const candidates = new Map();
+  const reviewCoveredCodes = new Set();
+  const multiSourceCodes = new Set();
+  for (const row of unique) {
+    const code = String(row.code || '');
+    const selectedSource = row.sourceEvidence?.selectedSource || row.source || 'unknown';
+    if (selectedSource && !isDisabledReviewSource(selectedSource)) {
+      const item = selected.get(selectedSource) || { source: selectedSource, count: 0 };
+      item.count += 1;
+      selected.set(selectedSource, item);
+    }
+    const candidateSources = new Set();
+    for (const candidate of row.sourceEvidence?.candidates || []) {
+      const source = candidate.source || 'unknown';
+      if (isDisabledReviewSource(source, candidate.group)) continue;
+      candidateSources.add(source);
+      const item = candidates.get(source) || { source, count: 0 };
+      item.count += 1;
+      candidates.set(source, item);
+      if (String(source).includes('review')) reviewCoveredCodes.add(code);
+    }
+    if (candidateSources.size >= 3 || String(selectedSource).includes('review-auto-consensus')) {
+      multiSourceCodes.add(code);
+    }
+  }
+  const autoRows = Array.isArray(autoPayload?.rows) ? autoPayload.rows : [];
+  const autoSourceRows = new Map();
+  const autoSourceStocks = new Map();
+  for (const row of autoRows) {
+    if (isDisabledReviewSource(row?.source, row?.group)) continue;
+    const supportSources = Array.isArray(row?.sourceSupport?.sources) && row.sourceSupport.sources.length
+      ? row.sourceSupport.sources
+      : [row?.source || 'unknown'];
+    for (const source of supportSources) {
+      if (isDisabledReviewSource(source)) continue;
+      const key = source || 'unknown';
+      autoSourceRows.set(key, (autoSourceRows.get(key) || 0) + 1);
+      if (!autoSourceStocks.has(key)) autoSourceStocks.set(key, new Set());
+      if (row?.code) autoSourceStocks.get(key).add(String(row.code));
+    }
+  }
+  // 让 reviewAutoSources（数据源健康面板读取的来源计数）也走「剔除北交所/ST」闸口：
+  // 优先用过滤后的 rawRows 重算，避免韭研等含北交所底稿的来源显示 86/覆盖率>100%。
+  const filteredRawRows = (Array.isArray(autoPayload?.rawRows) ? autoPayload.rawRows : [])
+    .filter(row => !isExcludedFromReview(row?.code, row?.name));
+  const recomputedStats = filteredRawRows.length ? buildReviewSourceStats(filteredRawRows, unique) : null;
+  const baseStats = recomputedStats
+    || (Array.isArray(autoPayload?.sourceStats) && autoPayload.sourceStats.length ? autoPayload.sourceStats : null);
+  const sourceRows = baseStats
+    ? baseStats.filter(item => !isDisabledReviewSource(item?.source, item?.group))
+    : [...autoSourceRows.entries()]
+      .map(([source, rowCount]) => ({
+        source,
+        rowCount,
+        stockCount: autoSourceStocks.get(source)?.size || 0,
+        coveragePct: total ? Number((((autoSourceStocks.get(source)?.size || 0) / total) * 100).toFixed(2)) : 0,
+      }))
+      .sort((a, b) => b.stockCount - a.stockCount || a.source.localeCompare(b.source));
+  return {
+    total,
+    reviewCoveredCount: reviewCoveredCodes.size,
+    reviewCoveragePct: total ? Number(((reviewCoveredCodes.size / total) * 100).toFixed(2)) : 0,
+    multiSourceCount: multiSourceCodes.size,
+    multiSourcePct: total ? Number(((multiSourceCodes.size / total) * 100).toFixed(2)) : 0,
+    selectedSources: [...selected.values()].sort((a, b) => b.count - a.count || a.source.localeCompare(b.source)),
+    candidateSources: [...candidates.values()].sort((a, b) => b.count - a.count || a.source.localeCompare(b.source)),
+    reviewAutoSources: sourceRows,
+    sourceErrors: (Array.isArray(autoPayload?.sourceErrors) ? autoPayload.sourceErrors : [])
+      .filter(item => !isDisabledReviewSource(item?.source, item?.group)),
+  };
+}
+
+function mainReasonEvidenceQuality(row) {
+  const explicit = String(row?.reasonQuality || '').trim().toLowerCase();
+  if (explicit) return explicit;
+  if (row?.ocrFallback) return 'fallback';
+  const confidence = Number(row?.confidence || 0);
+  if (confidence > 0 && confidence < 0.8) return 'weak';
+  if (row?.primaryRawTopic || row?.primaryTopic || row?.reasonText) return 'clear';
+  return 'fallback';
+}
+
+function mainReasonEvidenceMatchType(row) {
+  if (row?.matchType) return String(row.matchType);
+  if (row?.ocrFallback) return 'code';
+  return 'text';
+}
+
+function normalizeMainReasonEvidenceRow(row, type = 'review-raw') {
+  const code = normalizeReasonSourceCode(row?.code);
+  if (!code) return null;
+  const source = String(row?.source || 'unknown');
+  const primaryRawTopic = String(row?.primaryRawTopic || row?.primaryTopic || row?.topic || '').trim();
+  const confidence = Number(row?.confidence || 0);
+  const reasonQuality = mainReasonEvidenceQuality(row);
+  const boardTopic = String(row?.boardTopic || (Array.isArray(row?.boardNames) ? row.boardNames.join('、') : '') || primaryRawTopic || '').trim();
+  return {
+    type,
+    code,
+    name: String(row?.name || '').trim(),
+    source,
+    group: reviewSourceGroup(source),
+    primaryRawTopic,
+    primaryTopic: canonicalTopicName(primaryRawTopic),
+    reasonText: String(row?.reasonText || ''),
+    reasonHeadline: String(row?.reasonHeadline || row?.title || ''),
+    confidence: Number.isFinite(confidence) ? confidence : 0,
+    matchType: mainReasonEvidenceMatchType(row),
+    reasonQuality,
+    lowConfidence: reasonQuality === 'fallback' || (Number.isFinite(confidence) && confidence > 0 && confidence < 0.8) || !!row?.ocrFallback,
+    qualityNote: String(row?.qualityNote || ''),
+    boardTopic,
+    detailReason: String(row?.detailReason || ''),
+    url: String(row?.url || ''),
+    title: String(row?.title || ''),
+    imageUrl: String(row?.imageUrl || ''),
+  };
+}
+
+function reviewEvidenceRowsFromAutoPayload(autoPayload) {
+  const sourceRows = Array.isArray(autoPayload?.rawRows) && autoPayload.rawRows.length
+    ? autoPayload.rawRows
+    : (Array.isArray(autoPayload?.rows) ? autoPayload.rows : []);
+  return sourceRows
+    .map(row => normalizeMainReasonEvidenceRow(row, Array.isArray(autoPayload?.rawRows) && autoPayload.rawRows.length ? 'review-raw' : 'review-aggregate'))
+    .filter(row => row && !isDisabledReviewSource(row.source, row.group))
+    .filter(Boolean);
+}
+
+function buildLimitUpMainReasonEvidencePayload(day, payload, autoPayload = null) {
+  const isoDay = isoFromCompactDate(day);
+  const reviewRows = reviewEvidenceRowsFromAutoPayload(autoPayload);
+  const reviewByCode = new Map();
+  for (const evidence of reviewRows) {
+    if (!reviewByCode.has(evidence.code)) reviewByCode.set(evidence.code, []);
+    reviewByCode.get(evidence.code).push(evidence);
+  }
+  const stocks = Array.isArray(payload?.stocks) ? payload.stocks : [];
+  const stockEvidence = stocks.map(stock => {
+    const code = normalizeReasonSourceCode(stock?.code);
+    const candidates = (stock?.sourceEvidence?.candidates || [])
+      .filter(candidate => candidate?.source)
+      .filter(candidate => !isDisabledReviewSource(candidate.source, candidate.group))
+      .map(candidate => ({
+        type: 'final-candidate',
+        code,
+        name: String(stock?.name || ''),
+        source: String(candidate.source || ''),
+        group: reviewSourceGroup(candidate.source),
+        primaryRawTopic: String(candidate.primaryRawTopic || ''),
+        primaryTopic: String(candidate.primaryTopic || canonicalTopicName(candidate.primaryRawTopic || '')),
+        confidence: Number(candidate.confidence || 0),
+      }));
+    return {
+      code,
+      name: String(stock?.name || ''),
+      selected: {
+        primaryRawTopic: String(stock?.primaryRawTopic || ''),
+        primaryTopic: String(stock?.primaryTopic || ''),
+        finalBoardTopic: String(stock?.finalBoardTopic || stock?.mainReasonSummary?.boardTopic || ''),
+        finalDetailReason: String(stock?.finalDetailReason || stock?.mainReasonSummary?.detailReason || ''),
+        finalReason: String(stock?.finalReason || stock?.mainReasonSummary?.finalReason || ''),
+        reasonText: String(stock?.reasonText || ''),
+        reasonHeadline: String(stock?.reasonHeadline || ''),
+        confidence: Number(stock?.confidence || 0),
+        selectedSource: String(stock?.sourceEvidence?.selectedSource || stock?.source || ''),
+      },
+      reviewEvidence: (reviewByCode.get(code) || []).sort((a, b) => (
+        Number(b.confidence || 0) - Number(a.confidence || 0) ||
+        String(a.source).localeCompare(String(b.source))
+      )),
+      finalCandidates: candidates,
+      fallbackReason: String(stock?.fallbackReason || ''),
+      sourceEvidence: stock?.sourceEvidence || null,
+    };
+  });
+  return {
+    version: 1,
+    day: isoDay,
+    generatedAt: new Date().toISOString(),
+    sourceDbSavedAt: payload?.savedAt || '',
+    ruleVersion: payload?.ruleVersion || MAIN_ZT_COUNT_RULE_VERSION,
+    count: stockEvidence.length,
+    rawReviewRowCount: reviewRows.length,
+    sourceStats: (Array.isArray(autoPayload?.sourceStats) ? autoPayload.sourceStats : [])
+      .filter(item => !isDisabledReviewSource(item?.source, item?.group)),
+    sourceErrors: (Array.isArray(autoPayload?.sourceErrors) ? autoPayload.sourceErrors : [])
+      .filter(item => !isDisabledReviewSource(item?.source, item?.group)),
+    stocks: stockEvidence,
+  };
+}
+
+function isClearMainReasonEvidence(row) {
+  return row?.reasonQuality === 'clear' && (row.primaryRawTopic || row.reasonText);
+}
+
+function isBoardMainReasonEvidence(row) {
+  return row?.reasonQuality !== 'fallback' && (row?.boardTopic || row?.primaryRawTopic || row?.reasonText);
+}
+
+function isDetailMainReasonEvidence(row) {
+  return row?.reasonQuality === 'clear' && !!String(row?.detailReason || '').trim();
+}
+
+function conflictingClearTopicRows(evidenceRows) {
+  const rows = (evidenceRows || [])
+    .filter(isClearMainReasonEvidence)
+    .filter(row => row.primaryTopic || row.primaryRawTopic);
+  const topics = [...new Set(rows
+    .map(row => row.primaryTopic || canonicalTopicName(row.primaryRawTopic))
+    .filter(Boolean))];
+  if (topics.length < 2) return [];
+  for (let i = 0; i < topics.length; i += 1) {
+    for (let j = i + 1; j < topics.length; j += 1) {
+      if (!hasTopicIntersection(topics[i], topics[j])) {
+        return rows;
+      }
+    }
+  }
+  return [];
+}
+
+function hasConflictingTopics(evidenceRows) {
+  return conflictingClearTopicRows(evidenceRows).length > 0;
+}
+
+function buildLimitUpMainReasonQualityPayload(day, payload, evidencePayload, autoPayload = null) {
+  const isoDay = isoFromCompactDate(day);
+  const stocks = Array.isArray(evidencePayload?.stocks) ? evidencePayload.stocks : [];
+  const total = stocks.length;
+  const missingReviewStocks = [];
+  const lowConfidenceStocks = [];
+  const conflictStocks = [];
+  const fallbackOnlyStocks = [];
+  const sourceMap = new Map();
+  const lowConfidenceEvidenceCodes = new Set();
+  let reviewCoveredCount = 0;
+  let reviewMainReasonCoveredCount = 0;
+  let clearMainReasonCoveredCount = 0;
+  let boardEvidenceCoveredCount = 0;
+  let detailReasonCoveredCount = 0;
+  let boardOnlyEvidenceCount = 0;
+  let strongEvidenceCount = 0;
+
+  for (const stock of stocks) {
+    const reviewEvidence = Array.isArray(stock.reviewEvidence) ? stock.reviewEvidence : [];
+    const mainReasonEvidence = reviewEvidence.filter(isBoardMainReasonEvidence);
+    const clearMainReasonEvidence = reviewEvidence.filter(isClearMainReasonEvidence);
+    const boardEvidence = reviewEvidence.filter(isBoardMainReasonEvidence);
+    const detailReasonEvidence = reviewEvidence.filter(isDetailMainReasonEvidence);
+    const groups = new Set(reviewEvidence.map(row => row.group).filter(Boolean));
+    const clearGroups = new Set(clearMainReasonEvidence.map(row => row.group).filter(Boolean));
+    if (reviewEvidence.length) reviewCoveredCount += 1;
+    if (mainReasonEvidence.length) reviewMainReasonCoveredCount += 1;
+    if (clearMainReasonEvidence.length) clearMainReasonCoveredCount += 1;
+    if (boardEvidence.length) boardEvidenceCoveredCount += 1;
+    if (detailReasonEvidence.length) detailReasonCoveredCount += 1;
+    if (boardEvidence.length && !detailReasonEvidence.length) boardOnlyEvidenceCount += 1;
+    if (clearMainReasonEvidence.length && clearGroups.size >= 2) strongEvidenceCount += 1;
+    if (!reviewEvidence.length) {
+      missingReviewStocks.push({
+        code: stock.code,
+        name: stock.name,
+        selectedTopic: stock.selected?.primaryRawTopic || stock.selected?.primaryTopic || '',
+        reason: '没有外部复盘来源覆盖，只能依赖KPL/涨停底库兜底',
+      });
+    }
+    if (reviewEvidence.length && !mainReasonEvidence.length) {
+      fallbackOnlyStocks.push({
+        code: stock.code,
+        name: stock.name,
+        selectedTopic: stock.selected?.primaryRawTopic || stock.selected?.primaryTopic || '',
+        reason: '外部来源只命中股票，没有可解析主因',
+      });
+    }
+    if (reviewEvidence.some(row => row.lowConfidence)) lowConfidenceEvidenceCodes.add(stock.code);
+    if (!mainReasonEvidence.length || Number(stock.selected?.confidence || 0) < 0.8) {
+      lowConfidenceStocks.push({
+        code: stock.code,
+        name: stock.name,
+        selectedTopic: stock.selected?.primaryRawTopic || stock.selected?.primaryTopic || '',
+        selectedSource: stock.selected?.selectedSource || '',
+        reasons: mainReasonEvidence.length
+          ? ['最终主因置信度偏低']
+          : reviewEvidence
+            .filter(row => row.lowConfidence)
+            .map(row => `${row.source}:${row.qualityNote || row.reasonQuality || 'low confidence'}`)
+            .slice(0, 5),
+      });
+    }
+    const conflictRows = conflictingClearTopicRows(reviewEvidence);
+    if (conflictRows.length) {
+      conflictStocks.push({
+        code: stock.code,
+        name: stock.name,
+        selectedTopic: stock.selected?.primaryRawTopic || stock.selected?.primaryTopic || '',
+        finalBoardTopic: stock.selected?.finalBoardTopic || '',
+        finalDetailReason: stock.selected?.finalDetailReason || '',
+        topics: [...new Set(conflictRows
+          .map(row => `${row.source}:${row.primaryRawTopic || row.primaryTopic}`)
+          .filter(Boolean))],
+      });
+    }
+    for (const row of reviewEvidence) {
+      const source = row.source || 'unknown';
+      const item = sourceMap.get(source) || {
+        source,
+        group: row.group || reviewSourceGroup(source),
+        stockCodes: new Set(),
+        mainReasonCodes: new Set(),
+        strongCodes: new Set(),
+        detailReasonCodes: new Set(),
+        boardEvidenceCodes: new Set(),
+        lowConfidenceCodes: new Set(),
+        qualityCounts: { clear: 0, weak: 0, fallback: 0 },
+      };
+      item.stockCodes.add(stock.code);
+      if (row.reasonQuality !== 'fallback') item.mainReasonCodes.add(stock.code);
+      if (row.reasonQuality === 'clear') item.strongCodes.add(stock.code);
+      if (isDetailMainReasonEvidence(row)) item.detailReasonCodes.add(stock.code);
+      if (isBoardMainReasonEvidence(row)) item.boardEvidenceCodes.add(stock.code);
+      if (row.lowConfidence) item.lowConfidenceCodes.add(stock.code);
+      if (item.qualityCounts[row.reasonQuality] !== undefined) item.qualityCounts[row.reasonQuality] += 1;
+      sourceMap.set(source, item);
+    }
+  }
+
+  const sources = [...sourceMap.values()]
+    .map(item => ({
+      source: item.source,
+      group: item.group,
+      stockCount: item.stockCodes.size,
+      stockCoveragePct: total ? Number(((item.stockCodes.size / total) * 100).toFixed(2)) : 0,
+      mainReasonStockCount: item.mainReasonCodes.size,
+      mainReasonCoveragePct: total ? Number(((item.mainReasonCodes.size / total) * 100).toFixed(2)) : 0,
+      strongStockCount: item.strongCodes.size,
+      detailReasonStockCount: item.detailReasonCodes.size,
+      boardOnlyStockCount: [...item.boardEvidenceCodes].filter(code => !item.detailReasonCodes.has(code)).length,
+      lowConfidenceStockCount: item.lowConfidenceCodes.size,
+      qualityCounts: item.qualityCounts,
+    }))
+    .sort((a, b) => b.stockCount - a.stockCount || a.source.localeCompare(b.source));
+
+  return {
+    version: 1,
+    day: isoDay,
+    generatedAt: new Date().toISOString(),
+    ruleVersion: payload?.ruleVersion || MAIN_ZT_COUNT_RULE_VERSION,
+    total,
+    reviewCoveredCount,
+    reviewCoveragePct: total ? Number(((reviewCoveredCount / total) * 100).toFixed(2)) : 0,
+    reviewMainReasonCoveredCount,
+    reviewMainReasonCoveragePct: total ? Number(((reviewMainReasonCoveredCount / total) * 100).toFixed(2)) : 0,
+    clearMainReasonCoveredCount,
+    clearMainReasonCoveragePct: total ? Number(((clearMainReasonCoveredCount / total) * 100).toFixed(2)) : 0,
+    boardEvidenceCoveredCount,
+    boardEvidenceCoveragePct: total ? Number(((boardEvidenceCoveredCount / total) * 100).toFixed(2)) : 0,
+    detailReasonCoveredCount,
+    detailReasonCoveragePct: total ? Number(((detailReasonCoveredCount / total) * 100).toFixed(2)) : 0,
+    boardOnlyEvidenceCount,
+    strongEvidenceCount,
+    strongEvidencePct: total ? Number(((strongEvidenceCount / total) * 100).toFixed(2)) : 0,
+    missingReviewCount: missingReviewStocks.length,
+    lowConfidenceEvidenceStockCount: lowConfidenceEvidenceCodes.size,
+    lowConfidenceCount: lowConfidenceStocks.length,
+    conflictCount: conflictStocks.length,
+    fallbackOnlyCount: fallbackOnlyStocks.length,
+    sources,
+    missingReviewStocks,
+    lowConfidenceStocks,
+    conflictStocks,
+    fallbackOnlyStocks,
+    sourceErrors: Array.isArray(autoPayload?.sourceErrors) ? autoPayload.sourceErrors : [],
+  };
+}
+
+async function writeLimitUpMainReasonEvidenceAndQuality(day, payload, autoPayload = null) {
+  const isoDay = isoFromCompactDate(day);
+  const evidencePayload = buildLimitUpMainReasonEvidencePayload(isoDay, payload, autoPayload);
+  const qualityPayload = buildLimitUpMainReasonQualityPayload(isoDay, payload, evidencePayload, autoPayload);
+  await fs.mkdir(LIMIT_UP_MAIN_REASON_EVIDENCE_DIR, { recursive: true });
+  await fs.mkdir(LIMIT_UP_MAIN_REASON_QUALITY_DIR, { recursive: true });
+  await fs.writeFile(limitUpMainReasonEvidencePath(isoDay), JSON.stringify(evidencePayload, null, 2), 'utf8');
+  await fs.writeFile(limitUpMainReasonQualityPath(isoDay), JSON.stringify(qualityPayload, null, 2), 'utf8');
+  return { evidence: evidencePayload, quality: qualityPayload };
+}
+
+async function readLimitUpMainReasonEvidenceDay(day) {
+  return JSON.parse(await fs.readFile(limitUpMainReasonEvidencePath(isoFromCompactDate(day)), 'utf8'));
+}
+
+async function readLimitUpMainReasonQualityDay(day) {
+  return JSON.parse(await fs.readFile(limitUpMainReasonQualityPath(isoFromCompactDate(day)), 'utf8'));
+}
+
+async function ensureLimitUpMainReasonEvidenceAndQualityDay(day, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  if (!isChinaMarketTradingDay(isoDay)) {
+    return {
+      evidence: marketClosedSkipPayload(isoDay),
+      quality: marketClosedSkipPayload(isoDay),
+    };
+  }
+  if (!options.force) {
+    const [evidence, quality] = await Promise.all([
+      readLimitUpMainReasonEvidenceDay(isoDay).catch(() => null),
+      readLimitUpMainReasonQualityDay(isoDay).catch(() => null),
+    ]);
+    if (evidence && quality) return { evidence, quality };
+  }
+  const payload = await readLimitUpMainReasonDbDay(isoDay);
+  if (!payload?.stocks?.length) return { evidence: null, quality: null };
+  const autoPayload = options.force
+    ? await ensureLimitUpMainReasonAutoSourceDay(isoDay, payload.stocks || [], { force: true })
+      .catch(() => readLimitUpMainReasonAutoSourceDay(isoDay).catch(() => null))
+    : await readLimitUpMainReasonAutoSourceDay(isoDay).catch(() => null);
+  return writeLimitUpMainReasonEvidenceAndQuality(isoDay, payload, autoPayload);
+}
+
+function summarizeMainReasonDetailText(text) {
+  const raw = String(text || '')
+    .replace(/（免责声明：[\s\S]*$/u, '')
+    .replace(/\r/g, '\n')
+    .replace(/[|｜]/g, '+')
+    .trim();
+  if (!raw) return '';
+  const companyPart = raw.split(/公司原因：/u)[1] || '';
+  const industryPart = raw.split(/行业原因：/u)[1]?.split(/公司原因：/u)[0] || '';
+  const candidates = [companyPart, industryPart, raw]
+    .map(value => String(value || '')
+      .split(/\n+/)
+      .map(line => line.replace(/^\d+[、.．]\s*/u, '').trim())
+      .find(Boolean) || '')
+    .filter(Boolean);
+  const textValue = candidates[0] || '';
+  if (!textValue) return '';
+  return textValue.length > 80 ? `${textValue.slice(0, 80)}...` : textValue;
+}
+
+function escapeRegExp(text) {
+  return String(text || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeFinalDetailReason(detail, boardTopic = '', stockName = '') {
+  let text = summarizeMainReasonDetailText(detail)
+    .replace(new RegExp(`^${escapeRegExp(String(boardTopic || ''))}[：:\\-\\s]+`, 'u'), '')
+    .replace(new RegExp(`^${escapeRegExp(String(stockName || ''))}[：:\\-\\s]+`, 'u'), '')
+    .trim();
+  if (!text) return '';
+  const board = String(boardTopic || '').trim();
+  if (board && (text === board || hasTopicIntersection(text, board) && text.length <= board.length + 3)) return '';
+  return text;
+}
+
+function mainReasonCandidateDetailText(candidate, boardTopic = '', stockName = '') {
+  const details = [
+    candidate?.detailReason,
+    candidate?.reasonHeadline,
+    candidate?.reasonText,
+  ];
+  for (const detail of details) {
+    const text = normalizeFinalDetailReason(detail, boardTopic, stockName);
+    if (text) return text;
+  }
+  return '';
+}
+
+function mainReasonQualityScore(value) {
+  const q = String(value || '').toLowerCase();
+  if (q === 'clear') return 3;
+  if (q === 'weak') return 2;
+  if (q === 'fallback') return 1;
+  return 0;
+}
+
+function mainReasonDetailCandidateScore(candidate) {
+  const source = String(candidate?.source || '');
+  const support = candidate?.sourceSupport || candidate?.evidence?.sourceSupport || {};
+  const groupCount = Array.isArray(support.groups) ? support.groups.length : 0;
+  return mainReasonQualityScore(candidate?.reasonQuality) * 10 +
+    Number(candidate?.confidence || 0) +
+    mainReasonSourcePriority(source) / 100 +
+    Math.min(1, groupCount * 0.25);
+}
+
+function buildFinalMainReasonSummary(stock, selected, candidates, fallbackTopic = '') {
+  const name = String(stock?.name || '').trim();
+  const boardTopicRaw = String(
+    selected?.boardTopic ||
+    selected?.primaryRawTopic ||
+    fallbackTopic ||
+    ''
+  ).trim();
+  // 最终主因统一映射到标准热点题材(存储→存储芯片、光通信→光模块、PCB上游→PCB…),展示口径一致;无匹配保留原词
+  const boardTopic = standardTheme(boardTopicRaw) || boardTopicRaw;
+  const validCandidates = (candidates || []).filter(candidate => candidate?.primaryTopic);
+  const explicitDetailConsensus = String(
+    selected?.detailConsensusPhrase ||
+    selected?.evidence?.detailConsensusPhrase ||
+    selected?.raw?.detailConsensusPhrase ||
+    ''
+  ).trim();
+  const detailCandidate = validCandidates
+    .map(candidate => ({
+      candidate,
+      detailReason: mainReasonCandidateDetailText(candidate, boardTopic, name),
+      score: mainReasonDetailCandidateScore(candidate),
+    }))
+    .filter(item => item.detailReason)
+    .sort((a, b) => b.score - a.score)[0] || null;
+  const support = selected?.sourceSupport || selected?.evidence?.sourceSupport || {};
+  const supportSources = [...new Set([
+    ...(Array.isArray(support.sources) ? support.sources : []),
+    selected?.source,
+  ].map(source => String(source || '').trim()).filter(Boolean))];
+  const supportGroups = [...new Set([
+    ...(Array.isArray(support.groups) ? support.groups : []),
+    reviewSourceGroup(selected?.source || ''),
+  ].map(group => String(group || '').trim()).filter(Boolean))];
+  // ≥2 源共识的具体原因(归一后与板块不同)必须作为细分浮出来：
+  // 例 沃格光电——板块=芯片(芯片/芯片概念归一2源)，但玻璃基板封装也2源共识 → 细分取玻璃基板封装，显示"芯片/玻璃基板封装"。
+  // 4 个复盘源在 aggregateReviewSourceRows 已预合并成一条 review-auto-consensus，per-源票数在这层看不见，
+  // 故改读聚合层透传上来的 consensusTopics(每个 ≥2 来源组共识的具体题材)，剔除与板块同主题的，取票数最高者当细分。
+  const boardCanon = consensusKey(boardTopic);
+  // 先求板块自身的共识票数(consensusTopics 里 canon===板块 的最高组数)。
+  // 只有"具体共识票数 >= 板块共识票数"才把它浮成细分——
+  // 沃格光电(芯片2票 vs 玻璃基板封装2票，平手)→ 浮出玻璃基板封装；
+  // 而 板块3票/某次要主题2票 这类弱次要主题不喧宾夺主；"其他"等兜底桶一律不作细分。
+  let boardVotes = 0;
+  const consensusPool = new Map();
+  for (const c of [selected, ...validCandidates]) {
+    const list = Array.isArray(c?.consensusTopics) ? c.consensusTopics : [];
+    for (const ct of list) {
+      const rt = String(ct?.rawTopic || '').trim();
+      if (!rt) continue;
+      const canon = String(ct?.canonTopic || consensusKey(rt));
+      const groupCount = Number(ct?.groupCount || 0);
+      if (canon === boardCanon) { if (groupCount > boardVotes) boardVotes = groupCount; continue; }
+      if (groupCount < 2) continue;
+      if (/其他|未归类|未分类|未知/.test(rt) || /其他/.test(canon)) continue;   // 兜底桶不作细分
+      const score = Number(ct?.score || 0);
+      const prev = consensusPool.get(canon);
+      if (!prev || groupCount > prev.groupCount || (groupCount === prev.groupCount && score > prev.score)) {
+        consensusPool.set(canon, { rawTopic: rt, groupCount, score });
+      }
+    }
+  }
+  let consensusBest = null;
+  for (const v of consensusPool.values()) {
+    if (v.groupCount < boardVotes) continue;             // 具体共识弱于板块共识 → 不喧宾夺主
+    if (!consensusBest || v.groupCount > consensusBest.groupCount || (v.groupCount === consensusBest.groupCount && v.score > consensusBest.score)) {
+      consensusBest = v;
+    }
+  }
+  const consensusSpecific = consensusBest ? consensusBest.rawTopic : '';
+  const detailReason = explicitDetailConsensus || consensusSpecific || detailCandidate?.detailReason || '';
+  return {
+    boardTopic,
+    detailReason,
+    consensusDetail: explicitDetailConsensus || consensusSpecific || '',
+    finalReason: boardTopic && detailReason ? `${boardTopic}: ${detailReason}` : (boardTopic || detailReason),
+    selectedSource: selected?.source || '',
+    detailSource: detailCandidate?.candidate?.source || '',
+    supportSources,
+    supportGroups,
+    hasDetailReason: !!detailReason,
+    evidenceLevel: detailReason ? 'board-detail' : (boardTopic ? 'board' : 'fallback'),
+  };
+}
+
+// 综合归纳「强主因板块」统筹:把落在"单只题材"的个股,按其多源(4源 boardTopic + detailReason)候选,
+// 改归当日≥2只的强势"具体"题材(非宽兜底、非自身)。实现用户诉求:结合所有源把个股归进真正的强主因板块。
+function consolidateWeakThemesToStrong(records, autoPayload) {
+  if (!Array.isArray(records) || !records.length) return 0;
+  const broadSet = new Set(THEME_BROAD.map(t => themeDisplayName(t.standard)));
+  const candByCode = new Map();
+  const addCand = (code, raw) => {
+    const st = standardTheme(raw); if (!st) return;
+    if (!candByCode.has(code)) candByCode.set(code, new Set());
+    candByCode.get(code).add(st);
+  };
+  for (const r of (autoPayload?.rawRows || [])) {
+    const code = normalizeReasonSourceCode(r.code); if (!code) continue;
+    addCand(code, r.boardTopic || r.primaryRawTopic);
+    for (const tok of String(r.detailReason || '').split(/[+＋、,，/\s]+/)) addCand(code, tok.trim());
+  }
+  const themeCount = new Map();
+  for (const rec of records) { const t = String(rec.finalBoardTopic || '').trim(); if (t) themeCount.set(t, (themeCount.get(t) || 0) + 1); }
+  let moved = 0;
+  for (const rec of records) {
+    const cur = String(rec.finalBoardTopic || '').trim();
+    if (!cur || rec.overridden || (themeCount.get(cur) || 0) > 1) continue;   // 只统筹单只题材、非人工覆盖的股
+    const cands = candByCode.get(normalizeReasonSourceCode(rec.code));
+    if (!cands) continue;
+    let best = null, bestCount = 1;
+    for (const t of cands) {
+      if (t === cur || broadSet.has(t)) continue;                            // 不并到自身/宽兜底
+      const c = themeCount.get(t) || 0;
+      if (c >= 2 && c > bestCount) { best = t; bestCount = c; }               // 取候选里当日最强的具体题材
+    }
+    if (best) {
+      rec.consolidatedFrom = cur;
+      rec.finalBoardTopic = best;
+      const detail = String(rec.finalDetailReason || '').trim();
+      rec.finalReason = (detail && detail !== best) ? `${best}: ${detail}` : best;
+      moved++;
+    }
+  }
+  return moved;
+}
+
+async function writeLimitUpMainReasonDbDay(day, rows, source = 'kpl/zt_reason') {
+  const isoDay = isoFromCompactDate(day);
+  if (!isChinaMarketTradingDay(isoDay)) {
+    return marketClosedSkipPayload(isoDay, {
+      source,
+      ruleVersion: MAIN_ZT_COUNT_RULE_VERSION,
+      sourceCoverage: null,
+    });
+  }
+  await fs.mkdir(LIMIT_UP_MAIN_REASON_DB_DIR, { recursive: true });
+  const savedAt = isAfterMarketClose(isoDay) ? afterCloseSavedAtForDay(isoDay) : new Date().toISOString();
+  const unique = [...new Map((rows || [])
+    .filter(row => row.code && row.name)
+    .map(row => [String(row.code), row])).values()];
+  const autoPayload = await readLimitUpMainReasonAutoSourceDay(isoDay).catch(() => null);
+  // 注:consolidateWeakThemesToStrong 暂停——"按候选拉进最热题材"会误并(威龙白酒→算力)，需更精准的多源综合方案
+  const payload = {
+    version: 1,
+    ruleVersion: MAIN_ZT_COUNT_RULE_VERSION,
+    day: isoDay,
+    source,
+    savedAt,
+    count: unique.length,
+    sourceCoverage: buildMainReasonSourceCoverage(unique, autoPayload),
+    stocks: unique,
+  };
+  await fs.writeFile(limitUpMainReasonDbPath(isoDay), JSON.stringify(payload, null, 2), 'utf8');
+  await writeLimitUpMainReasonEvidenceAndQuality(isoDay, payload, autoPayload);
+  applyMainReasonOverridesToPayload(payload, await readMainReasonOverrides(isoDay));
+  mainReasonDbCache.set(isoDay, payload);
+  return payload;
+}
+
+function isAutoOtherMainReason(stock) {
+  const selectedSource = String(stock?.sourceEvidence?.selectedSource || stock?.source || '').toLowerCase();
+  return !!(
+    stock?.noConsensusDemoted ||
+    stock?.thsLoneDemoted ||
+    selectedSource === 'review-no-consensus-demoted' ||
+    selectedSource === 'review-ths-lone-demoted'
+  );
+}
+
+// 分歧待定清单：只保留真正需要人工处理的缺主因/低置信股票。
+// 四源没有相同板块、细分原因也没有相同证据时，系统已自动归入“其他”，不再要求手填主因。
+async function getLimitUpMainReasonPending(url, req, res) {
+  const isoDay = isoFromCompactDate(url.searchParams.get('day') || chinaNowParts().day);
+  const db = await readLimitUpMainReasonDbDay(isoDay).catch(() => null);
+  // 排除"事件已确定"的股:source-view(同综合归纳口径)算出 eventReason 的(如返利科技=控制权变更4源、蓝科高新=资产重组4源)
+  // 主因已确定为事件型,不需管理员手填。
+  const eventCodes = new Set();
+  try {
+    const { payload } = await buildDaySourceViewWithConsensus(isoDay);   // 内部已调 attachFinalConsensusTier,tabs 在 .payload
+    const finalTab = (payload?.tabs || []).find(t => t.key === 'final');
+    for (const r of (finalTab?.rows || [])) if (r.eventReason) eventCodes.add(normalizeReasonSourceCode(r.code));
+  } catch (e) {}
+  const pending = (db?.stocks || []).filter(s => {
+    if (s.overridden) return false;
+    if (eventCodes.has(normalizeReasonSourceCode(s.code))) return false;
+    if (isAutoOtherMainReason(s)) return false;
+    const topic = String(s.finalBoardTopic || '');
+    return !topic || /其他/.test(topic) || Number(s.confidence || 0) < 0.5;
+  }).map(s => ({
+    code: s.code,
+    name: s.name,
+    finalBoardTopic: s.finalBoardTopic || '',
+    confidence: Number(s.confidence || 0),
+    limitUpCount: Number(s.limitUpCount || 0),
+  }));
+  return send(res, 200, { ok: true, day: isoDay, count: pending.length, pending });
+}
+
+async function buildHotThemeRecentTopStocks(endDay, themes, days = 15, limit = 2) {
+  const wantedThemes = new Set([...(themes || [])].map(t => String(t || '').trim()).filter(Boolean));
+  const apiKey = await readSavedApiKey().catch(() => '');
+  const tradingDays = await getRecentTradingDays(endDay, apiKey, days).catch(() => []);
+  const byTheme = new Map();
+  for (const d of tradingDays) {
+    const db = await readLimitUpMainReasonDbDay(d).catch(() => null);
+    const seen = new Set();
+    for (const s of (db?.stocks || [])) {
+      if (isExcludedFromReview(s?.code, s?.name)) continue;
+      const theme = String(s.finalBoardTopic || '').trim();
+      if (!theme || /其他/.test(theme) || isDroppedThemeWord(theme)) continue;
+      if (wantedThemes.size && !wantedThemes.has(theme)) continue;
+      const code = normalizeReasonSourceCode(s.code);
+      if (!code) continue;
+      const seenKey = `${d}:${theme}:${code}`;
+      if (seen.has(seenKey)) continue;
+      seen.add(seenKey);
+      if (!byTheme.has(theme)) byTheme.set(theme, new Map());
+      const themeMap = byTheme.get(theme);
+      if (!themeMap.has(code)) {
+        themeMap.set(code, {
+          code,
+          name: String(s.name || ''),
+          count: 0,
+          days: [],
+          latestDay: '',
+          latestLianban: 0,
+          maxLianban: 0,
+          latestDetail: '',
+        });
+      }
+      const item = themeMap.get(code);
+      item.count += 1;
+      item.days.push(d);
+      if (s.name) item.name = String(s.name);
+      const lianban = Number(s.limitUpCount) || 0;
+      item.maxLianban = Math.max(item.maxLianban || 0, lianban);
+      if (!item.latestDay || d > item.latestDay) {
+        item.latestDay = d;
+        item.latestLianban = lianban;
+        item.latestDetail = String(s.finalDetailReason || '');
+      }
+    }
+  }
+  const topByTheme = new Map();
+  for (const [theme, stockMap] of byTheme.entries()) {
+    const top = [...stockMap.values()]
+      .sort((a, b) =>
+        (Number(b.count) || 0) - (Number(a.count) || 0) ||
+        (Number(b.latestLianban) || 0) - (Number(a.latestLianban) || 0) ||
+        String(b.latestDay || '').localeCompare(String(a.latestDay || '')) ||
+        String(a.code || '').localeCompare(String(b.code || ''))
+      )
+      .slice(0, limit)
+      .map(item => ({
+        code: item.code,
+        name: item.name,
+        count: item.count,
+        days: item.days,
+        latestDay: item.latestDay,
+        latestLianban: item.latestLianban,
+        maxLianban: item.maxLianban,
+        latestDetail: item.latestDetail,
+      }));
+    topByTheme.set(theme, top);
+  }
+  return { topByTheme, tradingDays };
+}
+
+async function buildMainlineTopGainStocks(endDay, themes, scanDays = 30, limit = 5) {
+  const wanted = new Map();
+  for (const t of (themes || [])) {
+    const raw = String(t || '').trim();
+    const key = strategyMainlineTopicKey(raw);
+    if (raw && key && !wanted.has(key)) wanted.set(key, raw);
+  }
+  if (!wanted.size) return { byTheme: new Map(), tradingDays: [], baseDay: null };
+  const apiKey = await readSavedApiKey().catch(() => '');
+  const tradingDays = await getRecentTradingDays(endDay, apiKey, Math.max(31, scanDays)).catch(() => []);
+  if (!tradingDays.length) return { byTheme: new Map(), tradingDays: [], baseDay: null };
+  const last = tradingDays.length - 1;
+  const baseDay = last - 10 >= 0 ? tradingDays[last - 10] : null;
+  const closeMapOf = async d => {
+    if (!d) return new Map();
+    const cdb = await readEastmoneyCloseDbDay(d).catch(() => null);
+    return new Map((cdb?.stocks || [])
+      .map(s => [normalizeReasonSourceCode(s.code), Number(s.close)])
+      .filter(([c, v]) => c && Number.isFinite(v) && v > 0));
+  };
+  const [c0, c10] = await Promise.all([closeMapOf(isoFromCompactDate(endDay)), closeMapOf(baseDay)]);
+  if (!c0.size || !c10.size) return { byTheme: new Map(), tradingDays, baseDay };
+  const last10 = new Set(tradingDays.slice(-10));
+  const aggByTheme = new Map();
+  for (const d of tradingDays.slice(Math.max(0, tradingDays.length - scanDays))) {
+    const db = await readLimitUpMainReasonDbDay(d).catch(() => null);
+    for (const s of (db?.stocks || [])) {
+      if (isExcludedFromReview(s?.code, s?.name)) continue;
+      const theme = String(s.finalBoardTopic || '').trim();
+      const key = strategyMainlineTopicKey(theme);
+      if (!key || !wanted.has(key)) continue;
+      const code = normalizeReasonSourceCode(s.code);
+      if (!code) continue;
+      if (!aggByTheme.has(key)) aggByTheme.set(key, new Map());
+      const stockMap = aggByTheme.get(key);
+      if (!stockMap.has(code)) {
+        stockMap.set(code, {
+          code,
+          name: String(s.name || ''),
+          mainTopic: wanted.get(key),
+          zt10: 0,
+          zt30: 0,
+          days: [],
+          latestDetail: '',
+        });
+      }
+      const item = stockMap.get(code);
+      if (s.name) item.name = String(s.name);
+      item.zt30 += 1;
+      if (last10.has(d)) item.zt10 += 1;
+      item.days.push(d);
+      if (d === endDay || !item.latestDetail) item.latestDetail = String(s.finalDetailReason || '');
+    }
+  }
+  const byTheme = new Map();
+  for (const [key, stockMap] of aggByTheme.entries()) {
+    const rows = [...stockMap.values()].map(item => {
+      const p0 = c0.get(item.code);
+      const p10 = c10.get(item.code);
+      const gain10 = (Number.isFinite(p0) && Number.isFinite(p10)) ? Number(((p0 / p10 - 1) * 100).toFixed(2)) : null;
+      return { ...item, gain10 };
+    }).filter(item => Number.isFinite(item.gain10))
+      .sort((a, b) =>
+        (Number(b.gain10) || -9999) - (Number(a.gain10) || -9999) ||
+        (Number(b.zt10) || 0) - (Number(a.zt10) || 0) ||
+        String(a.code || '').localeCompare(String(b.code || ''))
+      )
+      .slice(0, limit)
+      .map(item => ({
+        code: item.code,
+        name: item.name,
+        gain10: item.gain10,
+        zt10: item.zt10,
+        zt30: item.zt30,
+        days: item.days,
+        latestDetail: item.latestDetail,
+      }));
+    byTheme.set(key, rows);
+  }
+  return { byTheme, tradingDays, baseDay };
+}
+
+// 今日热点榜:按最终主因(标准热点题材)聚合当日涨停股,排热度(涨停数+高度+连板数),给龙头
+async function buildLimitUpMainReasonHotThemesData(day) {
+  const isoDay = isoFromCompactDate(day || chinaNowParts().day);
+  const db = await readLimitUpMainReasonDbDay(isoDay).catch(() => null);
+  const themeBoardStats = await getDayThemeBoardStats(isoDay).catch(() => new Map());
+  const stocks = (db?.stocks || []).filter(s => !isExcludedFromReview(s?.code, s?.name));
+  const byTheme = new Map();
+  for (const s of stocks) {
+    const theme = String(s.finalBoardTopic || '').trim();
+    if (!theme || /其他/.test(theme) || isDroppedThemeWord(theme)) continue;  // 事件词不进热点榜
+    if (!byTheme.has(theme)) byTheme.set(theme, []);
+    byTheme.get(theme).push(s);
+  }
+  const recent = await buildHotThemeRecentTopStocks(isoDay, byTheme.keys(), 15, 2);
+  const themes = [...byTheme.entries()].map(([theme, list]) => {
+    const lb = list.map(s => Number(s.limitUpCount) || 0);
+    const maxLb = Math.max(0, ...lb);
+    const lianbanCount = lb.filter(x => x >= 2).length;
+    const leaders = list.slice().sort((a, b) =>
+      (Number(b.limitUpCount) || 0) - (Number(a.limitUpCount) || 0) ||
+      (Number(b.gain) || 0) - (Number(a.gain) || 0)
+    ).slice(0, 6).map(s => ({
+      code: s.code, name: s.name,
+      lianban: Number(s.limitUpCount) || 0,
+      gain: Number.isFinite(Number(s.gain)) ? Number(s.gain) : null,
+      firstLimitTime: s.firstLimitTime || null,
+      detail: String(s.finalDetailReason || ''),
+    }));
+    const score = list.length * 10 + maxLb * 30 + lianbanCount * 15;
+    const boardStat = themeBoardStats.get(theme) || {};
+    const netInflow = Number.isFinite(Number(boardStat.netInflow)) ? Number(boardStat.netInflow) : null;
+    const boardGainPct = Number.isFinite(Number(boardStat.gainPct)) ? Number(boardStat.gainPct) : null;
+    return {
+      theme, count: list.length, maxLianban: maxLb, lianbanCount, leaders,
+      recentTopStocks: recent.topByTheme.get(theme) || [],
+      netInflow,
+      netInflowBoard: boardStat.netInflowBoard || '',
+      boardGainPct,
+      boardGainName: boardStat.gainBoard || '',
+      score: Number(score.toFixed(1)),
+    };
+  }).sort((a, b) => b.score - a.score || b.count - a.count);
+  return { ok: true, day: isoDay, themeCount: themes.length, stockCount: stocks.length, recentDays: recent.tradingDays, recentWindow: recent.tradingDays.length, themes };
+}
+async function getLimitUpMainReasonHotThemes(url, req, res) {
+  return send(res, 200, await buildLimitUpMainReasonHotThemesData(url.searchParams.get('day') || chinaNowParts().day));
+}
+
+// 未归类新词榜(校准入口):扫近N天4源题材词,列出映射不到标准库且非事件噪声的词,按频次排,供加进标准库
+async function getLimitUpMainReasonUnmappedThemes(url, req, res) {
+  const endDay = isoFromCompactDate(url.searchParams.get('day') || chinaNowParts().day);
+  const days = Math.max(1, Math.min(60, Number(url.searchParams.get('days')) || 30));
+  const apiKey = await readSavedApiKey().catch(() => '');
+  const tradingDays = await getRecentTradingDays(endDay, apiKey, days).catch(() => []);
+  const SRC = { 'review/xuangubao-limit-up': '选股宝', 'review/jiuyangongshe-structured': '韭研', 'review/kaipanla-fupanla': '复盘啦', 'review/ths-limitup-structured': '同花顺' };
+  const unmapped = new Map();
+  for (const d of tradingDays) {
+    const payload = await readLimitUpMainReasonAutoSourceDay(d).catch(() => null);
+    for (const r of (payload?.rawRows || [])) {
+      const lab = SRC[r.source]; if (!lab) continue;
+      let t = String(r.boardTopic || r.primaryRawTopic || '').trim();
+      if (lab === '同花顺') {
+        const arr = String(r.detailReason || '').split(/[+＋、,，/\s]+/).map(x => x.trim()).filter(Boolean);
+        t = arr.find(x => x && !isDroppedThemeWord(x)) || arr[0] || t;
+      }
+      if (!t || /^其他$|涨停池|^公告$/.test(t)) continue;
+      if (standardTheme(t) || isDroppedThemeWord(t)) continue;
+      const e = unmapped.get(t) || { word: t, count: 0, sources: new Set(), samples: [] };
+      e.count++; e.sources.add(lab);
+      if (e.samples.length < 5 && r.name && !e.samples.includes(r.name)) e.samples.push(r.name);
+      unmapped.set(t, e);
+    }
+  }
+  const list = [...unmapped.values()]
+    .map(e => ({ word: e.word, count: e.count, sources: [...e.sources], samples: e.samples }))
+    .sort((a, b) => b.count - a.count).slice(0, 80);
+  return send(res, 200, { ok: true, endDay, days, count: list.length, unmapped: list, themes: allStandardThemeNames() });
+}
+
+// 校准:把一个新词加进某标准题材的 keywords(写回 theme-taxonomy.json + 热加载,即时生效,无需重启)
+async function addThemeKeyword(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  let body = {};
+  try { body = await readJsonBody(req); } catch { return send(res, 400, { ok: false, error: 'bad body' }); }
+  const word = String(body?.word || '').trim();
+  const theme = String(body?.theme || '').trim();
+  if (!word || !theme) return send(res, 400, { ok: false, error: 'missing word/theme' });
+  let data;
+  try { data = JSON.parse(fsSync.readFileSync(THEME_TAXONOMY_PATH, 'utf8')); }
+  catch (e) { return send(res, 500, { ok: false, error: 'taxonomy read fail' }); }
+  const t = (data.taxonomy || []).find(x => themeDisplayName(x.standard) === theme || x.standard === theme);
+  if (!t) return send(res, 404, { ok: false, error: 'theme not found: ' + theme });
+  if (!Array.isArray(t.keywords)) t.keywords = [];
+  if (!Array.isArray(t.members)) t.members = [];
+  if (!t.keywords.includes(word)) t.keywords.push(word);
+  if (!t.members.includes(word)) t.members.push(word);
+  try { fsSync.writeFileSync(THEME_TAXONOMY_PATH, JSON.stringify(data, null, 1), 'utf8'); }
+  catch (e) { return send(res, 500, { ok: false, error: 'taxonomy write fail: ' + e.message }); }
+  loadThemeTaxonomy();
+  return send(res, 200, { ok: true, word, theme, mappedTo: standardTheme(word) });
+}
+
+async function setLimitUpMainReasonOverride(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  let body = {};
+  try { body = await readJsonBody(req); } catch { return send(res, 400, { ok: false, error: 'bad body' }); }
+  const isoDay = isoFromCompactDate(body?.day || url.searchParams.get('day') || chinaNowParts().day);
+  const code = normalizeReasonSourceCode(body?.code);
+  const boardTopic = String(body?.boardTopic || '').trim();
+  const reason = String(body?.reason || '').trim();
+  if (!code) return send(res, 400, { ok: false, error: 'missing code' });
+  const overrides = await readMainReasonOverrides(isoDay);
+  const removed = !boardTopic && !reason;
+  if (removed) delete overrides[code];
+  else overrides[code] = { boardTopic, reason: reason || boardTopic, by: 'admin', at: new Date().toISOString() };
+  await fs.mkdir(LIMIT_UP_MAIN_REASON_OVERRIDE_DIR, { recursive: true });
+  await fs.writeFile(mainReasonOverridePath(isoDay), JSON.stringify(overrides, null, 2), 'utf8');
+  mainReasonDbCache.delete(isoDay);
+  return send(res, 200, { ok: true, day: isoDay, code, boardTopic, removed });
+}
+
+function isCompatibleMainReasonDb(payload) {
+  return !!payload?.stocks?.length && MAIN_REASON_DB_COMPATIBLE_RULE_VERSIONS.has(String(payload.ruleVersion || ''));
+}
+
+async function buildLimitUpMainReasonRecord(stock, day, apiKey) {
+  const stockId = String(stock?.code || '');
+  const name = String(stock?.name || '');
+  const compactDayText = compactDate(day);
+  const [reasonList, concepts, sourceMap] = await Promise.all([
+    fetchZtReason(stockId, compactDayText, apiKey).catch(() => []),
+    fetchConcepts(stockId, apiKey).catch(() => []),
+    readLimitUpMainReasonSourceDay(day).catch(() => new Map()),
+  ]);
+  const conceptNameByCode = new Map((concepts || []).map(item => [String(item?.CCode || ''), String(item?.CName || '')]));
+  const evidence = reasonListPrimaryEvidence(reasonList, conceptNameByCode);
+  const sourceOverride = sourceMap.get(normalizeReasonSourceCode(stockId));
+  const fallbackTokens = mainReasonTokenList(stock?.reason);
+  const fallbackTopic = fallbackTokens[0] || '';
+  const candidates = [
+    sourceOverride ? makeMainReasonCandidate(sourceOverride.source, sourceOverride.primaryRawTopic, {
+      reasonText: sourceOverride.reasonText,
+      reasonHeadline: sourceOverride.reasonHeadline,
+      confidence: sourceOverride.confidence,
+      boardTopic: sourceOverride.boardTopic,
+      detailReason: sourceOverride.detailReason,
+      reasonQuality: sourceOverride.reasonQuality,
+      matchTypes: sourceOverride.matchTypes,
+      sourceSupport: sourceOverride.sourceSupport,
+      qualityNote: sourceOverride.qualityNote,
+      consensusTopics: sourceOverride.consensusTopics,
+      evidence: sourceOverride.raw,
+    }) : null,
+    makeMainReasonCandidate('kpl-zt-reason', evidence.primaryRawTopic, {
+      reasonText: evidence.reasonText,
+      reasonHeadline: evidence.reasonHeadline,
+      primaryReasonCode: evidence.primaryReasonCode,
+      primaryReasonName: evidence.primaryReasonName,
+      boardTopic: evidence.primaryRawTopic,
+      detailReason: evidence.reasonHeadline,
+      reasonQuality: evidence.reasonText ? 'clear' : '',
+      confidence: evidence.reasonText ? (evidence.primaryReasonCode ? 0.92 : 0.82) : 0,
+      evidence: {
+        reasonCodes: evidence.reasonCodes,
+        reasonNames: evidence.reasonNames,
+      },
+    }),
+    makeMainReasonCandidate('limit-up-db-reason', fallbackTopic, {
+      reasonText: String(stock?.reason || ''),
+      boardTopic: fallbackTopic,
+      detailReason: String(stock?.reason || ''),
+      reasonQuality: fallbackTopic ? 'weak' : '',
+      confidence: fallbackTopic ? 0.68 : 0,
+    }),
+  ];
+  const consensusCandidate = buildConsensusMainReasonCandidate(candidates);
+  if (consensusCandidate) candidates.unshift(consensusCandidate);
+  const selected = chooseMainReasonCandidate(candidates);
+  // 4源判不出干净主因(selected=null:全是事件噪声/无候选)→ 直接"待定其他";
+  // 不再回落 evidence.primaryRawTopic(KPL那条题材)/fallbackTopic(db兜底)——否则刚过滤掉的KPL/db又从后门钻回来(宝鹰=ST摘帽、新潮=源残留)。
+  const primaryRawTopic = selected?.primaryRawTopic || '其他';
+  const primaryTopic = selected?.primaryTopic || '其他';
+  const allRawTopics = [...new Set([
+    ...evidence.headlineTopics,
+    ...evidence.reasonNames,
+    ...fallbackTokens,
+    sourceOverride?.primaryRawTopic,
+  ].map(s => String(s || '').trim()).filter(Boolean))];
+  const allTopics = [...new Set(allRawTopics.map(canonicalTopicName).filter(Boolean))];
+  const confidence = selected?.confidence ?? (fallbackTopic ? 0.52 : 0.2);
+  const finalSummary = buildFinalMainReasonSummary(stock, selected, candidates, primaryRawTopic || fallbackTopic);
+  return {
+    code: stockId,
+    name,
+    day: isoFromCompactDate(day),
+    gain: Number.isFinite(Number(stock?.gain)) ? Number(stock.gain) : null,
+    limitUpCount: stock?.limitUpCount ?? null,
+    firstLimitTime: stock?.firstLimitTime ?? null,
+    lastLimitTime: stock?.lastLimitTime ?? null,
+    sealAmount: strategyMainlineSealAmount(stock),
+    primaryTopic,
+    primaryRawTopic,
+    finalBoardTopic: finalSummary.boardTopic,
+    finalDetailReason: finalSummary.detailReason,
+    finalReason: finalSummary.finalReason,
+    mainReasonSummary: finalSummary,
+    primaryReasonCode: selected?.primaryReasonCode || evidence.primaryReasonCode,
+    primaryReasonName: selected?.primaryReasonName || evidence.primaryReasonName,
+    reasonHeadline: selected?.reasonHeadline || evidence.reasonHeadline || fallbackTopic,
+    allTopics,
+    allRawTopics,
+    reasonCodes: evidence.reasonCodes,
+    reasonNames: evidence.reasonNames,
+    reasonText: selected?.reasonText || evidence.reasonText,
+    fallbackReason: String(stock?.reason || ''),
+    sourceEvidence: {
+      selectedSource: selected?.source || '',
+      kplZtReason: !!evidence.reasonText,
+      limitUpDbReason: !!stock?.reason,
+      reviewSource: !!sourceOverride,
+      conceptCount: Array.isArray(concepts) ? concepts.length : 0,
+      candidates: candidates
+        .filter(candidate => candidate?.primaryTopic)
+        .map(candidate => ({
+          source: candidate.source,
+          primaryTopic: candidate.primaryTopic,
+          primaryRawTopic: candidate.primaryRawTopic,
+          boardTopic: candidate.boardTopic || '',
+          detailReason: candidate.detailReason || '',
+          reasonQuality: candidate.reasonQuality || '',
+          matchTypes: candidate.matchTypes || [],
+          sourceSupport: candidate.sourceSupport || null,
+          confidence: candidate.confidence,
+        })),
+    },
+    confidence,
+    ruleVersion: MAIN_ZT_COUNT_RULE_VERSION,
+  };
+}
+
+async function ensureLimitUpMainReasonDbDay(day, apiKey, force = false, opts = {}) {
+  const isoDay = isoFromCompactDate(day);
+  if (!isChinaMarketTradingDay(isoDay)) return await readLimitUpMainReasonDbDay(isoDay).catch(() => null);
+  // dryRun：过期抽查用——重算主因但不落盘/不写缓存/不写evidence,只返回 payload 供与存盘对比。
+  const dryRun = !!opts.dryRun;
+  const today = chinaNowParts().day;
+  let cached = null;
+  if (!dryRun) {
+    if (!force && mainReasonDbCache.has(isoDay)) return mainReasonDbCache.get(isoDay);
+    cached = await readLimitUpMainReasonDbDay(isoDay).catch(() => null);
+    if (!force && isCompatibleMainReasonDb(cached)) {
+      if (isoDay !== today || isAfterMarketClose(isoDay)) return cached;
+    }
+    if (isoDay === today && !isAfterMarketClose(isoDay)) return cached;
+  }
+  let limitUpPayload = await ensureLimitUpDbDay(isoDay, apiKey, dryRun ? false : force).catch(() => null);
+  if (!limitUpPayload?.stocks?.length) {
+    limitUpPayload = await readLimitUpDbDay(isoDay).catch(() => null);
+  }
+  const stocks = Array.isArray(limitUpPayload?.stocks) ? limitUpPayload.stocks : [];
+  if (!stocks.length) return dryRun ? null : cached;
+  // 统一复盘口径：北交所个股和 ST/退市个股不进涨停复盘最终库；
+  // 原始涨停底库 kpl-limitup-db 保持不变，近 10 日涨停次数等统计照常使用全市场口径。
+  const reviewStocks = stocks.filter(stock => !isExcludedFromReview(stock?.code, stock?.name));
+  // reuseAutoSource：重建最终库但不联网重抓复盘源，复用已存的 auto-source(rawRows)，
+  // 只让新的"≥2源具体共识→细分"逻辑重跑，不改动其它源数据。dryRun 一律复用、绝不联网。
+  const autoSourceForce = (dryRun || opts.reuseAutoSource) ? false : force;
+  await ensureLimitUpMainReasonAutoSourceDay(isoDay, reviewStocks, { force: autoSourceForce }).catch(err => {
+    console.error('main reason auto review source failed:', err.message);
+  });
+  const rows = await mapLimit(reviewStocks, 4, stock => buildLimitUpMainReasonRecord(stock, isoDay, apiKey));
+  if (dryRun) {
+    // 同 writeLimitUpMainReasonDbDay 的去重+套用手填覆盖,但不写文件/不写缓存/不写evidence。
+    const unique = [...new Map((rows || []).filter(r => r.code && r.name).map(r => [String(r.code), r])).values()];
+    const payload = { version: 1, ruleVersion: MAIN_ZT_COUNT_RULE_VERSION, day: isoDay, source: 'dryrun-staleness', count: unique.length, stocks: unique };
+    applyMainReasonOverridesToPayload(payload, await readMainReasonOverrides(isoDay));
+    return payload;
+  }
+  return writeLimitUpMainReasonDbDay(isoDay, rows, 'multi-source-main-reason');
+}
+
+async function getMainReasonRecordForStockDay(stockId, day, apiKey) {
+  const isoDay = isoFromCompactDate(day);
+  const payload = await ensureLimitUpMainReasonDbDay(isoDay, apiKey).catch(() => null);
+  const record = (payload?.stocks || []).find(row => String(row.code) === String(stockId));
+  return record || null;
+}
+
+function hasRelatedConcept(concepts, plateId, plateName) {
+  return (concepts || []).some(item => {
+    const code = String(item?.CCode || '');
+    const name = String(item?.CName || '');
+    return code === String(plateId) || isRelatedReasonName(plateName, name);
+  });
+}
+
+function isEmergingBoard(plateId, plateName) {
+  const id = String(plateId || '');
+  const name = String(plateName || '');
+  return id.startsWith('803') || /AI|具身|机器人|智能体|物理/.test(name);
+}
+
+function isReasonListMatchBoard(reasonList, conceptNameByCode, plateId, plateName, strictPrimaryReason) {
+  return (reasonList || []).some(item => {
+    const codes = Array.isArray(item?.ZSCode) ? item.ZSCode.map(String) : [];
+    const reasonText = String(item?.Reason || item?.GNSM || '');
+    return codes.some((code, index) => {
+      const reasonName = conceptNameByCode.get(code);
+      const related = code === String(plateId) || isPrimaryTopicRelatedToBoard(plateName, reasonName, reasonText);
+      if (!related) return false;
+      return !strictPrimaryReason || isPrimaryReasonMatch(plateName, reasonName, reasonText, index);
+    });
+  });
+}
+
+async function calcMainZtCount(stockId, plateId, plateName, days, apiKey, zsType = DEFAULT_ZS_TYPE) {
+  const normalizedDays = [...new Set((days || []).map(compactDate).filter(Boolean))].sort();
+  if (!normalizedDays.length) return 0;
+  const sourceKey = boardSourceKey(zsType);
+  const cacheKey = `${MAIN_ZT_COUNT_RULE_VERSION}-${sourceKey}-${stockId}-${plateId}-${normalizedDays.join('_')}`;
+  if (mainZtCountCache.has(cacheKey)) return mainZtCountCache.get(cacheKey);
+  const persisted = await readPersistCache('main-zt-count', cacheKey);
+  if (Number.isFinite(Number(persisted?.data?.count))) {
+    const count = Number(persisted.data.count);
+    mainZtCountCache.set(cacheKey, count);
+    return count;
+  }
+
+  // 严格口径（用户选定）：“主”只认综合归纳主因库 —— 某涨停日该股综合归纳主因匹配本板块才计入；
+  // 不再用东财/同花顺的宽松题材兜底、也不用概念/涨停原文兜底（主因库当天无该股记录则该日不计）。
+  // 代价：东财/同花顺及很细的概念板块会大量显示“主0”，属预期。
+  const results = await mapLimit(normalizedDays, 3, async day => {
+    const record = await getMainReasonRecordForStockDay(stockId, day, apiKey).catch(() => null);
+    return record ? mainReasonRecordMatchesBoard(record, plateId, plateName) : false;
+  });
+  const count = results.filter(Boolean).length;
+  mainZtCountCache.set(cacheKey, count);
+  await writePersistCache('main-zt-count', cacheKey, {
+    count,
+    stockId,
+    plateId,
+    plateName,
+    zsType: sourceKey,
+    days: normalizedDays,
+    method: 'limit-up-main-reason-db-strict',
+    ruleVersion: MAIN_ZT_COUNT_RULE_VERSION,
+  });
+  return count;
+}
+
+function limitUpThreshold(code, name) {
+  const c = String(code || '');
+  const n = String(name || '').toUpperCase();
+  if (n.includes('ST')) return 4.75;
+  if (c.startsWith('30') || c.startsWith('68') || c.startsWith('43') || c.startsWith('83') || c.startsWith('87') || c.startsWith('92')) return 19.5;
+  return 9.75;
+}
+
+function compactDate(day) {
+  return String(day || '').replace(/\D/g, '');
+}
+
+function calcZtFromKline(stock, kline, endDay, realtimeGain) {
+  const dates = Array.isArray(kline?.x) ? kline.x : [];
+  const bars = Array.isArray(kline?.y) ? kline.y : [];
+  const threshold = limitUpThreshold(stock.code, stock.name);
+  const rows = [];
+  const endDateText = compactDate(endDay);
+  let lastIndex = dates.length - 1;
+  while (lastIndex >= 0 && endDateText && compactDate(dates[lastIndex]) > endDateText) {
+    lastIndex -= 1;
+  }
+  if (lastIndex < 1) return { count: 0, days: [], todayGain: null };
+  const lastKlineDate = compactDate(dates[lastIndex]);
+  const hasRealtimeToday = endDateText && lastKlineDate && endDateText > lastKlineDate && Number.isFinite(realtimeGain);
+  const klineWindowSize = hasRealtimeToday ? 9 : 10;
+  const start = Math.max(1, lastIndex - klineWindowSize + 1);
+  for (let i = start; i <= lastIndex; i += 1) {
+    const prevClose = Number(bars[i - 1]?.[1]);
+    const close = Number(bars[i]?.[1]);
+    if (!Number.isFinite(prevClose) || !Number.isFinite(close) || prevClose <= 0) continue;
+    const pct = ((close - prevClose) / prevClose) * 100;
+    if (pct >= threshold) rows.push(String(dates[i] || ''));
+  }
+  if (hasRealtimeToday && realtimeGain >= threshold) {
+    rows.push(endDateText);
+  }
+  let todayGain = null;
+  if (hasRealtimeToday) {
+    todayGain = realtimeGain;
+  } else if (lastIndex > 0) {
+    const prevClose = Number(bars[lastIndex - 1]?.[1]);
+    const close = Number(bars[lastIndex]?.[1]);
+    if (Number.isFinite(prevClose) && Number.isFinite(close) && prevClose > 0) {
+      todayGain = ((close - prevClose) / prevClose) * 100;
+    }
+  }
+  return { count: rows.length, days: rows, todayGain };
+}
+
+function mergeZtDays(dbDays = [], klineDays = []) {
+  return [...new Set([
+    ...(dbDays || []).map(compactDate).filter(Boolean),
+    ...(klineDays || []).map(compactDate).filter(Boolean),
+  ])].sort();
+}
+
+function recentTradingWindowDates(kline, endDay, period = 10) {
+  const dates = Array.isArray(kline?.x) ? kline.x.map(compactDate).filter(Boolean) : [];
+  if (!dates.length) return new Set();
+  const endDateText = compactDate(endDay);
+  let lastIndex = dates.length - 1;
+  while (lastIndex >= 0 && endDateText && dates[lastIndex] > endDateText) {
+    lastIndex -= 1;
+  }
+  if (lastIndex < 0) return new Set();
+  const lastKlineDate = dates[lastIndex];
+  const hasRealtimeEndDay = endDateText && lastKlineDate && endDateText > lastKlineDate;
+  const startIndex = Math.max(0, hasRealtimeEndDay ? lastIndex - (period - 2) : lastIndex - (period - 1));
+  const windowDates = dates.slice(startIndex, lastIndex + 1);
+  if (hasRealtimeEndDay) windowDates.push(endDateText);
+  return new Set(windowDates);
+}
+
+function calcWindowGainFromKline(kline, endDay, realtimePrice, period) {
+  const dates = Array.isArray(kline?.x) ? kline.x : [];
+  const bars = Array.isArray(kline?.y) ? kline.y : [];
+  if (!dates.length || !bars.length) return null;
+  const endDateText = compactDate(endDay);
+  let lastIndex = dates.length - 1;
+  while (lastIndex >= 0 && endDateText && compactDate(dates[lastIndex]) > endDateText) {
+    lastIndex -= 1;
+  }
+  if (lastIndex < 0) return null;
+
+  const lastKlineDate = compactDate(dates[lastIndex]);
+  const hasRealtimeEndDay = endDateText && lastKlineDate && endDateText > lastKlineDate && Number.isFinite(realtimePrice);
+  const latestPrice = hasRealtimeEndDay ? Number(realtimePrice) : Number(bars[lastIndex]?.[1]);
+  const baseIndex = hasRealtimeEndDay ? lastIndex - (period - 1) : lastIndex - period;
+  const baseClose = Number(bars[baseIndex]?.[1]);
+  if (!Number.isFinite(latestPrice) || !Number.isFinite(baseClose) || baseClose <= 0) return null;
+  return ((latestPrice - baseClose) / baseClose) * 100;
+}
+
+function calcGainBaseFromKline(kline, endDay, period) {
+  const dates = Array.isArray(kline?.x) ? kline.x : [];
+  const bars = Array.isArray(kline?.y) ? kline.y : [];
+  if (!dates.length || !bars.length) return null;
+  const endDateText = compactDate(endDay);
+  let lastIndex = dates.length - 1;
+  while (lastIndex >= 0 && endDateText && compactDate(dates[lastIndex]) > endDateText) {
+    lastIndex -= 1;
+  }
+  if (lastIndex < 0) return null;
+
+  const lastKlineDate = compactDate(dates[lastIndex]);
+  const hasRealtimeEndDay = endDateText && lastKlineDate && endDateText > lastKlineDate;
+  const baseIndex = hasRealtimeEndDay ? lastIndex - (period - 1) : lastIndex - period;
+  const baseClose = Number(bars[baseIndex]?.[1]);
+  const latestClose = Number(bars[lastIndex]?.[1]);
+  if (!Number.isFinite(baseClose) || baseClose <= 0) return null;
+  return {
+    period,
+    endDay: isoFromCompactDate(endDateText),
+    baseDay: isoFromCompactDate(dates[baseIndex]),
+    baseClose,
+    lastKlineDay: isoFromCompactDate(lastKlineDate),
+    latestClose: Number.isFinite(latestClose) ? latestClose : null,
+  };
+}
+
+async function getGainBase(stockId, endDay, period, apiKey, options = {}) {
+  const sourceKey = boardSourceKey(options.zsType || DEFAULT_ZS_TYPE);
+  const cacheKey = `${sourceKey}-${stockId}-${compactDate(endDay)}-${period}`;
+  if (gainBaseCache.has(cacheKey)) return gainBaseCache.get(cacheKey);
+  const localBase = await getEastmoneyGainBaseFromCloseDb(stockId, endDay, period, apiKey);
+  if (localBase) {
+    gainBaseCache.set(cacheKey, localBase);
+    await writePersistCache('gain-base', cacheKey, localBase);
+    return localBase;
+  }
+  const persisted = await readPersistCache('gain-base', cacheKey);
+  if (Number.isFinite(Number(persisted?.data?.baseClose))) {
+    gainBaseCache.set(cacheKey, persisted.data);
+    return persisted.data;
+  }
+  const kline = isExternalConceptZsType(sourceKey)
+    ? await fetchEastmoneyKline(stockId)
+    : await fetchKline(stockId, apiKey);
+  const base = calcGainBaseFromKline(kline, endDay, period);
+  gainBaseCache.set(cacheKey, base);
+  if (base) {
+    await writePersistCache('gain-base', cacheKey, {
+      ...base,
+      source: isExternalConceptZsType(sourceKey) ? 'eastmoney-kline' : 'kpl-kline',
+    });
+  }
+  return base;
+}
+
+function calcWindowGainFromBase(base, realtimePrice) {
+  if (!base || !isFiniteNumeric(base.baseClose) || Number(base.baseClose) <= 0) return null;
+  const latestPrice = isFiniteNumeric(realtimePrice) ? Number(realtimePrice) : Number(base.latestClose);
+  if (!Number.isFinite(latestPrice)) return null;
+  return ((latestPrice - Number(base.baseClose)) / Number(base.baseClose)) * 100;
+}
+
+async function mapLimit(items, limit, worker) {
+  const result = new Array(items.length);
+  let next = 0;
+  async function run() {
+    while (next < items.length) {
+      const i = next;
+      next += 1;
+      result[i] = await worker(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
+  return result;
+}
+
+function normalizeStock(row, day) {
+  return {
+    code: String(row?.[0] || ''),
+    name: String(row?.[1] || ''),
+    gain: Number(row?.[4]),
+    reason: String(row?.[11] || ''),
+    day,
+  };
+}
+
+function isStStock(name) {
+  const n = String(name || '').trim();
+  return /(^|\W)\*?ST/i.test(n) || /退市|退$/.test(n);
+}
+
+function isNewListingStockName(name) {
+  return /^[NC][\u4e00-\u9fa5A-Z0-9]/i.test(String(name || '').trim());
+}
+
+// 北交所/北证个股：代码以 8、9、4 开头（与 eastmoneySecid 的 bj 归类一致）。
+// 沪深 A 股代码以 6/0/3 开头，不会落入此判断。
+function isBeijingStock(code) {
+  return /^[489]/.test(String(code || '').replace(/\D/g, ''));
+}
+
+// 复盘数据统一排除标准：北交所个股 + ST/退市整理 + 新股前缀，一律不进涨停复盘。
+function isExcludedFromReview(code, name) {
+  return isBeijingStock(code) || isStStock(name) || isNewListingStockName(name);
+}
+
+function addBoardRow(board, stock, hitDay) {
+  const key = stock.code || stock.name;
+  if (!key) return;
+  if (!board.rows.has(key)) {
+    board.rows.set(key, {
+      code: stock.code,
+      name: stock.name,
+      totalCount: 0,
+      ztCount: 0,
+      todayGain: stock.gain,
+      days: [],
+    });
+  }
+  const row = board.rows.get(key);
+  row.totalCount += 1;
+  row.ztCount += 1;
+  row.days.push(hitDay);
+  if (Number.isFinite(stock.gain)) row.todayGain = stock.gain;
+}
+
+async function buildLimitUpIndex(day, apiKey, options = {}) {
+  const force = !!options.force;
+  const cacheKey = `${apiKey.slice(-6)}:${day}:10:${force ? 'force' : 'normal'}`;
+  if (!force && limitUpIndexCache.has(cacheKey)) return limitUpIndexCache.get(cacheKey);
+
+  const [limitUpDays, tradingDays] = await Promise.all([
+    ensureRecentLimitUpDbDays(day, apiKey, 10, { force }),
+    getRecentTradingDays(day, apiKey, 10),
+  ]);
+  const selectedDay = String(day || '');
+  const selectedDayText = compactDate(selectedDay);
+  const isCurrentSelectedDay = selectedDay === chinaNowParts().day;
+  const tradingDaySet = new Set(tradingDays.map(compactDate).filter(Boolean));
+  const reliableDbDaySet = new Set(limitUpDays.map(item => compactDate(item.day)).filter(Boolean));
+  const needsKlineRepair = tradingDays.some(item => {
+    const d = compactDate(item);
+    if (!d) return false;
+    if (isCurrentSelectedDay && d === selectedDayText && !isAfterMarketClose(selectedDay)) return false;
+    return !reliableDbDaySet.has(d);
+  });
+
+  const index = new Map();
+  for (const item of limitUpDays) {
+    const hitDay = compactDate(item.day);
+    if (tradingDaySet.size && !tradingDaySet.has(hitDay)) continue;
+    for (const stock of item.stocks || []) {
+      const code = String(stock.code || '');
+      if (!code) continue;
+      if (!index.has(code)) {
+        index.set(code, { code, name: stock.name || '', days: [], gainByDay: new Map() });
+      }
+      const rec = index.get(code);
+      if (!rec.days.includes(hitDay)) rec.days.push(hitDay);
+      rec.gainByDay.set(hitDay, Number(stock.gain));
+      if (stock.name) rec.name = stock.name;
+    }
+  }
+  for (const rec of index.values()) {
+    rec.days = rec.days.map(compactDate).filter(Boolean).sort();
+  }
+
+  const value = {
+    day,
+    tradingDays,
+    tradingDaySet,
+    reliableDbDaySet,
+    needsKlineRepair,
+    selectedDay,
+    selectedDayText,
+    isCurrentSelectedDay,
+    index,
+  };
+  limitUpIndexCache.set(cacheKey, value);
+  return value;
+}
+
+async function buildPreciseZt10Result(day, plates, names, apiKey, options = {}) {
+  const zsType = options.zsType || DEFAULT_ZS_TYPE;
+  const limitUpIndex = await buildLimitUpIndex(day, apiKey, { force: !!options.forceIndex });
+  const {
+    index: limitUpByCode,
+    tradingDaySet,
+    needsKlineRepair,
+    selectedDayText,
+    isCurrentSelectedDay,
+  } = limitUpIndex;
+  const selectedDayLimitUpCodeSet = isCurrentSelectedDay
+    ? await getDisplayLimitUpCodeSet(day, apiKey).catch(() => new Set())
+    : new Set();
+  const hasSelectedDayLimitUpSet = selectedDayLimitUpCodeSet.size > 0;
+
+  const result = {};
+  const usedDays = new Set();
+  await mapLimit(plates, 3, async (plateId, boardIndex) => {
+    const plate = await fetchPlateStocks(plateId, day, apiKey, zsType);
+    const realtimeRows = await fetchRealtimeBoardStocks(plateId, apiKey, zsType);
+    const realtimeByCode = new Map(realtimeRows
+      .filter(row => row?.[0])
+      .map(row => [String(row[0]), { gain: Number(row[6]), name: String(row[1] || '') }]));
+    usedDays.add(plate.day);
+    const stocks = plate.list.map(row => ({
+      code: String(row?.[0] || ''),
+      name: String(row?.[1] || ''),
+      todayGain: Number(row?.[6]),
+    })).filter(s => s.code && s.name && !isStStock(s.name));
+    const stockByCode = new Map(stocks.map(s => [s.code, s]));
+    for (const row of realtimeRows) {
+      const stock = {
+        code: String(row?.[0] || ''),
+        name: String(row?.[1] || ''),
+        todayGain: Number(row?.[6]),
+      };
+      if (!stock.code || !stock.name || isStStock(stock.name)) continue;
+      const threshold = limitUpThreshold(stock.code, stock.name);
+      if (Number.isFinite(stock.todayGain) && stock.todayGain >= threshold) {
+        stockByCode.set(stock.code, { ...(stockByCode.get(stock.code) || {}), ...stock });
+      }
+    }
+    const uniqueStocks = [...stockByCode.values()];
+    const rows = await mapLimit(uniqueStocks, 10, async stock => {
+      const realtime = realtimeByCode.get(stock.code);
+      const realtimeGain = Number.isFinite(realtime?.gain) ? realtime.gain : stock.todayGain;
+      const dbHit = limitUpByCode.get(String(stock.code));
+      const dbDays = (dbHit?.days || []).map(compactDate).filter(Boolean);
+      const threshold = limitUpThreshold(stock.code, stock.name);
+      const isRealtimeLimitUp = isCurrentSelectedDay && (
+        hasSelectedDayLimitUpSet
+          ? selectedDayLimitUpCodeSet.has(String(stock.code))
+          : Number.isFinite(realtimeGain) && realtimeGain >= threshold
+      );
+      if (!dbDays.length && options.currentOnlyFallback && !isRealtimeLimitUp) return null;
+      let days = mergeZtDays(dbDays, isRealtimeLimitUp ? [selectedDayText] : []);
+      if (needsKlineRepair) {
+        const repairRealtimeGain = isCurrentSelectedDay && !isRealtimeLimitUp ? null : realtimeGain;
+        const kline = isExternalConceptZsType(zsType)
+          ? await fetchEastmoneyKline(stock.code)
+          : await fetchKline(stock.code, apiKey);
+        const klineZt = calcZtFromKline(stock, kline, day, repairRealtimeGain);
+        const klineDays = (klineZt.days || []).map(compactDate).filter(d => tradingDaySet.has(d));
+        days = mergeZtDays(days, klineDays);
+      }
+      if (!days.length) return null;
+      return {
+        code: stock.code,
+        name: realtime?.name || dbHit?.name || stock.name,
+        totalCount: days.length,
+        ztCount: 0,
+        todayGain: realtimeGain,
+        days,
+      };
+    });
+    const topRows = rows
+      .filter(Boolean)
+      .sort((a, b) => b.totalCount - a.totalCount || (b.todayGain || 0) - (a.todayGain || 0))
+      .slice(0, 10);
+    if (isEastmoneyZsType(zsType)) {
+      await mapLimit(topRows, 5, async row => {
+        const quote = await fetchEastmoneySingleStockQuote(row.code).catch(() => null);
+        if (Number.isFinite(quote?.gain)) row.todayGain = quote.gain;
+        if (quote?.name) row.name = quote.name;
+        return row;
+      });
+    }
+    await mapLimit(topRows, 5, async row => {
+      row.ztCount = await calcMainZtCount(row.code, plateId, names[boardIndex], row.days, apiKey, zsType);
+      return row;
+    });
+    result[String(plateId)] = topRows
+      .sort((a, b) => b.totalCount - a.totalCount || b.ztCount - a.ztCount || (b.todayGain || 0) - (a.todayGain || 0));
+    if (names[boardIndex]) result[names[boardIndex]] = result[String(plateId)];
+  });
+
+  return {
+    day,
+    zsType,
+    plateDays: [...usedDays],
+    boards: result,
+  };
+}
+
+async function buildPreciseGainRanksResult(day, plates, apiKey, options = {}) {
+  const zsType = options.zsType || DEFAULT_ZS_TYPE;
+  const limit = Number(options.limit || 10);
+  const result = {};
+  const usedDays = new Set();
+  await mapLimit(plates, 3, async plateId => {
+    const plate = await fetchPlateStocks(plateId, day, apiKey, zsType);
+    const realtimeRows = await fetchRealtimeBoardStocks(plateId, apiKey, zsType);
+    usedDays.add(plate.day);
+    const realtimeByCode = new Map(realtimeRows
+      .filter(row => row?.[0])
+      .map(row => [String(row[0]), {
+        code: String(row[0] || ''),
+        name: String(row[1] || ''),
+        price: Number(row[5]),
+        todayGain: Number(row[6]),
+      }]));
+    const stockByCode = new Map();
+    for (const row of plate.list || []) {
+      const code = String(row?.[0] || '');
+      const name = String(row?.[1] || '');
+      if (!code || !name || isStStock(name)) continue;
+      stockByCode.set(code, {
+        code,
+        name,
+        price: Number(row?.[5]),
+        todayGain: Number(row?.[6]),
+      });
+    }
+    for (const row of realtimeRows || []) {
+      const code = String(row?.[0] || '');
+      const name = String(row?.[1] || '');
+      if (!code || !name || isStStock(name)) continue;
+      stockByCode.set(code, {
+        ...(stockByCode.get(code) || {}),
+        code,
+        name,
+        price: Number(row?.[5]),
+        todayGain: Number(row?.[6]),
+      });
+    }
+
+    const rows = await mapLimit([...stockByCode.values()], 10, async stock => {
+      const realtime = realtimeByCode.get(stock.code);
+      const price = Number.isFinite(realtime?.price) ? realtime.price : stock.price;
+      const todayGain = Number.isFinite(realtime?.todayGain) ? realtime.todayGain : stock.todayGain;
+      const [base10, base30] = await Promise.all([
+        getGainBase(stock.code, day, 10, apiKey, { zsType }),
+        getGainBase(stock.code, day, 30, apiKey, { zsType }),
+      ]);
+      const gain10 = calcWindowGainFromBase(base10, price);
+      const gain30 = calcWindowGainFromBase(base30, price);
+      return {
+        code: stock.code,
+        name: realtime?.name || stock.name,
+        todayGain: Number.isFinite(todayGain) ? todayGain : null,
+        gain10,
+        gain30,
+      };
+    });
+
+    result[String(plateId)] = {
+      top10d_gain: rows
+        .filter(row => Number.isFinite(row.gain10))
+        .map(row => ({ code: row.code, name: row.name, gain: row.gain10, todayGain: row.todayGain }))
+        .sort((a, b) => b.gain - a.gain)
+        .slice(0, limit),
+      top30d_gain: rows
+        .filter(row => Number.isFinite(row.gain30))
+        .map(row => ({ code: row.code, name: row.name, gain: row.gain30, todayGain: row.todayGain }))
+        .sort((a, b) => b.gain - a.gain)
+        .slice(0, limit),
+    };
+  });
+
+  return {
+    day,
+    zsType,
+    plateDays: [...usedDays],
+    plates: result,
+  };
+}
+
+async function preciseZt10(url, req, res) {
+  const apiKey = await requestApiKey(req);
+  if (!apiKey) return send(res, 401, { error: 'missing x-api-key' });
+
+  const day = url.searchParams.get('day') || chinaNowParts().day;
+  const zsType = url.searchParams.get('zs_type') || DEFAULT_ZS_TYPE;
+  const plates = (url.searchParams.get('plates') || '').split(',').map(s => s.trim()).filter(Boolean);
+  const names = (url.searchParams.get('names') || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (!plates.length && !names.length) return send(res, 400, { error: 'missing plates or names' });
+
+  return send(res, 200, await buildPreciseZt10Result(day, plates, names, apiKey, { zsType }));
+}
+
+async function preciseGainRank(url, req, res) {
+  const apiKey = await requestApiKey(req);
+  if (!apiKey) return send(res, 401, { error: 'missing x-api-key' });
+  const day = url.searchParams.get('day') || chinaNowParts().day;
+  const zsType = url.searchParams.get('zs_type') || DEFAULT_ZS_TYPE;
+  const plates = (url.searchParams.get('plates') || '').split(',').map(s => s.trim()).filter(Boolean);
+  const limit = Number(url.searchParams.get('stock_limit') || 10);
+  if (!plates.length) return send(res, 400, { error: 'missing plates' });
+  return send(res, 200, await buildPreciseGainRanksResult(day, plates, apiKey, {
+    zsType,
+    limit: Math.max(1, Math.min(50, limit)),
+  }));
+}
+
+function pickArray(obj, keys) {
+  for (const key of keys) {
+    if (Array.isArray(obj?.[key])) return obj[key];
+  }
+  return [];
+}
+
+async function fetchBoardRankingForSnapshot(zsType, apiKey, options = {}) {
+  const count = Math.max(BOARD_RANK_FETCH_STEP, Number(options.count || BOARD_RANK_FETCH_STEP));
+  if (isDisabledZsType(zsType)) return [];
+  if (isEastmoneyZsType(zsType)) {
+    let catalog = await readEastmoneyConceptCatalog();
+    if (!catalog?.boards?.length && isAfterMarketClose(chinaNowParts().day)) {
+      catalog = await syncEastmoneyConcepts({ reason: 'ranking-demand' }).catch(() => null);
+    }
+    const quoteBoards = await fetchEastmoneyConceptBoards().catch(() => []);
+    const stockCountById = new Map((catalog?.boards || []).map(board => [
+      String(board.plateId),
+      board.stockCount,
+    ]));
+    const sourceBoards = quoteBoards.length ? quoteBoards : (catalog?.boards || []);
+    return sourceBoards.slice(0, count).map(board => {
+      const view = publicEastmoneyConceptBoard({
+        ...board,
+        stockCount: stockCountById.get(String(board.plateId)) ?? board.stockCount,
+      }, board);
+      return {
+        plateId: view.plateId,
+        name: view.name,
+        memberCount: view.stockCount,
+        gainPct: numOrNull(view.gain),
+        turnover: null,
+        amount: null,
+        netInflow: numOrNull(view.netInflow),
+        upCount: view.upCount,
+        downCount: view.downCount,
+        leadStockName: view.leadStockName,
+        leadStockCode: view.leadStockCode,
+        ztCount: 0,
+        source: 'eastmoney',
+      };
+    }).filter(board => board.plateId && board.name);
+  }
+  if (isThsZsType(zsType)) {
+    let catalog = await readThsConceptCatalog();
+    if (!catalog?.boards?.length && isAfterMarketClose(chinaNowParts().day)) {
+      catalog = await syncThsConcepts({ reason: 'ranking-demand' }).catch(() => null);
+    }
+    const quoteBoards = await fetchThsConceptBoards().catch(() => []);
+    const stockCountById = new Map((catalog?.boards || []).map(board => [
+      String(board.plateId),
+      board.stockCount,
+    ]));
+    const sourceBoards = quoteBoards.length ? quoteBoards : (catalog?.boards || []);
+    return sourceBoards.slice(0, count).map(board => {
+      const view = publicThsConceptBoard({
+        ...board,
+        stockCount: stockCountById.get(String(board.plateId)) ?? board.stockCount,
+      }, board);
+      return {
+        plateId: view.plateId,
+        name: view.name,
+        memberCount: view.stockCount,
+        gainPct: numOrNull(view.gain),
+        turnover: null,
+        amount: null,
+        netInflow: numOrNull(view.netInflow),
+        upCount: null,
+        downCount: null,
+        leadStockName: '',
+        leadStockCode: '',
+        ztCount: 0,
+        source: 'ths',
+      };
+    }).filter(board => board.plateId && board.name);
+  }
+  const data = await kplFetch(`/kpl/hangqing/plate_ranking_realtime?rank_type=2&zs_type=${encodeURIComponent(zsType)}&count=${count}`, apiKey);
+  const list = data?.List || data?.list || data?.data || [];
+  return list.map(row => ({
+    plateId: row[0],
+    name: row[1],
+    memberCount: row[2],
+    gainPct: parseFloat(row[3]),
+    turnover: row[4],
+    amount: row[5],
+    netInflow: parseFloat(row[6]),
+    ztCount: 0,
+  })).filter(board => board.plateId && board.name);
+}
+
+async function fetchPlateInfoQjForSnapshot(plateId, apiKey) {
+  return kplFetch(`/kpl/hangqing/plate_info_qj?plate_id=${encodeURIComponent(plateId)}`, apiKey).catch(() => null);
+}
+
+async function fetchPlatePankouForSnapshot(plateId, apiKey) {
+  return kplFetch(`/kpl/plate/bk_pankou?plate_id=${encodeURIComponent(plateId)}`, apiKey).catch(() => null);
+}
+
+async function hydrateEastmoneyBoard(board, day = chinaNowParts().day, apiKey = '') {
+  const payload = await ensureEastmoneyConceptBoard(board.plateId, board);
+  const limitUpCodeSet = await getDisplayLimitUpCodeSet(day, apiKey).catch(() => new Set());
+  const stocks = (payload?.stocks || []).map(s => ({
+    code: String(s.code || ''),
+    name: String(s.name || ''),
+    price: Number(s.close ?? s.price),
+    gain: Number(s.gain),
+    amount: null,
+    turnover: null,
+    ztState: null,
+  })).filter(s => s.code && s.name && !isStStock(s.name));
+  const ztList = stocks.filter(s => stockMatchesDisplayLimitUpSet(s, limitUpCodeSet))
+    .sort((a, b) => b.gain - a.gain);
+  board.memberCount = Number.isFinite(Number(board.memberCount)) ? board.memberCount : stocks.length;
+  board.ztCount = ztList.length;
+  return {
+    board,
+    cardData: {
+      ztList,
+      ztListTotal: ztList.length,
+    },
+  };
+}
+
+async function hydrateThsBoard(board, day = chinaNowParts().day, apiKey = '') {
+  const payload = await ensureThsConceptBoard(board.plateId, board);
+  const limitUpCodeSet = await getDisplayLimitUpCodeSet(day, apiKey).catch(() => new Set());
+  const stocks = (payload?.stocks || []).map(s => ({
+    code: String(s.code || ''),
+    name: String(s.name || ''),
+    price: Number(s.close ?? s.price),
+    gain: Number(s.gain),
+    amount: Number(s.amount),
+    turnover: Number(s.turnover),
+    ztState: null,
+  })).filter(s => s.code && s.name && !isStStock(s.name));
+  const ztList = stocks.filter(s => stockMatchesDisplayLimitUpSet(s, limitUpCodeSet))
+    .sort((a, b) => b.gain - a.gain);
+  board.memberCount = Number.isFinite(Number(board.memberCount)) ? board.memberCount : stocks.length;
+  board.ztCount = ztList.length;
+  return {
+    board,
+    cardData: {
+      ztList,
+      ztListTotal: ztList.length,
+    },
+  };
+}
+
+async function hydrateBoardForSnapshot(board, apiKey, zsType = DEFAULT_ZS_TYPE, day = chinaNowParts().day) {
+  if (isEastmoneyZsType(zsType)) return hydrateEastmoneyBoard(board, day, apiKey);
+  if (isThsZsType(zsType)) return hydrateThsBoard(board, day, apiKey);
+  const [qjRes, stocksRes, pankouRes] = await Promise.all([
+    fetchPlateInfoQjForSnapshot(board.plateId, apiKey),
+    fetchRealtimePlateStocks(board.plateId, apiKey).catch(() => []),
+    fetchPlatePankouForSnapshot(board.plateId, apiKey),
+  ]);
+
+  const arr = qjRes?.List || qjRes?.list || [];
+  if (arr.length > 5) {
+    board.ztCount = Number(arr[5]) || 0;
+    if (board.netInflow == null || Number.isNaN(board.netInflow)) {
+      board.netInflow = parseFloat(arr[3]);
+    }
+  }
+
+  const stocks = stocksRes.map(s => ({
+    code: String(s?.[0] || ''),
+    name: String(s?.[1] || ''),
+    price: parseFloat(s?.[5]),
+    gain: parseFloat(s?.[6]),
+    amount: s?.[7],
+    turnover: s?.[8],
+    ztState: s?.[23],
+  })).filter(s => s.code && s.name && !isStStock(s.name));
+  const ztList = stocks.filter(s => Number.isFinite(s.gain) && s.gain >= limitUpThreshold(s.code, s.name))
+    .sort((a, b) => b.gain - a.gain);
+  board.ztCount = ztList.length;
+
+  const ni = parseFloat(pankouRes?.pankou?.[5]);
+  if (Number.isFinite(ni)) board.netInflow = ni;
+
+  return {
+    board,
+    cardData: {
+      ztList,
+      ztListTotal: ztList.length,
+    },
+  };
+}
+
+async function hydrateBoardPreview(board, apiKey, zsType = DEFAULT_ZS_TYPE, day = chinaNowParts().day) {
+  if (isEastmoneyZsType(zsType)) {
+    const hydrated = await hydrateEastmoneyBoard(board, day, apiKey);
+    return {
+      board: hydrated.board,
+      cardData: {},
+    };
+  }
+  if (isThsZsType(zsType)) {
+    const hydrated = await hydrateThsBoard(board, day, apiKey);
+    return {
+      board: hydrated.board,
+      cardData: {},
+    };
+  }
+  const [qjRes, pankouRes] = await Promise.all([
+    fetchPlateInfoQjForSnapshot(board.plateId, apiKey),
+    fetchPlatePankouForSnapshot(board.plateId, apiKey),
+  ]);
+
+  const arr = qjRes?.List || qjRes?.list || [];
+  if (arr.length > 5) {
+    board.ztCount = Number(arr[5]) || 0;
+    if (board.netInflow == null || Number.isNaN(board.netInflow)) {
+      board.netInflow = parseFloat(arr[3]);
+    }
+  }
+
+  const ni = parseFloat(pankouRes?.pankou?.[5]);
+  if (Number.isFinite(ni)) board.netInflow = ni;
+
+  return {
+    board,
+    cardData: {},
+  };
+}
+
+function boardGainNumber(board) {
+  const gain = Number(board?.gainPct ?? board?.gain);
+  return Number.isFinite(gain) ? gain : null;
+}
+
+function isBoardGainAllowed(board) {
+  const gain = boardGainNumber(board);
+  return Number.isFinite(gain) && gain >= MIN_BOARD_GAIN_PCT;
+}
+
+async function selectStrongBoardsFromCandidates(candidateBoards, hydrateBoard, apiKey, zsType, boardPool, day = chinaNowParts().day) {
+  const selected = [];
+  const seen = new Set();
+  const initialCandidates = candidateBoards.slice(0, BOARD_INITIAL_CANDIDATE_COUNT);
+  const fallbackCandidates = candidateBoards.slice(BOARD_INITIAL_CANDIDATE_COUNT);
+
+  async function scan(candidates, stopAtMinVisible = false) {
+    const batchSize = 12;
+    for (let i = 0; i < candidates.length && selected.length < boardPool; i += batchSize) {
+      const batch = candidates.slice(i, i + batchSize);
+      const hydratedBatch = await mapLimit(batch, 8, board => hydrateBoard(board, apiKey, zsType, day));
+      for (const item of hydratedBatch) {
+        const plateId = String(item?.board?.plateId || '');
+        if (!plateId || seen.has(plateId)) continue;
+        if (Number(item.board.ztCount) < MIN_BOARD_ZT_COUNT) continue;
+        seen.add(plateId);
+        selected.push(item);
+        if (selected.length >= boardPool) break;
+      }
+      if (stopAtMinVisible && selected.length >= Math.min(MIN_VISIBLE_BOARD_COUNT, boardPool)) break;
+    }
+  }
+
+  await scan(initialCandidates, false);
+  if (selected.length < Math.min(MIN_VISIBLE_BOARD_COUNT, boardPool)) {
+    await scan(fallbackCandidates, true);
+  }
+  return selected.slice(0, boardPool);
+}
+
+async function buildDashboardSnapshotData(day, zsType, apiKey, options = {}) {
+  const hiddenIds = new Set([...(options.hiddenIds || [])].map(String));
+  const permanentHiddenIds = await getPermanentHiddenSet(zsType);
+  permanentHiddenIds.forEach(id => hiddenIds.add(String(id)));
+  const boardPool = options.boardPool || SNAPSHOT_BOARD_POOL;
+  if (isDisabledZsType(zsType)) {
+    return {
+      day,
+      zsType,
+      kpi: null,
+      boards: [],
+      cardData: {},
+    };
+  }
+  if (!isChinaMarketTradingDay(day)) {
+    return {
+      day: isoFromCompactDate(day),
+      zsType,
+      kpi: null,
+      boards: [],
+      cardData: {},
+      ...marketClosedSkipPayload(day),
+    };
+  }
+  if (!options.skipLimitUpDbSync) {
+    await ensureRecentLimitUpDbDays(day, apiKey, 10);
+  }
+  const kpi = await (isExternalConceptZsType(zsType)
+    ? fetchEastmoneyIndexInfo(day).catch(() => null)
+    : kplFetch('/kpl/hangqing/index_info', apiKey).catch(() => null));
+  const hydrateBoard = options.previewOnly ? hydrateBoardPreview : hydrateBoardForSnapshot;
+  let selected = [];
+  for (let step = 1; ; step += 1) {
+    const count = BOARD_RANK_FETCH_STEP * step;
+    const boardsRaw = await fetchBoardRankingForSnapshot(zsType, apiKey, { count });
+    const candidateBoards = boardsRaw
+      .filter(board => !hiddenIds.has(String(board.plateId)))
+      .filter(isBoardGainAllowed);
+    selected = await selectStrongBoardsFromCandidates(candidateBoards, hydrateBoard, apiKey, zsType, boardPool, day);
+    const lastGain = boardGainNumber(boardsRaw[boardsRaw.length - 1]);
+    if (
+      selected.length >= boardPool ||
+      selected.length >= Math.min(MIN_VISIBLE_BOARD_COUNT, boardPool) ||
+      (Number.isFinite(lastGain) && lastGain < MIN_BOARD_GAIN_PCT) ||
+      boardsRaw.length < count
+    ) {
+      break;
+    }
+  }
+  const boards = selected.map(item => item.board);
+  const cardData = {};
+  for (const item of selected) {
+    cardData[item.board.plateId] = item.cardData;
+  }
+
+  if (options.previewOnly) {
+    return {
+      day,
+      zsType,
+      kpi,
+      boards,
+      cardData,
+    };
+  }
+
+  if (boards.length) {
+    const plates = boards.map(board => String(board.plateId));
+    const names = boards.map(board => String(board.name));
+    const preciseOptions = { ...(options.preciseOptions || {}), zsType };
+    const [precise, gainRank] = await Promise.all([
+      buildPreciseZt10Result(day, plates, names, apiKey, preciseOptions).catch(() => null),
+      buildPreciseGainRanksResult(day, plates, apiKey, { limit: 50, zsType }).catch(() => null),
+    ]);
+    for (const board of boards) {
+      const data = cardData[board.plateId] || (cardData[board.plateId] = {});
+      const preciseRows = precise?.boards?.[board.plateId] || precise?.boards?.[String(board.plateId)] || precise?.boards?.[board.name] || [];
+      if (Array.isArray(preciseRows) && preciseRows.length) {
+        data.zt10 = preciseRows;
+        data.zt10Source = 'precise';
+      }
+      const perBoard = gainRank?.plates?.[board.plateId] || gainRank?.plates?.[String(board.plateId)] || gainRank?.[board.plateId] || {};
+      data.gain10 = pickArray(perBoard, ['top10d_gain', 'gain10', 'top_10d']);
+      data.gain30 = pickArray(perBoard, ['top30d_gain', 'gain30', 'top_30d']);
+    }
+  }
+
+  return {
+    day,
+    zsType,
+    kpi,
+    boards,
+    cardData,
+  };
+}
+
+async function buildDashboardSnapshot(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  const apiKey = req.headers['x-api-key'] || await readSavedApiKey();
+  if (!apiKey) return send(res, 401, { error: 'missing x-api-key' });
+  const day = url.searchParams.get('day') || chinaNowParts().day;
+  const zsType = url.searchParams.get('zs_type') || DEFAULT_ZS_TYPE;
+  const data = await buildDashboardSnapshotData(day, zsType, apiKey);
+  const saved = await writeDashboardSnapshot(data);
+  return send(res, 200, {
+    ok: true,
+    day,
+    zsType,
+    boardCount: data.boards.length,
+    file: saved.file,
+    savedAt: saved.snapshot.savedAt,
+  });
+}
+
+async function dashboardLive(url, req, res) {
+  const apiKey = await requestApiKey(req);
+  if (!apiKey) return send(res, 401, { error: 'missing x-api-key' });
+  const day = url.searchParams.get('day') || chinaNowParts().day;
+  const zsType = url.searchParams.get('zs_type') || DEFAULT_ZS_TYPE;
+  const hiddenIds = new Set((url.searchParams.get('hidden') || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean));
+  const data = await buildDashboardSnapshotData(day, zsType, apiKey, {
+    hiddenIds,
+    boardPool: BOARD_COUNT,
+    stopAfterPool: true,
+    preciseOptions: {
+      currentOnlyFallback: true,
+    },
+  });
+  return send(res, 200, {
+    ...data,
+    live: true,
+    generatedAt: new Date().toISOString(),
+  });
+}
+
+async function dashboardPreview(url, req, res) {
+  const apiKey = await requestApiKey(req);
+  if (!apiKey) return send(res, 401, { error: 'missing x-api-key' });
+  const day = url.searchParams.get('day') || chinaNowParts().day;
+  const zsType = url.searchParams.get('zs_type') || DEFAULT_ZS_TYPE;
+  const hiddenIds = new Set((url.searchParams.get('hidden') || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean));
+  const data = await buildDashboardSnapshotData(day, zsType, apiKey, {
+    hiddenIds,
+    boardPool: BOARD_COUNT,
+    stopAfterPool: true,
+    previewOnly: true,
+    skipLimitUpDbSync: true,
+  });
+  return send(res, 200, {
+    ...data,
+    preview: true,
+    generatedAt: new Date().toISOString(),
+  });
+}
+
+async function cleanupOldLocalData(options = {}) {
+  const now = chinaNowParts();
+  const nowDay = options.nowDay || now.day;
+  const retentionDays = Math.max(10, Number(options.retentionDays || AUTO_CLEANUP_RETENTION_DAYS));
+  const cacheRetentionDays = Math.max(10, Number(options.cacheRetentionDays || AUTO_CLEANUP_MAX_CACHE_FILE_AGE_DAYS));
+  const apiKey = options.apiKey || await readSavedApiKey().catch(() => '');
+  const retentionEndDay = await resolveCurrentLatestTradingDay(apiKey).catch(() => nowDay);
+  const retainedTradingDays = new Set((await getRecentTradingDays(retentionEndDay, apiKey, retentionDays).catch(() => []))
+    .map(isoFromCompactDate)
+    .filter(Boolean));
+  if (!retainedTradingDays.size) {
+    for (let i = 0; i < 90 && retainedTradingDays.size < retentionDays; i += 1) {
+      const candidate = shiftDay(retentionEndDay, -i);
+      if (isChinaMarketTradingDay(candidate)) retainedTradingDays.add(candidate);
+    }
+  }
+  // 保底保护：如果“最新交易日”接口/缓存滞后，不能把今天或昨天刚生成的来源库误判为
+  // 不在最近 30 个交易日内。额外保留最近 14 个自然日的日期文件。
+  for (let i = 0; i < 14; i += 1) {
+    retainedTradingDays.add(isoFromCompactDate(shiftDay(nowDay, -i)));
+  }
+  const dateCleanupOptions = retainedTradingDays.size ? { keepDays: retainedTradingDays } : {};
+  const results = [];
+  results.push(await cleanupDateNamedEntries(LIMIT_UP_DB_DIR, retentionDays, nowDay, dateCleanupOptions));
+  results.push(await cleanupDateNamedEntries(LIMIT_UP_MAIN_REASON_DB_DIR, retentionDays, nowDay, dateCleanupOptions));
+  results.push(await cleanupDateNamedEntries(LIMIT_UP_MAIN_REASON_EVIDENCE_DIR, retentionDays, nowDay, dateCleanupOptions));
+  results.push(await cleanupDateNamedEntries(LIMIT_UP_MAIN_REASON_QUALITY_DIR, retentionDays, nowDay, dateCleanupOptions));
+  results.push(await cleanupDateNamedEntries(LIMIT_UP_MAIN_REASON_AUTO_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));
+  results.push(await cleanupDateNamedEntries(LIMIT_UP_MAIN_REASON_SOURCE_DIR, retentionDays, nowDay, {
+    ...dateCleanupOptions,
+    keepNames: new Set(['auto', 'tgb-hunan-ocr-cache', 'tgb-hunan-structured', 'tgb-hunan-raw', 'jiuyangongshe-structured', 'jiuyangongshe-diagram', 'tonghuashun-structured', 'tonghuashun-official-images', 'tonghuashun-api-candidates', 'kaipanla-fupanla', 'eastmoney-fpl-limit-reason', 'xuangubao-limit-up']),
+  }));
+  results.push(await cleanupDateNamedEntries(EASTMONEY_CLOSE_DIR, retentionDays, nowDay, {
+    ...dateCleanupOptions,
+    keepNames: new Set(['_tmp']),
+  }));
+  results.push(await cleanupDateNamedEntries(TGB_HUNAN_OCR_CACHE_DIR, retentionDays, nowDay, dateCleanupOptions));
+  results.push(await cleanupDateNamedEntries(TGB_HUNAN_STRUCTURED_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));
+  results.push(await cleanupDateNamedEntries(TGB_HUNAN_RAW_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));
+  results.push(await cleanupDateNamedEntries(TONGHUASHUN_STRUCTURED_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));
+  results.push(await cleanupDateNamedEntries(TONGHUASHUN_OFFICIAL_IMAGE_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));
+  results.push(await cleanupDateNamedEntries(KAIPANLA_FUPANLA_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));
+  results.push(await cleanupDateNamedEntries(EASTMONEY_FPL_LIMIT_REASON_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));
+  results.push(await cleanupDateNamedEntries(XUANGUBAO_LIMIT_UP_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));
+  let snapshotScopes = [];
+  try {
+    snapshotScopes = await fs.readdir(SNAPSHOT_DIR, { withFileTypes: true });
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+  for (const scope of snapshotScopes.filter(entry => entry.isDirectory())) {
+    results.push(await cleanupDateNamedEntries(path.join(SNAPSHOT_DIR, scope.name), retentionDays, nowDay, dateCleanupOptions));
+  }
+  results.push(await cleanupOldFilesByMtime(PERSIST_CACHE_DIR, cacheRetentionDays));
+  results.push(await cleanupDateNamedEntries(JIUYANGONGSHE_STRUCTURED_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));
+  results.push(await cleanupDateNamedEntries(JIUYANGONGSHE_DIAGRAM_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));
+  const tmpDir = path.join(EASTMONEY_CLOSE_DIR, '_tmp');
+  results.push(await cleanupOldFilesByMtime(tmpDir, 2));
+  return {
+    ok: true,
+    nowDay,
+    retentionDays,
+    retentionMode: retainedTradingDays.size ? 'trading-days' : 'calendar-days',
+    retentionEndDay,
+    retainedTradingDays: [...retainedTradingDays].sort(),
+    cacheRetentionDays,
+    results,
+    deleted: results.reduce((sum, item) => sum + Number(item.deleted || 0), 0),
+    checked: results.reduce((sum, item) => sum + Number(item.checked || 0), 0),
+    errors: results.flatMap(item => item.errors || []),
+  };
+}
+
+async function cleanupLocalDataApi(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  const retentionDays = Number(url.searchParams.get('retention_days') || AUTO_CLEANUP_RETENTION_DAYS);
+  const cacheRetentionDays = Number(url.searchParams.get('cache_retention_days') || AUTO_CLEANUP_MAX_CACHE_FILE_AGE_DAYS);
+  const result = await cleanupOldLocalData({ retentionDays, cacheRetentionDays });
+  return send(res, 200, result);
+}
+
+async function runAutoCleanupIfDue() {
+  const now = chinaNowParts();
+  if (autoCleanupDay === now.day) return;
+  if (now.hour < AUTO_CLEANUP_RUN_HOUR || (now.hour === AUTO_CLEANUP_RUN_HOUR && now.minute < AUTO_CLEANUP_RUN_MINUTE)) return;
+  autoCleanupDay = now.day;
+  const result = await cleanupOldLocalData();
+  if (result.deleted) {
+    console.log(`cleanup old local data: deleted ${result.deleted}, checked ${result.checked}`);
+  }
+}
+
+function msUntilNextChinaClockTime(hour, minute) {
+  const now = chinaNowParts();
+  const targetMinute = Math.max(0, Math.min(23, Number(hour) || 0)) * 60 + Math.max(0, Math.min(59, Number(minute) || 0));
+  const currentMinute = now.hour * 60 + now.minute;
+  let delayMinutes = targetMinute - currentMinute;
+  if (delayMinutes <= 0) delayMinutes += 24 * 60;
+  return Math.max(60 * 1000, delayMinutes * 60 * 1000);
+}
+
+function scheduleDailyAutoCleanup() {
+  const run = async () => {
+    try {
+      await runAutoCleanupIfDue();
+    } catch (err) {
+      console.error('cleanup old local data failed:', err.message);
+    } finally {
+      setTimeout(run, msUntilNextChinaClockTime(AUTO_CLEANUP_RUN_HOUR, AUTO_CLEANUP_RUN_MINUTE));
+    }
+  };
+  setTimeout(run, msUntilNextChinaClockTime(AUTO_CLEANUP_RUN_HOUR, AUTO_CLEANUP_RUN_MINUTE));
+}
+
+async function runAutoDiscoverySyncIfDue() {
+  const now = chinaNowParts();
+  if (autoDiscoverySyncDay === now.day) return;
+  const currentMinute = now.hour * 60 + now.minute;
+  const targetMinute = DISCOVERY_AUTO_SYNC_HOUR * 60 + DISCOVERY_AUTO_SYNC_MINUTE;
+  if (currentMinute < targetMinute) return;
+  autoDiscoverySyncDay = now.day;
+  await syncDiscoveryDb({ force: false, reason: 'auto-daily' });
+}
+
+async function runAutoSnapshotIfDue() {
+  const now = chinaNowParts();
+  if (now.hour < 15 || (now.hour === 15 && now.minute < 30)) return;
+  if (autoSnapshotDay === now.day) return;
+  if (!isChinaMarketTradingDay(now.day)) {
+    autoSnapshotDay = now.day;
+    return;
+  }
+  const apiKey = await readSavedApiKey();
+  if (!apiKey) return;
+  const existing = await readLimitUpDbDay(now.day).catch(() => null);
+  if (!existing?.stocks?.length) {
+    await ensureLimitUpDbDay(now.day, apiKey, true).catch(() => null);
+  }
+  await ensureLimitUpMainReasonDbDay(now.day, apiKey, true).catch(() => null);
+  await syncCloseDbRecentDays(now.day, apiKey, CLOSE_DB_SYNC_TRADING_DAYS).catch(() => null);
+  for (const zsType of AUTO_SNAPSHOT_ZS_TYPES) {
+    if (isDisabledZsType(zsType)) continue;
+    try {
+      await fs.readFile(snapshotPath(now.day, zsType), 'utf8');
+      continue;
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+    }
+    if (isEastmoneyZsType(zsType)) {
+      await syncEastmoneyConcepts({ reason: 'snapshot-after-15:30' }).catch(() => null);
+    }
+    if (isThsZsType(zsType)) {
+      await syncThsConcepts({ reason: 'snapshot-after-15:30' }).catch(() => null);
+    }
+    const data = await buildDashboardSnapshotData(now.day, zsType, apiKey);
+    await writeDashboardSnapshot(data);
+  }
+  autoSnapshotDay = now.day;
+}
+
+async function runAutoMorningMainReasonSyncIfDue() {
+  const now = chinaNowParts();
+  const minuteOfDay = now.hour * 60 + now.minute;
+  const startMinute = 8 * 60 + 30;
+  const endMinute = 9 * 60 + 20;
+  if (minuteOfDay < startMinute || minuteOfDay > endMinute) return;
+  if (!isChinaMarketTradingDay(now.day)) return;
+  const slot = `${now.day}:${Math.floor((minuteOfDay - startMinute) / 10)}`;
+  if (autoMorningMainReasonLastSlot === slot) return;
+  autoMorningMainReasonLastSlot = slot;
+  const apiKey = await readSavedApiKey();
+  if (!apiKey) return;
+  const tradingDays = await getRecentTradingDays(now.day, apiKey, MAIN_REASON_SYNC_MAX_DAYS).catch(() => []);
+  const targetDay = [...tradingDays].reverse().find(day => day < now.day) || tradingDays[tradingDays.length - 1];
+  if (!targetDay) return;
+  autoMorningMainReasonDay = now.day;
+  const results = await syncMissingLimitUpMainReasonDbDays(targetDay, apiKey, MAIN_REASON_SYNC_MAX_DAYS, {
+    forceAll: false,
+  }).catch(err => {
+    console.error('morning main reason auto sync failed:', err.message);
+    return [];
+  });
+  await ensureLimitUpDbDay(targetDay, apiKey, false).catch(() => null);
+  await ensureLimitUpMainReasonDbDay(targetDay, apiKey, true).catch(err => {
+    console.error('morning main reason latest-day refresh failed:', err.message);
+  });
+}
+
+async function runAutoTgbHunanRawEvidenceIfDue() {
+  return;
+  const now = chinaNowParts();
+  const minuteOfDay = now.hour * 60 + now.minute;
+  const startMinute = 8 * 60 + 30;
+  const endMinute = 10 * 60 + 30;
+  if (minuteOfDay < startMinute || minuteOfDay > endMinute) return;
+  const slot = `${now.day}:${Math.floor((minuteOfDay - startMinute) / 15)}`;
+  if (autoTgbHunanRawEvidenceLastSlot === slot) return;
+  autoTgbHunanRawEvidenceLastSlot = slot;
+  const apiKey = await readSavedApiKey();
+  const tradingDays = apiKey ? await getRecentTradingDays(now.day, apiKey, 5).catch(() => []) : [];
+  const targetDay = [...tradingDays].reverse().find(day => day < now.day) || previousChinaTradingDay(now.day);
+  if (!targetDay || !isChinaMarketTradingDay(targetDay)) return;
+  await fetchTgbHunanRawEvidenceDay(targetDay, { force: false }).catch(err => {
+    console.error('TGB Hunan raw evidence auto sync failed:', err.message);
+  });
+}
+
+// 日常自动:每交易日上午(主因DB同步之后),对上一交易日的湖南人复盘图做视觉识别→对账→落结构化→折入存盘DB。
+// 幂等(已有结构化文件则跳过);未配视觉 key 或当日复盘图未发/对账不达标则安静跳过,绝不污染共识。
+async function runAutoTgbVisionSyncIfDue() {
+  // TGB auto structuring uses the guarded Qwen OCR table parser. It only writes when
+  // OCR rows pass the limit-up-pool validation gate, so failed recognition stays out
+  // of the official source database.
+  const now = chinaNowParts();
+  const minuteOfDay = now.hour * 60 + now.minute;
+  // 两个窗口:① 晚间 17:30-23:00 同步「当天」复盘(湖南人 17点后发);② 次日早 9:20-11:30 同步「上一交易日」(兜底)。
+  const evening = minuteOfDay >= 17 * 60 + 30 && minuteOfDay <= 23 * 60;
+  const morning = minuteOfDay >= 9 * 60 + 20 && minuteOfDay <= 11 * 60 + 30;
+  if (!evening && !morning) return;
+  if (!isChinaMarketTradingDay(now.day)) return;
+  const slot = `${now.day}:${evening ? 'e' : 'm'}:${Math.floor(minuteOfDay / 20)}`;
+  if (autoTgbVisionLastSlot === slot) return;
+  autoTgbVisionLastSlot = slot;
+  const qwenConfig = await readTgbQwenOcrConfig().catch(() => ({ configured: false }));
+  if (!qwenConfig.configured) return;                            // 未配 OCR key 不跑
+  const apiKey = await readSavedApiKey();
+  const tradingDays = apiKey ? await getRecentTradingDays(now.day, apiKey, 5).catch(() => []) : [];
+  // 晚间同步当天(复盘已发);早间同步上一交易日。当天涨停池(对账基准)未就绪时 buildTgb... 会安静跳过。
+  const targetDay = evening ? now.day : ([...tradingDays].reverse().find(day => day < now.day) || previousChinaTradingDay(now.day));
+  if (!targetDay || !isChinaMarketTradingDay(targetDay)) return;
+  try { await fs.access(tgbHunanStructuredSourcePath(isoFromCompactDate(targetDay))); return; } catch {}  // 已有→幂等跳过
+  const r = await ensureTgbHunanStructuredArtifactDay(targetDay, apiKey, { force: false }).catch(err => ({ ok: false, error: err.message }));
+  if (!r.ok) { console.error(`TGB OCR auto sync ${targetDay} skipped: ${r.error || r.reason || r.message}`); return; }
+  // 折入存盘DB:非reuse重建(重跑 fetchAutoReviewSourceRows,4源读缓存文件+tgb读结构化,基本不联网),
+  // 让 tgb 进存盘 rawRows → 共识/覆盖/数据源健康 全一致
+  await ensureLimitUpMainReasonDbDay(targetDay, apiKey, true, { reuseAutoSource: false }).catch(err => {
+    console.error('TGB vision DB refold failed:', err.message);
+  });
+  console.log(`TGB OCR auto sync ${targetDay}: ${r.count || r.rows || 0} rows, folded into DB`);
+}
+
+async function runAutoEastmoneyConceptSyncIfDue() {
+  const now = chinaNowParts();
+  if (now.hour < 15) return;
+  if (autoEastmoneyConceptSyncDay === now.day) return;
+  if (!isChinaMarketTradingDay(now.day)) {
+    autoEastmoneyConceptSyncDay = now.day;
+    return;
+  }
+  const catalog = await readEastmoneyConceptCatalog();
+  const closeDb = await readEastmoneyCloseDbDay(now.day);
+  if (eastmoneyConceptCatalogIsTodayAfterClose(catalog, now.day) && isCompleteCloseDbPayload(closeDb)) {
+    autoEastmoneyConceptSyncDay = now.day;
+    return;
+  }
+  autoEastmoneyConceptSyncDay = now.day;
+  await syncEastmoneyConcepts({ reason: 'auto-after-15:00' });
+}
+
+async function runAutoCloseDbBackfillIfDue() {
+  const now = chinaNowParts();
+  if (now.hour < 15 || (now.hour === 15 && now.minute < 5)) return;
+  if (autoCloseDbBackfillDay === now.day) return;
+  if (!isChinaMarketTradingDay(now.day)) {
+    autoCloseDbBackfillDay = now.day;
+    return;
+  }
+  const apiKey = await readSavedApiKey();
+  if (!apiKey) return;
+  const closeDb = await readEastmoneyCloseDbDay(now.day);
+  if (isCompleteCloseDbPayload(closeDb) && isSavedAfterMarketClose(closeDb, now.day)) {
+    autoCloseDbBackfillDay = now.day;
+    return;
+  }
+  autoCloseDbBackfillDay = now.day;
+  await syncCloseDbRecentDays(now.day, apiKey, CLOSE_DB_SYNC_TRADING_DAYS);
+}
+
+// 行情页「热点/细分搜索」:输入热点板块名或细分词,扫近30交易日主因库,匹配「主因 或 细分原因」命中的涨停股,
+// 返回卡片数据:每股 近10/近30日涨停次数 + 10日/30日涨幅,默认按10日涨幅排序。细分词用 sub-theme-taxonomy 扩同义词。
+async function getHotThemeSearch(url, req, res) {
+  const q = String(url.searchParams.get('q') || '').trim();
+  if (!q) return send(res, 400, { ok: false, error: 'missing q' });
+  const isoDay = isoFromCompactDate(url.searchParams.get('day') || chinaNowParts().day);
+  const apiKey = await readSavedApiKey().catch(() => '');
+  const tradingDays = await getRecentTradingDays(isoDay, apiKey, 30).catch(() => []);
+  if (!tradingDays.length) return send(res, 200, { ok: true, query: q, stockCount: 0, stocks: [] });
+  const last10 = new Set(tradingDays.slice(-10));
+  // 精确匹配:只显示「真属于该标签」的股,不把仅在细分原因里捎带提一句的大范围股拉进来。
+  const tax = loadSubThemeTaxonomy();
+  const subEntry = (tax.subThemes || []).find(st => String(st.name) === q);
+  const subKeywords = subEntry ? [q, ...(subEntry.keywords || [])].filter(Boolean) : [];
+  const subParents = subEntry ? (subEntry.parents || []) : [];
+  const qKey = consensusKey(q) || q;
+  const detailOf = s => [s.finalDetailReason, ...(s.reasonNames || []), s.finalReason, ...(s.allRawTopics || [])].filter(Boolean).join(' ');
+  // 先读近30天库到内存(缓存命中,便宜)
+  const recs = [];
+  for (const d of tradingDays) {
+    const db = await readLimitUpMainReasonDbDay(d).catch(() => null);
+    for (const s of (db?.stocks || [])) { const code = normalizeReasonSourceCode(s.code); if (code) recs.push({ d, code, s }); }
+  }
+  function matchBy(mode, s) {
+    const main = String(s.finalBoardTopic || '');
+    if (mode === 'sub') return subThemeParentMatches(main, subParents) && subKeywords.some(k => detailOf(s).includes(k));   // 细分:主因属父家族 + 细分原因命中
+    if (mode === 'main') { const st = standardTheme(q); return main === q || (st && standardTheme(main) === st); }            // 主因:精确(严格标准题材;未知词只认字面,不模糊归类)
+    return main !== q && ((s.reasonNames || []).map(String).includes(q) || (s.allRawTopics || []).map(String).includes(q) || String(s.finalDetailReason || '').includes(q));   // detail:auto细分(氧化锆等)
+  }
+  function collect(mode) {
+    const agg = new Map();
+    for (const { d, code, s } of recs) {
+      if (!matchBy(mode, s)) continue;
+      if (!agg.has(code)) agg.set(code, { code, name: s.name || '', ztDays: new Set(), topics: new Set(), latest: '' });
+      const a = agg.get(code); a.ztDays.add(d); if (s.name) a.name = s.name;
+      if (s.finalBoardTopic) { a.topics.add(s.finalBoardTopic); a.latest = s.finalBoardTopic; }
+    }
+    return agg;
+  }
+  // 模式判定:① 词典细分(封测/磷化工)→ sub;② 有股主因literally=q(存储芯片/小金属)→ main 按题材家族配;
+  // ③ 否则(氧化锆这种没人拿它当主因、却是别的题材keyword的词)→ detail,按细分原因字面精配,不被 standardTheme 模糊归大类。
+  const hasExactMain = recs.some(r => String(r.s.finalBoardTopic || '') === q);
+  const matchMode = subEntry ? 'sub' : (hasExactMain ? 'main' : 'detail');
+  const agg = collect(matchMode);
+  // 先按近30涨停次数取前60(最活跃),再算涨幅,避免给太多股拉K线
+  const capped = [...agg.values()].sort((x, y) => y.ztDays.size - x.ztDays.size).slice(0, 60);
+  await mapLimit(capped, 6, async a => {
+    a.zt10 = [...a.ztDays].filter(d => last10.has(d)).length;
+    a.zt30 = a.ztDays.size;
+    let kline = apiKey ? await fetchKline(a.code, apiKey).catch(() => null) : null;
+    if (!kline?.x?.length) kline = await fetchEastmoneyKline(a.code).catch(() => null);
+    const bars = Array.isArray(kline?.y) ? kline.y : [];
+    const closeBack = back => { const i = bars.length - 1 - back; const v = Number(bars[i]?.[1]); return (i >= 0 && Number.isFinite(v)) ? v : null; };
+    const last = closeBack(0), c10 = closeBack(10), c30 = closeBack(30);
+    a.gain10 = (last && c10) ? +(((last - c10) / c10) * 100).toFixed(2) : null;
+    a.gain30 = (last && c30) ? +(((last - c30) / c30) * 100).toFixed(2) : null;
+  });
+  capped.sort((x, y) => (y.gain10 ?? -9999) - (x.gain10 ?? -9999));
+  return send(res, 200, {
+    ok: true, query: q, day: isoDay,
+    matchMode,   // 'main'=按主因精配 / 'sub'=词典细分 / 'detail'=自动细分(按细分原因)
+    matchedTopics: [...new Set(capped.flatMap(a => [...a.topics]))].slice(0, 12),
+    stockCount: capped.length,
+    zt10Total: capped.reduce((s, a) => s + (a.zt10 || 0), 0),
+    zt30Total: capped.reduce((s, a) => s + (a.zt30 || 0), 0),
+    stocks: capped.map(a => ({ code: a.code, name: a.name, mainTopic: a.latest, zt10: a.zt10, zt30: a.zt30, gain10: a.gain10, gain30: a.gain30 })),
+  });
+}
+
+async function runAutoThsConceptSyncIfDue() {
+  const now = chinaNowParts();
+  if (now.hour < 15) return;
+  if (autoThsConceptSyncDay === now.day) return;
+  if (!isChinaMarketTradingDay(now.day)) {
+    autoThsConceptSyncDay = now.day;
+    return;
+  }
+  const catalog = await readThsConceptCatalog();
+  if (thsConceptCatalogIsTodayAfterClose(catalog, now.day)) {
+    autoThsConceptSyncDay = now.day;
+    return;
+  }
+  autoThsConceptSyncDay = now.day;
+  await syncThsConcepts({ reason: 'auto-after-15:00' });
+}
+
+// ====================== 策略页后端(挂载 strategy-backend.js) ======================
+const { createStrategyBackend } = require('./strategy-backend');
+const { createL2FocusScanner } = require('./l2-focus-scanner');
+// getBoards: 读三类型(东财6/同花顺5/KPL7)当天快照里的板块+指标，合并下发
+// 策略页 QI 龙头：从快照 cardData(zt10 含主次数 ztCount + gain10/gain30) 按 QI 口径
+// (近10日主次数≥2 且 主次数/涨幅均居板块前列) 算每板块 10日/30日 QI 龙头，与看板 QI 同口径
+function strategyQiRank(rows, valOf) {
+  const m = new Map();
+  [...(Array.isArray(rows) ? rows : [])]
+    .map(r => ({ code: String(r?.code || ''), name: String(r?.name || ''), v: Number(valOf(r)) }))
+    .filter(r => r.code && Number.isFinite(r.v))
+    .sort((a, b) => b.v - a.v)
+    .forEach((r, i) => { if (!m.has(r.code)) m.set(r.code, { rank: i + 1, v: r.v, name: r.name }); });
+  return m;
+}
+function strategyPickQi(countMap, gainMap, totalByCode) {
+  const K = 5, MIN_COUNT = 2, MAX = 3;
+  const out = [];
+  for (const [code, c] of countMap) {
+    const g = gainMap.get(code);
+    if (!g) continue;
+    if (c.rank <= K && g.rank <= K && c.v >= MIN_COUNT && g.v > 0) out.push({ code, name: c.name || g.name, score: c.rank + g.rank, count: c.v, gain: g.v, total: Number(totalByCode && totalByCode.get(code)) });
+  }
+  out.sort((a, b) => a.score - b.score);
+  // 带上 主次数(count)/总涨停次数(total)/窗口涨幅(gain)/综合名次(score)，供 QI 龙头聚合算战绩/引领；板块卡只用 code/name，多余字段无害
+  return out.slice(0, MAX).map(o => ({ code: o.code, name: o.name, count: o.count, total: Number.isFinite(o.total) ? o.total : o.count, gain: Number(o.gain), score: o.score }));
+}
+function computeBoardQiLeaders(card) {
+  if (!card) return null;
+  const countMap = strategyQiRank(card.zt10, r => r.ztCount);
+  const totalByCode = new Map();
+  for (const r of (Array.isArray(card.zt10) ? card.zt10 : [])) {
+    const c = String(r?.code || '');
+    if (c && !totalByCode.has(c)) totalByCode.set(c, Number(r?.totalCount ?? r?.ztCount));
+  }
+  const qi10 = strategyPickQi(countMap, strategyQiRank(card.gain10, r => r.gain), totalByCode);
+  const qi30 = strategyPickQi(countMap, strategyQiRank(card.gain30, r => r.gain), totalByCode);
+  return (qi10.length || qi30.length) ? { qi10, qi30 } : null;
+}
+async function strategySnapshotDayHasSnap(d) {
+  for (const z of [6, 5, 7]) { try { await fs.access(snapshotPath(d, String(z))); return true; } catch {} }
+  return false;
+}
+// 请求日(通常=今天盘中、快照15:30才生成)无快照时，回退到最近一个有快照的交易日，避免策略页空白
+async function resolveStrategySnapshotDay(day) {
+  if (await strategySnapshotDayHasSnap(day)) return day;
+  const apiKey = await readSavedApiKey().catch(() => '');
+  const td = await getRecentTradingDays(day, apiKey, 15).catch(() => []);
+  for (let i = td.length - 1; i >= 0; i--) {
+    if (String(td[i]) === String(day)) continue;
+    if (await strategySnapshotDayHasSnap(td[i])) return td[i];
+  }
+  return day;
+}
+// 列出某交易日「之前」最近一个有快照的交易日，用于「今日新晋 QI」对比
+async function prevStrategySnapshotDay(useDay) {
+  try {
+    const dir = path.join(SNAPSHOT_DIR, '6');
+    const files = await fs.readdir(dir);
+    const days = files
+      .map(f => (/^(\d{4}-\d{2}-\d{2})\.json$/.exec(f) || [])[1])
+      .filter(Boolean)
+      .filter(d => String(d) < String(useDay))
+      .sort();
+    return days.length ? days[days.length - 1] : '';
+  } catch { return ''; }
+}
+// 收集某快照日「全部板块」的 QI 龙头代码集合（10日∪30日），用于新晋对比
+async function collectStrategyQiCodes(snapDay) {
+  const set = new Set();
+  for (const zsType of [6, 5, 7]) {
+    try {
+      const payload = JSON.parse(await fs.readFile(snapshotPath(snapDay, String(zsType)), 'utf8'));
+      const cardData = payload?.cardData || {};
+      for (const b of (Array.isArray(payload?.boards) ? payload.boards : [])) {
+        const plateId = String(b?.plateId ?? b?.id ?? b?.code ?? '');
+        const ql = computeBoardQiLeaders(cardData[plateId]);
+        if (ql) for (const e of [...(ql.qi10 || []), ...(ql.qi30 || [])]) set.add(String(e.code));
+      }
+    } catch {}
+  }
+  return set;
+}
+async function getStrategyBoardsForDay(day) {
+  const useDay = await resolveStrategySnapshotDay(day);
+  const out = [];
+  for (const zsType of [6, 5, 7]) {
+    let hidden; try { hidden = await getPermanentHiddenSet(zsType); } catch { hidden = new Set(); }
+    try {
+      const payload = JSON.parse(await fs.readFile(snapshotPath(useDay, String(zsType)), 'utf8'));
+      const cardData = payload?.cardData || {};
+      for (const b of (Array.isArray(payload?.boards) ? payload.boards : [])) {
+        const plateId = String(b?.plateId ?? b?.id ?? b?.code ?? '');
+        if (!plateId) continue;
+        if (hidden.has(plateId)) continue;   // 看板永久删除(删两次)的板块,策略候选/强势板块也排除
+        out.push({
+          plateId,
+          name: String(b?.name ?? b?.plateName ?? ''),
+          gainPct: Number(b?.gainPct ?? b?.gain ?? NaN),
+          ztCount: Number(b?.ztCount ?? b?.zt ?? NaN),
+          netInflow: Number(b?.netInflow ?? b?.mainInflow ?? b?.inflow ?? NaN),
+          zsType,
+          qiLeaders: computeBoardQiLeaders(cardData[plateId]),
+        });
+      }
+    } catch {}
+  }
+  return out;
+}
+
+// 读某日全部看板板块(name/plateId/ztCount/netInflow + 今日涨停成员 code),并**排除看板永久删除的板块**
+// (与看板同口径:getPermanentHiddenSet 黑名单,按 zsType 隔离)。供强势板块共振榜 + 热点榜资金流入共用。
+async function getDayBoardsWithMembers(day) {
+  const useDay = await resolveStrategySnapshotDay(day);
+  const bmap = new Map();
+  for (const z of [6, 5, 7]) {
+    let hidden; try { hidden = await getPermanentHiddenSet(z); } catch { hidden = new Set(); }
+    try {
+      const p = JSON.parse(await fs.readFile(snapshotPath(useDay, String(z)), 'utf8'));
+      const cardData = p?.cardData || {};
+      for (const b of (Array.isArray(p?.boards) ? p.boards : [])) {
+        const name = String(b?.name || b?.plateName || '');
+        if (!name) continue;
+        const plateId = String(b?.plateId || b?.id || '');
+        if (plateId && hidden.has(plateId)) continue;   // 看板永久删除的板块,共振榜也不出现
+        const zt = Number(b?.ztCount ?? b?.zt ?? NaN);
+        const netInflow = Number(b?.netInflow ?? b?.mainInflow ?? b?.inflow ?? NaN);
+        const gainPct = Number(b?.gainPct ?? b?.gain ?? b?.zf ?? b?.changePct ?? b?.涨幅 ?? NaN);
+        const ztList = Array.isArray(cardData[plateId]?.ztList) ? cardData[plateId].ztList : [];
+        const codes = ztList.map(x => normalizeReasonSourceCode(x?.code ?? x)).filter(Boolean);
+        const cur = bmap.get(name);
+        if (!cur || (Number(zt) || 0) > (Number(cur.zt) || 0)) bmap.set(name, { name, plateId, zsType: z, zt, netInflow, gainPct, codes });
+      }
+    } catch {}
+  }
+  return { useDay, boards: [...bmap.values()] };
+}
+
+async function getDayThemeBoardStats(day) {
+  const { useDay, boards } = await getDayBoardsWithMembers(day);
+  const dbPayload = await readLimitUpMainReasonDbDay(isoFromCompactDate(useDay)).catch(() => null);
+  const recByCode = new Map((dbPayload?.stocks || []).map(s => [normalizeReasonSourceCode(s.code), s]).filter(([c]) => c));
+  const out = new Map();
+  for (const b of boards) {
+    const cnt = new Map();
+    for (const c of b.codes) {
+      const m = recByCode.get(c);
+      if (!m) continue;
+      const t = String(m.finalBoardTopic || '');
+      if (t) cnt.set(t, (cnt.get(t) || 0) + 1);
+    }
+    const dom = [...cnt.entries()].sort((a, b) => b[1] - a[1])[0];
+    if (!dom) continue;
+    const theme = dom[0];
+    const e = out.get(theme) || {
+      theme,
+      boardCount: 0,
+      boards: [],
+      netInflow: null,
+      netInflowBoard: '',
+      gainPct: null,
+      gainBoard: '',
+    };
+    e.boardCount += 1;
+    e.boards.push({
+      name: b.name,
+      plateId: b.plateId,
+      zsType: b.zsType,
+      zt: Number(b.zt) || 0,
+      netInflow: Number.isFinite(Number(b.netInflow)) ? Number(b.netInflow) : null,
+      gainPct: Number.isFinite(Number(b.gainPct)) ? Number(b.gainPct) : null,
+    });
+    if (Number.isFinite(Number(b.netInflow)) && (e.netInflow == null || Number(b.netInflow) > Number(e.netInflow))) {
+      e.netInflow = Number(b.netInflow);
+      e.netInflowBoard = b.name;
+    }
+    if (Number.isFinite(Number(b.gainPct)) && (e.gainPct == null || Number(b.gainPct) > Number(e.gainPct))) {
+      e.gainPct = Number(b.gainPct);
+      e.gainBoard = b.name;
+    }
+    out.set(theme, e);
+  }
+  return out;
+}
+
+// 题材→板块净流入映射:每个板块的净流入归到「其今日涨停成员的复盘主因众数(dominant)」,同题材取最大板块净流入。
+// 供今日热点榜每张题材卡显示资金流入。
+async function getDayThemeNetInflow(day) {
+  const stats = await getDayThemeBoardStats(day);
+  const themeInflow = new Map([...stats.entries()]
+    .filter(([, v]) => Number.isFinite(Number(v.netInflow)))
+    .map(([theme, v]) => [theme, Number(v.netInflow)]));
+  return themeInflow;
+}
+
+const STRATEGY_STRONG_RESONANCE_MIN_STOCKS = 2;
+function strategyResonanceTopicKey(raw) {
+  return consensusKey(raw) || canonicalTopicName(raw) || String(raw || '').replace(/概念$/u, '').trim();
+}
+function strategyBoardTopicAligned(boardName, mainTheme) {
+  const board = String(boardName || '').trim();
+  const theme = String(mainTheme || '').trim();
+  if (!board || !theme || /^其他$/u.test(theme) || isDroppedThemeWord(theme)) return false;
+  const boardKey = strategyResonanceTopicKey(board);
+  const themeKey = strategyResonanceTopicKey(theme);
+  return !!(boardKey && themeKey && boardKey === themeKey);
+}
+
+// 强势板块共振榜:看板硬闸(涨停家数≥2 且 净流入>0)选出强势板块,用「成员股 code」关节。
+// 严格口径:只统计「个股最终主因」与「板块名称」同题材的成员股;仅属板块成分但主因不符的不算共振。
+async function getStrategyStrongResonance(day) {
+  const { useDay, boards } = await getDayBoardsWithMembers(day);
+  const strong = boards.filter(b => Number.isFinite(b.zt) && b.zt >= 2 && Number.isFinite(b.netInflow) && b.netInflow > 0);
+  const { payload } = await buildDaySourceViewWithConsensus(useDay, {}).catch(() => ({ payload: null }));
+  const finalRows = ((payload?.tabs || []).find(t => t.key === 'final') || {}).rows || [];
+  const consByCode = new Map();
+  for (const r of finalRows) { const code = normalizeReasonSourceCode(r.code); if (code) consByCode.set(code, r); }
+  const tierRank = t => (t === 'strong' ? 2 : t === 'majority' ? 1 : 0);
+  const resultBoards = strong.map(b => {
+    const members = b.codes.map(c => consByCode.get(c)).filter(Boolean);
+    const allThemeCount = new Map();
+    for (const m of members) {
+      const t = String(m.finalBoardTopic || '其他');
+      allThemeCount.set(t, (allThemeCount.get(t) || 0) + 1);
+    }
+    const matchedMembers = members.filter(m =>
+      (m.consensusTier === 'strong' || m.consensusTier === 'majority') &&
+      strategyBoardTopicAligned(b.name, m.finalBoardTopic)
+    );
+    const themeCount = new Map();
+    for (const m of matchedMembers) {
+      const t = String(m.finalBoardTopic || '');
+      if (t) themeCount.set(t, (themeCount.get(t) || 0) + 1);
+    }
+    const themeDist = [...themeCount.entries()].map(([theme, count]) => ({ theme, count })).sort((a, b) => b.count - a.count || a.theme.localeCompare(b.theme));
+    const allThemeDist = [...allThemeCount.entries()].map(([theme, count]) => ({ theme, count })).sort((a, b) => b.count - a.count || a.theme.localeCompare(b.theme));
+    const dominantTheme = themeDist[0]?.theme || '';
+    const dominantKey = strategyResonanceTopicKey(dominantTheme);
+    const resonanceStocks = members
+      .filter(m => (m.consensusTier === 'strong' || m.consensusTier === 'majority') && strategyBoardTopicAligned(b.name, m.finalBoardTopic))
+      .map(m => ({
+        code: m.code, name: m.name, mainTheme: String(m.finalBoardTopic || ''),
+        agreeCount: Number(m.agreeCount || 0), tier: m.consensusTier,
+        limitUpCount: Number(m.limitUpCount || 0), gain: Number.isFinite(Number(m.gain)) ? Number(m.gain) : null,
+        alignsDominant: dominantKey && strategyResonanceTopicKey(m.finalBoardTopic) === dominantKey,
+        alignsBoard: true,
+      }))
+      .sort((a, b) => tierRank(b.tier) - tierRank(a.tier) || b.agreeCount - a.agreeCount || b.limitUpCount - a.limitUpCount || (Number(b.gain) || 0) - (Number(a.gain) || 0));
+    return {
+      name: b.name, plateId: b.plateId,
+      ztCount: Number(b.zt), netInflow: Number(b.netInflow),
+      gainPct: Number.isFinite(Number(b.gainPct)) ? Number(b.gainPct) : null,
+      memberCount: b.codes.length, matchedCount: members.length,
+      dominantTheme, themeDist, allThemeDist, confirmedCount: resonanceStocks.length, resonanceStocks,
+    };
+  }).filter(b => b.confirmedCount >= STRATEGY_STRONG_RESONANCE_MIN_STOCKS)
+    .sort((a, b) => b.netInflow - a.netInflow);
+  return { ok: true, day: isoFromCompactDate(useDay), strongCount: resultBoards.length, boards: resultBoards };
+}
+
+function strategyMainlineTopicKey(raw) {
+  return strategyResonanceTopicKey(raw);
+}
+function strategyThemeTaxonomyInfo(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return null;
+  for (const t of THEME_NONBROAD) {
+    if ((t.keywords || []).some(k => k && s.includes(k))) {
+      return { standard: themeDisplayName(t.standard), group: String(t.group || ''), broad: false };
+    }
+  }
+  for (const t of THEME_BROAD) {
+    if ((t.keywords || []).some(k => k && s.includes(k))) {
+      return { standard: themeDisplayName(t.standard), group: String(t.group || ''), broad: true };
+    }
+  }
+  return null;
+}
+const STRATEGY_MAINLINE_MERGE_GROUPS = new Set([
+  '算力AI',
+  '机器人',
+  '半导体',
+  '医药',
+  '消费',
+  '化工材料',
+  'PCB与连接',
+  '被动元件',
+  '光通信',
+  '消费电子/显示',
+]);
+function strategyMainlineFamilyInfo(item) {
+  const theme = String(item?.theme || '').trim();
+  const info = strategyThemeTaxonomyInfo(theme);
+  if (info?.group && STRATEGY_MAINLINE_MERGE_GROUPS.has(info.group)) {
+    return { key: `group:${info.group}`, label: info.group, group: info.group, taxonomy: info };
+  }
+  return { key: `theme:${item?.key || strategyMainlineTopicKey(theme) || theme}`, label: theme, group: '', taxonomy: info };
+}
+function strategyDedupeByCode(rows, limit = 5) {
+  const seen = new Set();
+  const out = [];
+  for (const row of rows || []) {
+    const code = normalizeReasonSourceCode(row?.code);
+    if (!code || seen.has(code)) continue;
+    seen.add(code);
+    out.push({ ...row, code });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+function strategyMergeScoreParts(items) {
+  const out = {};
+  for (const item of items || []) {
+    for (const [key, value] of Object.entries(item?.scoreParts || {})) {
+      out[key] = Number((Number(out[key] || 0) + Number(value || 0)).toFixed(1));
+    }
+  }
+  return out;
+}
+function strategyMergeMainlineRoles(items, count) {
+  const height = strategyDedupeByCode(
+    items.flatMap(item => item?.roles?.height || [])
+      .sort((a, b) => (Number(b.leadScore) || 0) - (Number(a.leadScore) || 0)),
+    3
+  );
+  const heightCodes = new Set(height.map(row => row.code));
+  const spread = strategyDedupeByCode(
+    items.flatMap(item => item?.roles?.spread || [])
+      .filter(row => !heightCodes.has(normalizeReasonSourceCode(row?.code)))
+      .sort((a, b) =>
+        (Number(b.lianban) || 0) - (Number(a.lianban) || 0) ||
+        (Number(b.leadScore) || 0) - (Number(a.leadScore) || 0)
+      ),
+    5
+  );
+  const spreadCodes = new Set(spread.map(row => row.code));
+  const followerExamples = strategyDedupeByCode(
+    items.flatMap(item => item?.roles?.followers?.examples || [])
+      .filter(row => !heightCodes.has(normalizeReasonSourceCode(row?.code)) && !spreadCodes.has(normalizeReasonSourceCode(row?.code))),
+    4
+  );
+  const highlighted = height.length + spread.length;
+  const explicitFollowers = items.reduce((sum, item) => sum + (Number(item?.roles?.followers?.count) || 0), 0);
+  return {
+    height,
+    spread,
+    followers: {
+      count: Math.max(0, Number(count || 0) - highlighted, explicitFollowers),
+      examples: followerExamples,
+    },
+  };
+}
+function strategyMergeMainlineFamilies(rawMainlines) {
+  const buckets = new Map();
+  for (const item of rawMainlines || []) {
+    const family = strategyMainlineFamilyInfo(item);
+    if (!buckets.has(family.key)) buckets.set(family.key, { family, items: [] });
+    buckets.get(family.key).items.push(item);
+  }
+  const merged = [];
+  for (const { family, items } of buckets.values()) {
+    const sorted = items.slice().sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+    const lead = sorted[0] || {};
+    if (sorted.length === 1) {
+      merged.push({ ...lead, familyKey: family.key, familyLabel: lead.theme || family.label, mergedThemes: [] });
+      continue;
+    }
+    const themes = [...new Set(sorted.map(item => item.theme).filter(Boolean))];
+    const label = family.label || lead.theme || themes[0] || '';
+    const mergedTodayCodes = new Set(sorted.flatMap(item => Array.isArray(item.todayCodes) ? item.todayCodes : []));
+    const mergedRealtimeCodes = new Set(sorted.flatMap(item => Array.isArray(item.realtimeCodes) ? item.realtimeCodes : []));
+    const mergedPriorCodes = new Set(sorted.flatMap(item => Array.isArray(item.priorReasonCodes) ? item.priorReasonCodes : []));
+    const count = mergedTodayCodes.size || sorted.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
+    const maxLianban = Math.max(0, ...sorted.map(item => Number(item.maxLianban) || 0));
+    const lianbanCount = sorted.reduce((sum, item) => sum + (Number(item.lianbanCount) || 0), 0);
+    const recentHeat = sorted.reduce((sum, item) => sum + (Number(item.recentHeat) || 0), 0);
+    const priorReasonCount = mergedPriorCodes.size || sorted.reduce((sum, item) => sum + (Number(item.priorReasonCount) || 0), 0);
+    const boardCount = sorted.reduce((sum, item) => sum + (Number(item.boardCount) || 0), 0);
+    const resonanceStockCount = mergedRealtimeCodes.size || sorted.reduce((sum, item) => sum + (Number(item.resonanceStockCount) || 0), 0);
+    const uniqueBoardMap = new Map();
+    for (const board of sorted.flatMap(item => item.resonanceBoards || [])) {
+      const key = `${board?.name || ''}:${board?.plateId || ''}`;
+      if (!String(board?.name || '').trim() || uniqueBoardMap.has(key)) continue;
+      uniqueBoardMap.set(key, board);
+    }
+    const uniqueBoardsForStats = [...uniqueBoardMap.values()];
+    const netItems = uniqueBoardsForStats.filter(item => isFiniteNumeric(item.netInflow));
+    const netInflow = netItems.length ? netItems.reduce((sum, item) => sum + Number(item.netInflow), 0) : null;
+    const netLead = netItems.slice().sort((a, b) => Number(b.netInflow) - Number(a.netInflow))[0] || {};
+    const gainItems = uniqueBoardsForStats.filter(item => isFiniteNumeric(item.gainPct));
+    const gainLead = gainItems.sort((a, b) => Number(b.gainPct) - Number(a.gainPct))[0] || {};
+    const scoreParts = strategyMergeScoreParts(sorted);
+    if (mergedTodayCodes.size) {
+      scoreParts.limitUps = Number((count * 10).toFixed(1));
+      scoreParts.resonance = Number((boardCount * 12 + resonanceStockCount * 3).toFixed(1));
+    }
+    if (priorReasonCount) scoreParts.priorReason = Number(Math.min(80, priorReasonCount * 8).toFixed(1));
+    scoreParts.continuity = Number((Math.min(recentHeat, 20) * 3).toFixed(1));
+    scoreParts.inflow = Number(strategyMainlineRealtimeInflowScore(netInflow).toFixed(1));
+    const gainLeadPct = isFiniteNumeric(gainLead.gainPct) ? Number(gainLead.gainPct) : 0;
+    scoreParts.boardGain = Number(Math.max(0, Math.min(70, gainLeadPct * 8)).toFixed(1));
+    const score = Object.values(scoreParts).reduce((sum, v) => sum + (Number(v) || 0), 0);
+    const leaders = strategyDedupeByCode(
+      sorted.flatMap(item => item.leaders || [])
+        .sort((a, b) => (Number(b.leadScore) || 0) - (Number(a.leadScore) || 0)),
+      6
+    );
+    const prevCompare = {
+      day: lead.prevCompare?.day || '',
+      count: sorted.reduce((sum, item) => sum + (Number(item.prevCompare?.count) || 0), 0),
+      countDelta: sorted.reduce((sum, item) => sum + (Number(item.prevCompare?.countDelta) || 0), 0),
+      maxLianban: Math.max(0, ...sorted.map(item => Number(item.prevCompare?.maxLianban) || 0)),
+      maxLianbanDelta: maxLianban - Math.max(0, ...sorted.map(item => Number(item.prevCompare?.maxLianban) || 0)),
+      lianbanCount: sorted.reduce((sum, item) => sum + (Number(item.prevCompare?.lianbanCount) || 0), 0),
+      lianbanCountDelta: sorted.reduce((sum, item) => sum + (Number(item.prevCompare?.lianbanCountDelta) || 0), 0),
+    };
+    const resonanceBoards = [];
+    const seenBoards = new Set();
+    for (const board of sorted.flatMap(item => item.resonanceBoards || [])) {
+      const key = String(board?.name || '');
+      if (!key || seenBoards.has(key)) continue;
+      seenBoards.add(key);
+      resonanceBoards.push(board);
+      if (resonanceBoards.length >= 6) break;
+    }
+    const recentTopStocks = strategyDedupeByCode(
+      sorted.flatMap(item => item.recentTopStocks || [])
+        .sort((a, b) => (Number(b.count) || 0) - (Number(a.count) || 0)),
+      4
+    );
+    const roles = strategyMergeMainlineRoles(sorted, count);
+    merged.push({
+      ...lead,
+      theme: label,
+      key: family.key,
+      familyKey: family.key,
+      familyLabel: label,
+      mergedThemes: themes,
+      childMainlines: sorted.map(item => ({
+        theme: item.theme,
+        count: Number(item.count) || 0,
+        score: Number(item.score) || 0,
+        maxLianban: Number(item.maxLianban) || 0,
+      })),
+      score: Number(score.toFixed(1)),
+      scoreParts,
+      explain: [
+        `已合并${themes.join('、')}，按同一主线族统一观察。`,
+        ...strategyMainlineExplain(label, {
+          count,
+          maxLianban,
+          lianbanCount,
+          boardCount,
+          resonanceStockCount,
+          priorReasonCount,
+          recentHeat,
+          netInflow,
+          boardGainPct: gainLead.gainPct,
+          boardGainName: gainLead.name,
+        }),
+      ].slice(0, 5),
+      count,
+      maxLianban,
+      lianbanCount,
+      prevCompare,
+      roles,
+      netInflow,
+      netInflowBoard: String(netLead.name || ''),
+      boardGainPct: isFiniteNumeric(gainLead.gainPct) ? Number(gainLead.gainPct) : null,
+      boardGainName: gainLead.name || '',
+      recentHeat,
+      recentTopStocks,
+      priorReasonCount,
+      priorReasonStocks: strategyDedupeByCode(sorted.flatMap(item => item.priorReasonStocks || []), 6),
+      priorReasonCodes: [...mergedPriorCodes],
+      todayCodes: [...mergedTodayCodes],
+      realtimeCodes: [...mergedRealtimeCodes],
+      topGainStocks: strategyDedupeByCode(sorted.flatMap(item => item.topGainStocks || []), 5),
+      boardCount,
+      resonanceStockCount,
+      resonanceBoards,
+      mainLeader: leaders[0] || null,
+      leaders,
+    });
+  }
+  return merged.sort((a, b) =>
+    (Number(b.score) || 0) - (Number(a.score) || 0) ||
+    (Number(b.count) || 0) - (Number(a.count) || 0) ||
+    (Number(b.maxLianban) || 0) - (Number(a.maxLianban) || 0)
+  );
+}
+function strategyMainlineTierRank(tier) {
+  return tier === 'strong' ? 2 : tier === 'majority' ? 1 : 0;
+}
+function strategyMainlineInflowScore(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(14, Math.log10(n / 1e8 + 1) * 9);
+}
+function strategyMainlineAddCandidate(map, raw, extra = {}) {
+  const code = normalizeReasonSourceCode(raw?.code);
+  if (!code) return null;
+  const cur = map.get(code) || {
+    code,
+    name: String(raw?.name || ''),
+    lianban: 0,
+    gain: null,
+    firstLimitTime: '',
+    sealAmount: null,
+    detail: '',
+    recentCount: 0,
+    recentDays: [],
+    maxRecentLianban: 0,
+    inTodayTheme: false,
+    inResonance: false,
+    tier: '',
+    agreeCount: 0,
+    sourceTags: new Set(),
+  };
+  if (!cur.name && raw?.name) cur.name = String(raw.name);
+  const lianban = Number(raw?.lianban ?? raw?.limitUpCount ?? raw?.latestLianban ?? raw?.maxLianban ?? 0) || 0;
+  cur.lianban = Math.max(cur.lianban || 0, lianban);
+  const gain = Number(raw?.gain);
+  if (Number.isFinite(gain)) cur.gain = cur.gain == null ? gain : Math.max(cur.gain, gain);
+  const seal = String(raw?.firstLimitTime || raw?.sealTime || '').trim();
+  if (seal && !cur.firstLimitTime) cur.firstLimitTime = seal;
+  const sealAmount = strategyMainlineSealAmount(raw);
+  if (sealAmount != null) cur.sealAmount = cur.sealAmount == null ? sealAmount : Math.max(cur.sealAmount, sealAmount);
+  const detail = String(raw?.detail || raw?.latestDetail || raw?.finalDetailReason || '').trim();
+  if (detail && !cur.detail) cur.detail = detail;
+  if (Number(raw?.count) > 0) cur.recentCount = Math.max(cur.recentCount || 0, Number(raw.count) || 0);
+  if (Array.isArray(raw?.days) && raw.days.length) {
+    cur.recentDays = [...new Set([...(cur.recentDays || []), ...raw.days.map(String)])].sort();
+  }
+  cur.maxRecentLianban = Math.max(cur.maxRecentLianban || 0, Number(raw?.maxLianban || 0) || 0);
+  if (extra.inTodayTheme) cur.inTodayTheme = true;
+  if (extra.inResonance) cur.inResonance = true;
+  if (extra.tag) cur.sourceTags.add(extra.tag);
+  const rawTier = String(raw?.tier || raw?.consensusTier || '');
+  if (strategyMainlineTierRank(rawTier) > strategyMainlineTierRank(cur.tier)) cur.tier = rawTier;
+  cur.agreeCount = Math.max(cur.agreeCount || 0, Number(raw?.agreeCount || 0) || 0);
+  map.set(code, cur);
+  return cur;
+}
+function strategyMainlineScoreLeader(c) {
+  const sealMin = strategyParseSealMinutes(c.firstLimitTime);
+  const sealTie = Math.min(4, strategySealBonus(sealMin) / 15);
+  const score =
+    (Math.min(Number(c.lianban) || 0, 6) * 34) +
+    (c.inTodayTheme ? 18 : 0) +
+    (c.inResonance ? 22 : 0) +
+    (strategyMainlineTierRank(c.tier) * 10) +
+    (Math.min(Number(c.agreeCount) || 0, 4) * 4) +
+    (Math.min(Number(c.recentCount) || 0, 8) * 3) +
+    (Math.min(Number(c.maxRecentLianban) || 0, 6) * 2) +
+    (Number.isFinite(Number(c.gain)) ? Math.max(0, Math.min(8, Number(c.gain) / 3)) : 0) +
+    sealTie;
+  return Number(score.toFixed(1));
+}
+function strategyMainlineLeaderBasis(c) {
+  const tags = [];
+  if (Number(c.lianban) >= 2) tags.push(`${Number(c.lianban)}连板`);
+  if (c.inResonance) tags.push('板块共振');
+  if (c.tier === 'strong') tags.push(`${Number(c.agreeCount) || 0}源高度一致`);
+  else if (c.tier === 'majority') tags.push(`${Number(c.agreeCount) || 0}源确认`);
+  if (Number(c.recentCount) > 0) tags.push(`近15日${Number(c.recentCount)}次`);
+  if (!tags.length && c.detail) tags.push(c.detail);
+  return tags.slice(0, 4);
+}
+function strategyMainlinePlainYi(value) {
+  if (value === null || value === undefined || value === '') return '';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '';
+  const abs = Math.abs(n);
+  if (abs >= 1e8) return `${n >= 0 ? '' : '-'}${(abs / 1e8).toFixed(1)}亿`;
+  if (abs >= 1e4) return `${n >= 0 ? '' : '-'}${Math.round(abs / 1e4)}万`;
+  return String(Math.round(n));
+}
+function strategyMainlineSealAmount(raw) {
+  const values = [
+    raw?.sealAmount,
+    raw?.limitUpFund,
+    raw?.sealedAmount,
+    raw?.fund,
+    raw?.raw?.fund,
+  ];
+  for (const value of values) {
+    const n = Number(value);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
+function strategyMainlineExplain(theme, data = {}) {
+  const explain = [];
+  const count = Number(data.count) || 0;
+  const maxLianban = Number(data.maxLianban) || 0;
+  const lianbanCount = Number(data.lianbanCount) || 0;
+  const boardCount = Number(data.boardCount) || 0;
+  const resonanceStockCount = Number(data.resonanceStockCount) || 0;
+  const priorReasonCount = Number(data.priorReasonCount) || 0;
+  const recentHeat = Number(data.recentHeat) || 0;
+  const inflow = strategyMainlinePlainYi(data.netInflow);
+  const inflowValue = isFiniteNumeric(data.netInflow) ? Number(data.netInflow) : null;
+  const boardGainPct = isFiniteNumeric(data.boardGainPct) ? Number(data.boardGainPct) : null;
+  const boardGainName = String(data.boardGainName || '').trim();
+  if (count > 0) explain.push(`${theme}今日涨停${count}只，是主线分的基础权重。`);
+  if (priorReasonCount > 0) explain.push(`${priorReasonCount}只今日涨停股被历史四源综合指向该主因，作为盘中主因预判。`);
+  if (maxLianban > 0) explain.push(`高度达到${maxLianban}板${lianbanCount ? `，其中${lianbanCount}只连板` : ''}，说明短线梯队有延续。`);
+  if (boardCount > 0 || resonanceStockCount > 0) explain.push(`${boardCount}个强势板块形成共振，覆盖${resonanceStockCount}只相关涨停股。`);
+  if (recentHeat > 0) explain.push(`近15个交易日反复活跃${recentHeat}次，连续性加分。`);
+  if (inflow && inflowValue != null) explain.push(`相关强势板块${inflowValue >= 0 ? '净流入' : '净流出'}约${inflow.replace(/^-/, '')}，资金维度参与打分。`);
+  if (boardGainPct != null && boardGainPct > 0) explain.push(`${boardGainName || '相关板块'}涨幅${boardGainPct.toFixed(2)}%，同步增强主线强度。`);
+  return explain.slice(0, 5);
+}
+function strategyMainlineLeaderExplain(c) {
+  const explain = [];
+  if (Number(c?.lianban) >= 2) explain.push(`${Number(c.lianban)}连板带来核心高度。`);
+  if (c?.inTodayTheme) explain.push('属于今日实时强势板块里的涨停股。');
+  if (c?.inResonance) explain.push('同时出现在强势共振板块里。');
+  if (c?.tier === 'strong') explain.push(`${Number(c.agreeCount) || 0}个来源对主因高度一致。`);
+  else if (c?.tier === 'majority') explain.push(`${Number(c.agreeCount) || 0}个来源确认主因。`);
+  if (Number(c?.recentCount) > 0) explain.push(`近15个交易日出现${Number(c.recentCount)}次。`);
+  if (!explain.length && c?.detail) explain.push(String(c.detail));
+  return explain.slice(0, 4);
+}
+function strategyMainlinePrevTradingDay(day) {
+  const isoDay = isoFromCompactDate(day);
+  for (let i = 1; i <= 20; i += 1) {
+    const candidate = shiftDay(isoDay, -i);
+    if (isChinaMarketTradingDay(candidate)) return candidate;
+  }
+  return '';
+}
+function strategyMainlineStockBrief(c, role = '') {
+  return {
+    code: c?.code || '',
+    name: c?.name || '',
+    role,
+    lianban: Number(c?.lianban) || 0,
+    gain: Number.isFinite(Number(c?.gain)) ? Number(Number(c.gain).toFixed(2)) : null,
+    firstLimitTime: c?.firstLimitTime || '',
+    sealAmount: strategyMainlineSealAmount(c),
+    detail: c?.detail || '',
+    recentCount: Number(c?.recentCount) || 0,
+    leadScore: Number.isFinite(Number(c?.leadScore)) ? Number(Number(c.leadScore).toFixed(1)) : 0,
+    basis: Array.isArray(c?.basis) ? c.basis.slice(0, 3) : [],
+    explain: Array.isArray(c?.explain) ? c.explain.slice(0, 3) : [],
+  };
+}
+function strategyMainlineRoleBreakdown(candidates, currentCount = 0) {
+  const today = (candidates || []).filter(c => c?.inTodayTheme);
+  const maxLianban = Math.max(0, ...today.map(c => Number(c.lianban) || 0));
+  const heightRaw = today
+    .filter(c => Number(c.lianban) >= Math.max(2, maxLianban || 0))
+    .sort((a, b) => (Number(b.leadScore) || 0) - (Number(a.leadScore) || 0))
+    .slice(0, 2);
+  const heightCodes = new Set(heightRaw.map(c => c.code));
+  const spreadRaw = today
+    .filter(c => !heightCodes.has(c.code))
+    .sort((a, b) =>
+      (Number(b.lianban) || 0) - (Number(a.lianban) || 0) ||
+      (Number(b.leadScore) || 0) - (Number(a.leadScore) || 0) ||
+      (Number(b.gain) || 0) - (Number(a.gain) || 0) ||
+      (strategyParseSealMinutes(a.firstLimitTime) ?? 9999) - (strategyParseSealMinutes(b.firstLimitTime) ?? 9999)
+    )
+    .slice(0, 4);
+  const spreadCodes = new Set(spreadRaw.map(c => c.code));
+  const followerRaw = today
+    .filter(c => !heightCodes.has(c.code) && !spreadCodes.has(c.code))
+    .sort((a, b) =>
+      (strategyParseSealMinutes(a.firstLimitTime) ?? 9999) - (strategyParseSealMinutes(b.firstLimitTime) ?? 9999) ||
+      String(a.code || '').localeCompare(String(b.code || ''))
+    );
+  const followerCount = Math.max(0, Number(currentCount || today.length) - heightRaw.length - spreadRaw.length);
+  return {
+    height: heightRaw.map(c => strategyMainlineStockBrief(c, 'height')),
+    spread: spreadRaw.map(c => strategyMainlineStockBrief(c, 'spread')),
+    followers: {
+      count: followerCount,
+      examples: followerRaw.slice(0, 3).map(c => strategyMainlineStockBrief(c, 'follow')),
+    },
+  };
+}
+
+function strategyMainlineRealtimeThemeName(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  const info = strategyThemeTaxonomyInfo(s);
+  return String(info?.standard || s.replace(/概念$/u, '')).trim();
+}
+
+function strategyMainlineRealtimeInflowScore(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(60, Math.log10(n / 1e8 + 1) * 22);
+}
+
+function strategyMainlineBoardIdentity(board) {
+  return `${board?.zsType ?? ''}:${String(board?.plateId || board?.id || board?.name || '')}`;
+}
+
+function strategyMainlineBoardThemeRelated(boardName, theme) {
+  const board = String(boardName || '').replace(/概念$/u, '').trim();
+  const main = String(theme || '').replace(/概念$/u, '').trim();
+  if (!board || !main) return false;
+  const boardKey = strategyMainlineTopicKey(board);
+  const mainKey = strategyMainlineTopicKey(main);
+  if (boardKey && mainKey && boardKey === mainKey) return true;
+  const boardInfo = strategyThemeTaxonomyInfo(board);
+  const mainInfo = strategyThemeTaxonomyInfo(main);
+  if (boardInfo && mainInfo) {
+    if (boardInfo.standard && mainInfo.standard && boardInfo.standard === mainInfo.standard) return true;
+    if (boardInfo.group && mainInfo.group && boardInfo.group === mainInfo.group) return true;
+  }
+  return board.includes(main) || main.includes(board);
+}
+
+function strategyMainlineBoardNameKey(value) {
+  return String(value || '')
+    .replace(/概念$/u, '')
+    .replace(/板块$/u, '')
+    .replace(/产业链$/u, '')
+    .replace(/[（）()]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+function strategyMainlineFallbackAliases(theme) {
+  const raw = String(theme || '').trim();
+  const aliases = new Set([...topicAliasSet(raw)].filter(Boolean));
+  const add = list => list.forEach(item => { if (item) aliases.add(item); });
+  if (/光模块|光通信|CPO/i.test(raw)) add(['光模块', '光通信模块', '光通信', 'CPO概念', 'CPO']);
+  if (/半导体|芯片|集成电路/u.test(raw)) add(['半导体', '半导体概念', '芯片', '集成电路']);
+  if (/PCB|覆铜板|线路板/i.test(raw)) add(['PCB', 'PCB概念', '覆铜板', 'PCB铜箔']);
+  if (/人形机器人/u.test(raw)) add(['人形机器人']);
+  else if (/机器人|具身智能|物理AI/u.test(raw)) add(['机器人概念', '人形机器人', '机器人执行器', '减速器']);
+  if (/算力|AI硬件|液冷|数据中心/u.test(raw)) add(['算力概念', '算力', '液冷概念', '液冷', '数据中心', 'CPO概念']);
+  if (/基础建设|基建/u.test(raw)) add(['工程建设', '水利建设', '铁路基建', '装配建筑']);
+  if (/地产链|房地产/u.test(raw)) add(['房地产开发', '房地产', '物业服务', '装修建材', '建筑材料']);
+  if (/化工材料|化工/u.test(raw)) add(['化工', '煤化工概念', '磷化工', '氟化工']);
+  if (/消费/u.test(raw)) add(['大消费', '食品饮料', '乳业', '白酒', '预制菜']);
+  return aliases;
+}
+
+function strategyMainlineCatalogBoardScore(board, seed) {
+  const theme = String(seed?.theme || '').trim();
+  const boardName = String(board?.name || '').trim();
+  if (!theme || !boardName) return 0;
+  const boardKey = strategyMainlineBoardNameKey(boardName);
+  const themeKey = strategyMainlineBoardNameKey(theme);
+  const aliases = [...strategyMainlineFallbackAliases(theme)].map(strategyMainlineBoardNameKey).filter(Boolean);
+  let score = 0;
+  if (aliases.some(alias => alias === boardKey)) score = Math.max(score, 120);
+  if (themeKey && boardKey === themeKey) score += 35;
+  if (aliases.some(alias => alias && boardKey && (alias.includes(boardKey) || boardKey.includes(alias)))) score = Math.max(score, 92);
+  if (strategyMainlineBoardThemeRelated(boardName, theme)) score = Math.max(score, 70);
+  if (!score) return 0;
+  if (/中报|高股息|昨日涨停|融资融券|国企改革|预增|风格/u.test(boardName)) score -= 40;
+  if (numOrNull(board.netInflow) != null) score += 8;
+  if (numOrNull(board.gainPct) != null) score += 4;
+  if (Number(board.zsType) === 6) score += 3;
+  if (Number(board.zsType) === 5) score += 1;
+  return score;
+}
+
+async function getStrategyMainlineRealtimeCatalogBoards(day) {
+  const [eastmoneyQuoteBoards, thsCatalog] = await Promise.all([
+    fetchEastmoneyConceptBoards().catch(() => []),
+    readThsConceptCatalog().catch(() => null),
+  ]);
+  const eastmoneyBoards = (eastmoneyQuoteBoards || []).map(board => {
+    const view = publicEastmoneyConceptBoard(board, board);
+    return {
+      plateId: view.plateId,
+      name: view.name,
+      memberCount: view.stockCount,
+      gainPct: numOrNull(view.gain),
+      netInflow: numOrNull(view.netInflow),
+      ztCount: 0,
+      source: 'eastmoney',
+      zsType: 6,
+    };
+  });
+  const thsBoards = (thsCatalog?.boards || []).map(board => {
+    const view = publicThsConceptBoard(board, board);
+    return {
+      plateId: view.plateId,
+      name: view.name,
+      memberCount: view.stockCount,
+      gainPct: numOrNull(view.gain),
+      netInflow: numOrNull(view.netInflow),
+      ztCount: 0,
+      source: 'ths',
+      zsType: 5,
+    };
+  });
+  const lists = [eastmoneyBoards, thsBoards];
+  const seen = new Set();
+  return lists.flat().map(board => ({
+    ...board,
+    zt: numOrNull(board.ztCount),
+    zsType: Number(board.zsType || (board.source === 'eastmoney' ? 6 : board.source === 'ths' ? 5 : 7)),
+  })).filter(board => {
+    const key = `${board.zsType}:${board.plateId}`;
+    if (!board.name || !board.plateId || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function strategyMainlineAttachBestCatalogBoard(seed, catalogBoards) {
+  if (!seed || !Array.isArray(catalogBoards) || !catalogBoards.length) return false;
+  const candidates = catalogBoards
+    .map(board => ({ board, score: strategyMainlineCatalogBoardScore(board, seed) }))
+    .filter(item => item.score >= 90)
+    .sort((a, b) =>
+      b.score - a.score ||
+      (numOrNull(b.board.netInflow) != null ? 1 : 0) - (numOrNull(a.board.netInflow) != null ? 1 : 0) ||
+      Math.abs(Number(b.board.gainPct) || 0) - Math.abs(Number(a.board.gainPct) || 0)
+    );
+  const best = candidates[0]?.board;
+  if (!best) return false;
+  return strategyMainlineAttachRealtimeBoardToSeed(seed, best, []);
+}
+
+function strategyMainlineAttachRealtimeBoardToSeed(seed, board, matchedCodes = []) {
+  if (!seed || !board) return false;
+  if (!seed.boardKeySet) seed.boardKeySet = new Set();
+  const boardKey = strategyMainlineBoardIdentity(board);
+  if (!boardKey || seed.boardKeySet.has(boardKey)) return false;
+  const boardName = String(board?.name || '').trim();
+  const gainPct = numOrNull(board?.gainPct);
+  const netInflow = numOrNull(board?.netInflow);
+  const zt = numOrNull(board?.zt);
+  const codes = [...new Set((matchedCodes.length ? matchedCodes : (Array.isArray(board?.codes) ? board.codes : []))
+    .map(normalizeReasonSourceCode)
+    .filter(Boolean))];
+  seed.boardKeySet.add(boardKey);
+  if (!seed.realtimeCodeSet) seed.realtimeCodeSet = new Set();
+  for (const code of codes) {
+    seed.codeSet.add(code);
+    seed.realtimeCodeSet.add(code);
+  }
+  if (gainPct != null && (seed.maxGainPct == null || gainPct > seed.maxGainPct)) {
+    seed.maxGainPct = gainPct;
+    seed.gainBoard = boardName;
+  }
+  if (netInflow != null) {
+    seed.netInflowSeen = true;
+    seed.netInflowTotal += netInflow;
+    if (seed.netInflowBest == null || netInflow > seed.netInflowBest) {
+      seed.netInflowBest = netInflow;
+      seed.netInflowBoard = boardName;
+    }
+  }
+  seed.boards.push({
+    name: boardName,
+    plateId: String(board?.plateId || ''),
+    zsType: board?.zsType,
+    ztCount: zt != null ? zt : codes.length,
+    netInflow,
+    gainPct,
+    confirmedCount: codes.length || (zt != null ? zt : 0),
+  });
+  return true;
+}
+
+function strategyMainlineAddRealtimeBoardSeed(seedByKey, board) {
+  const boardName = String(board?.name || '').trim();
+  const theme = strategyMainlineRealtimeThemeName(boardName);
+  const key = strategyMainlineTopicKey(theme || boardName);
+  if (!key || !theme || isDroppedThemeWord(theme)) return null;
+  const zt = numOrNull(board?.zt);
+  const gainPct = numOrNull(board?.gainPct);
+  const netInflow = numOrNull(board?.netInflow);
+  const codes = [...new Set((Array.isArray(board?.codes) ? board.codes : [])
+    .map(normalizeReasonSourceCode)
+    .filter(Boolean))];
+  if (!(Number.isFinite(zt) && zt > 0) && !codes.length) return null;
+  if (!seedByKey.has(key)) {
+    seedByKey.set(key, {
+      theme,
+      key,
+      boards: [],
+      codeSet: new Set(),
+      realtimeCodeSet: new Set(),
+      priorCodeSet: new Set(),
+      countFallback: 0,
+      maxGainPct: null,
+      gainBoard: '',
+      netInflowTotal: 0,
+      netInflowSeen: false,
+      netInflowBoard: '',
+      netInflowBest: null,
+      boardKeySet: new Set(),
+    });
+  }
+  const seed = seedByKey.get(key);
+  if (!seed.boardKeySet) seed.boardKeySet = new Set();
+  seed.boardKeySet.add(strategyMainlineBoardIdentity(board));
+  seed.countFallback += zt != null ? Math.max(0, zt) : codes.length;
+  if (!seed.realtimeCodeSet) seed.realtimeCodeSet = new Set();
+  for (const code of codes) {
+    seed.codeSet.add(code);
+    seed.realtimeCodeSet.add(code);
+  }
+  if (gainPct != null && (seed.maxGainPct == null || gainPct > seed.maxGainPct)) {
+    seed.maxGainPct = gainPct;
+    seed.gainBoard = boardName;
+  }
+  if (netInflow != null) {
+    seed.netInflowSeen = true;
+    seed.netInflowTotal += netInflow;
+    if (seed.netInflowBest == null || netInflow > seed.netInflowBest) {
+      seed.netInflowBest = netInflow;
+      seed.netInflowBoard = boardName;
+    }
+  }
+  seed.boards.push({
+    name: boardName,
+    plateId: String(board?.plateId || ''),
+    zsType: board?.zsType,
+    ztCount: zt != null ? zt : codes.length,
+    netInflow,
+    gainPct,
+    confirmedCount: codes.length || (zt != null ? zt : 0),
+  });
+  return seed;
+}
+
+function strategyMainlineEnsureSeed(seedByKey, theme, key = '') {
+  const cleanTheme = String(theme || '').trim();
+  const cleanKey = String(key || strategyMainlineTopicKey(cleanTheme)).trim();
+  if (!cleanTheme || !cleanKey) return null;
+  if (!seedByKey.has(cleanKey)) {
+    seedByKey.set(cleanKey, {
+      theme: cleanTheme,
+      key: cleanKey,
+      boards: [],
+      codeSet: new Set(),
+      realtimeCodeSet: new Set(),
+      priorCodeSet: new Set(),
+      countFallback: 0,
+      maxGainPct: null,
+      gainBoard: '',
+      netInflowTotal: 0,
+      netInflowSeen: false,
+      netInflowBoard: '',
+      netInflowBest: null,
+      boardKeySet: new Set(),
+    });
+  } else {
+    const seed = seedByKey.get(cleanKey);
+    if (!seed.priorCodeSet) seed.priorCodeSet = new Set();
+    if (!seed.boardKeySet) seed.boardKeySet = new Set();
+  }
+  return seedByKey.get(cleanKey);
+}
+
+async function buildStrategyMainlinePriorReasonContext(endDay, todayCodes, days = 30) {
+  const wanted = new Set([...(todayCodes || [])].map(normalizeReasonSourceCode).filter(Boolean));
+  const historyEndDay = strategyMainlinePrevTradingDay(endDay) || shiftDay(endDay, -1);
+  if (!wanted.size || !historyEndDay) return { byCode: new Map(), byTheme: new Map(), tradingDays: [], endDay: historyEndDay || '' };
+  const apiKey = await readSavedApiKey().catch(() => '');
+  const tradingDays = await getRecentTradingDays(historyEndDay, apiKey, days).catch(() => []);
+  const byCode = new Map();
+  for (const d of tradingDays) {
+    const db = await readLimitUpMainReasonDbDay(d).catch(() => null);
+    for (const s of (db?.stocks || [])) {
+      const code = normalizeReasonSourceCode(s?.code);
+      if (!code || !wanted.has(code) || isExcludedFromReview(s?.code, s?.name)) continue;
+      const theme = String(s.finalBoardTopic || '').trim();
+      if (!theme || /其他/.test(theme) || isDroppedThemeWord(theme)) continue;
+      const key = strategyMainlineTopicKey(theme);
+      if (!key) continue;
+      if (!byCode.has(code)) {
+        byCode.set(code, {
+          code,
+          name: String(s.name || ''),
+          topics: new Map(),
+        });
+      }
+      const stat = byCode.get(code);
+      if (s.name) stat.name = String(s.name);
+      if (!stat.topics.has(key)) {
+        stat.topics.set(key, {
+          key,
+          theme,
+          count: 0,
+          latestDay: '',
+          latestDetail: '',
+          maxLianban: 0,
+        });
+      }
+      const topic = stat.topics.get(key);
+      topic.count += 1;
+      topic.maxLianban = Math.max(topic.maxLianban || 0, strategyParseLianban(s?.limitUpCount));
+      if (!topic.latestDay || d > topic.latestDay) {
+        topic.latestDay = d;
+        topic.latestDetail = String(s.finalDetailReason || '');
+      }
+    }
+  }
+  const finalByCode = new Map();
+  const byTheme = new Map();
+  for (const [code, stat] of byCode.entries()) {
+    const topics = [...stat.topics.values()].sort((a, b) =>
+      (Number(b.count) || 0) - (Number(a.count) || 0) ||
+      String(b.latestDay || '').localeCompare(String(a.latestDay || '')) ||
+      (Number(b.maxLianban) || 0) - (Number(a.maxLianban) || 0) ||
+      a.theme.localeCompare(b.theme)
+    );
+    const best = topics[0];
+    if (!best) continue;
+    const row = {
+      code,
+      name: stat.name,
+      key: best.key,
+      theme: best.theme,
+      count: Number(best.count) || 0,
+      latestDay: best.latestDay || '',
+      latestDetail: best.latestDetail || '',
+      topics: topics.slice(0, 3).map(t => ({ theme: t.theme, count: t.count, latestDay: t.latestDay })),
+    };
+    finalByCode.set(code, row);
+    if (!byTheme.has(best.key)) byTheme.set(best.key, { key: best.key, theme: best.theme, count: 0, codes: [], stocks: [] });
+    const themeStat = byTheme.get(best.key);
+    themeStat.count += 1;
+    themeStat.codes.push(code);
+    themeStat.stocks.push(row);
+  }
+  return { byCode: finalByCode, byTheme, tradingDays, endDay: historyEndDay };
+}
+
+async function buildStrategyMainlineHistoryContext(endDay, themeKeys, days = 15, limit = 4) {
+  const wanted = new Set([...(themeKeys || [])].map(String).filter(Boolean));
+  const historyEndDay = strategyMainlinePrevTradingDay(endDay) || shiftDay(endDay, -1);
+  const apiKey = await readSavedApiKey().catch(() => '');
+  const tradingDays = await getRecentTradingDays(historyEndDay, apiKey, days).catch(() => []);
+  const byTheme = new Map();
+  for (const d of tradingDays) {
+    const db = await readLimitUpMainReasonDbDay(d).catch(() => null);
+    const seen = new Set();
+    for (const s of (db?.stocks || [])) {
+      if (isExcludedFromReview(s?.code, s?.name)) continue;
+      const theme = String(s.finalBoardTopic || '').trim();
+      if (!theme || /其他/.test(theme) || isDroppedThemeWord(theme)) continue;
+      const key = strategyMainlineTopicKey(theme);
+      if (!key || (wanted.size && !wanted.has(key))) continue;
+      const code = normalizeReasonSourceCode(s.code);
+      if (!code) continue;
+      const seenKey = `${d}:${key}:${code}`;
+      if (seen.has(seenKey)) continue;
+      seen.add(seenKey);
+      if (!byTheme.has(key)) {
+        byTheme.set(key, {
+          key,
+          recentHeat: 0,
+          themeCounts: new Map(),
+          stockMap: new Map(),
+        });
+      }
+      const stat = byTheme.get(key);
+      stat.recentHeat += 1;
+      stat.themeCounts.set(theme, (stat.themeCounts.get(theme) || 0) + 1);
+      if (!stat.stockMap.has(code)) {
+        stat.stockMap.set(code, {
+          code,
+          name: String(s.name || ''),
+          count: 0,
+          days: [],
+          latestDay: '',
+          latestLianban: 0,
+          maxLianban: 0,
+          latestDetail: '',
+        });
+      }
+      const item = stat.stockMap.get(code);
+      item.count += 1;
+      item.days.push(d);
+      if (s.name) item.name = String(s.name);
+      const lianban = strategyParseLianban(s?.limitUpCount);
+      item.maxLianban = Math.max(item.maxLianban || 0, lianban);
+      if (!item.latestDay || d > item.latestDay) {
+        item.latestDay = d;
+        item.latestLianban = lianban;
+        item.latestDetail = String(s.finalDetailReason || '');
+      }
+    }
+  }
+  for (const stat of byTheme.values()) {
+    stat.topTopics = [...stat.themeCounts.entries()]
+      .map(([theme, count]) => ({ theme, count }))
+      .sort((a, b) => b.count - a.count || a.theme.localeCompare(b.theme));
+    stat.dominantTheme = stat.topTopics[0]?.theme || '';
+    stat.recentTopStocks = [...stat.stockMap.values()]
+      .sort((a, b) =>
+        (Number(b.count) || 0) - (Number(a.count) || 0) ||
+        (Number(b.latestLianban) || 0) - (Number(a.latestLianban) || 0) ||
+        String(b.latestDay || '').localeCompare(String(a.latestDay || '')) ||
+        String(a.code || '').localeCompare(String(b.code || ''))
+      )
+      .slice(0, limit)
+      .map(item => ({
+        code: item.code,
+        name: item.name,
+        count: item.count,
+        days: item.days,
+        latestDay: item.latestDay,
+        latestLianban: item.latestLianban,
+        maxLianban: item.maxLianban,
+        latestDetail: item.latestDetail,
+      }));
+  }
+  return { byTheme, tradingDays, endDay: historyEndDay, recentWindow: tradingDays.length };
+}
+
+async function getStrategyMainlines(day) {
+  const requestedDay = isoFromCompactDate(day || chinaNowParts().day);
+  const boardPayload = await getDayBoardsWithMembers(requestedDay).catch(() => ({ useDay: requestedDay, boards: [] }));
+  const isoDay = isoFromCompactDate(boardPayload?.useDay || requestedDay);
+  const limitUpDb = await readLimitUpDbDay(isoDay).catch(() => null);
+  const prevDay = strategyMainlinePrevTradingDay(isoDay);
+  const prevDb = prevDay ? await readLimitUpMainReasonDbDay(prevDay).catch(() => null) : null;
+  const prevThemeStats = new Map();
+  for (const s of (prevDb?.stocks || [])) {
+    if (isExcludedFromReview(s?.code, s?.name)) continue;
+    const theme = String(s.finalBoardTopic || '').trim();
+    if (!theme || /其他/.test(theme) || isDroppedThemeWord(theme)) continue;
+    const key = strategyMainlineTopicKey(theme);
+    if (!key) continue;
+    const stat = prevThemeStats.get(key) || { day: prevDay, count: 0, maxLianban: 0, lianbanCount: 0 };
+    const lianban = strategyParseLianban(s?.limitUpCount);
+    stat.count += 1;
+    stat.maxLianban = Math.max(stat.maxLianban || 0, lianban);
+    if (lianban >= 2) stat.lianbanCount += 1;
+    prevThemeStats.set(key, stat);
+  }
+  const sealAmountByCode = new Map();
+  for (const s of (limitUpDb?.stocks || [])) {
+    const code = normalizeReasonSourceCode(s?.code);
+    const sealAmount = strategyMainlineSealAmount(s);
+    if (code && sealAmount != null) sealAmountByCode.set(code, sealAmount);
+  }
+  const limitUpByCode = new Map();
+  for (const s of (limitUpDb?.stocks || [])) {
+    if (isExcludedFromReview(s?.code, s?.name)) continue;
+    const code = normalizeReasonSourceCode(s?.code);
+    if (code) limitUpByCode.set(code, s);
+  }
+  const seedByKey = new Map();
+  for (const b of (boardPayload?.boards || [])) {
+    const zt = numOrNull(b?.zt);
+    const gainPct = numOrNull(b?.gainPct);
+    const netInflow = numOrNull(b?.netInflow);
+    const hasLimitUps = zt != null && zt > 0;
+    const hasCodes = Array.isArray(b?.codes) && b.codes.length > 0;
+    if (!hasLimitUps && !hasCodes) continue;
+    if (!((zt != null && zt >= 2) || (gainPct != null && gainPct > 0) || (netInflow != null && netInflow > 0))) continue;
+    strategyMainlineAddRealtimeBoardSeed(seedByKey, b);
+  }
+  let todayLimitCodes = new Set([...limitUpByCode.keys()]);
+  if (!todayLimitCodes.size) {
+    todayLimitCodes = new Set([...seedByKey.values()].flatMap(seed => [...(seed.codeSet || [])]));
+  }
+  const priorReason = await buildStrategyMainlinePriorReasonContext(isoDay, todayLimitCodes, 30)
+    .catch(() => ({ byCode: new Map(), byTheme: new Map(), tradingDays: [], endDay: '' }));
+  for (const prior of priorReason.byCode.values()) {
+    const seed = strategyMainlineEnsureSeed(seedByKey, prior.theme, prior.key);
+    if (!seed) continue;
+    seed.codeSet.add(prior.code);
+    seed.priorCodeSet.add(prior.code);
+  }
+  for (const seed of seedByKey.values()) {
+    const seedCodes = new Set([...(seed.codeSet || [])]);
+    if (!seedCodes.size) continue;
+    for (const board of (boardPayload?.boards || [])) {
+      const boardCodes = [...new Set((Array.isArray(board?.codes) ? board.codes : [])
+        .map(normalizeReasonSourceCode)
+        .filter(Boolean))];
+      if (!boardCodes.length) continue;
+      const matchedCodes = boardCodes.filter(code => seedCodes.has(code));
+      if (!matchedCodes.length) continue;
+      const related = strategyMainlineBoardThemeRelated(board?.name, seed.theme);
+      if (!related) continue;
+      strategyMainlineAttachRealtimeBoardToSeed(seed, board, matchedCodes);
+    }
+  }
+  const catalogBoards = await getStrategyMainlineRealtimeCatalogBoards(isoDay).catch(() => []);
+  for (const seed of seedByKey.values()) {
+    strategyMainlineAttachBestCatalogBoard(seed, catalogBoards);
+  }
+  const history = await buildStrategyMainlineHistoryContext(isoDay, seedByKey.keys(), 15, 4).catch(() => ({ byTheme: new Map(), tradingDays: [], endDay: '', recentWindow: 0 }));
+  const seeds = [...seedByKey.values()].map(seed => {
+    const todayCodes = [...seed.codeSet];
+    const realtimeCodes = [...(seed.realtimeCodeSet || [])];
+    const todayStocks = todayCodes.map(code => {
+      const live = limitUpByCode.get(code) || {};
+      const prior = priorReason.byCode.get(code) || {};
+      return {
+        ...live,
+        code,
+        name: String(live.name || prior.name || ''),
+        finalDetailReason: live.finalDetailReason || live.reason || prior.latestDetail || '',
+        priorReason: prior.key === seed.key ? prior : null,
+        sealAmount: live.sealAmount ?? sealAmountByCode.get(code),
+      };
+    });
+    const lianbans = todayStocks.map(s => strategyParseLianban(s?.limitUpCount));
+    const hist = history.byTheme.get(seed.key) || {};
+    const count = todayCodes.length || Number(seed.countFallback) || 0;
+    return {
+      theme: seed.theme,
+      key: seed.key,
+      count,
+      todayCodes,
+      realtimeCodes,
+      todayStocks,
+      priorReasonCount: seed.priorCodeSet ? seed.priorCodeSet.size : 0,
+      priorReasonStocks: todayStocks.filter(s => s.priorReason).map(s => ({
+        code: s.code,
+        name: s.name,
+        count: Number(s.priorReason?.count) || 0,
+        latestDay: s.priorReason?.latestDay || '',
+        latestDetail: s.priorReason?.latestDetail || '',
+      })),
+      maxLianban: Math.max(0, ...lianbans),
+      lianbanCount: lianbans.filter(x => x >= 2).length,
+      recentTopStocks: hist.recentTopStocks || [],
+      recentHeat: Number(hist.recentHeat) || 0,
+      historicalTheme: hist.dominantTheme || '',
+      historicalThemes: hist.topTopics || [],
+      netInflow: seed.netInflowSeen ? Number(seed.netInflowTotal) : null,
+      netInflowBoard: seed.netInflowBoard || '',
+      boardGainPct: seed.maxGainPct == null ? null : Number(seed.maxGainPct),
+      boardGainName: seed.gainBoard || '',
+      boards: seed.boards,
+      boardCount: seed.boards.length,
+      resonanceStockCount: realtimeCodes.length || (seed.boards.length ? count : 0),
+    };
+  });
+  const gainLeaders = await buildMainlineTopGainStocks(isoDay, seeds.map(t => t.theme), 30, 5)
+    .catch(() => ({ byTheme: new Map(), tradingDays: [], baseDay: null }));
+  const rawMainlines = seeds.map((t) => {
+    const theme = String(t.theme || '');
+    const key = t.key || strategyMainlineTopicKey(theme);
+    const boards = t.boards || [];
+    const candidateMap = new Map();
+    for (const s of (t.todayStocks || [])) {
+      const prior = s.priorReason || null;
+      strategyMainlineAddCandidate(candidateMap, {
+        code: s.code,
+        name: s.name,
+        limitUpCount: s.limitUpCount,
+        gain: s.gain,
+        firstLimitTime: s.firstLimitTime,
+        sealAmount: s.sealAmount ?? sealAmountByCode.get(normalizeReasonSourceCode(s.code)),
+        finalDetailReason: s.finalDetailReason || s.reason || prior?.latestDetail || '',
+      }, { inTodayTheme: true, inResonance: true, tag: prior ? '历史主因预判' : '今日实时' });
+    }
+    for (const s of (t.recentTopStocks || [])) {
+      strategyMainlineAddCandidate(candidateMap, s, { tag: '近15日' });
+    }
+    const candidates = [...candidateMap.values()]
+      .filter(c => c.inTodayTheme || c.inResonance)
+      .map(c => ({
+        ...c,
+        sourceTags: [...(c.sourceTags || [])].slice(0, 4),
+        leadScore: strategyMainlineScoreLeader(c),
+        basis: strategyMainlineLeaderBasis(c),
+        explain: strategyMainlineLeaderExplain(c),
+      }))
+      .sort((a, b) =>
+        (Number(b.leadScore) || 0) - (Number(a.leadScore) || 0) ||
+        (Number(b.lianban) || 0) - (Number(a.lianban) || 0) ||
+        (Number(b.recentCount) || 0) - (Number(a.recentCount) || 0) ||
+        (strategyParseSealMinutes(a.firstLimitTime) ?? 9999) - (strategyParseSealMinutes(b.firstLimitTime) ?? 9999) ||
+        String(a.code || '').localeCompare(String(b.code || ''))
+      );
+    const leaders = candidates.slice(0, 5);
+    const boardCount = Number(t.boardCount) || boards.length;
+    const resonanceStockCount = Number(t.resonanceStockCount) || 0;
+    const priorReasonCount = Number(t.priorReasonCount) || 0;
+    const recentHeat = Number(t.recentHeat) || (t.recentTopStocks || []).reduce((sum, s) => sum + (Number(s.count) || 0), 0);
+    const boardGainPct = isFiniteNumeric(t.boardGainPct) ? Number(t.boardGainPct) : null;
+    const currentCount = Number(t.count) || 0;
+    const currentMaxLianban = Number(t.maxLianban) || 0;
+    const currentLianbanCount = Number(t.lianbanCount) || 0;
+    const prev = prevThemeStats.get(key) || { day: prevDay, count: 0, maxLianban: 0, lianbanCount: 0 };
+    const prevCompare = {
+      day: prevDay,
+      count: Number(prev.count) || 0,
+      countDelta: currentCount - (Number(prev.count) || 0),
+      maxLianban: Number(prev.maxLianban) || 0,
+      maxLianbanDelta: currentMaxLianban - (Number(prev.maxLianban) || 0),
+      lianbanCount: Number(prev.lianbanCount) || 0,
+      lianbanCountDelta: currentLianbanCount - (Number(prev.lianbanCount) || 0),
+    };
+    const roles = strategyMainlineRoleBreakdown(candidates, currentCount);
+    const scoreParts = {
+      limitUps: currentCount * 10,
+      height: currentMaxLianban * 22,
+      lianban: currentLianbanCount * 9,
+      resonance: boardCount * 12 + resonanceStockCount * 3,
+      priorReason: Math.min(80, priorReasonCount * 8),
+      continuity: Math.min(recentHeat, 20) * 3,
+      inflow: strategyMainlineRealtimeInflowScore(t.netInflow),
+      boardGain: Math.max(0, Math.min(70, (boardGainPct || 0) * 8)),
+    };
+    const score = Object.values(scoreParts).reduce((sum, v) => sum + (Number(v) || 0), 0);
+    return {
+      theme,
+      key,
+      score: Number(score.toFixed(1)),
+      scoreParts: Object.fromEntries(Object.entries(scoreParts).map(([k, v]) => [k, Number((Number(v) || 0).toFixed(1))])),
+      explain: strategyMainlineExplain(theme, { ...t, boardCount, resonanceStockCount, recentHeat, boardGainPct }),
+      count: currentCount,
+      maxLianban: currentMaxLianban,
+      lianbanCount: currentLianbanCount,
+      prevCompare,
+      roles,
+      netInflow: t.netInflow ?? null,
+      netInflowBoard: t.netInflowBoard || '',
+      boardGainPct,
+      boardGainName: t.boardGainName || '',
+      recentHeat,
+      recentTopStocks: t.recentTopStocks || [],
+      priorReasonCount,
+      priorReasonStocks: t.priorReasonStocks || [],
+      priorReasonCodes: (t.priorReasonStocks || []).map(s => normalizeReasonSourceCode(s.code)).filter(Boolean),
+      historicalTheme: t.historicalTheme || '',
+      historicalThemes: t.historicalThemes || [],
+      todayCodes: t.todayCodes || [],
+      realtimeCodes: t.realtimeCodes || [],
+      topGainStocks: gainLeaders.byTheme.get(key) || [],
+      gainBaseDay: gainLeaders.baseDay || null,
+      boardCount,
+      resonanceStockCount,
+      resonanceBoards: boards.slice(0, 5).map(b => ({
+        name: b.name,
+        ztCount: Number(b.ztCount) || 0,
+        netInflow: b.netInflow,
+        gainPct: b.gainPct,
+        confirmedCount: Number(b.confirmedCount) || 0,
+      })),
+      mainLeader: leaders[0] || null,
+      leaders,
+    };
+  }).filter(x => x.count > 0);
+
+  const mainlines = strategyMergeMainlineFamilies(rawMainlines)
+    .slice(0, 10)
+    .map((x, i) => ({ ...x, rank: i + 1 }));
+  return {
+    ok: true,
+    mode: 'intraday-mainline',
+    basis: 'realtime-board-gain-inflow-limitups-plus-prior-main-reason',
+    day: isoDay,
+    requestedDay,
+    sourceDay: { realtime: isoDay, boards: isoDay, priorReason: priorReason.endDay || '', history: history.endDay || '', hotThemes: history.endDay || isoDay, resonance: isoDay },
+    recentWindow: history.recentWindow || 15,
+    count: mainlines.length,
+    stockCount: new Set(seeds.flatMap(t => t.todayCodes || [])).size,
+    mainlines,
+  };
+}
+
+// 反向关节(stock 视角，**主因口径**):个股「💪强势」标的正确含义=该股综合归纳出的「唯一主因」
+// 恰是当日某个强势板块的 dominantTheme。这样 13 板块归属被综合归纳收敛成 1 个主因后只问一次。
+// dominantTheme 与共振榜同口径:只认板块名称与最终主因同题材,且至少2只成员股坐实。硬闸:涨停≥2 且 净流入>0、排永久隐藏。
+// 返回 { strongThemes:Set<主题>, themeBoards:Map<主题,[强势板块名]> }(themeBoards 仅供 tooltip 显示该主题由哪些强势板块坐实)。
+async function getStrongThemeMap(day, finalRows) {
+  const { boards } = await getDayBoardsWithMembers(day);
+  const strong = boards.filter(b => Number.isFinite(b.zt) && b.zt >= 2 && Number.isFinite(b.netInflow) && b.netInflow > 0);
+  const topicByCode = new Map();
+  for (const r of (finalRows || [])) { const c = normalizeReasonSourceCode(r?.code); if (c) topicByCode.set(c, String(r?.finalBoardTopic || '')); }
+  const strongThemes = new Set();
+  const themeBoards = new Map();
+  for (const b of strong) {
+    const cnt = new Map();
+    for (const c of b.codes) {
+      const t = topicByCode.get(normalizeReasonSourceCode(c));
+      if (t && t !== '其他' && strategyBoardTopicAligned(b.name, t)) cnt.set(t, (cnt.get(t) || 0) + 1);
+    }
+    const dom = [...cnt.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+    if (dom && dom[1] < STRATEGY_STRONG_RESONANCE_MIN_STOCKS) continue;
+    if (!dom) continue;
+    const theme = dom[0];
+    strongThemes.add(theme);
+    if (!themeBoards.has(theme)) themeBoards.set(theme, []);
+    if (!themeBoards.get(theme).includes(b.name)) themeBoards.get(theme).push(b.name);
+  }
+  return { strongThemes, themeBoards };
+}
+
+// 连板数：涨停库 limitUpCount 可能是数字或"3天3板"等字符串，取首个整数
+function strategyParseLianban(v) {
+  if (v == null) return 0;
+  const n = Number(v);
+  if (Number.isFinite(n)) return n;
+  const m = String(v).match(/\d+/);
+  return m ? Number(m[0]) : 0;
+}
+// 封板时间解析：兼容 "09:31:34" / "093134" / "93134"(HHMMSS 去前导零) 等，返回距 00:00 的分钟
+function strategyParseSealMinutes(t) {
+  const digits = String(t || '').replace(/\D/g, '');
+  if (!digits) return null;
+  let hh, mm;
+  if (digits.length >= 5) { const p = digits.padStart(6, '0'); hh = +p.slice(0, 2); mm = +p.slice(2, 4); }
+  else if (digits.length === 4) { hh = +digits.slice(0, 2); mm = +digits.slice(2, 4); }
+  else if (digits.length === 3) { hh = +digits.slice(0, 1); mm = +digits.slice(1, 3); }
+  else { hh = +digits; mm = 0; }
+  if (!(hh >= 0 && hh < 24 && mm >= 0 && mm < 60)) return null;
+  return hh * 60 + mm;
+}
+function strategyFmtSeal(mins) {
+  if (mins == null) return '';
+  return String(Math.floor(mins / 60)).padStart(2, '0') + ':' + String(mins % 60).padStart(2, '0');
+}
+// 抢先封板加分：封板越早(越接近09:30)分越高，封板时间缺失=0
+function strategySealBonus(mins) {
+  if (mins == null) return 0;
+  const fromOpen = Math.max(0, mins - (9 * 60 + 30));
+  return Math.max(0, 60 - fromOpen * 0.2);   // 开盘即封≈60，越晚越低，约5小时后归0
+}
+// ========== QI 龙头聚合（作战室）：把各板块分散的 QI 龙头汇成一张总榜 ==========
+// 维度：引领分(高连板+抢先封板+主次数强度+多板块归属) / 梯队(按今日连板分档) / 今日新晋(对比前一快照日 QI 集合)
+async function getStrategyQiBoard(day, boards) {
+  const useDay = await resolveStrategySnapshotDay(day);
+  const bd = Array.isArray(boards) && boards.length ? boards : await getStrategyBoardsForDay(day);
+  // 今日涨停 join：连板数 + 封板时间 + 今日涨幅
+  const limitMap = new Map();
+  try {
+    const db = await readLimitUpDbDay(useDay);
+    for (const s of (db?.stocks || [])) {
+      const code = String(s?.code || ''); if (!code) continue;
+      limitMap.set(code, {
+        lianban: strategyParseLianban(s?.limitUpCount),
+        sealTime: String(s?.firstLimitTime || '').trim(),
+        gainToday: Number(s?.gain),
+      });
+    }
+  } catch {}
+  // 今日新晋：今天是 QI 但前一快照日不是
+  const prevDay = await prevStrategySnapshotDay(useDay);
+  const prevSet = prevDay ? await collectStrategyQiCodes(prevDay) : new Set();
+  const byCode = new Map();
+  for (const b of bd) {
+    const ql = b?.qiLeaders; if (!ql) continue;
+    const addEntry = (e, kind) => {
+      const code = String(e?.code || ''); if (!code) return;
+      const cur = byCode.get(code) || { code, name: String(e?.name || ''), boards: [], kinds: new Set(), count: 0, total: 0, gain: 0 };
+      if (!cur.name) cur.name = String(e?.name || '');
+      if (!cur.boards.some(x => x.plateId === String(b.plateId) && x.zsType === b.zsType)) {
+        cur.boards.push({ name: String(b.name || ''), plateId: String(b.plateId), zsType: b.zsType });
+      }
+      cur.kinds.add(kind);
+      cur.count = Math.max(cur.count, Number(e?.count) || 0);
+      cur.total = Math.max(cur.total, Number(e?.total) || 0);
+      cur.gain = Math.max(cur.gain, Number(e?.gain) || 0);
+      byCode.set(code, cur);
+    };
+    for (const e of (ql.qi10 || [])) addEntry(e, '10');
+    for (const e of (ql.qi30 || [])) addEntry(e, '30');
+  }
+  const leaders = [...byCode.values()].map(c => {
+    const lu = limitMap.get(c.code) || {};
+    const lianban = Number(lu.lianban) || 0;
+    const sealMin = strategyParseSealMinutes(lu.sealTime);
+    const sealTime = strategyFmtSeal(sealMin);   // 规范成 HH:MM 下发，前端直接显示
+    const leadScore = lianban * 100 + strategySealBonus(sealMin) + (c.count || 0) * 3 + c.boards.length * 2;
+    const tier = lianban >= 3 ? 1 : (lianban === 2 ? 2 : (lianban === 1 ? 3 : 4));
+    return {
+      code: c.code,
+      name: c.name,
+      boards: c.boards,
+      boardCount: c.boards.length,
+      kinds: [...c.kinds].sort(),
+      count: c.count,
+      totalCount: c.total || c.count,
+      gain: Number((Number(c.gain) || 0).toFixed(2)),
+      lianban,
+      sealTime,
+      gainToday: Number.isFinite(Number(lu.gainToday)) ? Number(Number(lu.gainToday).toFixed(2)) : null,
+      leadScore: Number(leadScore.toFixed(1)),
+      tier,
+      isNew: !prevSet.has(c.code),
+    };
+  }).sort((a, b) => b.leadScore - a.leadScore || b.count - a.count || b.gain - a.gain);
+  return {
+    day: useDay,
+    prevDay,
+    total: leaders.length,
+    newCount: leaders.filter(l => l.isNew).length,
+    leaders,
+  };
+}
+// getBoardStocks: 仅智能选股(接 L2 后)才会被调用；按 zsType 分流到现成只读取数函数
+function strategyNormStocks(r) {
+  const arr = Array.isArray(r) ? r : (r?.stocks || r?.data || r?.list || []);
+  return arr.map(s => ({ code: String(s.code || s.dm || ''), name: String(s.name || s.mc || '') })).filter(s => s.code);
+}
+function strategyNormRealtimeStocks(r) {
+  const arr = Array.isArray(r) ? r : (r?.stocks || r?.data || r?.list || []);
+  return arr.map(s => ({
+    code: String(s.code || s.dm || s.stockCode || ''),
+    name: String(s.name || s.mc || s.stockName || ''),
+    gainPct: numOrNull(s.gainPct ?? s.gain ?? s.todayGain ?? s.zf ?? s.changePct),
+  })).filter(s => s.code);
+}
+async function getStrategyBoardStocks(plateId, day, info) {
+  const zsType = Number(info?.zsType);
+  try {
+    if (zsType === 6) return strategyNormStocks(await fetchEastmoneyConceptStocks(plateId));
+    if (zsType === 5) return strategyNormStocks(await fetchThsConceptStocks(plateId));
+    if (zsType === 7) {
+      const apiKey = await readSavedApiKey().catch(() => '');
+      if (!apiKey) return [];
+      const r = await fetchRealtimePlateStocks(plateId, apiKey);
+      return (Array.isArray(r?.List) ? r.List : []).map(row => ({ code: String(row?.[0] || ''), name: String(row?.[1] || '') })).filter(s => s.code);
+    }
+  } catch {}
+  return [];
+}
+async function getStrategyBoardRealtimeStocks(plateId, day, info) {
+  const zsType = Number(info?.zsType);
+  try {
+    if (zsType === 6) return strategyNormRealtimeStocks(await fetchEastmoneyConceptStocks(plateId));
+    if (zsType === 5) return strategyNormRealtimeStocks(await fetchThsConceptStocks(plateId));
+    if (zsType === 7) {
+      const apiKey = await readSavedApiKey().catch(() => '');
+      if (!apiKey) return [];
+      const r = await fetchRealtimePlateStocks(plateId, apiKey);
+      return (Array.isArray(r?.List) ? r.List : []).map(row => ({
+        code: String(row?.[0] || ''),
+        name: String(row?.[1] || ''),
+        gainPct: numOrNull(row?.[6]),
+      })).filter(s => s.code);
+    }
+  } catch {}
+  return getStrategyBoardStocks(plateId, day, info);
+}
+const l2FocusScanner = createL2FocusScanner({ baseDir: __dirname });
+const strategy = createStrategyBackend({
+  dataDir: path.join(__dirname, 'strategy-data'),
+  nowParts: () => chinaNowParts(),
+  isAdmin: (req) => isAdminRequest(req),
+  canRunL2Scan: (req) => !!adminSessionFromToken(readAdminToken(req)),
+  getBoards: getStrategyBoardsForDay,
+  getBoardStocks: getStrategyBoardStocks,
+  getBoardRealtimeStocks: getStrategyBoardRealtimeStocks,
+  l2FocusScanner,
+  getQiAggregate: (day, boards) => getStrategyQiBoard(day, boards),   // QI 龙头作战室聚合(引领/梯队/新晋)
+  // getOrderStats 不注入 → 智能选股返回 available:false(逐笔/L2 数据源待接入)
+});
+
+// 娱乐频道独立服务薄代理。娱乐服务异常时只返回 503,不影响主页、行情和后台。
+const YULE_PROXY_PORT = Number(process.env.YULE_PORT || 8766);
+const YULE_PROXY_HOST = process.env.YULE_HOST || '127.0.0.1';
+function isStanningHost(req) {
+  const host = String((req && req.headers && req.headers.host) || '').split(':')[0].toLowerCase();
+  return host === 'stanning.dreamerqi.com';
+}
+function proxyToYule(req, res) {
+  try {
+    const opts = {
+      host: YULE_PROXY_HOST,
+      port: YULE_PROXY_PORT,
+      path: req.url,
+      method: req.method,
+      headers: req.headers,
+      timeout: 12000,
+    };
+    const pr = http.request(opts, (pres) => {
+      try { res.writeHead(pres.statusCode || 502, pres.headers); } catch (_) {}
+      pres.pipe(res);
+    });
+    const fail = () => {
+      try { pr.destroy(); } catch (_) {}
+      if (!res.headersSent) {
+        res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      }
+      try { res.end(JSON.stringify({ ok: false, error: '娱乐频道暂时不可用' })); } catch (_) {}
+    };
+    pr.on('error', fail);
+    pr.on('timeout', fail);
+    req.pipe(pr);
+  } catch (_) {
+    if (!res.headersSent) { try { res.writeHead(503); } catch (_) {} }
+    try { res.end('{"ok":false}'); } catch (_) {}
+  }
+}
+
+const server = http.createServer(async (req, res) => {
+  if (req.method === 'OPTIONS') return send(res, 200, { ok: true });
+  try {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    if (isStanningHost(req) ||
+        url.pathname === '/yule' || url.pathname.startsWith('/yule/') ||
+        url.pathname === '/yule-admin' || url.pathname.startsWith('/yule-admin/') ||
+        url.pathname.startsWith('/api/yule/') || url.pathname.startsWith('/yule-img/')) {
+      return proxyToYule(req, res);
+    }
+    if (url.pathname.startsWith('/api/strategy/')) {
+      // 把服务器永久删除黑名单注入 hidden 参数:策略所有路径(含历史冻结快照)都排除已永久删除的板块,跨 zsType。
+      try {
+        const permIds = new Set();
+        for (const z of [6, 5, 7]) { for (const id of await getPermanentHiddenSet(z)) permIds.add(String(id)); }
+        if (permIds.size) {
+          const cur = url.searchParams.get('hidden') || '';
+          url.searchParams.set('hidden', (cur ? cur + ',' : '') + [...permIds].join(','));
+        }
+      } catch (e) { /* 名单读不到就不注入,不挡正常请求 */ }
+      if (await strategy.handle(req, res, url)) return;
+    }
+    if ((req.method === 'GET' || req.method === 'HEAD') && STATIC_FILES.has(url.pathname)) {
+      return await sendStatic(req, res, STATIC_FILES.get(url.pathname));
+    }
+    if (url.pathname === '/health') return send(res, 200, { ok: true });
+    if (url.pathname === '/api/admin/login') return await adminLogin(url, req, res);
+    if (url.pathname === '/api/admin/status') return await adminStatus(url, req, res);
+    if (url.pathname === '/api/admin/cloud-health') return await adminCloudHealth(url, req, res);
+    if (url.pathname === '/api/admin/ops-log') return await adminOpsLog(url, req, res);
+    if (url.pathname === '/api/admin/review-source-health') return await adminReviewSourceHealth(url, req, res);
+    if (url.pathname === '/api/auth/register/request-code') return await authRegisterRequestCode(url, req, res);
+    if (url.pathname === '/api/auth/register') return await authRegister(url, req, res);
+    if (url.pathname === '/api/auth/login') return await authLogin(url, req, res);
+    if (url.pathname === '/api/auth/me') return await authMe(url, req, res);
+    if (url.pathname === '/api/auth/password-reset/request') return await authPasswordResetRequest(url, req, res);
+    if (url.pathname === '/api/auth/password-reset/confirm') return await authPasswordResetConfirm(url, req, res);
+    if (url.pathname === '/api/auth/admin/users') return await authAdminUsers(url, req, res);
+    if (url.pathname === '/api/auth/admin/create-user') return await authAdminCreateUser(url, req, res);
+    if (url.pathname === '/api/auth/admin/login-events') return await authAdminLoginEvents(url, req, res);
+    if (url.pathname === '/api/auth/admin/user-password') return await authAdminChangePassword(url, req, res);
+    if (url.pathname === '/api/auth/admin/user-disable') return await authAdminSetUserDisabled(url, req, res);
+    if (url.pathname === '/api/auth/admin/delete-user') return await authAdminDeleteUser(url, req, res);
+    if (url.pathname === '/api/auth/admin/mail-outbox') return await authAdminMailOutbox(url, req, res);
+    if (url.pathname === '/api/auth/admin/smtp-config') return await authAdminSmtpConfig(url, req, res);
+    if (url.pathname === '/api/admin/content-sync/status') return await adminContentSyncStatus(url, req, res);
+    if (url.pathname === '/api/admin/content-sync/yule') return await adminContentSyncYule(url, req, res);
+    if (url.pathname === '/api/admin/content-sync/discovery') return await adminContentSyncDiscovery(url, req, res);
+    if (/^\/api\/chatter\/posts\/[^/]+\/comments$/.test(url.pathname)) return await createChatterComment(url, req, res);
+    if (/^\/api\/chatter\/posts\/[^/]+$/.test(url.pathname)) return await getChatterPost(url, req, res);
+    if (url.pathname === '/api/chatter/posts') {
+      if (req.method === 'POST') return await createChatterPost(url, req, res);
+      return await listChatterPosts(url, req, res);
+    }
+    if (url.pathname.startsWith('/api/chatter/image/')) return await serveChatterImage(url, req, res);
+    if (url.pathname === '/api/discovery/image') return await discoveryImageProxy(url, req, res);
+    if (url.pathname === '/api/discovery') return await getDiscoveryData(url, req, res);
+    if (url.pathname === '/api/discovery/sync') return await syncDiscoveryDataApi(url, req, res);
+    if (url.pathname === '/api/docs-cards') return await docsCardsApi(url, req, res);
+    if (url.pathname === '/api/site-sync/config') return await siteSyncConfig(url, req, res);
+    if (url.pathname === '/api/site-sync/status') return await siteSyncStatus(url, req, res);
+    if (url.pathname === '/api/site-sync/run') return await siteSyncRun(url, req, res);
+    if (url.pathname === '/api/site-sync/rollback') return await siteSyncRollback(url, req, res);
+    if (url.pathname === '/api/site-sync/restart-remote') return await siteSyncRestartRemoteService(url, req, res);
+    if (url.pathname === '/api/site-sync/manifest') return await siteSyncManifest(url, req, res);
+    if (url.pathname === '/api/site-sync/objects') return await siteSyncObjects(url, req, res);
+    if (url.pathname === '/api/site-sync/receive-objects') return await siteSyncReceiveObjects(url, req, res);
+    if (url.pathname === '/api/site-sync/export') return await siteSyncExport(url, req, res);
+    if (url.pathname === '/api/site-sync/receive') return await siteSyncReceive(url, req, res);
+    if (url.pathname === '/api/service/restart') return await serviceRestart(url, req, res);
+    if (url.pathname === '/api/kpl-proxy') return await kplProxy(url, req, res);
+    if (url.pathname === '/api/precise-zt10') return await preciseZt10(url, req, res);
+    if (url.pathname === '/api/precise-gain-rank') return await preciseGainRank(url, req, res);
+    if (url.pathname === '/api/latest-trading-day') return await latestTradingDay(url, req, res);
+    if (url.pathname === '/api/limit-up-db/sync') return await syncLimitUpDb(url, req, res);
+    if (url.pathname === '/api/limit-up-db/status') return await getLimitUpDbStatus(url, req, res);
+    if (url.pathname === '/api/limit-up-main-reason-db/sync') return await syncLimitUpMainReasonDb(url, req, res);
+    if (url.pathname === '/api/limit-up-main-reason-db/status') return await getLimitUpMainReasonDbStatus(url, req, res);
+    if (url.pathname === '/api/limit-up-main-reason-db/staleness-check') return await getMainReasonStalenessCheck(url, req, res);
+    if (url.pathname === '/api/limit-up-main-reason-db/day') return await getLimitUpMainReasonDbDay(url, req, res);
+    if (url.pathname === '/api/limit-up-main-reason-db/quality') return await getLimitUpMainReasonDbQuality(url, req, res);
+    if (url.pathname === '/api/limit-up-main-reason-db/evidence') return await getLimitUpMainReasonDbEvidence(url, req, res);
+    if (url.pathname === '/api/limit-up-main-reason-db/source-view') return await getLimitUpMainReasonDbSourceView(url, req, res);
+    if (url.pathname === '/api/limit-up-main-reason-db/stock') return await getLimitUpMainReasonStockDetail(url, req, res);
+    if (url.pathname === '/api/limit-up-main-reason-db/recent-universe') return await getLimitUpMainReasonRecentUniverse(url, req, res);
+    if (url.pathname === '/api/limit-up-main-reason-db/pending') return await getLimitUpMainReasonPending(url, req, res);
+    if (url.pathname === '/api/limit-up-main-reason-db/hot-themes') return await getLimitUpMainReasonHotThemes(url, req, res);
+    if (url.pathname === '/api/strategy-mainlines') return send(res, 200, await getStrategyMainlines(url.searchParams.get('day') || chinaNowParts().day).catch(e => ({ ok: false, error: String(e && e.message || e) })));
+    if (url.pathname === '/api/strong-board-resonance') return send(res, 200, await getStrategyStrongResonance(url.searchParams.get('day') || chinaNowParts().day).catch(e => ({ ok: false, error: String(e && e.message || e) })));
+    if (url.pathname === '/api/hot-theme-search') return await getHotThemeSearch(url, req, res);
+    if (url.pathname === '/api/limit-up-main-reason-db/unmapped-themes') return await getLimitUpMainReasonUnmappedThemes(url, req, res);
+    if (url.pathname === '/api/limit-up-main-reason-db/theme-add' && req.method === 'POST') return await addThemeKeyword(url, req, res);
+    if (url.pathname === '/api/limit-up-main-reason-db/override' && req.method === 'POST') return await setLimitUpMainReasonOverride(url, req, res);
+    if (url.pathname === '/api/close-db/sync') return await syncCloseDb(url, req, res);
+    if (url.pathname === '/api/close-db/status') return await closeDbStatus(url, req, res);
+    if (url.pathname === '/api/after-close-status') return await afterCloseStatus(url, req, res);
+    if (url.pathname === '/api/jiuyangongshe-auth/status') return await getJiuyangongsheAuthStatus(url, req, res);
+    if (url.pathname === '/api/jiuyangongshe-auth/credentials') return await jiuyangongsheAuthCredentials(url, req, res);
+    if (url.pathname === '/api/jiuyangongshe-auth/launch') return await launchJiuyangongsheAuth(url, req, res);
+    if (url.pathname === '/api/jiuyangongshe-auth/auto-status') return await autoJiuyangongsheAuthStatus(url, req, res);
+    if (url.pathname === '/api/jiuyangongshe-auth') return await saveJiuyangongsheAuth(url, req, res);
+    if (url.pathname === '/api/cleanup-local-data') return await cleanupLocalDataApi(url, req, res);
+    if (url.pathname === '/api/dashboard-preview') return await dashboardPreview(url, req, res);
+    if (url.pathname === '/api/dashboard-live') return await dashboardLive(url, req, res);
+    if (url.pathname === '/api/dashboard-snapshot/build') return await buildDashboardSnapshot(url, req, res);
+    if (url.pathname === '/api/board-names') return await resolveBoardNames(url, req, res);
+    if (url.pathname === '/api/permanent-hidden-boards') return await getPermanentHiddenBoardsServer(url, req, res);
+    if (url.pathname === '/api/permanent-hidden-board') return await savePermanentHiddenBoardServer(url, req, res);
+    if (url.pathname === '/api/permanent-hidden-board/delete') return await deletePermanentHiddenBoardServer(url, req, res);
+    if (url.pathname === '/api/eastmoney-concepts/status') return await eastmoneyConceptStatus(url, req, res);
+    if (url.pathname === '/api/eastmoney-concepts/catalog') return await eastmoneyConceptCatalog(url, req, res);
+    if (url.pathname === '/api/eastmoney-concepts/stocks') return await eastmoneyConceptStocks(url, req, res);
+    if (url.pathname === '/api/eastmoney-concepts/sync') return await eastmoneyConceptSync(url, req, res);
+    if (url.pathname === '/api/eastmoney-index-info') return await eastmoneyIndexInfo(url, req, res);
+    if (url.pathname === '/api/ths-concepts/status') return await thsConceptStatus(url, req, res);
+    if (url.pathname === '/api/ths-concepts/catalog') return await thsConceptCatalog(url, req, res);
+    if (url.pathname === '/api/ths-concepts/stocks') return await thsConceptStocks(url, req, res);
+    if (url.pathname === '/api/ths-concepts/sync') return await thsConceptSync(url, req, res);
+    if (url.pathname === '/api/snapshot' && req.method === 'GET') return await getSnapshot(url, req, res);
+    if (url.pathname === '/api/snapshot' && req.method === 'POST') return await saveSnapshot(url, req, res);
+    return send(res, 404, { error: 'not found' });
+  } catch (err) {
+    return send(res, 500, { error: err.message });
+  }
+});
+
+function cliArgValue(name, fallback = '') {
+  const prefix = `--${name}=`;
+  const found = process.argv.find(arg => arg.startsWith(prefix));
+  return found ? found.slice(prefix.length) : fallback;
+}
+
+async function runMainReasonBackfillCli() {
+  const endDay = isoFromCompactDate(cliArgValue('day', chinaNowParts().day));
+  const days = Math.max(1, Math.min(MAIN_REASON_SYNC_MAX_DAYS, Number(cliArgValue('days', '10')) || 10));
+  const force = process.argv.includes('--force') || cliArgValue('force', '') === '1' || cliArgValue('force', '') === 'true';
+  const apiKey = await readSavedApiKey();
+  if (!apiKey) throw new Error('missing saved api key');
+  const tradingDays = await getRecentTradingDays(endDay, apiKey, days);
+  // --reuse-source：重建最终库但复用已存复盘源(rawRows)，不联网重抓——只重跑归纳逻辑(如≥2源具体共识→细分)
+  const reuseAutoSource = process.argv.includes('--reuse-source');
+  const results = [];
+  for (const day of tradingDays) {
+    if (!isChinaMarketTradingDay(day)) {
+      results.push({ day, skipped: true, reason: 'market closed' });
+      continue;
+    }
+    if (!force && !isMainReasonReviewReady(day)) {
+      results.push({ day, skipped: true, reason: 'review source not ready' });
+      continue;
+    }
+    const payload = await ensureLimitUpMainReasonDbDay(day, apiKey, true, { reuseAutoSource });
+    const { quality } = await ensureLimitUpMainReasonEvidenceAndQualityDay(day, { force: true });
+    results.push({
+      day,
+      rebuilt: !!payload?.stocks?.length,
+      count: Number(payload?.count || payload?.stocks?.length || 0),
+      ruleVersion: payload?.ruleVersion || '',
+      reviewCoveragePct: quality?.reviewCoveragePct ?? null,
+      reviewMainReasonCoveragePct: quality?.reviewMainReasonCoveragePct ?? null,
+      lowConfidenceCount: quality?.lowConfidenceCount ?? null,
+      conflictCount: quality?.conflictCount ?? null,
+    });
+  }
+  console.log(JSON.stringify({
+    ok: true,
+    mode: 'main-reason-backfill',
+    endDay,
+    days,
+    scanned: results.length,
+    rebuilt: results.filter(item => item.rebuilt).length,
+    results,
+  }, null, 2));
+}
+
+async function runTgbHunanRawEvidenceCli() {
+  const endDay = isoFromCompactDate(cliArgValue('day', chinaNowParts().day));
+  const days = Math.max(1, Math.min(MAIN_REASON_SYNC_MAX_DAYS, Number(cliArgValue('days', '1')) || 1));
+  const force = process.argv.includes('--force') || cliArgValue('force', '') === '1' || cliArgValue('force', '') === 'true';
+  const apiKey = await readSavedApiKey();
+  const tradingDays = apiKey
+    ? await getRecentTradingDays(endDay, apiKey, days).catch(() => [])
+    : [];
+  const fallbackDays = [];
+  for (let i = 0; i < 60 && fallbackDays.length < days; i += 1) {
+    const candidate = shiftDay(endDay, -i);
+    if (isChinaMarketTradingDay(candidate)) fallbackDays.unshift(candidate);
+  }
+  const targetDays = tradingDays.length ? tradingDays : fallbackDays.slice(-days);
+  const results = [];
+  for (const day of targetDays) {
+    results.push(await fetchTgbHunanRawEvidenceDay(day, { force }).catch(err => ({
+      ok: false,
+      day,
+      error: err.message,
+    })));
+  }
+  console.log(JSON.stringify({
+    ok: true,
+    mode: 'tgb-hunan-raw-evidence',
+    endDay,
+    days,
+    force,
+    ocrDisabled: true,
+    officialTgbOnly: true,
+    scanned: results.length,
+    saved: results.filter(item => item.rawEvidence?.downloadedImageCount || item.rawEvidence?.articleCount).length,
+    results,
+  }, null, 2));
+}
+
+async function runReviewSourceArtifactsCli() {
+  const endDay = isoFromCompactDate(cliArgValue('day', chinaNowParts().day));
+  const days = Math.max(1, Math.min(MAIN_REASON_SYNC_MAX_DAYS, Number(cliArgValue('days', '1')) || 1));
+  const force = process.argv.includes('--force') || cliArgValue('force', '') === '1' || cliArgValue('force', '') === 'true';
+  const apiKey = await readSavedApiKey();
+  if (!apiKey) throw new Error('missing saved api key');
+  const requestedSources = cliArgValue('sources', '')
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean);
+  const sourceSet = requestedSources.length ? new Set(requestedSources) : null;
+  const tradingDays = await getRecentTradingDays(endDay, apiKey, days);
+  const results = [];
+  for (const day of tradingDays) {
+    const limitUpFill = await ensureLimitUpDbDay(day, apiKey, force).catch(err => ({ error: err.message }));
+    const dayResults = [];
+    for (const source of REQUIRED_REVIEW_SOURCE_GROUPS) {
+      if (sourceSet && !sourceSet.has(source.group)) continue;
+      dayResults.push(await ensureReviewSourceArtifactDay(day, source.group, apiKey, { force }).catch(err => ({
+        group: source.group,
+        label: source.label,
+        ok: false,
+        day,
+        error: err.message,
+      })));
+    }
+    const status = await summarizeRequiredReviewSourceArtifacts(day).catch(err => ({ error: err.message }));
+    results.push({
+      day,
+      ok: dayResults.every(item => item.ok),
+      limitUpFill: limitUpFill
+        ? {
+          ok: !!limitUpFill?.stocks?.length,
+          count: Number(limitUpFill?.count || limitUpFill?.stocks?.length || 0),
+          source: limitUpFill?.source || '',
+          error: limitUpFill?.error || '',
+        }
+        : null,
+      results: dayResults,
+      status,
+    });
+  }
+  console.log(JSON.stringify({
+    ok: results.every(item => item.ok),
+    mode: 'review-source-artifacts',
+    endDay,
+    days,
+    force,
+    sources: requestedSources.length ? requestedSources : REQUIRED_REVIEW_SOURCE_GROUPS.map(source => source.group),
+    scanned: results.length,
+    ready: results.filter(item => item.ok).length,
+    results,
+  }, null, 2));
+}
+
+async function runRefreshZt10Cli() {
+  const endDay = isoFromCompactDate(cliArgValue('day', chinaNowParts().day));
+  const days = Math.max(1, Math.min(40, Number(cliArgValue('days', '10')) || 10));
+  const apiKey = await readSavedApiKey();
+  if (!apiKey) throw new Error('missing saved api key');
+  // 清掉旧“主”计数缓存，确保按当前（严格综合归纳）逻辑重算
+  try { await fs.rm(path.join(PERSIST_CACHE_DIR, 'main-zt-count'), { recursive: true, force: true }); } catch {}
+  mainZtCountCache.clear();
+  const tradingDays = await getRecentTradingDays(endDay, apiKey, days).catch(() => []);
+  const results = [];
+  for (const day of tradingDays) {
+    for (const zsType of AUTO_SNAPSHOT_ZS_TYPES) {
+      if (isDisabledZsType(zsType)) continue;
+      const file = snapshotPath(day, zsType);
+      let snap;
+      try { snap = JSON.parse(await fs.readFile(file, 'utf8')); } catch { continue; }
+      const cardData = snap.cardData || {};
+      const seen = new Set();
+      let updated = 0;
+      for (const board of (snap.boards || [])) {
+        const plateId = String(board.plateId || '');
+        if (!plateId || seen.has(plateId)) continue;
+        seen.add(plateId);
+        const cd = cardData[plateId];
+        if (!cd || !Array.isArray(cd.zt10)) continue;
+        for (const row of cd.zt10) {
+          const next = await calcMainZtCount(row.code, plateId, String(board.name || ''), row.days || [], apiKey, zsType);
+          if (Number(row.ztCount) !== Number(next)) { row.ztCount = next; updated += 1; }
+        }
+      }
+      if (updated) await fs.writeFile(file, JSON.stringify(snap, null, 2), 'utf8');
+      results.push({ day, zsType, boards: (snap.boards || []).length, updated });
+    }
+  }
+  console.log(JSON.stringify({ ok: true, mode: 'refresh-zt10', endDay, days, scanned: results.length, results }, null, 2));
+}
+
+async function runTgbVisionSyncCli() {
+  const endDay = isoFromCompactDate(cliArgValue('day', chinaNowParts().day));
+  const days = Math.max(1, Math.min(MAIN_REASON_SYNC_MAX_DAYS, Number(cliArgValue('days', '1')) || 1));
+  const apiKey = await readSavedApiKey().catch(() => '');
+  const tradingDays = apiKey ? await getRecentTradingDays(endDay, apiKey, days).catch(() => [endDay]) : [endDay];
+  const results = [];
+  for (const day of tradingDays) {
+    if (!isChinaMarketTradingDay(day)) { results.push({ day, skipped: true, reason: 'market closed' }); continue; }
+    const r = await ensureTgbHunanStructuredArtifactDay(day, apiKey, { force: true })
+      .catch(err => ({ ok: false, day, reason: err.message }));
+    if (r.ok) {
+      // 折入存盘DB(非reuse重建→tgb进rawRows→共识/覆盖/健康一致),否则只写了文件、综合归纳不生效
+      await ensureLimitUpMainReasonDbDay(day, apiKey, true, { reuseAutoSource: false }).then(() => { r.refolded = true; }).catch(e => { r.refoldError = e.message; });
+    }
+    results.push(r);
+  }
+  const ocrConfig = await readTgbQwenOcrConfig().catch(() => ({ configured: false, model: '' }));
+  console.log(JSON.stringify({ ok: results.some(r => r.ok), mode: 'tgb-vision-sync', qwenOcrConfigured: !!ocrConfig.configured, qwenOcrModel: ocrConfig.model || '', endDay, days, results }, null, 2));
+}
+
+if (process.argv.includes('--refresh-zt10')) {
+  runRefreshZt10Cli().catch(err => {
+    console.error(err.stack || err.message || String(err));
+    process.exitCode = 1;
+  });
+} else if (process.argv.includes('--main-reason-backfill')) {
+  runMainReasonBackfillCli().catch(err => {
+    console.error(err.stack || err.message || String(err));
+    process.exitCode = 1;
+  });
+} else if (process.argv.includes('--tgb-hunan-raw-evidence')) {
+  runTgbHunanRawEvidenceCli().catch(err => {
+    console.error(err.stack || err.message || String(err));
+    process.exitCode = 1;
+  });
+} else if (process.argv.includes('--review-source-artifacts')) {
+  runReviewSourceArtifactsCli().catch(err => {
+    console.error(err.stack || err.message || String(err));
+    process.exitCode = 1;
+  });
+} else if (process.argv.includes('--tgb-vision-sync')) {
+  runTgbVisionSyncCli().catch(err => {
+    console.error(err.stack || err.message || String(err));
+    process.exitCode = 1;
+  });
+} else {
+  server.listen(PORT, HOST, () => {
+    console.log(`KPL stats server running at http://${HOST}:${PORT}`);
+  });
+  if (PUBLIC_HTTP_PORT && PUBLIC_HTTP_PORT !== PORT) {
+    const publicServer = http.createServer(server.listeners('request')[0]);
+    publicServer.on('error', err => {
+      console.error(`public HTTP listener ${PUBLIC_HTTP_PORT} failed:`, err.message);
+    });
+    publicServer.listen(PUBLIC_HTTP_PORT, '0.0.0.0', () => {
+      console.log(`KPL stats public HTTP running at http://0.0.0.0:${PUBLIC_HTTP_PORT}`);
+    });
+  }
+  scheduleDailyAutoCleanup();
+  strategy.startCron();
+
+  setInterval(() => {
+    runAutoCloseDbBackfillIfDue().catch(err => {
+      console.error('close db auto sync failed:', err.message);
+    });
+    runAutoSnapshotIfDue().catch(err => {
+      console.error('auto snapshot failed:', err.message);
+    });
+    runAutoMorningMainReasonSyncIfDue().catch(err => {
+      console.error('morning main reason auto sync failed:', err.message);
+    });
+    runAutoTgbVisionSyncIfDue().catch(err => {
+      console.error('tgb vision auto sync failed:', err.message);
+    });
+    runAutoEastmoneyConceptSyncIfDue().catch(err => {
+      console.error('eastmoney concept auto sync failed:', err.message);
+    });
+    runAutoThsConceptSyncIfDue().catch(err => {
+      console.error('ths concept auto sync failed:', err.message);
+    });
+    runAutoDiscoverySyncIfDue().catch(err => {
+      console.error('discovery auto sync failed:', err.message);
+    });
+  }, 60 * 1000);
+
+  setTimeout(() => {
+    runAutoCloseDbBackfillIfDue().catch(err => {
+      console.error('close db auto sync failed:', err.message);
+    });
+    runAutoSnapshotIfDue().catch(err => {
+      console.error('auto snapshot failed:', err.message);
+    });
+    runAutoMorningMainReasonSyncIfDue().catch(err => {
+      console.error('morning main reason auto sync failed:', err.message);
+    });
+    runAutoTgbVisionSyncIfDue().catch(err => {
+      console.error('tgb vision auto sync failed:', err.message);
+    });
+    runAutoEastmoneyConceptSyncIfDue().catch(err => {
+      console.error('eastmoney concept auto sync failed:', err.message);
+    });
+    runAutoThsConceptSyncIfDue().catch(err => {
+      console.error('ths concept auto sync failed:', err.message);
+    });
+    runAutoDiscoverySyncIfDue().catch(err => {
+      console.error('discovery auto sync failed:', err.message);
+    });
+  }, 3000);
+}

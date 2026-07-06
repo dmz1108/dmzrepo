@@ -1,0 +1,1719 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Qi 乐掼蛋 · 欢乐对战</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  :root{
+    --felt-1:#1f273b; --felt-2:#161c2c; --felt-3:#0d111b;
+    --panel:#1b2233; --panel-2:#232c41;
+    --gold:#f3c44b; --gold-d:#6b4a00;
+    --orange:#ff7e4d; --orange-l:#ff9d72;
+    --blue:#3f9bff; --blue-l:#74b9ff;
+    --green:#2fb6a0; --red:#e8602e;
+    --txt:#eef2f7; --txt-dim:#9fb2cc; --yellow:#7fb4ff;
+    --A:#ef6f80; --B:#5aa9e6; --C:#7bc96f; --D:#b07fd8;
+    --disp:"Space Grotesk","PingFang SC","Microsoft YaHei",sans-serif;
+    --qi-blue:#3f9bff; --qi-glow:rgba(63,155,255,.55);
+  }
+  html,body{height:100%;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:oklch(0.165 0.013 265);color:var(--txt);overflow:hidden;}
+  #app{position:relative;width:100vw;height:100vh;margin:0 auto;
+    background:
+      radial-gradient(circle at 50% 38%, oklch(0.72 0.15 242 / 0.10), transparent 60%),
+      oklch(0.165 0.013 265);
+    overflow:hidden;}
+  #app::before{content:'';position:absolute;inset:-20%;z-index:0;pointer-events:none;
+    background:radial-gradient(circle at 30% 30%, rgba(255,255,255,.06), transparent 40%),
+              radial-gradient(circle at 70% 70%, rgba(255,255,255,.05), transparent 40%);
+    animation:ambient 16s ease-in-out infinite alternate;}
+  @keyframes ambient{0%{transform:translate(0,0)}100%{transform:translate(4%,3%)}}
+  /* 横屏：正常铺满 */
+  /* 竖屏：把 #app 旋转 90°，用竖屏的“高”当作横屏的“宽”，强制横屏呈现，不依赖系统自动旋转开关 */
+  @media (orientation:portrait){
+    #app{
+      width:100vh;            /* 旋转后：宽=屏幕高 */
+      height:100vw;           /* 旋转后：高=屏幕宽 */
+      position:fixed;
+      top:50%; left:50%;
+      transform:translate(-50%,-50%) rotate(90deg);
+      transform-origin:center center;
+    }
+  }
+  #rotateTip{display:none;}   /* 不再使用旋转拦截提示 */
+  .screen{position:absolute;inset:0;display:none;flex-direction:column;}
+  .screen.active{display:flex;animation:fade .4s ease;}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  @keyframes pop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+  @keyframes floatup{0%{transform:translateY(8px);opacity:0}100%{transform:translateY(0);opacity:1}}
+
+  .btn{border:none;border-radius:40px;font-weight:800;color:#fff;cursor:pointer;
+    font-family:inherit;transition:transform .1s,filter .15s,box-shadow .1s;user-select:none;position:relative;overflow:hidden;}
+  .btn::after{content:'';position:absolute;left:0;top:0;right:0;height:45%;
+    background:linear-gradient(180deg,rgba(255,255,255,.35),transparent);border-radius:40px 40px 0 0;pointer-events:none;}
+  .btn:active{transform:translateY(3px) scale(.97);}
+  .btn-orange{background:linear-gradient(180deg,var(--orange-l),var(--orange));box-shadow:0 4px 0 #b8650f,0 6px 12px rgba(0,0,0,.25);}
+  .btn-orange:active{box-shadow:0 1px 0 #b8650f,0 2px 6px rgba(0,0,0,.25);}
+  .btn-blue{background:linear-gradient(180deg,var(--blue-l),var(--blue));box-shadow:0 4px 0 #235f96,0 6px 12px rgba(0,0,0,.25);}
+  .btn-blue:active{box-shadow:0 1px 0 #235f96,0 2px 6px rgba(0,0,0,.25);}
+  .btn-gray{background:linear-gradient(180deg,#c4ccd6,#9aa4b0);box-shadow:0 4px 0 #6c7682,0 6px 12px rgba(0,0,0,.2);}
+  .btn-gray:active{box-shadow:0 1px 0 #6c7682,0 2px 6px rgba(0,0,0,.2);}
+  .btn-green{background:linear-gradient(180deg,#5fe0cf,var(--green));box-shadow:0 4px 0 #1f8475,0 6px 12px rgba(0,0,0,.2);}
+  .btn-play:not(:disabled){background:linear-gradient(180deg,var(--blue-l),var(--blue));box-shadow:0 4px 0 #1e63b0,0 6px 14px rgba(63,155,255,.4);}
+  .btn-play:not(:disabled):active{box-shadow:0 1px 0 #1e63b0,0 2px 6px rgba(63,155,255,.4);}
+  .btn:disabled{filter:grayscale(.6) opacity(.5);box-shadow:none;cursor:default;}
+  .btn:disabled::after{opacity:.3;}
+
+  /* ====== 通用顶栏 ====== */
+  .topbar{display:flex;align-items:center;gap:8px;padding:10px 12px;font-size:13px;}
+  .pill{background:rgba(27,49,81,.6);border-radius:9px;padding:5px 10px;display:flex;align-items:center;gap:6px;font-weight:700;}
+  .pill .num{background:var(--gold);color:var(--gold-d);border-radius:5px;padding:1px 7px;font-weight:900;}
+  .topbar .spacer{flex:1;}
+  .icon-btn{background:rgba(35,44,65,.55);border:1px solid rgba(159,178,204,.18);border-radius:10px;padding:6px 11px;font-size:12px;color:#cfdcec;cursor:pointer;transition:border-color .15s,background .15s;}
+  .icon-btn:hover{border-color:rgba(63,155,255,.5);background:rgba(45,58,85,.65);}
+
+  /* ====== 大厅 ====== */
+  #lobby{justify-content:flex-start;align-items:center;padding-top:14px;}
+  .lobby-topbar{position:absolute;top:12px;right:14px;display:flex;gap:8px;z-index:20;}
+  .top-btn{display:flex;align-items:center;gap:7px;background:rgba(35,44,65,.55);border:1px solid rgba(159,178,204,.22);
+    border-radius:13px;padding:8px 15px;font-size:13px;font-weight:600;color:#dfe8f5;cursor:pointer;letter-spacing:.5px;
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    box-shadow:0 4px 14px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.08);transition:transform .12s,border-color .15s,background .15s,box-shadow .15s;}
+  .top-btn:active{transform:scale(.95);}
+  .top-btn:hover{border-color:rgba(63,155,255,.6);background:rgba(45,58,85,.7);color:#fff;box-shadow:0 6px 18px rgba(63,155,255,.22),inset 0 1px 0 rgba(255,255,255,.12);}
+  .top-btn svg{opacity:.92;}
+  .logo{text-align:center;animation:pop .6s ease;}
+  .logo-row{display:flex;align-items:center;justify-content:center;gap:6px;}
+  .logo-row .qi-mark{height:76px;width:auto;overflow:visible;flex-shrink:0;filter:drop-shadow(0 5px 14px rgba(0,0,0,.4));}
+  .logo-zh{font-family:"PingFang SC","Microsoft YaHei",sans-serif;font-weight:700;font-size:52px;letter-spacing:3px;line-height:1;
+    color:#eef2f7;text-shadow:0 3px 12px rgba(0,0,0,.4);}
+  .logo p{color:var(--yellow);font-size:15px;margin-top:10px;letter-spacing:9px;font-weight:600;
+    text-shadow:0 1px 3px rgba(0,0,0,.3);}
+  .hero-row{display:flex;justify-content:center;gap:10px;margin:16px 0 0;flex-wrap:nowrap;}
+  .lobby-stats{text-align:center;font-size:13px;color:var(--txt-dim);margin:8px 0 0;}
+  .lobby-stats b{color:var(--yellow);}
+  .hero-item{display:flex;flex-direction:column;align-items:center;animation:floatup .6s ease backwards;}
+  .hero-item:nth-child(2){animation-delay:.1s}
+  .hero-item:nth-child(3){animation-delay:.2s}
+  .hero-item:nth-child(4){animation-delay:.3s}
+  .hero-item svg{width:59px;height:74px;filter:drop-shadow(0 5px 9px rgba(0,0,0,.3));}
+  /* 卡通俏皮昵称：圆鼓鼓胶囊 + 描边 + 俏皮圆体字 + 轻微倾斜 */
+  .hero-name{font-size:13px;font-weight:800;color:#fff;margin-top:11px;letter-spacing:.5px;
+    font-family:"PingFang SC","Microsoft YaHei",sans-serif;
+    border:2px solid #fff;border-radius:14px;padding:4px 14px;transition:transform .15s;
+    box-shadow:0 3px 8px rgba(0,0,0,.28);text-shadow:0 1px 1px rgba(0,0,0,.22);}
+  .hero-item[data-role="A"] .hero-name{background:#ff7a9d;transform:rotate(-3deg);}
+  .hero-item[data-role="B"] .hero-name{background:#4fb0f0;transform:rotate(2deg);}
+  .hero-item[data-role="D"] .hero-name{background:#a577e0;transform:rotate(-2deg);}
+  .hero-item[data-role="C"] .hero-name{background:#ff6b5e;transform:rotate(3deg);}
+  .hero-item[data-role="E"] .hero-name{background:#f5b81e;color:#5a4200;text-shadow:0 1px 1px rgba(255,255,255,.45);transform:rotate(-2deg);}
+  .hero-item[data-role="F"] .hero-name{background:#56c2b0;transform:rotate(2deg);}
+  .hero-item:hover .hero-name{transform:rotate(0) scale(1.1);}
+  .lobby-cards{padding:0 22px;display:flex;flex-direction:row;justify-content:center;gap:16px;margin:20px 0 0;flex-wrap:wrap;}
+  .mode-card{background:linear-gradient(160deg,rgba(40,66,104,.7),rgba(22,40,68,.7));
+    border:1.5px solid rgba(255,255,255,.14);border-radius:22px;
+    padding:18px 20px;display:flex;align-items:center;gap:14px;cursor:pointer;
+    transition:transform .12s,border-color .15s,box-shadow .15s;width:272px;
+    box-shadow:0 5px 14px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.08);}
+  .mode-card:active{transform:scale(.97);}
+  .mode-card:hover{border-color:rgba(63,155,255,.55);box-shadow:0 8px 22px rgba(0,0,0,.35);}
+  .mode-card .mc-icon{width:58px;height:58px;border-radius:17px;display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;background:rgba(255,255,255,.06);box-shadow:inset 0 1px 0 rgba(255,255,255,.1);}
+  .mode-card .mc-icon svg{width:46px;height:46px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.3));}
+  .mode-card h3{font-size:20px;font-weight:800;}
+  .mode-card p{font-size:12.5px;color:var(--txt-dim);margin-top:3px;}
+  .mode-card .go{margin-left:auto;font-size:24px;color:var(--yellow);font-weight:700;}
+  .wallet{display:flex;justify-content:center;gap:18px;padding:8px;font-size:14px;}
+  .wallet .w{display:flex;align-items:center;gap:6px;background:rgba(27,49,81,.5);padding:6px 16px;border-radius:20px;font-weight:700;}
+  .coin{width:20px;height:20px;border-radius:50%;background:var(--gold);color:var(--gold-d);
+    display:flex;align-items:center;justify-content:center;font-weight:900;font-size:13px;}
+
+  /* ====== 匹配 ====== */
+  #matching{align-items:center;justify-content:center;text-align:center;}
+  .seat-ring{position:relative;width:280px;height:280px;margin-bottom:20px;}
+  .seat{position:absolute;width:90px;text-align:center;animation:pop .4s ease backwards;}
+  .seat svg{width:60px;height:75px;}
+  .seat .nm{font-size:13px;margin-top:2px;background:rgba(27,49,81,.6);border-radius:10px;padding:2px 0;}
+  .seat.s-top{top:0;left:95px;} .seat.s-left{left:0;top:105px;}
+  .seat.s-right{right:0;top:105px;} .seat.s-bot{bottom:0;left:95px;}
+  .seat.searching{opacity:.35;}
+  .seat .dots{font-size:13px;color:var(--yellow);height:16px;}
+  .match-title{font-size:22px;font-weight:800;margin-bottom:6px;}
+  .match-sub{color:var(--txt-dim);font-size:14px;margin-bottom:24px;}
+
+  /* ====== 牌桌 ====== */
+  /* ===== 横屏牌桌：用绝对定位铺满整屏 ===== */
+  #game{justify-content:flex-start;}
+  /* 牌桌中央光晕 + 椭圆桌面 */
+  #game::before{content:'';position:absolute;left:50%;top:50%;width:62%;height:64%;
+    transform:translate(-50%,-50%);border-radius:50%;
+    background:radial-gradient(ellipse at center, rgba(120,180,240,.28), rgba(40,80,130,.05) 70%, transparent 75%);
+    box-shadow:inset 0 0 60px rgba(255,255,255,.06);pointer-events:none;z-index:0;}
+  #game::after{content:'';position:absolute;left:50%;top:50%;width:46%;height:46%;
+    transform:translate(-50%,-50%);border-radius:50%;
+    border:1.5px solid rgba(255,255,255,.08);pointer-events:none;z-index:0;}
+  .opp-zone{position:absolute;inset:0;z-index:1;}
+  .player-tag{position:absolute;display:flex;flex-direction:column;align-items:center;width:92px;z-index:2;}
+  .player-tag .avatar-wrap{position:relative;}
+  .player-tag svg.av{width:58px;height:74px;border-radius:14px;background:linear-gradient(160deg,#f3f9ff,#dbe9fb);
+    border:2.5px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.25);transition:box-shadow .3s,border-color .3s;}
+  .player-tag.turn svg.av{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold),0 0 18px var(--gold);animation:breathe 1.4s ease-in-out infinite;}
+  @keyframes breathe{0%,100%{transform:translateY(0) scale(1);box-shadow:0 0 0 2px var(--gold),0 0 14px var(--gold);}50%{transform:translateY(-4px) scale(1.04);box-shadow:0 0 0 2px var(--gold),0 0 24px var(--gold);}}
+  @keyframes raise{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+  .player-tag .name{font-size:11px;font-weight:800;color:#fff7e0;letter-spacing:.5px;
+    background:linear-gradient(180deg,rgba(58,92,140,.9),rgba(31,49,81,.9));
+    border:1px solid rgba(255,216,107,.4);border-radius:10px;padding:2px 9px;margin-top:5px;
+    max-width:86px;text-align:center;white-space:nowrap;
+    box-shadow:0 2px 5px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.1);text-shadow:0 1px 2px rgba(0,0,0,.4);}
+  .player-tag .cnt{position:absolute;right:-8px;bottom:20px;background:linear-gradient(180deg,#ff7a4a,#e8602e);border-radius:11px;
+    font-size:11px;font-weight:800;padding:1px 7px;border:1.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);}
+  .player-tag .label{position:absolute;left:-6px;top:-6px;background:linear-gradient(180deg,#ff7a4a,#e8602e);border-radius:7px;font-size:10px;padding:1px 6px;
+    box-shadow:0 1px 3px rgba(0,0,0,.3);z-index:3;}
+  .player-tag .label.mate{background:linear-gradient(180deg,#6fe08a,var(--green));}
+  /* 队友正上方居中，两对手贴左右边偏上（避免被底部手牌遮挡） */
+  .pt-top{top:8px;left:50%;transform:translateX(-50%);}
+  .pt-left{top:40%;left:16px;transform:translateY(-50%);}
+  .pt-right{top:40%;right:16px;transform:translateY(-50%);}
+
+  .played{position:absolute;display:flex;transition:opacity .25s;}
+  .played .pcard{margin-left:-26px;animation:playLand .3s cubic-bezier(.3,1.3,.5,1) backwards;}
+  .played .pcard:nth-child(2){animation-delay:.03s;}
+  .played .pcard:nth-child(3){animation-delay:.06s;}
+  .played .pcard:nth-child(4){animation-delay:.09s;}
+  .played .pcard:nth-child(5){animation-delay:.12s;}
+  .played .pcard:first-child{margin-left:0;}
+  .played.dim{opacity:.62;}
+  @keyframes playLand{0%{transform:translateY(-14px) scale(.8);opacity:0;}60%{transform:translateY(2px) scale(1.04);opacity:1;}100%{transform:translateY(0) scale(1);opacity:1;}}
+  /* 出牌落点：分别靠近各自玩家、朝向中央 */
+  .pl-top{top:96px;left:50%;transform:translateX(-50%);}
+  .pl-left{top:40%;left:118px;transform:translateY(-50%);}
+  .pl-right{top:40%;right:118px;transform:translateY(-50%);}
+  .pass-bubble{position:absolute;background:#fff;color:#c0392b;font-weight:800;font-size:14px;
+    border-radius:16px;padding:5px 14px;box-shadow:0 2px 6px rgba(0,0,0,.3);animation:pop .3s;z-index:8;}
+  .pass-bubble.pl-top{top:96px;}
+  .pass-bubble.pl-left{top:40%;left:118px;transform:translateY(-50%);}
+  .pass-bubble.pl-right{top:40%;right:118px;transform:translateY(-50%);}
+
+  .card{display:inline-block;background:linear-gradient(155deg,#ffffff,#f2f5fa);border:1px solid #cfd6e0;border-radius:8px;
+    position:relative;text-align:left;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.12);}
+  .card .rk{position:absolute;top:2px;left:5px;font-weight:800;font-family:Georgia,serif;line-height:1;}
+  .card .st{position:absolute;font-weight:700;}
+  .card.red .rk,.card.red .st{color:#d8352f;}
+  .card.blk .rk,.card.blk .st{color:#1a1a1a;}
+  .pcard{width:44px;height:62px;box-shadow:0 3px 8px rgba(0,0,0,.28);}
+  .pcard .rk{font-size:16px;} .pcard .st{font-size:19px;bottom:5px;right:6px;}
+
+  /* 动作按钮：横屏放在右下角竖排/横排区 */
+  .action-row{position:absolute;right:14px;bottom:128px;display:flex;align-items:center;gap:10px;z-index:9;}
+  .action-row .btn{font-size:19px;}
+  .btn-pass{width:96px;height:52px;}
+  .btn-hint{width:88px;height:52px;}
+  .btn-play{width:96px;height:52px;}
+  .timer{width:46px;height:46px;border-radius:50%;background:radial-gradient(circle at 38% 30%,#ffd86b,var(--gold));color:var(--gold-d);
+    display:flex;align-items:center;justify-content:center;font-weight:900;font-size:20px;border:3px solid #fff;flex-shrink:0;
+    box-shadow:0 0 0 0 rgba(243,169,59,.6);animation:timerPulse 1s ease-in-out infinite;}
+  @keyframes timerPulse{0%{box-shadow:0 0 0 0 rgba(243,169,59,.55);}70%{box-shadow:0 0 0 10px rgba(243,169,59,0);}100%{box-shadow:0 0 0 0 rgba(243,169,59,0);}}
+  .turn-hint{position:absolute;right:120px;bottom:188px;font-size:13px;font-weight:700;color:var(--yellow);z-index:9;
+    text-shadow:0 1px 3px rgba(0,0,0,.6);pointer-events:none;white-space:nowrap;}
+
+  /* 我的信息（左下角） */
+  .my-row{position:absolute;left:14px;bottom:128px;display:flex;align-items:center;gap:8px;z-index:9;}
+  .my-row svg.av{width:40px;height:50px;border-radius:10px;background:linear-gradient(160deg,#f3f9ff,#dbe9fb);border:2px solid var(--gold);box-shadow:0 2px 8px rgba(0,0,0,.25);}
+  .my-row .nm{font-size:13px;color:var(--yellow);font-weight:700;}
+  .my-row .selinfo{font-size:12px;color:var(--txt-dim);margin-left:6px;}
+
+  /* 手牌：按点数分列，同点竖向堆叠 */
+  .hand-wrap{position:absolute;left:0;right:0;bottom:6px;height:138px;padding:0 12px;overflow:visible;z-index:9;}
+  .hand{position:relative;height:100%;display:flex;justify-content:center;align-items:flex-end;}
+  .hcol{position:relative;width:46px;align-self:flex-end;}
+  .hcard{width:46px;height:104px;position:absolute;left:0;cursor:pointer;
+    transition:transform .16s cubic-bezier(.34,1.4,.5,1),box-shadow .16s;box-shadow:0 2px 6px rgba(0,0,0,.25);will-change:transform;}
+  .hcard:hover{transform:translateY(-6px);}
+  .hcard .rk{font-size:17px;}
+  /* 顶部小花色（点数右下） */
+  .hcard .suit{position:absolute;top:21px;left:6px;font-size:12px;font-weight:800;line-height:1;}
+  /* 中间大花色水印 */
+  .hcard .st{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:30px;opacity:.9;}
+  .hcard.sel{transform:translateY(-22px);box-shadow:0 0 0 2px var(--gold),0 8px 16px rgba(243,169,59,.45);}
+  .hcard.sel{z-index:50 !important;}
+  .hcard.joker .rk{font-size:11px;letter-spacing:-1px;left:3px;top:3px;}
+  .hcard.joker .joker-star{position:absolute;top:46%;left:50%;transform:translate(-50%,-50%);font-size:22px;color:var(--gold);}
+
+  /* 工具栏（右上） */
+  .toolbar{position:absolute;right:14px;top:46px;display:flex;align-items:center;gap:8px;font-size:13px;z-index:9;}
+  .toolbar .coinbox{display:flex;align-items:center;gap:6px;font-weight:700;}
+  .toolbar .spacer{display:none;}
+  .tool-btn{background:rgba(27,49,81,.55);border-radius:18px;padding:6px 12px;font-weight:700;cursor:pointer;color:#fff;border:none;font-family:inherit;}
+  .tool-btn.green{background:var(--green);}
+  .tool-btn:active{transform:scale(.95);}
+
+  /* ====== 结算 ====== */
+  #result{align-items:center;justify-content:center;text-align:center;padding:0 24px;}
+  .result-banner{font-size:52px;font-weight:900;animation:pop .5s;margin-bottom:6px;}
+  .result-banner.win{color:#ffd86b;text-shadow:0 4px 10px rgba(0,0,0,.3);}
+  .result-banner.lose{color:#ff9aa6;}
+  .result-sub{font-size:16px;color:var(--txt-dim);margin-bottom:24px;}
+  .result-list{width:100%;max-width:320px;background:rgba(27,49,81,.55);border-radius:18px;padding:8px;margin-bottom:26px;}
+  .result-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08);}
+  .result-row:last-child{border-bottom:none;}
+  .result-row svg{width:40px;height:50px;border-radius:10px;background:#eaf3ff;}
+  .result-row .rname{font-weight:700;font-size:15px;}
+  .result-row .rrank{margin-left:auto;font-weight:900;font-size:16px;}
+  .rank1{color:var(--yellow);} .rank2{color:#cfe6ff;} .rank3{color:#ffcaa8;} .rank4{color:#bbb;}
+  .result-btns{display:flex;gap:14px;}
+  .result-btns .btn{width:140px;height:54px;font-size:18px;}
+
+  .toast{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    background:rgba(0,0,0,.78);color:#fff;padding:12px 22px;border-radius:14px;font-size:15px;font-weight:700;
+    z-index:50;animation:pop .25s;pointer-events:none;}
+  .boom{position:absolute;top:42%;left:50%;transform:translate(-50%,-50%);z-index:60;pointer-events:none;
+    font-size:54px;font-weight:900;letter-spacing:4px;color:#fff;
+    text-shadow:0 0 18px #ff5a2a,0 0 30px #ff9a3a,0 3px 6px rgba(0,0,0,.4);
+    animation:boomAnim .9s ease forwards;}
+  @keyframes boomAnim{
+    0%{transform:translate(-50%,-50%) scale(.3) rotate(-12deg);opacity:0;}
+    25%{transform:translate(-50%,-50%) scale(1.25) rotate(6deg);opacity:1;}
+    45%{transform:translate(-50%,-50%) scale(1) rotate(0);opacity:1;}
+    100%{transform:translate(-50%,-50%) scale(1.1);opacity:0;}
+  }
+  /* 飞牌：从出牌者位置飞向桌面中央 */
+  .fly-layer{position:absolute;inset:0;z-index:55;pointer-events:none;}
+  .fly-card{position:absolute;width:46px;height:64px;background:#fdfdfd;border:1px solid #d8d8d8;border-radius:7px;
+    box-shadow:0 4px 10px rgba(0,0,0,.3);transition:transform .42s cubic-bezier(.4,.8,.4,1),opacity .42s;text-align:left;}
+  .fly-card .rk{position:absolute;top:2px;left:5px;font-weight:800;font-family:Georgia,serif;font-size:17px;line-height:1;}
+  .fly-card .st{position:absolute;bottom:5px;right:6px;font-weight:700;font-size:20px;}
+  .fly-card.red .rk,.fly-card.red .st{color:#d8352f;}
+  .fly-card.blk .rk,.fly-card.blk .st{color:#1a1a1a;}
+  /* 炸弹摔牌：角色跳起 */
+  .player-tag.slam svg.av,.my-row.slam svg.av{animation:slamJump .5s ease;}
+  @keyframes slamJump{
+    0%{transform:translateY(0)}
+    35%{transform:translateY(-26px) scale(1.08)}
+    70%{transform:translateY(0) scale(.96)}
+    100%{transform:translateY(0)}
+  }
+  .fly-card.slam{box-shadow:0 6px 18px rgba(255,90,42,.6);}
+  @keyframes slamLand{
+    0%{transform:scale(1.5) rotate(var(--rot,0deg));opacity:.4}
+    60%{transform:scale(.88) rotate(var(--rot,0deg));opacity:1}
+    100%{transform:scale(1) rotate(var(--rot,0deg));opacity:1}
+  }
+  .played .pcard.landed{animation:slamLand .35s ease;}
+  /* 记牌器面板 */
+  .tracker-mask{position:absolute;inset:0;background:rgba(0,0,0,.5);z-index:70;display:none;align-items:center;justify-content:center;}
+  .tracker-mask.open{display:flex;animation:fade .25s;}
+  .tracker-panel{width:88%;max-width:380px;background:#1b3151;border:1.5px solid rgba(255,255,255,.15);
+    border-radius:18px;padding:14px;animation:pop .3s;}
+  .tracker-head{font-size:16px;font-weight:800;color:#fff;margin-bottom:12px;display:flex;align-items:center;}
+  .tracker-close{margin-left:auto;width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.15);
+    display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer;}
+  .tracker-body{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
+  .trk-cell{background:rgba(255,255,255,.07);border-radius:10px;padding:8px 4px;text-align:center;}
+  .trk-cell .rk{font-size:18px;font-weight:800;font-family:Georgia,serif;}
+  .trk-cell.red .rk{color:#ff8a8a;} .trk-cell.blk .rk{color:#dfe8f5;}
+  .trk-cell .left{font-size:20px;font-weight:900;margin-top:2px;}
+  .trk-cell .left.zero{color:#ff6b6b;} .trk-cell .left.full{color:#7bdf8f;} .trk-cell .left.mid{color:#ffd86b;}
+  .tracker-tip{font-size:11px;color:var(--txt-dim);margin-top:12px;text-align:center;}
+  .settings-body{display:flex;flex-direction:column;gap:10px;}
+  .set-btn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:12px;
+    padding:12px 16px;font-size:15px;font-weight:700;color:#fff;cursor:pointer;text-align:left;font-family:inherit;}
+  .set-btn:active{transform:scale(.97);}
+  .set-btn.danger{color:#ff8a8a;border-color:rgba(255,90,90,.4);}
+  /* 贡牌还牌弹层 */
+  .tribute-mask{position:absolute;inset:0;background:rgba(0,0,0,.55);z-index:72;display:none;align-items:center;justify-content:center;}
+  .tribute-mask.open{display:flex;animation:fade .3s;}
+  .tribute-box{background:linear-gradient(180deg,#2a4a78,#1b3151);border:2px solid var(--gold);
+    border-radius:18px;padding:22px 26px;text-align:center;animation:pop .35s;max-width:80%;}
+  .tribute-title{font-size:20px;font-weight:900;color:var(--gold);margin-bottom:12px;letter-spacing:2px;}
+  .tribute-text{font-size:16px;color:#fff;line-height:1.5;font-weight:600;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ================= 大厅 ================= -->
+  <section class="screen active" id="lobby">
+    <div class="lobby-topbar">
+      <div class="top-btn" id="fsBtn" onclick="toggleFullscreen()"><svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5V2h3M9 2h3v3M12 9v3H9M5 12H2V9"/></svg>全屏</div>
+      <div class="top-btn" onclick="openSettings()"><svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="2.3"/><path d="M7 1v1.6M7 11.4V13M1 7h1.6M11.4 7H13M2.8 2.8l1.1 1.1M9.9 9.9l1.3 1.3M11.2 2.8 10.1 3.9M3.9 10.1 2.6 11.4"/></svg>设置</div>
+    </div>
+    <div class="logo">
+      <div class="logo-row">
+        <svg class="qi-mark" viewBox="6 0 122 135" fill="none" aria-label="Qi">
+          <ellipse cx="65" cy="68" rx="53.2" ry="22" transform="rotate(-28 65 68)" stroke="rgba(159,178,204,.5)" stroke-width="2.5"/>
+          <circle cx="61" cy="68" r="30" stroke="#eef2f7" stroke-width="11" fill="none"/>
+          <path d="M78 84 L92 98" stroke="#eef2f7" stroke-width="11" stroke-linecap="round"/>
+          <rect x="106.5" y="61" width="11" height="37" rx="5.5" fill="#eef2f7"/>
+          <circle cx="112" cy="43" r="9" fill="#3f9bff" style="filter:drop-shadow(0 0 6px rgba(63,155,255,.6))"/>
+        </svg>
+        <span class="logo-zh">乐掼蛋</span>
+      </div>
+      <p>Q 版 · 四人对战</p>
+    </div>
+    <div class="hero-row" id="heroRow"></div>
+    <div class="lobby-stats" id="lobbyStats"></div>
+    <div class="lobby-cards">
+      <div class="mode-card mc-quest" onclick="startMatch('classic')">
+        <div class="mc-icon">
+          <svg viewBox="0 0 48 48"><defs><linearGradient id="qg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd86b"/><stop offset="1" stop-color="#f3a93b"/></linearGradient></defs>
+            <path d="M10 38 L10 16 L24 8 L38 16 L38 38 Z" fill="url(#qg)" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>
+            <rect x="18" y="26" width="12" height="12" fill="#b8650f" opacity=".5"/>
+            <path d="M24 6 L26 11 L31 11 L27 14 L29 19 L24 16 L19 19 L21 14 L17 11 L22 11 Z" fill="#fff"/>
+            <circle cx="24" cy="22" r="3.5" fill="#fff"/>
+          </svg>
+        </div>
+        <div><h3>闯关模式</h3><p>逐关升级 · 打到 A 通关</p></div>
+        <div class="go">›</div>
+      </div>
+      <div class="mode-card mc-fast" onclick="startMatch('fast')">
+        <div class="mc-icon">
+          <svg viewBox="0 0 48 48"><defs><linearGradient id="fg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fd3f4"/><stop offset="1" stop-color="#3d8fd8"/></linearGradient></defs>
+            <circle cx="24" cy="24" r="17" fill="url(#fg)" stroke="#fff" stroke-width="1.5"/>
+            <path d="M26 10 L15 27 L22 27 L20 38 L33 21 L25 21 Z" fill="#fff"/>
+          </svg>
+        </div>
+        <div><h3>快速场</h3><p>节奏更快 · 适合练手</p></div>
+        <div class="go">›</div>
+      </div>
+      <div class="mode-card mc-friend" onclick="toast('好友房需要邀请码~')">
+        <div class="mc-icon">
+          <svg viewBox="0 0 48 48"><defs><linearGradient id="frg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9fe8c0"/><stop offset="1" stop-color="#2ba368"/></linearGradient></defs>
+            <circle cx="24" cy="24" r="17" fill="url(#frg)" stroke="#fff" stroke-width="1.5"/>
+            <circle cx="18" cy="20" r="4.5" fill="#fff"/><circle cx="30" cy="20" r="4.5" fill="#fff"/>
+            <path d="M10 35 Q10 27 18 27 Q24 27 24 33 L24 35 Z" fill="#fff"/>
+            <path d="M38 35 Q38 27 30 27 Q24 27 24 33 L24 35 Z" fill="#fff" opacity=".85"/>
+          </svg>
+        </div>
+        <div><h3>好友房</h3><p>和好友开黑组队</p></div>
+        <div class="go">›</div>
+      </div>
+    </div>
+    <div class="wallet">
+      <div class="w"><span class="coin">¥</span><span>15136</span></div>
+      <div class="w">💎 <span>28</span></div>
+    </div>
+
+    <!-- 设置弹层 -->
+    <div class="tracker-mask" id="settingsMask" onclick="closeSettings(event)">
+      <div class="tracker-panel" onclick="event.stopPropagation()">
+        <div class="tracker-head">设置 <span class="tracker-close" onclick="closeSettings()">✕</span></div>
+        <div class="settings-body">
+          <button class="set-btn" id="btnSound" onclick="toggleSound()">🔊 音效：开</button>
+          <button class="set-btn" id="btnVoice" onclick="toggleVoice()">🗣 语音：开</button>
+          <button class="set-btn danger" onclick="resetSave()">🗑 清空存档</button>
+        </div>
+        <div class="tracker-tip">语音用系统朗读引擎，真机需联网或已装中文语音包</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 匹配中 ================= -->
+  <section class="screen" id="matching">
+    <div class="match-title">正在匹配牌友…</div>
+    <div class="match-sub" id="matchSub">寻找合适的对手</div>
+    <div class="seat-ring" id="seatRing"></div>
+  </section>
+
+  <!-- ================= 牌桌 ================= -->
+  <section class="screen" id="game">
+    <div class="topbar">
+      <div class="pill">本局打 <span class="num" id="hbLevel">2</span></div>
+      <div class="pill">倍数 <span class="num">2</span></div>
+      <div class="spacer"></div>
+      <div class="icon-btn" onclick="openTracker()">记牌器</div>
+      <div class="icon-btn" id="fsBtnGame" onclick="toggleFullscreen()">⛶</div>
+      <div class="icon-btn" onclick="quitToLobby()">退出</div>
+    </div>
+
+    <div class="opp-zone" id="oppZone"></div>
+    <div class="fly-layer" id="flyLayer"></div>
+
+    <div class="action-row" id="actionRow">
+      <button class="btn btn-orange btn-pass" id="btnPass" onclick="playerPass()">不出</button>
+      <div class="timer" id="timer">20</div>
+      <button class="btn btn-blue btn-hint" id="btnHint" onclick="playerHint()">提示</button>
+      <button class="btn btn-gray btn-play" id="btnPlay" onclick="playerPlay()">出牌</button>
+    </div>
+    <div class="turn-hint" id="turnHint">轮到你出牌</div>
+
+    <div class="my-row" id="myRow">
+      <svg class="av" id="myAv"></svg>
+      <span class="nm">自信哥</span>
+      <span class="selinfo" id="selInfo"></span>
+    </div>
+
+    <div class="hand-wrap"><div class="hand" id="hand"></div></div>
+
+    <div class="toolbar">
+      <span class="coinbox"><span class="coin">¥</span>15136</span>
+      <div class="spacer"></div>
+      <button class="tool-btn" onclick="sortHand()">理牌</button>
+      <button class="tool-btn green" onclick="autoSelect()">一键提示</button>
+    </div>
+
+    <!-- 记牌器面板 -->
+    <div class="tracker-mask" id="trackerMask" onclick="closeTracker(event)">
+      <div class="tracker-panel" onclick="event.stopPropagation()">
+        <div class="tracker-head">记牌器 · 全场已出牌
+          <span class="tracker-close" onclick="closeTracker()">✕</span>
+        </div>
+        <div class="tracker-body" id="trackerBody"></div>
+        <div class="tracker-tip">数字 = 该点数全场剩余张数（共 8 张，王各 2 张）</div>
+      </div>
+    </div>
+    <!-- 贡牌/还牌提示 -->
+    <div class="tribute-mask" id="tributeMask">
+      <div class="tribute-box">
+        <div class="tribute-title">进贡 · 还牌</div>
+        <div class="tribute-text" id="tributeText"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 结算 ================= -->
+  <section class="screen" id="result">
+    <div class="result-banner" id="resultBanner">胜利</div>
+    <div class="result-sub" id="resultSub">你的队伍升级啦！</div>
+    <div class="result-list" id="resultList"></div>
+    <div class="result-btns">
+      <button class="btn btn-gray" onclick="quitToLobby()">返回大厅</button>
+      <button class="btn btn-orange" onclick="rematch()">再来一局</button>
+    </div>
+  </section>
+
+</div>
+<script>
+/* ============ 音频 / 语音 / 震动 引擎 ============ */
+var AUDIO={ on:true, voice:true, ctx:null, zh:null };
+/* 用户首次交互后解锁 AudioContext（移动端要求） */
+function unlockAudio(){
+  try{
+    if(!AUDIO.ctx){ var AC=window.AudioContext||window.webkitAudioContext; if(AC) AUDIO.ctx=new AC(); }
+    if(AUDIO.ctx && AUDIO.ctx.state==='suspended') AUDIO.ctx.resume();
+  }catch(e){}
+}
+document.addEventListener('pointerdown', unlockAudio, {once:false});
+/* 合成音效：tone(频率, 时长, 波形, 音量) */
+function tone(freq,dur,type,vol){
+  if(!AUDIO.on) return;
+  unlockAudio();
+  if(!AUDIO.ctx) return;
+  try{
+    var t=AUDIO.ctx.currentTime;
+    var o=AUDIO.ctx.createOscillator(), g=AUDIO.ctx.createGain();
+    o.type=type||'sine'; o.frequency.value=freq;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vol||0.18, t+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+(dur||0.15));
+    o.connect(g); g.connect(AUDIO.ctx.destination);
+    o.start(t); o.stop(t+(dur||0.15)+0.02);
+  }catch(e){}
+}
+/* 预设音效 */
+var SFX={
+  tap:function(){ tone(520,0.07,'triangle',0.12); },
+  deal:function(){ tone(380,0.05,'square',0.08); },
+  play:function(){ tone(440,0.08,'triangle',0.14); tone(660,0.06,'sine',0.1); },
+  pass:function(){ tone(300,0.12,'sine',0.1); },
+  bomb:function(){ tone(140,0.18,'sawtooth',0.22); setTimeout(function(){tone(90,0.25,'sawtooth',0.2);},60); buzz(60); },
+  win:function(){ [523,659,784,1047].forEach(function(f,i){ setTimeout(function(){tone(f,0.18,'triangle',0.16);}, i*120); }); },
+  lose:function(){ [392,330,262].forEach(function(f,i){ setTimeout(function(){tone(f,0.22,'sine',0.14);}, i*150); }); },
+  finish:function(){ tone(784,0.1,'triangle',0.16); setTimeout(function(){tone(1047,0.14,'triangle',0.16);},90); }
+};
+/* 震动（真机支持） */
+function buzz(ms){ try{ if(AUDIO.on && navigator.vibrate) navigator.vibrate(ms||30); }catch(e){} }
+
+/* 真人录音映射：把对应文件放到同目录即可自动启用真人语音；缺文件则回退系统朗读。
+   想用真人语音：录两句 mp3，命名为 voice/yaobuyao.mp3、voice/nihendama.mp3 放进去。 */
+var VOICE_FILES={
+  '要不要！':'voice/yaobuyao.mp3',
+  '你很大吗？':'voice/nihendama.mp3'
+};
+var _voiceCache={};
+var _voiceMissing={};   /* 记录已确认缺失的文件，避免反复请求 */
+function playVoiceFile(text){
+  var url=VOICE_FILES[text];
+  if(!url || _voiceMissing[url]) return false;
+  try{
+    var a=_voiceCache[url];
+    if(!a){
+      a=new Audio(url);
+      a.preload='auto';
+      a.addEventListener('error', function(){ _voiceMissing[url]=true; }, {once:true});
+      _voiceCache[url]=a;
+    }
+    a.currentTime=0;
+    var pr=a.play();
+    if(pr && pr.catch) pr.catch(function(){ _voiceMissing[url]=true; });
+    return true;   /* 乐观返回；播放失败会标记缺失，下次走系统朗读 */
+  }catch(e){ _voiceMissing[url]=true; return false; }
+}
+/* 语音播报：优先真人录音，缺文件回退系统朗读 */
+function speak(text){
+  if(!AUDIO.voice) return;
+  /* 已知该文件缺失 → 直接系统朗读；否则尝试真人录音 */
+  var url=VOICE_FILES[text];
+  if(url && !_voiceMissing[url]){
+    if(playVoiceFile(text)) return;
+  }
+  ttsSpeak(text);
+}
+/* 系统朗读（参数调得更自然：略慢、音调适中） */
+function ttsSpeak(text){
+  try{
+    if(!('speechSynthesis' in window) || !window.speechSynthesis) return;
+    var u=new SpeechSynthesisUtterance(text);
+    u.lang='zh-CN'; u.rate=1.0; u.pitch=1.0; u.volume=1;
+    if(AUDIO.zh) u.voice=AUDIO.zh;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+  }catch(e){}
+}
+/* 选取最自然的中文语音：优先神经/增强音色 */
+function pickVoice(){
+  try{
+    if(!('speechSynthesis' in window) || !window.speechSynthesis) return;
+    var vs=window.speechSynthesis.getVoices();
+    var zh=vs.filter(function(v){return /zh|Chinese|中文/i.test(v.lang+v.name);});
+    /* 优先挑名字里带 神经/Neural/增强/Premium/Siri 等更自然的音色 */
+    AUDIO.zh = zh.find(function(v){return /neural|premium|enhanced|siri|natural|婷婷|云|晓|increased/i.test(v.name);})
+            || zh[0] || null;
+  }catch(e){}
+}
+if('speechSynthesis' in window && window.speechSynthesis){
+  try{
+    pickVoice();
+    window.speechSynthesis.onvoiceschanged=pickVoice;
+  }catch(e){}
+}
+function toggleSound(){ AUDIO.on=!AUDIO.on; if(AUDIO.on) SFX.tap(); renderSoundBtns(); persistAudioPref(); }
+function toggleVoice(){ AUDIO.voice=!AUDIO.voice; if(AUDIO.voice) speak('语音已开启'); renderSoundBtns(); persistAudioPref(); }
+function persistAudioPref(){
+  try{ if(typeof localStorage!=='undefined') localStorage.setItem('guandan_audio',JSON.stringify({on:AUDIO.on,voice:AUDIO.voice})); }catch(e){}
+}
+function loadAudioPref(){
+  try{
+    var raw=(typeof localStorage!=='undefined')?localStorage.getItem('guandan_audio'):null;
+    if(raw){ var a=JSON.parse(raw); AUDIO.on=a.on!==false; AUDIO.voice=a.voice!==false; }
+  }catch(e){}
+}
+function renderSoundBtns(){
+  var s=document.getElementById('btnSound'), v=document.getElementById('btnVoice');
+  if(s) s.textContent='🔊 音效'+(AUDIO.on?'：开':'：关');
+  if(v) v.textContent='🗣 语音'+(AUDIO.voice?'：开':'：关');
+}
+
+/* ============ 四个 Q 版角色头像 ============ */
+/* 共用渐变/配色，与定稿角色一致 */
+var BODY={A:['#ff9aa6','#ef6f80'],B:['#8fd3f4','#5aa9e6'],C:['#ff5a52','#d8231b'],D:['#d9b8f0','#b07fd8'],E:['#ffe06b','#f5c518'],F:['#ffffff','#e8edf2']};
+var HAIR={A:'#5b3a29',B:'#2c2c2c',C:'#3a2a26',D:'#3a2a4a',E:'#6b4423',F:'#2c2c2c'};
+var _uid=0;
+
+function svgDefs(role,u){
+  var b=BODY[role];
+  /* 素质酱(D)肤色更深，其余正常 */
+  var sk = role==='D' ? ['#e8bf94','#cf9a68'] : ['#ffe8d6','#ffd2b3'];
+  return '<defs>'+
+    '<radialGradient id="sk'+u+'" cx="40%" cy="35%" r="70%"><stop offset="0%" stop-color="'+sk[0]+'"/><stop offset="100%" stop-color="'+sk[1]+'"/></radialGradient>'+
+    '<linearGradient id="bd'+u+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="'+b[0]+'"/><stop offset="100%" stop-color="'+b[1]+'"/></linearGradient>'+
+    '</defs>';
+}
+
+/* 头部（发型+五官+表情），脸心(50,50) r=42，画在 100x100 中。u=本实例唯一后缀 */
+function faceOnly(role,u){
+  var hair=HAIR[role];
+  var head='<circle cx="50" cy="50" r="42" fill="url(#sk'+u+')"/>';
+  var cheekA='<circle cx="28" cy="62" r="8" fill="#ffb0b0" opacity="0.6"/><circle cx="72" cy="62" r="8" fill="#ffb0b0" opacity="0.6"/>';
+  var cheekB='<circle cx="28" cy="62" r="8" fill="#ffb0b0" opacity="0.5"/><circle cx="72" cy="62" r="8" fill="#ffb0b0" opacity="0.5"/>';
+  var feat='', hairShape='';
+  if(role==='A'){ /* 自信哥：烟花烫卷发+层次起伏顶、两侧鬓发垂落、山羊胡、眨眼坏笑 */
+    hairShape='<g fill="'+hair+'">'+
+      '<circle cx="30" cy="6" r="11"/>'+
+      '<circle cx="43" cy="13" r="10"/>'+
+      '<circle cx="55" cy="3" r="12"/>'+
+      '<circle cx="67" cy="12" r="10"/>'+
+      '<circle cx="78" cy="6" r="11"/>'+
+      '<circle cx="18" cy="17" r="12"/><circle cx="86" cy="17" r="11"/>'+
+      '<circle cx="9" cy="33" r="12"/><circle cx="91" cy="33" r="12"/>'+
+      '<circle cx="8" cy="50" r="11"/><circle cx="92" cy="50" r="11"/>'+
+      '<circle cx="12" cy="66" r="9"/><circle cx="88" cy="66" r="9"/>'+
+      '<path d="M10 54 Q6 12 50 8 Q94 12 90 54 Q70 30 50 30 Q30 30 10 54 Z"/>'+
+      '</g>'+
+      '<circle cx="38" cy="16" r="6" fill="#4a2f22" opacity="0.4"/>'+
+      '<circle cx="62" cy="16" r="6" fill="#4a2f22" opacity="0.4"/>'+
+      '<circle cx="23" cy="33" r="5" fill="#4a2f22" opacity="0.35"/>'+
+      '<circle cx="77" cy="33" r="5" fill="#4a2f22" opacity="0.35"/>'+
+      '<circle cx="34" cy="9" r="4" fill="#7a5238" opacity="0.5"/>'+
+      '<circle cx="56" cy="7" r="4" fill="#7a5238" opacity="0.5"/>'+
+      '<circle cx="74" cy="10" r="4" fill="#7a5238" opacity="0.45"/>';
+    feat=cheekA+
+      '<path d="M22 39 Q30 35 38 38" fill="none" stroke="#4a352a" stroke-width="3" stroke-linecap="round"/>'+
+      '<path d="M58 38 Q66 35 74 39" fill="none" stroke="#4a352a" stroke-width="3" stroke-linecap="round"/>'+
+      '<path d="M23 50 Q31 45 39 50" fill="none" stroke="#3a2a20" stroke-width="3.5" stroke-linecap="round"/>'+
+      '<circle cx="64" cy="50" r="6.5" fill="#3a2a20"/><circle cx="66" cy="47" r="2.3" fill="#fff"/>'+
+      '<path d="M38 65 Q44 61 50 64 Q56 61 62 65" fill="none" stroke="#4a352a" stroke-width="4" stroke-linecap="round"/>'+
+      '<path d="M41 71 Q50 77 59 71" fill="none" stroke="#3a2a20" stroke-width="3" stroke-linecap="round"/>'+
+      '<path d="M40 75 Q50 90 60 75 Q56 85 50 85.5 Q44 85 40 75 Z" fill="#4a352a"/>';
+  } else if(role==='B'){ /* 紧张妹：齐刘海、冒汗瞪眼 */
+    hairShape='<path d="M9 49 Q7 9 50 6 Q93 9 91 49 Q80 18 66 24 Q50 8 34 24 Q20 18 9 49 Z" fill="'+hair+'"/>';
+    feat=cheekB+
+      '<path d="M86 32 Q92 42 86 50 Q80 42 86 32 Z" fill="#9fd8f0"/>'+
+      '<circle cx="34" cy="50" r="8" fill="#fff" stroke="#3a2a20" stroke-width="1.5"/><circle cx="35" cy="52" r="4" fill="#3a2a20"/>'+
+      '<circle cx="64" cy="50" r="8" fill="#fff" stroke="#3a2a20" stroke-width="1.5"/><circle cx="65" cy="52" r="4" fill="#3a2a20"/>'+
+      '<path d="M30 38 Q37 34 44 38" fill="none" stroke="#3a2a20" stroke-width="2.4" stroke-linecap="round"/>'+
+      '<path d="M56 38 Q63 34 70 38" fill="none" stroke="#3a2a20" stroke-width="2.4" stroke-linecap="round"/>'+
+      '<path d="M42 71 Q50 65 58 71" fill="none" stroke="#3a2a20" stroke-width="3" stroke-linecap="round"/>';
+  } else if(role==='C'){ /* 迷信妹：长发、虔诚许愿般的表情、星星元素 */
+    /* 长发：两侧垂落到脸颊以下 */
+    hairShape='<path d="M6 52 Q4 8 50 5 Q96 8 94 52 Q92 78 86 90 Q84 70 80 60 Q78 30 50 28 Q22 30 20 60 Q16 70 14 90 Q8 78 6 52 Z" fill="'+hair+'"/>'+
+      /* 头顶刘海 */
+      '<path d="M22 40 Q30 22 50 22 Q70 22 78 40 Q66 30 50 31 Q34 30 22 40 Z" fill="'+hair+'"/>';
+    feat=cheekB+
+      /* 弯弯的笑眼（虔诚、向往） */
+      '<path d="M28 50 Q34 44 40 50" fill="none" stroke="#3a2a20" stroke-width="3" stroke-linecap="round"/>'+
+      '<path d="M60 50 Q66 44 72 50" fill="none" stroke="#3a2a20" stroke-width="3" stroke-linecap="round"/>'+
+      /* 小小的抿嘴笑 */
+      '<path d="M43 67 Q50 73 57 67" fill="none" stroke="#3a2a20" stroke-width="3" stroke-linecap="round"/>'+
+      /* 眉心一点朱砂（迷信/祈福感） */
+      '<circle cx="50" cy="40" r="2.6" fill="#d8231b"/>'+
+      /* 头顶星星（许愿/迷信元素） */
+      '<path d="M50 2 l1.6 3.4 3.7 .4 -2.7 2.5 .7 3.6 -3.3 -1.8 -3.3 1.8 .7 -3.6 -2.7 -2.5 3.7 -.4 Z" fill="#ffd86b"/>'+
+      '<circle cx="84" cy="20" r="2.2" fill="#ffd86b"/>'+
+      '<circle cx="16" cy="22" r="1.8" fill="#ffd86b"/>';
+  } else if(role==='D'){ /* 素质酱：优雅长发、发花、温柔微笑 */
+    hairShape='<path d="M6 52 Q4 8 50 5 Q96 8 94 52 Q92 80 86 92 Q84 70 80 60 Q78 30 50 28 Q22 30 20 60 Q16 70 14 92 Q8 80 6 52 Z" fill="'+hair+'"/>'+
+      '<path d="M20 42 Q26 20 50 20 Q74 20 80 42 Q72 28 52 30 Q50 24 48 30 Q28 28 20 42 Z" fill="'+hair+'"/>';
+    feat=cheekB+
+      '<g transform="translate(73,25)"><circle cx="-5" cy="0" r="3" fill="#ffb3d1"/><circle cx="5" cy="0" r="3" fill="#ffb3d1"/><circle cx="0" cy="-5" r="3" fill="#ffb3d1"/><circle cx="0" cy="5" r="3" fill="#ffb3d1"/><circle r="2.4" fill="#ffd86b"/></g>'+
+      '<path d="M24 41 Q31 38 39 41" fill="none" stroke="#5a4636" stroke-width="2.2" stroke-linecap="round"/>'+
+      '<path d="M61 41 Q69 38 76 41" fill="none" stroke="#5a4636" stroke-width="2.2" stroke-linecap="round"/>'+
+      '<circle cx="35" cy="51" r="6" fill="#3a2a20"/><circle cx="37" cy="48.5" r="2" fill="#fff"/>'+
+      '<circle cx="65" cy="51" r="6" fill="#3a2a20"/><circle cx="67" cy="48.5" r="2" fill="#fff"/>'+
+      '<path d="M27 47 Q30 45 33 46.5" stroke="#3a2a20" stroke-width="1.4" fill="none" stroke-linecap="round"/>'+
+      '<path d="M67 46.5 Q70 45 73 47" stroke="#3a2a20" stroke-width="1.4" fill="none" stroke-linecap="round"/>'+
+      '<path d="M42 67 Q50 73 58 67" fill="none" stroke="#3a2a20" stroke-width="2.6" stroke-linecap="round"/>';
+  } else if(role==='E'){ /* 健身妹：卷毛、活力笑脸 */
+    /* 卷毛：一圈小圆球组成蓬松卷发 */
+    hairShape='<g fill="'+hair+'">'+
+      '<circle cx="50" cy="10" r="12"/><circle cx="30" cy="16" r="12"/><circle cx="70" cy="16" r="12"/>'+
+      '<circle cx="16" cy="32" r="12"/><circle cx="84" cy="32" r="12"/>'+
+      '<circle cx="14" cy="50" r="11"/><circle cx="86" cy="50" r="11"/>'+
+      '<circle cx="20" cy="64" r="9"/><circle cx="80" cy="64" r="9"/>'+
+      '<path d="M14 50 Q12 18 50 14 Q88 18 86 50 Q70 30 50 30 Q30 30 14 50 Z"/>'+
+      '</g>';
+    feat=cheekA+
+      /* 自信亮眼 */
+      '<circle cx="35" cy="50" r="6.5" fill="#3a2a20"/><circle cx="37" cy="47" r="2.2" fill="#fff"/>'+
+      '<circle cx="65" cy="50" r="6.5" fill="#3a2a20"/><circle cx="67" cy="47" r="2.2" fill="#fff"/>'+
+      /* 活力大笑 + 牙齿 */
+      '<path d="M36 64 Q50 78 64 64 Q50 72 36 64 Z" fill="#fff" stroke="#3a2a20" stroke-width="2.5" stroke-linejoin="round"/>'+
+      /* 腮红更明显 */
+      '<circle cx="28" cy="60" r="7" fill="#ff8fa0" opacity="0.65"/><circle cx="72" cy="60" r="7" fill="#ff8fa0" opacity="0.65"/>';
+  } else { /* 救人哥：白衣帅哥、戴口罩、胸前120 */
+    hairShape='<path d="M8 50 Q6 9 50 6 Q94 9 92 50 Q86 22 66 21 Q60 13 50 17 Q40 13 34 21 Q14 22 8 50 Z" fill="'+hair+'"/>';
+    feat=
+      '<path d="M25 41 Q33 37 41 41" fill="none" stroke="#2c2c2c" stroke-width="3" stroke-linecap="round"/>'+
+      '<path d="M59 41 Q67 37 75 41" fill="none" stroke="#2c2c2c" stroke-width="3" stroke-linecap="round"/>'+
+      '<circle cx="34" cy="50" r="6.5" fill="#3a2a20"/><circle cx="36" cy="47" r="2.3" fill="#fff"/>'+
+      '<circle cx="66" cy="50" r="6.5" fill="#3a2a20"/><circle cx="68" cy="47" r="2.3" fill="#fff"/>'+
+      '<path d="M23 60 Q23 56 27 56 L73 56 Q77 56 77 60 L77 71 Q77 84 50 87 Q23 84 23 71 Z" fill="#f4f8fc" stroke="#c2d2e2" stroke-width="1.5"/>'+
+      '<path d="M23 60 L13 55 M77 60 L87 55" stroke="#c2d2e2" stroke-width="2" stroke-linecap="round"/>'+
+      '<path d="M30 65 L70 65 M30 70 L70 70" stroke="#dce6f0" stroke-width="1.2"/>';
+  }
+  return head+hairShape+feat;
+}
+
+/* 头像（仅头+表情）——用于占位/小图标 */
+function avatar(role){
+  var u=role+(_uid++);
+  return '<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">'+svgDefs(role,u)+faceOnly(role,u)+'</svg>';
+}
+
+/* 手持牌身像：圆胖身子 + 双臂抱一把扇形扑克 + 头。count=显示的扇形牌张数(1~5)，done=已出完 */
+function avatarBody(role,count,done){
+  var u=role+(_uid++);
+  var cardStroke={A:'#e0a0aa',B:'#7fb5d8',C:'#e08a86',D:'#b07fd8',E:'#e8c84a',F:'#c0ccd8'}[role];
+  var body=
+    '<ellipse cx="60" cy="143" rx="46" ry="9" fill="#000" opacity="0.12"/>'+
+    '<path d="M28 138 Q26 96 60 96 Q94 96 92 138 Q92 146 78 146 L42 146 Q28 146 28 138 Z" fill="url(#bd'+u+')"/>';
+  /* 手臂：健身妹无袖露肤+肌肉；救人哥/其他为同色衣袖 */
+  if(role==='E'){
+    /* 左袖较短露出小臂；右臂裸露并有肱二头肌隆起 */
+    body+='<ellipse cx="32" cy="112" rx="11" ry="14" fill="url(#bd'+u+')"/>'+   /* 左肩黄袖 */
+      '<ellipse cx="32" cy="124" rx="9" ry="11" fill="url(#sk'+u+')"/>'+        /* 左小臂露肤 */
+      '<ellipse cx="88" cy="110" rx="12" ry="13" fill="url(#sk'+u+')"/>'+       /* 右上臂露肤 */
+      '<path d="M82 104 Q90 100 95 106 Q92 110 86 110 Q82 108 82 104 Z" fill="#f0c89a" opacity="0.8"/>'+ /* 肱二头肌高光隆起 */
+      '<ellipse cx="89" cy="124" rx="9" ry="11" fill="url(#sk'+u+')"/>';        /* 右小臂 */
+  } else {
+    body+='<ellipse cx="32" cy="116" rx="11" ry="15" fill="url(#bd'+u+')"/>'+
+      '<ellipse cx="88" cy="116" rx="11" ry="15" fill="url(#bd'+u+')"/>';
+  }
+  /* 救人哥衣服下方红色 120 标 */
+  if(role==='F'){
+    body+='<text x="60" y="140" font-size="15" font-weight="900" fill="#e8362f" text-anchor="middle" font-family="Arial,sans-serif" letter-spacing="1">120</text>';
+  }
+  if(done){
+    /* 出完牌：双手比胜利✌，不再抱牌 */
+    body+='<text x="60" y="120" font-size="26" text-anchor="middle">✌️</text>';
+  } else {
+    var n=Math.max(1,Math.min(5,count==null?5:count));
+    /* 5张牌的角度模板，按n取居中的几张 */
+    var deck5=[{x:-38,y:-18,r:-26},{x:-29,y:-21,r:-14},{x:-19,y:-23,r:-2},{x:-9,y:-23,r:10},{x:1,y:-21,r:22}];
+    var start=Math.floor((5-n)/2);
+    var cards='';
+    for(var i=0;i<n;i++){ var c=deck5[start+i];
+      cards+='<rect x="'+c.x+'" y="'+c.y+'" width="22" height="33" rx="3.5" fill="#fff" stroke="'+cardStroke+'" stroke-width="1" transform="rotate('+c.r+')"/>';
+    }
+    body+='<g transform="translate(60,108)">'+cards+'</g>';
+  }
+  var head='<g transform="translate(10,-4)">'+faceOnly(role,u)+'</g>';
+  return '<svg viewBox="0 0 120 150" xmlns="http://www.w3.org/2000/svg">'+svgDefs(role,u)+body+head+'</svg>';
+}
+function bodyInner(role,count,done){
+  return avatarBody(role,count,done).replace(/^<svg[^>]*>/,'').replace(/<\/svg>$/,'');
+}
+/* 由剩牌数映射到要显示的扇形牌张数 */
+function fanCount(remain){
+  if(remain<=0) return 0;
+  if(remain<=3) return 1;
+  if(remain<=7) return 2;
+  if(remain<=13) return 3;
+  if(remain<=20) return 4;
+  return 5;
+}
+
+/* ============ 玩家配置（四方） ============ */
+var PLAYERS=[
+  {id:0,name:'自信哥',role:'A',me:true},   /* 底部本人 */
+  {id:1,name:'紧张仔',role:'B'},           /* 左对手 */
+  {id:2,name:'素质酱',role:'D'},           /* 上方队友 */
+  {id:3,name:'迷信妹',role:'C'}            /* 右对手（最右边） */
+];
+/* 首页展示全部角色（含两位新成员），牌桌对战仍为 4 人 */
+var CAST=[
+  {name:'自信哥',role:'A'},
+  {name:'紧张仔',role:'B'},
+  {name:'素质酱',role:'D'},
+  {name:'迷信妹',role:'C'},
+  {name:'健身姐',role:'E'},
+  {name:'救人哥',role:'F'}
+];
+/* 0&2 一队，1&3 一队 */
+function teammate(i){return (i+2)%4;}
+
+/* ============ 牌组 ============ */
+var SUITS=['♠','♥','♣','♦'];
+var RANKS=['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+/* 牌力顺序：3<4<...<A<2<小王<大王 ；用 val 表示 */
+function rankVal(r){
+  var order={'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'10':10,'J':11,'Q':12,'K':13,'A':14,'2':15,'jo':16,'JO':17};
+  return order[r];
+}
+function buildDeck(){
+  var d=[];
+  for(var n=0;n<2;n++){ /* 两副牌 */
+    SUITS.forEach(function(s){ RANKS.forEach(function(r){
+      d.push({r:r,s:s,red:(s==='♥'||s==='♦')});
+    });});
+    d.push({r:'jo',s:'',red:false,joker:'小王'});
+    d.push({r:'JO',s:'',red:true,joker:'大王'});
+  }
+  for(var i=d.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=d[i];d[i]=d[j];d[j]=t;}
+  return d;
+}
+
+/* ============ 牌型识别 ============ */
+/* 返回 {type, len, val}  type: single/pair/trips/triple2/straight/tripstr/plate/bomb/rocket */
+function detect(cards){
+  if(!cards.length) return null;
+  var vals=cards.map(function(c){return rankVal(c.r);}).sort(function(a,b){return a-b;});
+  var n=cards.length;
+  var cnt={}; vals.forEach(function(v){cnt[v]=(cnt[v]||0)+1;});
+  var groups=Object.keys(cnt).map(Number).sort(function(a,b){return a-b;});
+  var uniq=groups.length;
+  /* 王炸 */
+  if(n===4 && vals[0]===16 && vals[3]===17) return {type:'rocket',len:4,val:999};
+  /* 炸弹：4张及以上同点 */
+  if(uniq===1 && n>=4) return {type:'bomb',len:n,val:groups[0]+n*0.01};
+  if(n===1) return {type:'single',len:1,val:vals[0]};
+  if(n===2 && uniq===1) return {type:'pair',len:2,val:groups[0]};
+  if(n===3 && uniq===1) return {type:'trips',len:3,val:groups[0]};
+  /* 三带二 */
+  if(n===5 && uniq===2){
+    var a=groups[0],b=groups[1];
+    if(cnt[a]===3 && cnt[b]===2) return {type:'triple2',len:5,val:a};
+    if(cnt[a]===2 && cnt[b]===3) return {type:'triple2',len:5,val:b};
+  }
+  /* 顺子：5张连续单牌，2及王不可入顺 */
+  if(n===5 && uniq===5 && vals[4]<=14){
+    var ok=true; for(var i=1;i<5;i++){if(vals[i]!==vals[i-1]+1)ok=false;}
+    if(ok){
+      /* 同花顺（火箭/钢花）：五张同花色的顺子，属特殊炸弹 */
+      var sameSuit = cards.every(function(c){ return !c.joker && c.s===cards[0].s; });
+      if(sameSuit) return {type:'sflush',len:5,val:vals[0]};
+      return {type:'straight',len:5,val:vals[0]};
+    }
+  }
+  /* 连对：3对及以上连续 */
+  if(n>=6 && n%2===0 && uniq===n/2){
+    var allp=groups.every(function(g){return cnt[g]===2;});
+    var seq=true; for(var i=1;i<groups.length;i++){if(groups[i]!==groups[i-1]+1)seq=true&&groups[i]===groups[i-1]+1?seq:false;}
+    seq=true; for(var i=1;i<groups.length;i++){if(groups[i]!==groups[i-1]+1)seq=false;}
+    if(allp && seq && groups[groups.length-1]<=14) return {type:'pairstr',len:n,val:groups[0]};
+  }
+  /* 钢板：2组及以上连续三张 */
+  if(n>=6 && n%3===0 && uniq===n/3){
+    var allt=groups.every(function(g){return cnt[g]===3;});
+    var seq2=true; for(var i=1;i<groups.length;i++){if(groups[i]!==groups[i-1]+1)seq2=false;}
+    if(allt && seq2 && groups[groups.length-1]<=14) return {type:'plate',len:n,val:groups[0]};
+  }
+  return null;
+}
+/* 是否属于"炸"类（炸弹/同花顺/王炸） */
+function isBombType(t){ return t==='bomb'||t==='sflush'||t==='rocket'; }
+/* 炸力值：普通炸弹按张数，同花顺介于5张和6张炸弹之间，王炸最大 */
+function bombPower(combo){
+  if(combo.type==='rocket') return 100;
+  if(combo.type==='sflush') return 5.5;            /* 同花顺 > 5张炸弹, < 6张炸弹 */
+  if(combo.type==='bomb') return combo.len + combo.val*0.001; /* 张数为主，点数次之 */
+  return -1;
+}
+/* prev 能否被 cur 压过 */
+function beats(cur,prev){
+  if(!prev) return true;
+  var cb=isBombType(cur.type), pb=isBombType(prev.type);
+  /* 炸 vs 炸：比炸力 */
+  if(cb && pb){
+    var pc=bombPower(cur), pp=bombPower(prev);
+    if(Math.floor(pc)===Math.floor(pp) && cur.type===prev.type){
+      /* 同档同类型再比点数 */
+      return cur.val>prev.val;
+    }
+    return pc>pp;
+  }
+  /* 炸 压 非炸 */
+  if(cb && !pb) return true;
+  if(!cb && pb) return false;
+  /* 普通牌型：同型同长比点数 */
+  if(cur.type!==prev.type || cur.len!==prev.len) return false;
+  return cur.val>prev.val;
+}
+
+/* ============ 游戏状态 ============ */
+var G={
+  hands:[[],[],[],[]],   /* 每人手牌 */
+  current:0,             /* 当前出牌玩家 */
+  lastPlay:null,         /* {by, combo, cards} 当前桌面最大牌 */
+  passCount:0,
+  selected:[],           /* 我选中的卡 index */
+  finished:[],           /* 出完牌的玩家顺序 */
+  level:2,
+  timerId:null, timeLeft:20,
+  busy:false,
+  playedCount:{},        /* 记牌器：各点数已出张数 {rankVal: n} */
+  tribute:null,          /* 贡牌还牌信息 */
+  bombedThisRound:{},    /* 本轮已出过炸的玩家 {pid:true}，用于"要不要！"语音 */
+  roundPlays:{},         /* 本轮各家最近出的牌 {pid:{cards,slam}}，清桌前都保留显示 */
+  passedThisRound:{}     /* 本轮已过牌的玩家 {pid:true}，显示"不出"标记 */
+};
+
+/* ============ 连胜/升级进度存档（内存版，可被外部持久化） ============ */
+var SAVE={ myLevel:2, mateLevel:2, oppLevel:2, streak:0, bestStreak:0, games:0, wins:0 };
+
+function cardHTML(c,cls){
+  var col=c.red?'red':'blk';
+  if(c.joker){
+    return '<div class="card '+cls+' joker '+col+'"><span class="rk">'+(c.r==='JO'?'大王':'小王')+
+      '</span><span class="joker-star">★</span></div>';
+  }
+  return '<div class="card '+cls+' '+col+'"><span class="rk">'+c.r+'</span><span class="st">'+c.s+'</span></div>';
+}
+
+/* 排序：从大到小（便于看牌），王最大 */
+function sortCards(arr){
+  return arr.slice().sort(function(a,b){
+    var d=rankVal(b.r)-rankVal(a.r);
+    if(d!==0) return d;
+    return SUITS.indexOf(a.s)-SUITS.indexOf(b.s);
+  });
+}
+
+function deal(){
+  var deck=buildDeck();
+  /* 108 张 / 4 = 27 张每人 */
+  for(var i=0;i<4;i++){ G.hands[i]=sortCards(deck.slice(i*27,i*27+27)); }
+  G.current=0; G.lastPlay=null; G.passCount=0; G.selected=[]; G.finished=[];
+  G.playedCount={}; G.tribute=null; G.bombedThisRound={};
+  G.roundPlays={}; G.passedThisRound={};
+}
+
+/* ============ 渲染牌桌 ============ */
+function renderTable(){
+  var oz=document.getElementById('oppZone');
+  var positions=['','pt-left','pt-top','pt-right']; /* 索引对应 player id */
+  var html='';
+  [1,2,3].forEach(function(pid){
+    var p=PLAYERS[pid];
+    var turnCls=(G.current===pid)?' turn':'';
+    var rankLabel = pid===2 ? '队友' : '对手';
+    var done = G.finished.indexOf(pid)>=0;
+    var fan = fanCount(G.hands[pid].length);
+    html+='<div class="player-tag '+positions[pid]+turnCls+'">'+
+      '<div class="avatar-wrap">'+
+        '<svg class="av" viewBox="0 0 120 150">'+bodyInner(p.role,fan,done)+'</svg>'+
+        '<span class="label '+(pid===2?'mate':'')+'">'+rankLabel+'</span>'+
+        '<span class="cnt">'+(done?'✓':G.hands[pid].length)+'</span>'+
+      '</div>'+
+      '<span class="name">'+p.name+'</span>'+
+    '</div>';
+  });
+  /* 本轮各家打出的牌：全部保留显示，直到清桌 */
+  var posMap={1:'pl-left',2:'pl-top',3:'pl-right'};
+  [1,2,3].forEach(function(pid){
+    var rp=G.roundPlays[pid];
+    if(rp){
+      var landCls=rp.slam?' landed':'';
+      var dim=(G.lastPlay && G.lastPlay.by!==pid)?' dim':'';  /* 非当前最大牌的淡化 */
+      html+='<div class="played '+posMap[pid]+dim+'">'+rp.cards.map(function(c){return cardHTML(c,'pcard'+landCls);}).join('')+'</div>';
+    } else if(G.passedThisRound[pid]){
+      html+='<div class="pass-bubble '+posMap[pid]+'">不出</div>';
+    }
+  });
+  oz.innerHTML=html;
+  document.getElementById('hbLevel').textContent=G.level;
+
+  /* 我打出的牌显示在底部上方 */
+  renderMyPlayed();
+}
+function avatarInner(role){
+  var svg=avatar(role);
+  return svg.replace(/^<svg[^>]*>/,'').replace(/<\/svg>$/,'');
+}
+function renderMyPlayed(){
+  var existing=document.getElementById('myPlayed');
+  if(existing) existing.remove();
+  var rp=G.roundPlays[0];
+  if(rp){
+    var d=document.createElement('div');
+    d.id='myPlayed';
+    var dim=(G.lastPlay && G.lastPlay.by!==0)?' dim':'';
+    d.className='played'+dim;
+    d.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-30%);';
+    var landCls=rp.slam?'pcard landed':'pcard';
+    d.innerHTML=rp.cards.map(function(c){return cardHTML(c,landCls);}).join('');
+    document.getElementById('oppZone').appendChild(d);
+  } else if(G.passedThisRound[0]){
+    var d2=document.createElement('div');
+    d2.id='myPlayed';
+    d2.className='pass-bubble';
+    d2.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-30%);';
+    d2.textContent='不出';
+    document.getElementById('oppZone').appendChild(d2);
+  }
+}
+
+/* ============ 渲染我的手牌 ============ */
+function renderHand(){
+  var h=document.getElementById('hand');
+  var cards=G.hands[0];
+  h.innerHTML='';
+  /* 按点数分组（已排序：从大到小），保留每张的原始 index */
+  var groups=[];           /* [{val, items:[{card,idx}]}] */
+  var map={};
+  cards.forEach(function(c,idx){
+    var v=rankVal(c.r);
+    if(map[v]==null){ map[v]=groups.length; groups.push({val:v, items:[]}); }
+    groups[map[v]].items.push({card:c, idx:idx});
+  });
+  /* 计算每列宽度与列间重叠，自适应屏宽 */
+  var w=h.clientWidth||760;
+  var colW=46;
+  var nCol=groups.length;
+  var gap = nCol>1 ? Math.min(8, Math.max(-18,(w-20-nCol*colW)/(nCol-1))) : 8;
+  /* 同点竖向错开的步距 */
+  var stackStep=20;
+
+  groups.forEach(function(g){
+    var col=document.createElement('div');
+    col.className='hcol';
+    col.style.marginLeft = (g===groups[0]?0:gap)+'px';
+    /* 该列高度 = 顶张全高 + (张数-1)*步距 */
+    var stackH=(g.items.length-1)*stackStep;
+    col.style.height=(104+stackH)+'px';
+    g.items.forEach(function(it,i){
+      var c=it.card, idx=it.idx;
+      var colr=c.red?'red':'blk';
+      var el=document.createElement('div');
+      el.className='hcard card '+colr+(G.selected.indexOf(idx)>=0?' sel':'')+(c.joker?' joker':'');
+      el.style.top=(i*stackStep)+'px';
+      el.style.zIndex=i+1;
+      if(c.joker){
+        el.innerHTML='<span class="rk">'+(c.r==='JO'?'大王':'小王')+'</span><span class="joker-star">★</span>';
+      } else {
+        el.innerHTML='<span class="rk">'+c.r+'</span><span class="suit">'+c.s+'</span><span class="st">'+c.s+'</span>';
+      }
+      el.onclick=function(e){ e.stopPropagation(); toggleSel(idx); };
+      col.appendChild(el);
+    });
+    h.appendChild(col);
+  });
+  updateSelInfo();
+}
+function toggleSel(idx){
+  if(G.current!==0 || G.busy) return;
+  var p=G.selected.indexOf(idx);
+  if(p>=0) G.selected.splice(p,1); else G.selected.push(idx);
+  renderHand();
+}
+function updateSelInfo(){
+  var info=document.getElementById('selInfo');
+  if(!G.selected.length){ info.textContent=''; document.getElementById('btnPlay').disabled=(G.current!==0); return; }
+  var cs=G.selected.map(function(i){return G.hands[0][i];});
+  var combo=detect(cs);
+  var names={single:'单张',pair:'对子',trips:'三张',triple2:'三带二',straight:'顺子',pairstr:'连对',plate:'钢板',bomb:'炸弹',rocket:'王炸'};
+  if(!combo){ info.textContent='⚠ 非法牌型'; }
+  else if(G.lastPlay && G.lastPlay.by!==0 && !isTeammateOf(G.lastPlay.by,0) && !beats(combo,G.lastPlay.combo)){
+    info.textContent=names[combo.type]+' · 压不过';
+  } else {
+    info.textContent='✓ '+names[combo.type];
+  }
+}
+function isTeammateOf(a,b){ return teammate(a)===b; }
+
+/* ============ 找出能压过 prev 的所有出法（用于提示和AI） ============ */
+function findPlays(hand, prev){
+  var plays=[];
+  var n=hand.length;
+  /* 按点数分组 */
+  var byVal={};
+  hand.forEach(function(c,i){ var v=rankVal(c.r); (byVal[v]=byVal[v]||[]).push(i); });
+  var vals=Object.keys(byVal).map(Number).sort(function(a,b){return a-b;});
+
+  function add(idxArr){
+    var cs=idxArr.map(function(i){return hand[i];});
+    var combo=detect(cs);
+    if(combo && (!prev || beats(combo,prev))) plays.push({idx:idxArr.slice(),combo:combo});
+  }
+  /* 自由出牌时优先出最小的单牌/对子，避免拆炸；有 prev 时找能压的 */
+  if(!prev){
+    /* 单张（每个最小点各一张） */
+    vals.forEach(function(v){ add([byVal[v][0]]); });
+    /* 对子 */
+    vals.forEach(function(v){ if(byVal[v].length>=2) add([byVal[v][0],byVal[v][1]]); });
+    /* 三张 */
+    vals.forEach(function(v){ if(byVal[v].length>=3) add([byVal[v][0],byVal[v][1],byVal[v][2]]); });
+    /* 顺子 */
+    findStraights(hand,byVal,vals,add);
+    return plays;
+  }
+  var t=prev.type;
+  if(t==='single'){ vals.forEach(function(v){ if(v>prev.val) add([byVal[v][0]]); }); }
+  if(t==='pair'){ vals.forEach(function(v){ if(v>prev.val && byVal[v].length>=2) add([byVal[v][0],byVal[v][1]]); }); }
+  if(t==='trips'){ vals.forEach(function(v){ if(v>prev.val && byVal[v].length>=3) add(byVal[v].slice(0,3)); }); }
+  if(t==='triple2'){
+    vals.forEach(function(v){
+      if(v>prev.val && byVal[v].length>=3){
+        var pairV=vals.find(function(x){return x!==v && byVal[x].length>=2;});
+        if(pairV!=null) add(byVal[v].slice(0,3).concat(byVal[pairV].slice(0,2)));
+      }
+    });
+  }
+  if(t==='straight'){ findStraights(hand,byVal,vals,function(idx){
+    var cs=idx.map(function(i){return hand[i];}); var cm=detect(cs);
+    if(cm && cm.type==='straight' && cm.val>prev.val) plays.push({idx:idx,combo:cm});
+  });}
+  /* 炸弹永远可压（除王炸） */
+  vals.forEach(function(v){ if(byVal[v].length>=4) add(byVal[v].slice(0,byVal[v].length)); });
+  /* 同花顺 */
+  findFlushes(hand, add);
+  /* 王炸 */
+  var sj=hand.findIndex(function(c){return c.r==='jo';});
+  var bj=hand.findIndex(function(c){return c.r==='JO';});
+  var sj2=hand.findIndex(function(c,i){return c.r==='jo'&&i!==sj;});
+  var bj2=hand.findIndex(function(c,i){return c.r==='JO'&&i!==bj;});
+  if(sj>=0&&bj>=0&&sj2>=0&&bj2>=0) plays.push({idx:[sj,bj,sj2,bj2],combo:{type:'rocket',len:4,val:999}});
+  return plays;
+}
+function findStraights(hand,byVal,vals,add){
+  var single=vals.filter(function(v){return v<=14;});
+  for(var start=0;start<single.length;start++){
+    var seq=[single[start]];
+    for(var k=start+1;k<single.length;k++){
+      if(single[k]===seq[seq.length-1]+1) seq.push(single[k]); else break;
+    }
+    for(var s=0;s+5<=seq.length;s++){
+      var idx=seq.slice(s,s+5).map(function(v){return byVal[v][0];});
+      add(idx);
+    }
+  }
+}
+/* 找同花顺：按花色分组，找连续5张同花 */
+function findFlushes(hand,add){
+  var bySuit={'♠':[],'♥':[],'♣':[],'♦':[]};
+  hand.forEach(function(c,i){ if(!c.joker && bySuit[c.s]) bySuit[c.s].push({v:rankVal(c.r),i:i}); });
+  Object.keys(bySuit).forEach(function(s){
+    var arr=bySuit[s].filter(function(x){return x.v<=14;}).sort(function(a,b){return a.v-b.v;});
+    /* 去重点数（同花色同点可能有两张，取一张即可） */
+    var seen={}, uniq=[];
+    arr.forEach(function(x){ if(!seen[x.v]){seen[x.v]=1;uniq.push(x);} });
+    for(var start=0;start<uniq.length;start++){
+      var seq=[uniq[start]];
+      for(var k=start+1;k<uniq.length;k++){
+        if(uniq[k].v===seq[seq.length-1].v+1) seq.push(uniq[k]); else break;
+      }
+      for(var off=0;off+5<=seq.length;off++){
+        add(seq.slice(off,off+5).map(function(x){return x.i;}));
+      }
+    }
+  });
+}
+
+/* ============ 回合流转 ============ */
+function nextTurn(){
+  clearTimer();
+  G.lastPassBy=null;
+  /* 检查整局结束（任一队两人都出完，或3人出完） */
+  if(G.finished.length>=3){ endGame(); return; }
+  do{ G.current=(G.current+1)%4; } while(G.finished.indexOf(G.current)>=0);
+  renderTable(); renderHand();
+  startRound();
+}
+function setMyButtons(on){
+  document.getElementById('btnPass').disabled=!on || !canPass();
+  document.getElementById('btnHint').disabled=!on;
+  document.getElementById('btnPlay').disabled=!on;
+}
+function canPass(){
+  /* 自由出牌（桌面空或上家是自己/队友刚被让过）不能pass */
+  if(!G.lastPlay) return false;
+  if(G.lastPlay.by===0) return false;
+  return true;
+}
+
+/* ============ 我出牌 ============ */
+function playerPlay(){
+  if(G.current!==0) return;
+  if(!G.selected.length){ toast('请选择要出的牌'); return; }
+  var cs=G.selected.map(function(i){return G.hands[0][i];});
+  var combo=detect(cs);
+  if(!combo){ toast('牌型不合法'); return; }
+  var needBeat = G.lastPlay && G.lastPlay.by!==0 && !isTeammateOf(G.lastPlay.by,0);
+  if(needBeat && !beats(combo,G.lastPlay.combo)){ toast('压不过上家的牌'); return; }
+  commitPlay(0,G.selected.slice(),combo,cs);
+}
+function commitPlay(pid,idxArr,combo,cs){
+  /* 从手牌移除 */
+  idxArr.slice().sort(function(a,b){return b-a;}).forEach(function(i){ G.hands[pid].splice(i,1); });
+  /* 记牌器：累加已出牌 */
+  cs.forEach(function(c){ var v=rankVal(c.r); G.playedCount[v]=(G.playedCount[v]||0)+1; });
+  var isBomb=isBombType(combo.type);
+  /* 语音规则判定（在更新 lastPlay 之前，prev 还是被压的牌） */
+  var prevCombo = (G.lastPlay && G.lastPlay.by!==pid) ? G.lastPlay.combo : null;
+  var voiceLine=null;
+  if(isBomb){
+    /* 规则2：用炸/同花顺/王炸 压过 对方的炸弹或同花顺 → "你很大吗？" */
+    if(prevCombo && isBombType(prevCombo.type) && !isTeammateOf(G.lastPlay.by,pid)){
+      voiceLine='你很大吗？';
+    }
+    /* 规则1：本轮该玩家第一次出炸（且非压炸场景）→ "要不要！" */
+    else if(!G.bombedThisRound[pid]){
+      voiceLine='要不要！';
+    }
+    G.bombedThisRound[pid]=true;
+  }
+  /* 飞牌动画 */
+  flyCards(pid, sortCards(cs), isBomb);
+  /* 音效 */
+  if(isBomb){
+    slamAvatar(pid);
+    boom(combo.type==='rocket'?'王 炸！':combo.type==='sflush'?'同花顺！':'炸 弹！');
+    SFX.bomb();
+  } else {
+    SFX.play();
+  }
+  /* 语音（稍延迟，叠在音效之后更清晰） */
+  if(voiceLine) setTimeout(function(){ speak(voiceLine); }, 180);
+
+  G.lastPlay={by:pid,combo:combo,cards:sortCards(cs),slam:isBomb};
+  /* 记录本轮该家出的牌（保留到清桌），并清掉其"不出"标记 */
+  G.roundPlays[pid]={cards:sortCards(cs),slam:isBomb};
+  delete G.passedThisRound[pid];
+  G.passCount=0;
+  if(pid===0) G.selected=[];
+  if(G.hands[pid].length===0 && G.finished.indexOf(pid)<0){
+    G.finished.push(pid);
+    toast(PLAYERS[pid].name+' 出完啦！');
+    SFX.finish();
+  } else if(G.hands[pid].length===1 && pid!==0){
+    toast(PLAYERS[pid].name+' 还剩 1 张！');
+  }
+  G.busy=false;
+  /* 飞牌进行中先不重绘桌面打出区，动画落地后再 renderTable */
+  renderHand(); renderTrackerIfOpen();
+  var delay=isBomb?460:380;
+  setTimeout(function(){ renderTable(); }, delay);
+  /* 回合推进略等动画 */
+  setTimeout(function(){ nextTurn(); }, delay+40);
+}
+/* 起点坐标（出牌者头像大致位置，横屏，相对 #app） */
+function playerOrigin(pid){
+  var W=document.getElementById('app').clientWidth||800;
+  var H=document.getElementById('app').clientHeight||400;
+  /* 0=我(底部中央) 1=左对手(左侧中) 2=队友(顶部中央) 3=右对手(右侧中) */
+  var map={0:{x:W*0.5,y:H-90},1:{x:50,y:H*0.42},2:{x:W*0.5,y:60},3:{x:W-50,y:H*0.42}};
+  return map[pid];
+}
+/* 飞牌：临时卡片从起点滑到中央 */
+function flyCards(pid, cards, isBomb){
+  var layer=document.getElementById('flyLayer');
+  if(!layer) return;
+  var W=document.getElementById('app').clientWidth||800;
+  var H=document.getElementById('app').clientHeight||400;
+  var o=playerOrigin(pid);
+  var cx=W/2, cy=H*0.46;            /* 桌面中央落点 */
+  var spread=Math.min(20, 160/Math.max(1,cards.length));
+  cards.forEach(function(c,i){
+    var el=document.createElement('div');
+    el.className='fly-card '+(c.red?'red':'blk')+(isBomb?' slam':'');
+    if(c.joker){ el.innerHTML='<span class="rk" style="font-size:9px">'+(c.r==='JO'?'大王':'小王')+'</span>'; }
+    else { el.innerHTML='<span class="rk">'+c.r+'</span><span class="st">'+c.s+'</span>'; }
+    el.style.left=o.x+'px'; el.style.top=o.y+'px';
+    el.style.opacity='0.2';
+    layer.appendChild(el);
+    /* 触发位移 */
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){
+        var dx=(cx - o.x) + (i-(cards.length-1)/2)*spread;
+        var dy=(cy - o.y);
+        var rot=isBomb?((i-(cards.length-1)/2)*8):((i-(cards.length-1)/2)*3);
+        el.style.transform='translate('+dx+'px,'+dy+'px) rotate('+rot+'deg)'+(isBomb?' scale(1.15)':'');
+        el.style.opacity='1';
+      });
+    });
+    setTimeout(function(){ el.remove(); }, isBomb?500:440);
+  });
+}
+function slamAvatar(pid){
+  var el = pid===0 ? document.getElementById('myRow') : document.querySelectorAll('#oppZone .player-tag')[pid===1?0:pid===2?1:2];
+  if(!el) return;
+  el.classList.add('slam');
+  setTimeout(function(){ el.classList.remove('slam'); }, 520);
+}
+/* 炸弹全屏闪动特效 */
+function boom(txt){
+  var d=document.createElement('div');
+  d.className='boom';
+  d.textContent=txt;
+  document.getElementById('app').appendChild(d);
+  setTimeout(function(){d.remove();},900);
+}
+function playerPass(){
+  if(G.current!==0 || !canPass()) return;
+  doPass(0);
+}
+function doPass(pid){
+  G.passCount++;
+  G.lastPassBy=pid;
+  G.passedThisRound[pid]=true;   /* 记录本轮该家不出 */
+  SFX.pass();
+  /* 若除未出完者外其余都pass，桌面清空 */
+  var active=[0,1,2,3].filter(function(i){return G.finished.indexOf(i)<0;});
+  if(G.lastPlay && G.passCount>=active.length-1){
+    /* 回到最大牌的人自由出，清空本轮桌面 */
+    G.passCount=0;
+    var leader=G.lastPlay.by;
+    G.lastPlay=null;
+    G.bombedThisRound={};        /* 新一轮重置炸弹语音追踪 */
+    G.roundPlays={};             /* 清空本轮各家出牌（这才让牌从桌面消失） */
+    G.passedThisRound={};        /* 清空"不出"标记 */
+    clearTimer();
+    if(G.finished.indexOf(leader)>=0){ leader=active.find(function(i){return i!==pid;}); }
+    G.current=(leader+3)%4; /* nextTurn 会 +1 回到 leader */
+    while(G.finished.indexOf((G.current+1)%4)>=0){ G.current=(G.current+1)%4; }
+    G.busy=false;
+    nextTurn();
+    return;
+  }
+  G.busy=false;
+  renderTable();
+  nextTurn();
+}
+
+/* ============ 记牌器 ============ */
+/* 每个点数全场共 8 张（两副×4花色），大小王各 2 张 */
+function rankTotal(v){ return (v===16||v===17)?2:8; }
+function openTracker(){
+  renderTracker();
+  document.getElementById('trackerMask').classList.add('open');
+}
+function closeTracker(e){
+  if(e && e.target && e.target.classList && e.target.classList.contains('tracker-panel')) return;
+  document.getElementById('trackerMask').classList.remove('open');
+}
+function openSettings(){ SFX.tap(); renderSoundBtns(); document.getElementById('settingsMask').classList.add('open'); }
+function closeSettings(e){
+  if(e && e.target && e.target.classList && e.target.classList.contains('tracker-panel')) return;
+  document.getElementById('settingsMask').classList.remove('open');
+}
+/* ===== 全屏切换 ===== */
+function isFullscreen(){
+  return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+}
+function toggleFullscreen(){
+  SFX.tap();
+  var el=document.documentElement;
+  try{
+    if(!isFullscreen()){
+      var req=el.requestFullscreen||el.webkitRequestFullscreen||el.mozRequestFullScreen||el.msRequestFullscreen;
+      if(req){ req.call(el); }
+      else { toast('当前浏览器不支持全屏，可把页面“添加到主屏幕”后全屏使用'); }
+    } else {
+      var exit=document.exitFullscreen||document.webkitExitFullscreen||document.mozCancelFullScreen||document.msExitFullscreen;
+      if(exit){ exit.call(document); }
+    }
+  }catch(e){ toast('全屏切换失败，可尝试“添加到主屏幕”'); }
+}
+function syncFsButtons(){
+  var on=isFullscreen();
+  var FS_SVG='<svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5V2h3M9 2h3v3M12 9v3H9M5 12H2V9"/></svg>';
+  var a=document.getElementById('fsBtn');
+  if(a) a.innerHTML=FS_SVG+(on?'退出全屏':'全屏');
+  var g=document.getElementById('fsBtnGame');
+  if(g) g.innerHTML=FS_SVG;
+}
+['fullscreenchange','webkitfullscreenchange','mozfullscreenchange','MSFullscreenChange'].forEach(function(ev){
+  document.addEventListener(ev, syncFsButtons);
+});
+function renderTrackerIfOpen(){
+  if(document.getElementById('trackerMask').classList.contains('open')) renderTracker();
+}
+function renderTracker(){
+  var order=['2','A','K','Q','J','10','9','8','7','6','5','4','3'];
+  var cells=order.map(function(r){
+    var v=rankVal(r);
+    var played=G.playedCount[v]||0;
+    var left=rankTotal(v)-played;
+    var cls=left<=0?'zero':(left>=rankTotal(v)?'full':'mid');
+    /* 这些点数主要是黑色显示 */
+    return '<div class="trk-cell blk"><div class="rk">'+r+'</div><div class="left '+cls+'">'+left+'</div></div>';
+  });
+  /* 大小王 */
+  [['小王',16],['大王',17]].forEach(function(p){
+    var played=G.playedCount[p[1]]||0; var left=2-played;
+    var cls=left<=0?'zero':(left>=2?'full':'mid');
+    cells.push('<div class="trk-cell red"><div class="rk" style="font-size:12px">'+p[0]+'</div><div class="left '+cls+'">'+left+'</div></div>');
+  });
+  document.getElementById('trackerBody').innerHTML=cells.join('');
+}
+
+/* ============ 贡牌 / 还牌（掼蛋特色） ============ */
+/* 规则简化版：上一局末游(末位)向头游进贡其最大单牌；头游回还一张≤10的牌。
+   首局无进贡。这里基于 SAVE 里记录的上局名次。*/
+function runTributePhase(callback){
+  var lastRank=SAVE.lastFinishOrder; /* 上局名次数组，如 [2,0,3,1] 表示 pid 顺序 */
+  if(!lastRank || lastRank.length<4){ callback(); return; }
+  var head=lastRank[0], tail=lastRank[3];
+  /* 抗贡判断：末游若有两个大王可抗贡，简化为随机偶发 */
+  /* 末游最大单张 */
+  var tailHand=G.hands[tail];
+  var maxIdx=0, maxV=-1;
+  tailHand.forEach(function(c,i){ var v=rankVal(c.r); if(v>maxV){maxV=v;maxIdx=i;} });
+  var tributeCard=tailHand[maxIdx];
+  /* 大王不进贡 */
+  if(rankVal(tributeCard.r)===17){
+    showTribute('末游手握大王，无需进贡！', null, null, callback);
+    return;
+  }
+  /* 执行：tail → head 进贡 */
+  tailHand.splice(maxIdx,1);
+  G.hands[head].push(tributeCard);
+  G.hands[head]=sortCards(G.hands[head]);
+  /* head 还牌：选一张 ≤10 的最小牌 */
+  var headHand=G.hands[head];
+  var backIdx=-1, backV=999;
+  headHand.forEach(function(c,i){ var v=rankVal(c.r); if(v<=10 && v<backV){backV=v;backIdx=i;} });
+  if(backIdx<0){ headHand.forEach(function(c,i){ var v=rankVal(c.r); if(v<backV){backV=v;backIdx=i;} }); }
+  var backCard=headHand[backIdx];
+  headHand.splice(backIdx,1);
+  G.hands[tail].push(backCard);
+  G.hands[tail]=sortCards(G.hands[tail]);
+  /* 头游先出（进贡方的对家或头游先手，简化为头游先出） */
+  G.current=(head+3)%4;
+  showTribute(
+    PLAYERS[tail].name+' 向 '+PLAYERS[head].name+' 进贡 '+cardName(tributeCard),
+    PLAYERS[head].name+' 还牌 '+cardName(backCard),
+    null, callback);
+}
+function cardName(c){ return c.joker?(c.r==='JO'?'大王':'小王'):(c.r+c.s); }
+function showTribute(line1,line2,line3,callback){
+  var mask=document.getElementById('tributeMask');
+  document.getElementById('tributeText').innerHTML=
+    '<div>'+line1+'</div>'+(line2?'<div style="margin-top:8px">'+line2+'</div>':'');
+  mask.classList.add('open');
+  setTimeout(function(){
+    mask.classList.remove('open');
+    callback();
+  }, 2200);
+}
+
+/* ============ 存档 / 连胜（内存，支持持久化钩子） ============ */
+var SAVE_KEY='guandan_save_v1';
+function loadSave(){
+  try{
+    var raw = (typeof localStorage!=='undefined') ? localStorage.getItem(SAVE_KEY) : null;
+    if(raw){ SAVE=Object.assign(SAVE, JSON.parse(raw)); }
+    else if(window.__guandanSave){ SAVE=Object.assign(SAVE, window.__guandanSave); }
+  }catch(e){
+    /* 隐私模式或不支持时回退到内存 */
+    if(window.__guandanSave){ try{SAVE=Object.assign(SAVE,window.__guandanSave);}catch(e2){} }
+  }
+  renderLobbyStats();
+}
+function persistSave(){
+  var json;
+  try{ json=JSON.stringify(SAVE); }catch(e){ json=null; }
+  try{
+    if(json && typeof localStorage!=='undefined') localStorage.setItem(SAVE_KEY, json);
+  }catch(e){ /* 存储失败（隐私模式/超额）忽略 */ }
+  try{ window.__guandanSave=JSON.parse(json||'{}'); }catch(e){}
+  renderLobbyStats();
+}
+/* 清空存档（设置里可调用） */
+function resetSave(){
+  SAVE={ myLevel:2, mateLevel:2, oppLevel:2, streak:0, bestStreak:0, games:0, wins:0 };
+  try{ if(typeof localStorage!=='undefined') localStorage.removeItem(SAVE_KEY); }catch(e){}
+  window.__guandanSave=null;
+  renderLobbyStats();
+  toast('存档已清空');
+}
+function renderLobbyStats(){
+  var el=document.getElementById('lobbyStats');
+  if(!el) return;
+  el.innerHTML='当前级别 <b>'+levelName(SAVE.myLevel)+'</b> · 连胜 <b>'+SAVE.streak+'</b>'+
+    (SAVE.bestStreak>0?' · 最高连胜 '+SAVE.bestStreak:'')+
+    ' · 人物角色自定义选择';
+}
+function levelName(n){ var m={11:'J',12:'Q',13:'K',14:'A'}; return m[n]||String(n); }
+
+/* ============ AI 出牌 ============ */
+function aiPlay(){
+  if(G.current===0) return;
+  var pid=G.current;
+  var hand=G.hands[pid];
+  var prev=(G.lastPlay && G.lastPlay.by!==pid && !isTeammateOf(G.lastPlay.by,pid))?G.lastPlay.combo:null;
+  /* 队友是最大牌且对方剩牌不少时，让牌 */
+  if(G.lastPlay && isTeammateOf(G.lastPlay.by,pid) && G.lastPlay.by!==pid){
+    /* 队友领先，过牌让队友 */
+    if(canPassFor(pid)){ doPass(pid); return; }
+  }
+  var plays=findPlays(hand, prev);
+  if(plays.length===0){
+    if(canPassFor(pid)){ doPass(pid); return; }
+    /* 不能pass又没法出（理论少见），出最小单张 */
+    var smallest=hand.length-1;
+    commitPlay(pid,[smallest],detect([hand[smallest]]),[hand[smallest]]);
+    return;
+  }
+  /* 选择策略：优先非炸弹的最小可压牌；快出完时出大的 */
+  plays.sort(function(a,b){
+    var ab=(a.combo.type==='bomb'||a.combo.type==='rocket')?1:0;
+    var bb=(b.combo.type==='bomb'||b.combo.type==='rocket')?1:0;
+    if(ab!==bb) return ab-bb;
+    return a.combo.val-b.combo.val;
+  });
+  var pick=plays[0];
+  /* 若桌面有上家牌但AI手牌还多，偶尔保守pass（非炸时） */
+  if(prev && hand.length>6 && pick.combo.type!=='single' && Math.random()<0.25 && canPassFor(pid)){
+    doPass(pid); return;
+  }
+  var cs=pick.idx.map(function(i){return hand[i];});
+  commitPlay(pid,pick.idx,pick.combo,cs);
+}
+function canPassFor(pid){
+  if(!G.lastPlay) return false;
+  if(G.lastPlay.by===pid) return false;
+  return true;
+}
+
+/* ============ 提示 / 一键 ============ */
+function playerHint(){
+  if(G.current!==0) return;
+  var prev=(G.lastPlay && G.lastPlay.by!==0 && !isTeammateOf(G.lastPlay.by,0))?G.lastPlay.combo:null;
+  var plays=findPlays(G.hands[0],prev);
+  if(plays.length===0){ toast(canPass()?'没有能压的牌，可以选择不出':'暂无提示'); G.selected=[]; renderHand(); return; }
+  plays.sort(function(a,b){
+    var ab=(a.combo.type==='bomb'||a.combo.type==='rocket')?1:0;
+    var bb=(b.combo.type==='bomb'||b.combo.type==='rocket')?1:0;
+    if(ab!==bb) return ab-bb; return a.combo.val-b.combo.val;
+  });
+  G.hintIdx=(G.hintIdx==null?0:(G.hintIdx+1)%plays.length);
+  G.selected=plays[G.hintIdx].idx.slice();
+  renderHand();
+}
+function autoSelect(){ G.hintIdx=null; playerHint(); }
+
+/* ============ 计时器 ============ */
+function startTimer(){
+  clearTimer();
+  G.timeLeft=20;
+  document.getElementById('timer').textContent=G.timeLeft;
+  G.timerId=setInterval(function(){
+    G.timeLeft--;
+    document.getElementById('timer').textContent=Math.max(0,G.timeLeft);
+    if(G.timeLeft<=0){
+      clearTimer();
+      /* 超时：能pass则pass，否则自动出提示 */
+      if(canPass()){ playerPass(); }
+      else { autoSelect(); setTimeout(playerPlay,200); }
+    }
+  },1000);
+}
+function clearTimer(){ if(G.timerId){clearInterval(G.timerId);G.timerId=null;} }
+
+/* ============ 理牌 ============ */
+function sortHand(){ G.hands[0]=sortCards(G.hands[0]); G.selected=[]; renderHand(); toast('已整理'); }
+
+/* ============ 界面切换 ============ */
+function show(id){
+  document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
+  document.getElementById(id).classList.add('active');
+}
+function toast(msg){
+  var t=document.createElement('div'); t.className='toast'; t.textContent=msg;
+  document.getElementById('app').appendChild(t);
+  setTimeout(function(){t.style.opacity='0';t.style.transition='opacity .3s';},1100);
+  setTimeout(function(){t.remove();},1450);
+}
+
+/* ============ 匹配动画 ============ */
+function startMatch(mode){
+  G.mode=mode;
+  G.level = mode==='fast'?5:2;
+  show('matching');
+  var ring=document.getElementById('seatRing');
+  var seatCls=['s-bot','s-left','s-top','s-right'];
+  ring.innerHTML=PLAYERS.map(function(p,i){
+    return '<div class="seat '+seatCls[i]+(i===0?'':' searching')+'" data-i="'+i+'">'+
+      '<svg viewBox="0 0 120 150">'+bodyInner(p.role)+'</svg>'+
+      '<div class="nm">'+(i===0?p.name:'?')+'</div>'+
+      '<div class="dots">'+(i===0?'':'匹配中')+'</div></div>';
+  }).join('');
+  var order=[3,1,2]; var step=0;
+  var sub=document.getElementById('matchSub');
+  var iv=setInterval(function(){
+    if(step>=order.length){
+      clearInterval(iv);
+      sub.textContent='匹配成功，准备开始！';
+      setTimeout(beginGame,700);
+      return;
+    }
+    var i=order[step];
+    var seat=ring.querySelector('[data-i="'+i+'"]');
+    seat.classList.remove('searching');
+    seat.querySelector('.nm').textContent=PLAYERS[i].name;
+    seat.querySelector('.dots').textContent=(i===2?'★队友':'对手');
+    step++;
+  },650);
+}
+
+/* ============ 开始一局 ============ */
+function beginGame(){
+  deal();
+  G.level=SAVE.myLevel;
+  show('game');
+  document.getElementById('myAv').innerHTML=bodyInner('A');
+  document.getElementById('myAv').setAttribute('viewBox','0 0 120 150');
+  G.busy=false;
+  renderTable(); renderHand();
+  /* 发牌音效（连续几声） */
+  for(var k=0;k<5;k++){ (function(d){ setTimeout(function(){ SFX.deal(); }, d*90); })(k); }
+  /* 贡牌还牌阶段（首局无） */
+  runTributePhase(function(){
+    renderTable(); renderHand();
+    startRound();
+  });
+}
+function startRound(){
+  if(G.current===0){
+    document.getElementById('turnHint').textContent='轮到你出牌';
+    setMyButtons(true);
+    startTimer();
+  } else {
+    document.getElementById('turnHint').textContent=PLAYERS[G.current].name+' 思考中…';
+    setMyButtons(false);
+    G.busy=true;
+    setTimeout(aiPlay, 900+Math.random()*700);
+  }
+}
+
+/* ============ 结算 ============ */
+function endGame(){
+  clearTimer();
+  /* 剩最后一个未出完者补进排名 */
+  [0,1,2,3].forEach(function(i){ if(G.finished.indexOf(i)<0) G.finished.push(i); });
+  var win = (G.finished[0]===0||G.finished[0]===2);
+  /* 记录本局名次供下局进贡 */
+  SAVE.lastFinishOrder=G.finished.slice();
+  /* 升级：头游队伍 +级数，按头游/二游差距 */
+  var myTeamRanks=[G.finished.indexOf(0),G.finished.indexOf(2)].sort(function(a,b){return a-b;});
+  var oppTeamRanks=[G.finished.indexOf(1),G.finished.indexOf(3)].sort(function(a,b){return a-b;});
+  var step=0;
+  if(win){
+    /* 头游 + 队友名次：同队第二名是2游升3级,3游升2级,末游升1级 */
+    var mate2nd=myTeamRanks[1];
+    step = mate2nd===1?3 : mate2nd===2?2 : 1;
+    SAVE.myLevel=Math.min(14, SAVE.myLevel+step);
+    SAVE.streak++; SAVE.wins++;
+    if(SAVE.streak>SAVE.bestStreak) SAVE.bestStreak=SAVE.streak;
+  } else {
+    var omate2nd=oppTeamRanks[1];
+    var ostep = omate2nd===1?3 : omate2nd===2?2 : 1;
+    SAVE.oppLevel=Math.min(14, SAVE.oppLevel+ostep);
+    SAVE.streak=0;
+  }
+  SAVE.games++;
+  persistSave();
+  /* 胜负音效 */
+  if(win){ SFX.win(); buzz([40,60,40]); } else { SFX.lose(); }
+
+  show('result');
+  var banner=document.getElementById('resultBanner');
+  banner.textContent=win?'胜利':'失败';
+  banner.className='result-banner '+(win?'win':'lose');
+  var passed = win && SAVE.myLevel>14-step ? true : win;
+  document.getElementById('resultSub').textContent= win?
+    ('升 '+step+' 级 → 现打 '+levelName(SAVE.myLevel)+(SAVE.streak>1?'　🔥连胜 '+SAVE.streak:'')):
+    ('对手升 '+(oppTeamRanks[1]===1?3:oppTeamRanks[1]===2?2:1)+' 级，连胜中断');
+  var rankNames=['头游','二游','三游','末游'];
+  var list=G.finished.map(function(pid,idx){
+    var p=PLAYERS[pid];
+    return '<div class="result-row">'+
+      '<svg viewBox="0 0 120 150">'+bodyInner(p.role)+'</svg>'+
+      '<span class="rname">'+p.name+(pid===0?'（你）':pid===2?'（队友）':'')+'</span>'+
+      '<span class="rrank rank'+(idx+1)+'">'+rankNames[idx]+'</span></div>';
+  }).join('');
+  document.getElementById('resultList').innerHTML=list;
+  /* 胜利且打过A：夺冠 */
+  if(win && SAVE.myLevel>=14){
+    document.getElementById('resultSub').textContent='打到 A，本桌夺冠！🏆 连胜 '+SAVE.streak;
+  }
+}
+function rematch(){ startMatch(G.mode||'classic'); }
+function quitToLobby(){ clearTimer(); closeTracker(); show('lobby'); renderLobbyStats(); }
+
+/* ============ 初始化 ============ */
+(function init(){
+  document.getElementById('heroRow').innerHTML=CAST.map(function(p){return '<div class="hero-item" data-role="'+p.role+'"><svg viewBox="0 0 120 150">'+bodyInner(p.role)+'</svg><span class="hero-name">'+p.name+'</span></div>';}).join('');
+  loadAudioPref();
+  loadSave();
+  renderSoundBtns();
+})();
+window.addEventListener('resize',function(){ if(document.getElementById('game').classList.contains('active')) renderHand(); });
+</script>
+</body>
+</html>
