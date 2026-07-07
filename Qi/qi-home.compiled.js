@@ -1097,7 +1097,7 @@ function SpbShowcase() {
         kind: 'image',
         image: CHAT_PREVIEW_IMAGE,
         meta: '图片 · 碎碎念 · 日常',
-        sub: '像帖子一样发图、聊天和回复'
+        sub: '晒图、唠嗑、盖楼回复，每天都有新鲜事'
       }]);
     });
     return () => {
@@ -1135,7 +1135,7 @@ function SpbShowcase() {
     kind: 'image',
     image: CHAT_PREVIEW_IMAGE,
     meta: '图片 · 碎碎念 · 日常',
-    sub: '像帖子一样发图、聊天和回复'
+    sub: '晒图、唠嗑、盖楼回复，每天都有新鲜事'
   }];
   const renderVisual = card => {
     if (card.kind === 'market') {
@@ -2037,6 +2037,8 @@ function SpbDiscover() {
     }
   })))) : null))) : null);
 }
+const CHAT_TOPIC_PROMPTS = ['☕ 今天的第一杯咖啡/奶茶是什么？', '📷 晒一张刚拍的照片吧', '🍜 今天吃了什么好吃的？', '💭 用一句话记录现在的心情', '🎬 最近在追什么剧或电影？', '🌤 你那边今天天气怎么样？'];
+const CHAT_STARTER_CHIPS = [['☕ 日常打卡', '今日份日常打卡：'], ['📷 晒一张图', '晒一张今天拍的图：'], ['🍜 干饭报告', '今天的干饭报告：'], ['💭 碎碎念', '此刻的碎碎念：'], ['🎬 追剧安利', '最近在看的剧/电影，安利一下：']];
 function SpbChat({
   user,
   onLogin
@@ -2053,7 +2055,10 @@ function SpbChat({
   const [replyText, setReplyText] = React.useState('');
   const [replySubmitting, setReplySubmitting] = React.useState(false);
   const [filter, setFilter] = React.useState('all');
+  const [topicIndex, setTopicIndex] = React.useState(0);
   const fileInputRef = React.useRef(null);
+  const composerRef = React.useRef(null);
+  const composerCardRef = React.useRef(null);
   const loadPosts = React.useCallback(() => {
     setLoading(true);
     fetch(`${ADMIN_SERVER_BASE}/api/chatter/posts?_=${Date.now()}`, {
@@ -2073,6 +2078,25 @@ function SpbChat({
   React.useEffect(() => {
     loadPosts();
   }, [loadPosts]);
+  React.useEffect(() => {
+    const timer = setInterval(() => setTopicIndex(prev => (prev + 1) % CHAT_TOPIC_PROMPTS.length), 4200);
+    return () => clearInterval(timer);
+  }, []);
+  const applyStarter = starter => {
+    setText(prev => prev.trim() ? prev : starter);
+    composerRef.current?.focus();
+  };
+  const goCompose = () => {
+    if (!user) {
+      onLogin?.();
+      return;
+    }
+    composerCardRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center'
+    });
+    setTimeout(() => composerRef.current?.focus(), 350);
+  };
   const formatTime = value => {
     if (!value) return '';
     const date = new Date(value);
@@ -2323,7 +2347,20 @@ function SpbChat({
       borderTop: `1px solid ${spb.line}`,
       background: 'radial-gradient(circle at 18% 0%, oklch(0.36 0.07 245 / 0.20), transparent 34%), radial-gradient(circle at 88% 12%, oklch(0.42 0.08 315 / 0.14), transparent 30%), linear-gradient(180deg, oklch(0.17 0.013 265), oklch(0.145 0.012 265))'
     }
-  }, React.createElement("div", {
+  }, React.createElement("style", null, `
+        @keyframes qiChatBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+        @keyframes qiChatFloat { 0%, 100% { transform: translateY(0) rotate(-0.6deg); } 50% { transform: translateY(-5px) rotate(0.8deg); } }
+        @keyframes qiChatTwinkle { 0%, 100% { opacity: 0.3; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.15); } }
+        @keyframes qiChatPop { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: none; } }
+        .qi-chat-card { transition: transform 0.18s ease, box-shadow 0.18s ease; }
+        .qi-chat-card:hover { transform: translateY(-3px); box-shadow: 0 26px 56px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.06); }
+        .qi-chat-chip { transition: transform 0.15s ease, border-color 0.15s ease; }
+        .qi-chat-chip:hover { transform: translateY(-2px); border-color: oklch(0.72 0.15 242 / 0.45); }
+        @media (prefers-reduced-motion: reduce) {
+          .qi-chat-card, .qi-chat-chip { transition: none; }
+          .qi-chat-anim { animation: none !important; }
+        }
+      `), React.createElement("div", {
     style: {
       maxWidth: 1160,
       margin: '0 auto'
@@ -2369,31 +2406,186 @@ function SpbChat({
       fontSize: 16.5,
       lineHeight: 1.75
     }
-  }, "\u4E00\u4E2A\u8F7B\u677E\u7684\u516C\u5171\u5E16\u5B50\u5E7F\u573A\u3002\u53D1\u56FE\u3001\u5199\u788E\u788E\u5FF5\u3001\u8BB0\u5F55\u65E5\u5E38\uFF0C\u522B\u4EBA\u53EF\u4EE5\u70B9\u8FDB\u5E16\u5B50\u7EE7\u7EED\u56DE\u590D\u3002")), React.createElement("div", {
+  }, "\u8FD9\u91CC\u662F DreamerQi \u7684\u9732\u5929\u8336\u8BDD\u4F1A\uFF1A\u6652\u56FE\u3001\u5520\u55D1\u3001\u788E\u788E\u5FF5\uFF0C\u60F3\u5230\u4EC0\u4E48\u53D1\u4EC0\u4E48\u3002\u6BCF\u6761\u5E16\u5B50\u90FD\u80FD\u76D6\u697C\u56DE\u590D\uFF0C\u6765\u665A\u4E86\u5C31\u53EA\u80FD\u8E72\u522B\u4EBA\u7684\u6C99\u53D1\u5566\uFF5E")), React.createElement("div", {
     style: {
       display: 'flex',
       gap: 12,
       flexWrap: 'wrap'
     }
-  }, statChip('帖子', chatStats.posts), statChip('图片', chatStats.images), statChip('回复', chatStats.replies))), React.createElement("div", {
+  }, statChip('📝 帖子', chatStats.posts), statChip('🖼️ 图片', chatStats.images), statChip('💬 回复', chatStats.replies))), React.createElement("div", {
     style: {
+      position: 'relative',
       border: `1px solid ${spb.line}`,
       borderRadius: 14,
       overflow: 'hidden',
       minHeight: 220,
-      background: spb.panel2
+      background: 'linear-gradient(135deg, #e8f1ff 0%, #fdeef6 55%, #e9f9f0 100%)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 'clamp(14px, 3vw, 26px)',
+      padding: '24px clamp(16px, 3vw, 26px)',
+      flexWrap: 'wrap'
     }
-  }, React.createElement("img", {
-    src: CHAT_PREVIEW_IMAGE,
-    alt: "\u778E\u804A\u804A\u9884\u89C8",
+  }, [['✦', '#f5a623', '7%', '10%', '3.2s', '0s'], ['✧', '#5b8def', '80%', '9%', '2.7s', '0.6s'], ['✦', '#57c48f', '11%', '78%', '3.6s', '1.1s'], ['✧', '#e86a92', '87%', '72%', '2.9s', '0.3s']].map(([glyph, color, left, top, duration, delay], idx) => React.createElement("span", {
+    key: idx,
+    "aria-hidden": "true",
+    className: "qi-chat-anim",
     style: {
-      width: '100%',
-      height: '100%',
-      minHeight: 220,
-      objectFit: 'cover',
-      display: 'block'
+      position: 'absolute',
+      left,
+      top,
+      color,
+      fontSize: 20,
+      animation: `qiChatTwinkle ${duration} ease-in-out ${delay} infinite`
     }
-  }))), React.createElement("div", {
+  }, glyph)), React.createElement("svg", {
+    viewBox: "0 0 160 150",
+    width: "132",
+    height: "124",
+    "aria-hidden": "true",
+    className: "qi-chat-anim",
+    style: {
+      flex: '0 0 auto',
+      animation: 'qiChatBob 4s ease-in-out infinite'
+    }
+  }, React.createElement("circle", {
+    cx: "42",
+    cy: "34",
+    r: "20",
+    fill: "#fdf3e7",
+    stroke: "#454b6e",
+    strokeWidth: "5"
+  }), React.createElement("circle", {
+    cx: "118",
+    cy: "34",
+    r: "20",
+    fill: "#fdf3e7",
+    stroke: "#454b6e",
+    strokeWidth: "5"
+  }), React.createElement("circle", {
+    cx: "42",
+    cy: "34",
+    r: "9",
+    fill: "#f7b8c8"
+  }), React.createElement("circle", {
+    cx: "118",
+    cy: "34",
+    r: "9",
+    fill: "#f7b8c8"
+  }), React.createElement("rect", {
+    x: "18",
+    y: "30",
+    width: "124",
+    height: "96",
+    rx: "34",
+    fill: "#fdf6ec",
+    stroke: "#454b6e",
+    strokeWidth: "5"
+  }), React.createElement("circle", {
+    cx: "60",
+    cy: "74",
+    r: "7",
+    fill: "#2f3555"
+  }), React.createElement("circle", {
+    cx: "100",
+    cy: "74",
+    r: "7",
+    fill: "#2f3555"
+  }), React.createElement("circle", {
+    cx: "62.5",
+    cy: "71.5",
+    r: "2.4",
+    fill: "#fff"
+  }), React.createElement("circle", {
+    cx: "102.5",
+    cy: "71.5",
+    r: "2.4",
+    fill: "#fff"
+  }), React.createElement("ellipse", {
+    cx: "46",
+    cy: "92",
+    rx: "10",
+    ry: "6.5",
+    fill: "#f7b8c8",
+    opacity: "0.9"
+  }), React.createElement("ellipse", {
+    cx: "114",
+    cy: "92",
+    rx: "10",
+    ry: "6.5",
+    fill: "#f7b8c8",
+    opacity: "0.9"
+  }), React.createElement("path", {
+    d: "M70 92 Q80 102 90 92",
+    fill: "none",
+    stroke: "#2f3555",
+    strokeWidth: "4.5",
+    strokeLinecap: "round"
+  }), React.createElement("rect", {
+    x: "34",
+    y: "118",
+    width: "26",
+    height: "22",
+    rx: "11",
+    fill: "#fdf6ec",
+    stroke: "#454b6e",
+    strokeWidth: "5"
+  }), React.createElement("rect", {
+    x: "100",
+    y: "118",
+    width: "26",
+    height: "22",
+    rx: "11",
+    fill: "#fdf6ec",
+    stroke: "#454b6e",
+    strokeWidth: "5"
+  })), React.createElement("div", {
+    style: {
+      display: 'grid',
+      gap: 10,
+      justifyItems: 'start',
+      minWidth: 0,
+      flex: '1 1 220px',
+      maxWidth: 320
+    }
+  }, React.createElement("div", {
+    className: "qi-chat-anim",
+    style: {
+      background: '#dbe8ff',
+      border: '1.5px solid #9db9ee',
+      borderRadius: '16px 16px 16px 4px',
+      padding: '10px 16px',
+      color: '#33406b',
+      fontSize: 16.5,
+      fontWeight: 760,
+      animation: 'qiChatFloat 5s ease-in-out infinite'
+    }
+  }, "\u4ECA\u5929\u804A\u70B9\u4EC0\u4E48\uFF1F"), React.createElement("div", {
+    key: topicIndex,
+    className: "qi-chat-anim",
+    style: {
+      background: '#fbdde8',
+      border: '1.5px solid #eaa6bf',
+      borderRadius: '16px 16px 4px 16px',
+      padding: '9px 15px',
+      color: '#7c3f58',
+      fontSize: 14,
+      fontWeight: 680,
+      animation: 'qiChatPop 0.45s ease both'
+    }
+  }, CHAT_TOPIC_PROMPTS[topicIndex]), React.createElement("div", {
+    style: {
+      background: '#dcf3e5',
+      border: '1.5px solid #93cfae',
+      borderRadius: 999,
+      padding: '7px 14px',
+      color: '#2f6b4c',
+      fontSize: 12.5,
+      fontWeight: 750
+    }
+  }, "DreamerQi Chatter \xB7 \u6BCF\u5929\u90FD\u6709\u65B0\u9C9C\u4E8B")))), React.createElement("div", {
+    ref: composerCardRef,
     style: {
       margin: '22px auto 0',
       maxWidth: 880,
@@ -2425,12 +2617,37 @@ function SpbChat({
       color: spb.faint,
       fontSize: 12.5
     }
-  }, user ? `当前账号：${user.name}` : '未登录也可以浏览，发布和回复需要登录。'))), React.createElement("textarea", {
+  }, user ? `当前账号：${user.name}，想到什么就聊点什么～` : '未登录也可以围观，发布和回复需要登录。'))), React.createElement("div", {
+    style: {
+      marginTop: 14,
+      display: 'flex',
+      gap: 8,
+      flexWrap: 'wrap',
+      alignItems: 'center'
+    }
+  }, React.createElement("span", {
+    style: {
+      color: spb.faint,
+      fontSize: 12.5
+    }
+  }, "\u6CA1\u7075\u611F\uFF1F\u8BD5\u8BD5\uFF1A"), CHAT_STARTER_CHIPS.map(([label, starter]) => React.createElement("button", {
+    key: label,
+    type: "button",
+    className: "qi-chat-chip",
+    onClick: () => applyStarter(starter),
+    style: {
+      ...smallButton,
+      borderRadius: 999,
+      padding: '7px 13px',
+      fontSize: 12.5
+    }
+  }, label))), React.createElement("textarea", {
+    ref: composerRef,
     value: text,
     onChange: event => setText(event.target.value.slice(0, 1200)),
-    placeholder: user ? '今天想发点什么？' : '登录后可以发布文字和图片',
+    placeholder: user ? `今天想发点什么？比如：${CHAT_TOPIC_PROMPTS[topicIndex]}` : '登录后可以发布文字和图片',
     style: {
-      marginTop: 16,
+      marginTop: 14,
       width: '100%',
       minHeight: 112,
       resize: 'vertical',
@@ -2569,11 +2786,36 @@ function SpbChat({
     style: {
       marginTop: 22,
       ...cardStyle,
-      padding: 24,
+      padding: '30px 24px',
+      textAlign: 'center'
+    }
+  }, React.createElement("div", {
+    style: {
+      fontSize: 40,
+      lineHeight: 1
+    }
+  }, "\uD83D\uDECB\uFE0F"), React.createElement("div", {
+    style: {
+      marginTop: 12,
+      color: spb.ink,
+      fontSize: 17,
+      fontWeight: 760
+    }
+  }, "\u6C99\u53D1\u8FD8\u7A7A\u7740\uFF01"), React.createElement("div", {
+    style: {
+      marginTop: 8,
       color: spb.sub,
+      fontSize: 14.5,
       lineHeight: 1.7
     }
-  }, "\u8FD8\u6CA1\u6709\u5185\u5BB9\u3002\u767B\u5F55\u540E\u53EF\u4EE5\u53D1\u7B2C\u4E00\u6761\u5E16\u5B50\u3002") : null, !loading && posts.length > 0 && !visiblePosts.length ? React.createElement("div", {
+  }, "\u7B2C\u4E00\u6761\u5E16\u5B50\u7684\u4F4D\u7F6E\u865A\u4F4D\u4EE5\u5F85\uFF0C\u53D1\u5F20\u56FE\u6216\u5199\u53E5\u8BDD\uFF0C\u8BA9\u5E7F\u573A\u70ED\u95F9\u8D77\u6765\uFF5E"), React.createElement("button", {
+    type: "button",
+    onClick: goCompose,
+    style: {
+      ...primary,
+      marginTop: 16
+    }
+  }, user ? '抢下第一帖' : '登录后抢第一帖')) : null, !loading && posts.length > 0 && !visiblePosts.length ? React.createElement("div", {
     style: {
       marginTop: 22,
       ...cardStyle,
@@ -2581,7 +2823,7 @@ function SpbChat({
       color: spb.sub,
       lineHeight: 1.7
     }
-  }, "\u8FD9\u4E2A\u5206\u7C7B\u6682\u65F6\u6CA1\u6709\u5E16\u5B50\u3002") : null, React.createElement("div", {
+  }, "\u8FD9\u4E2A\u5206\u7C7B\u8FD8\u6CA1\u6709\u5E16\u5B50\uFF0C\u6362\u4E2A\u6807\u7B7E\u901B\u901B\uFF0C\u6216\u8005\u81EA\u5DF1\u6765\u8865\u4E00\u6761\uFF5E") : null, React.createElement("div", {
     style: {
       margin: '18px auto 0',
       display: 'grid',
@@ -2591,6 +2833,7 @@ function SpbChat({
   }, visiblePosts.map(post => React.createElement("button", {
     key: post.id,
     type: "button",
+    className: "qi-chat-card",
     onClick: () => openPost(post),
     style: {
       ...cardStyle,
@@ -2599,7 +2842,8 @@ function SpbChat({
       textAlign: 'left',
       cursor: 'pointer',
       fontFamily: 'inherit',
-      color: 'inherit'
+      color: 'inherit',
+      animation: 'qiChatPop 0.4s ease both'
     }
   }, React.createElement("div", {
     style: {
