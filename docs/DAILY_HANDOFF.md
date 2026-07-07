@@ -127,3 +127,27 @@ Deployment:
 Notes for next agent:
 - Cloud production still needs an explicit deploy step if it should consume GitHub `main`.
 - Before cloud `git pull`, confirm `C:\PandaDashboard` is a Git worktree and runtime config files are preserved.
+
+## 2026-07-07 - Codex - Audited cloud vs Git main server differences
+
+Changed:
+- Compared cloud `C:\PandaDashboard\kpl-stats-server.js` with GitHub `main`.
+- Brought the cloud-only THS catalog `cache=1` optimization into Git `main`.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- Confirmed cloud `https://dreamerqi.com/api/chatter/posts` currently returns 404, while Git `main` contains the chatter post/comment/image APIs.
+- Confirmed cloud `https://dreamerqi.com/api/admin/content-sync/status` currently returns 404, while Git `main` contains admin content-sync APIs.
+
+Deployment:
+- GitHub main only.
+- Production cloud server was read for comparison, but no production files were changed.
+- No service restart.
+
+Notes for next agent:
+- Git `main` intentionally has newer server code than the current cloud file in chatter APIs, admin content-sync APIs, discovery quality logic, TGB OCR parser improvements, and strategy mainline matching.
+- If deploying Git `main` to cloud, back up cloud first and verify those newer routes behave as intended.

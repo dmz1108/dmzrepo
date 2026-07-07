@@ -10971,7 +10971,8 @@ async function thsConceptStatus(url, req, res) {
 
 async function thsConceptCatalog(url, req, res) {
   const catalog = await readThsConceptCatalog();
-  const quoteBoards = await fetchThsConceptBoards().catch(() => []);
+  const cacheOnly = url.searchParams.get('cache') === '1' || url.searchParams.get('cacheOnly') === '1';
+  const quoteBoards = cacheOnly ? [] : await fetchThsConceptBoards().catch(() => []);
   if (!catalog && !quoteBoards.length) return send(res, 404, { error: 'ths concept catalog not found' });
   const catalogById = new Map((catalog?.boards || []).map(board => [String(board.plateId), board]));
   const sourceBoards = quoteBoards.length
