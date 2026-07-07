@@ -67,3 +67,41 @@ Deployment:
 Notes for next agent:
 - Append to this file after each task.
 - If you deploy or alter production runtime state, also update the cloud server operation log.
+
+## 2026-07-07 - Codex - Imported company L2 worker handoff
+
+Changed:
+- Imported the company/trading-PC AXTICK L2 worker architecture into a Git branch.
+- Added the cloud-side local worker task queue and wired strategy L2 scans to prefer the local worker queue.
+- Preserved the newer Git-side homepage/chatter/discovery server code instead of overwriting `kpl-stats-server.js` with the older cloud file.
+- Synced the strategy page UI updates for board search, L2 detail display, public/admin L2 visibility, and card-level refresh.
+- Added the company handoff note as a GitHub-safe reference file.
+
+Files:
+- `.gitignore`
+- `kpl-dashboard_17_apple.html`
+- `kpl-stats-server.js`
+- `strategy-backend.js`
+- `local-l2-task-queue.js`
+- `tools/axtick_down_benchmark.js`
+- `docs/HOME_CODEX_HANDOFF_2026-07-07.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- `node --check strategy-backend.js`
+- `node --check local-l2-task-queue.js`
+- `node --check tools/axtick_down_benchmark.js`
+- Parsed and compiled the inline script in `kpl-dashboard_17_apple.html`.
+- `git diff --check`
+- Confirmed `https://dreamerqi.com/health` returns `{"ok":true}`.
+- Confirmed unauthenticated `https://dreamerqi.com/api/strategy/focus-l2-scan` returns login-required, matching the protected endpoint design.
+
+Deployment:
+- GitHub branch only.
+- Production cloud server was read for comparison, but no production files were changed.
+- No service restart.
+
+Notes for next agent:
+- Do not commit worker runtime configs or real AXTICK credentials. `panda-local-l2-worker-config.json` is ignored.
+- Company handoff listed `tools/ths_board_top_eastmoney.js`, but that file was not present on the cloud server during this sync.
+- Raw cloud operation logs were not copied into Git because they may contain runtime-only or sensitive details.

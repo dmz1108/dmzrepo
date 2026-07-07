@@ -4050,6 +4050,184 @@
 	      min-height: 0;
 	    }
 	  }
+  body.view-strategy .strategy-board-search-section {
+    margin: 0 0 18px;
+    padding: 15px;
+    border: 1px solid var(--strategy-comfort-line);
+    border-radius: 8px;
+    background: var(--strategy-comfort-panel);
+  }
+  body.view-strategy .strategy-board-search-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  body.view-strategy .strategy-board-search-input {
+    width: 100%;
+    height: 36px;
+    min-width: 0;
+    padding: 0 12px;
+    border: 1px solid var(--strategy-comfort-line);
+    border-radius: 7px;
+    background: rgba(255,255,255,0.045);
+    color: var(--strategy-comfort-text);
+    outline: none;
+  }
+  body.view-strategy .strategy-board-search-input:focus {
+    border-color: rgba(94,170,255,0.56);
+    background: rgba(255,255,255,0.065);
+  }
+  body.view-strategy .strategy-board-search-btn,
+  body.view-strategy .strategy-board-search-clear {
+    height: 36px;
+    padding: 0 14px;
+    border-radius: 7px;
+    border: 1px solid rgba(94,170,255,0.42);
+    background: rgba(94,170,255,0.12);
+    color: #9cccff;
+    font-weight: 720;
+    cursor: pointer;
+  }
+  body.view-strategy .strategy-board-search-clear {
+    border-color: var(--strategy-comfort-line);
+    background: rgba(255,255,255,0.040);
+    color: var(--strategy-comfort-muted);
+  }
+  body.view-strategy .strategy-search-state {
+    padding: 12px;
+    border: 1px dashed var(--strategy-comfort-line-soft);
+    border-radius: 8px;
+    color: var(--strategy-comfort-muted);
+    background: rgba(255,255,255,0.020);
+  }
+  body.view-strategy .strategy-search-state.error {
+    color: var(--down);
+    border-color: rgba(255,96,96,0.26);
+    background: rgba(255,96,96,0.070);
+  }
+  body.view-strategy .strategy-search-grid {
+    margin-top: 12px;
+  }
+  body.view-strategy .strategy-badge.badge-source {
+    color: #9cccff;
+    background: rgba(94,170,255,0.12);
+    border-color: rgba(94,170,255,0.28);
+  }
+  body.view-strategy .sc-picked-row.sc-clickable {
+    gap: 8px;
+    padding: 7px 9px;
+    border: 1px solid rgba(255,255,255,0.065);
+    border-radius: 7px;
+    background: rgba(0,0,0,0.12);
+  }
+  body.view-strategy .sc-picked-row.sc-clickable + .sc-pick-detail {
+    margin-top: 6px;
+  }
+  body.view-strategy .sc-pick-detail {
+    display: block;
+    margin: 0 0 10px;
+    padding: 10px;
+    border: 1px solid rgba(255,255,255,0.075);
+    border-radius: 8px;
+    background: rgba(0,0,0,0.16);
+    color: var(--text-dim);
+  }
+  body.view-strategy .sc-pick-signalbar {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+    margin-bottom: 10px;
+  }
+  body.view-strategy .sc-pick-signal {
+    min-width: 0;
+    padding: 7px 8px;
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 7px;
+    background: rgba(255,255,255,0.028);
+  }
+  body.view-strategy .sc-pick-signal.hit {
+    border-color: rgba(11,208,106,0.28);
+    background: rgba(11,208,106,0.095);
+  }
+  body.view-strategy .sc-pick-signal i,
+  body.view-strategy .sc-pick-money i {
+    display: block;
+    margin: 0 0 3px;
+    color: var(--strategy-comfort-muted);
+    font-style: normal;
+    font-size: 10px;
+  }
+  body.view-strategy .sc-pick-signal b {
+    color: var(--strategy-comfort-text);
+    font-size: 14px;
+  }
+  body.view-strategy .sc-pick-signal.hit b {
+    color: #36dd96;
+  }
+  body.view-strategy .sc-pick-money-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 8px;
+  }
+  body.view-strategy .sc-pick-detail-group {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    padding: 9px;
+    border: 1px solid rgba(255,255,255,0.065);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.024);
+  }
+  body.view-strategy .sc-pick-detail-title {
+    grid-column: 1 / -1;
+    color: var(--strategy-comfort-text);
+    font-size: 12px;
+    font-weight: 760;
+  }
+  body.view-strategy .sc-pick-money {
+    min-width: 0;
+    padding: 6px 7px;
+    border-radius: 6px;
+    background: rgba(0,0,0,0.14);
+  }
+  body.view-strategy .sc-pick-money b {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+    font-weight: 760;
+  }
+  body.view-strategy .sc-pick-money.buy b {
+    color: var(--up);
+  }
+  body.view-strategy .sc-pick-money.sell b {
+    color: var(--down);
+  }
+  body.view-strategy .sc-pick-explain,
+  body.view-strategy .sc-pick-detail-note {
+    display: block;
+    margin-top: 9px;
+    color: var(--strategy-comfort-muted);
+    font-size: 11px;
+    line-height: 1.45;
+  }
+  @media (max-width: 760px) {
+    body.view-strategy .strategy-board-search-bar {
+      grid-template-columns: 1fr;
+    }
+    body.view-strategy .strategy-board-search-btn,
+    body.view-strategy .strategy-board-search-clear {
+      width: 100%;
+    }
+    body.view-strategy .sc-pick-signalbar,
+    body.view-strategy .sc-pick-money-grid,
+    body.view-strategy .sc-pick-detail-group {
+      grid-template-columns: 1fr;
+    }
+  }
 	  .review-topics {
 	    display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -7445,6 +7623,189 @@
     min-height: 220px !important;
   }
 
+  body.view-strategy .strategy-hero {
+    align-items: center !important;
+  }
+
+  body.view-strategy .strategy-hero .strategy-board-search-section {
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+    justify-self: start !important;
+    align-self: center !important;
+    width: min(330px, calc(100% - 136px)) !important;
+    margin: 0 0 0 136px !important;
+    padding: 8px !important;
+    border: 1px solid var(--ui-border) !important;
+    border-radius: 8px !important;
+    background: rgba(255,255,255,0.028) !important;
+    box-shadow: none !important;
+  }
+
+  body.view-strategy .strategy-hero .strategy-board-search-bar {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 58px auto !important;
+    gap: 6px !important;
+    margin: 0 !important;
+  }
+
+  body.view-strategy .strategy-hero .strategy-board-search-input {
+    height: 30px !important;
+    padding: 0 9px !important;
+    font-size: 12px !important;
+    border-radius: 7px !important;
+  }
+
+  body.view-strategy .strategy-hero .strategy-board-search-btn,
+  body.view-strategy .strategy-hero .strategy-board-search-clear {
+    height: 30px !important;
+    min-height: 30px !important;
+    padding: 0 10px !important;
+    font-size: 12px !important;
+    border-radius: 7px !important;
+    white-space: nowrap !important;
+  }
+
+  body.view-strategy .strategy-hero .strategy-board-search-hint {
+    margin-top: 6px !important;
+    color: var(--text-faint) !important;
+    font-size: 11px !important;
+    line-height: 1.2 !important;
+  }
+
+  body.view-strategy .strategy-board-search-results {
+    margin: -4px 0 14px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  body.view-strategy .strategy-board-search-results .strategy-section-head {
+    margin-bottom: 9px !important;
+  }
+
+  body.view-strategy .strategy-board-search-results .strategy-board-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)) !important;
+  }
+
+  body.view-strategy .strategy-board-search-results .strategy-board-card {
+    min-height: 154px !important;
+  }
+
+  @media (max-width: 1180px) {
+    body.view-strategy .strategy-hero .strategy-board-search-section {
+      grid-column: 1 !important;
+      grid-row: 3 !important;
+      justify-self: start !important;
+      width: min(360px, 100%) !important;
+      margin: 6px 0 0 !important;
+    }
+  }
+
+  body.view-strategy .sc-picked-row.sc-clickable + .sc-pick-detail {
+    margin-top: 5px !important;
+  }
+
+  body.view-strategy .sc-pick-detail {
+    padding: 8px !important;
+    margin-bottom: 8px !important;
+  }
+
+  body.view-strategy .sc-pick-money-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+  }
+
+  body.view-strategy .sc-pick-detail-group {
+    grid-template-columns: 1fr !important;
+    gap: 5px !important;
+    padding: 7px 8px !important;
+    border-radius: 7px !important;
+  }
+
+  body.view-strategy .sc-pick-detail-title {
+    display: flex !important;
+    grid-column: auto !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+    line-height: 1.2 !important;
+  }
+
+  body.view-strategy .sc-pick-detail-title em {
+    overflow: hidden !important;
+    color: var(--strategy-comfort-muted, var(--text-faint)) !important;
+    font-style: normal !important;
+    font-size: 10px !important;
+    font-weight: 650 !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  body.view-strategy .sc-pick-pair {
+    display: grid !important;
+    grid-template-columns: 50px minmax(0, 1fr) minmax(0, 1fr) !important;
+    align-items: center !important;
+    gap: 5px !important;
+    min-width: 0 !important;
+    padding: 5px 6px !important;
+    border-radius: 6px !important;
+    background: rgba(0,0,0,0.13) !important;
+  }
+
+  body.view-strategy .sc-pick-pair span {
+    display: flex !important;
+    align-items: baseline !important;
+    gap: 4px !important;
+    min-width: 0 !important;
+    color: var(--strategy-comfort-muted, var(--text-faint)) !important;
+    font-size: 11px !important;
+    white-space: nowrap !important;
+  }
+
+  body.view-strategy .sc-pick-pair span b {
+    color: #36dd96 !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
+  }
+
+  body.view-strategy .sc-pick-pair em {
+    min-width: 0 !important;
+    overflow: hidden !important;
+    font-style: normal !important;
+    font-size: 12px !important;
+    font-weight: 720 !important;
+    line-height: 1.15 !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  body.view-strategy .sc-pick-pair em:first-of-type {
+    color: var(--up) !important;
+  }
+
+  body.view-strategy .sc-pick-pair em:last-of-type {
+    color: var(--down) !important;
+  }
+
+  body.view-strategy .sc-picked-row.sc-focus-only {
+    display: grid !important;
+    grid-template-columns: 62px minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+
+  body.view-strategy .sc-focus-note {
+    padding: 2px 6px !important;
+    border: 1px solid rgba(11,208,106,0.24) !important;
+    border-radius: 999px !important;
+    color: #36dd96 !important;
+    background: rgba(11,208,106,0.08) !important;
+    font-size: 11px !important;
+    font-weight: 760 !important;
+    white-space: nowrap !important;
+  }
+
   .modal,
   .account-panel input,
   .account-inline input,
@@ -7476,6 +7837,22 @@
     .data-health-strip-summary {
       max-width: none !important;
       white-space: nowrap !important;
+    }
+    body.view-strategy .strategy-hero .strategy-board-search-section {
+      grid-column: 1 !important;
+      grid-row: auto !important;
+      justify-self: stretch !important;
+      width: 100% !important;
+      margin-top: 8px !important;
+    }
+    body.view-strategy .strategy-hero .strategy-board-search-bar {
+      grid-template-columns: minmax(0, 1fr) auto auto !important;
+    }
+    body.view-strategy .sc-pick-money-grid {
+      grid-template-columns: 1fr !important;
+    }
+    body.view-strategy .sc-pick-pair {
+      grid-template-columns: 48px minmax(0, 1fr) minmax(0, 1fr) !important;
     }
   }
 </style>
@@ -7895,9 +8272,14 @@ const state = {
   reviewSearchTerm: '',
   strategyData: {},
   smartPick: {},
+  smartPickPublicLoads: {},
   smartPickThreshold: 1.5,
   smartPickMinAmount: 500000,
   smartPickExpanded: new Set(),
+  strategyBoardSearchQuery: '',
+  strategyBoardSearchResults: [],
+  strategyBoardSearchLoading: false,
+  strategyBoardSearchError: '',
   strategyQiFilter: 'all',   // QI 龙头作战室筛选：all=全部 / new=仅今日新晋
   themeCalibOpen: false,      // 题材校准面板(管理员)是否展开
   refreshAllRunning: false,
@@ -11773,6 +12155,11 @@ function canManageDashboardCards() {
   return !!state.adminLoggedIn;
 }
 
+function canUseL2AdminTools() {
+  const name = String(state.accountName || state.adminName || '').trim().toLowerCase();
+  return !!state.adminLoggedIn && (name === 'panda' || name === 'qi_admin');
+}
+
 function authGateHtml(page) {
   const isReview = page === 'review';
   return `
@@ -11838,6 +12225,10 @@ const ZS_LABELS = { 6: '东财概念', 5: '同花顺概念', 7: 'KPL概念' };
 function zsLabel(zsType = state.zsType) {
   return ZS_LABELS[zsType] || ZS_LABELS[String(zsType)] || ('概念类型 ' + zsType);
 }
+const STRATEGY_BOARD_SEARCH_SOURCES = [
+  { key: 'eastmoney', label: '东财', zsType: '6', url: '/api/eastmoney-concepts/catalog' },
+  { key: 'ths', label: '同花顺', zsType: '5', url: '/api/ths-concepts/catalog' },
+];
 
 // 策略页数据：今天读 /api/strategy/today（实时），过去某天读 /api/strategy/snapshot（15点快照）。
 // 服务器仍返回 { focus, strong, boards }；页面只展示重点关注，单独强势板块区由共振榜替代。
@@ -11888,7 +12279,9 @@ function syncFocusToServer(action, board, day = state.date) {
 function strategyBoardExplainHTML(board, isFocusCard, reasons, smartPickState) {
   const list = [];
   const reasonSet = new Set(reasons || []);
-  if (isFocusCard) list.push('已确认进入重点关注池，优先用于策略跟踪和 L2 扫描。');
+  const l2Admin = canUseL2AdminTools();
+  if (board && board.searchResult && l2Admin) list.push(`来自${board.searchSourceLabel || zsLabel(board.zsType)}搜索结果，可直接按该板块成分股计算 L2。`);
+  if (isFocusCard) list.push(l2Admin ? '已确认进入重点关注池，优先用于策略跟踪和 L2 扫描。' : '已确认进入重点关注池。');
   if (reasonSet.has('gain')) list.push('实时涨幅进入市场前列。');
   if (reasonSet.has('zt')) list.push('涨停家数进入市场前列。');
   const gain = Number(board && board.gainPct);
@@ -11900,7 +12293,9 @@ function strategyBoardExplainHTML(board, isFocusCard, reasons, smartPickState) {
   if (board && board.qiLeaders && (((board.qiLeaders.qi10 || []).length) || ((board.qiLeaders.qi30 || []).length))) {
     list.push('板块内存在 10日/30日 QI 龙头。');
   }
-  if (smartPickState && smartPickState.done && smartPickState.count > 0) list.push(`L2已筛出${smartPickState.count}只主动买盘占优个股。`);
+  if (smartPickState && smartPickState.done && smartPickState.count > 0) {
+    list.push(l2Admin ? `L2已筛出${smartPickState.count}只主动买盘占优个股。` : `重点关注${smartPickState.count}只个股。`);
+  }
   if (!list.length) return '';
   return `<div class="strategy-explain strategy-board-explain">
     <div class="strategy-explain-title">为什么关注</div>
@@ -11913,11 +12308,13 @@ function strategyPickReasonText(row, threshold) {
   const active = Number(row && row.activeRatio);
   const passive = Number(row && row.passiveRatio);
   const support = Number(row && row.supportRatio);
+  const signals = (row && row.pickSignals) || {};
+  const signalCount = Number(row && row.pickSignalCount) || 0;
   const parts = [];
-  if (row && row.pickReason === 'active-buy' && Number.isFinite(active)) parts.push(`主动买/主动卖 ${active.toFixed(2)} ≥ ${th}`);
-  else if (row && row.pickReason === 'passive-buy' && Number.isFinite(passive)) parts.push(`被动买/被动卖 ${passive.toFixed(2)} ≥ ${th}`);
-  else if (Number.isFinite(active)) parts.push(`主动买/主动卖 ${active.toFixed(2)}`);
-  if (Number.isFinite(support)) parts.push(`买方支撑/卖压 ${support.toFixed(2)}`);
+  if (signalCount) parts.push(`满足${signalCount}/3`);
+  if (Number.isFinite(active)) parts.push(`主动买/主动卖 ${active.toFixed(2)}${signals.active ? ` ≥ ${th}` : ''}`);
+  if (Number.isFinite(passive)) parts.push(`被动买/被动卖 ${passive.toFixed(2)}${signals.passive ? ` ≥ ${th}` : ''}`);
+  if (Number.isFinite(support)) parts.push(`综合买/卖 ${support.toFixed(2)}${signals.support ? ` ≥ ${th}` : ''}`);
   const buy = Number(row && row.buySupport);
   const sell = Number(row && row.sellPressure);
   if (Number.isFinite(buy) && Number.isFinite(sell)) parts.push(`买方${strategyPlainMoney(buy)} / 卖方${strategyPlainMoney(sell)}`);
@@ -11926,23 +12323,45 @@ function strategyPickReasonText(row, threshold) {
 
 function strategyBoardCardHTML(board, reasons) {
   // 重点关注卡片不带徽章；强势板块带 涨幅Top / 涨停Top
-  const isFocusCard = !(reasons || []).length;
+  const reasonList = reasons || [];
+  const isSearchCard = !!(board && board.searchResult);
+  const isFocusCard = !reasonList.length && !isSearchCard;
+  const admin = canUseL2AdminTools();
+  const canScanCard = admin && (isFocusCard || isSearchCard);
   const badgeMap = { gain: '涨幅Top', zt: '涨停Top' };
-  const badges = (reasons || [])
+  const badges = [
+    isSearchCard ? `<span class="strategy-badge badge-source">${escapeHTML(board.searchSourceLabel || zsLabel(board.zsType))}</span>` : '',
+    ...reasonList
     .map(r => badgeMap[r] ? `<span class="strategy-badge badge-${r}">${badgeMap[r]}</span>` : '')
-    .join('');
+  ].join('');
   const name = cleanBoardName ? (cleanBoardName(board.name, board.plateId) || board.name || '') : (board.name || '');
   const gain = Number.isFinite(Number(board.gainPct)) ? fmtPct(board.gainPct) : '--';
   const zt = board.ztCount ?? '--';
   const net = (board.netInflow != null && fmtYiHTML) ? fmtYiHTML(board.netInflow) : '--';
   const id = String(board.plateId);
   const minLbl = ((state.smartPickMinAmount || 500000) / 1e4) + '万';   // 单笔最小金额展示（如 50万）
+  const scanButtonText = isSearchCard ? '计算' : 'L2扫描';
 
   // L2 扫描状态
   const sp = state.smartPick[id];
-  const explainHtml = strategyBoardExplainHTML(board, isFocusCard, reasons, sp);
+  const explainHtml = strategyBoardExplainHTML(board, isFocusCard, reasonList, sp);
   let nameTag = '', btnExtra = '', pickedHtml = '';
-  if (sp) {
+  if (sp && !admin) {
+    const publicPicked = Array.isArray(sp.picked) ? sp.picked : [];
+    if (Number(sp.count) > 0 && publicPicked.length) {
+      nameTag = '<span class="sc-pick-tag done">重点关注</span>';
+      const rows = publicPicked.map(p => {
+        const code = escapeHTML(String(p.code));
+        const pname = escapeHTML(String(p.name));
+        return `<div class="sc-picked-row sc-focus-only"><span class="sc-pcode">${code}</span>${pname}<span class="sc-focus-note">重点关注</span></div>`;
+      }).join('');
+      pickedHtml = `
+        <div class="sc-picked">
+          <div class="sc-picked-lbl">重点关注 ${publicPicked.length} 只</div>
+          ${rows}
+        </div>`;
+    }
+  } else if (sp) {
     if (sp.loading) {
       const batchText = sp.batchCount ? ` ${sp.currentBatch || 0}/${sp.batchCount}` : '';
       const progressText = sp.total ? ` · ${sp.scanned || 0}/${sp.total}` : '';
@@ -11959,30 +12378,57 @@ function strategyBoardCardHTML(board, reasons) {
       nameTag = '<span class="sc-pick-tag none">成分股为空</span>';
       pickedHtml = `<div class="sc-picked"><div class="sc-picked-lbl">${escapeHTML(sp.note || '没有拿到该板块的成分股，请刷新后重试')}</div></div>`;
     } else if (sp.count > 0) {
-      nameTag = '<span class="sc-pick-tag done">L2已筛出</span>';
-      const admin = !!state.adminLoggedIn;   // 明细/阈值仅管理员可见
+      nameTag = admin ? '<span class="sc-pick-tag done">L2已筛出</span>' : '<span class="sc-pick-tag done">重点关注</span>';
       const rows = sp.picked.map(p => {
         const code = escapeHTML(String(p.code));
         const pname = escapeHTML(String(p.name));
-        if (!admin) return `<div class="sc-picked-row"><span class="sc-pcode">${code}</span>${pname}</div>`;
+        if (!admin) return `<div class="sc-picked-row sc-focus-only"><span class="sc-pcode">${code}</span>${pname}<span class="sc-focus-note">重点关注</span></div>`;
         const key = id + ':' + p.code;
         const open = state.smartPickExpanded.has(key);
         const sums = p.thresholds || {};
-        const t50 = sums['500000'] || p;
-        const t500 = sums['5000000'] || { activeBuy: 0, passiveBuy: 0, activeSell: 0, passiveSell: 0 };
         const pickExplain = strategyPickReasonText(p, sp.threshold || state.smartPickThreshold || 1.5);
-        const moneyGroup = (label, s) => `
-          <div class="sc-pick-detail-group">
-            <div class="sc-pick-detail-title">${label}</div>
-            <span><i>主动买</i>${fmtMoneyWan(s.activeBuy)}</span>
-            <span><i>被动买</i>${fmtMoneyWan(s.passiveBuy)}</span>
-            <span><i>主动卖</i>${fmtMoneyWan(s.activeSell)}</span>
-            <span><i>被动卖</i>${fmtMoneyWan(s.passiveSell)}</span>
+        const ratioText = value => {
+          if (value === Infinity || value === 'Infinity') return '∞';
+          return Number.isFinite(Number(value)) ? Number(value).toFixed(2) : '--';
+        };
+        const ratioOf = (buy, sell) => {
+          const b = Number(buy) || 0;
+          const s = Number(sell) || 0;
+          if (s > 0) return b / s;
+          return b > 0 ? Infinity : 0;
+        };
+        const thresholdSummary = value => sums[String(value)] || (value === 500000 ? p : { activeBuy: 0, passiveBuy: 0, activeSell: 0, passiveSell: 0 });
+        const moneyPair = (label, buy, sell, ratio, cls) => `
+          <div class="sc-pick-pair ${cls}">
+            <span>${label}<b>${ratioText(ratio)}</b></span>
+            <em>买 ${fmtMoneyWan(buy)}</em>
+            <em>卖 ${fmtMoneyWan(sell)}</em>
           </div>`;
+        const moneyGroup = (label, s = {}) => {
+          const activeRatio = ratioOf(s.activeBuy, s.activeSell);
+          const passiveRatio = ratioOf(s.passiveBuy, s.passiveSell);
+          return `
+          <div class="sc-pick-detail-group">
+            <div class="sc-pick-detail-title">
+              <span>${label}</span>
+              <em>主动比 ${ratioText(activeRatio)} · 被动比 ${ratioText(passiveRatio)}</em>
+            </div>
+            ${moneyPair('主动', s.activeBuy, s.activeSell, activeRatio, 'active')}
+            ${moneyPair('被动', s.passiveBuy, s.passiveSell, passiveRatio, 'passive')}
+          </div>`;
+        };
+        const detailThresholds = [
+          [500000, '≥50万'],
+          [3000000, '≥300万'],
+          [5000000, '≥500万'],
+          [8000000, '≥800万'],
+          [10000000, '≥1000万'],
+        ];
         const detail = open ? `
           <div class="sc-pick-detail">
-            ${moneyGroup('≥50万', t50)}
-            ${moneyGroup('≥500万', t500)}
+            <div class="sc-pick-money-grid">
+              ${detailThresholds.map(([value, label]) => moneyGroup(label, thresholdSummary(value))).join('')}
+            </div>
             ${pickExplain ? `<span class="sc-pick-explain">入选依据：${escapeHTML(pickExplain)}</span>` : ''}
             <span class="sc-pick-detail-note">主动按单笔成交统计；被动按同一挂单订单号累计统计</span>
           </div>` : '';
@@ -11991,9 +12437,12 @@ function strategyBoardCardHTML(board, reasons) {
             <span class="sc-row-caret">${open ? '▴' : '▾'}</span>
           </div>${detail}`;
       }).join('');
+      const pickedLabel = admin
+        ? `L2选出 ${sp.count} 只 · 已扫 ${sp.scanned || sp.total || 0}/${sp.total || 0} · 阈值 ${state.smartPickThreshold || 1.5}`
+        : `重点关注 ${sp.count} 只`;
       pickedHtml = `
         <div class="sc-picked">
-          <div class="sc-picked-lbl">L2选出 ${sp.count} 只 · 已扫 ${sp.scanned || sp.total || 0}/${sp.total || 0}${admin ? ' · 阈值 ' + (state.smartPickThreshold || 1.5) : ''}</div>
+          <div class="sc-picked-lbl">${escapeHTML(pickedLabel)}</div>
           ${rows}
         </div>`;
     } else {
@@ -12029,12 +12478,154 @@ function strategyBoardCardHTML(board, reasons) {
       </div>
       ${explainHtml}
       ${qiHtml}
-      ${isFocusCard ? `<div class="strategy-card-foot">
-        <button class="sc-smart-btn${btnExtra}" type="button" data-zs-type="${escapeHTML(board.zsType ?? '')}" data-board-name="${escapeHTML(name)}" onclick="smartPick('${escapeHTML(id)}', this)">L2扫描</button>
+      ${canScanCard ? `<div class="strategy-card-foot">
+        <button class="sc-smart-btn${btnExtra}" type="button" data-zs-type="${escapeHTML(board.zsType ?? '')}" data-board-name="${escapeHTML(name)}" onclick="smartPick('${escapeHTML(id)}', this)">${scanButtonText}</button>
       </div>` : ''}
       ${pickedHtml}
     </div>
   `;
+}
+
+function strategySearchNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function normalizeStrategyBoardSearchRow(board, source, sourceIndex = 0) {
+  const plateId = String(board?.plateId || board?.plate_id || board?.id || board?.code || '').trim();
+  if (!plateId) return null;
+  const rawName = String(board?.name || board?.plateName || board?.boardName || board?.title || '').trim();
+  const name = (cleanBoardName ? cleanBoardName(rawName, plateId) : rawName) || rawName || plateId;
+  const gainPct = strategySearchNumber(board?.gainPct ?? board?.gain ?? board?.zf ?? board?.changePct);
+  const ztCount = strategySearchNumber(board?.ztCount ?? board?.limitUpCount ?? board?.zt);
+  const netInflow = strategySearchNumber(board?.netInflow ?? board?.net_inflow ?? board?.fund ?? board?.amount);
+  const stockCount = strategySearchNumber(board?.stockCount ?? board?.count ?? board?.stock_count);
+  return {
+    plateId,
+    name,
+    zsType: source.zsType,
+    gainPct,
+    ztCount,
+    netInflow,
+    stockCount,
+    searchResult: true,
+    searchSource: source.key,
+    searchSourceLabel: source.label,
+    sourceIndex,
+  };
+}
+
+async function fetchStrategyBoardSearchRows(source, query) {
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), 9000) : null;
+  try {
+    const res = await fetch(`${KPL_STATS_BASE}${source.url}?cache=1&_=${Date.now()}`, {
+      cache: 'no-store',
+      signal: controller ? controller.signal : undefined,
+    });
+    if (!res.ok) throw new Error(`${source.label}板块目录读取失败`);
+    const data = await res.json();
+    const q = String(query || '').trim().toLowerCase();
+    return (data.boards || [])
+      .map((board, index) => normalizeStrategyBoardSearchRow(board, source, index))
+      .filter(Boolean)
+      .filter(row => {
+        const name = String(row.name || '').toLowerCase();
+        const id = String(row.plateId || '').toLowerCase();
+        return name.includes(q) || id.includes(q);
+      });
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function runStrategyBoardSearch() {
+  const input = document.getElementById('strategy-board-search-input');
+  const query = String((input && input.value) || state.strategyBoardSearchQuery || '').trim();
+  state.strategyBoardSearchQuery = query;
+  state.strategyBoardSearchError = '';
+  if (!query) {
+    state.strategyBoardSearchResults = [];
+    renderStrategyPage();
+    return;
+  }
+  state.strategyBoardSearchLoading = true;
+  renderStrategyPage();
+  try {
+    const settled = await Promise.allSettled(STRATEGY_BOARD_SEARCH_SOURCES.map(source => fetchStrategyBoardSearchRows(source, query)));
+    const groups = settled.filter(item => item.status === 'fulfilled').map(item => item.value);
+    const failedCount = settled.filter(item => item.status !== 'fulfilled').length;
+    const q = query.toLowerCase();
+    state.strategyBoardSearchResults = groups.flat()
+      .map(row => ({
+        ...row,
+        searchScore: (String(row.name).toLowerCase() === q ? 4 : 0)
+          + (String(row.name).toLowerCase().startsWith(q) ? 2 : 0)
+          + (String(row.plateId).toLowerCase() === q ? 3 : 0),
+      }))
+      .sort((a, b) => b.searchScore - a.searchScore
+        || a.sourceIndex - b.sourceIndex
+        || (Number(b.gainPct) || -Infinity) - (Number(a.gainPct) || -Infinity)
+        || String(a.name).localeCompare(String(b.name), 'zh-Hans-CN'))
+      .slice(0, 24);
+    state.strategyBoardSearchError = failedCount && !state.strategyBoardSearchResults.length
+      ? '部分板块源读取超时，请稍后重试'
+      : '';
+  } catch (e) {
+    state.strategyBoardSearchResults = [];
+    state.strategyBoardSearchError = (e && e.message) || '板块搜索失败';
+  } finally {
+    state.strategyBoardSearchLoading = false;
+    renderStrategyPage();
+  }
+}
+
+function clearStrategyBoardSearch() {
+  state.strategyBoardSearchQuery = '';
+  state.strategyBoardSearchResults = [];
+  state.strategyBoardSearchError = '';
+  renderStrategyPage();
+}
+
+function renderStrategyBoardSearchHTML() {
+  const query = escapeHTML(state.strategyBoardSearchQuery || '');
+  return `
+    <div class="strategy-board-search-section">
+      <div class="strategy-board-search-bar">
+        <input id="strategy-board-search-input" class="strategy-board-search-input" type="search" value="${query}" placeholder="搜索板块" oninput="state.strategyBoardSearchQuery=this.value" onkeydown="if(event.key==='Enter'){runStrategyBoardSearch();}">
+        <button class="strategy-board-search-btn" type="button" onclick="runStrategyBoardSearch()">搜索</button>
+        ${state.strategyBoardSearchQuery ? '<button class="strategy-board-search-clear" type="button" onclick="clearStrategyBoardSearch()">清空</button>' : ''}
+      </div>
+      <div class="strategy-board-search-hint">东财 / 同花顺</div>
+    </div>
+  `;
+}
+
+function renderStrategyBoardSearchResultsHTML() {
+  if (state.strategyBoardSearchLoading) return '<section class="strategy-section strategy-board-search-results"><div class="strategy-search-state">正在搜索板块...</div></section>';
+  if (state.strategyBoardSearchError) return `<section class="strategy-section strategy-board-search-results"><div class="strategy-search-state error">${escapeHTML(state.strategyBoardSearchError)}</div></section>`;
+  if (state.strategyBoardSearchQuery && !state.strategyBoardSearchResults.length) return '<section class="strategy-section strategy-board-search-results"><div class="strategy-search-state">没有找到匹配板块</div></section>';
+  if (!state.strategyBoardSearchResults.length) return '';
+  return `
+    <section class="strategy-section strategy-board-search-results">
+      <div class="strategy-section-head">
+        <span class="strategy-section-title">搜索结果</span>
+        <span class="strategy-section-sub">点击计算后按板块成分股扫描</span>
+      </div>
+      <div class="strategy-board-grid strategy-search-grid">
+        ${state.strategyBoardSearchResults.map(board => strategyBoardCardHTML(board, [])).join('')}
+      </div>
+    </section>
+  `;
+}
+
+function findStrategySmartPickBoard(plateId) {
+  const id = String(plateId);
+  const entry = state.strategyData[state.date];
+  const focus = entry && entry.data && Array.isArray(entry.data.focus) ? entry.data.focus : [];
+  return focus.find(b => String(b && b.plateId) === id)
+    || (state.strategyBoardSearchResults || []).find(b => String(b && b.plateId) === id)
+    || null;
 }
 
 // 候选板块日期选择：切换查看日期（与顶栏日期联动），重拉跨类型实时指标
@@ -12054,6 +12645,7 @@ function normalizeSmartPickJob(d) {
     done: !!done,
     error: !!(d && (d.status === 'error' || d.error)),
     available: !d || d.available !== false,
+    publicOnly: !!(d && d.publicOnly),
     note: (d && (d.note || d.error)) || '',
     jobId: d && d.jobId,
     status: d && d.status,
@@ -12078,31 +12670,35 @@ function pollSmartPick(plateId, jobId) {
       .then(r => r.json())
       .then(d => {
         state.smartPick[plateId] = normalizeSmartPickJob(d);
-        if (state.page === 'strategy') renderStrategyPage();
+        refreshSmartPickCard(plateId);
         if (state.smartPick[plateId] && state.smartPick[plateId].loading) pollSmartPick(plateId, jobId);
       })
       .catch(() => {
         state.smartPick[plateId] = { done: true, error: true, count: 0, picked: [], note: 'L2扫描状态读取失败' };
-        if (state.page === 'strategy') renderStrategyPage();
+        refreshSmartPickCard(plateId);
       });
   }, 1600);
 }
 
 // L2扫描：L1只取板块成分股实时涨幅快照排序，L2逐笔成交分批统计主动买/主动卖。
 function smartPick(plateId, sourceEl) {
+  if (!canUseL2AdminTools()) {
+    showError('只有 panda、qi_admin 可以执行 L2 扫描');
+    return;
+  }
   plateId = String(plateId);
   const cur = state.smartPick[plateId];
   if (cur && cur.loading) return;
   state.smartPick[plateId] = { loading: true, note: '正在建立L2扫描任务' };
-  renderStrategyPage();
+  refreshSmartPickCard(plateId);
   const th = encodeURIComponent(state.smartPickThreshold || 1.5);
-  const minAmt = encodeURIComponent(state.smartPickMinAmount || 500000);
+  const minAmt = encodeURIComponent(500000);
   const zsType = sourceEl && sourceEl.dataset ? sourceEl.dataset.zsType : '';
   const boardName = sourceEl && sourceEl.dataset ? sourceEl.dataset.boardName : '';
   fetch(`${KPL_STATS_BASE}/api/strategy/focus-l2-scan?plateId=${encodeURIComponent(plateId)}&day=${encodeURIComponent(state.date)}&threshold=${th}&minAmount=${minAmt}&_=${Date.now()}`, {
     method: 'POST',
     headers: Object.assign({ 'Content-Type': 'application/json' }, (typeof adminHeaders === 'function' ? adminHeaders() : {})),
-    body: JSON.stringify({ plateId, day: state.date, zsType, boardName, threshold: state.smartPickThreshold || 1.5, minAmount: state.smartPickMinAmount || 500000 }),
+    body: JSON.stringify({ plateId, day: state.date, zsType, boardName, threshold: state.smartPickThreshold || 1.5, minAmount: 500000 }),
     cache: 'no-store',
   })
     .then(r => r.json())
@@ -12115,7 +12711,7 @@ function smartPick(plateId, sourceEl) {
       if (state.smartPick[plateId].jobId && state.smartPick[plateId].loading) pollSmartPick(plateId, state.smartPick[plateId].jobId);
     })
     .catch(() => { state.smartPick[plateId] = { done: true, error: true, count: 0, picked: [], note: 'L2扫描启动失败' }; })
-    .finally(() => { if (state.page === 'strategy') renderStrategyPage(); });
+    .finally(() => { refreshSmartPickCard(plateId); });
 }
 
 // 阈值调整（仅管理员）：改后对已选过的板块按新阈值重算
@@ -12144,10 +12740,11 @@ function rerunSmartPicks() {
 
 // 展开/收起某选出个股的 4 项明细（仅管理员）
 function smartPickDetail(plateId, code) {
+  if (!canUseL2AdminTools()) return;
   const key = plateId + ':' + code;
   if (state.smartPickExpanded.has(key)) state.smartPickExpanded.delete(key);
   else state.smartPickExpanded.add(key);
-  renderStrategyPage();
+  refreshSmartPickCard(plateId);
 }
 
 function fmtMoneyWan(yuan) {
@@ -12372,28 +12969,27 @@ function renderStrategyPage() {
     `;
   }
 
-  const MIN_AMT_OPTS = [[500000, '50万'], [3000000, '300万'], [5000000, '500万'], [8000000, '800万'], [10000000, '1000万']];
-  const minAmtSelect = state.adminLoggedIn
-    ? `<span class="strategy-threshold"><span class="st-lbl">单笔最小金额 ≥</span><select class="sc-min-input" onchange="onSmartMinAmountChange(this.value)">${MIN_AMT_OPTS.map(([v, l]) => `<option value="${v}"${(state.smartPickMinAmount || 500000) === v ? ' selected' : ''}>${l}</option>`).join('')}</select></span>`
-    : '';
+  const minAmtSelect = '';
   root.innerHTML = `
     <div class="strategy-hero">
       <div class="strategy-kicker">实时主线与选股</div>
       <div class="strategy-title">今日策略</div>
       <div class="strategy-subtitle">
         <input type="date" class="strategy-date-input" value="${escapeHTML(state.date)}" max="${escapeHTML(today)}" onchange="onStrategyDateChange(this.value)">
-        ${state.adminLoggedIn ? `<span class="strategy-threshold"><span class="st-lbl">L2阈值 主动买/主动卖 ≥</span><input type="number" class="sc-threshold-input" min="0.1" step="0.1" value="${state.smartPickThreshold || 1.5}" onchange="onSmartThresholdChange(this.value)"></span>` : ''}
+        ${canUseL2AdminTools() ? `<span class="strategy-threshold"><span class="st-lbl">L2阈值 主动买/主动卖 ≥</span><input type="number" class="sc-threshold-input" min="0.1" step="0.1" value="${state.smartPickThreshold || 1.5}" onchange="onSmartThresholdChange(this.value)"></span>` : ''}
         ${minAmtSelect}
       </div>
       ${banner ? `<div class="strategy-snapshot-banner">${banner}</div>` : ''}
+      ${canUseL2AdminTools() ? renderStrategyBoardSearchHTML() : ''}
     </div>
+    ${canUseL2AdminTools() ? renderStrategyBoardSearchResultsHTML() : ''}
     <div id="strategy-mainlines" class="strategy-mainlines"></div>
     <div class="strategy-signal-grid" aria-hidden="true">
       <div id="strategy-hot-themes" class="strategy-hot-themes"></div>
       <div id="strategy-strong-resonance" class="strategy-strong-resonance"></div>
     </div>
     ${bodyHtml}
-    <div class="strategy-note">重点关注板块按实时涨幅快照排序后分批 L2 扫描；主动按逐笔成交统计，被动按挂单订单号累计统计。</div>
+    ${canUseL2AdminTools() ? '<div class="strategy-note">重点关注板块按实时涨幅快照排序后分批 L2 扫描；主动按逐笔成交统计，被动按挂单订单号累计统计。</div>' : ''}
     ${state.adminLoggedIn ? `
     <section class="strategy-section theme-calib">
       <div class="strategy-section-head tc-head" onclick="toggleThemeCalib()">
@@ -12404,7 +13000,61 @@ function renderStrategyPage() {
     </section>` : ''}
   `;
   loadStrategyMainlines(state.date);
+  loadPublicSmartPicks(focus.map(it => it && it.board).filter(Boolean));
   if (state.adminLoggedIn && state.themeCalibOpen) loadThemeCalibration();
+}
+
+function refreshSmartPickCard(plateId) {
+  if (state.page !== 'strategy') return;
+  const id = String(plateId);
+  const card = Array.from(document.querySelectorAll('.strategy-board-card'))
+    .find(el => el && el.dataset && String(el.dataset.plateId) === id);
+  const board = findStrategySmartPickBoard(id);
+  if (!card || !board) {
+    renderStrategyPage();
+    return;
+  }
+  const scrollY = window.scrollY;
+  const wrap = document.createElement('div');
+  wrap.innerHTML = strategyBoardCardHTML(board, []);
+  const next = wrap.firstElementChild;
+  if (!next) {
+    renderStrategyPage();
+    return;
+  }
+  card.replaceWith(next);
+  requestAnimationFrame(() => window.scrollTo(0, scrollY));
+}
+
+function loadPublicSmartPick(plateId) {
+  const id = String(plateId || '');
+  if (!id || canUseL2AdminTools()) return;
+  const key = `${state.date}:${id}`;
+  if (state.smartPickPublicLoads[key]) return;
+  state.smartPickPublicLoads[key] = 'loading';
+  fetch(`${KPL_STATS_BASE}/api/strategy/focus-l2-scan?plateId=${encodeURIComponent(id)}&day=${encodeURIComponent(state.date)}&_=${Date.now()}`, {
+    cache: 'no-store',
+    headers: typeof adminHeaders === 'function' ? adminHeaders() : {},
+  })
+    .then(async r => {
+      if (r.status === 404 || r.status === 403) return null;
+      const data = await r.json().catch(() => null);
+      return r.ok ? data : null;
+    })
+    .then(data => {
+      state.smartPickPublicLoads[key] = 'done';
+      if (!data || data.publicOnly !== true || !(Number(data.pickedCount) > 0)) return;
+      state.smartPick[id] = normalizeSmartPickJob(data);
+      refreshSmartPickCard(id);
+    })
+    .catch(() => {
+      state.smartPickPublicLoads[key] = 'error';
+    });
+}
+
+function loadPublicSmartPicks(boards = []) {
+  if (canUseL2AdminTools()) return;
+  boards.forEach(board => loadPublicSmartPick(board && board.plateId));
 }
 
 // ====================== Load Flow ======================
@@ -13150,6 +13800,26 @@ function syncSharedAccountSession() {
   clearCookie(SHARED_AUTH_SESSION_COOKIE);
 }
 
+function sanitizeSmartPickForPublic() {
+  if (canUseL2AdminTools()) return;
+  Object.keys(state.smartPick || {}).forEach(id => {
+    const item = state.smartPick[id];
+    if (!item || !Array.isArray(item.picked)) return;
+    state.smartPick[id] = {
+      done: !!item.done,
+      loading: !!item.loading,
+      available: item.available !== false,
+      publicOnly: true,
+      count: Number(item.count || item.picked.length || 0),
+      picked: item.picked.map(row => ({
+        code: String(row && row.code || ''),
+        name: String(row && row.name || ''),
+      })).filter(row => row.code),
+    };
+  });
+  state.smartPickExpanded.clear();
+}
+
 function applySharedAccountSnapshot() {
   const token = readSharedAuthToken();
   const session = readSharedAccountSession();
@@ -13168,6 +13838,7 @@ function applySharedAccountSnapshot() {
 
 function updateAdminUi() {
   syncSharedAccountSession();
+  sanitizeSmartPickForPublic();
   updateManualRefreshButton();
   const btn = document.getElementById('main-reason-sync-btn');
   if (btn) btn.classList.toggle('is-visible', !!state.adminLoggedIn);

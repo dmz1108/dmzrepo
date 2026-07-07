@@ -25,6 +25,7 @@ kpl-runtime-config.json
 jiuyangongshe-auth.json
 source-structurer-config.json
 panda-l2-config.json
+panda-local-l2-worker-config.json
 service-account*.json
 credentials*.json
 cookies*.json

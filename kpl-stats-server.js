@@ -74,6 +74,7 @@ const SITE_SYNC_CONFIG_PATH = path.join(__dirname, 'panda-sync-config.json');
 const SITE_SYNC_STATE_PATH = path.join(__dirname, 'panda-sync-state.json');
 const SITE_SYNC_MANIFEST_CACHE_PATH = path.join(__dirname, 'panda-site-sync-manifest-cache.json');
 const DOCS_CARDS_PATH = path.join(__dirname, 'panda-docs-cards.json');
+const LOCAL_L2_WORKER_CONFIG_PATH = path.join(__dirname, 'panda-local-l2-worker-config.json');
 function parseSiteSyncBool(value) {
   const text = String(value ?? '').trim().toLowerCase();
   if (!text) return null;
@@ -1093,6 +1094,12 @@ function adminSessionFromToken(token) {
 function isAdminRequest(req) {
   const session = adminSessionFromToken(readAdminToken(req));
   return !!session && session.role === 'admin';
+}
+
+function isL2AdminRequest(req) {
+  const session = adminSessionFromToken(readAdminToken(req));
+  const username = String(session?.username || '').trim().toLowerCase();
+  return !!session && session.role === 'admin' && (username === 'panda' || username === 'qi_admin');
 }
 
 function requireAdmin(req, res) {
@@ -19785,6 +19792,21 @@ async function runAutoThsConceptSyncIfDue() {
 // ====================== 策略页后端(挂载 strategy-backend.js) ======================
 const { createStrategyBackend } = require('./strategy-backend');
 const { createL2FocusScanner } = require('./l2-focus-scanner');
+const { createLocalL2TaskQueue } = require('./local-l2-task-queue');
+
+function readLocalL2WorkerConfig() {
+  let fileConfig = {};
+  try {
+    fileConfig = JSON.parse(fsSync.readFileSync(LOCAL_L2_WORKER_CONFIG_PATH, 'utf8'));
+  } catch {
+    fileConfig = {};
+  }
+  return {
+    token: process.env.PANDA_LOCAL_L2_WORKER_TOKEN || fileConfig.token || fileConfig.workerToken || '',
+    batchSize: Number(process.env.PANDA_LOCAL_L2_BATCH_SIZE || fileConfig.batchSize || 50),
+  };
+}
+
 // getBoards: 读三类型(东财6/同花顺5/KPL7)当天快照里的板块+指标，合并下发
 // 策略页 QI 龙头：从快照 cardData(zt10 含主次数 ztCount + gain10/gain30) 按 QI 口径
 // (近10日主次数≥2 且 主次数/涨幅均居板块前列) 算每板块 10日/30日 QI 龙头，与看板 QI 同口径
@@ -21325,14 +21347,17 @@ async function getStrategyBoardRealtimeStocks(plateId, day, info) {
   return getStrategyBoardStocks(plateId, day, info);
 }
 const l2FocusScanner = createL2FocusScanner({ baseDir: __dirname });
+const localL2TaskQueue = createLocalL2TaskQueue(readLocalL2WorkerConfig());
 const strategy = createStrategyBackend({
   dataDir: path.join(__dirname, 'strategy-data'),
   nowParts: () => chinaNowParts(),
   isAdmin: (req) => isAdminRequest(req),
-  canRunL2Scan: (req) => !!adminSessionFromToken(readAdminToken(req)),
+  canRunL2Scan: (req) => isL2AdminRequest(req),
+  canReadL2Scan: (req) => !!adminSessionFromToken(readAdminToken(req)),
   getBoards: getStrategyBoardsForDay,
   getBoardStocks: getStrategyBoardStocks,
   getBoardRealtimeStocks: getStrategyBoardRealtimeStocks,
+  localL2TaskQueue,
   l2FocusScanner,
   getQiAggregate: (day, boards) => getStrategyQiBoard(day, boards),   // QI 龙头作战室聚合(引领/梯队/新晋)
   // getOrderStats 不注入 → 智能选股返回 available:false(逐笔/L2 数据源待接入)

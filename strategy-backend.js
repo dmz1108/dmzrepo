@@ -194,7 +194,9 @@ function createStrategyBackend(opts = {}) {
   const getBoardStocks = opts.getBoardStocks || (async () => []);
   const getBoardRealtimeStocks = opts.getBoardRealtimeStocks || getBoardStocks;
   const l2FocusScanner = opts.l2FocusScanner || null;
+  const localL2TaskQueue = opts.localL2TaskQueue || null;
   const canRunL2Scan = typeof opts.canRunL2Scan === 'function' ? opts.canRunL2Scan : isAdmin;
+  const canReadL2Scan = typeof opts.canReadL2Scan === 'function' ? opts.canReadL2Scan : canRunL2Scan;
   // 逐笔统计适配器：(code, day, minAmount) -> { activeBuy, passiveBuy, activeSell, passiveSell }
   //   minAmount = 单笔最小成交金额（元，前端可选 50万/300万/500万/800万/1000万）；只统计单笔≥minAmount 的逐笔。
   // 不注入 = 逐笔数据源未接入（智能选股返回 available:false，不出任何结果）。接 L2 逐笔委托后注入真实实现。
@@ -314,6 +316,31 @@ function createStrategyBackend(opts = {}) {
   function startCron() { if (!timer) { timer = setInterval(() => { tick().catch(() => {}); }, 60 * 1000); tick().catch(() => {}); } }
   function stopCron() { if (timer) { clearInterval(timer); timer = null; } }
 
+  function publicL2PickedRow(row) {
+    return {
+      code: String(row?.code || ''),
+      name: String(row?.name || ''),
+    };
+  }
+
+  function l2ScanForViewer(job, admin = false) {
+    if (!job) return null;
+    if (admin) return job;
+    const picked = Array.isArray(job.picked) ? job.picked.map(publicL2PickedRow).filter(row => row.code) : [];
+    return {
+      plateId: String(job.plateId || ''),
+      boardName: String(job.boardName || ''),
+      day: String(job.day || ''),
+      jobId: String(job.jobId || ''),
+      status: String(job.status || ''),
+      available: job.available !== false,
+      mode: job.mode || '',
+      publicOnly: true,
+      pickedCount: picked.length,
+      picked,
+    };
+  }
+
   // ---------- 路由 ----------
   async function handle(req, res, url) {
     if (!url.pathname.startsWith('/api/strategy/')) return false;
@@ -355,20 +382,53 @@ function createStrategyBackend(opts = {}) {
       }
       if (method === 'GET') { sendJson(res, 200, { day, focus: await readFocus(day) }); return true; }
     }
+    if (url.pathname === '/api/strategy/local-l2-worker/claim' && method === 'POST') {
+      if (!localL2TaskQueue) { sendJson(res, 404, { error: 'local worker queue not configured' }); return true; }
+      const body = await readBody(req);
+      try {
+        sendJson(res, 200, localL2TaskQueue.claim(body));
+      } catch (err) {
+        sendJson(res, err.status || 500, { error: err.message || 'worker claim failed' });
+      }
+      return true;
+    }
+    if (url.pathname === '/api/strategy/local-l2-worker/result' && method === 'POST') {
+      if (!localL2TaskQueue) { sendJson(res, 404, { error: 'local worker queue not configured' }); return true; }
+      const body = await readBody(req);
+      try {
+        sendJson(res, 200, localL2TaskQueue.update(body));
+      } catch (err) {
+        sendJson(res, err.status || 500, { error: err.message || 'worker result failed' });
+      }
+      return true;
+    }
     // 重点关注 L2 扫描：L1 仅取成分股实时涨幅快照排序，L2 逐笔成交分批统计主动/被动买卖。
     if (url.pathname === '/api/strategy/focus-l2-scan') {
-      if (!l2FocusScanner) {
+      const scanBackend = localL2TaskQueue || l2FocusScanner;
+      if (!scanBackend) {
         sendJson(res, 200, { available: false, note: 'L2扫描器未接入' });
         return true;
       }
       if (method === 'GET') {
+        if (!canReadL2Scan(req)) { sendJson(res, 403, { error: 'login required' }); return true; }
+        const adminViewer = !!canRunL2Scan(req);
         const jobId = url.searchParams.get('jobId') || url.searchParams.get('job_id');
         if (jobId) {
-          const job = l2FocusScanner.get(jobId);
-          sendJson(res, job ? 200 : 404, job || { error: 'job not found' });
+          const job = scanBackend.get(jobId);
+          const view = l2ScanForViewer(job, adminViewer);
+          sendJson(res, view ? 200 : 404, view || { error: 'job not found' });
           return true;
         }
-        sendJson(res, 200, await l2FocusScanner.status());
+        const plateId = url.searchParams.get('plateId') || url.searchParams.get('plate_id');
+        if (plateId) {
+          const day = url.searchParams.get('day') || nowParts().day;
+          const job = typeof scanBackend.latest === 'function' ? scanBackend.latest(plateId, day) : null;
+          const view = l2ScanForViewer(job, adminViewer);
+          sendJson(res, view ? 200 : 404, view || { error: 'job not found' });
+          return true;
+        }
+        if (!adminViewer) { sendJson(res, 403, { error: 'admin required' }); return true; }
+        sendJson(res, 200, await scanBackend.status());
         return true;
       }
       if (method === 'POST') {
@@ -381,6 +441,8 @@ function createStrategyBackend(opts = {}) {
         const threshold = Number.isFinite(thRaw) && thRaw > 0 ? thRaw : SMART_PICK_RATIO;
         const minRaw = Number(body.minAmount ?? url.searchParams.get('minAmount'));
         const minAmount = Number.isFinite(minRaw) && minRaw > 0 ? minRaw : 500000;
+        const limitRaw = Number(body.limitStocks ?? body.maxStocks ?? url.searchParams.get('limitStocks') ?? url.searchParams.get('maxStocks'));
+        const limitStocks = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.floor(limitRaw) : 0;
         const requestedZsType = normZsType(body.zsType ?? body.zs_type ?? url.searchParams.get('zsType') ?? url.searchParams.get('zs_type'));
         const boardsForPick = await getBoards(day).catch(() => []);
         const focusRows = await readFocus(day).catch(() => []);
@@ -396,12 +458,13 @@ function createStrategyBackend(opts = {}) {
           name: boardForPick?.name || focusForPick?.name || body.boardName || body.name || '',
         };
         const stocks = await getBoardRealtimeStocks(plateId, day, stockInfo).catch(async () => getBoardStocks(plateId, day, stockInfo).catch(() => []));
-        const job = l2FocusScanner.start({
+        const job = scanBackend.start({
           plateId: String(plateId),
           boardName: body.boardName || body.name || boardForPick?.name || stockInfo.name || '',
           day,
           threshold,
           minAmount,
+          limitStocks,
           stocks,
           sortSnapshotAt: new Date().toISOString(),
         });
