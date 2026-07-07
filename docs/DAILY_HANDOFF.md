@@ -269,3 +269,33 @@ Notes for next agent:
 - The chat page no longer loads `chatter-cute-preview.png` (only the homepage showcase does), so the server-side static whitelist for that PNG must stay for the homepage.
 - No PNG optimization tooling (optipng/pngquant) exists in this environment; if the PNG needs byte-level compression later, do it on a machine with tooling and keep the same path.
 - After deploying to cloud, hard-refresh check `dreamerqi.com/#chat` and confirm `/api/chatter/posts` still populates the feed; the local smoke test could not cover live API rendering.
+
+## 2026-07-07 - Codex - Merged and deployed Claude chat revamp
+
+Changed:
+- Merged `origin/claude/dreamerqi-orientation-yuiha3` into latest `main` while preserving Codex's later TGB Qwen workflow commits.
+- Resolved the only merge conflict in `docs/DAILY_HANDOFF.md` by keeping both Codex and Claude handoff entries.
+- Deployed only homepage/chat files to cloud production.
+
+Files:
+- `Qi/index.html`
+- `Qi/qi-home.jsx`
+- `Qi/qi-home.compiled.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node Qi/build-home.js`
+- `node --check Qi/qi-home.compiled.js`
+- Cloud file hashes for the three deployed `Qi` files match local Git files.
+- `https://dreamerqi.com/health` returned ok.
+- `https://dreamerqi.com/` references `qi-home.compiled.js?v=20260707-chat-lively`.
+- `https://dreamerqi.com/api/chatter/posts` returned 200 with existing posts.
+
+Deployment:
+- Deployed to cloud production.
+- No service restart; static homepage files only.
+- Did not touch `kpl-stats-server.js`, market files, admin files, runtime data, or cloud config.
+
+Notes for next agent:
+- Cloud backup: `C:\PandaDashboard\backups\deploy-claude-chat-revamp-20260707`.
+- If the live `#chat` page looks wrong, hard-refresh first because the script cache version changed.
