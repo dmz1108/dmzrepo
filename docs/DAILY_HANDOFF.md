@@ -151,3 +151,33 @@ Deployment:
 Notes for next agent:
 - Git `main` intentionally has newer server code than the current cloud file in chatter APIs, admin content-sync APIs, discovery quality logic, TGB OCR parser improvements, and strategy mainline matching.
 - If deploying Git `main` to cloud, back up cloud first and verify those newer routes behave as intended.
+
+## 2026-07-07 - Codex - Deployed Git main server to cloud production
+
+Changed:
+- Restored cloud `C:\PandaDashboard\kpl-stats-server.js` from GitHub `main`.
+- Preserved company L2 worker integration while restoring chatter APIs, admin content-sync APIs, discovery enhancements, TGB parser improvements, and strategy mainline matching.
+- Added cloud startup script `C:\PandaDashboard\start-kpl-main.cmd`.
+- Added/updated cloud scheduled task `PandaDashboardMain` to run the main server at system startup.
+- Disabled the scheduled task 72-hour execution limit.
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Cloud `node --check` passed for the staged server file before replacement.
+- `https://dreamerqi.com/health` returned ok.
+- `https://dreamerqi.com/api/chatter/posts` returned 200.
+- `https://dreamerqi.com/api/admin/content-sync/status` returned admin required.
+- `https://dreamerqi.com/api/strategy/focus-l2-scan` returned login required.
+- Home, market root, `/kpl`, `/admin`, stanning, and explore returned 200.
+
+Deployment:
+- Deployed to cloud production.
+- Restarted only the main `kpl-stats-server.js` Node process.
+- Did not restart `yule-server.js`.
+
+Notes for next agent:
+- Cloud backup: `C:\PandaDashboard\backups\git-main-restore-20260707-221713`.
+- Cloud operation logs were also updated on the server.
+- Future changes should avoid whole-file cloud overwrites from stale local copies; use Git branches and review diffs first.
