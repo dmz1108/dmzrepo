@@ -309,6 +309,7 @@ Changed:
 Files:
 - `docs/COLLABORATION_WORKFLOW.md`
 - `CLAUDE.md`
+- `docs/CLAUDE_HANDOFF_EN.md` (Important Files now marks the workflow doc as required reading)
 - `docs/DAILY_HANDOFF.md`
 
 Validated:

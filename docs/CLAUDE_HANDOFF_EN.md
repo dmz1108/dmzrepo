@@ -34,6 +34,7 @@ The project currently runs on a Windows cloud server under `C:\PandaDashboard`. 
 - `yule.html`, `yule-admin.html`, `yule-server.js`: entertainment area.
 - `Caddyfile`: domain and reverse-proxy configuration.
 - `docs/DAILY_HANDOFF.md`: GitHub-side daily handoff log for Codex, Claude, and future collaborators.
+- `docs/COLLABORATION_WORKFLOW.md`: required reading — every new agent must read the three-agent Git collaboration workflow before starting its first task.
 
 ## Homepage Status
 
