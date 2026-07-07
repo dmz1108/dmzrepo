@@ -19633,10 +19633,10 @@ async function runAutoTgbHunanRawEvidenceIfDue() {
   });
 }
 
-// 日常自动:TGB 湖南人正式结构化库默认不再无人值守生成。
-// 用户当前流程是人工核对后上传/落库;如需临时恢复 Qwen 自动生成,必须显式设置 TGB_AUTO_QWEN_STRUCTURING=1。
+// 日常自动:TGB 湖南人复盘默认自动生成正式结构化库,避免当天综合归纳缺 TGB 源。
+// 生成后仍需要人工抽查/修正细分原因;如需临时关闭,设置 TGB_AUTO_QWEN_STRUCTURING=0。
 async function runAutoTgbVisionSyncIfDue() {
-  if (process.env.TGB_AUTO_QWEN_STRUCTURING !== '1') return;
+  if (process.env.TGB_AUTO_QWEN_STRUCTURING === '0') return;
   // TGB auto structuring uses the guarded Qwen OCR table parser. It only writes when
   // OCR rows pass the limit-up-pool validation gate, so failed recognition stays out
   // of the official source database.

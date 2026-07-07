@@ -209,3 +209,30 @@ Notes for next agent:
 - User's intended TGB workflow is manual checked structuring unless they explicitly ask to re-enable automated Qwen generation.
 - Cloud backup: `C:\PandaDashboard\backups\disable-tgb-auto-20260707`.
 - If the user wants today's auto-generated TGB file removed from official status, back it up and move it out of `tgb-hunan-structured`; do not delete it outright.
+
+## 2026-07-07 - Codex - Re-enabled default TGB Qwen official write
+
+Changed:
+- Reversed the prior default-off TGB Qwen guard after user clarified the preferred tradeoff.
+- TGB湖南人 Qwen OCR now writes the official structured source by default after the existing limit-up-pool validation gate passes.
+- Emergency/manual disable remains available with `TGB_AUTO_QWEN_STRUCTURING=0`.
+- Daily human review is still expected to correct OCR detail-reason issues after the automated file is available.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- Deployed server file contains `if (process.env.TGB_AUTO_QWEN_STRUCTURING === '0') return;`
+- `https://dreamerqi.com/health` returned ok.
+- Home, market `/kpl`, and admin returned 200 after restart.
+
+Deployment:
+- Deployed to cloud production.
+- Restarted only the main `kpl-stats-server.js` Node process.
+- Did not restart `yule-server.js`.
+
+Notes for next agent:
+- Preferred workflow is now: Qwen auto writes a validated official TGB source so comprehensive review is not missing TGB; Codex/user then reviews and patches detail-reason OCR errors.
+- Cloud backup: `C:\PandaDashboard\backups\enable-tgb-auto-20260707`.
