@@ -6,8 +6,9 @@ You are joining the DreamerQi / PandaDashboard project. Start by understanding t
 
 1. Read `README.md`.
 2. Read `docs/CLAUDE_HANDOFF_EN.md`.
-3. Read `docs/PROJECT_MAP.md` and `docs/SANITIZATION.md`.
-4. Optionally read the sanitized operation notes:
+3. Read `docs/DAILY_HANDOFF.md`.
+4. Read `docs/PROJECT_MAP.md` and `docs/SANITIZATION.md`.
+5. Optionally read the sanitized operation notes:
    - `docs/PROJECT_HANDOFF.sanitized.md`
    - `docs/panda-cloud-ops-2026-06-19.sanitized.md`
    - `docs/cloud-change-log-20260705.sanitized.md`
@@ -18,6 +19,7 @@ Then respond with a short summary of:
 - the entry files,
 - the recent homepage changes,
 - the market/admin risk areas,
+- the latest relevant notes in `docs/DAILY_HANDOFF.md`,
 - the files you intend to edit.
 
 ## Hard Rules
@@ -65,3 +67,16 @@ Check at least:
 - no secret-like runtime files are added.
 
 Review `docs/SECRET_SCAN_REVIEW_REQUIRED.txt`. Most hits are expected code field names such as `token`, `password`, or `cookie`, but review before making the repository public.
+
+## Handoff Requirement
+
+After every meaningful task, append a concise entry to `docs/DAILY_HANDOFF.md` with:
+
+- what changed,
+- which files changed,
+- what was validated,
+- whether anything was deployed to production,
+- whether any service was restarted,
+- what the next agent should know.
+
+If production runtime state changes, also update the cloud operation log on the server. Do not put secrets or runtime-only values in GitHub.

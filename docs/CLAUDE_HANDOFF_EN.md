@@ -33,6 +33,7 @@ The project currently runs on a Windows cloud server under `C:\PandaDashboard`. 
 - `Qi/qi-home.compiled.js`: generated home bundle.
 - `yule.html`, `yule-admin.html`, `yule-server.js`: entertainment area.
 - `Caddyfile`: domain and reverse-proxy configuration.
+- `docs/DAILY_HANDOFF.md`: GitHub-side daily handoff log for Codex, Claude, and future collaborators.
 
 ## Homepage Status
 
@@ -104,6 +105,30 @@ Important distinction:
 - Production secrets and runtime config should stay out of GitHub.
 
 If code is changed in GitHub, deployment still needs a deliberate cloud update step.
+
+## Daily Handoff Workflow
+
+GitHub is the shared code collaboration space. Production runtime state stays on the cloud server.
+
+After every meaningful code or documentation task, append an entry to:
+
+`docs/DAILY_HANDOFF.md`
+
+Each entry should include:
+
+- what changed,
+- which files changed,
+- what was validated,
+- deployment status,
+- whether the cloud server was touched or restarted,
+- notes for the next agent.
+
+If a task changes actual production runtime state, also update the cloud operation logs on the server:
+
+- `C:\PandaDashboard\panda-cloud-ops-2026-06-19.md`
+- `C:\PandaDashboard\_cloud-change-log-20260705.md`
+
+Never put secrets, tokens, cookies, SMTP credentials, private keys, user databases, or runtime-only data into GitHub handoff notes.
 
 ## Excluded From This GitHub Package
 
