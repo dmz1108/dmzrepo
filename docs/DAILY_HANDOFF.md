@@ -181,3 +181,36 @@ Notes for next agent:
 - Cloud backup: `C:\PandaDashboard\backups\git-main-restore-20260707-221713`.
 - Cloud operation logs were also updated on the server.
 - Future changes should avoid whole-file cloud overwrites from stale local copies; use Git branches and review diffs first.
+
+## 2026-07-07 - Claude - 瞎聊聊 page liveliness revamp + banner optimization
+
+Changed:
+- Revamped the `#chat` (瞎聊聊) page hero: replaced the static 103KB PNG banner with a self-contained animated inline banner (SVG mascot, floating chat bubbles, twinkling sparkles, rotating topic prompt every ~4s) — zero extra network requests, crisp at any resolution.
+- Added five "starter chip" buttons above the composer that prefill the textarea with a post opener (daily check-in, photo share, food report, random thoughts, show recommendation) and focus it; the textarea placeholder also rotates through topic prompts.
+- Livelier copy throughout: hero description, stat chips with emoji, composer hint, filtered-empty hint.
+- New engaging empty state ("沙发还空着！") with a CTA button that scrolls to and focuses the composer (or opens login when logged out).
+- Post cards got a hover-lift transition and pop-in entrance animation; `prefers-reduced-motion` disables all new animations.
+- Homepage showcase card for 瞎聊聊 keeps `Qi/assets/chatter-cute-preview.png` (per CLAUDE.md) with updated sub copy in both the live-fetch and fallback card lists.
+- All existing post / image upload / comment logic (loadPosts, openPost, pickImage, submitPost, submitReply, filters, auth handling) is untouched.
+
+Files:
+- `Qi/qi-home.jsx`
+- `Qi/qi-home.compiled.js` (regenerated via `node Qi/build-home.js`)
+- `Qi/index.html` (script cache version -> `20260707-chat-lively`)
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node Qi/build-home.js` rebuilt the bundle; `node --check Qi/qi-home.compiled.js` passed.
+- Headless Chromium (Playwright) smoke test against a local static server: `#chat` renders the new banner, starter chips, and empty-state CTA with zero page errors; homepage renders with the removed hero chip still absent and no console/page errors.
+- Confirmed old showcase sub copy no longer appears in the compiled bundle (0 hits) and new copy appears in both card lists (2 hits).
+- API-dependent behavior (post/reply submit) could not be exercised locally (no runtime backend/data in the seed repo); logic paths were not modified.
+
+Deployment:
+- GitHub branch `claude/dreamerqi-orientation-yuiha3` only.
+- Not deployed to the cloud server.
+- No service restart.
+
+Notes for next agent:
+- The chat page no longer loads `chatter-cute-preview.png` (only the homepage showcase does), so the server-side static whitelist for that PNG must stay for the homepage.
+- No PNG optimization tooling (optipng/pngquant) exists in this environment; if the PNG needs byte-level compression later, do it on a machine with tooling and keep the same path.
+- After deploying to cloud, hard-refresh check `dreamerqi.com/#chat` and confirm `/api/chatter/posts` still populates the feed; the local smoke test could not cover live API rendering.
