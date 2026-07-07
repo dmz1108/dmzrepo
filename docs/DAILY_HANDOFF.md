@@ -105,3 +105,25 @@ Notes for next agent:
 - Do not commit worker runtime configs or real AXTICK credentials. `panda-local-l2-worker-config.json` is ignored.
 - Company handoff listed `tools/ths_board_top_eastmoney.js`, but that file was not present on the cloud server during this sync.
 - Raw cloud operation logs were not copied into Git because they may contain runtime-only or sensitive details.
+
+## 2026-07-07 - Codex - Merged company L2 sync branch to main
+
+Changed:
+- Fast-forwarded `main` to include `codex/sync-company-l2-20260707`.
+- Recorded that the GitHub main branch now contains the company L2 worker handoff and cloud-side queue integration.
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Branch merge was a clean fast-forward from `2600faa` to `f27b2d9`.
+- Prior validation from the imported branch still applies.
+
+Deployment:
+- GitHub main only.
+- Not deployed to the cloud server.
+- No service restart.
+
+Notes for next agent:
+- Cloud production still needs an explicit deploy step if it should consume GitHub `main`.
+- Before cloud `git pull`, confirm `C:\PandaDashboard` is a Git worktree and runtime config files are preserved.
