@@ -181,3 +181,31 @@ Notes for next agent:
 - Cloud backup: `C:\PandaDashboard\backups\git-main-restore-20260707-221713`.
 - Cloud operation logs were also updated on the server.
 - Future changes should avoid whole-file cloud overwrites from stale local copies; use Git branches and review diffs first.
+
+## 2026-07-07 - Codex - Disabled unattended TGB Qwen structuring
+
+Changed:
+- Disabled the unattended evening/morning TGB湖南人 Qwen OCR structuring cron unless `TGB_AUTO_QWEN_STRUCTURING=1` is explicitly set.
+- Preserved existing TGB structured-file reading and manual upload/manual processing paths.
+- Investigated why `2026-07-07` TGB already showed completed: cloud had auto-generated `kpl-limitup-main-reason-sources/tgb-hunan-structured/2026-07-07.json` with `method=qwen-ocr-table-parser`, `model=qwen-vl-ocr-latest`, `count=33`, generated at `2026-07-07T14:17:19.573Z`.
+- Did not delete or move the already generated `2026-07-07` TGB file.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- Deployed server file contains the `TGB_AUTO_QWEN_STRUCTURING` guard.
+- `https://dreamerqi.com/health` returned ok.
+- Home, market `/kpl`, and admin returned 200 after restart.
+
+Deployment:
+- Deployed to cloud production.
+- Restarted only the main `kpl-stats-server.js` Node process.
+- Did not restart `yule-server.js`.
+
+Notes for next agent:
+- User's intended TGB workflow is manual checked structuring unless they explicitly ask to re-enable automated Qwen generation.
+- Cloud backup: `C:\PandaDashboard\backups\disable-tgb-auto-20260707`.
+- If the user wants today's auto-generated TGB file removed from official status, back it up and move it out of `tgb-hunan-structured`; do not delete it outright.

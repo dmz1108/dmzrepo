@@ -19633,9 +19633,10 @@ async function runAutoTgbHunanRawEvidenceIfDue() {
   });
 }
 
-// 日常自动:每交易日上午(主因DB同步之后),对上一交易日的湖南人复盘图做视觉识别→对账→落结构化→折入存盘DB。
-// 幂等(已有结构化文件则跳过);未配视觉 key 或当日复盘图未发/对账不达标则安静跳过,绝不污染共识。
+// 日常自动:TGB 湖南人正式结构化库默认不再无人值守生成。
+// 用户当前流程是人工核对后上传/落库;如需临时恢复 Qwen 自动生成,必须显式设置 TGB_AUTO_QWEN_STRUCTURING=1。
 async function runAutoTgbVisionSyncIfDue() {
+  if (process.env.TGB_AUTO_QWEN_STRUCTURING !== '1') return;
   // TGB auto structuring uses the guarded Qwen OCR table parser. It only writes when
   // OCR rows pass the limit-up-pool validation gate, so failed recognition stays out
   // of the official source database.
