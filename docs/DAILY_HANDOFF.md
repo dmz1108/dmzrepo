@@ -299,3 +299,36 @@ Deployment:
 Notes for next agent:
 - Cloud backup: `C:\PandaDashboard\backups\deploy-claude-chat-revamp-20260707`.
 - If the live `#chat` page looks wrong, hard-refresh first because the script cache version changed.
+
+## 2026-07-07 - Codex - 今日主线榜盘中预测逻辑升级
+
+Changed:
+- Repositioned 今日主线榜 as an intraday prediction tool: realtime strong boards + board member big gainers + near-limit candidates + historical four-source reason DB.
+- Added backend collection of board constituents with same-day gain, but limited it to the strongest 18 boards and 4 seconds per board so the strategy page does not hang.
+- Historical main-reason matching now checks both today's limit-up stocks and intraday big-gain stocks.
+- Mainline scoring now includes `bigGainers` and `nearLimit` score parts, while keeping confirmed limit-up count separate.
+- Strategy cards now show 大涨股, 冲板股, and candidate rows instead of presenting the module as only a limit-up/after-market confirmation board.
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- Dashboard script parsed with `new Function(...)`.
+- `git diff --check`
+- Cloud `https://dreamerqi.com/health` returned ok.
+- Cloud `https://market.dreamerqi.com/kpl` returned the updated HTML containing the new 今日主线榜 wording.
+- Cloud `/api/strategy-mainlines?day=2026-07-07` returned `basis: realtime-board-gain-inflow-big-gainers-plus-prior-main-reason` with `bigGainCount` fields.
+
+Deployment:
+- Deployed to cloud production.
+- Restarted the main Node service through the existing `PandaDashboard-KPL-Server` scheduled task.
+- Did not restart `yule-server.js`.
+
+Notes for next agent:
+- Actual intraday strategy quality was not validated because the market was already closed; next trading session should check whether the ranking identifies current-session themes before broad limit-up confirmation.
+- Cloud backups:
+  - `C:\PandaDashboard\backups\strategy-mainline-predictive-20260707-090003`
+  - `C:\PandaDashboard\backups\strategy-mainline-predictive-timeout-20260707-090926`

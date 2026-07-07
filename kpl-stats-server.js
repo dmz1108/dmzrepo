@@ -20002,6 +20002,10 @@ async function getDayThemeNetInflow(day) {
 }
 
 const STRATEGY_STRONG_RESONANCE_MIN_STOCKS = 2;
+const STRATEGY_MAINLINE_BIG_GAIN_PCT = 5;
+const STRATEGY_MAINLINE_NEAR_LIMIT_GAP_PCT = 1.5;
+const STRATEGY_MAINLINE_RISING_BOARD_LIMIT = 18;
+const STRATEGY_MAINLINE_RISING_FETCH_TIMEOUT_MS = 4000;
 function strategyResonanceTopicKey(raw) {
   return consensusKey(raw) || canonicalTopicName(raw) || String(raw || '').replace(/概念$/u, '').trim();
 }
@@ -20125,6 +20129,95 @@ function strategyMergeScoreParts(items) {
   }
   return out;
 }
+function strategyCreateMainlineSeed(theme, key) {
+  return {
+    theme,
+    key,
+    boards: [],
+    codeSet: new Set(),
+    realtimeCodeSet: new Set(),
+    priorCodeSet: new Set(),
+    risingCodeSet: new Set(),
+    nearLimitCodeSet: new Set(),
+    risingStockMap: new Map(),
+    nearLimitStockMap: new Map(),
+    countFallback: 0,
+    maxGainPct: null,
+    gainBoard: '',
+    netInflowTotal: 0,
+    netInflowSeen: false,
+    netInflowBoard: '',
+    netInflowBest: null,
+    boardKeySet: new Set(),
+  };
+}
+function strategyEnsureMainlineSeedShape(seed) {
+  if (!seed) return seed;
+  if (!seed.codeSet) seed.codeSet = new Set();
+  if (!seed.realtimeCodeSet) seed.realtimeCodeSet = new Set();
+  if (!seed.priorCodeSet) seed.priorCodeSet = new Set();
+  if (!seed.risingCodeSet) seed.risingCodeSet = new Set();
+  if (!seed.nearLimitCodeSet) seed.nearLimitCodeSet = new Set();
+  if (!seed.risingStockMap) seed.risingStockMap = new Map();
+  if (!seed.nearLimitStockMap) seed.nearLimitStockMap = new Map();
+  if (!seed.boardKeySet) seed.boardKeySet = new Set();
+  if (!Array.isArray(seed.boards)) seed.boards = [];
+  if (!Number.isFinite(Number(seed.netInflowTotal))) seed.netInflowTotal = 0;
+  return seed;
+}
+function strategyMainlineNormalizeRisingStock(row) {
+  const code = normalizeReasonSourceCode(row?.code || row?.dm || row?.stockCode);
+  if (!code) return null;
+  const name = String(row?.name || row?.mc || row?.stockName || '').trim();
+  if (isExcludedFromReview(code, name)) return null;
+  const gain = numOrNull(row?.gainPct ?? row?.gain ?? row?.todayGain ?? row?.zf ?? row?.changePct);
+  if (gain == null) return null;
+  return { code, name, gain: Number(gain) };
+}
+function strategyMainlineIsNearLimitStock(stock, limitCodes = new Set()) {
+  const code = normalizeReasonSourceCode(stock?.code);
+  if (!code || limitCodes.has(code)) return false;
+  const gain = numOrNull(stock?.gain);
+  if (gain == null) return false;
+  return gain >= (limitUpThreshold(code, stock?.name) - STRATEGY_MAINLINE_NEAR_LIMIT_GAP_PCT);
+}
+function strategyMainlineAddRisingStock(map, stock) {
+  if (!map || !stock) return;
+  const code = normalizeReasonSourceCode(stock.code);
+  if (!code) return;
+  const cur = map.get(code);
+  if (!cur || Number(stock.gain) > Number(cur.gain || -Infinity)) map.set(code, { ...stock, code });
+}
+function strategyMainlineBoardRisingStocks(board) {
+  return Array.isArray(board?.risingStocks) ? board.risingStocks : [];
+}
+function strategyMainlineBoardNearLimitStocks(board) {
+  return Array.isArray(board?.nearLimitStocks) ? board.nearLimitStocks : [];
+}
+function strategyMainlineAbsorbRisingStocks(seed, risingStocks = [], nearLimitStocks = []) {
+  strategyEnsureMainlineSeedShape(seed);
+  for (const stock of risingStocks || []) {
+    const code = normalizeReasonSourceCode(stock?.code);
+    if (!code) continue;
+    seed.risingCodeSet.add(code);
+    strategyMainlineAddRisingStock(seed.risingStockMap, stock);
+  }
+  for (const stock of nearLimitStocks || []) {
+    const code = normalizeReasonSourceCode(stock?.code);
+    if (!code) continue;
+    seed.nearLimitCodeSet.add(code);
+    strategyMainlineAddRisingStock(seed.nearLimitStockMap, stock);
+  }
+}
+function strategyMainlineWithTimeout(promise, ms, fallback) {
+  let timer = null;
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise(resolve => { timer = setTimeout(() => resolve(fallback), ms); }),
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
 function strategyMergeMainlineRoles(items, count) {
   const height = strategyDedupeByCode(
     items.flatMap(item => item?.roles?.height || [])
@@ -20183,6 +20276,10 @@ function strategyMergeMainlineFamilies(rawMainlines) {
     const lianbanCount = sorted.reduce((sum, item) => sum + (Number(item.lianbanCount) || 0), 0);
     const recentHeat = sorted.reduce((sum, item) => sum + (Number(item.recentHeat) || 0), 0);
     const priorReasonCount = mergedPriorCodes.size || sorted.reduce((sum, item) => sum + (Number(item.priorReasonCount) || 0), 0);
+    const mergedRisingCodes = new Set(sorted.flatMap(item => Array.isArray(item.risingStocks) ? item.risingStocks.map(s => normalizeReasonSourceCode(s?.code)).filter(Boolean) : []));
+    const mergedNearLimitCodes = new Set(sorted.flatMap(item => Array.isArray(item.nearLimitStocks) ? item.nearLimitStocks.map(s => normalizeReasonSourceCode(s?.code)).filter(Boolean) : []));
+    const bigGainCount = mergedRisingCodes.size || sorted.reduce((sum, item) => sum + (Number(item.bigGainCount) || 0), 0);
+    const nearLimitCount = mergedNearLimitCodes.size || sorted.reduce((sum, item) => sum + (Number(item.nearLimitCount) || 0), 0);
     const boardCount = sorted.reduce((sum, item) => sum + (Number(item.boardCount) || 0), 0);
     const resonanceStockCount = mergedRealtimeCodes.size || sorted.reduce((sum, item) => sum + (Number(item.resonanceStockCount) || 0), 0);
     const uniqueBoardMap = new Map();
@@ -20202,6 +20299,8 @@ function strategyMergeMainlineFamilies(rawMainlines) {
       scoreParts.limitUps = Number((count * 10).toFixed(1));
       scoreParts.resonance = Number((boardCount * 12 + resonanceStockCount * 3).toFixed(1));
     }
+    if (bigGainCount) scoreParts.bigGainers = Number(Math.min(90, bigGainCount * 5).toFixed(1));
+    if (nearLimitCount) scoreParts.nearLimit = Number(Math.min(70, nearLimitCount * 10).toFixed(1));
     if (priorReasonCount) scoreParts.priorReason = Number(Math.min(80, priorReasonCount * 8).toFixed(1));
     scoreParts.continuity = Number((Math.min(recentHeat, 20) * 3).toFixed(1));
     scoreParts.inflow = Number(strategyMainlineRealtimeInflowScore(netInflow).toFixed(1));
@@ -20236,6 +20335,16 @@ function strategyMergeMainlineFamilies(rawMainlines) {
         .sort((a, b) => (Number(b.count) || 0) - (Number(a.count) || 0)),
       4
     );
+    const risingStocks = strategyDedupeByCode(
+      sorted.flatMap(item => item.risingStocks || [])
+        .sort((a, b) => (Number(b.nearLimit) ? 1 : 0) - (Number(a.nearLimit) ? 1 : 0) || (Number(b.gain) || 0) - (Number(a.gain) || 0)),
+      8
+    );
+    const nearLimitStocks = strategyDedupeByCode(
+      sorted.flatMap(item => item.nearLimitStocks || [])
+        .sort((a, b) => (Number(b.gain) || 0) - (Number(a.gain) || 0)),
+      5
+    );
     const roles = strategyMergeMainlineRoles(sorted, count);
     merged.push({
       ...lead,
@@ -20261,6 +20370,8 @@ function strategyMergeMainlineFamilies(rawMainlines) {
           boardCount,
           resonanceStockCount,
           priorReasonCount,
+          bigGainCount,
+          nearLimitCount,
           recentHeat,
           netInflow,
           boardGainPct: gainLead.gainPct,
@@ -20281,6 +20392,10 @@ function strategyMergeMainlineFamilies(rawMainlines) {
       priorReasonCount,
       priorReasonStocks: strategyDedupeByCode(sorted.flatMap(item => item.priorReasonStocks || []), 6),
       priorReasonCodes: [...mergedPriorCodes],
+      bigGainCount,
+      nearLimitCount,
+      risingStocks,
+      nearLimitStocks,
       todayCodes: [...mergedTodayCodes],
       realtimeCodes: [...mergedRealtimeCodes],
       topGainStocks: strategyDedupeByCode(sorted.flatMap(item => item.topGainStocks || []), 5),
@@ -20321,6 +20436,8 @@ function strategyMainlineAddCandidate(map, raw, extra = {}) {
     maxRecentLianban: 0,
     inTodayTheme: false,
     inResonance: false,
+    bigGain: false,
+    nearLimit: false,
     tier: '',
     agreeCount: 0,
     sourceTags: new Set(),
@@ -20343,6 +20460,8 @@ function strategyMainlineAddCandidate(map, raw, extra = {}) {
   cur.maxRecentLianban = Math.max(cur.maxRecentLianban || 0, Number(raw?.maxLianban || 0) || 0);
   if (extra.inTodayTheme) cur.inTodayTheme = true;
   if (extra.inResonance) cur.inResonance = true;
+  if (extra.bigGain) cur.bigGain = true;
+  if (extra.nearLimit) cur.nearLimit = true;
   if (extra.tag) cur.sourceTags.add(extra.tag);
   const rawTier = String(raw?.tier || raw?.consensusTier || '');
   if (strategyMainlineTierRank(rawTier) > strategyMainlineTierRank(cur.tier)) cur.tier = rawTier;
@@ -20358,6 +20477,7 @@ function strategyMainlineScoreLeader(c) {
     (c.inTodayTheme ? 18 : 0) +
     (c.inResonance ? 22 : 0) +
     (strategyMainlineTierRank(c.tier) * 10) +
+    (c.nearLimit ? 18 : (c.bigGain ? 8 : 0)) +
     (Math.min(Number(c.agreeCount) || 0, 4) * 4) +
     (Math.min(Number(c.recentCount) || 0, 8) * 3) +
     (Math.min(Number(c.maxRecentLianban) || 0, 6) * 2) +
@@ -20369,6 +20489,8 @@ function strategyMainlineLeaderBasis(c) {
   const tags = [];
   if (Number(c.lianban) >= 2) tags.push(`${Number(c.lianban)}连板`);
   if (c.inResonance) tags.push('板块共振');
+  if (c.nearLimit) tags.push('冲板候选');
+  else if (c.bigGain) tags.push('盘中大涨');
   if (c.tier === 'strong') tags.push(`${Number(c.agreeCount) || 0}源高度一致`);
   else if (c.tier === 'majority') tags.push(`${Number(c.agreeCount) || 0}源确认`);
   if (Number(c.recentCount) > 0) tags.push(`近15日${Number(c.recentCount)}次`);
@@ -20406,24 +20528,30 @@ function strategyMainlineExplain(theme, data = {}) {
   const boardCount = Number(data.boardCount) || 0;
   const resonanceStockCount = Number(data.resonanceStockCount) || 0;
   const priorReasonCount = Number(data.priorReasonCount) || 0;
+  const bigGainCount = Number(data.bigGainCount) || 0;
+  const nearLimitCount = Number(data.nearLimitCount) || 0;
   const recentHeat = Number(data.recentHeat) || 0;
   const inflow = strategyMainlinePlainYi(data.netInflow);
   const inflowValue = isFiniteNumeric(data.netInflow) ? Number(data.netInflow) : null;
   const boardGainPct = isFiniteNumeric(data.boardGainPct) ? Number(data.boardGainPct) : null;
   const boardGainName = String(data.boardGainName || '').trim();
   if (count > 0) explain.push(`${theme}今日涨停${count}只，是主线分的基础权重。`);
-  if (priorReasonCount > 0) explain.push(`${priorReasonCount}只今日涨停股被历史四源综合指向该主因，作为盘中主因预判。`);
+  if (bigGainCount > 0) explain.push(`板块内${bigGainCount}只成分股盘中大涨，说明资金正在扩散，不只等待涨停确认。`);
+  if (nearLimitCount > 0) explain.push(`${nearLimitCount}只成分股接近涨停，作为可能冲板的前置观察。`);
+  if (priorReasonCount > 0) explain.push(`${priorReasonCount}只盘中信号股被历史四源综合指向该主因，作为今日主线预判。`);
   if (maxLianban > 0) explain.push(`高度达到${maxLianban}板${lianbanCount ? `，其中${lianbanCount}只连板` : ''}，说明短线梯队有延续。`);
   if (boardCount > 0 || resonanceStockCount > 0) explain.push(`${boardCount}个强势板块形成共振，覆盖${resonanceStockCount}只相关涨停股。`);
   if (recentHeat > 0) explain.push(`近15个交易日反复活跃${recentHeat}次，连续性加分。`);
   if (inflow && inflowValue != null) explain.push(`相关强势板块${inflowValue >= 0 ? '净流入' : '净流出'}约${inflow.replace(/^-/, '')}，资金维度参与打分。`);
   if (boardGainPct != null && boardGainPct > 0) explain.push(`${boardGainName || '相关板块'}涨幅${boardGainPct.toFixed(2)}%，同步增强主线强度。`);
-  return explain.slice(0, 5);
+  return explain.slice(0, 6);
 }
 function strategyMainlineLeaderExplain(c) {
   const explain = [];
   if (Number(c?.lianban) >= 2) explain.push(`${Number(c.lianban)}连板带来核心高度。`);
-  if (c?.inTodayTheme) explain.push('属于今日实时强势板块里的涨停股。');
+  if (c?.inTodayTheme) explain.push('属于今日实时强势板块里的核心成分股。');
+  if (c?.nearLimit) explain.push('盘中涨幅接近涨停，是提前观察的冲板候选。');
+  else if (c?.bigGain) explain.push('尚未必然涨停，但已经跟随板块出现明显大涨。');
   if (c?.inResonance) explain.push('同时出现在强势共振板块里。');
   if (c?.tier === 'strong') explain.push(`${Number(c.agreeCount) || 0}个来源对主因高度一致。`);
   else if (c?.tier === 'majority') explain.push(`${Number(c.agreeCount) || 0}个来源确认主因。`);
@@ -20450,6 +20578,8 @@ function strategyMainlineStockBrief(c, role = '') {
     sealAmount: strategyMainlineSealAmount(c),
     detail: c?.detail || '',
     recentCount: Number(c?.recentCount) || 0,
+    bigGain: !!c?.bigGain,
+    nearLimit: !!c?.nearLimit,
     leadScore: Number.isFinite(Number(c?.leadScore)) ? Number(Number(c.leadScore).toFixed(1)) : 0,
     basis: Array.isArray(c?.basis) ? c.basis.slice(0, 3) : [],
     explain: Array.isArray(c?.explain) ? c.explain.slice(0, 3) : [],
@@ -20616,6 +20746,45 @@ async function getStrategyMainlineRealtimeCatalogBoards(day) {
   });
 }
 
+async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day) {
+  const list = Array.isArray(boards) ? boards : [];
+  const targets = list
+    .slice()
+    .sort((a, b) =>
+      (Number(b?.zt) || 0) - (Number(a?.zt) || 0) ||
+      (Math.max(0, Number(b?.gainPct) || 0)) - (Math.max(0, Number(a?.gainPct) || 0)) ||
+      (Number(b?.netInflow) || 0) - (Number(a?.netInflow) || 0)
+    )
+    .slice(0, STRATEGY_MAINLINE_RISING_BOARD_LIMIT);
+  await mapLimit(targets, 3, async board => {
+    const plateId = String(board?.plateId || '');
+    if (!plateId) return;
+    const limitCodes = new Set((Array.isArray(board?.codes) ? board.codes : [])
+      .map(normalizeReasonSourceCode)
+      .filter(Boolean));
+    const rows = await strategyMainlineWithTimeout(
+      getStrategyBoardRealtimeStocks(plateId, day, board).catch(() => []),
+      STRATEGY_MAINLINE_RISING_FETCH_TIMEOUT_MS,
+      []
+    );
+    const normalized = (rows || [])
+      .map(strategyMainlineNormalizeRisingStock)
+      .filter(Boolean)
+      .sort((a, b) => Number(b.gain) - Number(a.gain));
+    const risingStocks = normalized
+      .filter(stock => Number(stock.gain) >= STRATEGY_MAINLINE_BIG_GAIN_PCT)
+      .slice(0, 40);
+    const nearLimitStocks = normalized
+      .filter(stock => strategyMainlineIsNearLimitStock(stock, limitCodes))
+      .slice(0, 20);
+    board.risingStocks = risingStocks;
+    board.risingCodes = risingStocks.map(stock => stock.code);
+    board.nearLimitStocks = nearLimitStocks;
+    board.nearLimitCodes = nearLimitStocks.map(stock => stock.code);
+  });
+  return list;
+}
+
 function strategyMainlineAttachBestCatalogBoard(seed, catalogBoards) {
   if (!seed || !Array.isArray(catalogBoards) || !catalogBoards.length) return false;
   const candidates = catalogBoards
@@ -20631,24 +20800,27 @@ function strategyMainlineAttachBestCatalogBoard(seed, catalogBoards) {
   return strategyMainlineAttachRealtimeBoardToSeed(seed, best, []);
 }
 
-function strategyMainlineAttachRealtimeBoardToSeed(seed, board, matchedCodes = []) {
+function strategyMainlineAttachRealtimeBoardToSeed(seed, board, matchedCodes = null) {
   if (!seed || !board) return false;
-  if (!seed.boardKeySet) seed.boardKeySet = new Set();
+  strategyEnsureMainlineSeedShape(seed);
   const boardKey = strategyMainlineBoardIdentity(board);
   if (!boardKey || seed.boardKeySet.has(boardKey)) return false;
   const boardName = String(board?.name || '').trim();
   const gainPct = numOrNull(board?.gainPct);
   const netInflow = numOrNull(board?.netInflow);
   const zt = numOrNull(board?.zt);
-  const codes = [...new Set((matchedCodes.length ? matchedCodes : (Array.isArray(board?.codes) ? board.codes : []))
+  const sourceCodes = Array.isArray(matchedCodes) ? matchedCodes : (Array.isArray(board?.codes) ? board.codes : []);
+  const codes = [...new Set(sourceCodes
     .map(normalizeReasonSourceCode)
     .filter(Boolean))];
   seed.boardKeySet.add(boardKey);
-  if (!seed.realtimeCodeSet) seed.realtimeCodeSet = new Set();
   for (const code of codes) {
     seed.codeSet.add(code);
     seed.realtimeCodeSet.add(code);
   }
+  const risingStocks = strategyMainlineBoardRisingStocks(board);
+  const nearLimitStocks = strategyMainlineBoardNearLimitStocks(board);
+  strategyMainlineAbsorbRisingStocks(seed, risingStocks, nearLimitStocks);
   if (gainPct != null && (seed.maxGainPct == null || gainPct > seed.maxGainPct)) {
     seed.maxGainPct = gainPct;
     seed.gainBoard = boardName;
@@ -20669,6 +20841,8 @@ function strategyMainlineAttachRealtimeBoardToSeed(seed, board, matchedCodes = [
     netInflow,
     gainPct,
     confirmedCount: codes.length || (zt != null ? zt : 0),
+    bigGainCount: risingStocks.length,
+    nearLimitCount: nearLimitStocks.length,
   });
   return true;
 }
@@ -20684,34 +20858,20 @@ function strategyMainlineAddRealtimeBoardSeed(seedByKey, board) {
   const codes = [...new Set((Array.isArray(board?.codes) ? board.codes : [])
     .map(normalizeReasonSourceCode)
     .filter(Boolean))];
-  if (!(Number.isFinite(zt) && zt > 0) && !codes.length) return null;
+  const risingStocks = strategyMainlineBoardRisingStocks(board);
+  const nearLimitStocks = strategyMainlineBoardNearLimitStocks(board);
+  if (!(Number.isFinite(zt) && zt > 0) && !codes.length && !risingStocks.length) return null;
   if (!seedByKey.has(key)) {
-    seedByKey.set(key, {
-      theme,
-      key,
-      boards: [],
-      codeSet: new Set(),
-      realtimeCodeSet: new Set(),
-      priorCodeSet: new Set(),
-      countFallback: 0,
-      maxGainPct: null,
-      gainBoard: '',
-      netInflowTotal: 0,
-      netInflowSeen: false,
-      netInflowBoard: '',
-      netInflowBest: null,
-      boardKeySet: new Set(),
-    });
+    seedByKey.set(key, strategyCreateMainlineSeed(theme, key));
   }
-  const seed = seedByKey.get(key);
-  if (!seed.boardKeySet) seed.boardKeySet = new Set();
+  const seed = strategyEnsureMainlineSeedShape(seedByKey.get(key));
   seed.boardKeySet.add(strategyMainlineBoardIdentity(board));
   seed.countFallback += zt != null ? Math.max(0, zt) : codes.length;
-  if (!seed.realtimeCodeSet) seed.realtimeCodeSet = new Set();
   for (const code of codes) {
     seed.codeSet.add(code);
     seed.realtimeCodeSet.add(code);
   }
+  strategyMainlineAbsorbRisingStocks(seed, risingStocks, nearLimitStocks);
   if (gainPct != null && (seed.maxGainPct == null || gainPct > seed.maxGainPct)) {
     seed.maxGainPct = gainPct;
     seed.gainBoard = boardName;
@@ -20732,6 +20892,8 @@ function strategyMainlineAddRealtimeBoardSeed(seedByKey, board) {
     netInflow,
     gainPct,
     confirmedCount: codes.length || (zt != null ? zt : 0),
+    bigGainCount: risingStocks.length,
+    nearLimitCount: nearLimitStocks.length,
   });
   return seed;
 }
@@ -20741,26 +20903,9 @@ function strategyMainlineEnsureSeed(seedByKey, theme, key = '') {
   const cleanKey = String(key || strategyMainlineTopicKey(cleanTheme)).trim();
   if (!cleanTheme || !cleanKey) return null;
   if (!seedByKey.has(cleanKey)) {
-    seedByKey.set(cleanKey, {
-      theme: cleanTheme,
-      key: cleanKey,
-      boards: [],
-      codeSet: new Set(),
-      realtimeCodeSet: new Set(),
-      priorCodeSet: new Set(),
-      countFallback: 0,
-      maxGainPct: null,
-      gainBoard: '',
-      netInflowTotal: 0,
-      netInflowSeen: false,
-      netInflowBoard: '',
-      netInflowBest: null,
-      boardKeySet: new Set(),
-    });
+    seedByKey.set(cleanKey, strategyCreateMainlineSeed(cleanTheme, cleanKey));
   } else {
-    const seed = seedByKey.get(cleanKey);
-    if (!seed.priorCodeSet) seed.priorCodeSet = new Set();
-    if (!seed.boardKeySet) seed.boardKeySet = new Set();
+    strategyEnsureMainlineSeedShape(seedByKey.get(cleanKey));
   }
   return seedByKey.get(cleanKey);
 }
@@ -20927,6 +21072,7 @@ async function getStrategyMainlines(day) {
   const requestedDay = isoFromCompactDate(day || chinaNowParts().day);
   const boardPayload = await getDayBoardsWithMembers(requestedDay).catch(() => ({ useDay: requestedDay, boards: [] }));
   const isoDay = isoFromCompactDate(boardPayload?.useDay || requestedDay);
+  await strategyMainlineEnrichBoardsWithRisingStocks(boardPayload?.boards || [], isoDay).catch(() => []);
   const limitUpDb = await readLimitUpDbDay(isoDay).catch(() => null);
   const prevDay = strategyMainlinePrevTradingDay(isoDay);
   const prevDb = prevDay ? await readLimitUpMainReasonDbDay(prevDay).catch(() => null) : null;
@@ -20957,13 +21103,20 @@ async function getStrategyMainlines(day) {
     if (code) limitUpByCode.set(code, s);
   }
   const seedByKey = new Map();
+  const risingStockByCode = new Map();
+  const nearLimitStockByCode = new Map();
+  for (const b of (boardPayload?.boards || [])) {
+    for (const stock of strategyMainlineBoardRisingStocks(b)) strategyMainlineAddRisingStock(risingStockByCode, stock);
+    for (const stock of strategyMainlineBoardNearLimitStocks(b)) strategyMainlineAddRisingStock(nearLimitStockByCode, stock);
+  }
   for (const b of (boardPayload?.boards || [])) {
     const zt = numOrNull(b?.zt);
     const gainPct = numOrNull(b?.gainPct);
     const netInflow = numOrNull(b?.netInflow);
     const hasLimitUps = zt != null && zt > 0;
     const hasCodes = Array.isArray(b?.codes) && b.codes.length > 0;
-    if (!hasLimitUps && !hasCodes) continue;
+    const hasRising = Array.isArray(b?.risingStocks) && b.risingStocks.length > 0;
+    if (!hasLimitUps && !hasCodes && !hasRising) continue;
     if (!((zt != null && zt >= 2) || (gainPct != null && gainPct > 0) || (netInflow != null && netInflow > 0))) continue;
     strategyMainlineAddRealtimeBoardSeed(seedByKey, b);
   }
@@ -20971,24 +21124,37 @@ async function getStrategyMainlines(day) {
   if (!todayLimitCodes.size) {
     todayLimitCodes = new Set([...seedByKey.values()].flatMap(seed => [...(seed.codeSet || [])]));
   }
-  const priorReason = await buildStrategyMainlinePriorReasonContext(isoDay, todayLimitCodes, 30)
+  const intradaySignalCodes = new Set([...todayLimitCodes, ...risingStockByCode.keys()]);
+  const priorReason = await buildStrategyMainlinePriorReasonContext(isoDay, intradaySignalCodes, 30)
     .catch(() => ({ byCode: new Map(), byTheme: new Map(), tradingDays: [], endDay: '' }));
   for (const prior of priorReason.byCode.values()) {
     const seed = strategyMainlineEnsureSeed(seedByKey, prior.theme, prior.key);
     if (!seed) continue;
-    seed.codeSet.add(prior.code);
+    if (todayLimitCodes.has(prior.code)) seed.codeSet.add(prior.code);
+    const risingStock = risingStockByCode.get(prior.code);
+    if (risingStock) {
+      strategyMainlineAbsorbRisingStocks(seed, [risingStock], nearLimitStockByCode.has(prior.code) ? [nearLimitStockByCode.get(prior.code)] : []);
+    }
     seed.priorCodeSet.add(prior.code);
   }
   for (const seed of seedByKey.values()) {
-    const seedCodes = new Set([...(seed.codeSet || [])]);
+    const seedCodes = new Set([
+      ...(seed.codeSet || []),
+      ...(seed.risingCodeSet || []),
+      ...(seed.priorCodeSet || []),
+    ]);
     if (!seedCodes.size) continue;
     for (const board of (boardPayload?.boards || [])) {
       const boardCodes = [...new Set((Array.isArray(board?.codes) ? board.codes : [])
         .map(normalizeReasonSourceCode)
         .filter(Boolean))];
-      if (!boardCodes.length) continue;
+      const boardRisingCodes = [...new Set((Array.isArray(board?.risingCodes) ? board.risingCodes : [])
+        .map(normalizeReasonSourceCode)
+        .filter(Boolean))];
+      if (!boardCodes.length && !boardRisingCodes.length) continue;
       const matchedCodes = boardCodes.filter(code => seedCodes.has(code));
-      if (!matchedCodes.length) continue;
+      const matchedRisingCodes = boardRisingCodes.filter(code => seedCodes.has(code));
+      if (!matchedCodes.length && !matchedRisingCodes.length) continue;
       const related = strategyMainlineBoardThemeRelated(board?.name, seed.theme);
       if (!related) continue;
       strategyMainlineAttachRealtimeBoardToSeed(seed, board, matchedCodes);
@@ -21002,6 +21168,18 @@ async function getStrategyMainlines(day) {
   const seeds = [...seedByKey.values()].map(seed => {
     const todayCodes = [...seed.codeSet];
     const realtimeCodes = [...(seed.realtimeCodeSet || [])];
+    const risingStocks = [...(seed.risingStockMap || new Map()).values()]
+      .sort((a, b) => Number(b.gain) - Number(a.gain))
+      .slice(0, 12)
+      .map(stock => {
+        const prior = priorReason.byCode.get(stock.code) || {};
+        return {
+          ...stock,
+          priorReason: prior.key === seed.key ? prior : null,
+          nearLimit: seed.nearLimitCodeSet ? seed.nearLimitCodeSet.has(stock.code) : false,
+        };
+      });
+    const nearLimitStocks = risingStocks.filter(stock => stock.nearLimit);
     const todayStocks = todayCodes.map(code => {
       const live = limitUpByCode.get(code) || {};
       const prior = priorReason.byCode.get(code) || {};
@@ -21025,13 +21203,17 @@ async function getStrategyMainlines(day) {
       realtimeCodes,
       todayStocks,
       priorReasonCount: seed.priorCodeSet ? seed.priorCodeSet.size : 0,
-      priorReasonStocks: todayStocks.filter(s => s.priorReason).map(s => ({
+      priorReasonStocks: [...todayStocks, ...risingStocks].filter(s => s.priorReason).map(s => ({
         code: s.code,
         name: s.name,
         count: Number(s.priorReason?.count) || 0,
         latestDay: s.priorReason?.latestDay || '',
         latestDetail: s.priorReason?.latestDetail || '',
       })),
+      bigGainCount: seed.risingCodeSet ? seed.risingCodeSet.size : 0,
+      nearLimitCount: seed.nearLimitCodeSet ? seed.nearLimitCodeSet.size : 0,
+      risingStocks,
+      nearLimitStocks,
       maxLianban: Math.max(0, ...lianbans),
       lianbanCount: lianbans.filter(x => x >= 2).length,
       recentTopStocks: hist.recentTopStocks || [],
@@ -21066,6 +21248,23 @@ async function getStrategyMainlines(day) {
         finalDetailReason: s.finalDetailReason || s.reason || prior?.latestDetail || '',
       }, { inTodayTheme: true, inResonance: true, tag: prior ? '历史主因预判' : '今日实时' });
     }
+    for (const s of (t.risingStocks || [])) {
+      const prior = s.priorReason || null;
+      strategyMainlineAddCandidate(candidateMap, {
+        code: s.code,
+        name: s.name,
+        gain: s.gain,
+        finalDetailReason: prior?.latestDetail || '',
+        count: prior?.count || 0,
+        maxLianban: prior?.maxLianban || 0,
+      }, {
+        inTodayTheme: true,
+        inResonance: true,
+        bigGain: true,
+        nearLimit: !!s.nearLimit,
+        tag: s.nearLimit ? '冲板候选' : (prior ? '历史主因预判' : '盘中大涨'),
+      });
+    }
     for (const s of (t.recentTopStocks || [])) {
       strategyMainlineAddCandidate(candidateMap, s, { tag: '近15日' });
     }
@@ -21089,6 +21288,8 @@ async function getStrategyMainlines(day) {
     const boardCount = Number(t.boardCount) || boards.length;
     const resonanceStockCount = Number(t.resonanceStockCount) || 0;
     const priorReasonCount = Number(t.priorReasonCount) || 0;
+    const bigGainCount = Number(t.bigGainCount) || 0;
+    const nearLimitCount = Number(t.nearLimitCount) || 0;
     const recentHeat = Number(t.recentHeat) || (t.recentTopStocks || []).reduce((sum, s) => sum + (Number(s.count) || 0), 0);
     const boardGainPct = isFiniteNumeric(t.boardGainPct) ? Number(t.boardGainPct) : null;
     const currentCount = Number(t.count) || 0;
@@ -21110,6 +21311,8 @@ async function getStrategyMainlines(day) {
       height: currentMaxLianban * 22,
       lianban: currentLianbanCount * 9,
       resonance: boardCount * 12 + resonanceStockCount * 3,
+      bigGainers: Math.min(90, bigGainCount * 5),
+      nearLimit: Math.min(70, nearLimitCount * 10),
       priorReason: Math.min(80, priorReasonCount * 8),
       continuity: Math.min(recentHeat, 20) * 3,
       inflow: strategyMainlineRealtimeInflowScore(t.netInflow),
@@ -21136,6 +21339,10 @@ async function getStrategyMainlines(day) {
       priorReasonCount,
       priorReasonStocks: t.priorReasonStocks || [],
       priorReasonCodes: (t.priorReasonStocks || []).map(s => normalizeReasonSourceCode(s.code)).filter(Boolean),
+      bigGainCount,
+      nearLimitCount,
+      risingStocks: t.risingStocks || [],
+      nearLimitStocks: t.nearLimitStocks || [],
       historicalTheme: t.historicalTheme || '',
       historicalThemes: t.historicalThemes || [],
       todayCodes: t.todayCodes || [],
@@ -21150,11 +21357,13 @@ async function getStrategyMainlines(day) {
         netInflow: b.netInflow,
         gainPct: b.gainPct,
         confirmedCount: Number(b.confirmedCount) || 0,
+        bigGainCount: Number(b.bigGainCount) || 0,
+        nearLimitCount: Number(b.nearLimitCount) || 0,
       })),
       mainLeader: leaders[0] || null,
       leaders,
     };
-  }).filter(x => x.count > 0);
+  }).filter(x => x.count > 0 || x.bigGainCount > 0 || x.nearLimitCount > 0);
 
   const mainlines = strategyMergeMainlineFamilies(rawMainlines)
     .slice(0, 10)
@@ -21162,13 +21371,16 @@ async function getStrategyMainlines(day) {
   return {
     ok: true,
     mode: 'intraday-mainline',
-    basis: 'realtime-board-gain-inflow-limitups-plus-prior-main-reason',
+    basis: 'realtime-board-gain-inflow-big-gainers-plus-prior-main-reason',
     day: isoDay,
     requestedDay,
     sourceDay: { realtime: isoDay, boards: isoDay, priorReason: priorReason.endDay || '', history: history.endDay || '', hotThemes: history.endDay || isoDay, resonance: isoDay },
     recentWindow: history.recentWindow || 15,
     count: mainlines.length,
-    stockCount: new Set(seeds.flatMap(t => t.todayCodes || [])).size,
+    stockCount: new Set(seeds.flatMap(t => [
+      ...(t.todayCodes || []),
+      ...(t.risingStocks || []).map(s => s.code).filter(Boolean),
+    ])).size,
     mainlines,
   };
 }
