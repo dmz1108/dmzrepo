@@ -300,6 +300,31 @@ Notes for next agent:
 - Cloud backup: `C:\PandaDashboard\backups\deploy-claude-chat-revamp-20260707`.
 - If the live `#chat` page looks wrong, hard-refresh first because the script cache version changed.
 
+## 2026-07-07 - Claude - Added three-agent collaboration workflow doc
+
+Changed:
+- Added `docs/COLLABORATION_WORKFLOW.md` documenting the shared Git workflow for Home Codex, Company Codex, and Claude: branch naming (`codex/...` / `company/...` / `claude/...`), start-from-latest-main rule, no force-push / no deleting other agents' branches, careful diffing on `kpl-stats-server.js`, deployment checklist, never-commit list, emergency hotfix procedure, and the Git-handoff vs cloud-log distinction.
+- Added the new doc to the `Read First` list in `CLAUDE.md` so every agent reads it during onboarding.
+
+Files:
+- `docs/COLLABORATION_WORKFLOW.md`
+- `CLAUDE.md`
+- `docs/CLAUDE_HANDOFF_EN.md` (Important Files now marks the workflow doc as required reading)
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Doc content matches the owner's workflow rules message verbatim in substance.
+- `CLAUDE.md` Read First numbering stays sequential.
+
+Deployment:
+- GitHub only.
+- Not deployed to the cloud server (docs are GitHub-side).
+- No service restart.
+
+Notes for next agent:
+- Read `docs/COLLABORATION_WORKFLOW.md` before your first task; it is now part of onboarding.
+- Company Codex should adopt `company/...` branch naming going forward.
+
 ## 2026-07-07 - Codex - 今日主线榜盘中预测逻辑升级
 
 Changed:
