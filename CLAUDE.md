@@ -7,8 +7,9 @@ You are joining the DreamerQi / PandaDashboard project. Start by understanding t
 1. Read `README.md`.
 2. Read `docs/CLAUDE_HANDOFF_EN.md`.
 3. Read `docs/DAILY_HANDOFF.md`.
-4. Read `docs/PROJECT_MAP.md` and `docs/SANITIZATION.md`.
-5. Optionally read the sanitized operation notes:
+4. Read `docs/COLLABORATION_WORKFLOW.md`.
+5. Read `docs/PROJECT_MAP.md` and `docs/SANITIZATION.md`.
+6. Optionally read the sanitized operation notes:
    - `docs/PROJECT_HANDOFF.sanitized.md`
    - `docs/panda-cloud-ops-2026-06-19.sanitized.md`
    - `docs/cloud-change-log-20260705.sanitized.md`
