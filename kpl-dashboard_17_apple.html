@@ -11199,20 +11199,21 @@ function renderStrategyMainlinesHTML(d) {
       `<span class="ml-stock ml-starstock${s.level === 'confirmed' ? ' confirmed' : ''}" title="${escapeHTML(s.boardName || '')} L2:主动比${s.ratios?.activeRatio ?? '-'} 被动比${s.ratios?.passiveRatio ?? '-'} 合计比${s.ratios?.supportRatio ?? '-'}">⭐${escapeHTML(s.name || s.code || '')}<i>主${s.ratios?.activeRatio ?? '-'}/被${s.ratios?.passiveRatio ?? '-'}</i></span>`
     ).join('');
     const reasonLine = (stage && stage.advice) || (Array.isArray(m.explain) && m.explain.length ? m.explain[0] : '');
-    // 龙头/明星双槽:龙头=10日涨停次数/10日30日涨幅池内排名+主因门槛选出的旗手(1-3个);明星=L2主动被动比达标的资金攻击股;可能是同一只。
+    // 角色标签可叠加:同一只股可以同时是龙头/明星/潜力,三行独立展示,芯片上叠加对方角标(👑龙头 ⭐明星)。
+    const leaderCodeSet = new Set((m.leaders || []).map(l => String(l.code || '')));
+    const starCodeSet = new Set((m.starStocks || []).map(s => String(s.code || '')));
     const leaderChips = (m.leaders || []).slice(0, 3).map((l, idx) => {
       const lb = Array.isArray(l.basis) ? l.basis.slice(0, idx === 0 ? 3 : 2).join(' · ') : '';
-      const isStarToo = idx === 0 && m.leaderIsStar;
-      return `<span class="ml-stock ml-leaderstock${idx === 0 ? ' top' : ''}" title="${escapeHTML((l.basis || []).join(' · '))}">${isStarToo ? '⭐' : (idx === 0 ? '👑' : '')}${escapeHTML(l.name || l.code || '')}<i>${escapeHTML(lb)}</i></span>`;
+      const marks = `${idx === 0 ? '👑' : ''}${starCodeSet.has(String(l.code || '')) ? '⭐' : ''}`;
+      return `<span class="ml-stock ml-leaderstock${idx === 0 ? ' top' : ''}" title="${escapeHTML((l.basis || []).join(' · '))}">${marks}${escapeHTML(l.name || l.code || '')}<i>${escapeHTML(lb)}</i></span>`;
     }).join('');
     const leaderRow = leaderChips
-      ? `<div class="ml-proof-row"><span class="ml-proof-lbl" title="按10日涨停次数/10日30日涨幅池内排名+主因门槛综合打分,最多3个可能龙头">${m.leaderIsStar ? '龙头·明星' : '龙头'}</span>${leaderChips}</div>`
+      ? `<div class="ml-proof-row"><span class="ml-proof-lbl" title="按10日涨停次数/10日30日涨幅池内排名+主因门槛综合打分,最多3个可能龙头;⭐=同时是明星">龙头</span>${leaderChips}</div>`
       : (m.leaderNote ? `<div class="ml-proof-row"><span class="ml-proof-lbl">龙头</span><span class="ml-leader-none">${escapeHTML(m.leaderNote)}</span></div>` : '');
     const starChips = (m.starStocks || []).slice(0, 2)
-      .filter(s => !(m.leaderIsStar && m.mainLeader && s.code === m.mainLeader.code))
-      .map(s => `<span class="ml-stock ml-starstock${s.level === 'confirmed' ? ' confirmed' : ''}" title="L2:主动比${s.ratios?.activeRatio ?? '-'} 被动比${s.ratios?.passiveRatio ?? '-'} 合计比${s.ratios?.supportRatio ?? '-'}">⭐${escapeHTML(s.name || s.code || '')}<i>${escapeHTML(s.label || '')} 主${s.ratios?.activeRatio ?? '-'}/被${s.ratios?.passiveRatio ?? '-'}</i></span>`)
+      .map(s => `<span class="ml-stock ml-starstock${s.level === 'confirmed' ? ' confirmed' : ''}" title="L2:主动比${s.ratios?.activeRatio ?? '-'} 被动比${s.ratios?.passiveRatio ?? '-'} 合计比${s.ratios?.supportRatio ?? '-'}">⭐${leaderCodeSet.has(String(s.code || '')) ? '👑' : ''}${escapeHTML(s.name || s.code || '')}<i>${escapeHTML(s.label || '')} 主${s.ratios?.activeRatio ?? '-'}/被${s.ratios?.passiveRatio ?? '-'}</i></span>`)
       .join('');
-    const starRow = starChips ? `<div class="ml-proof-row"><span class="ml-proof-lbl" title="纯当日L2数据判定:涨停前主动/被动比≥1.5=资金活跃,涨停后三比值2个≥2=明星确认">明星</span>${starChips}</div>` : '';
+    const starRow = starChips ? `<div class="ml-proof-row"><span class="ml-proof-lbl" title="纯当日L2数据判定:涨停前主动/被动比≥1.5=资金活跃,涨停后三比值2个≥2=明星确认;👑=同时是龙头">明星</span>${starChips}</div>` : '';
     const confirmedBadge = m.isConfirmedMainline ? `<span class="ml-confirmed">✔ 当日主线</span>` : '';
     const confirmBtn = state.adminLoggedIn
       ? (m.isConfirmedMainline
@@ -11221,7 +11222,9 @@ function renderStrategyMainlinesHTML(d) {
       : '';
     const focus = (m.focusStocks || []).slice(0, 3).map(s => {
       const tag = Array.isArray(s.basis) && s.basis.length ? ` · ${s.basis[0]}` : '';
-      return `<span class="ml-stock ml-focus${s.nearLimit ? ' near' : ''}">${escapeHTML(s.name || s.code || '')}<i>${Number(s.gain) > 0 ? '+' : ''}${Number(s.gain).toFixed(1)}%${escapeHTML(tag)}</i></span>`;
+      const fLeader = (m.leaders || []).some(l => String(l.code || '') === String(s.code || ''));
+      const fStar = (m.starStocks || []).some(x => String(x.code || '') === String(s.code || ''));
+      return `<span class="ml-stock ml-focus${s.nearLimit ? ' near' : ''}">${fLeader ? '👑' : ''}${fStar ? '⭐' : ''}${escapeHTML(s.name || s.code || '')}<i>${Number(s.gain) > 0 ? '+' : ''}${Number(s.gain).toFixed(1)}%${escapeHTML(tag)}</i></span>`;
     }).join('');
     const breadthHtml = m.breadth && m.breadth.upPct != null
       ? `<span class="ml-stock">${escapeHTML(m.breadth.boardName || '成分广度')}<i>${Number(m.breadth.upPct)}%上涨 · 中位${Number(m.breadth.medianGainPct) >= 0 ? '+' : ''}${Number(m.breadth.medianGainPct)}%</i></span>`

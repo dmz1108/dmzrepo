@@ -914,3 +914,18 @@ Deployment:
 
 Notes for next agent:
 - 潜力→明星是自动升级链路：同一只股 L2 达标后自然从潜力行消失、出现在明星行，无需人工操作。
+
+## 2026-07-08 - Claude - 角色标签可叠加（龙头/明星/潜力同株共存）
+
+Changed:
+- 同一只股可同时是龙头、明星、潜力：三行独立展示不再互斥去重,芯片上叠加角标——龙头行的股若同时是明星加⭐,明星行的股若同时是龙头加👑,潜力行同理叠加👑/⭐;行标签悬停说明补充角标含义。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 前端内联脚本编译通过;`node --check` 通过。
+
+Deployment:
+- GitHub branch only（并入 PR #6）。Not deployed. No restart.
