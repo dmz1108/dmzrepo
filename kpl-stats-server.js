@@ -21320,6 +21320,187 @@ function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase) {
   } catch {}
 }
 
+// ===== 当日唯一主线确认（管理员）+ 预判记录（胜率回看用） =====
+const STRATEGY_MAINLINE_DATA_DIR = path.join(__dirname, 'strategy-data');
+function strategyMainlineConfirmPath(day) { return path.join(STRATEGY_MAINLINE_DATA_DIR, `mainline-confirm-${day}.json`); }
+function strategyMainlinePredictPath(day) { return path.join(STRATEGY_MAINLINE_DATA_DIR, `mainline-predict-${day}.json`); }
+async function readMainlineConfirm(day) {
+  try { return JSON.parse(await fs.readFile(strategyMainlineConfirmPath(day), 'utf8')); } catch { return null; }
+}
+async function writeMainlineConfirm(day, data) {
+  await fs.mkdir(STRATEGY_MAINLINE_DATA_DIR, { recursive: true });
+  if (!data) { await fs.unlink(strategyMainlineConfirmPath(day)).catch(() => {}); return null; }
+  await fs.writeFile(strategyMainlineConfirmPath(day), JSON.stringify(data, null, 2), 'utf8');
+  return data;
+}
+async function readMainlinePredict(day) {
+  try { return JSON.parse(await fs.readFile(strategyMainlinePredictPath(day), 'utf8')); } catch { return null; }
+}
+// 盘中持续覆盖当天预判快照；收盘后不再覆盖已有快照（保留“收盘前最后一次预判”作为回测基准）。
+async function writeMainlinePredict(day, sessionPhase, mainlines, confirm) {
+  try {
+    const existing = await readMainlinePredict(day);
+    if (existing && sessionPhase === '已收盘') return;
+    const pick = m => m ? {
+      key: m.familyKey || m.key || '', theme: m.theme || '', rank: m.rank || 0,
+      score: m.score ?? null, predictScore: m.predictScore ?? null,
+      stage: m.stage?.label || '', certainty: m.certainty?.label || '',
+      leader: m.mainLeader ? { code: m.mainLeader.code, name: m.mainLeader.name } : null,
+      star: (m.starStocks || [])[0] ? { code: m.starStocks[0].code, name: m.starStocks[0].name } : null,
+    } : null;
+    const top = (mainlines || []).slice(0, 3).map(pick).filter(Boolean);
+    if (!top.length) return;
+    await fs.mkdir(STRATEGY_MAINLINE_DATA_DIR, { recursive: true });
+    await fs.writeFile(strategyMainlinePredictPath(day), JSON.stringify({
+      day, savedAt: new Date().toISOString(), sessionPhase: sessionPhase || '',
+      confirmedKey: confirm?.key || '', top,
+    }, null, 2), 'utf8');
+  } catch {}
+}
+
+// ===== 龙头重构：池内三榜排名（10日涨停次数前5 / 10日涨幅前10 / 30日涨幅前10，均按交易日）+ 主因硬门槛 =====
+// 复用 enrichReviewLeaderMetrics：gain10/gain30 来自收盘价库，zt10Count 来自涨停底库，
+// mainZt10Count = 近10日「复盘综合归纳指向本主线」的涨停次数——个股涨停必须和板块主因结合，这就是硬门槛。
+function strategyLeaderRankScore(rank, top, base, step) {
+  return rank && rank <= top ? Math.max(0, base - step * (rank - 1)) : 0;
+}
+async function strategyMainlineReworkLeaders(mainlines, isoDay) {
+  const list = Array.isArray(mainlines) ? mainlines : [];
+  if (!list.length) return;
+  const apiKey = await readSavedApiKey().catch(() => '');
+  const allRows = [];
+  const poolByMainline = [];
+  for (const m of list) {
+    const todaySet = new Set((m.todayCodes || []).map(normalizeReasonSourceCode).filter(Boolean));
+    const starByCode = new Map((m.starStocks || []).map(s => [normalizeReasonSourceCode(s.code), s]));
+    const pool = new Map();
+    const add = (s) => {
+      const code = normalizeReasonSourceCode(s?.code);
+      if (!code) return;
+      const cur = pool.get(code) || {
+        code, name: '', gain: null, lianban: 0, firstLimitTime: '', nearLimit: false,
+        finalBoardTopic: m.theme,
+      };
+      if (!cur.name && s.name) cur.name = String(s.name);
+      const gain = numOrNull(s.gain);
+      if (gain != null) cur.gain = cur.gain == null ? gain : Math.max(cur.gain, gain);
+      cur.lianban = Math.max(cur.lianban || 0, Number(s.lianban) || 0);
+      if (!cur.firstLimitTime && s.firstLimitTime) cur.firstLimitTime = String(s.firstLimitTime);
+      if (s.nearLimit) cur.nearLimit = true;
+      pool.set(code, cur);
+    };
+    for (const s of (m.leaders || [])) add(s);
+    for (const s of (m.risingStocks || [])) add(s);
+    for (const s of (m.priorReasonStocks || [])) add(s);
+    for (const s of (m.recentTopStocks || [])) add(s);
+    for (const s of (m.starStocks || [])) add(s);
+    for (const row of pool.values()) {
+      row.todayLimit = todaySet.has(row.code);
+      row.star = starByCode.get(row.code) || null;
+      allRows.push(row);
+    }
+    poolByMainline.push({ m, rows: [...pool.values()] });
+  }
+  if (!allRows.length) return;
+  await enrichReviewLeaderMetrics(allRows, isoDay, apiKey).catch(() => {});
+  for (const { m, rows } of poolByMainline) {
+    if (!rows.length) continue;
+    const rankOf = (sorted, code) => { const i = sorted.findIndex(r => r.code === code); return i >= 0 ? i + 1 : 0; };
+    const byZt = rows.slice().filter(r => (Number(r.zt10Count) || 0) > 0).sort((a, b) => (b.zt10Count || 0) - (a.zt10Count || 0));
+    const byG10 = rows.slice().filter(r => isFiniteNumeric(r.gain10)).sort((a, b) => Number(b.gain10) - Number(a.gain10));
+    const byG30 = rows.slice().filter(r => isFiniteNumeric(r.gain30)).sort((a, b) => Number(b.gain30) - Number(a.gain30));
+    const scored = rows.map(r => {
+      const ztRank = rankOf(byZt, r.code);
+      const g10Rank = rankOf(byG10, r.code);
+      const g30Rank = rankOf(byG30, r.code);
+      const sealMin = strategyParseSealMinutes(r.firstLimitTime);
+      const starBonus = r.star ? (r.star.level === 'confirmed' ? 15 : 8) : 0;
+      const leadScore = Number((
+        strategyLeaderRankScore(ztRank, 5, 40, 6) +
+        strategyLeaderRankScore(g10Rank, 10, 30, 3) +
+        strategyLeaderRankScore(g30Rank, 10, 20, 2) +
+        (r.todayLimit ? 10 : 0) +
+        Math.min(24, (Number(r.lianban) || 0) * 8) +
+        starBonus +
+        (sealMin != null && sealMin <= 600 ? 6 : 0)
+      ).toFixed(1));
+      const basis = [];
+      if (Number(r.zt10Count) > 0) basis.push(`10日${r.zt10Count}板${ztRank && ztRank <= 5 ? `(第${ztRank})` : ''}`);
+      if (isFiniteNumeric(r.gain10)) basis.push(`10日${Number(r.gain10) > 0 ? '+' : ''}${r.gain10}%${g10Rank && g10Rank <= 10 ? `(第${g10Rank})` : ''}`);
+      if (isFiniteNumeric(r.gain30)) basis.push(`30日${Number(r.gain30) > 0 ? '+' : ''}${r.gain30}%${g30Rank && g30Rank <= 10 ? `(第${g30Rank})` : ''}`);
+      basis.push(`主因${Number(r.mainZt10Count) || 0}次`);
+      if ((Number(r.lianban) || 0) >= 2) basis.push(`今日${r.lianban}板`);
+      else if (r.todayLimit) basis.push('今日涨停');
+      else if (isFiniteNumeric(r.gain) && Number(r.gain) >= 5) basis.push(`今日+${Number(r.gain).toFixed(1)}%`);
+      return { ...r, leadScore, basis, gated: (Number(r.mainZt10Count) || 0) >= 1 };
+    });
+    const gated = scored.filter(r => r.gated).sort((a, b) => b.leadScore - a.leadScore || (b.zt10Count || 0) - (a.zt10Count || 0));
+    const fallback = scored.slice().sort((a, b) => b.leadScore - a.leadScore);
+    const leaders = (gated.length ? gated : fallback).slice(0, 4)
+      .map(r => ({ ...r, star: r.star ? { level: r.star.level, ratios: r.star.ratios } : null, fallback: !r.gated }));
+    if (leaders.length) {
+      m.leaders = leaders;
+      m.mainLeader = leaders[0];
+      m.leaderBasisMode = gated.length ? 'pool-rank' : 'today-fallback';
+    }
+    const starTop = (m.starStocks || [])[0] || null;
+    m.starSlot = starTop ? { ...starTop } : null;
+    m.leaderIsStar = !!(starTop && m.mainLeader && normalizeReasonSourceCode(starTop.code) === normalizeReasonSourceCode(m.mainLeader.code));
+  }
+}
+
+// ===== 预判回看：昨日预判的明星/龙头，次日实际表现如何（胜率统计） =====
+// 收盘涨幅用收盘价库（可靠）；最高涨幅需确认 K 线 bar 的 high 字段索引后再补，先输出 null 不装有数据。
+async function getStrategyMainlineReview(days = 10) {
+  const apiKey = await readSavedApiKey().catch(() => '');
+  const todayIso = isoFromCompactDate(chinaNowParts().day);
+  const tradingDays = await getRecentTradingDays(todayIso, apiKey, Math.min(30, Math.max(3, days) + 2)).catch(() => []);
+  if (tradingDays.length < 2) return { ok: true, days: [], stats: null };
+  const closeMapOf = async d => {
+    const cdb = await readEastmoneyCloseDbDay(d).catch(() => null);
+    return new Map((cdb?.stocks || [])
+      .map(s => [normalizeReasonSourceCode(s.code), Number(s.close)])
+      .filter(([c, v]) => c && Number.isFinite(v) && v > 0));
+  };
+  const rows = [];
+  let starWins = 0, starTotal = 0, leaderWins = 0, leaderTotal = 0;
+  for (let i = tradingDays.length - 2; i >= 0 && rows.length < days; i -= 1) {
+    const day = tradingDays[i];
+    const nextDay = tradingDays[i + 1];
+    const predict = await readMainlinePredict(day);
+    if (!predict || !Array.isArray(predict.top) || !predict.top.length) continue;
+    const main = predict.top.find(t => predict.confirmedKey && t.key === predict.confirmedKey) || predict.top[0];
+    const [c0, c1] = await Promise.all([closeMapOf(day), closeMapOf(nextDay)]);
+    const evalStock = (stock) => {
+      if (!stock?.code) return null;
+      const code = normalizeReasonSourceCode(stock.code);
+      const p0 = c0.get(code), p1 = c1.get(code);
+      const closeGain = (Number.isFinite(p0) && Number.isFinite(p1) && p0 > 0)
+        ? Number(((p1 / p0 - 1) * 100).toFixed(2)) : null;
+      return { code, name: stock.name || '', nextCloseGain: closeGain, nextHighGain: null, win: closeGain != null ? closeGain > 0 : null };
+    };
+    const star = evalStock(main.star);
+    const leader = evalStock(main.leader);
+    if (star?.win != null) { starTotal += 1; if (star.win) starWins += 1; }
+    if (leader?.win != null) { leaderTotal += 1; if (leader.win) leaderWins += 1; }
+    rows.push({
+      day, nextDay,
+      theme: main.theme, confirmed: !!(predict.confirmedKey && main.key === predict.confirmedKey),
+      stage: main.stage || '', certainty: main.certainty || '',
+      star, leader,
+    });
+  }
+  return {
+    ok: true,
+    days: rows,
+    stats: {
+      starWins, starTotal, starWinRate: starTotal ? Number((starWins / starTotal * 100).toFixed(1)) : null,
+      leaderWins, leaderTotal, leaderWinRate: leaderTotal ? Number((leaderWins / leaderTotal * 100).toFixed(1)) : null,
+    },
+    note: '收盘涨幅按收盘价库计算；最高涨幅字段待接入日内高点数据后启用。',
+  };
+}
+
 // 最终输出前的预判增强：广度分、动能分、潜力个股、明星股、首日题材、确定性分级都在这一处挂载。
 function strategyMainlineAugmentPrediction(item, isToday, day) {
   const breadth = strategyMainlineBestBreadth(item?.resonanceBoards);
@@ -21977,11 +22158,20 @@ async function getStrategyMainlines(day) {
     )
     .slice(0, 10)
     .map((x, i) => ({ ...x, rank: i + 1 }));
+  await strategyMainlineReworkLeaders(mainlines, isoDay).catch(() => {});
+  const mainlineConfirm = await readMainlineConfirm(isoDay).catch(() => null);
+  if (mainlineConfirm) {
+    for (const m of mainlines) {
+      m.isConfirmedMainline = (m.familyKey || m.key) === mainlineConfirm.key || m.theme === mainlineConfirm.theme;
+    }
+  }
+  if (isTodayQuery) writeMainlinePredict(isoDay, sessionPhaseNow, mainlines, mainlineConfirm);
   return {
     ok: true,
     mode: 'intraday-mainline',
     basis: 'realtime-board-gain-inflow-big-gainers-breadth-momentum-plus-prior-main-reason',
     sessionPhase: sessionPhaseNow,
+    confirmedMainline: mainlineConfirm || null,
     day: isoDay,
     requestedDay,
     sourceDay: { realtime: isoDay, boards: isoDay, priorReason: priorReason.endDay || '', history: history.endDay || '', hotThemes: history.endDay || isoDay, resonance: isoDay },
@@ -22313,6 +22503,30 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/limit-up-main-reason-db/pending') return await getLimitUpMainReasonPending(url, req, res);
     if (url.pathname === '/api/limit-up-main-reason-db/hot-themes') return await getLimitUpMainReasonHotThemes(url, req, res);
     if (url.pathname === '/api/strategy-mainlines') return send(res, 200, await getStrategyMainlines(url.searchParams.get('day') || chinaNowParts().day).catch(e => ({ ok: false, error: String(e && e.message || e) })));
+    if (url.pathname === '/api/strategy-mainline-review') {
+      const reviewDays = Math.min(30, Math.max(1, Number(url.searchParams.get('days')) || 10));
+      return send(res, 200, await getStrategyMainlineReview(reviewDays).catch(e => ({ ok: false, error: String(e && e.message || e) })));
+    }
+    if (url.pathname === '/api/strategy-mainline-confirm') {
+      const confirmDay = isoFromCompactDate(url.searchParams.get('day') || chinaNowParts().day);
+      if (req.method === 'GET') {
+        return send(res, 200, { ok: true, day: confirmDay, confirm: await readMainlineConfirm(confirmDay).catch(() => null) });
+      }
+      if (!requireAdmin(req, res)) return;
+      if (req.method === 'POST') {
+        const body = await readJsonBody(req).catch(() => ({}));
+        const key = String(body.key || '').trim();
+        const theme = String(body.theme || '').trim();
+        if (!key && !theme) return send(res, 400, { ok: false, error: 'missing key/theme' });
+        const saved = await writeMainlineConfirm(confirmDay, { key: key || theme, theme: theme || key, at: new Date().toISOString() });
+        return send(res, 200, { ok: true, day: confirmDay, confirm: saved });
+      }
+      if (req.method === 'DELETE') {
+        await writeMainlineConfirm(confirmDay, null);
+        return send(res, 200, { ok: true, day: confirmDay, confirm: null });
+      }
+      return send(res, 405, { ok: false, error: 'method not allowed' });
+    }
     if (url.pathname === '/api/strong-board-resonance') return send(res, 200, await getStrategyStrongResonance(url.searchParams.get('day') || chinaNowParts().day).catch(e => ({ ok: false, error: String(e && e.message || e) })));
     if (url.pathname === '/api/hot-theme-search') return await getHotThemeSearch(url, req, res);
     if (url.pathname === '/api/limit-up-main-reason-db/unmapped-themes') return await getLimitUpMainReasonUnmappedThemes(url, req, res);

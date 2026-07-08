@@ -7186,6 +7186,77 @@
     margin-bottom: 8px;
   }
   body.view-strategy .ml-star-row { margin-top: 10px; }
+  body.view-strategy .ml-stock.ml-leaderstock {
+    border-color: rgba(255,200,87,0.42);
+    background: rgba(255,200,87,0.10);
+    font-weight: 760;
+  }
+  body.view-strategy .ml-stock.ml-leaderstock i { color: #ffd78a; }
+  body.view-strategy .ml-stock.ml-leaderstock.fb {
+    border-color: rgba(174,190,214,0.24);
+    background: rgba(174,190,214,0.06);
+  }
+  body.view-strategy .ml-stock.ml-leaderstock.fb i { color: #aebed6; }
+  body.view-strategy .ml-confirmed {
+    flex: 0 0 auto;
+    min-height: 22px;
+    padding: 0 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,200,87,0.5);
+    background: rgba(255,200,87,0.14);
+    color: #ffd78a;
+    font-size: 11px;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+  }
+  body.view-strategy .ml-card-actions { margin-top: auto; display: flex; gap: 8px; }
+  body.view-strategy .ml-card-actions .ml-toggle { margin-top: 0; flex: 1 1 auto; }
+  body.view-strategy .ml-confirm-btn {
+    flex: 0 0 auto;
+    padding: 6px 12px;
+    border: 1px solid rgba(255,200,87,0.34);
+    border-radius: 7px;
+    background: rgba(255,200,87,0.08);
+    color: #ffd78a;
+    font-size: 11.5px;
+    font-weight: 740;
+    cursor: pointer;
+  }
+  body.view-strategy .ml-confirm-btn.on {
+    border-color: rgba(174,190,214,0.28);
+    background: rgba(174,190,214,0.07);
+    color: #aebed6;
+  }
+  body.view-strategy .ml-review {
+    margin-top: 12px;
+    padding: 11px 13px;
+    border: 1px solid rgba(174,190,214,0.12);
+    border-radius: 9px;
+    background: rgba(0,0,0,0.14);
+  }
+  body.view-strategy .mlr-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+  body.view-strategy .mlr-head span { color: #eaf2ff; font-size: 13px; font-weight: 780; }
+  body.view-strategy .mlr-head small { color: rgba(174,190,214,0.6); font-size: 11px; }
+  body.view-strategy .mlr-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 5px 0;
+    border-top: 1px solid rgba(174,190,214,0.07);
+    font-size: 12px;
+  }
+  body.view-strategy .mlr-day { color: rgba(174,190,214,0.75); font-family: "IBM Plex Mono", monospace; }
+  body.view-strategy .mlr-theme { color: #eaf2ff; font-weight: 740; min-width: 76px; }
+  body.view-strategy .mlr-theme i { font-style: normal; color: #ffd78a; margin-left: 3px; }
+  body.view-strategy .mlr-slot { color: rgba(174,190,214,0.7); display: inline-flex; gap: 5px; align-items: center; }
+  body.view-strategy .mlr-name { color: #cfe0f5; }
+  body.view-strategy .mlr-gain.up { color: #ff6d6d; }
+  body.view-strategy .mlr-gain.down { color: #0bd06a; }
+  body.view-strategy .mlr-gain.flat, body.view-strategy .mlr-na { color: #aebed6; }
+  body.view-strategy .mlr-win { font-weight: 800; }
   body.view-strategy .ml-trend {
     display: inline-flex;
     align-items: center;
@@ -11123,6 +11194,20 @@ function renderStrategyMainlinesHTML(d) {
       `<span class="ml-stock ml-starstock${s.level === 'confirmed' ? ' confirmed' : ''}" title="${escapeHTML(s.boardName || '')} L2:主动比${s.ratios?.activeRatio ?? '-'} 被动比${s.ratios?.passiveRatio ?? '-'} 合计比${s.ratios?.supportRatio ?? '-'}">⭐${escapeHTML(s.name || s.code || '')}<i>主${s.ratios?.activeRatio ?? '-'}/被${s.ratios?.passiveRatio ?? '-'}</i></span>`
     ).join('');
     const reasonLine = (stage && stage.advice) || (Array.isArray(m.explain) && m.explain.length ? m.explain[0] : '');
+    // 龙头/明星双槽:龙头=10日涨停次数/10日30日涨幅池内排名+主因门槛选出的旗手;明星=L2主动被动比达标的资金攻击股;可能是同一只。
+    const ml = m.mainLeader || null;
+    const mlBasis = ml && Array.isArray(ml.basis) ? ml.basis.slice(0, 3).join(' · ') : '';
+    const leaderRow = ml ? `<div class="ml-proof-row"><span class="ml-proof-lbl">${m.leaderIsStar ? '龙头·明星' : '龙头'}</span><span class="ml-stock ml-leaderstock${ml.fallback ? ' fb' : ''}" title="${escapeHTML((ml.basis || []).join(' · '))}">${m.leaderIsStar ? '⭐' : '👑'}${escapeHTML(ml.name || ml.code || '')}<i>${escapeHTML(ml.fallback ? `今日强势候选${mlBasis ? ' · ' + mlBasis : ''}` : mlBasis)}</i></span></div>` : '';
+    const starSlot = m.starSlot || null;
+    const starRow = starSlot && !m.leaderIsStar
+      ? `<div class="ml-proof-row"><span class="ml-proof-lbl">明星</span><span class="ml-stock ml-starstock${starSlot.level === 'confirmed' ? ' confirmed' : ''}" title="L2:主动比${starSlot.ratios?.activeRatio ?? '-'} 被动比${starSlot.ratios?.passiveRatio ?? '-'} 合计比${starSlot.ratios?.supportRatio ?? '-'}">⭐${escapeHTML(starSlot.name || starSlot.code || '')}<i>${escapeHTML(starSlot.label || '')} 主${starSlot.ratios?.activeRatio ?? '-'}/被${starSlot.ratios?.passiveRatio ?? '-'}</i></span></div>`
+      : '';
+    const confirmedBadge = m.isConfirmedMainline ? `<span class="ml-confirmed">✔ 当日主线</span>` : '';
+    const confirmBtn = state.adminLoggedIn
+      ? (m.isConfirmedMainline
+        ? `<button type="button" class="ml-confirm-btn on" onclick="unconfirmMainlineTheme()">取消确认</button>`
+        : `<button type="button" class="ml-confirm-btn" data-key="${escapeHTML(m.familyKey || m.key || '')}" data-theme="${escapeHTML(m.theme || '')}" onclick="confirmMainlineTheme(this.dataset.key, this.dataset.theme)">确认主线</button>`)
+      : '';
     const focus = (m.focusStocks || []).slice(0, 3).map(s => {
       const tag = Array.isArray(s.basis) && s.basis.length ? ` · ${s.basis[0]}` : '';
       return `<span class="ml-stock ml-focus${s.nearLimit ? ' near' : ''}">${escapeHTML(s.name || s.code || '')}<i>${Number(s.gain) > 0 ? '+' : ''}${Number(s.gain).toFixed(1)}%${escapeHTML(tag)}</i></span>`;
@@ -11144,6 +11229,7 @@ function renderStrategyMainlinesHTML(d) {
         <div class="ml-namebox">
           <div class="ml-name-row">
             <div class="ml-name" title="${escapeHTML(m.theme || '')}">${escapeHTML(m.theme || '')}</div>
+            ${confirmedBadge}
             ${combinedBadge}
             ${newThemeBadge}
           </div>
@@ -11155,10 +11241,14 @@ function renderStrategyMainlinesHTML(d) {
         </div>
       </div>
       ${signalStrip}
-      ${stars ? `<div class="ml-proof-row ml-star-row"><span class="ml-proof-lbl">明星</span>${stars}</div>` : ''}
+      ${leaderRow}
+      ${starRow}
       ${focus ? `<div class="ml-proof-row"><span class="ml-proof-lbl">潜力</span>${focus}</div>` : ''}
       ${reasonLine ? `<div class="ml-reason">${escapeHTML(reasonLine)}</div>` : ''}
-      <button type="button" class="ml-toggle" onclick="const c=this.closest('.ml-card');c.classList.toggle('open');this.textContent=c.classList.contains('open')?'收起详情 ▴':'展开详情 ▾'">展开详情 ▾</button>
+      <div class="ml-card-actions">
+        <button type="button" class="ml-toggle" onclick="const c=this.closest('.ml-card');c.classList.toggle('open');this.textContent=c.classList.contains('open')?'收起详情 ▴':'展开详情 ▾'">展开详情 ▾</button>
+        ${confirmBtn}
+      </div>
       <div class="ml-details">
         <div class="ml-details-head">
           <span class="ml-driver ml-driver-${escapeHTML(driver.key)}">${escapeHTML(driver.label)}</span>
@@ -11198,6 +11288,58 @@ function renderStrategyMainlinesHTML(d) {
     ${strategyMainlineQuickReadHTML(lines, d)}
     ${strategyMainlineEarlyRadarHTML(lines)}
     <div class="ml-grid">${cards}</div>
+  </section>`;
+}
+function confirmMainlineTheme(key, theme) {
+  fetch(`${KPL_STATS_BASE}/api/strategy-mainline-confirm?day=${encodeURIComponent(state.date)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+    body: JSON.stringify({ key, theme }),
+  }).then(res => res.json()).catch(() => null).finally(() => loadStrategyMainlines(state.date));
+}
+function unconfirmMainlineTheme() {
+  fetch(`${KPL_STATS_BASE}/api/strategy-mainline-confirm?day=${encodeURIComponent(state.date)}`, {
+    method: 'DELETE',
+    headers: adminHeaders(),
+  }).then(res => res.json()).catch(() => null).finally(() => loadStrategyMainlines(state.date));
+}
+async function loadStrategyMainlineReview() {
+  const el = document.getElementById('strategy-mainline-review');
+  if (!el) return;
+  try {
+    const res = await fetch(`${KPL_STATS_BASE}/api/strategy-mainline-review?days=10&_=${Date.now()}`, { cache: 'no-store' });
+    const d = await res.json();
+    const cur = document.getElementById('strategy-mainline-review');
+    if (cur) cur.innerHTML = renderMainlineReviewHTML(d);
+  } catch (e) {
+    const cur = document.getElementById('strategy-mainline-review');
+    if (cur) cur.innerHTML = '';
+  }
+}
+function renderMainlineReviewHTML(d) {
+  const rows = (d && d.days) || [];
+  if (!rows.length) return '';
+  const stats = d.stats || {};
+  const gainCell = (s) => {
+    if (!s) return '<span class="mlr-na">—</span>';
+    const g = s.nextCloseGain;
+    if (g == null) return `<span class="mlr-name">${escapeHTML(s.name || s.code || '')}</span><span class="mlr-na">—</span>`;
+    const cls = g > 0 ? 'up' : (g < 0 ? 'down' : 'flat');
+    return `<span class="mlr-name">${escapeHTML(s.name || s.code || '')}</span><span class="mlr-gain ${cls}">${g > 0 ? '+' : ''}${g}%</span><span class="mlr-win">${s.win ? '✓' : '✗'}</span>`;
+  };
+  const body = rows.map(r => `<div class="mlr-row">
+    <span class="mlr-day">${escapeHTML(String(r.day || '').slice(5))}</span>
+    <span class="mlr-theme">${escapeHTML(r.theme || '')}${r.confirmed ? '<i title="管理员确认的当日主线">✔</i>' : ''}</span>
+    <span class="mlr-slot">明星 ${gainCell(r.star)}</span>
+    <span class="mlr-slot">龙头 ${gainCell(r.leader)}</span>
+  </div>`).join('');
+  const rate = (wins, total, pct) => total ? `${wins}/${total}${pct != null ? `(${pct}%)` : ''}` : '--';
+  return `<section class="ml-review">
+    <div class="mlr-head">
+      <span>预判回看</span>
+      <small>明星次日胜率 ${rate(stats.starWins, stats.starTotal, stats.starWinRate)} · 龙头次日胜率 ${rate(stats.leaderWins, stats.leaderTotal, stats.leaderWinRate)} · 按次日收盘涨幅统计</small>
+    </div>
+    ${body}
   </section>`;
 }
 async function loadStrategyHotThemes(day) {
@@ -13540,6 +13682,7 @@ function renderStrategyPage() {
     </div>
     ${canUseL2AdminTools() ? renderStrategyBoardSearchResultsHTML() : ''}
     <div id="strategy-mainlines" class="strategy-mainlines"></div>
+    <div id="strategy-mainline-review"></div>
     <div class="strategy-signal-grid" aria-hidden="true">
       <div id="strategy-hot-themes" class="strategy-hot-themes"></div>
       <div id="strategy-strong-resonance" class="strategy-strong-resonance"></div>
@@ -13556,6 +13699,7 @@ function renderStrategyPage() {
     </section>` : ''}
   `;
   loadStrategyMainlines(state.date);
+  loadStrategyMainlineReview();
   loadPublicSmartPicks(focus.map(it => it && it.board).filter(Boolean));
   if (state.adminLoggedIn && state.themeCalibOpen) loadThemeCalibration();
 }
