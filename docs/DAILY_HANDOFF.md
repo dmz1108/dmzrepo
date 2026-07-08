@@ -1059,3 +1059,25 @@ Notes for next agent:
 - Keep Explore focused on city new shops and places. Do not turn it into a generic tourism guide.
 - User explicitly does not want a map surface here; use address, phone, business area, and practical trip-planning fields instead.
 - Detail modal should not re-add an `信息来源` card unless the user asks for it.
+## 2026-07-08 - Claude - PR #6 与 main 最终同步（含 Explore 工作保全）
+
+Changed:
+- 将 main `17c6564`（Explore 路线与评分、POI 校验层、城市指南、周末路线、品类聚焦、地址/电话/商圈文案）合并进 PR #6 分支。
+- 冲突仅 docs/DAILY_HANDOFF.md（双方追加），已按时间顺序双保留：Claude 策略条目在前、Codex Explore 条目在后，零删除。
+- kpl-stats-server.js 自动合并成功：Codex 的 Explore/discovery 代码与 Claude 的策略主线代码物理不重叠。
+
+Files:
+- `docs/DAILY_HANDOFF.md`（冲突解决）
+
+Validated:
+- `node --check kpl-stats-server.js` 通过。
+- 策略页内联脚本编译通过；round-4 与龙头重构测试套件全部回归通过。
+- qmt-order-stats.js 删除仍生效（文件不存在、PROJECT_MAP 无条目、零代码引用）。
+- `git ls-files` 确认无任何 strategy-data 运行时文件被提交。
+- Explore 内容完整性抽查：discovery/explore 相关代码 159 处、周末路线与品类聚焦标记均在合并结果中。
+
+Deployment:
+- GitHub branch only。Not deployed. No restart.
+
+Notes for next agent:
+- PR #6 已与 main 无冲突，转为可合并状态。
