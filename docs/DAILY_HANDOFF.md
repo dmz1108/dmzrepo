@@ -568,3 +568,33 @@ Deployment:
 
 Notes for next agent:
 - The cloud server still needs a deliberate deploy after Claude/Codex review. Current production may not yet include the merged `main` strategy enhancements.
+
+## 2026-07-08 - Codex - Deploy combined strategy main to cloud
+
+Changed:
+- Deployed `main` commit `e073fed` to the cloud production server.
+- Uploaded the combined Codex/Claude strategy changes for current-day mainline prediction, lifecycle labels, early-window quick-read, live focus metrics, and clearer L2 offline status.
+- Wrote matching deployment notes into the cloud operation logs.
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `strategy-backend.js`
+- `local-l2-task-queue.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Local checks passed: `git diff --check`, server syntax, strategy backend syntax, local L2 queue syntax, and dashboard inline script syntax.
+- Cloud checks passed after upload for the same production files.
+- Public checks passed: `https://dreamerqi.com/health`, `https://market.dreamerqi.com/kpl`, `https://market.dreamerqi.com/api/strategy/today?day=2026-07-08`, and `https://market.dreamerqi.com/api/strategy-mainlines?day=2026-07-08`.
+- Verified strategy focus metrics returned same-day values for sampled focus boards, and mainline API returned the new `breadth-momentum` basis plus `sessionPhase`.
+
+Deployment:
+- Production touched: yes.
+- Backup created before upload: `C:\PandaDashboard\backups\main-strategy-merge-20260708-182229`.
+- Restarted only `PandaDashboard-KPL-Server`.
+- Did not restart Caddy or `yule-server.js`.
+
+Notes for next agent:
+- `api/strategy-mainlines` completed successfully but took about 23 seconds during public verification; consider performance tuning if the page feels slow during trading hours.
+- L2 scan still depends on the separate local L2 worker being online; this deployment only improved queue/auth handling and user-facing offline status.
