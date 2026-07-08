@@ -1081,3 +1081,28 @@ Deployment:
 
 Notes for next agent:
 - PR #6 已与 main 无冲突，转为可合并状态。
+
+## 2026-07-08 - Codex - Limit formal review sources to current four-source model
+
+Changed:
+- Merged Claude PR #6 into `main` by fast-forwarding from `origin/claude/dreamerqi-orientation-yuiha3`.
+- Restricted formal limit-up review source handling to the current four-source model: TGB Hunan, Jiuyangongshe, Kaipanla/Fupanla, and Xuangubao.
+- Removed Tonghuashun from formal source-view tabs, source-view merge chain, auto review source collection, unmapped-theme scan, source-stat remapping, and formal source retention whitelist.
+- Removed Eastmoney/Tonghuashun deprecated source directories from formal retention handling. Legacy helper functions remain in code for now, but they are not part of the formal four-source pipeline.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- Frontend inline script compilation check for `kpl-dashboard_17_apple.html`
+- `git diff --check`
+
+Deployment:
+- GitHub/local only at this point. Production deployment follows in the next step.
+- No service restart yet.
+
+Notes for next agent:
+- Current formal review sources are exactly: `review/tgb-hunan-structured`, `review/jiuyangongshe-structured`, `review/kaipanla-fupanla`, and `review/xuangubao-limit-up`.
+- Do not re-add Eastmoney or Tonghuashun to the formal source tabs or auto consensus pipeline unless the owner explicitly changes the source policy.

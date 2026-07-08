@@ -5410,7 +5410,6 @@ function limitUpMainReasonSourceViewTabs() {
     { key: 'final', label: '综合归纳', sourceLabel: '综合归纳' },
     { key: 'kaipanla', label: '复盘啦', sourceLabel: '复盘啦' },
     { key: 'xuangubao', label: '\u9009\u80a1\u5b9d', sourceLabel: '\u9009\u80a1\u5b9d' },
-    { key: 'ths', label: '同花顺', sourceLabel: '同花顺' },
     { key: 'jiuyangongshe', label: '韭研', sourceLabel: '韭研' },
     { key: 'tgb', label: '淘股吧', sourceLabel: '淘股吧' },
   ];
@@ -5420,13 +5419,10 @@ function limitUpMainReasonSourceViewLabel(source, group = '') {
   const s = String(source || '').toLowerCase();
   const g = String(group || reviewSourceGroup(source) || '').toLowerCase();
   if (s === 'review/tgb-hunan-structured') return 'TGB';
-  if (s === 'review/eastmoney-fpl-limit-reason') return '\u4e1c\u8d22';
   if (s === 'review/xuangubao-limit-up') return '\u9009\u80a1\u5b9d';
   if (g === 'xuangubao') return '\u9009\u80a1\u5b9d';
   if (s === 'review/jiuyangongshe-structured') return '闊爺';
   if (g === 'kaipanla') return '复盘啦';
-  if (g === 'eastmoney') return '东财';
-  if (g === 'ths') return '同花顺';
   if (g === 'jiuyangongshe') return '韭研';
   if (s.includes('review-auto-consensus')) return '复盘多源共识';
   if (s.includes('multi-source-consensus')) return '多源共识';
@@ -5442,9 +5438,7 @@ function limitUpMainReasonSourceViewKey(row) {
   if (source === 'review/jiuyangongshe-structured') return 'jiuyangongshe';
   if (source === 'review/xuangubao-limit-up') return 'xuangubao';
   if (group === 'kaipanla') return 'kaipanla';
-  if (group === 'eastmoney') return 'eastmoney';
   if (group === 'xuangubao') return 'xuangubao';
-  if (group === 'ths') return 'ths';
   if (group === 'jiuyangongshe') return 'jiuyangongshe';
   return '';
 }
@@ -6369,13 +6363,9 @@ async function buildDaySourceViewWithConsensus(day, opts = {}) {
   const payload = await mergeTgbStructuredSourceViewTab(
     await mergeXuangubaoLimitUpSourceViewTab(
       await mergeKaipanlaFupanlaSourceViewTab(
-        await mergeTonghuashunStructuredSourceViewTab(
-          await mergeJiuyangongsheStructuredSourceViewTab(
-            await mergeRawReviewSourceViewTabs(
-              buildLimitUpMainReasonSourceView(day, baseEvidence, dbPayload),
-              day,
-              dbPayload
-            ),
+        await mergeJiuyangongsheStructuredSourceViewTab(
+          await mergeRawReviewSourceViewTabs(
+            buildLimitUpMainReasonSourceView(day, baseEvidence, dbPayload),
             day,
             dbPayload
           ),
@@ -6437,10 +6427,8 @@ async function getLimitUpMainReasonDbSourceView(url, req, res) {
     const sourceByGroup = {
       kaipanla: 'review/kaipanla-fupanla',
       xuangubao: 'review/xuangubao-limit-up',
-      ths: 'review/ths-limitup-structured',
       jiuyangongshe: 'review/jiuyangongshe-structured',
       tgb: 'review/tgb-hunan-structured',
-      eastmoney: 'review/eastmoney-fpl-limit-reason',
     };
     const existingStats = Array.isArray(payload.sourceStats) ? payload.sourceStats : [];
     const statsBase = existingStats.length
@@ -6591,11 +6579,9 @@ async function getLimitUpMainReasonStockDetail(url, req, res) {
   const sv = await mergeTgbStructuredSourceViewTab(
     await mergeXuangubaoLimitUpSourceViewTab(
       await mergeKaipanlaFupanlaSourceViewTab(
-        await mergeTonghuashunStructuredSourceViewTab(
-          await mergeJiuyangongsheStructuredSourceViewTab(
-            await mergeRawReviewSourceViewTabs(
-              buildLimitUpMainReasonSourceView(refDay, baseEvidence, refDb),
-              refDay, refDb),
+        await mergeJiuyangongsheStructuredSourceViewTab(
+          await mergeRawReviewSourceViewTabs(
+            buildLimitUpMainReasonSourceView(refDay, baseEvidence, refDb),
             refDay, refDb),
           refDay, refDb),
         refDay, refDb),
@@ -17528,11 +17514,6 @@ async function fetchAutoReviewSourceRows(day, stocks, options = {}) {
       fetchRows: fetchXuangubaoLimitUpRows,
     },
     {
-      source: 'review/ths-limitup-structured',
-      confidence: 0.99,
-      fetchRows: fetchTonghuashunStructuredRows,
-    },
-    {
       source: 'review/tgb-hunan-structured',
       confidence: 0.99,
       fetchRows: fetchTgbHunanStructuredRows,   // 读结构化文件、不联网;进存盘 rawRows 让 覆盖/健康/sourceStats/共识 一致
@@ -18618,17 +18599,13 @@ async function getLimitUpMainReasonUnmappedThemes(url, req, res) {
   const days = Math.max(1, Math.min(60, Number(url.searchParams.get('days')) || 30));
   const apiKey = await readSavedApiKey().catch(() => '');
   const tradingDays = await getRecentTradingDays(endDay, apiKey, days).catch(() => []);
-  const SRC = { 'review/xuangubao-limit-up': '选股宝', 'review/jiuyangongshe-structured': '韭研', 'review/kaipanla-fupanla': '复盘啦', 'review/ths-limitup-structured': '同花顺' };
+  const SRC = { 'review/xuangubao-limit-up': '选股宝', 'review/jiuyangongshe-structured': '韭研', 'review/kaipanla-fupanla': '复盘啦', 'review/tgb-hunan-structured': '淘股吧' };
   const unmapped = new Map();
   for (const d of tradingDays) {
     const payload = await readLimitUpMainReasonAutoSourceDay(d).catch(() => null);
     for (const r of (payload?.rawRows || [])) {
       const lab = SRC[r.source]; if (!lab) continue;
       let t = String(r.boardTopic || r.primaryRawTopic || '').trim();
-      if (lab === '同花顺') {
-        const arr = String(r.detailReason || '').split(/[+＋、,，/\s]+/).map(x => x.trim()).filter(Boolean);
-        t = arr.find(x => x && !isDroppedThemeWord(x)) || arr[0] || t;
-      }
       if (!t || /^其他$|涨停池|^公告$/.test(t)) continue;
       if (standardTheme(t) || isDroppedThemeWord(t)) continue;
       const e = unmapped.get(t) || { word: t, count: 0, sources: new Set(), samples: [] };
@@ -19873,7 +19850,7 @@ async function cleanupOldLocalData(options = {}) {
   results.push(await cleanupDateNamedEntries(LIMIT_UP_MAIN_REASON_AUTO_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));
   results.push(await cleanupDateNamedEntries(LIMIT_UP_MAIN_REASON_SOURCE_DIR, retentionDays, nowDay, {
     ...dateCleanupOptions,
-    keepNames: new Set(['auto', 'tgb-hunan-ocr-cache', 'tgb-hunan-structured', 'tgb-hunan-raw', 'jiuyangongshe-structured', 'jiuyangongshe-diagram', 'tonghuashun-structured', 'tonghuashun-official-images', 'tonghuashun-api-candidates', 'kaipanla-fupanla', 'eastmoney-fpl-limit-reason', 'xuangubao-limit-up']),
+    keepNames: new Set(['auto', 'tgb-hunan-ocr-cache', 'tgb-hunan-structured', 'tgb-hunan-raw', 'jiuyangongshe-structured', 'jiuyangongshe-diagram', 'kaipanla-fupanla', 'xuangubao-limit-up']),
   }));
   results.push(await cleanupDateNamedEntries(EASTMONEY_CLOSE_DIR, CLOSE_DB_RETENTION_TRADING_DAYS, nowDay, {
     ...closeDbCleanupOptions,
@@ -19882,10 +19859,7 @@ async function cleanupOldLocalData(options = {}) {
   results.push(await cleanupDateNamedEntries(TGB_HUNAN_OCR_CACHE_DIR, retentionDays, nowDay, dateCleanupOptions));
   results.push(await cleanupDateNamedEntries(TGB_HUNAN_STRUCTURED_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));
   results.push(await cleanupDateNamedEntries(TGB_HUNAN_RAW_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));
-  results.push(await cleanupDateNamedEntries(TONGHUASHUN_STRUCTURED_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));
-  results.push(await cleanupDateNamedEntries(TONGHUASHUN_OFFICIAL_IMAGE_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));
   results.push(await cleanupDateNamedEntries(KAIPANLA_FUPANLA_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));
-  results.push(await cleanupDateNamedEntries(EASTMONEY_FPL_LIMIT_REASON_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));
   results.push(await cleanupDateNamedEntries(XUANGUBAO_LIMIT_UP_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));
   let snapshotScopes = [];
   try {
