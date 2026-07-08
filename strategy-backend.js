@@ -251,11 +251,18 @@ function createStrategyBackend(opts = {}) {
 
   // ---------- 组装「今天/快照」结构 ----------
   async function buildPayload(day, hidden = emptyHiddenSpec()) {
-    const boards = (await getBoards(day).catch(() => []))
-      .filter((b) => !isHiddenBoard(b, hidden));
-    const map = new Map(boards.map((b) => [scopedBoardKey(b.plateId, b.zsType), b]));
     const focusRaw = (await readFocus(day))
       .filter((b) => !isHiddenBoard(b, hidden));
+    const isToday = day === nowParts().day;
+    const boardOptions = isToday ? {
+      allowFallback: false,
+      liveIfMissing: true,
+      liveRankCount: 500,
+      includeBoards: focusRaw.map((b) => ({ plateId: b.plateId, zsType: b.zsType })),
+    } : {};
+    const boards = (await getBoards(day, boardOptions).catch(() => []))
+      .filter((b) => !isHiddenBoard(b, hidden));
+    const map = new Map(boards.map((b) => [scopedBoardKey(b.plateId, b.zsType), b]));
     const focusIds = new Set(focusRaw.map((b) => scopedBoardKey(b.plateId, b.zsType)));
 
     const focus = focusRaw.map((f) => {
@@ -444,8 +451,14 @@ function createStrategyBackend(opts = {}) {
         const limitRaw = Number(body.limitStocks ?? body.maxStocks ?? url.searchParams.get('limitStocks') ?? url.searchParams.get('maxStocks'));
         const limitStocks = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.floor(limitRaw) : 0;
         const requestedZsType = normZsType(body.zsType ?? body.zs_type ?? url.searchParams.get('zsType') ?? url.searchParams.get('zs_type'));
-        const boardsForPick = await getBoards(day).catch(() => []);
         const focusRows = await readFocus(day).catch(() => []);
+        const isToday = day === nowParts().day;
+        const boardsForPick = await getBoards(day, isToday ? {
+          allowFallback: false,
+          liveIfMissing: true,
+          liveRankCount: 500,
+          includeBoards: focusRows.map((b) => ({ plateId: b.plateId, zsType: b.zsType })),
+        } : {}).catch(() => []);
         const focusForPick = focusRows.find((b) => samePlateAndSource(b, plateId, requestedZsType))
           || focusRows.find((b) => String(b.plateId) === String(plateId))
           || null;
@@ -468,6 +481,13 @@ function createStrategyBackend(opts = {}) {
           stocks,
           sortSnapshotAt: new Date().toISOString(),
         });
+        if (job && job.status === 'queued' && typeof scanBackend.status === 'function') {
+          let queueStatus = null;
+          try { queueStatus = await Promise.resolve(scanBackend.status()); } catch {}
+          if (queueStatus && queueStatus.mode === 'local-worker' && !queueStatus.workerOnline) {
+            job.note = 'L2本机计算助手未在线，任务已排队，启动助手后会继续计算';
+          }
+        }
         sendJson(res, 202, job);
         return true;
       }

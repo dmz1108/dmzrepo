@@ -12678,8 +12678,17 @@ function pollSmartPick(plateId, jobId) {
   setTimeout(() => {
     const cur = state.smartPick[plateId];
     if (!cur || cur.jobId !== jobId || !cur.loading) return;
-    fetch(`${KPL_STATS_BASE}/api/strategy/focus-l2-scan?jobId=${encodeURIComponent(jobId)}&_=${Date.now()}`, { cache: 'no-store' })
-      .then(r => r.json())
+    fetch(`${KPL_STATS_BASE}/api/strategy/focus-l2-scan?jobId=${encodeURIComponent(jobId)}&_=${Date.now()}`, {
+      cache: 'no-store',
+      headers: typeof adminHeaders === 'function' ? adminHeaders() : {},
+    })
+      .then(async r => {
+        const d = await r.json().catch(() => null);
+        if (!r.ok || (d && d.error)) {
+          return { status: 'error', error: (d && d.error) || `L2扫描状态读取失败 HTTP ${r.status}` };
+        }
+        return d;
+      })
       .then(d => {
         state.smartPick[plateId] = normalizeSmartPickJob(d);
         refreshSmartPickCard(plateId);
@@ -12713,7 +12722,11 @@ function smartPick(plateId, sourceEl) {
     body: JSON.stringify({ plateId, day: state.date, zsType, boardName, threshold: state.smartPickThreshold || 1.5, minAmount: 500000 }),
     cache: 'no-store',
   })
-    .then(r => r.json())
+    .then(async r => {
+      const d = await r.json().catch(() => null);
+      if (!r.ok || !d) return { error: (d && d.error) || `L2扫描启动失败 HTTP ${r.status}` };
+      return d;
+    })
     .then(d => {
       if (d && d.error) {
         state.smartPick[plateId] = { done: true, error: true, count: 0, picked: [], note: d.error };

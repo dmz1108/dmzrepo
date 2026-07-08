@@ -164,6 +164,8 @@ class LocalL2TaskQueue {
   }
 
   start(payload = {}) {
+    const lastSeenMs = this.worker.lastSeenAt ? Date.parse(this.worker.lastSeenAt) : 0;
+    const workerOnline = !!lastSeenMs && Date.now() - lastSeenMs < 45000;
     const limitStocks = Math.max(0, Math.floor(Number(payload.limitStocks || payload.maxStocks || 0)));
     const rawStocks = Array.isArray(payload.stocks) ? payload.stocks : [];
     const normalizedStocks = rawStocks
@@ -191,7 +193,9 @@ class LocalL2TaskQueue {
       status: this.configured() ? 'queued' : 'done',
       available: this.configured(),
       mode: 'local-worker',
-      note: this.configured() ? '等待本机计算助手领取任务' : '本机计算助手Token未配置',
+      note: this.configured()
+        ? (workerOnline ? '等待本机计算助手领取任务' : 'L2本机计算助手未在线，任务已排队，启动助手后会继续计算')
+        : '本机计算助手Token未配置',
       createdAt: new Date().toISOString(),
       startedAt: '',
       endedAt: '',

@@ -19889,9 +19889,15 @@ async function collectStrategyQiCodes(snapDay) {
   }
   return set;
 }
-async function getStrategyBoardsForDay(day) {
-  const useDay = await resolveStrategySnapshotDay(day);
+async function getStrategyBoardsForDay(day, options = {}) {
+  const requestedDay = isoFromCompactDate(day);
+  const allowFallback = options.allowFallback !== false;
+  const useDay = allowFallback ? await resolveStrategySnapshotDay(requestedDay) : requestedDay;
   const out = [];
+  const includeKeys = new Set((Array.isArray(options.includeBoards) ? options.includeBoards : [])
+    .map((b) => `${String(b?.zsType ?? '')}:${String(b?.plateId ?? '').trim()}`)
+    .filter((key) => !key.endsWith(':')));
+  const shouldHydrateIncluded = (board, zsType) => includeKeys.has(`${String(zsType)}:${String(board?.plateId ?? '')}`);
   for (const zsType of [6, 5, 7]) {
     let hidden; try { hidden = await getPermanentHiddenSet(zsType); } catch { hidden = new Set(); }
     try {
@@ -19912,6 +19918,37 @@ async function getStrategyBoardsForDay(day) {
         });
       }
     } catch {}
+  }
+  if (!out.length && options.liveIfMissing && isChinaMarketTradingDay(requestedDay)) {
+    const apiKey = await readSavedApiKey().catch(() => '');
+    if (apiKey) {
+      for (const zsType of [6, 5, 7]) {
+        let hidden; try { hidden = await getPermanentHiddenSet(zsType); } catch { hidden = new Set(); }
+        try {
+          const liveBoards = await fetchBoardRankingForSnapshot(String(zsType), apiKey, {
+            count: Number(options.liveRankCount || 0) || 500,
+          });
+          for (const raw of liveBoards) {
+            const plateId = String(raw?.plateId ?? raw?.id ?? raw?.code ?? '');
+            if (!plateId || hidden.has(plateId)) continue;
+            let board = { ...raw, plateId };
+            if (shouldHydrateIncluded(board, zsType)) {
+              const hydrated = await hydrateBoardForSnapshot({ ...board }, apiKey, String(zsType), requestedDay).catch(() => null);
+              if (hydrated?.board) board = { ...board, ...hydrated.board };
+            }
+            out.push({
+              plateId,
+              name: String(board?.name ?? board?.plateName ?? ''),
+              gainPct: Number(board?.gainPct ?? board?.gain ?? NaN),
+              ztCount: Number(board?.ztCount ?? board?.zt ?? NaN),
+              netInflow: Number(board?.netInflow ?? board?.mainInflow ?? board?.inflow ?? NaN),
+              zsType,
+              qiLeaders: null,
+            });
+          }
+        } catch {}
+      }
+    }
   }
   return out;
 }

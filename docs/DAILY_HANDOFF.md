@@ -406,3 +406,38 @@ Deployment:
 Notes for next agent:
 - First live same-day strategy calculation can take about 20 seconds because it enriches the strongest boards with constituent big-gain/near-limit stocks. Consider adding short TTL caching if this feels slow during market hours.
 - Do not reintroduce `resolveStrategySnapshotDay()` into `getStrategyMainlines`; fallback-to-yesterday belongs to historical review/snapshot views, not intraday strategy prediction.
+
+## 2026-07-08 - Codex - Fix strategy focus live metrics and L2 status clarity
+
+Changed:
+- Strategy 今日数据 now asks the board provider for same-day live rankings instead of falling back to previous snapshots, so 重点关注 cards can show current gain, limit-up count, and net inflow.
+- Same-day focus boards are passed as included boards so their limit-up count is hydrated from constituent stocks and the current display limit-up set.
+- L2 scan polling now sends admin headers and treats non-ok/API-error responses as visible scan errors instead of vague failed/looping states.
+- Local L2 queued jobs now say when the local worker is offline, making the reason for no L2 result explicit.
+
+Files:
+- `kpl-stats-server.js`
+- `strategy-backend.js`
+- `local-l2-task-queue.js`
+- `kpl-dashboard_17_apple.html`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- `node --check strategy-backend.js`
+- `node --check local-l2-task-queue.js`
+- Dashboard inline script parsed successfully.
+- `git diff --check`
+- Cloud `https://dreamerqi.com/health` returned ok.
+- Cloud `/api/strategy/today?day=2026-07-08` returned focus metrics for 东数西算 and 国资云概念 instead of nulls.
+- Cloud `/api/strategy-mainlines?day=2026-07-08` still returned `realtimeSource: live`.
+
+Deployment:
+- Deployed to cloud production.
+- Backed up changed production files under `C:\PandaDashboard\backups\strategy-l2-focus-fix-20260708-114541`.
+- Restarted only the main `kpl-stats-server.js` Node service through the existing `PandaDashboard-KPL-Server` task.
+- Did not restart Caddy or `yule-server.js`.
+
+Notes for next agent:
+- Cloud has `panda-local-l2-worker-config.json` with a token configured, but no `PandaLocalL2Worker` / AXTICK / QMT worker process was online during validation. L2 scans will queue but not produce results until the local worker is started.
+- Current focus validation values: 东数西算 `gainPct=3.07`, `ztCount=6`, `netInflow=4733816064`; 国资云概念 `gainPct=4.56`, `ztCount=4`, `netInflow=1665866288`.
