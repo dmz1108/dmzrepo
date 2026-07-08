@@ -1397,6 +1397,44 @@ function SpbDiscover() {
   const hideBrokenImage = event => {
     event.currentTarget.style.display = 'none';
   };
+  const sourceLabel = item => {
+    const raw = String(item?.sourceName || '').trim();
+    if (!raw) return '城市线索';
+    if (/站内地点资料/.test(raw)) return '精选地点库';
+    if (/百度新闻/.test(raw)) return '城市新闻';
+    if (/微信文章/.test(raw)) return '本地公众号';
+    if (/大众点评/.test(raw)) return '口碑榜单';
+    return raw.replace(/线索/g, '').trim() || '城市线索';
+  };
+  const sourceTone = item => {
+    if (item?.poi?.verified) return '地址已核验';
+    const raw = String(item?.sourceName || '');
+    if (/站内地点资料/.test(raw)) return '已整理';
+    if (/大众点评|微信|百度新闻/.test(raw)) return '公开线索';
+    return '待观察';
+  };
+  const poiLine = item => {
+    const poi = item?.poi?.verified ? item.poi : null;
+    if (!poi) return '';
+    return [poi.businessArea || poi.district, poi.address].filter(Boolean).join(' · ');
+  };
+  const visitCheckText = item => {
+    const poi = item?.poi?.verified ? item.poi : null;
+    if (poi?.tel) return `地址已核验，可电话 ${poi.tel} 确认营业和排队`;
+    if (poi?.address) return `地址已核验，出发前再确认营业时间和预约`;
+    return '确认营业时间、预约和排队情况';
+  };
+  const scoreText = item => {
+    const score = Math.round(Number(item?.recommendationScore || item?.qualityScore || 0));
+    const label = item?.recommendationLevel || (score >= 88 ? '优先安排' : score >= 78 ? '值得收藏' : score >= 68 ? '顺路可去' : '先观察');
+    return score ? `${label} ${score}` : label;
+  };
+  const itemReason = item => {
+    const parts = [item?.sceneTag, item?.category, item?.poi?.businessArea || item?.district].filter(Boolean);
+    if (parts.length) return parts.join(' · ');
+    return item?.tagline || '近期城市去处';
+  };
+  const sourcePlan = [['新店雷达', '新开、首店、试营业、快闪和上新，是探索页的第一层线索。'], ['口碑校验', '优先看本地公众号、榜单线索、城市新闻和地点资料，过滤泛资讯。'], ['地址核验', '配置校验服务后，会补充真实地址、电话和商圈，区分线索与可到达地点。'], ['路线价值', '不只列店名，还判断适合约饭、拍照、慢逛、看展还是夜间小聚。'], ['到店提醒', '详情里保留营业、预约、排队、临时调整等二次确认提醒。']];
   const openItem = (city, item) => {
     const photos = getItemPhotos(item);
     setSelectedItem({
@@ -1410,7 +1448,55 @@ function SpbDiscover() {
     ...item,
     cityName: city.name,
     cityId: city.id
-  }))).sort((a, b) => Number(b.qualityScore || 0) - Number(a.qualityScore || 0) || String(b.discoveredAt || b.publishedAt || '').localeCompare(String(a.discoveredAt || a.publishedAt || ''))).slice(0, 5);
+  }))).sort((a, b) => Number(b.recommendationScore || b.qualityScore || 0) - Number(a.recommendationScore || a.qualityScore || 0) || String(b.discoveredAt || b.publishedAt || '').localeCompare(String(a.discoveredAt || a.publishedAt || ''))).slice(0, 5);
+  const allVisibleItems = visibleCities.flatMap(city => (city.items || []).map(item => ({
+    ...item,
+    cityName: city.name,
+    cityId: city.id
+  }))).sort((a, b) => Number(b.recommendationScore || b.qualityScore || 0) - Number(a.recommendationScore || a.qualityScore || 0));
+  const categorySpotlights = categories.filter(item => item !== '全部').map(name => {
+    const items = allVisibleItems.filter(item => item.category === name).slice(0, 3);
+    return {
+      name,
+      count: allVisibleItems.filter(item => item.category === name).length,
+      items
+    };
+  }).filter(group => group.count).slice(0, 8);
+  const pickRouteItem = (items, categoryNames, used) => {
+    const hit = items.find(item => categoryNames.includes(item.category) && !used.has(item.id || item.name));
+    if (hit) {
+      used.add(hit.id || hit.name);
+      return hit;
+    }
+    const fallback = items.find(item => !used.has(item.id || item.name));
+    if (fallback) used.add(fallback.id || fallback.name);
+    return fallback || null;
+  };
+  const weekendRoutes = visibleCities.map(city => {
+    const items = (city.items || []).map(item => ({
+      ...item,
+      cityName: city.name,
+      cityId: city.id
+    })).sort((a, b) => Number(b.recommendationScore || b.qualityScore || 0) - Number(a.recommendationScore || a.qualityScore || 0));
+    const used = new Set();
+    const stops = [{
+      time: '上午',
+      title: '先找一个轻起点',
+      item: pickRouteItem(items, ['咖啡', '面包烘焙', '茶饮', '甜品'], used)
+    }, {
+      time: '下午',
+      title: '安排主目的地',
+      item: pickRouteItem(items, ['展览空间', '买手店', '餐厅'], used)
+    }, {
+      time: '傍晚',
+      title: '用一餐或小聚收尾',
+      item: pickRouteItem(items, ['餐厅', '酒吧', '甜品', '咖啡'], used)
+    }].filter(stop => stop.item);
+    return {
+      city,
+      stops
+    };
+  }).filter(route => route.stops.length >= 2).slice(0, 4);
   return React.createElement("section", {
     style: shell
   }, React.createElement("div", {
@@ -1446,7 +1532,7 @@ function SpbDiscover() {
       fontSize: 16,
       lineHeight: 1.7
     }
-  }, "\u805A\u5408\u8FD1\u671F\u65B0\u5F00\u3001\u9996\u5E97\u3001\u63A2\u5E97\u3001\u5C55\u89C8\u4E0E\u751F\u6D3B\u65B9\u5F0F\u7A7A\u95F4\uFF0C\u6574\u7406\u6210\u53EF\u76F4\u63A5\u6D4F\u89C8\u7684\u7AD9\u5185\u5185\u5BB9\u3002")), React.createElement("div", {
+  }, "\u628A\u8FD1\u671F\u65B0\u5F00\u3001\u9996\u5E97\u3001\u63A2\u5E97\u3001\u5C55\u89C8\u3001\u5E02\u96C6\u548C\u751F\u6D3B\u65B9\u5F0F\u7A7A\u95F4\u6574\u7406\u6210\u53EF\u9605\u8BFB\u7684\u57CE\u5E02\u8DEF\u7EBF\u3002\u5148\u770B\u662F\u5426\u503C\u5F97\u53BB\uFF0C\u518D\u51B3\u5B9A\u4EC0\u4E48\u65F6\u5019\u53BB\u3001\u548C\u54EA\u91CC\u4E00\u8D77\u901B\u3002")), React.createElement("div", {
     style: {
       minWidth: 190,
       justifySelf: 'end',
@@ -1475,6 +1561,35 @@ function SpbDiscover() {
       fontSize: 13
     }
   }, totalItems, " \u6761\u7AD9\u5185\u5185\u5BB9"))), React.createElement("div", {
+    style: {
+      marginTop: 28,
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 210px), 1fr))',
+      gap: 12
+    }
+  }, sourcePlan.map(([title, text]) => React.createElement("div", {
+    key: title,
+    style: {
+      border: `1px solid ${spb.line}`,
+      borderRadius: 16,
+      padding: '15px 16px',
+      background: 'linear-gradient(180deg, oklch(0.235 0.015 265 / 0.78), oklch(0.19 0.014 265 / 0.72))',
+      boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.07)'
+    }
+  }, React.createElement("div", {
+    style: {
+      color: spb.ink,
+      fontSize: 15,
+      fontWeight: 800
+    }
+  }, title), React.createElement("div", {
+    style: {
+      marginTop: 7,
+      color: spb.sub,
+      fontSize: 13.5,
+      lineHeight: 1.62
+    }
+  }, text)))), React.createElement("div", {
     style: {
       marginTop: 34,
       display: 'flex',
@@ -1519,7 +1634,280 @@ function SpbDiscover() {
       color: spb.sub,
       fontSize: 16
     }
-  }, "\u6B63\u5728\u52A0\u8F7D\u4ECA\u65E5\u63A2\u7D22\u5185\u5BB9...") : null, !loading && featuredItems.length ? React.createElement("div", {
+  }, "\u6B63\u5728\u52A0\u8F7D\u4ECA\u65E5\u63A2\u7D22\u5185\u5BB9...") : null, !loading && weekendRoutes.length ? React.createElement("div", {
+    style: {
+      marginTop: 34,
+      border: `1px solid ${spb.line}`,
+      borderRadius: 20,
+      padding: '20px clamp(18px, 3vw, 24px)',
+      background: 'linear-gradient(180deg, oklch(0.245 0.015 265 / 0.86), oklch(0.18 0.014 265 / 0.86))',
+      boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.08)'
+    }
+  }, React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'end',
+      gap: 18,
+      flexWrap: 'wrap'
+    }
+  }, React.createElement("div", null, React.createElement("div", {
+    style: {
+      fontFamily: spb.mono,
+      fontSize: 12,
+      letterSpacing: '0.08em',
+      color: spb.blueSoft,
+      textTransform: 'uppercase'
+    }
+  }, "Weekend routes"), React.createElement("h2", {
+    style: {
+      margin: '8px 0 0',
+      fontFamily: spb.disp,
+      color: spb.ink,
+      fontSize: 30,
+      lineHeight: 1.12,
+      letterSpacing: '-0.025em'
+    }
+  }, "\u5468\u672B\u53EF\u4EE5\u8FD9\u6837\u901B")), React.createElement("div", {
+    style: {
+      maxWidth: 360,
+      color: spb.sub,
+      fontSize: 13.5,
+      lineHeight: 1.6
+    }
+  }, "\u6309\u57CE\u5E02\u3001\u7C7B\u578B\u548C\u63A8\u8350\u5206\u81EA\u52A8\u4E32\u8054\uFF0C\u4E0D\u9700\u8981\u5207\u6362\u5E94\u7528\u4E5F\u80FD\u5148\u5224\u65AD\u8DEF\u7EBF\u662F\u5426\u987A\u3002")), React.createElement("div", {
+    style: {
+      marginTop: 18,
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 270px), 1fr))',
+      gap: 14
+    }
+  }, weekendRoutes.map(route => React.createElement("article", {
+    key: route.city.id,
+    style: {
+      border: `1px solid ${spb.line}`,
+      borderRadius: 16,
+      padding: 16,
+      background: 'oklch(0.19 0.014 265 / 0.72)'
+    }
+  }, React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'baseline',
+      justifyContent: 'space-between',
+      gap: 12
+    }
+  }, React.createElement("h3", {
+    style: {
+      margin: 0,
+      color: spb.ink,
+      fontSize: 18,
+      fontWeight: 850
+    }
+  }, route.city.name), React.createElement("span", {
+    style: {
+      color: spb.blueSoft,
+      fontFamily: spb.mono,
+      fontSize: 11
+    }
+  }, route.stops.length, " stops")), React.createElement("div", {
+    style: {
+      marginTop: 13,
+      display: 'grid',
+      gap: 10
+    }
+  }, route.stops.map((stop, index) => React.createElement("button", {
+    key: `${route.city.id}-${stop.time}-${stop.item.id || stop.item.name}`,
+    type: "button",
+    onClick: () => openItem(route.city, stop.item),
+    style: {
+      display: 'grid',
+      gridTemplateColumns: '46px minmax(0, 1fr)',
+      gap: 11,
+      alignItems: 'start',
+      textAlign: 'left',
+      border: 'none',
+      background: 'transparent',
+      padding: 0,
+      cursor: 'pointer',
+      fontFamily: 'inherit'
+    }
+  }, React.createElement("div", {
+    style: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      display: 'grid',
+      placeItems: 'center',
+      background: index === 1 ? spb.blueSoft : 'oklch(0.245 0.018 265)',
+      color: index === 1 ? spb.bg : spb.blueSoft,
+      fontFamily: spb.mono,
+      fontSize: 12,
+      fontWeight: 850,
+      border: `1px solid ${spb.line}`
+    }
+  }, stop.time), React.createElement("div", {
+    style: {
+      minWidth: 0,
+      paddingBottom: 10,
+      borderBottom: index === route.stops.length - 1 ? 'none' : `1px solid ${spb.line}`
+    }
+  }, React.createElement("div", {
+    style: {
+      color: spb.faint,
+      fontSize: 12.5
+    }
+  }, stop.title), React.createElement("div", {
+    style: {
+      marginTop: 3,
+      color: spb.ink,
+      fontSize: 15.5,
+      fontWeight: 800,
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap'
+    }
+  }, stop.item.name), React.createElement("div", {
+    style: {
+      marginTop: 5,
+      color: spb.sub,
+      fontSize: 12.5,
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap'
+    }
+  }, [stop.item.category, stop.item.poi?.businessArea || stop.item.district, scoreText(stop.item)].filter(Boolean).join(' · ')))))))))) : null, !loading && categorySpotlights.length ? React.createElement("div", {
+    style: {
+      marginTop: 34
+    }
+  }, React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'end',
+      justifyContent: 'space-between',
+      gap: 18,
+      flexWrap: 'wrap'
+    }
+  }, React.createElement("div", null, React.createElement("div", {
+    style: {
+      fontFamily: spb.mono,
+      fontSize: 12,
+      letterSpacing: '0.08em',
+      textTransform: 'uppercase',
+      color: spb.blueSoft
+    }
+  }, "Categories"), React.createElement("h2", {
+    style: {
+      margin: '8px 0 0',
+      fontFamily: spb.disp,
+      color: spb.ink,
+      fontSize: 30,
+      lineHeight: 1.12,
+      letterSpacing: '-0.025em'
+    }
+  }, "\u6309\u4E3B\u9898\u5148\u770B")), React.createElement("div", {
+    style: {
+      color: spb.sub,
+      fontSize: 14,
+      lineHeight: 1.6
+    }
+  }, "\u6BCF\u7C7B\u53EA\u9732\u51FA\u6700\u503C\u5F97\u5148\u770B\u7684\u524D\u4E09\u4E2A\uFF0C\u51CF\u5C11\u91CD\u590D\u4FE1\u606F")), React.createElement("div", {
+    style: {
+      marginTop: 18,
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 250px), 1fr))',
+      gap: 14
+    }
+  }, categorySpotlights.map(group => React.createElement("article", {
+    key: group.name,
+    style: {
+      border: `1px solid ${spb.line}`,
+      borderRadius: 17,
+      padding: 16,
+      background: 'oklch(0.205 0.014 265 / 0.68)',
+      boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.07)'
+    }
+  }, React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      gap: 12,
+      alignItems: 'baseline'
+    }
+  }, React.createElement("h3", {
+    style: {
+      margin: 0,
+      color: spb.ink,
+      fontSize: 18,
+      fontWeight: 850
+    }
+  }, group.name), React.createElement("button", {
+    type: "button",
+    onClick: () => setCategory(group.name),
+    style: {
+      border: `1px solid ${spb.line}`,
+      borderRadius: 999,
+      background: 'transparent',
+      color: spb.blueSoft,
+      padding: '5px 9px',
+      cursor: 'pointer',
+      fontSize: 12
+    }
+  }, "\u770B\u5168\u90E8 ", group.count)), React.createElement("div", {
+    style: {
+      marginTop: 12,
+      display: 'grid',
+      gap: 9
+    }
+  }, group.items.map(item => React.createElement("button", {
+    key: `${group.name}-${item.id || item.name}`,
+    type: "button",
+    onClick: () => openItem({
+      id: item.cityId,
+      name: item.cityName
+    }, item),
+    style: {
+      textAlign: 'left',
+      border: `1px solid ${spb.line}`,
+      borderRadius: 13,
+      background: 'oklch(0.18 0.014 265 / 0.62)',
+      padding: '10px 11px',
+      cursor: 'pointer',
+      fontFamily: 'inherit'
+    }
+  }, React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      gap: 10,
+      alignItems: 'center'
+    }
+  }, React.createElement("span", {
+    style: {
+      color: spb.ink,
+      fontSize: 14.5,
+      fontWeight: 780,
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap'
+    }
+  }, item.name), React.createElement("span", {
+    style: {
+      color: spb.blueSoft,
+      fontFamily: spb.mono,
+      fontSize: 11,
+      whiteSpace: 'nowrap'
+    }
+  }, scoreText(item))), React.createElement("div", {
+    style: {
+      marginTop: 5,
+      color: spb.faint,
+      fontSize: 12.5,
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap'
+    }
+  }, [item.cityName, item.poi?.businessArea || item.district, item.sceneTag].filter(Boolean).join(' · '))))))))) : null, !loading && featuredItems.length ? React.createElement("div", {
     style: {
       marginTop: 34
     }
@@ -1554,7 +1942,7 @@ function SpbDiscover() {
       fontSize: 14,
       lineHeight: 1.6
     }
-  }, "\u6309\u8FD1\u671F\u70ED\u5EA6\u3001\u56FE\u6587\u5B8C\u6574\u5EA6\u548C\u672C\u5730\u76F8\u5173\u6027\u6392\u5E8F")), React.createElement("div", {
+  }, "\u6309\u63A8\u8350\u6307\u6570\u3001\u8FD1\u671F\u70ED\u5EA6\u548C\u56FE\u6587\u5B8C\u6574\u5EA6\u6392\u5E8F")), React.createElement("div", {
     style: {
       marginTop: 18,
       display: 'grid',
@@ -1631,7 +2019,28 @@ function SpbDiscover() {
         fontWeight: 760,
         backdropFilter: 'blur(10px)'
       }
-    }, text))), React.createElement("div", {
+    }, text)), React.createElement("span", {
+      style: {
+        color: spb.bg,
+        background: spb.blueSoft,
+        border: '1px solid oklch(1 0 0 / 0.16)',
+        borderRadius: 999,
+        padding: '6px 9px',
+        fontSize: 12,
+        fontWeight: 820
+      }
+    }, sourceTone(item)), React.createElement("span", {
+      style: {
+        color: spb.ink,
+        background: 'oklch(0.12 0.01 265 / 0.48)',
+        border: '1px solid oklch(1 0 0 / 0.2)',
+        borderRadius: 999,
+        padding: '6px 9px',
+        fontSize: 12,
+        fontWeight: 820,
+        backdropFilter: 'blur(10px)'
+      }
+    }, scoreText(item))), React.createElement("div", {
       style: {
         marginTop: 13,
         color: spb.ink,
@@ -1643,6 +2052,24 @@ function SpbDiscover() {
       }
     }, item.name), React.createElement("div", {
       style: {
+        marginTop: 8,
+        color: spb.blueSoft,
+        fontSize: 13.5,
+        fontWeight: 760
+      }
+    }, itemReason(item)), poiLine(item) ? React.createElement("div", {
+      style: {
+        marginTop: 7,
+        color: 'oklch(0.82 0.045 150)',
+        fontSize: 12.8,
+        fontWeight: 760,
+        display: '-webkit-box',
+        WebkitLineClamp: 1,
+        WebkitBoxOrient: 'vertical',
+        overflow: 'hidden'
+      }
+    }, poiLine(item)) : null, React.createElement("div", {
+      style: {
         marginTop: 10,
         color: 'oklch(0.9 0.02 255)',
         lineHeight: 1.58,
@@ -1652,7 +2079,24 @@ function SpbDiscover() {
         WebkitBoxOrient: 'vertical',
         overflow: 'hidden'
       }
-    }, item.editorialSummary || item.summary || '')));
+    }, item.editorialSummary || item.summary || ''), React.createElement("div", {
+      style: {
+        marginTop: 14,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 14,
+        color: 'oklch(0.86 0.025 255 / 0.82)',
+        fontSize: 12.5
+      }
+    }, React.createElement("span", {
+      style: {
+        minWidth: 0,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+      }
+    }, item.bestVisitTime || sourceLabel(item)), React.createElement("span", null, "\u67E5\u770B\u8BE6\u60C5"))));
   }))) : null, React.createElement("div", {
     style: {
       marginTop: 34,
@@ -1777,7 +2221,7 @@ function SpbDiscover() {
         fontWeight: 800,
         whiteSpace: 'nowrap'
       }
-    }, item.category || '其他')), React.createElement("div", {
+    }, scoreText(item))), React.createElement("div", {
       style: {
         marginTop: 7,
         color: spb.sub,
@@ -1788,7 +2232,17 @@ function SpbDiscover() {
         WebkitBoxOrient: 'vertical',
         overflow: 'hidden'
       }
-    }, item.editorialSummary || item.summary || item.tagline || ''), item.district || item.sceneTag ? React.createElement("div", {
+    }, item.editorialSummary || item.summary || item.tagline || ''), poiLine(item) ? React.createElement("div", {
+      style: {
+        marginTop: 8,
+        color: 'oklch(0.82 0.045 150)',
+        fontSize: 12.5,
+        fontWeight: 720,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+      }
+    }, poiLine(item)) : null, item.district || item.sceneTag || item?.poi?.verified ? React.createElement("div", {
       style: {
         marginTop: 10,
         display: 'flex',
@@ -1809,7 +2263,23 @@ function SpbDiscover() {
         padding: '3px 8px',
         fontSize: 12
       }
-    }, item.sceneTag) : null) : null));
+    }, item.sceneTag) : null, item?.poi?.verified ? React.createElement("span", {
+      style: {
+        color: 'oklch(0.82 0.045 150)',
+        border: '1px solid oklch(0.72 0.1 150 / 0.35)',
+        borderRadius: 999,
+        padding: '3px 8px',
+        fontSize: 12
+      }
+    }, "\u5730\u5740\u5DF2\u6838\u9A8C") : null, React.createElement("span", {
+      style: {
+        color: spb.faint,
+        border: `1px solid ${spb.line}`,
+        borderRadius: 999,
+        padding: '3px 8px',
+        fontSize: 12
+      }
+    }, sourceLabel(item))) : null));
   })) : React.createElement("div", {
     style: {
       marginTop: 20,
@@ -1900,7 +2370,7 @@ function SpbDiscover() {
       gap: 9,
       flexWrap: 'wrap'
     }
-  }, [selectedItem.cityName || selectedItem.city, selectedItem.category, selectedItem.district].filter(Boolean).map(text => React.createElement("span", {
+  }, [selectedItem.cityName || selectedItem.city, selectedItem.category, selectedItem.district, selectedItem?.poi?.verified ? '地址已核验' : '', scoreText(selectedItem)].filter(Boolean).map(text => React.createElement("span", {
     key: text,
     style: {
       border: `1px solid oklch(1 0 0 / 0.22)`,
@@ -1952,7 +2422,11 @@ function SpbDiscover() {
       textAlign: 'right',
       lineHeight: 1.6
     }
-  }, React.createElement("div", null, selectedItem.cityName || selectedItem.city), React.createElement("div", null, [selectedItem.category, selectedItem.sceneTag].filter(Boolean).join(' · ')))), selectedItem.editorialTitle || selectedItem.tagline ? React.createElement("div", {
+  }, React.createElement("div", null, selectedItem.cityName || selectedItem.city), React.createElement("div", null, [selectedItem.category, selectedItem.sceneTag].filter(Boolean).join(' · ')), selectedItem?.poi?.verified ? React.createElement("div", {
+    style: {
+      color: 'oklch(0.82 0.045 150)'
+    }
+  }, "\u5730\u5740\u5DF2\u6838\u9A8C") : null, React.createElement("div", null, scoreText(selectedItem)))), selectedItem.editorialTitle || selectedItem.tagline ? React.createElement("div", {
     style: {
       marginTop: 24,
       color: spb.ink,
@@ -1960,7 +2434,38 @@ function SpbDiscover() {
       lineHeight: 1.55,
       fontWeight: 750
     }
-  }, selectedItem.editorialTitle || selectedItem.tagline) : null, selectedItem.imageCaption ? React.createElement("div", {
+  }, selectedItem.editorialTitle || selectedItem.tagline) : null, React.createElement("div", {
+    style: {
+      marginTop: 16,
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+      gap: 10
+    }
+  }, [['为什么看', itemReason(selectedItem)], ['推荐指数', scoreText(selectedItem)], ['出发前', visitCheckText(selectedItem)], ...(selectedItem?.poi?.verified ? [['地址', selectedItem.poi.address], ['电话', selectedItem.poi.tel || '暂无公开电话'], ['商圈', selectedItem.poi.businessArea || selectedItem.poi.district || selectedItem.district || '暂无商圈']] : []), ['最佳时间', selectedItem.bestVisitTime || '按距离和当天行程安排'], ['适合谁', selectedItem.visitAudience || '适合近期城市探索'], ['附近还能去哪', selectedItem.nearbySuggestion || '搭配同商圈咖啡、餐厅或展览空间']].map(([title, text]) => React.createElement("div", {
+    key: title,
+    style: {
+      border: `1px solid ${spb.line}`,
+      borderRadius: 16,
+      padding: '13px 14px',
+      background: 'oklch(0.205 0.014 265 / 0.62)'
+    }
+  }, React.createElement("div", {
+    style: {
+      color: spb.faint,
+      fontFamily: spb.mono,
+      fontSize: 11.5,
+      letterSpacing: '0.06em',
+      textTransform: 'uppercase'
+    }
+  }, title), React.createElement("div", {
+    style: {
+      marginTop: 7,
+      color: spb.ink,
+      fontSize: 14.5,
+      lineHeight: 1.5,
+      fontWeight: 760
+    }
+  }, text)))), selectedItem.imageCaption ? React.createElement("div", {
     style: {
       marginTop: 12,
       border: `1px solid ${spb.line}`,
