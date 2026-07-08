@@ -20075,6 +20075,20 @@ const STRATEGY_MAINLINE_TREND_MIN_GAP_MS = 3 * 60 * 1000;
 const STRATEGY_MAINLINE_TREND_WINDOW_MS = 45 * 60 * 1000;
 const STRATEGY_MAINLINE_TREND_BASE_MIN_AGE_MS = 5 * 60 * 1000;
 const strategyMainlineTrendSamples = new Map();
+// 明星股 L2 判定：档位只看 50万/300万/800万——低价股每笔金额小，500万以上档常年无成交，缺档跳过不判负。
+// 未涨停(涨幅≥5%)：各有效档主动比、被动比都 ≥1.5（涨停瞬间吃掉堆积卖单后会跳到 2 以上，所以盘中 1.5 就算资金活跃）。
+// 已涨停：50万档 主动比/被动比/主动+被动比 三者至少 2 个 ≥2，确认明星。
+const STRATEGY_MAINLINE_STAR_BUCKETS = [500000, 3000000, 8000000];
+const STRATEGY_MAINLINE_STAR_PRE_RATIO = 1.5;
+const STRATEGY_MAINLINE_STAR_SEAL_RATIO = 2;
+// 自动 L2 扫描：只在交易时段、每 5 分钟窗口最多派 2 个板块、串行（上一个没跑完不派下一个）、无合格目标不扫。
+// 合格目标 = 今日实时里 净流入≥8亿 且 板内涨停≥2 的前排板块，当天已扫过的不重复。
+const STRATEGY_MAINLINE_AUTO_SCAN_WINDOW_MS = 5 * 60 * 1000;
+const STRATEGY_MAINLINE_AUTO_SCAN_MAX_PER_WINDOW = 2;
+const STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW = 8e8;
+const STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT = 2;
+const STRATEGY_MAINLINE_AUTO_SCAN_LIMIT_STOCKS = 50;
+const strategyMainlineAutoScanState = { windowStart: 0, dispatched: 0, lastJobId: '' };
 function strategyResonanceTopicKey(raw) {
   return consensusKey(raw) || canonicalTopicName(raw) || String(raw || '').replace(/概念$/u, '').trim();
 }
@@ -20851,6 +20865,7 @@ async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day) {
     board.nearLimitStocks = nearLimitStocks;
     board.nearLimitCodes = nearLimitStocks.map(stock => stock.code);
     board.breadth = strategyMainlineBoardBreadth(normalized);
+    board.memberRows = normalized.slice(0, 120);
   });
   return list;
 }
@@ -20991,7 +21006,9 @@ function strategyMainlineFocusStocks(item) {
 }
 
 // 确定性分级：多维信号同时成立才给高确定性，单一维度只算观察。
-function strategyMainlineCertainty(item, trend) {
+// extra.isNewTheme：首日新题材没有历史复盘数据，缺主因属正常，不该被系统性压低——补一个信号对冲缺失的主因信号。
+// extra.starConfirmed / starActive：L2 明星股是主线板块的核心特征（主动/被动比达标）。
+function strategyMainlineCertainty(item, trend, extra = {}) {
   const signals = [];
   if ((Number(item?.count) || 0) > 0) signals.push('涨停确认');
   if ((Number(item?.maxLianban) || 0) >= 2) signals.push('连板梯队');
@@ -21003,6 +21020,9 @@ function strategyMainlineCertainty(item, trend) {
   if (item?.breadth && Number(item.breadth.upPct) >= 55) signals.push('板块普涨');
   if (trend && ((Number(trend.bigGainDelta) || 0) > 0 || (Number(trend.nearLimitDelta) || 0) > 0 ||
       (isFiniteNumeric(trend.inflowDelta) && Number(trend.inflowDelta) > 0))) signals.push('信号加速');
+  if (extra.starConfirmed) signals.push('明星股确认');
+  else if (extra.starActive) signals.push('资金活跃股');
+  if (extra.isNewTheme) signals.push('首日新题材');
   const level = signals.length >= 5 ? 'high' : signals.length >= 3 ? 'medium' : 'watch';
   return {
     level,
@@ -21082,8 +21102,112 @@ function strategyMainlineMomentumScore(trend) {
   return Number(score.toFixed(1));
 }
 
-// 最终输出前的预判增强：广度分、动能分、潜力个股、确定性分级都在这一处挂载。
-function strategyMainlineAugmentPrediction(item, isToday) {
+// 单档主动/被动/合计比值；该档四项都为 0 视为无成交，返回 null 让上层跳过（低价股大单档常年为空）。
+function strategyMainlineBucketRatios(bucket) {
+  if (!bucket) return null;
+  const activeBuy = Number(bucket.activeBuy) || 0;
+  const passiveBuy = Number(bucket.passiveBuy) || 0;
+  const activeSell = Number(bucket.activeSell) || 0;
+  const passiveSell = Number(bucket.passiveSell) || 0;
+  if (activeBuy + passiveBuy + activeSell + passiveSell <= 0) return null;
+  return {
+    activeRatio: activeBuy / Math.max(1, activeSell),
+    passiveRatio: passiveBuy / Math.max(1, passiveSell),
+    supportRatio: (activeBuy + passiveBuy) / Math.max(1, activeSell + passiveSell),
+  };
+}
+
+// 明星股判定：未涨停大涨股看「资金是否已活跃」，已涨停股看「涨停瞬间是否吃光卖压」。
+function strategyMainlineStarStatus(row) {
+  const thresholds = row?.thresholds || {};
+  const buckets = STRATEGY_MAINLINE_STAR_BUCKETS
+    .map(amount => ({ amount, ratios: strategyMainlineBucketRatios(thresholds[String(amount)]) }))
+    .filter(item => item.ratios);
+  if (!buckets.length) return null;
+  const base = buckets[0].ratios;
+  const display = {
+    activeRatio: Number(base.activeRatio.toFixed(2)),
+    passiveRatio: Number(base.passiveRatio.toFixed(2)),
+    supportRatio: Number(base.supportRatio.toFixed(2)),
+  };
+  const gain = numOrNull(row?.gainPct ?? row?.gain);
+  const sealed = gain != null && gain >= limitUpThreshold(row?.code, row?.name);
+  if (sealed) {
+    const passCount = [base.activeRatio, base.passiveRatio, base.supportRatio]
+      .filter(v => v >= STRATEGY_MAINLINE_STAR_SEAL_RATIO).length;
+    if (passCount >= 2) return { level: 'confirmed', label: '明星确认', gain, ratios: display };
+    return { level: 'sealedWeak', label: '涨停但比值未达标', gain, ratios: display };
+  }
+  if (gain != null && gain >= STRATEGY_MAINLINE_BIG_GAIN_PCT) {
+    const allPass = buckets.every(({ ratios }) =>
+      ratios.activeRatio >= STRATEGY_MAINLINE_STAR_PRE_RATIO &&
+      ratios.passiveRatio >= STRATEGY_MAINLINE_STAR_PRE_RATIO);
+    if (allPass) return { level: 'active', label: '资金活跃', gain, ratios: display };
+  }
+  return null;
+}
+
+// 读取主线相关板块当日已有的 L2 扫描结果（只消费，不在这里触发扫描），产出 code -> 明星判定。
+function strategyMainlineCollectStars(boards, day) {
+  const byCode = new Map();
+  for (const board of (Array.isArray(boards) ? boards : [])) {
+    const plateId = String(board?.plateId || '');
+    if (!plateId) continue;
+    let job = null;
+    try { job = localL2TaskQueue.latest(plateId, day); } catch { continue; }
+    if (!job || !Array.isArray(job.results) || !job.results.length) continue;
+    for (const row of job.results) {
+      const code = normalizeReasonSourceCode(row?.code);
+      if (!code || byCode.has(code)) continue;
+      const star = strategyMainlineStarStatus(row);
+      if (star) byCode.set(code, { ...star, code, name: String(row?.name || ''), boardName: String(board?.name || job.boardName || '') });
+    }
+  }
+  return byCode;
+}
+
+// 自动派发 L2 扫描：净流入≥8亿且板内涨停≥2 的前排板块；5 分钟窗口最多 2 个、串行、当天扫过不重复、无目标不扫。
+function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase) {
+  try {
+    if (!isToday) return;
+    if (!['早盘', '上午盘', '午后', '尾盘'].includes(String(sessionPhase || ''))) return;
+    if (typeof localL2TaskQueue?.configured === 'function' && !localL2TaskQueue.configured()) return;
+    const st = strategyMainlineAutoScanState;
+    const now = Date.now();
+    if (now - st.windowStart >= STRATEGY_MAINLINE_AUTO_SCAN_WINDOW_MS) {
+      st.windowStart = now;
+      st.dispatched = 0;
+    }
+    if (st.dispatched >= STRATEGY_MAINLINE_AUTO_SCAN_MAX_PER_WINDOW) return;
+    if (st.lastJobId) {
+      const last = localL2TaskQueue.get(st.lastJobId);
+      if (last && (last.status === 'queued' || last.status === 'running')) return;
+    }
+    const candidates = (Array.isArray(boards) ? boards : [])
+      .filter(b => String(b?.plateId || '') &&
+        Number(b?.netInflow) >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW &&
+        Number(b?.zt) >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT &&
+        Array.isArray(b?.memberRows) && b.memberRows.length)
+      .sort((a, b) => Number(b.netInflow) - Number(a.netInflow));
+    for (const board of candidates) {
+      const existing = localL2TaskQueue.latest(String(board.plateId), day);
+      if (existing && existing.status !== 'error') continue;
+      const job = localL2TaskQueue.start({
+        plateId: String(board.plateId),
+        boardName: String(board.name || ''),
+        day,
+        stocks: board.memberRows,
+        limitStocks: STRATEGY_MAINLINE_AUTO_SCAN_LIMIT_STOCKS,
+      });
+      st.dispatched += 1;
+      st.lastJobId = String(job?.jobId || '');
+      break;
+    }
+  } catch {}
+}
+
+// 最终输出前的预判增强：广度分、动能分、潜力个股、明星股、首日题材、确定性分级都在这一处挂载。
+function strategyMainlineAugmentPrediction(item, isToday, day) {
   const breadth = strategyMainlineBestBreadth(item?.resonanceBoards);
   const scoreParts = { ...(item?.scoreParts || {}) };
   const breadthScore = strategyMainlineBreadthScore(breadth);
@@ -21098,13 +21222,37 @@ function strategyMainlineAugmentPrediction(item, isToday) {
     : null;
   const momentum = strategyMainlineMomentumScore(trend);
   if (momentum > 0) scoreParts.momentum = momentum;
-  const score = Number(Object.values(scoreParts).reduce((sum, v) => sum + (Number(v) || 0), 0).toFixed(1));
   const focusStocks = strategyMainlineFocusStocks(item);
+  // 明星股：只匹配本主线相关的股票（今日涨停/大涨/潜力股），避免把邻板块扫描结果错挂进来。
+  const starByCode = strategyMainlineCollectStars(item?.resonanceBoards, day);
+  const themeCodes = new Set([
+    ...(Array.isArray(item?.todayCodes) ? item.todayCodes : []),
+    ...(Array.isArray(item?.risingStocks) ? item.risingStocks.map(s => normalizeReasonSourceCode(s?.code)) : []),
+    ...focusStocks.map(s => s.code),
+  ].filter(Boolean));
+  const starStocks = [...starByCode.values()]
+    .filter(star => themeCodes.has(star.code) && star.level !== 'sealedWeak')
+    .sort((a, b) => (a.level === 'confirmed' ? 0 : 1) - (b.level === 'confirmed' ? 0 : 1) || (Number(b.gain) || 0) - (Number(a.gain) || 0))
+    .slice(0, 4);
+  const starConfirmed = starStocks.some(star => star.level === 'confirmed');
+  const starActive = starStocks.some(star => star.level === 'active');
+  if (starStocks.length) {
+    scoreParts.star = Number(Math.min(40, starStocks.reduce((sum, star) => sum + (star.level === 'confirmed' ? 15 : 8), 0)).toFixed(1));
+  }
+  // 首日新题材：近 15 日零热度且无主因股，但盘面已有实质信号——缺主因是数据客观情况，不是题材弱。
+  const isNewTheme = (Number(item?.recentHeat) || 0) === 0 && (Number(item?.priorReasonCount) || 0) === 0 &&
+    ((Number(item?.bigGainCount) || 0) >= 2 || (Number(item?.count) || 0) >= 1 || (Number(item?.nearLimitCount) || 0) >= 1);
+  const score = Number(Object.values(scoreParts).reduce((sum, v) => sum + (Number(v) || 0), 0).toFixed(1));
   const withBreadth = { ...item, breadth: breadth || null };
-  const certainty = strategyMainlineCertainty(withBreadth, trend);
+  const certainty = strategyMainlineCertainty(withBreadth, trend, { isNewTheme, starConfirmed, starActive });
   const stage = strategyMainlineStage(withBreadth, trend);
   const explain = [...(Array.isArray(item?.explain) ? item.explain : [])];
   if (stage.advice) explain.push(`当前处于${stage.label}：${stage.advice}`);
+  if (starStocks.length) {
+    const top = starStocks[0];
+    explain.push(`L2扫描发现${starStocks.length}只${starConfirmed ? '明星股' : '资金活跃股'}，${top.name || top.code} 主动比${top.ratios.activeRatio}/被动比${top.ratios.passiveRatio}。`);
+  }
+  if (isNewTheme) explain.push('首日新题材：暂无历史主因属正常（此前无复盘数据），以盘面与资金信号为准。');
   if (breadth && breadthScore > 0) {
     explain.push(`${breadth.boardName || '相关板块'}成分股${breadth.upPct}%上涨、涨幅中位${breadth.medianGainPct >= 0 ? '+' : ''}${breadth.medianGainPct}%，普涨结构支持主线成立。`);
   }
@@ -21133,9 +21281,11 @@ function strategyMainlineAugmentPrediction(item, isToday) {
     predictScore,
     trend,
     focusStocks,
+    starStocks,
+    isNewTheme,
     certainty,
     stage,
-    explain: explain.slice(0, 8),
+    explain: explain.slice(0, 9),
   };
 }
 
@@ -21667,6 +21817,8 @@ async function getStrategyMainlines(day) {
       resonanceStockCount,
       resonanceBoards: boards.slice(0, 5).map(b => ({
         name: b.name,
+        plateId: String(b.plateId || ''),
+        zsType: b.zsType,
         ztCount: Number(b.ztCount) || 0,
         netInflow: b.netInflow,
         gainPct: b.gainPct,
@@ -21682,8 +21834,11 @@ async function getStrategyMainlines(day) {
 
   const chinaNow = chinaNowParts();
   const chinaTodayIso = isoFromCompactDate(chinaNow.day);
+  const isTodayQuery = isoDay === chinaTodayIso;
+  const sessionPhaseNow = isTodayQuery ? strategyMainlineSessionPhase(chinaNow) : '';
+  strategyMainlineMaybeAutoScan(boardPayload?.boards || [], isoDay, isTodayQuery, sessionPhaseNow);
   const mainlines = strategyMergeMainlineFamilies(rawMainlines)
-    .map(item => strategyMainlineAugmentPrediction(item, isoDay === chinaTodayIso))
+    .map(item => strategyMainlineAugmentPrediction(item, isTodayQuery, isoDay))
     .sort((a, b) =>
       (Number(b.score) || 0) - (Number(a.score) || 0) ||
       (Number(b.count) || 0) - (Number(a.count) || 0) ||
@@ -21695,7 +21850,7 @@ async function getStrategyMainlines(day) {
     ok: true,
     mode: 'intraday-mainline',
     basis: 'realtime-board-gain-inflow-big-gainers-breadth-momentum-plus-prior-main-reason',
-    sessionPhase: isoDay === chinaTodayIso ? strategyMainlineSessionPhase(chinaNow) : '',
+    sessionPhase: sessionPhaseNow,
     day: isoDay,
     requestedDay,
     sourceDay: { realtime: isoDay, boards: isoDay, priorReason: priorReason.endDay || '', history: history.endDay || '', hotThemes: history.endDay || isoDay, resonance: isoDay },
