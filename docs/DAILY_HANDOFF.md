@@ -544,3 +544,27 @@ Deployment:
 
 Notes for next agent:
 - After `main` is updated, Claude/company agents should pull latest `main` and verify before cloud deployment.
+
+## 2026-07-08 - Codex - Review Claude strategy update and preserve live focus metrics
+
+Changed:
+- Reviewed Claude's lifecycle-stage, early-window, and session-phase strategy update after it landed in `main`.
+- Fixed a follow-up edge case in `getStrategyBoardsForDay`: when a same-day snapshot exists, strategy focus cards can still merge live board metrics for included focus boards instead of staying with stale/null snapshot values.
+- The fix preserves existing QI snapshot data where present, but refreshes live `gainPct`, `ztCount`, and `netInflow` for requested focus boards.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- `node --check strategy-backend.js`
+- `node --check local-l2-task-queue.js`
+- Dashboard inline script parsed successfully.
+- `git diff --check`
+
+Deployment:
+- GitHub only. Not deployed to the cloud server. No service restart.
+
+Notes for next agent:
+- The cloud server still needs a deliberate deploy after Claude/Codex review. Current production may not yet include the merged `main` strategy enhancements.

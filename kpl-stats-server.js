@@ -19919,10 +19919,14 @@ async function getStrategyBoardsForDay(day, options = {}) {
       }
     } catch {}
   }
-  if (!out.length && options.liveIfMissing && isChinaMarketTradingDay(requestedDay)) {
+  if (options.liveIfMissing && isChinaMarketTradingDay(requestedDay) && (!out.length || includeKeys.size)) {
     const apiKey = await readSavedApiKey().catch(() => '');
     if (apiKey) {
+      const liveOutByKey = new Map(out.map(board => [`${String(board?.zsType ?? '')}:${String(board?.plateId ?? '')}`, board]));
       for (const zsType of [6, 5, 7]) {
+        const scopedPrefix = `${String(zsType)}:`;
+        const includedForType = [...includeKeys].filter(key => key.startsWith(scopedPrefix));
+        if (out.length && includeKeys.size && !includedForType.length) continue;
         let hidden; try { hidden = await getPermanentHiddenSet(zsType); } catch { hidden = new Set(); }
         try {
           const liveBoards = await fetchBoardRankingForSnapshot(String(zsType), apiKey, {
@@ -19931,12 +19935,14 @@ async function getStrategyBoardsForDay(day, options = {}) {
           for (const raw of liveBoards) {
             const plateId = String(raw?.plateId ?? raw?.id ?? raw?.code ?? '');
             if (!plateId || hidden.has(plateId)) continue;
+            const liveKey = `${String(zsType)}:${plateId}`;
+            if (out.length && includeKeys.size && !includeKeys.has(liveKey)) continue;
             let board = { ...raw, plateId };
             if (shouldHydrateIncluded(board, zsType)) {
               const hydrated = await hydrateBoardForSnapshot({ ...board }, apiKey, String(zsType), requestedDay).catch(() => null);
               if (hydrated?.board) board = { ...board, ...hydrated.board };
             }
-            out.push({
+            const liveItem = {
               plateId,
               name: String(board?.name ?? board?.plateName ?? ''),
               gainPct: Number(board?.gainPct ?? board?.gain ?? NaN),
@@ -19944,7 +19950,17 @@ async function getStrategyBoardsForDay(day, options = {}) {
               netInflow: Number(board?.netInflow ?? board?.mainInflow ?? board?.inflow ?? NaN),
               zsType,
               qiLeaders: null,
-            });
+            };
+            const existing = liveOutByKey.get(liveKey);
+            if (existing) {
+              if (liveItem.name) existing.name = liveItem.name;
+              if (Number.isFinite(liveItem.gainPct)) existing.gainPct = liveItem.gainPct;
+              if (Number.isFinite(liveItem.ztCount)) existing.ztCount = liveItem.ztCount;
+              if (Number.isFinite(liveItem.netInflow)) existing.netInflow = liveItem.netInflow;
+            } else {
+              out.push(liveItem);
+              liveOutByKey.set(liveKey, liveItem);
+            }
           }
         } catch {}
       }
