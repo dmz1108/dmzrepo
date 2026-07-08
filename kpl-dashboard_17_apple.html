@@ -7187,9 +7187,14 @@
   }
   body.view-strategy .ml-star-row { margin-top: 10px; }
   body.view-strategy .ml-stock.ml-leaderstock {
-    border-color: rgba(255,200,87,0.42);
-    background: rgba(255,200,87,0.10);
-    font-weight: 760;
+    border-color: rgba(255,200,87,0.30);
+    background: rgba(255,200,87,0.07);
+    font-weight: 740;
+  }
+  body.view-strategy .ml-stock.ml-leaderstock.top {
+    border-color: rgba(255,200,87,0.46);
+    background: rgba(255,200,87,0.12);
+    font-weight: 780;
   }
   body.view-strategy .ml-stock.ml-leaderstock i { color: #ffd78a; }
   body.view-strategy .ml-leader-none {
@@ -11194,16 +11199,20 @@ function renderStrategyMainlinesHTML(d) {
       `<span class="ml-stock ml-starstock${s.level === 'confirmed' ? ' confirmed' : ''}" title="${escapeHTML(s.boardName || '')} L2:主动比${s.ratios?.activeRatio ?? '-'} 被动比${s.ratios?.passiveRatio ?? '-'} 合计比${s.ratios?.supportRatio ?? '-'}">⭐${escapeHTML(s.name || s.code || '')}<i>主${s.ratios?.activeRatio ?? '-'}/被${s.ratios?.passiveRatio ?? '-'}</i></span>`
     ).join('');
     const reasonLine = (stage && stage.advice) || (Array.isArray(m.explain) && m.explain.length ? m.explain[0] : '');
-    // 龙头/明星双槽:龙头=10日涨停次数/10日30日涨幅池内排名+主因门槛选出的旗手;明星=L2主动被动比达标的资金攻击股;可能是同一只。
-    const ml = m.mainLeader || null;
-    const mlBasis = ml && Array.isArray(ml.basis) ? ml.basis.slice(0, 3).join(' · ') : '';
-    const leaderRow = ml
-      ? `<div class="ml-proof-row"><span class="ml-proof-lbl">${m.leaderIsStar ? '龙头·明星' : '龙头'}</span><span class="ml-stock ml-leaderstock" title="${escapeHTML((ml.basis || []).join(' · '))}">${m.leaderIsStar ? '⭐' : '👑'}${escapeHTML(ml.name || ml.code || '')}<i>${escapeHTML(mlBasis)}</i></span></div>`
+    // 龙头/明星双槽:龙头=10日涨停次数/10日30日涨幅池内排名+主因门槛选出的旗手(1-3个);明星=L2主动被动比达标的资金攻击股;可能是同一只。
+    const leaderChips = (m.leaders || []).slice(0, 3).map((l, idx) => {
+      const lb = Array.isArray(l.basis) ? l.basis.slice(0, idx === 0 ? 3 : 2).join(' · ') : '';
+      const isStarToo = idx === 0 && m.leaderIsStar;
+      return `<span class="ml-stock ml-leaderstock${idx === 0 ? ' top' : ''}" title="${escapeHTML((l.basis || []).join(' · '))}">${isStarToo ? '⭐' : (idx === 0 ? '👑' : '')}${escapeHTML(l.name || l.code || '')}<i>${escapeHTML(lb)}</i></span>`;
+    }).join('');
+    const leaderRow = leaderChips
+      ? `<div class="ml-proof-row"><span class="ml-proof-lbl" title="按10日涨停次数/10日30日涨幅池内排名+主因门槛综合打分,最多3个可能龙头">${m.leaderIsStar ? '龙头·明星' : '龙头'}</span>${leaderChips}</div>`
       : (m.leaderNote ? `<div class="ml-proof-row"><span class="ml-proof-lbl">龙头</span><span class="ml-leader-none">${escapeHTML(m.leaderNote)}</span></div>` : '');
-    const starSlot = m.starSlot || null;
-    const starRow = starSlot && !m.leaderIsStar
-      ? `<div class="ml-proof-row"><span class="ml-proof-lbl">明星</span><span class="ml-stock ml-starstock${starSlot.level === 'confirmed' ? ' confirmed' : ''}" title="L2:主动比${starSlot.ratios?.activeRatio ?? '-'} 被动比${starSlot.ratios?.passiveRatio ?? '-'} 合计比${starSlot.ratios?.supportRatio ?? '-'}">⭐${escapeHTML(starSlot.name || starSlot.code || '')}<i>${escapeHTML(starSlot.label || '')} 主${starSlot.ratios?.activeRatio ?? '-'}/被${starSlot.ratios?.passiveRatio ?? '-'}</i></span></div>`
-      : '';
+    const starChips = (m.starStocks || []).slice(0, 2)
+      .filter(s => !(m.leaderIsStar && m.mainLeader && s.code === m.mainLeader.code))
+      .map(s => `<span class="ml-stock ml-starstock${s.level === 'confirmed' ? ' confirmed' : ''}" title="L2:主动比${s.ratios?.activeRatio ?? '-'} 被动比${s.ratios?.passiveRatio ?? '-'} 合计比${s.ratios?.supportRatio ?? '-'}">⭐${escapeHTML(s.name || s.code || '')}<i>${escapeHTML(s.label || '')} 主${s.ratios?.activeRatio ?? '-'}/被${s.ratios?.passiveRatio ?? '-'}</i></span>`)
+      .join('');
+    const starRow = starChips ? `<div class="ml-proof-row"><span class="ml-proof-lbl" title="纯当日L2数据判定:涨停前主动/被动比≥1.5=资金活跃,涨停后三比值2个≥2=明星确认">明星</span>${starChips}</div>` : '';
     const confirmedBadge = m.isConfirmedMainline ? `<span class="ml-confirmed">✔ 当日主线</span>` : '';
     const confirmBtn = state.adminLoggedIn
       ? (m.isConfirmedMainline
@@ -11245,7 +11254,7 @@ function renderStrategyMainlinesHTML(d) {
       ${signalStrip}
       ${leaderRow}
       ${starRow}
-      ${focus ? `<div class="ml-proof-row"><span class="ml-proof-lbl">潜力</span>${focus}</div>` : ''}
+      ${focus ? `<div class="ml-proof-row"><span class="ml-proof-lbl" title="有望成为明星的观察股:盘中大涨/临板,若涨停前L2比值达标升级为资金活跃,封板吃单达标升级为明星确认">潜力</span>${focus}</div>` : ''}
       ${reasonLine ? `<div class="ml-reason">${escapeHTML(reasonLine)}</div>` : ''}
       <div class="ml-card-actions">
         <button type="button" class="ml-toggle" onclick="const c=this.closest('.ml-card');c.classList.toggle('open');this.textContent=c.classList.contains('open')?'收起详情 ▴':'展开详情 ▾'">展开详情 ▾</button>

@@ -21438,7 +21438,8 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay) {
     // （首日新题材天然无复盘数据 → 无龙头，只看明星；次日它进了主因库，龙头才开始产生。）
     const gated = scored.filter(r => r.gated).sort((a, b) => b.leadScore - a.leadScore || (b.zt10Count || 0) - (a.zt10Count || 0));
     if (gated.length) {
-      m.leaders = gated.slice(0, 4)
+      // 综合打分选出 1-3 个最佳可能龙头,第一个为主龙头(用于预判记录/回看)。
+      m.leaders = gated.slice(0, 3)
         .map(r => ({ ...r, star: r.star ? { level: r.star.level, ratios: r.star.ratios } : null }));
       m.mainLeader = m.leaders[0];
       m.leaderBasisMode = 'pool-rank';

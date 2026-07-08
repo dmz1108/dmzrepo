@@ -894,3 +894,23 @@ Deployment:
 Notes for next agent:
 - 龙头槽为空是正常状态（尤其首日新题材），不是 bug；不要再引入任何「用今日表现顶替龙头」的逻辑。
 - QMT 已从项目移除，后续任何数据源规划不要再考虑 QMT。
+
+## 2026-07-08 - Claude - 龙头1-3个 + 潜力→明星生命周期展示
+
+Changed:
+- 龙头槽从单个改为综合打分选出的 1-3 个最佳可能龙头：首位👑高亮（主龙头，用于预判记录/回看），其余为次龙头候选，均须过主因门槛。
+- 潜力定义明确为「有望成为明星的观察股」（如涨停前的华勤技术→封板后升级明星）：潜力/明星/龙头三行标签都加了悬停口径说明；明星行最多显示 2 只（确认级优先，与主龙头重复时不重复显示）。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check` 通过；前端内联脚本编译通过；龙头单测回归通过。
+
+Deployment:
+- GitHub branch only（并入 PR #6）。Not deployed. No restart.
+
+Notes for next agent:
+- 潜力→明星是自动升级链路：同一只股 L2 达标后自然从潜力行消失、出现在明星行，无需人工操作。
