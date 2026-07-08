@@ -11220,7 +11220,7 @@ function renderStrategyMainlinesHTML(d) {
         ? `<button type="button" class="ml-confirm-btn on" onclick="unconfirmMainlineTheme()">取消确认</button>`
         : `<button type="button" class="ml-confirm-btn" data-key="${escapeHTML(m.familyKey || m.key || '')}" data-theme="${escapeHTML(m.theme || '')}" onclick="confirmMainlineTheme(this.dataset.key, this.dataset.theme)">确认主线</button>`)
       : '';
-    const focus = (m.focusStocks || []).slice(0, 3).map(s => {
+    const focus = (m.focusStocks || []).slice(0, 6).map(s => {
       const tag = Array.isArray(s.basis) && s.basis.length ? ` · ${s.basis[0]}` : '';
       const fLeader = (m.leaders || []).some(l => String(l.code || '') === String(s.code || ''));
       const fStar = (m.starStocks || []).some(x => String(x.code || '') === String(s.code || ''));

@@ -929,3 +929,15 @@ Validated:
 
 Deployment:
 - GitHub branch only（并入 PR #6）。Not deployed. No restart.
+
+## 2026-07-08 - Claude - 潜力股展示放宽到6个
+
+Changed:
+- 潜力行展示上限 3→6（owner 口径:潜力股 3-6 个等待升级明星;明星每板块 2 个左右,展示已符合）。后端 focusStocks 上限本就是 6,仅前端放开。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `docs/DAILY_HANDOFF.md`
+
+Validated: 前端内联脚本编译通过。
+Deployment: GitHub branch only（并入 PR #6）。Not deployed. No restart.
