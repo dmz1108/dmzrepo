@@ -19918,30 +19918,55 @@ async function getStrategyBoardsForDay(day) {
 
 // 读某日全部看板板块(name/plateId/ztCount/netInflow + 今日涨停成员 code),并**排除看板永久删除的板块**
 // (与看板同口径:getPermanentHiddenSet 黑名单,按 zsType 隔离)。供强势板块共振榜 + 热点榜资金流入共用。
-async function getDayBoardsWithMembers(day) {
-  const useDay = await resolveStrategySnapshotDay(day);
+async function getDayBoardsWithMembers(day, options = {}) {
+  const requestedDay = isoFromCompactDate(day);
+  const allowFallback = options.allowFallback !== false;
+  const useDay = allowFallback ? await resolveStrategySnapshotDay(requestedDay) : requestedDay;
   const bmap = new Map();
-  for (const z of [6, 5, 7]) {
+  const absorbPayload = async (payload, z) => {
     let hidden; try { hidden = await getPermanentHiddenSet(z); } catch { hidden = new Set(); }
+    const cardData = payload?.cardData || {};
+    for (const b of (Array.isArray(payload?.boards) ? payload.boards : [])) {
+      const name = String(b?.name || b?.plateName || '');
+      if (!name) continue;
+      const plateId = String(b?.plateId || b?.id || '');
+      if (plateId && hidden.has(plateId)) continue;   // 看板永久删除的板块,共振榜也不出现
+      const zt = Number(b?.ztCount ?? b?.zt ?? NaN);
+      const netInflow = Number(b?.netInflow ?? b?.mainInflow ?? b?.inflow ?? NaN);
+      const gainPct = Number(b?.gainPct ?? b?.gain ?? b?.zf ?? b?.changePct ?? b?.涨幅 ?? NaN);
+      const ztList = Array.isArray(cardData[plateId]?.ztList) ? cardData[plateId].ztList : [];
+      const codes = ztList.map(x => normalizeReasonSourceCode(x?.code ?? x)).filter(Boolean);
+      const cur = bmap.get(name);
+      if (!cur || (Number(zt) || 0) > (Number(cur.zt) || 0)) bmap.set(name, { name, plateId, zsType: z, zt, netInflow, gainPct, codes });
+    }
+  };
+  for (const z of [6, 5, 7]) {
     try {
       const p = JSON.parse(await fs.readFile(snapshotPath(useDay, String(z)), 'utf8'));
-      const cardData = p?.cardData || {};
-      for (const b of (Array.isArray(p?.boards) ? p.boards : [])) {
-        const name = String(b?.name || b?.plateName || '');
-        if (!name) continue;
-        const plateId = String(b?.plateId || b?.id || '');
-        if (plateId && hidden.has(plateId)) continue;   // 看板永久删除的板块,共振榜也不出现
-        const zt = Number(b?.ztCount ?? b?.zt ?? NaN);
-        const netInflow = Number(b?.netInflow ?? b?.mainInflow ?? b?.inflow ?? NaN);
-        const gainPct = Number(b?.gainPct ?? b?.gain ?? b?.zf ?? b?.changePct ?? b?.涨幅 ?? NaN);
-        const ztList = Array.isArray(cardData[plateId]?.ztList) ? cardData[plateId].ztList : [];
-        const codes = ztList.map(x => normalizeReasonSourceCode(x?.code ?? x)).filter(Boolean);
-        const cur = bmap.get(name);
-        if (!cur || (Number(zt) || 0) > (Number(cur.zt) || 0)) bmap.set(name, { name, plateId, zsType: z, zt, netInflow, gainPct, codes });
-      }
+      await absorbPayload(p, z);
     } catch {}
   }
-  return { useDay, boards: [...bmap.values()] };
+  let source = bmap.size ? 'snapshot' : 'none';
+  if (!bmap.size && options.liveIfMissing && isChinaMarketTradingDay(requestedDay)) {
+    const apiKey = await readSavedApiKey().catch(() => '');
+    if (apiKey) {
+      for (const z of [6, 5, 7]) {
+        try {
+          let hidden; try { hidden = await getPermanentHiddenSet(z); } catch { hidden = new Set(); }
+          const rankBoards = await fetchBoardRankingForSnapshot(String(z), apiKey, {
+            count: Number(options.liveRankCount || 0) || BOARD_RANK_FETCH_STEP,
+          });
+          const boards = rankBoards
+            .filter(board => !hidden.has(String(board?.plateId || '')))
+            .filter(isBoardGainAllowed)
+            .slice(0, Number(options.boardPool || 0) || STRATEGY_MAINLINE_RISING_BOARD_LIMIT);
+          await absorbPayload({ boards, cardData: {} }, z);
+        } catch {}
+      }
+      if (bmap.size) source = 'live';
+    }
+  }
+  return { useDay, boards: [...bmap.values()], source, requestedDay };
 }
 
 async function getDayThemeBoardStats(day) {
@@ -21070,8 +21095,30 @@ async function buildStrategyMainlineHistoryContext(endDay, themeKeys, days = 15,
 
 async function getStrategyMainlines(day) {
   const requestedDay = isoFromCompactDate(day || chinaNowParts().day);
-  const boardPayload = await getDayBoardsWithMembers(requestedDay).catch(() => ({ useDay: requestedDay, boards: [] }));
-  const isoDay = isoFromCompactDate(boardPayload?.useDay || requestedDay);
+  const boardPayload = await getDayBoardsWithMembers(requestedDay, {
+    allowFallback: false,
+    liveIfMissing: true,
+    boardPool: STRATEGY_MAINLINE_RISING_BOARD_LIMIT,
+    liveRankCount: 80,
+  }).catch(() => ({ useDay: requestedDay, boards: [], source: 'none' }));
+  const isoDay = requestedDay;
+  if (!Array.isArray(boardPayload?.boards) || !boardPayload.boards.length) {
+    return {
+      ok: false,
+      mode: 'intraday-mainline',
+      basis: 'realtime-board-gain-inflow-big-gainers-plus-prior-main-reason',
+      day: isoDay,
+      requestedDay,
+      sourceDay: { realtime: '', boards: '', priorReason: '', history: '', hotThemes: '', resonance: '' },
+      reason: isChinaMarketTradingDay(isoDay) ? 'today-realtime-not-ready' : 'market-closed',
+      message: isChinaMarketTradingDay(isoDay)
+        ? '今日实时板块数据未准备，今日主线榜不再回退到上一交易日。'
+        : '今日非交易日，今日主线榜不生成盘中预测。',
+      count: 0,
+      stockCount: 0,
+      mainlines: [],
+    };
+  }
   await strategyMainlineEnrichBoardsWithRisingStocks(boardPayload?.boards || [], isoDay).catch(() => []);
   const limitUpDb = await readLimitUpDbDay(isoDay).catch(() => null);
   const prevDay = strategyMainlinePrevTradingDay(isoDay);
@@ -21375,6 +21422,7 @@ async function getStrategyMainlines(day) {
     day: isoDay,
     requestedDay,
     sourceDay: { realtime: isoDay, boards: isoDay, priorReason: priorReason.endDay || '', history: history.endDay || '', hotThemes: history.endDay || isoDay, resonance: isoDay },
+    realtimeSource: boardPayload.source || 'snapshot',
     recentWindow: history.recentWindow || 15,
     count: mainlines.length,
     stockCount: new Set(seeds.flatMap(t => [

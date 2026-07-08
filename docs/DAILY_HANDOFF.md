@@ -375,3 +375,34 @@ Deployment:
 
 Notes for next agent:
 - If a local hook suggests rewriting commits that belong to another agent or to merged main history, do not comply; report instead.
+
+## 2026-07-08 - Codex - Keep 今日主线榜 on current intraday date
+
+Changed:
+- Fixed 今日主线榜 so it no longer uses the limit-up/snapshot fallback date as its primary date.
+- Strategy mainlines now lock to the requested day, use same-day live board ranking when no same-day snapshot exists, and only use limit-up DB as an optional scoring signal.
+- If same-day live board data is unavailable, the API returns a clear not-ready message instead of silently showing the previous trading day.
+- Strategy empty-state text now displays the API message.
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- Dashboard inline script parsed with `new Function(...)`.
+- `git diff --check`
+- Cloud `https://dreamerqi.com/health` returned ok.
+- Cloud `/api/strategy-mainlines?day=2026-07-08` returned `day: 2026-07-08`, `requestedDay: 2026-07-08`, `realtimeSource: live`.
+- Cloud `/api/strategy-mainlines?day=2026-07-07` still returns historical snapshot data with `realtimeSource: snapshot`.
+
+Deployment:
+- Deployed to cloud production.
+- Backed up changed production files under `C:\PandaDashboard\backups\strategy-mainline-date-lock-20260708-112452`.
+- Restarted only the main `kpl-stats-server.js` Node service through the existing `PandaDashboard-KPL-Server` task after stopping the old process.
+- Did not restart Caddy or `yule-server.js`.
+
+Notes for next agent:
+- First live same-day strategy calculation can take about 20 seconds because it enriches the strongest boards with constituent big-gain/near-limit stocks. Consider adding short TTL caching if this feels slow during market hours.
+- Do not reintroduce `resolveStrategySnapshotDay()` into `getStrategyMainlines`; fallback-to-yesterday belongs to historical review/snapshot views, not intraday strategy prediction.

@@ -10584,12 +10584,15 @@ function renderStrategyMainlinesHTML(d) {
   ].filter(Boolean).join(' · ');
   const sourceSuffix = sourceNote ? ` · ${escapeHTML(sourceNote)}` : '';
   if (!lines.length) {
+    const emptyText = d && d.message
+      ? String(d.message)
+      : '暂无可用主线数据，请先同步今日实时看板。';
     return `<section class="mainline-wrap">
       <div class="ml-title">
         <span>今日主线榜</span>
         <small>实时板块涨幅 × 资金净流入 × 成分股大涨 × 冲板候选 × 历史四源主因预判${sourceSuffix}${dayNote}</small>
       </div>
-      <div class="rht-loading">暂无可用主线数据，请先同步今日实时看板。</div>
+      <div class="rht-loading">${escapeHTML(emptyText)}</div>
     </section>`;
   }
   const cards = lines.slice(0, 8).map((m, i) => {
