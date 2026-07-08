@@ -622,3 +622,25 @@ Deployment:
 
 Notes for next agent:
 - The cloud server still needs a deliberate deploy after Claude/Codex review. Current production may not yet include the merged `main` strategy enhancements.
+## 2026-07-08 - Claude - 策略页视觉打磨（本地真实渲染验证）
+
+Changed:
+- 用无头 Chromium + 模拟 API 数据在本地真实渲染了策略页（登录态、主线榜、雷达、明星/首日徽章全部注入验证），按截图逐项打磨：
+- 预判分/主线分主次分明：预判分保持绿色主位,主线分徽章改为中性灰,不再抢视觉重心。
+- 纯预判题材（预判分==主线分,即无任何确认分）不再重复显示两个相同数字,只显示预判分。
+- 主线卡「展开详情」按钮底部对齐（margin-top:auto）,三卡并排时按钮在同一水平线。
+- 快读四宫格瘦身：去掉 74px 最小高度、收紧内边距,信息密度提升约一倍。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 前端内联脚本编译通过。
+- 本地 Chromium 渲染验证：登录门、主线榜、抢跑雷达、明星⭐行、首日徽章、卡片折叠/展开全部正常;三卡等高、按钮对齐;展开态各明细区顺序完整。
+
+Deployment:
+- GitHub branch only（并入 PR #5）。Not deployed. No restart.
+
+Notes for next agent:
+- 本地渲染方法可复用：静态服务 + Playwright route 拦截 /api/*（注意 Playwright 后注册路由优先,兜底路由要最先注册）,mock 见会话记录;适合以后前端改动的自查。

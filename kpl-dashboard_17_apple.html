@@ -7073,12 +7073,15 @@
     align-items: center;
     gap: 1px;
     padding: 3px 8px;
-    border: 1px solid rgba(64,224,178,0.26);
+    border: 1px solid rgba(174,190,214,0.16);
     border-radius: 8px;
-    background: rgba(64,224,178,0.07);
+    background: rgba(174,190,214,0.05);
   }
-  body.view-strategy .ml-predict b { font-size: 15px; font-weight: 800; color: #7fe8c9; line-height: 1.1; }
-  body.view-strategy .ml-predict span { font-size: 10px; color: rgba(127,232,201,0.75); }
+  body.view-strategy .ml-predict b { font-size: 15px; font-weight: 800; color: #aebed6; line-height: 1.1; }
+  body.view-strategy .ml-predict span { font-size: 10px; color: rgba(174,190,214,0.6); }
+  body.view-strategy .ml-quick-item { min-height: 0; padding: 9px 11px; }
+  body.view-strategy .ml-quick-item b { font-size: 15px; margin-top: 2px; }
+  body.view-strategy .ml-quick-item small { font-size: 11px; }
   body.view-strategy .ml-early-radar {
     display: flex;
     align-items: center;
@@ -7161,7 +7164,7 @@
     line-height: 1.5;
   }
   body.view-strategy .ml-toggle {
-    margin-top: 10px;
+    margin-top: auto;
     width: 100%;
     padding: 6px 0;
     border: 1px solid rgba(174,190,214,0.14);
@@ -10878,7 +10881,7 @@ function renderStrategyMainlinesHTML(d) {
         </div>
         <div class="ml-score-wrap">
           ${m.predictScore != null ? `<div class="ml-score" title="只含前瞻信号:大涨扩散/冲板/普涨广度/动能/历史主因/资金"><b>${Number(m.predictScore || 0).toFixed(0)}</b><span>预判分</span></div>` : ''}
-          <div class="ml-predict" title="含涨停/高度/连板确认分的完整主线强度"><b>${Number(m.score || 0).toFixed(0)}</b><span>主线分</span></div>
+          ${m.predictScore == null || Math.round(Number(m.predictScore)) !== Math.round(Number(m.score || 0)) ? `<div class="ml-predict" title="含涨停/高度/连板确认分的完整主线强度"><b>${Number(m.score || 0).toFixed(0)}</b><span>主线分</span></div>` : ''}
         </div>
       </div>
       ${stars ? `<div class="ml-proof-row ml-star-row"><span class="ml-proof-lbl">明星</span>${stars}</div>` : ''}
