@@ -20068,6 +20068,13 @@ const STRATEGY_MAINLINE_BIG_GAIN_PCT = 5;
 const STRATEGY_MAINLINE_NEAR_LIMIT_GAP_PCT = 1.5;
 const STRATEGY_MAINLINE_RISING_BOARD_LIMIT = 18;
 const STRATEGY_MAINLINE_RISING_FETCH_TIMEOUT_MS = 4000;
+// 广度统计至少要有这么多有效成分股，否则小板块一两只股就能拉出虚高普涨率
+const STRATEGY_MAINLINE_BREADTH_MIN_MEMBERS = 8;
+// 盘中动能采样：同一主线族两次采样至少隔 3 分钟，只保留 45 分钟窗口，重启后自然冷启动
+const STRATEGY_MAINLINE_TREND_MIN_GAP_MS = 3 * 60 * 1000;
+const STRATEGY_MAINLINE_TREND_WINDOW_MS = 45 * 60 * 1000;
+const STRATEGY_MAINLINE_TREND_BASE_MIN_AGE_MS = 5 * 60 * 1000;
+const strategyMainlineTrendSamples = new Map();
 function strategyResonanceTopicKey(raw) {
   return consensusKey(raw) || canonicalTopicName(raw) || String(raw || '').replace(/概念$/u, '').trim();
 }
@@ -20843,6 +20850,7 @@ async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day) {
     board.risingCodes = risingStocks.map(stock => stock.code);
     board.nearLimitStocks = nearLimitStocks;
     board.nearLimitCodes = nearLimitStocks.map(stock => stock.code);
+    board.breadth = strategyMainlineBoardBreadth(normalized);
   });
   return list;
 }
@@ -20905,8 +20913,182 @@ function strategyMainlineAttachRealtimeBoardToSeed(seed, board, matchedCodes = n
     confirmedCount: codes.length || (zt != null ? zt : 0),
     bigGainCount: risingStocks.length,
     nearLimitCount: nearLimitStocks.length,
+    breadth: board?.breadth || null,
   });
   return true;
+}
+
+// 板块普涨广度：真主线是成分股普涨，虚拉是一两只权重股撑指数。
+function strategyMainlineBoardBreadth(memberRows) {
+  const gains = (Array.isArray(memberRows) ? memberRows : [])
+    .map(stock => Number(stock?.gain))
+    .filter(Number.isFinite);
+  if (gains.length < STRATEGY_MAINLINE_BREADTH_MIN_MEMBERS) return null;
+  const sortedGains = gains.slice().sort((a, b) => a - b);
+  const upCount = gains.filter(g => g > 0).length;
+  return {
+    memberCount: gains.length,
+    upCount,
+    upPct: Number((upCount / gains.length * 100).toFixed(1)),
+    medianGainPct: Number(sortedGains[Math.floor(sortedGains.length / 2)].toFixed(2)),
+  };
+}
+function strategyMainlineBestBreadth(boards) {
+  let best = null;
+  for (const board of (Array.isArray(boards) ? boards : [])) {
+    const breadth = board?.breadth;
+    if (!breadth || !Number.isFinite(Number(breadth.upPct))) continue;
+    if (!best || Number(breadth.upPct) > Number(best.upPct) ||
+        (Number(breadth.upPct) === Number(best.upPct) && Number(breadth.memberCount) > Number(best.memberCount))) {
+      best = { ...breadth, boardName: String(board?.name || '') };
+    }
+  }
+  return best;
+}
+function strategyMainlineBreadthScore(breadth) {
+  if (!breadth || Number(breadth.memberCount) < STRATEGY_MAINLINE_BREADTH_MIN_MEMBERS) return 0;
+  const upPct = Number(breadth.upPct) || 0;
+  const median = Number(breadth.medianGainPct) || 0;
+  const upScore = Math.max(0, Math.min(30, (upPct - 50) * 0.8));
+  const medianScore = Math.max(0, Math.min(20, median * 5));
+  return Number((upScore + medianScore).toFixed(1));
+}
+
+// 潜力个股：未封板但「距板近 + 历史主因指向本主线」的预判标的。
+function strategyMainlineFocusStocks(item) {
+  const todayCodes = new Set((Array.isArray(item?.todayCodes) ? item.todayCodes : [])
+    .map(normalizeReasonSourceCode).filter(Boolean));
+  const out = [];
+  for (const stock of (Array.isArray(item?.risingStocks) ? item.risingStocks : [])) {
+    const code = normalizeReasonSourceCode(stock?.code);
+    if (!code || todayCodes.has(code)) continue;
+    const gain = Number(stock?.gain);
+    if (!Number.isFinite(gain)) continue;
+    const gap = Math.max(0, limitUpThreshold(code, stock?.name) - gain);
+    const prior = stock?.priorReason || null;
+    const priorCount = Number(prior?.count) || 0;
+    let focusScore = 0;
+    if (stock?.nearLimit) focusScore += 30;
+    focusScore += Math.max(0, 24 - gap * 6);
+    focusScore += Math.min(24, priorCount * 6);
+    const basis = [];
+    if (stock?.nearLimit) basis.push('冲板在即');
+    else if (gap <= 3) basis.push(`距板${gap.toFixed(1)}%`);
+    if (priorCount > 0) basis.push(`近30日${priorCount}次同主因`);
+    if (prior?.latestDetail) basis.push(String(prior.latestDetail).slice(0, 12));
+    out.push({
+      code,
+      name: String(stock?.name || ''),
+      gain: Number(gain.toFixed(2)),
+      nearLimit: !!stock?.nearLimit,
+      gapPct: Number(gap.toFixed(2)),
+      priorCount,
+      focusScore: Number(focusScore.toFixed(1)),
+      basis: basis.slice(0, 3),
+    });
+  }
+  return out.sort((a, b) => b.focusScore - a.focusScore || b.gain - a.gain).slice(0, 6);
+}
+
+// 确定性分级：多维信号同时成立才给高确定性，单一维度只算观察。
+function strategyMainlineCertainty(item, trend) {
+  const signals = [];
+  if ((Number(item?.count) || 0) > 0) signals.push('涨停确认');
+  if ((Number(item?.maxLianban) || 0) >= 2) signals.push('连板梯队');
+  if ((Number(item?.bigGainCount) || 0) >= 3) signals.push('大涨扩散');
+  if ((Number(item?.nearLimitCount) || 0) >= 1) signals.push('冲板储备');
+  if ((Number(item?.priorReasonCount) || 0) >= 2) signals.push('历史主因吻合');
+  if (isFiniteNumeric(item?.netInflow) && Number(item.netInflow) > 0) signals.push('资金净流入');
+  if ((Number(item?.boardCount) || 0) >= 2) signals.push('多板块共振');
+  if (item?.breadth && Number(item.breadth.upPct) >= 55) signals.push('板块普涨');
+  if (trend && ((Number(trend.bigGainDelta) || 0) > 0 || (Number(trend.nearLimitDelta) || 0) > 0 ||
+      (isFiniteNumeric(trend.inflowDelta) && Number(trend.inflowDelta) > 0))) signals.push('信号加速');
+  const level = signals.length >= 5 ? 'high' : signals.length >= 3 ? 'medium' : 'watch';
+  return {
+    level,
+    label: level === 'high' ? '高确定性' : level === 'medium' ? '中等确定性' : '观察中',
+    signals,
+  };
+}
+
+// 盘中动能：进程内采样对比 ~5-45 分钟前的自己，识别正在加速的主线。重启后冷启动，属可接受降级。
+function strategyMainlineTrackTrend(key, snap) {
+  const cleanKey = String(key || '').trim();
+  if (!cleanKey) return null;
+  const now = Date.now();
+  const list = (strategyMainlineTrendSamples.get(cleanKey) || [])
+    .filter(sample => now - sample.ts <= STRATEGY_MAINLINE_TREND_WINDOW_MS);
+  const last = list[list.length - 1];
+  if (!last || now - last.ts >= STRATEGY_MAINLINE_TREND_MIN_GAP_MS) {
+    list.push({ ts: now, ...snap });
+  }
+  strategyMainlineTrendSamples.set(cleanKey, list);
+  const base = list.find(sample => now - sample.ts >= STRATEGY_MAINLINE_TREND_BASE_MIN_AGE_MS);
+  if (!base || base.ts === now) return null;
+  return {
+    minutes: Math.max(1, Math.round((now - base.ts) / 60000)),
+    inflowDelta: (isFiniteNumeric(snap.netInflow) && isFiniteNumeric(base.netInflow))
+      ? Number(snap.netInflow) - Number(base.netInflow) : null,
+    bigGainDelta: (Number(snap.bigGainCount) || 0) - (Number(base.bigGainCount) || 0),
+    nearLimitDelta: (Number(snap.nearLimitCount) || 0) - (Number(base.nearLimitCount) || 0),
+    limitUpDelta: (Number(snap.count) || 0) - (Number(base.count) || 0),
+  };
+}
+function strategyMainlineMomentumScore(trend) {
+  if (!trend) return 0;
+  let score = 0;
+  if (isFiniteNumeric(trend.inflowDelta) && Number(trend.inflowDelta) > 0) {
+    score += Math.min(16, Math.log10(Number(trend.inflowDelta) / 1e7 + 1) * 8);
+  }
+  if ((Number(trend.bigGainDelta) || 0) > 0) score += Math.min(12, Number(trend.bigGainDelta) * 3);
+  if ((Number(trend.nearLimitDelta) || 0) > 0) score += Math.min(12, Number(trend.nearLimitDelta) * 5);
+  return Number(score.toFixed(1));
+}
+
+// 最终输出前的预判增强：广度分、动能分、潜力个股、确定性分级都在这一处挂载。
+function strategyMainlineAugmentPrediction(item, isToday) {
+  const breadth = strategyMainlineBestBreadth(item?.resonanceBoards);
+  const scoreParts = { ...(item?.scoreParts || {}) };
+  const breadthScore = strategyMainlineBreadthScore(breadth);
+  if (breadthScore > 0) scoreParts.breadth = breadthScore;
+  const trend = isToday
+    ? strategyMainlineTrackTrend(item?.familyKey || item?.key, {
+        netInflow: isFiniteNumeric(item?.netInflow) ? Number(item.netInflow) : null,
+        bigGainCount: Number(item?.bigGainCount) || 0,
+        nearLimitCount: Number(item?.nearLimitCount) || 0,
+        count: Number(item?.count) || 0,
+      })
+    : null;
+  const momentum = strategyMainlineMomentumScore(trend);
+  if (momentum > 0) scoreParts.momentum = momentum;
+  const score = Number(Object.values(scoreParts).reduce((sum, v) => sum + (Number(v) || 0), 0).toFixed(1));
+  const focusStocks = strategyMainlineFocusStocks(item);
+  const withBreadth = { ...item, breadth: breadth || null };
+  const certainty = strategyMainlineCertainty(withBreadth, trend);
+  const explain = [...(Array.isArray(item?.explain) ? item.explain : [])];
+  if (breadth && breadthScore > 0) {
+    explain.push(`${breadth.boardName || '相关板块'}成分股${breadth.upPct}%上涨、涨幅中位${breadth.medianGainPct >= 0 ? '+' : ''}${breadth.medianGainPct}%，普涨结构支持主线成立。`);
+  }
+  if (trend && momentum > 0) {
+    const parts = [];
+    if ((Number(trend.bigGainDelta) || 0) > 0) parts.push(`大涨股+${trend.bigGainDelta}`);
+    if ((Number(trend.nearLimitDelta) || 0) > 0) parts.push(`冲板股+${trend.nearLimitDelta}`);
+    if (isFiniteNumeric(trend.inflowDelta) && Number(trend.inflowDelta) > 0) parts.push(`净流入+${strategyMainlinePlainYi(trend.inflowDelta)}`);
+    if (parts.length) explain.push(`近${trend.minutes}分钟${parts.join('、')}，信号在加速。`);
+  }
+  if (focusStocks.length) {
+    const top = focusStocks[0];
+    explain.push(`潜力股${focusStocks.length}只待冲板，首选${top.name || top.code}（${top.basis.join('，') || `盘中+${top.gain}%`}）。`);
+  }
+  return {
+    ...withBreadth,
+    scoreParts: Object.fromEntries(Object.entries(scoreParts).map(([k, v]) => [k, Number((Number(v) || 0).toFixed(1))])),
+    score,
+    trend,
+    focusStocks,
+    certainty,
+    explain: explain.slice(0, 7),
+  };
 }
 
 function strategyMainlineAddRealtimeBoardSeed(seedByKey, board) {
@@ -21443,19 +21625,27 @@ async function getStrategyMainlines(day) {
         confirmedCount: Number(b.confirmedCount) || 0,
         bigGainCount: Number(b.bigGainCount) || 0,
         nearLimitCount: Number(b.nearLimitCount) || 0,
+        breadth: b.breadth || null,
       })),
       mainLeader: leaders[0] || null,
       leaders,
     };
   }).filter(x => x.count > 0 || x.bigGainCount > 0 || x.nearLimitCount > 0);
 
+  const chinaTodayIso = isoFromCompactDate(chinaNowParts().day);
   const mainlines = strategyMergeMainlineFamilies(rawMainlines)
+    .map(item => strategyMainlineAugmentPrediction(item, isoDay === chinaTodayIso))
+    .sort((a, b) =>
+      (Number(b.score) || 0) - (Number(a.score) || 0) ||
+      (Number(b.count) || 0) - (Number(a.count) || 0) ||
+      (Number(b.maxLianban) || 0) - (Number(a.maxLianban) || 0)
+    )
     .slice(0, 10)
     .map((x, i) => ({ ...x, rank: i + 1 }));
   return {
     ok: true,
     mode: 'intraday-mainline',
-    basis: 'realtime-board-gain-inflow-big-gainers-plus-prior-main-reason',
+    basis: 'realtime-board-gain-inflow-big-gainers-breadth-momentum-plus-prior-main-reason',
     day: isoDay,
     requestedDay,
     sourceDay: { realtime: isoDay, boards: isoDay, priorReason: priorReason.endDay || '', history: history.endDay || '', hotThemes: history.endDay || isoDay, resonance: isoDay },
