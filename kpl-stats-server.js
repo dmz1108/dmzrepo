@@ -21011,6 +21011,43 @@ function strategyMainlineCertainty(item, trend) {
   };
 }
 
+// 主线生命周期阶段：酝酿/启动才是抢跑窗口，确认期已明牌，退潮期防追高。
+function strategyMainlineStage(item, trend) {
+  const count = Number(item?.count) || 0;
+  const bigGain = Number(item?.bigGainCount) || 0;
+  const nearLimit = Number(item?.nearLimitCount) || 0;
+  const maxLianban = Number(item?.maxLianban) || 0;
+  const fading = trend && (
+    ((Number(trend.bigGainDelta) || 0) <= -2 && (Number(trend.nearLimitDelta) || 0) <= 0) ||
+    (isFiniteNumeric(trend.inflowDelta) && Number(trend.inflowDelta) < 0 && (Number(trend.bigGainDelta) || 0) < 0)
+  );
+  if (fading) return { key: 'fade', label: '退潮观察', advice: '盘中大涨/资金信号转弱，谨慎追高，等待重新走强再考虑。' };
+  if (count >= 5 || (count >= 3 && maxLianban >= 2)) return { key: 'confirm', label: '确认期', advice: '已批量涨停、题材明牌，重点看高度股延续和分歧转一致。' };
+  if (count >= 1) {
+    return nearLimit >= 1 || bigGain >= 3
+      ? { key: 'launch', label: '启动期', advice: '首批涨停出现且冲板/大涨储备充足，属主升窗口。' }
+      : { key: 'launch', label: '启动期', advice: '首批涨停出现但扩散度一般，看大涨股能否跟上再确认。' };
+  }
+  if (bigGain >= 2 || nearLimit >= 1) return { key: 'brewing', label: '酝酿期', advice: '尚未大规模涨停，正是预判窗口，盯潜力股能否首板。' };
+  return { key: 'quiet', label: '平静', advice: '' };
+}
+
+// A股盘中时段：同样的信号在早盘和尾盘含义不同，输出给页面做时间语境。
+function strategyMainlineSessionPhase(nowParts) {
+  const hour = Number(nowParts?.hour);
+  const minute = Number(nowParts?.minute);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return '';
+  const t = hour * 60 + minute;
+  if (t < 9 * 60 + 15) return '盘前';
+  if (t < 9 * 60 + 30) return '集合竞价';
+  if (t < 10 * 60 + 30) return '早盘';
+  if (t < 11 * 60 + 30) return '上午盘';
+  if (t < 13 * 60) return '午间休市';
+  if (t < 14 * 60 + 30) return '午后';
+  if (t <= 15 * 60) return '尾盘';
+  return '已收盘';
+}
+
 // 盘中动能：进程内采样对比 ~5-45 分钟前的自己，识别正在加速的主线。重启后冷启动，属可接受降级。
 function strategyMainlineTrackTrend(key, snap) {
   const cleanKey = String(key || '').trim();
@@ -21065,7 +21102,9 @@ function strategyMainlineAugmentPrediction(item, isToday) {
   const focusStocks = strategyMainlineFocusStocks(item);
   const withBreadth = { ...item, breadth: breadth || null };
   const certainty = strategyMainlineCertainty(withBreadth, trend);
+  const stage = strategyMainlineStage(withBreadth, trend);
   const explain = [...(Array.isArray(item?.explain) ? item.explain : [])];
+  if (stage.advice) explain.push(`当前处于${stage.label}：${stage.advice}`);
   if (breadth && breadthScore > 0) {
     explain.push(`${breadth.boardName || '相关板块'}成分股${breadth.upPct}%上涨、涨幅中位${breadth.medianGainPct >= 0 ? '+' : ''}${breadth.medianGainPct}%，普涨结构支持主线成立。`);
   }
@@ -21087,7 +21126,8 @@ function strategyMainlineAugmentPrediction(item, isToday) {
     trend,
     focusStocks,
     certainty,
-    explain: explain.slice(0, 7),
+    stage,
+    explain: explain.slice(0, 8),
   };
 }
 
@@ -21632,7 +21672,8 @@ async function getStrategyMainlines(day) {
     };
   }).filter(x => x.count > 0 || x.bigGainCount > 0 || x.nearLimitCount > 0);
 
-  const chinaTodayIso = isoFromCompactDate(chinaNowParts().day);
+  const chinaNow = chinaNowParts();
+  const chinaTodayIso = isoFromCompactDate(chinaNow.day);
   const mainlines = strategyMergeMainlineFamilies(rawMainlines)
     .map(item => strategyMainlineAugmentPrediction(item, isoDay === chinaTodayIso))
     .sort((a, b) =>
@@ -21646,6 +21687,7 @@ async function getStrategyMainlines(day) {
     ok: true,
     mode: 'intraday-mainline',
     basis: 'realtime-board-gain-inflow-big-gainers-breadth-momentum-plus-prior-main-reason',
+    sessionPhase: isoDay === chinaTodayIso ? strategyMainlineSessionPhase(chinaNow) : '',
     day: isoDay,
     requestedDay,
     sourceDay: { realtime: isoDay, boards: isoDay, priorReason: priorReason.endDay || '', history: history.endDay || '', hotThemes: history.endDay || isoDay, resonance: isoDay },
