@@ -869,3 +869,28 @@ Notes for next agent:
 - 「次日最高涨幅」补法:确认 KPL K线 bar 数组中 high 的索引(现仅 [1]=close 有代码依据)或由 L2/QMT 侧提供日内高点,填进 getStrategyMainlineReview 的 nextHighGain。
 - 龙头三榜的分值(40/30/20 递减)和门槛(mainZt10Count≥1)集中在 strategyMainlineReworkLeaders,实盘后可调。
 - 预判回看需要积累数据:部署当天起每天自动落预判文件,第二个交易日开始出现回看行。
+
+## 2026-07-08 - Claude - 概念修正：无门槛不设龙头 + 移除 QMT 遗留
+
+Changed:
+- 龙头概念修正（与 owner 讨论定稿）：龙头/明星/候选三角色界限明确——龙头=10日30日涨幅+主因涨停次数综合（历史挣出来的）；明星=纯当日 L2 扫描数据（不看历史）；潜力/候选=盘中大涨临板观察对象。据此删除「今日强势候选顶替龙头槽」的 fallback 逻辑：无人满足主因门槛时 `mainLeader=null`，卡片龙头槽显示说明文字（首日题材→「龙头待产生，先看明星股」；其他→「暂无满足主因门槛的龙头」），不再用今日强势股冒充龙头。
+- 移除 QMT 遗留：owner 确认 QMT 已不存在。`qmt-order-stats.js` 经查零代码引用（纯死文件），已删除；`docs/PROJECT_MAP.md` 同步移除该条目。上一条交接里「次日最高涨幅可由 QMT 侧提供」的说法作废——补法仅剩：确认 K线 bar 的 high 字段索引，或由本机 L2 worker 提供日内高点。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `qmt-order-stats.js`（删除）
+- `docs/PROJECT_MAP.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check` 通过；前端内联脚本编译通过。
+- 龙头单测更新并通过：无人过门槛时 mainLeader=null 且 leaderBasisMode='none'；首日题材与非首日各自的说明文案正确；有门槛股时三榜排名照常选出真龙头。
+- `grep` 确认仓库内无任何代码引用 qmt-order-stats。
+
+Deployment:
+- GitHub branch only（并入 PR #6）。Not deployed. No restart.
+
+Notes for next agent:
+- 龙头槽为空是正常状态（尤其首日新题材），不是 bug；不要再引入任何「用今日表现顶替龙头」的逻辑。
+- QMT 已从项目移除，后续任何数据源规划不要再考虑 QMT。

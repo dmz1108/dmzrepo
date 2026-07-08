@@ -21434,14 +21434,22 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay) {
       else if (isFiniteNumeric(r.gain) && Number(r.gain) >= 5) basis.push(`今日+${Number(r.gain).toFixed(1)}%`);
       return { ...r, leadScore, basis, gated: (Number(r.mainZt10Count) || 0) >= 1 };
     });
+    // 龙头是「历史挣出来的」：三榜排名+主因门槛。没人过门槛就是没有龙头——不用今日强势股冒充。
+    // （首日新题材天然无复盘数据 → 无龙头，只看明星；次日它进了主因库，龙头才开始产生。）
     const gated = scored.filter(r => r.gated).sort((a, b) => b.leadScore - a.leadScore || (b.zt10Count || 0) - (a.zt10Count || 0));
-    const fallback = scored.slice().sort((a, b) => b.leadScore - a.leadScore);
-    const leaders = (gated.length ? gated : fallback).slice(0, 4)
-      .map(r => ({ ...r, star: r.star ? { level: r.star.level, ratios: r.star.ratios } : null, fallback: !r.gated }));
-    if (leaders.length) {
-      m.leaders = leaders;
-      m.mainLeader = leaders[0];
-      m.leaderBasisMode = gated.length ? 'pool-rank' : 'today-fallback';
+    if (gated.length) {
+      m.leaders = gated.slice(0, 4)
+        .map(r => ({ ...r, star: r.star ? { level: r.star.level, ratios: r.star.ratios } : null }));
+      m.mainLeader = m.leaders[0];
+      m.leaderBasisMode = 'pool-rank';
+      m.leaderNote = '';
+    } else {
+      m.mainLeader = null;
+      m.leaders = [];
+      m.leaderBasisMode = 'none';
+      m.leaderNote = m.isNewTheme
+        ? '首日题材，龙头待产生（无历史主因属正常），先看明星股'
+        : '暂无满足主因门槛的龙头（近10日无本主线主因涨停股）';
     }
     const starTop = (m.starStocks || [])[0] || null;
     m.starSlot = starTop ? { ...starTop } : null;

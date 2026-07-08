@@ -7192,11 +7192,11 @@
     font-weight: 760;
   }
   body.view-strategy .ml-stock.ml-leaderstock i { color: #ffd78a; }
-  body.view-strategy .ml-stock.ml-leaderstock.fb {
-    border-color: rgba(174,190,214,0.24);
-    background: rgba(174,190,214,0.06);
+  body.view-strategy .ml-leader-none {
+    color: rgba(174,190,214,0.62);
+    font-size: 12px;
+    line-height: 1.5;
   }
-  body.view-strategy .ml-stock.ml-leaderstock.fb i { color: #aebed6; }
   body.view-strategy .ml-confirmed {
     flex: 0 0 auto;
     min-height: 22px;
@@ -11197,7 +11197,9 @@ function renderStrategyMainlinesHTML(d) {
     // 龙头/明星双槽:龙头=10日涨停次数/10日30日涨幅池内排名+主因门槛选出的旗手;明星=L2主动被动比达标的资金攻击股;可能是同一只。
     const ml = m.mainLeader || null;
     const mlBasis = ml && Array.isArray(ml.basis) ? ml.basis.slice(0, 3).join(' · ') : '';
-    const leaderRow = ml ? `<div class="ml-proof-row"><span class="ml-proof-lbl">${m.leaderIsStar ? '龙头·明星' : '龙头'}</span><span class="ml-stock ml-leaderstock${ml.fallback ? ' fb' : ''}" title="${escapeHTML((ml.basis || []).join(' · '))}">${m.leaderIsStar ? '⭐' : '👑'}${escapeHTML(ml.name || ml.code || '')}<i>${escapeHTML(ml.fallback ? `今日强势候选${mlBasis ? ' · ' + mlBasis : ''}` : mlBasis)}</i></span></div>` : '';
+    const leaderRow = ml
+      ? `<div class="ml-proof-row"><span class="ml-proof-lbl">${m.leaderIsStar ? '龙头·明星' : '龙头'}</span><span class="ml-stock ml-leaderstock" title="${escapeHTML((ml.basis || []).join(' · '))}">${m.leaderIsStar ? '⭐' : '👑'}${escapeHTML(ml.name || ml.code || '')}<i>${escapeHTML(mlBasis)}</i></span></div>`
+      : (m.leaderNote ? `<div class="ml-proof-row"><span class="ml-proof-lbl">龙头</span><span class="ml-leader-none">${escapeHTML(m.leaderNote)}</span></div>` : '');
     const starSlot = m.starSlot || null;
     const starRow = starSlot && !m.leaderIsStar
       ? `<div class="ml-proof-row"><span class="ml-proof-lbl">明星</span><span class="ml-stock ml-starstock${starSlot.level === 'confirmed' ? ' confirmed' : ''}" title="L2:主动比${starSlot.ratios?.activeRatio ?? '-'} 被动比${starSlot.ratios?.passiveRatio ?? '-'} 合计比${starSlot.ratios?.supportRatio ?? '-'}">⭐${escapeHTML(starSlot.name || starSlot.code || '')}<i>${escapeHTML(starSlot.label || '')} 主${starSlot.ratios?.activeRatio ?? '-'}/被${starSlot.ratios?.passiveRatio ?? '-'}</i></span></div>`

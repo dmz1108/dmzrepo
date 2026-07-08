@@ -26,7 +26,6 @@ This GitHub seed is a sanitized code package exported from that layout. It is no
 - `kpl-stats-server.js`: main backend and API entry.
 - `strategy-backend.js`: strategy analysis support.
 - `l2-focus-scanner.js`: Level2 / active-passive scan support.
-- `qmt-order-stats.js`: QMT order statistics support.
 - `consistency-gate.js`: data consistency helper.
 
 ### Admin
