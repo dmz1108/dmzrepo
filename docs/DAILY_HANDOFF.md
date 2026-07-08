@@ -740,3 +740,36 @@ Deployment:
 Notes for next agent:
 - This release adds automatic strategy L2 scan queuing during trading sessions when the local L2 worker token is configured; watch the first live session for queue volume and whether the worker is online.
 - The 2026-07-08 source-view and same-day health checks still show all four recap sources at 46.
+
+## 2026-07-08 - Codex - Fix strategy mainline topic leakage
+
+Changed:
+- Fixed short English taxonomy keyword matching so `IP` no longer incorrectly matches `IPv6`.
+- Kept `短剧游戏` as its own strategy mainline instead of merging it into the broad `消费` card.
+- Tightened realtime board attachment so a related board only contributes the matched stocks to a mainline, instead of absorbing every big-gain stock from that board.
+- Deployed the fix to the cloud server.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- `git diff --check`
+- Local taxonomy spot check: `IPv6` no longer maps to `短剧游戏`; `IP`, `短剧游戏`, `VR/AR/MR`, `AI眼镜`, `AIPC`, `800G光模块`, and `R32制冷剂` still map as expected.
+- Cloud `node --check .\kpl-stats-server.js`
+- Public `https://dreamerqi.com/health`
+- Public `https://market.dreamerqi.com/kpl`
+- Public `https://market.dreamerqi.com/api/strategy-mainlines?day=2026-07-09`: top themes now include `IPv6` as an independent theme and no longer show a false `消费/短剧游戏` technology-stock card.
+- Public 2026-07-08 recap source-view remains 46/46 across final, kaipanla, xuangubao, jiuyangongshe, and tgb.
+
+Deployment:
+- Production touched: yes.
+- Backup before upload: `C:\PandaDashboard\backups\strategy-mainline-topic-fix-20260708-203223`.
+- Uploaded `kpl-stats-server.js`.
+- Restarted only `PandaDashboard-KPL-Server`.
+- Did not restart Caddy or `yule-server.js`.
+
+Notes for next agent:
+- This fix addresses the reported issue where the strategy `消费` card contained technology stocks such as 网宿科技、电科网安、紫光股份 because `IPv6` was misclassified through the short keyword `IP`.
+- If similar leakage appears later, check both taxonomy keyword boundary behavior and whether `strategyMainlineAttachRealtimeBoardToSeed` is receiving the intended matched code set.

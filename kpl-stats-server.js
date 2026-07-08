@@ -11740,6 +11740,16 @@ function loadThemeTaxonomy() {  // 可热加载(管理员校准加词后重读,�
 }
 loadThemeTaxonomy();
 function themeDisplayName(standard) { return String(standard || '').split('/')[0].trim(); }
+function themeKeywordMatches(text, keyword) {
+  const s = String(text || '').trim();
+  const k = String(keyword || '').trim();
+  if (!s || !k) return false;
+  if (!/[\u4e00-\u9fa5]/u.test(k) && /^[A-Za-z0-9.+\-/]+$/u.test(k) && k.length <= 4) {
+    const escaped = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(^|[^A-Za-z0-9])${escaped}($|[^A-Za-z0-9])`, 'i').test(s);
+  }
+  return s.includes(k);
+}
 // 全部标准题材显示名(供校准面板下拉)
 function allStandardThemeNames() {
   return [...new Set((THEME_TAXONOMY.taxonomy || []).map(t => themeDisplayName(t.standard)).filter(Boolean))];
@@ -11748,8 +11758,8 @@ function allStandardThemeNames() {
 function standardTheme(raw) {
   const s = String(raw || '').trim();
   if (!s) return '';
-  for (const t of THEME_NONBROAD) if (t.keywords.some(k => k && s.includes(k))) return themeDisplayName(t.standard);
-  for (const t of THEME_BROAD) if (t.keywords.some(k => k && s.includes(k))) return themeDisplayName(t.standard);
+  for (const t of THEME_NONBROAD) if ((t.keywords || []).some(k => themeKeywordMatches(s, k))) return themeDisplayName(t.standard);
+  for (const t of THEME_BROAD) if ((t.keywords || []).some(k => themeKeywordMatches(s, k))) return themeDisplayName(t.standard);
   return '';
 }
 function isDroppedThemeWord(raw) { return THEME_DROP_RE ? THEME_DROP_RE.test(String(raw || '')) : false; }
@@ -11902,8 +11912,8 @@ loadSubThemeTaxonomy();
 function standardThemeWithBroad(raw) {
   const s = String(raw || '').trim();
   if (!s) return null;
-  for (const t of THEME_NONBROAD) if (t.keywords.some(k => k && s.includes(k))) return { name: themeDisplayName(t.standard), broad: false };
-  for (const t of THEME_BROAD) if (t.keywords.some(k => k && s.includes(k))) return { name: themeDisplayName(t.standard), broad: true };
+  for (const t of THEME_NONBROAD) if ((t.keywords || []).some(k => themeKeywordMatches(s, k))) return { name: themeDisplayName(t.standard), broad: false };
+  for (const t of THEME_BROAD) if ((t.keywords || []).some(k => themeKeywordMatches(s, k))) return { name: themeDisplayName(t.standard), broad: true };
   return null;
 }
 // 细分挖掘:各源「题材标签」常被打宽(半导体/大消费/有色金属),但「细分原因」常含更具体题材(存储芯片/HBM)。
@@ -20176,12 +20186,12 @@ function strategyThemeTaxonomyInfo(raw) {
   const s = String(raw || '').trim();
   if (!s) return null;
   for (const t of THEME_NONBROAD) {
-    if ((t.keywords || []).some(k => k && s.includes(k))) {
+    if ((t.keywords || []).some(k => themeKeywordMatches(s, k))) {
       return { standard: themeDisplayName(t.standard), group: String(t.group || ''), broad: false };
     }
   }
   for (const t of THEME_BROAD) {
-    if ((t.keywords || []).some(k => k && s.includes(k))) {
+    if ((t.keywords || []).some(k => themeKeywordMatches(s, k))) {
       return { standard: themeDisplayName(t.standard), group: String(t.group || ''), broad: true };
     }
   }
@@ -20199,9 +20209,15 @@ const STRATEGY_MAINLINE_MERGE_GROUPS = new Set([
   '光通信',
   '消费电子/显示',
 ]);
+const STRATEGY_MAINLINE_KEEP_FINE_THEMES = new Set([
+  '短剧游戏',
+]);
 function strategyMainlineFamilyInfo(item) {
   const theme = String(item?.theme || '').trim();
   const info = strategyThemeTaxonomyInfo(theme);
+  if (info?.standard && STRATEGY_MAINLINE_KEEP_FINE_THEMES.has(info.standard)) {
+    return { key: `theme:${item?.key || strategyMainlineTopicKey(theme) || theme}`, label: info.standard, group: '', taxonomy: info };
+  }
   if (info?.group && STRATEGY_MAINLINE_MERGE_GROUPS.has(info.group)) {
     return { key: `group:${info.group}`, label: info.group, group: info.group, taxonomy: info };
   }
@@ -20914,13 +20930,17 @@ function strategyMainlineAttachRealtimeBoardToSeed(seed, board, matchedCodes = n
   const codes = [...new Set(sourceCodes
     .map(normalizeReasonSourceCode)
     .filter(Boolean))];
+  const restrictToMatched = Array.isArray(matchedCodes);
+  const matchedSet = new Set(codes);
   seed.boardKeySet.add(boardKey);
   for (const code of codes) {
     seed.codeSet.add(code);
     seed.realtimeCodeSet.add(code);
   }
-  const risingStocks = strategyMainlineBoardRisingStocks(board);
-  const nearLimitStocks = strategyMainlineBoardNearLimitStocks(board);
+  const risingStocks = strategyMainlineBoardRisingStocks(board)
+    .filter(stock => !restrictToMatched || matchedSet.has(normalizeReasonSourceCode(stock?.code)));
+  const nearLimitStocks = strategyMainlineBoardNearLimitStocks(board)
+    .filter(stock => !restrictToMatched || matchedSet.has(normalizeReasonSourceCode(stock?.code)));
   strategyMainlineAbsorbRisingStocks(seed, risingStocks, nearLimitStocks);
   if (gainPct != null && (seed.maxGainPct == null || gainPct > seed.maxGainPct)) {
     seed.maxGainPct = gainPct;
@@ -21634,10 +21654,11 @@ async function getStrategyMainlines(day) {
       if (!boardCodes.length && !boardRisingCodes.length) continue;
       const matchedCodes = boardCodes.filter(code => seedCodes.has(code));
       const matchedRisingCodes = boardRisingCodes.filter(code => seedCodes.has(code));
-      if (!matchedCodes.length && !matchedRisingCodes.length) continue;
+      const matchedAllCodes = [...new Set([...matchedCodes, ...matchedRisingCodes])];
+      if (!matchedAllCodes.length) continue;
       const related = strategyMainlineBoardThemeRelated(board?.name, seed.theme);
       if (!related) continue;
-      strategyMainlineAttachRealtimeBoardToSeed(seed, board, matchedCodes);
+      strategyMainlineAttachRealtimeBoardToSeed(seed, board, matchedAllCodes);
     }
   }
   const catalogBoards = await getStrategyMainlineRealtimeCatalogBoards(isoDay).catch(() => []);
