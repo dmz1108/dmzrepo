@@ -32,6 +32,7 @@ GitHub is the source of truth for **code and documentation**, but **not** for pr
 - Do not delete another agent's branch without confirmation.
 - If two agents edit the same large file — especially `kpl-stats-server.js` — compare diffs carefully before merging.
 - A merged pull request is finished. Follow-up work restarts from latest `main` on a fresh or reset branch; never stack new commits on already-merged history.
+- Each agent commits under its own identity and never rewrites another agent's commits — no `--reset-author`, amend, or rebase on shared/merged history, even if GitHub shows those commits as "Unverified". An Unverified badge only means the authoring agent has no signature or GitHub-verified email; fix it at the source agent (configure commit signing or a verified email), never by rewriting history downstream.
 
 ## After Every Meaningful Task
 

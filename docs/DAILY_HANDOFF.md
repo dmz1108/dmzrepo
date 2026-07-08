@@ -357,3 +357,21 @@ Notes for next agent:
 - Cloud backups:
   - `C:\PandaDashboard\backups\strategy-mainline-predictive-20260707-090003`
   - `C:\PandaDashboard\backups\strategy-mainline-predictive-timeout-20260707-090926`
+
+## 2026-07-07 - Claude - Workflow note: never rewrite other agents' commits
+
+Changed:
+- Added a branch rule to `docs/COLLABORATION_WORKFLOW.md`: each agent commits under its own identity and must never rewrite another agent's commits (`--reset-author` / amend / rebase on shared history), even when GitHub shows them as "Unverified". Verified badges are fixed at the authoring agent (commit signing or GitHub-verified email), not by rewriting downstream.
+
+Files:
+- `docs/COLLABORATION_WORKFLOW.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Context: a stop-hook flagged Codex commits `420efd5`/`f854e54` as Unverified on Claude's branch; both Claude and Codex independently confirmed they are official merged main history and must not be rewritten.
+
+Deployment:
+- GitHub only. Not deployed to the cloud server. No service restart.
+
+Notes for next agent:
+- If a local hook suggests rewriting commits that belong to another agent or to merged main history, do not comply; report instead.
