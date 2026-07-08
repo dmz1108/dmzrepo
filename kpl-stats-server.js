@@ -6599,7 +6599,6 @@ async function getLimitUpMainReasonRecentUniverse(url, req, res) {
 
 async function resolveAfterCloseSourceCoverage(mainReasonDay, mainReasonDb) {
   let sourceCoverage = mainReasonDb?.sourceCoverage || null;
-  if (Array.isArray(sourceCoverage?.reviewAutoSources) && sourceCoverage.reviewAutoSources.length) return sourceCoverage;
   if (!mainReasonDb?.stocks?.length) return sourceCoverage;
   const { payload } = await buildDaySourceViewWithConsensus(mainReasonDay, {}).catch(() => ({ payload: null }));
   const sourceStats = (Array.isArray(payload?.sourceStats) ? payload.sourceStats : [])
@@ -6607,15 +6606,16 @@ async function resolveAfterCloseSourceCoverage(mainReasonDay, mainReasonDb) {
   if (!sourceStats.length) return sourceCoverage;
   const total = Number(sourceCoverage?.total || mainReasonDb?.count || mainReasonDb?.stocks?.length || 0);
   const covered = Math.max(0, ...sourceStats.map(stat => Number(stat?.stockCount || 0)));
+  const sourceErrors = Array.isArray(payload?.sourceErrors)
+    ? payload.sourceErrors
+    : (Array.isArray(sourceCoverage?.sourceErrors) ? sourceCoverage.sourceErrors : []);
   return {
     ...(sourceCoverage || {}),
     total,
-    reviewCoveredCount: Number(sourceCoverage?.reviewCoveredCount || 0) || covered,
-    reviewCoveragePct: Number(sourceCoverage?.reviewCoveragePct || 0) || (total ? Number(((covered / total) * 100).toFixed(2)) : 0),
+    reviewCoveredCount: covered,
+    reviewCoveragePct: total ? Number(((covered / total) * 100).toFixed(2)) : 0,
     reviewAutoSources: sourceStats,
-    sourceErrors: Array.isArray(sourceCoverage?.sourceErrors) && sourceCoverage.sourceErrors.length
-      ? sourceCoverage.sourceErrors
-      : (Array.isArray(payload?.sourceErrors) ? payload.sourceErrors : []),
+    sourceErrors,
   };
 }
 
@@ -13571,7 +13571,7 @@ function normalizeTgbVisionRows(payload, sourceMeta = {}) {
     const detailReason = String(item?.detailReason || item?.reason || item?.detail || item?.reasonHeadline || '').replace(/\s+/g, ' ').trim();
     const firstLimitTime = String(item?.firstLimitTime || item?.time || '').replace(/\s+/g, '').trim();
     const limitUpCount = String(item?.limitUpCount || item?.count || item?.mark || '1').replace(/\s+/g, '').trim() || '1';
-    if (!/^\d{6}$/.test(code) || !name || !boardTopic || isStStock(name)) return null;
+    if (!/^\d{6}$/.test(code) || !name || !boardTopic || isExcludedFromReview(code, name)) return null;
     return {
       code,
       name,
@@ -13741,7 +13741,7 @@ function normalizeTgbQwenOcrRow(row, sourceMeta = {}) {
   const name = String(row?.name || row?.stockName || '').trim();
   const boardTopic = String(row?.boardTopic || row?.topic || row?.plate || row?.primaryRawTopic || '').trim();
   const detailReason = String(row?.detailReason || row?.reason || row?.mainReason || '').replace(/\s+/g, ' ').trim();
-  if (!code || !name || isStStock(name)) return null;
+  if (!code || !name || isExcludedFromReview(code, name)) return null;
   return {
     code,
     name,
@@ -14042,7 +14042,7 @@ function correctTgbQwenOcrRowsByLimitPool(rows, baselineStocks = []) {
   for (const stock of baselineStocks || []) {
     const code = normalizeReasonSourceCode(stock?.code);
     const name = String(stock?.name || '').trim();
-    if (!code || !name || isStStock(name)) continue;
+    if (!code || !name || isExcludedFromReview(code, name)) continue;
     const item = { code, name };
     byCode.set(code, item);
     byName.set(tgbQwenOcrNameKey(name), item);
@@ -14325,7 +14325,7 @@ async function readSourceBuilderLimitStocksFromArtifacts(day) {
       for (const row of extractStockRowsFromReviewArtifactPayload(payload)) {
         const code = normalizeReasonSourceCode(row?.code || row?.stockCode || row?.stock_code);
         const name = String(row?.name || row?.stockName || row?.stock_name || '').trim();
-        if (!code || !name || isStStock(name) || seen.has(code)) continue;
+        if (!code || !name || isExcludedFromReview(code, name) || seen.has(code)) continue;
         seen.add(code);
         stocks.push({
           code,
@@ -14366,7 +14366,7 @@ async function readSourceBuilderLimitStocks(day, apiKey) {
   for (const stock of payload?.stocks || []) {
     const code = normalizeReasonSourceCode(stock?.code);
     const name = String(stock?.name || '').trim();
-    if (!code || !name || isStStock(name) || seen.has(code)) continue;
+    if (!code || !name || isExcludedFromReview(code, name) || seen.has(code)) continue;
     seen.add(code);
     stocks.push({ ...stock, code, name });
   }
