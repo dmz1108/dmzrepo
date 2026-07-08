@@ -881,3 +881,42 @@ Deployment:
 Notes for next agent:
 - The Explore page still uses the existing public-search/curated-place architecture. Good next source directions are: city/local official activity feeds for exhibitions and markets, trusted local公众号/媒体, review/ranking sources for shops, and map/POI-style sources for address/opening-hour verification.
 - Avoid making the page a generic travel guide. Keep it focused on recent new shops, city places, weekend routes, and concrete decision details.
+
+## 2026-07-08 - Codex - Add optional Explore POI verification layer
+
+Changed:
+- Added an optional map/POI verification layer for the Explore page so concrete city places can be enriched with verified address, coordinate string, telephone, district/business-area, provider, confidence, and checked time.
+- Added local-only `panda-discovery-config.json` support plus admin API `/api/admin/discovery/poi-config`; the public response masks the key and never returns the raw secret.
+- Added the discovery POI config to the site-sync local-only exclusion list so cloud-only map service credentials are not synced to company hosts.
+- Added data-source health reporting for `探索地图 POI 校验`.
+- Updated Explore UI to show `地图已校验`, address, telephone, and visit-confirmation text when POI verification exists; without a map key the page keeps the existing public-search behavior.
+
+Files:
+- `kpl-stats-server.js`
+- `Qi/index.html`
+- `Qi/qi-home.jsx`
+- `Qi/qi-home.compiled.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node Qi/build-home.js`
+- `node --check kpl-stats-server.js`
+- `node --check Qi/qi-home.compiled.js`
+- `git diff --check`
+- Cloud `node --check .\kpl-stats-server.js`
+- Cloud `node --check .\Qi\qi-home.compiled.js`
+- Public `https://explore.dreamerqi.com/`
+- Public `https://explore.dreamerqi.com/api/discovery`
+- Public discovery API returned `ready`, `generatedDay: 2026-07-08`, `itemCount: 168`, and `poiVerifiedCount: 0` because no cloud map key is configured yet.
+
+Deployment:
+- Production touched: yes.
+- Backup before upload: `C:\PandaDashboard\backups\discovery-poi-verify-20260708-221945`.
+- Uploaded `kpl-stats-server.js`, `Qi/index.html`, `Qi/qi-home.jsx`, and `Qi/qi-home.compiled.js`.
+- Restarted only `PandaDashboard-KPL-Server` using the scheduled task; new listener PID was `12660`.
+- Did not restart Caddy or `yule-server.js`.
+
+Notes for next agent:
+- To enable POI verification on the cloud server, save a Gaode/AMap Web Service key through `/api/admin/discovery/poi-config` or set `PANDA_DISCOVERY_AMAP_KEY` / `AMAP_WEB_SERVICE_KEY` on the server, then run Explore sync.
+- Do not commit `panda-discovery-config.json`; it is a runtime-only secret-bearing config.
+- The POI layer is a verification/enrichment layer only. It should not replace the Explore source-selection logic or turn the page into a generic travel guide.

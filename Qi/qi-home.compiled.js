@@ -1407,17 +1407,29 @@ function SpbDiscover() {
     return raw.replace(/线索/g, '').trim() || '城市线索';
   };
   const sourceTone = item => {
+    if (item?.poi?.verified) return '地图已校验';
     const raw = String(item?.sourceName || '');
     if (/站内地点资料/.test(raw)) return '已整理';
     if (/大众点评|微信|百度新闻/.test(raw)) return '公开线索';
     return '待观察';
   };
+  const poiLine = item => {
+    const poi = item?.poi?.verified ? item.poi : null;
+    if (!poi) return '';
+    return [poi.businessArea || poi.district, poi.address].filter(Boolean).join(' · ');
+  };
+  const visitCheckText = item => {
+    const poi = item?.poi?.verified ? item.poi : null;
+    if (poi?.tel) return `地图已校验地址，可电话 ${poi.tel} 确认营业和排队`;
+    if (poi?.address) return `地图已校验地址，出发前再确认营业时间和预约`;
+    return '确认营业时间、预约和排队情况';
+  };
   const itemReason = item => {
-    const parts = [item?.sceneTag, item?.category, item?.district].filter(Boolean);
+    const parts = [item?.sceneTag, item?.category, item?.poi?.businessArea || item?.district].filter(Boolean);
     if (parts.length) return parts.join(' · ');
     return item?.tagline || '近期城市去处';
   };
-  const sourcePlan = [['新店雷达', '新开、首店、试营业、快闪和上新，是探索页的第一层线索。'], ['口碑校验', '优先看本地公众号、榜单线索、城市新闻和地点资料，过滤泛资讯。'], ['路线价值', '不只列店名，还判断适合约饭、拍照、慢逛、看展还是夜间小聚。'], ['到店提醒', '每个详情都保留营业、预约、排队、临时调整等二次确认提醒。']];
+  const sourcePlan = [['新店雷达', '新开、首店、试营业、快闪和上新，是探索页的第一层线索。'], ['口碑校验', '优先看本地公众号、榜单线索、城市新闻和地点资料，过滤泛资讯。'], ['地图核验', '配置地图服务后，会补充真实地址、商圈、电话和坐标，区分线索与可到达地点。'], ['路线价值', '不只列店名，还判断适合约饭、拍照、慢逛、看展还是夜间小聚。'], ['到店提醒', '详情里保留营业、预约、排队、临时调整等二次确认提醒。']];
   const openItem = (city, item) => {
     const photos = getItemPhotos(item);
     setSelectedItem({
@@ -1708,7 +1720,18 @@ function SpbDiscover() {
         fontSize: 13.5,
         fontWeight: 760
       }
-    }, itemReason(item)), React.createElement("div", {
+    }, itemReason(item)), poiLine(item) ? React.createElement("div", {
+      style: {
+        marginTop: 7,
+        color: 'oklch(0.82 0.045 150)',
+        fontSize: 12.8,
+        fontWeight: 760,
+        display: '-webkit-box',
+        WebkitLineClamp: 1,
+        WebkitBoxOrient: 'vertical',
+        overflow: 'hidden'
+      }
+    }, poiLine(item)) : null, React.createElement("div", {
       style: {
         marginTop: 10,
         color: 'oklch(0.9 0.02 255)',
@@ -1865,7 +1888,17 @@ function SpbDiscover() {
         WebkitBoxOrient: 'vertical',
         overflow: 'hidden'
       }
-    }, item.editorialSummary || item.summary || item.tagline || ''), item.district || item.sceneTag ? React.createElement("div", {
+    }, item.editorialSummary || item.summary || item.tagline || ''), poiLine(item) ? React.createElement("div", {
+      style: {
+        marginTop: 8,
+        color: 'oklch(0.82 0.045 150)',
+        fontSize: 12.5,
+        fontWeight: 720,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+      }
+    }, poiLine(item)) : null, item.district || item.sceneTag || item?.poi?.verified ? React.createElement("div", {
       style: {
         marginTop: 10,
         display: 'flex',
@@ -1886,7 +1919,15 @@ function SpbDiscover() {
         padding: '3px 8px',
         fontSize: 12
       }
-    }, item.sceneTag) : null, React.createElement("span", {
+    }, item.sceneTag) : null, item?.poi?.verified ? React.createElement("span", {
+      style: {
+        color: 'oklch(0.82 0.045 150)',
+        border: '1px solid oklch(0.72 0.1 150 / 0.35)',
+        borderRadius: 999,
+        padding: '3px 8px',
+        fontSize: 12
+      }
+    }, "\u5730\u56FE\u5DF2\u6821\u9A8C") : null, React.createElement("span", {
       style: {
         color: spb.faint,
         border: `1px solid ${spb.line}`,
@@ -1985,7 +2026,7 @@ function SpbDiscover() {
       gap: 9,
       flexWrap: 'wrap'
     }
-  }, [selectedItem.cityName || selectedItem.city, selectedItem.category, selectedItem.district].filter(Boolean).map(text => React.createElement("span", {
+  }, [selectedItem.cityName || selectedItem.city, selectedItem.category, selectedItem.district, selectedItem?.poi?.verified ? '地图已校验' : ''].filter(Boolean).map(text => React.createElement("span", {
     key: text,
     style: {
       border: `1px solid oklch(1 0 0 / 0.22)`,
@@ -2037,7 +2078,11 @@ function SpbDiscover() {
       textAlign: 'right',
       lineHeight: 1.6
     }
-  }, React.createElement("div", null, selectedItem.cityName || selectedItem.city), React.createElement("div", null, [selectedItem.category, selectedItem.sceneTag].filter(Boolean).join(' · ')), React.createElement("div", null, sourceLabel(selectedItem)))), selectedItem.editorialTitle || selectedItem.tagline ? React.createElement("div", {
+  }, React.createElement("div", null, selectedItem.cityName || selectedItem.city), React.createElement("div", null, [selectedItem.category, selectedItem.sceneTag].filter(Boolean).join(' · ')), selectedItem?.poi?.verified ? React.createElement("div", {
+    style: {
+      color: 'oklch(0.82 0.045 150)'
+    }
+  }, "\u5730\u56FE\u5DF2\u6821\u9A8C") : null, React.createElement("div", null, sourceLabel(selectedItem)))), selectedItem.editorialTitle || selectedItem.tagline ? React.createElement("div", {
     style: {
       marginTop: 24,
       color: spb.ink,
@@ -2052,7 +2097,7 @@ function SpbDiscover() {
       gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
       gap: 10
     }
-  }, [['为什么看', itemReason(selectedItem)], ['信息来源', sourceLabel(selectedItem)], ['出发前', '确认营业时间、预约和排队情况']].map(([title, text]) => React.createElement("div", {
+  }, [['为什么看', itemReason(selectedItem)], ['信息来源', sourceLabel(selectedItem)], ['出发前', visitCheckText(selectedItem)], ...(selectedItem?.poi?.verified ? [['地址', selectedItem.poi.address], ['电话', selectedItem.poi.tel || '暂无公开电话']] : [])].map(([title, text]) => React.createElement("div", {
     key: title,
     style: {
       border: `1px solid ${spb.line}`,

@@ -107,6 +107,7 @@ const ALLOW_INBOUND_SITE_SYNC = (() => {
 const AUTH_MAIL_CONFIG_PATH = path.join(__dirname, 'panda-mail-config.json');
 const AUTH_MAIL_OUTBOX_DIR = path.join(__dirname, 'panda-mail-outbox');
 const DISCOVERY_DB_PATH = path.join(__dirname, 'panda-discovery-db.json');
+const DISCOVERY_CONFIG_PATH = path.join(__dirname, 'panda-discovery-config.json');
 const DISCOVERY_IMAGE_CACHE_DIR = path.join(PERSIST_CACHE_DIR, 'discovery-images');
 const JIUYANGONGSHE_AUTH_PATH = path.join(__dirname, 'jiuyangongshe-auth.json');
 const SOURCE_STRUCTURER_CONFIG_PATH = path.join(__dirname, 'source-structurer-config.json');
@@ -142,6 +143,7 @@ const DISCOVERY_AUTO_SYNC_MINUTE = Number(process.env.PANDA_DISCOVERY_AUTO_SYNC_
 const DISCOVERY_CITY_LIMIT = Number(process.env.PANDA_DISCOVERY_CITY_LIMIT || 24);
 const DISCOVERY_CATEGORY_PER_CITY_LIMIT = Number(process.env.PANDA_DISCOVERY_CATEGORY_PER_CITY_LIMIT || 3);
 const DISCOVERY_IMAGE_ENHANCE_LIMIT = Number(process.env.PANDA_DISCOVERY_IMAGE_ENHANCE_LIMIT || 24);
+const DISCOVERY_POI_ENRICH_LIMIT_PER_CITY = Number(process.env.PANDA_DISCOVERY_POI_ENRICH_LIMIT_PER_CITY || 12);
 const CHATTER_MAX_POSTS = Number(process.env.PANDA_CHATTER_MAX_POSTS || 500);
 const CHATTER_TEXT_MAX = Number(process.env.PANDA_CHATTER_TEXT_MAX || 1200);
 const CHATTER_COMMENT_MAX = Number(process.env.PANDA_CHATTER_COMMENT_MAX || 600);
@@ -314,6 +316,7 @@ const SITE_SYNC_LOCAL_ONLY_PATHS = new Set([
   'panda-auth-db.json',
   'panda-auth-sessions.json',
   'panda-mail-config.json',
+  'panda-discovery-config.json',
   'jiuyangongshe-auth.json',
   'source-structurer-config.json',
   'panda-sync-config.json',
@@ -3590,6 +3593,82 @@ async function sourceStructurerConfigApi(url, req, res) {
   return send(res, 200, publicSourceStructurerConfig(config));
 }
 
+async function readDiscoveryConfigFilePayload() {
+  try {
+    return JSON.parse(await fs.readFile(DISCOVERY_CONFIG_PATH, 'utf8')) || {};
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+    return {};
+  }
+}
+
+function normalizeDiscoveryPoiConfig(payload = {}) {
+  const envAmapKey = String(
+    process.env.PANDA_DISCOVERY_AMAP_KEY ||
+    process.env.AMAP_WEB_SERVICE_KEY ||
+    process.env.AMAP_API_KEY ||
+    process.env.GAODE_WEB_SERVICE_KEY ||
+    ''
+  ).trim();
+  const amapKey = envAmapKey || String(payload.amapKey || payload.gaodeKey || '').trim();
+  const enabled = payload.enabled === false || payload.poiEnabled === false ? false : true;
+  return {
+    configured: enabled && !!amapKey,
+    enabled,
+    provider: 'amap-web-service',
+    amapKey,
+    amapKeyConfigured: !!amapKey,
+    amapKeyMasked: maskSecret(amapKey),
+    savedAt: envAmapKey ? 'env' : (payload.savedAt || ''),
+    configPath: DISCOVERY_CONFIG_PATH,
+  };
+}
+
+async function readDiscoveryPoiConfig() {
+  return normalizeDiscoveryPoiConfig(await readDiscoveryConfigFilePayload());
+}
+
+async function writeDiscoveryPoiConfig(data = {}) {
+  const current = await readDiscoveryConfigFilePayload();
+  const clear = data.clearAmapKey === true || data.amapKey === null;
+  const nextKey = clear
+    ? ''
+    : (String(data.amapKey || '').trim() || String(current.amapKey || current.gaodeKey || '').trim());
+  const payload = {
+    version: 1,
+    enabled: data.enabled === false || data.poiEnabled === false ? false : true,
+    provider: 'amap-web-service',
+    amapKey: nextKey,
+    savedAt: new Date().toISOString(),
+  };
+  await fs.writeFile(DISCOVERY_CONFIG_PATH, JSON.stringify(payload, null, 2), 'utf8');
+  return normalizeDiscoveryPoiConfig(payload);
+}
+
+function publicDiscoveryPoiConfig(config) {
+  return {
+    ok: true,
+    configured: !!config.configured,
+    enabled: config.enabled !== false,
+    provider: config.provider,
+    amapKeyConfigured: !!config.amapKey,
+    amapKeyMasked: config.amapKeyMasked,
+    savedAt: config.savedAt,
+    configPath: config.configPath,
+  };
+}
+
+async function discoveryPoiConfigApi(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  if (req.method === 'GET') {
+    return send(res, 200, publicDiscoveryPoiConfig(await readDiscoveryPoiConfig()));
+  }
+  if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
+  const body = await readJsonBody(req);
+  const config = await writeDiscoveryPoiConfig(body);
+  return send(res, 200, publicDiscoveryPoiConfig(config));
+}
+
 const PUBLIC_KPL_PROXY_PATHS = new Set([
   '/kpl/hangqing/index_info',
   '/kpl/hangqing/plate_ranking_realtime',
@@ -4188,6 +4267,7 @@ async function adminCloudHealth(url, req, res) {
   checks.push(await jsonFileHealth('邮箱 SMTP 配置', AUTH_MAIL_CONFIG_PATH, { key: 'smtp-config', optional: true }));
   checks.push(await jsonFileHealth('韭研自动登录配置', JIUYANGONGSHE_AUTH_PATH, { key: 'jiuyangongshe-auth', optional: true }));
   checks.push(await jsonFileHealth('图片结构化服务配置', SOURCE_STRUCTURER_CONFIG_PATH, { key: 'source-structurer', optional: true }));
+  checks.push(await jsonFileHealth('探索地图校验配置', DISCOVERY_CONFIG_PATH, { key: 'discovery-poi-config', optional: true }));
 
   const smtp = publicSmtpConfig(await getSmtpConfig());
   push(
@@ -4196,6 +4276,15 @@ async function adminCloudHealth(url, req, res) {
     smtp.configured ? 'ok' : 'warn',
     smtp.configured ? `${smtp.host}:${smtp.port || ''} 已配置` : '未配置 SMTP，公网注册和忘记密码无法发验证码',
     { configured: smtp.configured, host: smtp.host || '', from: smtp.from || '', hasPassword: smtp.hasPassword }
+  );
+
+  const poiConfig = publicDiscoveryPoiConfig(await readDiscoveryPoiConfig());
+  push(
+    'discovery-poi-ready',
+    '探索地图 POI 校验',
+    poiConfig.configured ? 'ok' : 'warn',
+    poiConfig.configured ? '高德 Web 服务 Key 已配置，可校验地址和坐标' : '未配置地图 Web 服务 Key，探索页只显示公开线索',
+    { configured: poiConfig.configured, provider: poiConfig.provider, keyMasked: poiConfig.amapKeyMasked }
   );
 
   const syncConfig = await readSiteSyncConfig().catch(err => ({ error: err.message, configured: false }));
@@ -8121,6 +8210,166 @@ function discoveryOriginalText(item) {
   ].filter(Boolean).join(' '));
 }
 
+function normalizeDiscoveryPoiText(value) {
+  const text = Array.isArray(value) ? value.filter(Boolean).join(' ') : String(value || '');
+  return cleanDiscoveryText(text).replace(/^[\[\]]+|[\[\]]+$/g, '').trim();
+}
+
+function normalizeDiscoveryPoi(poi) {
+  if (!poi || typeof poi !== 'object') return null;
+  const name = normalizeDiscoveryShopName(poi.name || '');
+  const address = normalizeDiscoveryPoiText(poi.address || '');
+  const location = normalizeDiscoveryPoiText(poi.location || '');
+  if (!name || !address || !location) return null;
+  return {
+    verified: poi.verified !== false,
+    provider: poi.provider || 'amap-web-service',
+    name,
+    address,
+    location,
+    tel: normalizeDiscoveryPoiText(poi.tel || ''),
+    type: normalizeDiscoveryPoiText(poi.type || ''),
+    city: normalizeDiscoveryPoiText(poi.city || ''),
+    district: normalizeDiscoveryPoiText(poi.district || ''),
+    businessArea: normalizeDiscoveryPoiText(poi.businessArea || ''),
+    confidence: Number(poi.confidence || 0),
+    checkedAt: poi.checkedAt || '',
+  };
+}
+
+function discoveryPoiComparableName(value) {
+  return normalizeDiscoveryShopName(value || '')
+    .toLowerCase()
+    .replace(/[（(].*?[）)]/g, '')
+    .replace(/[\s·・\-_/\\|｜:：,.，。'"“”‘’]+/g, '')
+    .replace(/(旗舰店|总店|分店|门店|店|馆|中心)$/g, '')
+    .trim();
+}
+
+function discoveryPoiNameConfidence(sourceName, poiName) {
+  const source = discoveryPoiComparableName(sourceName);
+  const target = discoveryPoiComparableName(poiName);
+  if (!source || !target) return 0;
+  if (source === target) return 96;
+  if (target.includes(source) || source.includes(target)) {
+    const shorter = Math.min(source.length, target.length);
+    return shorter >= 4 ? 86 : 64;
+  }
+  let common = 0;
+  for (const char of source) {
+    if (target.includes(char)) common += 1;
+  }
+  const ratio = common / Math.max(source.length, target.length);
+  return Math.round(ratio * 70);
+}
+
+function discoveryAmapField(value) {
+  if (Array.isArray(value)) return value.filter(Boolean).join(' ');
+  if (value && typeof value === 'object') return Object.values(value).filter(Boolean).join(' ');
+  return String(value || '').trim();
+}
+
+function discoveryAmapPoiToRecord(city, item, poi) {
+  const cityName = discoveryAmapField(poi.cityname);
+  const district = discoveryAmapField(poi.adname);
+  const address = discoveryAmapField(poi.address);
+  const name = normalizeDiscoveryShopName(poi.name || '');
+  const location = discoveryAmapField(poi.location);
+  const confidence = discoveryPoiNameConfidence(item?.name || '', name);
+  const sameCity = !city?.name || cityName.includes(city.name) || district.includes(city.name) || String(poi.pname || '').includes(city.name);
+  if (!name || !address || !location || !sameCity || confidence < 55) return null;
+  return normalizeDiscoveryPoi({
+    verified: true,
+    provider: 'amap-web-service',
+    name,
+    address,
+    location,
+    tel: discoveryAmapField(poi.tel),
+    type: discoveryAmapField(poi.type),
+    city: cityName || city?.name || '',
+    district,
+    businessArea: discoveryAmapField(poi.business_area || poi.businessarea),
+    confidence,
+    checkedAt: new Date().toISOString(),
+  });
+}
+
+function discoveryPoiCacheFresh(cache, maxAgeDays = 14) {
+  const saved = Date.parse(cache?.savedAt || '');
+  if (!Number.isFinite(saved)) return false;
+  return (Date.now() - saved) <= maxAgeDays * 86400000;
+}
+
+async function fetchAmapDiscoveryPoi(city, item, config) {
+  if (!config?.configured || !item?.name) return null;
+  const cacheKey = `${config.provider}:${city?.id || city?.name || ''}:${normalizeDiscoveryShopName(item.name)}`;
+  const cached = await readPersistCache('discovery-poi', cacheKey);
+  if (cached && discoveryPoiCacheFresh(cached, cached.data?.error ? 1 : 14)) {
+    return normalizeDiscoveryPoi(cached.data?.poi || cached.data || null);
+  }
+
+  const url = new URL('https://restapi.amap.com/v3/place/text');
+  url.searchParams.set('key', config.amapKey);
+  url.searchParams.set('keywords', [city?.name, item.name].filter(Boolean).join(' '));
+  if (city?.name) url.searchParams.set('city', city.name);
+  url.searchParams.set('citylimit', 'true');
+  url.searchParams.set('offset', '8');
+  url.searchParams.set('page', '1');
+  url.searchParams.set('extensions', 'all');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 9000);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) PandaDiscovery/1.0',
+        'Accept': 'application/json,text/plain,*/*',
+      },
+    });
+    if (!res.ok) throw new Error(`amap poi ${res.status}`);
+    const data = await res.json().catch(() => null);
+    if (String(data?.status || '') !== '1') throw new Error(data?.info || 'amap poi failed');
+    const pois = Array.isArray(data?.pois) ? data.pois : [];
+    const candidates = pois
+      .map(poi => discoveryAmapPoiToRecord(city, item, poi))
+      .filter(Boolean)
+      .sort((a, b) => Number(b.confidence || 0) - Number(a.confidence || 0));
+    const poi = candidates[0] || null;
+    await writePersistCache('discovery-poi', cacheKey, { poi });
+    return poi;
+  } catch (err) {
+    await writePersistCache('discovery-poi', cacheKey, { poi: null, error: err.message || String(err) });
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function enrichDiscoveryItemsWithPoi(items, city) {
+  const rows = Array.isArray(items) ? items : [];
+  const config = await readDiscoveryPoiConfig().catch(() => ({ configured: false }));
+  if (!config.configured) return rows;
+  let enriched = 0;
+  for (const item of rows.sort(sortDiscoveryItems)) {
+    const existing = normalizeDiscoveryPoi(item.poi);
+    if (existing?.verified) {
+      item.poi = existing;
+      continue;
+    }
+    if (enriched >= Math.max(0, DISCOVERY_POI_ENRICH_LIMIT_PER_CITY)) break;
+    if (discoveryNameLooksEditorialNoise(item.name || '', discoveryOriginalText(item))) continue;
+    const poi = await fetchAmapDiscoveryPoi(city, item, config);
+    if (poi?.verified) {
+      item.poi = poi;
+      if (!item.district && poi.district) item.district = poi.district;
+      if (!item.tags?.includes('地图已校验')) item.tags = ['地图已校验'].concat(Array.isArray(item.tags) ? item.tags : []).slice(0, 4);
+      enriched += 1;
+    }
+    await sleep(120);
+  }
+  return rows;
+}
+
 function discoveryItemFreshnessScore(item) {
   const text = discoveryOriginalText(item);
   let score = 0;
@@ -8148,6 +8397,7 @@ function discoveryQualityScore(item) {
   score += discoveryItemFreshnessScore(item);
   if (item?.imageUrl && !Object.values(DISCOVERY_CATEGORY_PHOTOS).includes(item.imageUrl)) score += 5;
   if (Array.isArray(item?.photos) && item.photos.length > 1) score += 2;
+  if (normalizeDiscoveryPoi(item?.poi)?.verified) score += 10;
   if (/微信|公众号|文章/.test(item?.sourceName || '')) score += 3;
   if (/大众点评|榜单/.test(item?.sourceName || '')) score += 2;
   if (/站内地点资料/.test(sourceName)) score += 28;
@@ -8334,7 +8584,8 @@ function decorateDiscoveryItem(item) {
   const category = DISCOVERY_NAME_CATEGORY_OVERRIDES[name] || item.category || guessDiscoveryCategory(`${item.summary || ''} ${item.sourceTitle || ''}`);
   const city = item.city || '';
   const profile = discoveryPlaceProfile(city, name);
-  const district = profile?.district || item.district || '';
+  const poi = normalizeDiscoveryPoi(item.poi);
+  const district = profile?.district || item.district || poi?.district || poi?.businessArea || '';
   const sceneTag = item.sceneTag || discoverySceneTagForItem({ ...item, category, name });
   const rawCopy = focusedDiscoveryCopy({ ...item, category, city, district }, name);
   const shortCopy = rawCopy
@@ -8361,28 +8612,33 @@ function decorateDiscoveryItem(item) {
   const editorialSummary = sourceHint
     ? `${name}是${locationText}的${category || '城市生活'}去处，近期线索集中在${sceneTag}：${sourceHint}`
     : `${name}是${locationText}的${category || '城市生活'}去处，适合按${focus}来判断是否加入这次路线。`;
+  const poiLine = poi?.verified
+    ? `地图校验显示它位于${poi.address}${poi.businessArea ? `，靠近${poi.businessArea}` : ''}${poi.tel ? `，可用电话 ${poi.tel} 做出发前确认` : ''}。`
+    : '';
   const editorialDetail = [
     `${name}是${locationText}的具体${category || '城市生活'}地点。这个条目只围绕这个店铺或地点展开，适合和同城同类内容放在一起比较，不会把你带到外部文章才能看重点。`,
     sourceHint
       ? `目前最值得先看的线索是：${sourceHint}。如果你正在筛选${city || '本地'}${category || '去处'}，可以先把它当作一个具体备选，再和同页其他地点对比。`
       : `目前可用信息主要集中在地点、类型和适合场景。可以先按距离、时间和喜好放入候选；有新的开业、上新、活动或探店线索时，内容会继续补全。`,
+    poiLine,
     `${category || '城市生活'}类内容重点看${focus}。${angles.decision}`,
     `${angles.route}${mood ? ` ${mood}` : ''}`,
     `到店前建议再确认营业时间、预约状态、排队情况和当天是否有临时调整。${angles.note}`,
-  ].join('\n\n');
+  ].filter(Boolean).join('\n\n');
   const imageCaption = item.imageCaption || profile?.imageCaption || `${name}的图片会优先匹配门店外观、空间或代表性出品；如果当天找不到足够可靠的门店图片，才会退回到同类目的氛围图。`;
   return {
     ...item,
     name,
     category,
     district,
+    poi,
     imageUrl,
     imageSource,
     photos: photoList.length ? photoList : (imageUrl ? [imageUrl] : []),
     tags,
     sceneTag,
     tagline: `${locationText} · ${sceneTag}`,
-    qualityScore: discoveryQualityScore({ ...item, name, category, district, imageUrl, photos: photoList }),
+    qualityScore: discoveryQualityScore({ ...item, name, category, district, poi, imageUrl, photos: photoList }),
     editorialTitle: `${name}｜${locationText} · ${category || sceneTag}`,
     editorialSummary,
     editorialDetail,
@@ -8391,7 +8647,7 @@ function decorateDiscoveryItem(item) {
       { title: '类型', text: category || sceneTag },
       { title: '看点', text: sceneTag },
       { title: '适合', text: mood.replace(/。$/, '') },
-      { title: '位置', text: locationText },
+      { title: poi?.verified ? '地图校验' : '位置', text: poi?.verified ? poi.address : locationText },
     ],
   };
 }
@@ -9385,12 +9641,19 @@ async function collectDiscoveryCityItems(city) {
     .sort(sortDiscoveryItems);
   const selected = selectDiscoveryCityItems(ranked);
   await enhanceDiscoveryItemImages(selected, city);
+  await enrichDiscoveryItemsWithPoi(selected, city);
   return selectDiscoveryCityItems(selected);
 }
 
 function mergeDiscoveryCityItems(fresh, previous) {
   const merged = [];
   const seen = new Set();
+  const previousPoiByName = new Map();
+  for (const item of previous || []) {
+    const name = normalizeDiscoveryShopName(item?.name || '');
+    const poi = normalizeDiscoveryPoi(item?.poi);
+    if (name && poi?.verified) previousPoiByName.set(name.toLowerCase(), poi);
+  }
   for (const item of [...(fresh || []), ...(previous || [])]) {
     const name = normalizeDiscoveryShopName(item?.name || '');
     if (!name) continue;
@@ -9406,6 +9669,7 @@ function mergeDiscoveryCityItems(fresh, previous) {
       category: item.category || '其他',
       contentTitle: item.contentTitle || item.sourceTitle || '',
       contentText: cleanDiscoveryText(item.contentText || item.summary || item.sourceTitle || '').slice(0, 420),
+      poi: normalizeDiscoveryPoi(item.poi) || previousPoiByName.get(name.toLowerCase()) || null,
       imageUrl,
       photos: photoList.length ? photoList : (imageUrl ? [imageUrl] : []),
       tags: Array.isArray(item.tags) ? item.tags.slice(0, 4) : [],
@@ -22285,6 +22549,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/admin/cloud-health') return await adminCloudHealth(url, req, res);
     if (url.pathname === '/api/admin/ops-log') return await adminOpsLog(url, req, res);
     if (url.pathname === '/api/admin/review-source-health') return await adminReviewSourceHealth(url, req, res);
+    if (url.pathname === '/api/admin/discovery/poi-config') return await discoveryPoiConfigApi(url, req, res);
     if (url.pathname === '/api/auth/register/request-code') return await authRegisterRequestCode(url, req, res);
     if (url.pathname === '/api/auth/register') return await authRegister(url, req, res);
     if (url.pathname === '/api/auth/login') return await authLogin(url, req, res);

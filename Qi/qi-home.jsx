@@ -857,21 +857,34 @@ function SpbDiscover() {
     return raw.replace(/线索/g, '').trim() || '城市线索';
   };
   const sourceTone = (item) => {
+    if (item?.poi?.verified) return '地图已校验';
     const raw = String(item?.sourceName || '');
     if (/站内地点资料/.test(raw)) return '已整理';
     if (/大众点评|微信|百度新闻/.test(raw)) return '公开线索';
     return '待观察';
   };
+  const poiLine = (item) => {
+    const poi = item?.poi?.verified ? item.poi : null;
+    if (!poi) return '';
+    return [poi.businessArea || poi.district, poi.address].filter(Boolean).join(' · ');
+  };
+  const visitCheckText = (item) => {
+    const poi = item?.poi?.verified ? item.poi : null;
+    if (poi?.tel) return `地图已校验地址，可电话 ${poi.tel} 确认营业和排队`;
+    if (poi?.address) return `地图已校验地址，出发前再确认营业时间和预约`;
+    return '确认营业时间、预约和排队情况';
+  };
   const itemReason = (item) => {
-    const parts = [item?.sceneTag, item?.category, item?.district].filter(Boolean);
+    const parts = [item?.sceneTag, item?.category, item?.poi?.businessArea || item?.district].filter(Boolean);
     if (parts.length) return parts.join(' · ');
     return item?.tagline || '近期城市去处';
   };
   const sourcePlan = [
     ['新店雷达', '新开、首店、试营业、快闪和上新，是探索页的第一层线索。'],
     ['口碑校验', '优先看本地公众号、榜单线索、城市新闻和地点资料，过滤泛资讯。'],
+    ['地图核验', '配置地图服务后，会补充真实地址、商圈、电话和坐标，区分线索与可到达地点。'],
     ['路线价值', '不只列店名，还判断适合约饭、拍照、慢逛、看展还是夜间小聚。'],
-    ['到店提醒', '每个详情都保留营业、预约、排队、临时调整等二次确认提醒。'],
+    ['到店提醒', '详情里保留营业、预约、排队、临时调整等二次确认提醒。'],
   ];
   const openItem = (city, item) => {
     const photos = getItemPhotos(item);
@@ -975,6 +988,9 @@ function SpbDiscover() {
                     </div>
                     <div style={{ marginTop: 13, color: spb.ink, fontFamily: spb.disp, fontSize: isLead ? 'clamp(28px, 4vw, 42px)' : 25, lineHeight: 1.08, letterSpacing: '-0.025em', fontWeight: 650 }}>{item.name}</div>
                     <div style={{ marginTop: 8, color: spb.blueSoft, fontSize: 13.5, fontWeight: 760 }}>{itemReason(item)}</div>
+                    {poiLine(item) ? (
+                      <div style={{ marginTop: 7, color: 'oklch(0.82 0.045 150)', fontSize: 12.8, fontWeight: 760, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{poiLine(item)}</div>
+                    ) : null}
                     <div style={{ marginTop: 10, color: 'oklch(0.9 0.02 255)', lineHeight: 1.58, fontSize: isLead ? 15.5 : 14.5, display: '-webkit-box', WebkitLineClamp: isLead ? 3 : 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.editorialSummary || item.summary || ''}</div>
                     <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, color: 'oklch(0.86 0.025 255 / 0.82)', fontSize: 12.5 }}>
                       <span>{sourceLabel(item)}</span>
@@ -1033,10 +1049,14 @@ function SpbDiscover() {
                           <span style={{ color: spb.bg, background: spb.blueSoft, borderRadius: 999, padding: '4px 8px', fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap' }}>{item.category || '其他'}</span>
                         </div>
                         <div style={{ marginTop: 7, color: spb.sub, lineHeight: 1.58, fontSize: 14.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.editorialSummary || item.summary || item.tagline || ''}</div>
-                        {(item.district || item.sceneTag) ? (
+                        {poiLine(item) ? (
+                          <div style={{ marginTop: 8, color: 'oklch(0.82 0.045 150)', fontSize: 12.5, fontWeight: 720, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{poiLine(item)}</div>
+                        ) : null}
+                        {(item.district || item.sceneTag || item?.poi?.verified) ? (
                           <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                             {item.district ? <span style={{ color: spb.blueSoft, fontSize: 12.5 }}>{item.district}</span> : null}
                             {item.sceneTag ? <span style={{ color: spb.faint, border: `1px solid ${spb.line}`, borderRadius: 999, padding: '3px 8px', fontSize: 12 }}>{item.sceneTag}</span> : null}
+                            {item?.poi?.verified ? <span style={{ color: 'oklch(0.82 0.045 150)', border: '1px solid oklch(0.72 0.1 150 / 0.35)', borderRadius: 999, padding: '3px 8px', fontSize: 12 }}>地图已校验</span> : null}
                             <span style={{ color: spb.faint, border: `1px solid ${spb.line}`, borderRadius: 999, padding: '3px 8px', fontSize: 12 }}>{sourceLabel(item)}</span>
                           </div>
                         ) : null}
@@ -1090,7 +1110,7 @@ function SpbDiscover() {
               )}
               <button type="button" onClick={() => setSelectedItem(null)} aria-label="关闭" style={{ position: 'absolute', top: 16, right: 16, width: 42, height: 42, borderRadius: 999, border: `1px solid ${spb.line}`, background: 'oklch(0.165 0.013 265 / 0.72)', color: spb.ink, fontSize: 24, lineHeight: 1, cursor: 'pointer', boxShadow: '0 12px 32px rgba(0,0,0,0.26)' }}>×</button>
               <div style={{ position: 'absolute', left: 22, bottom: 20, display: 'flex', gap: 9, flexWrap: 'wrap' }}>
-                {[selectedItem.cityName || selectedItem.city, selectedItem.category, selectedItem.district].filter(Boolean).map(text => (
+                {[selectedItem.cityName || selectedItem.city, selectedItem.category, selectedItem.district, selectedItem?.poi?.verified ? '地图已校验' : ''].filter(Boolean).map(text => (
                   <span key={text} style={{ border: `1px solid oklch(1 0 0 / 0.22)`, background: 'oklch(0.12 0.01 265 / 0.5)', color: spb.ink, borderRadius: 999, padding: '7px 11px', fontSize: 12.5, fontWeight: 750, backdropFilter: 'blur(12px)' }}>{text}</span>
                 ))}
               </div>
@@ -1104,6 +1124,7 @@ function SpbDiscover() {
                 <div style={{ color: spb.faint, fontSize: 13, textAlign: 'right', lineHeight: 1.6 }}>
                   <div>{selectedItem.cityName || selectedItem.city}</div>
                   <div>{[selectedItem.category, selectedItem.sceneTag].filter(Boolean).join(' · ')}</div>
+                  {selectedItem?.poi?.verified ? <div style={{ color: 'oklch(0.82 0.045 150)' }}>地图已校验</div> : null}
                   <div>{sourceLabel(selectedItem)}</div>
                 </div>
               </div>
@@ -1114,7 +1135,8 @@ function SpbDiscover() {
                 {[
                   ['为什么看', itemReason(selectedItem)],
                   ['信息来源', sourceLabel(selectedItem)],
-                  ['出发前', '确认营业时间、预约和排队情况'],
+                  ['出发前', visitCheckText(selectedItem)],
+                  ...(selectedItem?.poi?.verified ? [['地址', selectedItem.poi.address], ['电话', selectedItem.poi.tel || '暂无公开电话']] : []),
                 ].map(([title, text]) => (
                   <div key={title} style={{ border: `1px solid ${spb.line}`, borderRadius: 16, padding: '13px 14px', background: 'oklch(0.205 0.014 265 / 0.62)' }}>
                     <div style={{ color: spb.faint, fontFamily: spb.mono, fontSize: 11.5, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{title}</div>
