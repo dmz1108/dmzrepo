@@ -8074,9 +8074,13 @@ function cleanDiscoveryCopy(value) {
 function discoveryTextLooksBroken(value) {
   const raw = String(value || '');
   if (!raw.trim()) return false;
-  return /�|&(?:ldquo|rdquo|hellip|nbsp|amp|quot)\b|<\/?[a-z][\s\S]*?>/i.test(raw)
+  return /�|&(?:ldquo|rdquo|hellip|nbsp|amp|quot|mdash|ndash)\b|<\/?[a-z][\s\S]*?>/i.test(raw)
     || /(?:\\u[0-9a-f]{4}){2,}/i.test(raw)
     || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(raw);
+}
+
+function discoveryNameHasConcretePlaceSignal(name) {
+  return /(咖啡|coffee|cafe|café|餐厅|饭店|火锅|烤肉|日料|bistro|甜品|蛋糕|gelato|面包|烘焙|bakery|茶饮|奶茶|酒吧|bar|小酒馆|买手店|集合店|美术馆|艺术中心|展览|空间|市集|快闪|书店|店|馆|屋|坊|社|院|中心|商店|文化周|艺术节|音乐节|影展|戏剧节|livehouse|shop|store)/i.test(String(name || ''));
 }
 
 function discoveryPublicNameLooksBad(name) {
@@ -8086,8 +8090,24 @@ function discoveryPublicNameLooksBad(name) {
   if (/^(小吃|简餐|盛大|新春|品牌|资讯|专题|榜单|报告|指南|攻略|新店|首店|探店|空间)$/.test(text)) return true;
   if (/^(北京|上海|广州|深圳|成都|杭州|重庆|长沙).*(清单|精选|合集|汇总|周末新展市集|咖啡探店|餐厅新店|甜品下午茶|生活方式新店|夜间小聚)/.test(text)) return true;
   if (/^(超|近|约)?\d+/.test(text)) return true;
-  if (/(截至|H1|H2|门店数|400\+|20\d{2}新春|上海出发|网红餐饮|品牌资讯|商业观察|行业报告|招商|财报|业绩|供应链|热潮|生态|强化|专项|正式公示)/i.test(text)) return true;
+  if (/(截至|H1|H2|门店数|400\+|20\d{2}新春|上海出发|网红餐饮|品牌资讯|商业观察|行业报告|招商|财报|业绩|供应链|热潮|生态|强化|专项|正式公示|本地宝|活动汇总|活动亮点|周末去哪|近期活动|购票|门票|交通指南|注意事项|必吃榜|必玩榜|新店榜|服务榜|口味榜|环境榜|\d{1,2}:\d{2}|20\d{2}年\d{1,2}月\d{1,2}日)/i.test(text)) return true;
   if (/[?？]{2,}/.test(text) || !/[\u4e00-\u9fffA-Za-z0-9]/.test(text)) return true;
+  return false;
+}
+
+function discoveryNameLooksEditorialNoise(name, context = '') {
+  const text = cleanDiscoveryText(name);
+  if (!text) return true;
+  const fullText = cleanDiscoveryText(`${text} ${context || ''}`);
+  if (/^(活动亮点|活动时间|活动地点|购票入口|交通指南|门票价格|注意事项|报名入口|预约方式|必吃榜|新店榜|服务榜|口味榜|环境榜|热门榜|人气榜|本地宝|上海本地宝|北京本地宝|广州本地宝|深圳本地宝|成都本地宝|杭州本地宝|重庆本地宝|长沙本地宝)$/i.test(text)) return true;
+  if (/^(潮人装|锚定|天天有戏|你错了也对|泪流成海|城市乐游|探索荔湾|寻味西关|住在.*太幸福|一年三地|清迈初夏|啡行|整活|速报|这五款茶饮|零距离会展|百日星.*游|龙坞风味|好好喝|好好吃|人气之选|打卡实录)$/i.test(text)) return true;
+  if (/(20\d{2}年|\d{1,2}月\d{1,2}日|\d{1,2}:\d{2}|活动汇总|周末去哪玩|近期活动|本地宝|购票|门票|交通指南|注意事项|必吃榜|必玩榜|新店榜|服务榜|口味榜|环境榜|这家|这几家|这五款|上新$|速报|整活)/i.test(text)) return true;
+  const hasPlaceSignal = discoveryNameHasConcretePlaceSignal(fullText);
+  const hasNamePlaceSignal = discoveryNameHasConcretePlaceSignal(text);
+  if (/榜$/.test(text) && !hasNamePlaceSignal) return true;
+  if (/^(住在|生活在|来|去|逛|跟着|寻找|探索|打卡|漫游).{2,14}$/.test(text) && !hasNamePlaceSignal) return true;
+  if (/^[\u4e00-\u9fff]{2,6}$/.test(text) && !hasPlaceSignal) return true;
+  if (/^[\u4e00-\u9fff]{7,16}$/.test(text) && /(探索|寻找|跟着|打卡|周末|城市|主题|风景|新征程|新时代)/.test(text) && !hasPlaceSignal) return true;
   return false;
 }
 
@@ -8122,14 +8142,22 @@ function discoveryItemFreshnessScore(item) {
 
 function discoveryQualityScore(item) {
   let score = Number(item?.score || 0);
+  const name = normalizeDiscoveryShopName(item?.name || '');
+  const sourceName = String(item?.sourceName || '');
+  const contextText = discoveryOriginalText(item);
   score += discoveryItemFreshnessScore(item);
   if (item?.imageUrl && !Object.values(DISCOVERY_CATEGORY_PHOTOS).includes(item.imageUrl)) score += 5;
   if (Array.isArray(item?.photos) && item.photos.length > 1) score += 2;
   if (/微信|公众号|文章/.test(item?.sourceName || '')) score += 3;
   if (/大众点评|榜单/.test(item?.sourceName || '')) score += 2;
+  if (/站内地点资料/.test(sourceName)) score += 28;
+  if (discoveryPlaceProfile(item?.city || '', name)) score += 18;
+  if (discoveryNameHasConcretePlaceSignal(name)) score += 8;
+  if (/公开搜索|百度新闻/.test(sourceName) && !discoveryNameHasConcretePlaceSignal(name)) score -= 22;
+  if (/公开搜索|百度新闻/.test(sourceName) && discoveryNameLooksEditorialNoise(name, contextText)) score -= 120;
   if (item?.district) score += 2;
   if (item?.category && item.category !== '其他') score += 2;
-  const rawLength = discoveryOriginalText(item).length;
+  const rawLength = contextText.length;
   if (rawLength >= 80) score += 2;
   if (rawLength >= 180) score += 2;
   if (discoveryPublicNameLooksBad(item?.name || '')) score -= 100;
@@ -8148,6 +8176,7 @@ function isPublicDiscoveryItem(item) {
   if (!isValidDiscoveryShopName(name)) return false;
   if (discoveryPublicNameLooksBad(name)) return false;
   const text = discoveryOriginalText({ ...item, name });
+  if (discoveryNameLooksEditorialNoise(name, text)) return false;
   if (discoveryTextLooksBroken(text)) return false;
   if (isBadDiscoveryCandidate(name, item?.sourceTitle || '', item?.summary || '')) return false;
   const hasFresh = discoveryHasFreshSignal(text) || /新展|市集|快闪|探店|打卡|排队|热门/.test(text);

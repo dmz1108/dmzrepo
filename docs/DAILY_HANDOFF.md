@@ -842,3 +842,42 @@ Deployment:
 Notes for next agent:
 - Do not reduce `eastmoney-close-db` back to 30 files; 30-day gain requires at least 31 trading-day endpoints, and 35 gives a small buffer.
 - The user's business rule remains unchanged for source databases: TGB, 韭研, 同花顺, 开盘啦, 东财/选股宝-style source files still use the 30-trading-day retention policy.
+
+## 2026-07-08 - Codex - Refine Explore page around city new shops and places
+
+Changed:
+- Repositioned the Explore page around `城市新店与好去处` as a city-guide experience rather than a plain item list.
+- Added four reader-facing editorial principles: `新店雷达`, `口碑校验`, `路线价值`, and `到店提醒`.
+- Improved featured cards with source tone, reason text, source labels, and clearer `查看详情` affordance.
+- Improved city item rows and detail modal so users can see source type, why the place matters, and what to confirm before going.
+- Strengthened discovery data quality filters to remove editorial/search noise such as broad ranking names, local-guide timestamps, activity boilerplate, marketing slogans, and malformed HTML entity titles.
+- Adjusted discovery scoring so concrete places and curated place records rank ahead of vague public-search snippets.
+
+Files:
+- `Qi/index.html`
+- `Qi/qi-home.jsx`
+- `Qi/qi-home.compiled.js`
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node Qi/build-home.js`
+- `node --check kpl-stats-server.js`
+- `node --check Qi/qi-home.compiled.js`
+- `git diff --check`
+- Cloud `node --check .\kpl-stats-server.js`
+- Cloud `node --check .\Qi\qi-home.compiled.js`
+- Public `https://explore.dreamerqi.com/`
+- Public `https://explore.dreamerqi.com/api/discovery`
+- Public discovery API now returns 168 items for 2026-07-08, with obvious false names like `本地宝`, `活动亮点`, `必吃榜`, `潮人装`, `锚定`, malformed HTML entity titles, and similar search-noise phrases filtered from the sampled output.
+
+Deployment:
+- Production touched: yes.
+- Backup before upload: `C:\PandaDashboard\backups\discovery-city-guide-20260708-215614`.
+- Uploaded `kpl-stats-server.js`, `Qi/index.html`, `Qi/qi-home.jsx`, and `Qi/qi-home.compiled.js`.
+- Restarted only `PandaDashboard-KPL-Server` using the scheduled task.
+- Did not restart Caddy or `yule-server.js`.
+
+Notes for next agent:
+- The Explore page still uses the existing public-search/curated-place architecture. Good next source directions are: city/local official activity feeds for exhibitions and markets, trusted local公众号/媒体, review/ranking sources for shops, and map/POI-style sources for address/opening-hour verification.
+- Avoid making the page a generic travel guide. Keep it focused on recent new shops, city places, weekend routes, and concrete decision details.

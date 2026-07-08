@@ -1397,6 +1397,27 @@ function SpbDiscover() {
   const hideBrokenImage = event => {
     event.currentTarget.style.display = 'none';
   };
+  const sourceLabel = item => {
+    const raw = String(item?.sourceName || '').trim();
+    if (!raw) return '城市线索';
+    if (/站内地点资料/.test(raw)) return '精选地点库';
+    if (/百度新闻/.test(raw)) return '城市新闻';
+    if (/微信文章/.test(raw)) return '本地公众号';
+    if (/大众点评/.test(raw)) return '口碑榜单';
+    return raw.replace(/线索/g, '').trim() || '城市线索';
+  };
+  const sourceTone = item => {
+    const raw = String(item?.sourceName || '');
+    if (/站内地点资料/.test(raw)) return '已整理';
+    if (/大众点评|微信|百度新闻/.test(raw)) return '公开线索';
+    return '待观察';
+  };
+  const itemReason = item => {
+    const parts = [item?.sceneTag, item?.category, item?.district].filter(Boolean);
+    if (parts.length) return parts.join(' · ');
+    return item?.tagline || '近期城市去处';
+  };
+  const sourcePlan = [['新店雷达', '新开、首店、试营业、快闪和上新，是探索页的第一层线索。'], ['口碑校验', '优先看本地公众号、榜单线索、城市新闻和地点资料，过滤泛资讯。'], ['路线价值', '不只列店名，还判断适合约饭、拍照、慢逛、看展还是夜间小聚。'], ['到店提醒', '每个详情都保留营业、预约、排队、临时调整等二次确认提醒。']];
   const openItem = (city, item) => {
     const photos = getItemPhotos(item);
     setSelectedItem({
@@ -1446,7 +1467,7 @@ function SpbDiscover() {
       fontSize: 16,
       lineHeight: 1.7
     }
-  }, "\u805A\u5408\u8FD1\u671F\u65B0\u5F00\u3001\u9996\u5E97\u3001\u63A2\u5E97\u3001\u5C55\u89C8\u4E0E\u751F\u6D3B\u65B9\u5F0F\u7A7A\u95F4\uFF0C\u6574\u7406\u6210\u53EF\u76F4\u63A5\u6D4F\u89C8\u7684\u7AD9\u5185\u5185\u5BB9\u3002")), React.createElement("div", {
+  }, "\u628A\u8FD1\u671F\u65B0\u5F00\u3001\u9996\u5E97\u3001\u63A2\u5E97\u3001\u5C55\u89C8\u3001\u5E02\u96C6\u548C\u751F\u6D3B\u65B9\u5F0F\u7A7A\u95F4\u6574\u7406\u6210\u53EF\u9605\u8BFB\u7684\u57CE\u5E02\u8DEF\u7EBF\u3002\u5148\u770B\u662F\u5426\u503C\u5F97\u53BB\uFF0C\u518D\u51B3\u5B9A\u4EC0\u4E48\u65F6\u5019\u53BB\u3001\u548C\u54EA\u91CC\u4E00\u8D77\u901B\u3002")), React.createElement("div", {
     style: {
       minWidth: 190,
       justifySelf: 'end',
@@ -1475,6 +1496,35 @@ function SpbDiscover() {
       fontSize: 13
     }
   }, totalItems, " \u6761\u7AD9\u5185\u5185\u5BB9"))), React.createElement("div", {
+    style: {
+      marginTop: 28,
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 210px), 1fr))',
+      gap: 12
+    }
+  }, sourcePlan.map(([title, text]) => React.createElement("div", {
+    key: title,
+    style: {
+      border: `1px solid ${spb.line}`,
+      borderRadius: 16,
+      padding: '15px 16px',
+      background: 'linear-gradient(180deg, oklch(0.235 0.015 265 / 0.78), oklch(0.19 0.014 265 / 0.72))',
+      boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.07)'
+    }
+  }, React.createElement("div", {
+    style: {
+      color: spb.ink,
+      fontSize: 15,
+      fontWeight: 800
+    }
+  }, title), React.createElement("div", {
+    style: {
+      marginTop: 7,
+      color: spb.sub,
+      fontSize: 13.5,
+      lineHeight: 1.62
+    }
+  }, text)))), React.createElement("div", {
     style: {
       marginTop: 34,
       display: 'flex',
@@ -1631,7 +1681,17 @@ function SpbDiscover() {
         fontWeight: 760,
         backdropFilter: 'blur(10px)'
       }
-    }, text))), React.createElement("div", {
+    }, text)), React.createElement("span", {
+      style: {
+        color: spb.bg,
+        background: spb.blueSoft,
+        border: '1px solid oklch(1 0 0 / 0.16)',
+        borderRadius: 999,
+        padding: '6px 9px',
+        fontSize: 12,
+        fontWeight: 820
+      }
+    }, sourceTone(item))), React.createElement("div", {
       style: {
         marginTop: 13,
         color: spb.ink,
@@ -1643,6 +1703,13 @@ function SpbDiscover() {
       }
     }, item.name), React.createElement("div", {
       style: {
+        marginTop: 8,
+        color: spb.blueSoft,
+        fontSize: 13.5,
+        fontWeight: 760
+      }
+    }, itemReason(item)), React.createElement("div", {
+      style: {
         marginTop: 10,
         color: 'oklch(0.9 0.02 255)',
         lineHeight: 1.58,
@@ -1652,7 +1719,17 @@ function SpbDiscover() {
         WebkitBoxOrient: 'vertical',
         overflow: 'hidden'
       }
-    }, item.editorialSummary || item.summary || '')));
+    }, item.editorialSummary || item.summary || ''), React.createElement("div", {
+      style: {
+        marginTop: 14,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 14,
+        color: 'oklch(0.86 0.025 255 / 0.82)',
+        fontSize: 12.5
+      }
+    }, React.createElement("span", null, sourceLabel(item)), React.createElement("span", null, "\u67E5\u770B\u8BE6\u60C5"))));
   }))) : null, React.createElement("div", {
     style: {
       marginTop: 34,
@@ -1809,7 +1886,15 @@ function SpbDiscover() {
         padding: '3px 8px',
         fontSize: 12
       }
-    }, item.sceneTag) : null) : null));
+    }, item.sceneTag) : null, React.createElement("span", {
+      style: {
+        color: spb.faint,
+        border: `1px solid ${spb.line}`,
+        borderRadius: 999,
+        padding: '3px 8px',
+        fontSize: 12
+      }
+    }, sourceLabel(item))) : null));
   })) : React.createElement("div", {
     style: {
       marginTop: 20,
@@ -1952,7 +2037,7 @@ function SpbDiscover() {
       textAlign: 'right',
       lineHeight: 1.6
     }
-  }, React.createElement("div", null, selectedItem.cityName || selectedItem.city), React.createElement("div", null, [selectedItem.category, selectedItem.sceneTag].filter(Boolean).join(' · ')))), selectedItem.editorialTitle || selectedItem.tagline ? React.createElement("div", {
+  }, React.createElement("div", null, selectedItem.cityName || selectedItem.city), React.createElement("div", null, [selectedItem.category, selectedItem.sceneTag].filter(Boolean).join(' · ')), React.createElement("div", null, sourceLabel(selectedItem)))), selectedItem.editorialTitle || selectedItem.tagline ? React.createElement("div", {
     style: {
       marginTop: 24,
       color: spb.ink,
@@ -1960,7 +2045,38 @@ function SpbDiscover() {
       lineHeight: 1.55,
       fontWeight: 750
     }
-  }, selectedItem.editorialTitle || selectedItem.tagline) : null, selectedItem.imageCaption ? React.createElement("div", {
+  }, selectedItem.editorialTitle || selectedItem.tagline) : null, React.createElement("div", {
+    style: {
+      marginTop: 16,
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+      gap: 10
+    }
+  }, [['为什么看', itemReason(selectedItem)], ['信息来源', sourceLabel(selectedItem)], ['出发前', '确认营业时间、预约和排队情况']].map(([title, text]) => React.createElement("div", {
+    key: title,
+    style: {
+      border: `1px solid ${spb.line}`,
+      borderRadius: 16,
+      padding: '13px 14px',
+      background: 'oklch(0.205 0.014 265 / 0.62)'
+    }
+  }, React.createElement("div", {
+    style: {
+      color: spb.faint,
+      fontFamily: spb.mono,
+      fontSize: 11.5,
+      letterSpacing: '0.06em',
+      textTransform: 'uppercase'
+    }
+  }, title), React.createElement("div", {
+    style: {
+      marginTop: 7,
+      color: spb.ink,
+      fontSize: 14.5,
+      lineHeight: 1.5,
+      fontWeight: 760
+    }
+  }, text)))), selectedItem.imageCaption ? React.createElement("div", {
     style: {
       marginTop: 12,
       border: `1px solid ${spb.line}`,
