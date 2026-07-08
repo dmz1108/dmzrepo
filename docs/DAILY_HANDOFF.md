@@ -598,3 +598,27 @@ Notes for next agent:
 - 明星股数据依赖本机 L2 worker 在线；worker 离线时自动扫描任务会排队等待，主线榜正常出榜只是没有明星标注，属设计内降级。
 - 今日主线榜与「重点关注」的 L2 扫描共用同一队列与结果（latest(plateId, day)），两边天然共享；用户已点出两者在做同一件事，后续可考虑归并入口。
 - 自动扫描参数集中在 STRATEGY_MAINLINE_AUTO_SCAN_* 常量（8亿/2涨停/5分钟2个/50只），实盘后可调。
+
+## 2026-07-08 - Codex - Review Claude strategy update and preserve live focus metrics
+
+Changed:
+- Reviewed Claude's lifecycle-stage, early-window, and session-phase strategy update after it landed in `main`.
+- Fixed a follow-up edge case in `getStrategyBoardsForDay`: when a same-day snapshot exists, strategy focus cards can still merge live board metrics for included focus boards instead of staying with stale/null snapshot values.
+- The fix preserves existing QI snapshot data where present, but refreshes live `gainPct`, `ztCount`, and `netInflow` for requested focus boards.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- `node --check strategy-backend.js`
+- `node --check local-l2-task-queue.js`
+- Dashboard inline script parsed successfully.
+- `git diff --check`
+
+Deployment:
+- GitHub only. Not deployed to the cloud server. No service restart.
+
+Notes for next agent:
+- The cloud server still needs a deliberate deploy after Claude/Codex review. Current production may not yet include the merged `main` strategy enhancements.
