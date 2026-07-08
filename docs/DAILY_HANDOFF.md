@@ -1098,10 +1098,19 @@ Validated:
 - `node --check kpl-stats-server.js`
 - Frontend inline script compilation check for `kpl-dashboard_17_apple.html`
 - `git diff --check`
+- Cloud `node --check .\kpl-stats-server.js`
+- Cloud frontend inline script compilation check for `kpl-dashboard_17_apple.html`
+- Public `https://market.dreamerqi.com/api/strategy-mainlines?day=2026-07-08` returned `ok: true`, `count: 10`; first theme was `算力AI`.
+- Public `https://market.dreamerqi.com/api/limit-up-main-reason-db/source-view?day=2026-07-08` returned only five tabs: final, kaipanla, xuangubao, jiuyangongshe, tgb.
+- Public `https://market.dreamerqi.com/api/limit-up-main-reason-db/day?day=2026-07-08` returned four review auto sources only, each with `stockCount: 46` and `coveragePct: 100`.
 
 Deployment:
-- GitHub/local only at this point. Production deployment follows in the next step.
-- No service restart yet.
+- Production touched: yes.
+- Backup before upload: `C:\PandaDashboard\backups\deploy-main-pr6-four-sources-20260708-231833`.
+- Uploaded `kpl-stats-server.js`, `kpl-dashboard_17_apple.html`, `docs/DAILY_HANDOFF.md`, and `docs/PROJECT_MAP.md`.
+- Removed deprecated cloud file `C:\PandaDashboard\qmt-order-stats.js` after backing it up when present.
+- Restarted only `PandaDashboard-KPL-Server`; new listener PID was `15132`.
+- Did not restart Caddy or `yule-server.js`.
 
 Notes for next agent:
 - Current formal review sources are exactly: `review/tgb-hunan-structured`, `review/jiuyangongshe-structured`, `review/kaipanla-fupanla`, and `review/xuangubao-limit-up`.
