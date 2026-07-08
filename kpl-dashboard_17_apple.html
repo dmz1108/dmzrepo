@@ -7036,6 +7036,37 @@
     background: rgba(174,190,214,0.07);
     color: #aebed6;
   }
+  body.view-strategy .ml-stage {
+    flex: 0 0 auto;
+    min-height: 22px;
+    padding: 0 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 760;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+  }
+  body.view-strategy .ml-stage-brewing {
+    border: 1px solid rgba(64,224,178,0.34);
+    background: rgba(64,224,178,0.10);
+    color: #7fe8c9;
+  }
+  body.view-strategy .ml-stage-launch {
+    border: 1px solid rgba(255,92,92,0.34);
+    background: rgba(255,92,92,0.10);
+    color: #ff9a9a;
+  }
+  body.view-strategy .ml-stage-confirm {
+    border: 1px solid rgba(94,170,255,0.30);
+    background: rgba(94,170,255,0.09);
+    color: #9dccff;
+  }
+  body.view-strategy .ml-stage-fade {
+    border: 1px solid rgba(174,190,214,0.24);
+    background: rgba(174,190,214,0.07);
+    color: #aebed6;
+  }
   body.view-strategy .ml-stock.ml-focus i { color: #ffb4c8; }
   body.view-strategy .ml-stock.ml-focus.near {
     border-color: rgba(255,92,92,0.34);
@@ -10609,7 +10640,16 @@ function strategyMainlineQuickReadHTML(lines, d) {
     <b>${escapeHTML(theme || '--')}</b>
     <small>${escapeHTML(sub || '')}</small>
   </div>`;
+  const early = arr.find(x =>
+    x.stage && (x.stage.key === 'brewing' || x.stage.key === 'launch') &&
+    x.certainty && (x.certainty.level === 'high' || x.certainty.level === 'medium')
+  );
+  const earlyFocus = early && Array.isArray(early.focusStocks) && early.focusStocks.length ? early.focusStocks[0] : null;
+  const earlySub = early
+    ? `${early.stage.label} · ${early.certainty.label}${earlyFocus ? ` · 首选${earlyFocus.name || earlyFocus.code}` : ''}`
+    : '暂无未确认的高把握方向';
   return `<div class="ml-quick-read">
+    ${item('抢跑窗口', early ? early.theme : '', earlySub)}
     ${item('最强主线', strongest.theme, `主线分 ${Number(strongest.score || 0).toFixed(0)} · 大涨${Number(strongest.bigGainCount) || 0} · 涨停${Number(strongest.count) || 0}`)}
     ${item('高度方向', height.theme, `最高${Number(height.maxLianban) || 0}板 · 连板${Number(height.lianbanCount) || 0}`)}
     ${item('持续活跃', active.theme, `近15日 ${Number(active.recentHeat) || 0} 次`)}
@@ -10623,6 +10663,7 @@ function renderStrategyMainlinesHTML(d) {
   const realtimeDay = d && d.sourceDay && d.sourceDay.realtime;
   const priorDay = d && d.sourceDay && d.sourceDay.priorReason;
   const sourceNote = [
+    d && d.sessionPhase ? String(d.sessionPhase) : '',
     realtimeDay ? `盘中${formatStatusDay(realtimeDay)}` : '',
     priorDay && priorDay !== realtimeDay ? `主因参考${formatStatusDay(priorDay)}` : '',
   ].filter(Boolean).join(' · ');
@@ -10664,6 +10705,10 @@ function renderStrategyMainlinesHTML(d) {
     ).join('');
     const cert = m.certainty || null;
     const certHtml = cert ? `<span class="ml-cert ml-cert-${escapeHTML(String(cert.level || 'watch'))}" title="${escapeHTML((cert.signals || []).join(' · '))}">${escapeHTML(cert.label || '')}</span>` : '';
+    const stage = m.stage || null;
+    const stageHtml = stage && stage.key && stage.key !== 'quiet'
+      ? `<span class="ml-stage ml-stage-${escapeHTML(String(stage.key))}" title="${escapeHTML(stage.advice || '')}">${escapeHTML(stage.label || '')}</span>`
+      : '';
     const focus = (m.focusStocks || []).slice(0, 3).map(s => {
       const tag = Array.isArray(s.basis) && s.basis.length ? ` · ${s.basis[0]}` : '';
       return `<span class="ml-stock ml-focus${s.nearLimit ? ' near' : ''}">${escapeHTML(s.name || s.code || '')}<i>${Number(s.gain) > 0 ? '+' : ''}${Number(s.gain).toFixed(1)}%${escapeHTML(tag)}</i></span>`;
@@ -10685,6 +10730,7 @@ function renderStrategyMainlinesHTML(d) {
         <div class="ml-namebox">
           <div class="ml-name-row">
             <div class="ml-name">${escapeHTML(m.theme || '')}</div>
+            ${stageHtml}
             ${certHtml}
             <span class="ml-driver ml-driver-${escapeHTML(driver.key)}">${escapeHTML(driver.label)}</span>
           </div>
