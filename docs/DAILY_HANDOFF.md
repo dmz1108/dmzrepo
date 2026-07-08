@@ -524,3 +524,23 @@ Deployment:
 
 Notes for next agent:
 - `main` still has not been advanced to this combined branch. Deploy only after merging the reviewed branch into `main` or deliberately deploying this branch.
+
+## 2026-07-08 - Codex - Promote reviewed strategy branch toward main
+
+Changed:
+- Prepared the combined Codex/Claude strategy branch for `main`.
+- This branch includes Codex current-day strategy/L2 fixes plus Claude mainline breadth, momentum, focus-stock, lifecycle-stage, early-window, and session-phase updates.
+- No production code was changed in this step; this entry records the Git promotion step only.
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Confirmed `origin/main` is an ancestor of `origin/codex/home-mainline-20260707`, so `main` can be fast-forwarded without conflict.
+- Prior merged branch checks already passed: backend syntax, dashboard inline script, and `git diff --check`.
+
+Deployment:
+- GitHub only. Not deployed to the cloud server. No service restart.
+
+Notes for next agent:
+- After `main` is updated, Claude/company agents should pull latest `main` and verify before cloud deployment.
