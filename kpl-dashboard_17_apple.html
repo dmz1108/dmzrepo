@@ -7067,6 +7067,65 @@
     background: rgba(174,190,214,0.07);
     color: #aebed6;
   }
+  body.view-strategy .ml-predict {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    padding: 3px 8px;
+    border: 1px solid rgba(64,224,178,0.26);
+    border-radius: 8px;
+    background: rgba(64,224,178,0.07);
+  }
+  body.view-strategy .ml-predict b { font-size: 15px; font-weight: 800; color: #7fe8c9; line-height: 1.1; }
+  body.view-strategy .ml-predict span { font-size: 10px; color: rgba(127,232,201,0.75); }
+  body.view-strategy .ml-early-radar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 0 2px;
+    padding: 9px 12px;
+    border: 1px solid rgba(64,224,178,0.20);
+    border-radius: 9px;
+    background: rgba(64,224,178,0.05);
+  }
+  body.view-strategy .ml-radar-lbl {
+    font-size: 12px;
+    font-weight: 780;
+    color: #7fe8c9;
+    white-space: nowrap;
+  }
+  body.view-strategy .ml-early-radar small {
+    flex: 1 1 auto;
+    text-align: right;
+    color: rgba(174,190,214,0.55);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  body.view-strategy .ml-radar-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(64,224,178,0.24);
+    background: rgba(11,16,24,0.55);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  body.view-strategy .ml-radar-item b { color: #eaf2ff; font-weight: 780; }
+  body.view-strategy .ml-radar-item em { font-style: normal; color: #7fe8c9; font-weight: 760; }
+  body.view-strategy .ml-radar-item i { font-style: normal; color: rgba(174,190,214,0.85); }
+  body.view-strategy .ml-radar-launch { border-color: rgba(255,92,92,0.30); }
+  body.view-strategy .ml-radar-launch em { color: #ff9a9a; }
+  body.view-strategy .ml-radar-stage, body.view-strategy .ml-radar-cert {
+    font-size: 10.5px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    border: 1px solid rgba(174,190,214,0.20);
+    color: #aebed6;
+  }
   body.view-strategy .ml-stock.ml-focus i { color: #ffb4c8; }
   body.view-strategy .ml-stock.ml-focus.near {
     border-color: rgba(255,92,92,0.34);
@@ -10656,6 +10715,33 @@ function strategyMainlineQuickReadHTML(lines, d) {
     ${item('资金推动', inflow.theme, strategyPlainMoney(inflow.netInflow) ? `净流入约${strategyPlainMoney(inflow.netInflow)}` : '暂无资金优势')}
   </div>`;
 }
+function strategyMainlineEarlyRadarHTML(lines) {
+  const arr = Array.isArray(lines) ? lines : [];
+  const early = arr
+    .filter(x => x.stage && (x.stage.key === 'brewing' || x.stage.key === 'launch'))
+    .sort((a, b) => (Number(b.predictScore) || 0) - (Number(a.predictScore) || 0))
+    .slice(0, 3);
+  if (!early.length) return '';
+  const items = early.map(m => {
+    const focusTop = Array.isArray(m.focusStocks) && m.focusStocks.length ? m.focusStocks[0] : null;
+    const focusText = focusTop
+      ? `${focusTop.name || focusTop.code}${focusTop.nearLimit ? '·冲板' : ` +${Number(focusTop.gain).toFixed(1)}%`}`
+      : '';
+    const cert = m.certainty || {};
+    return `<div class="ml-radar-item ml-radar-${escapeHTML(String(m.stage.key))}">
+      <b>${escapeHTML(m.theme || '')}</b>
+      <span class="ml-radar-stage">${escapeHTML(m.stage.label || '')}</span>
+      ${cert.label ? `<span class="ml-radar-cert">${escapeHTML(cert.label)}</span>` : ''}
+      <em>预判 ${Number(m.predictScore || 0).toFixed(0)}</em>
+      ${focusText ? `<i>${escapeHTML(focusText)}</i>` : ''}
+    </div>`;
+  }).join('');
+  return `<div class="ml-early-radar">
+    <span class="ml-radar-lbl">抢跑雷达</span>
+    ${items}
+    <small>未批量涨停的方向按预判分排序 · 等涨停底库出来就晚了</small>
+  </div>`;
+}
 function renderStrategyMainlinesHTML(d) {
   const lines = (d && d.mainlines) || [];
   const usingFallbackDay = d && d.requestedDay && d.day && d.requestedDay !== d.day;
@@ -10743,6 +10829,7 @@ function renderStrategyMainlinesHTML(d) {
         <div class="ml-score-wrap">
           ${scoreMeta}
           <div class="ml-score"><b>${Number(m.score || 0).toFixed(0)}</b><span>主线分</span></div>
+          ${m.predictScore != null ? `<div class="ml-predict" title="剔除涨停/高度/连板等已确认得分后的前瞻信号分"><b>${Number(m.predictScore || 0).toFixed(0)}</b><span>预判分</span></div>` : ''}
         </div>
       </div>
       <div class="ml-metrics">
@@ -10776,6 +10863,7 @@ function renderStrategyMainlinesHTML(d) {
       <small>实时板块涨幅 × 资金净流入 × 成分股大涨/普涨广度 × 冲板候选 × 盘中动能 × 历史四源主因预判 · ${Number(d.count) || lines.length} 条${sourceSuffix}${dayNote}</small>
     </div>
     ${strategyMainlineQuickReadHTML(lines, d)}
+    ${strategyMainlineEarlyRadarHTML(lines)}
     <div class="ml-grid">${cards}</div>
   </section>`;
 }

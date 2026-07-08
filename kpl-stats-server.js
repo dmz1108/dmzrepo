@@ -21119,10 +21119,18 @@ function strategyMainlineAugmentPrediction(item, isToday) {
     const top = focusStocks[0];
     explain.push(`潜力股${focusStocks.length}只待冲板，首选${top.name || top.code}（${top.basis.join('，') || `盘中+${top.gain}%`}）。`);
   }
+  // 预判分 = 总分剔除「确认类」得分（涨停/高度/连板）。确认类是已发生的事实，
+  // 预判分只保留前瞻信号：大涨扩散、冲板储备、普涨广度、盘中动能、历史主因、连续性、资金、板块涨幅、共振。
+  // 主线榜的使命是在批量涨停之前预判主线——等涨停底库出来就晚了。
+  const predictScore = Number(Math.max(0, score -
+    (Number(scoreParts.limitUps) || 0) -
+    (Number(scoreParts.height) || 0) -
+    (Number(scoreParts.lianban) || 0)).toFixed(1));
   return {
     ...withBreadth,
     scoreParts: Object.fromEntries(Object.entries(scoreParts).map(([k, v]) => [k, Number((Number(v) || 0).toFixed(1))])),
     score,
+    predictScore,
     trend,
     focusStocks,
     certainty,
