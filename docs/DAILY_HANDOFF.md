@@ -795,7 +795,7 @@ Validated:
 - Cloud `node --check .\kpl-stats-server.js`
 - Cloud dashboard inline script parsed successfully.
 - Public `https://market.dreamerqi.com/kpl`
-- Public `https://market.dreamerqi.com/api/strategy-mainlines?day=2026-07-09`
+- Public `https://market.dreamerqi.com/api/strategy-mainlines?day=2026-07-08`
 - Verified page contains `ml-signal-strip`, `ml-trend-pill`, and `10/30日涨幅综合排序`.
 - Verified leader rows carry `zt10/gain10` where available and do not show fake `gain30=0`.
 
@@ -809,3 +809,36 @@ Deployment:
 Notes for next agent:
 - The expanded mainline leader list now uses current strength plus 10-day limit-up count and 10/30-day gain. If 30-day close data is missing or flat/no-signal, the 30-day badge is intentionally omitted.
 - The card header now reserves a visible metric strip for net inflow/outflow and board gain; avoid moving these back into the single-line subtitle.
+
+## 2026-07-08 - Codex - Keep enough close-price history for 30-day strategy gains
+
+Changed:
+- Fixed the strategy mainline leader trend data issue where 30-day gain could be absent even though the close-price database existed.
+- Split close-price database retention from the recap/source database retention: recap sources still keep 30 trading days, while `eastmoney-close-db` now syncs and keeps 35 trading days so 30-day gain has both end and start points.
+- Adjusted the strategy gain fallback so if today's close price is not available yet, the 10/30-day gain window is anchored to the latest available close-price day.
+- Updated cloud health wording to show the separate close-price retention rule.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- `git diff --check`
+- Cloud `node --check .\kpl-stats-server.js`
+- Public `https://market.dreamerqi.com/health`
+- Public `https://market.dreamerqi.com/kpl`
+- Close-price sync completed 35/35 trading days from `2026-05-20` through `2026-07-08`.
+- Confirmed no `2026-07-09.json` runtime data files were created during validation.
+- Public `https://market.dreamerqi.com/api/strategy-mainlines?day=2026-07-08` returns 10 mainlines and 24 leader rows with real `gain30`.
+
+Deployment:
+- Production touched: yes.
+- Backups before upload: `C:\PandaDashboard\backups\close-db-retention-20260708-212435`, `C:\PandaDashboard\backups\close-db-retention-fallback-20260708-213332`.
+- Uploaded `kpl-stats-server.js`.
+- Restarted only `PandaDashboard-KPL-Server` using the scheduled task so the process survives SSH logout.
+- Did not restart Caddy or `yule-server.js`.
+
+Notes for next agent:
+- Do not reduce `eastmoney-close-db` back to 30 files; 30-day gain requires at least 31 trading-day endpoints, and 35 gives a small buffer.
+- The user's business rule remains unchanged for source databases: TGB, 韭研, 同花顺, 开盘啦, 东财/选股宝-style source files still use the 30-trading-day retention policy.

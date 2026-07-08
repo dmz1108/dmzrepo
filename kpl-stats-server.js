@@ -127,7 +127,8 @@ const BOARD_RANK_FETCH_STEP = 20;
 const SNAPSHOT_BOARD_POOL = 32;
 const MIN_BOARD_ZT_COUNT = 2;
 const CLOSE_DB_MIN_STOCK_COUNT = 5000;
-const CLOSE_DB_SYNC_TRADING_DAYS = 30;
+const CLOSE_DB_SYNC_TRADING_DAYS = Number(process.env.KPL_CLOSE_DB_SYNC_TRADING_DAYS || 35);
+const CLOSE_DB_RETENTION_TRADING_DAYS = Number(process.env.KPL_CLOSE_DB_RETENTION_TRADING_DAYS || Math.max(35, CLOSE_DB_SYNC_TRADING_DAYS));
 const AUTO_CLEANUP_RETENTION_DAYS = Number(process.env.KPL_CLEANUP_RETENTION_DAYS || 30);
 const AUTO_CLEANUP_MAX_CACHE_FILE_AGE_DAYS = Number(process.env.KPL_CACHE_FILE_RETENTION_DAYS || 30);
 const AUTO_CLEANUP_RUN_HOUR = Number(process.env.KPL_CLEANUP_RUN_HOUR || 15);
@@ -4245,10 +4246,11 @@ async function adminCloudHealth(url, req, res) {
 
   const cleanupState = {
     retentionTradingDays: AUTO_CLEANUP_RETENTION_DAYS,
+    closeDbRetentionTradingDays: CLOSE_DB_RETENTION_TRADING_DAYS,
     cacheRetentionDays: AUTO_CLEANUP_MAX_CACHE_FILE_AGE_DAYS,
     dailyRunTime: `${String(AUTO_CLEANUP_RUN_HOUR).padStart(2, '0')}:${String(AUTO_CLEANUP_RUN_MINUTE).padStart(2, '0')}`,
   };
-  push('cleanup', '30 个交易日保留规则', 'ok', `每天 ${cleanupState.dailyRunTime} 自动清理`, cleanupState);
+  push('cleanup', '30 个交易日保留规则', 'ok', `每天 ${cleanupState.dailyRunTime} 自动清理，收盘价库保留 ${cleanupState.closeDbRetentionTradingDays} 个交易日用于 30 日涨幅`, cleanupState);
 
   return send(res, 200, {
     ok: true,
@@ -18095,7 +18097,7 @@ async function buildMainlineTopGainStocks(endDay, themes, scanDays = 30, limit =
   }
   if (!wanted.size) return { byTheme: new Map(), tradingDays: [], baseDay: null };
   const apiKey = await readSavedApiKey().catch(() => '');
-  const tradingDays = await getRecentTradingDays(endDay, apiKey, Math.max(31, scanDays)).catch(() => []);
+  let tradingDays = await getRecentTradingDays(endDay, apiKey, Math.max(35, scanDays + 5)).catch(() => []);
   if (!tradingDays.length) return { byTheme: new Map(), tradingDays: [], baseDay: null };
   const closeMapOf = async d => {
     if (!d) return new Map();
@@ -18117,6 +18119,14 @@ async function buildMainlineTopGainStocks(endDay, themes, scanDays = 30, limit =
         c0 = candidateMap;
         break;
       }
+    }
+  }
+  if (c0.size && closeDay !== isoFromCompactDate(endDay) && closeIndex - 30 < 0) {
+    const closeDayTradingDays = await getRecentTradingDays(closeDay, apiKey, Math.max(35, scanDays + 5)).catch(() => []);
+    if (closeDayTradingDays.length) {
+      tradingDays = closeDayTradingDays;
+      closeIndex = tradingDays.indexOf(closeDay);
+      if (closeIndex < 0) closeIndex = tradingDays.length - 1;
     }
   }
   if (closeIndex < 0) closeIndex = tradingDays.length - 1;
@@ -19469,18 +19479,29 @@ async function cleanupOldLocalData(options = {}) {
   const retainedTradingDays = new Set((await getRecentTradingDays(retentionEndDay, apiKey, retentionDays).catch(() => []))
     .map(isoFromCompactDate)
     .filter(Boolean));
+  const closeDbRetainedTradingDays = new Set((await getRecentTradingDays(retentionEndDay, apiKey, CLOSE_DB_RETENTION_TRADING_DAYS).catch(() => []))
+    .map(isoFromCompactDate)
+    .filter(Boolean));
   if (!retainedTradingDays.size) {
     for (let i = 0; i < 90 && retainedTradingDays.size < retentionDays; i += 1) {
       const candidate = shiftDay(retentionEndDay, -i);
       if (isChinaMarketTradingDay(candidate)) retainedTradingDays.add(candidate);
     }
   }
+  if (!closeDbRetainedTradingDays.size) {
+    for (let i = 0; i < 120 && closeDbRetainedTradingDays.size < CLOSE_DB_RETENTION_TRADING_DAYS; i += 1) {
+      const candidate = shiftDay(retentionEndDay, -i);
+      if (isChinaMarketTradingDay(candidate)) closeDbRetainedTradingDays.add(candidate);
+    }
+  }
   // 保底保护：如果“最新交易日”接口/缓存滞后，不能把今天或昨天刚生成的来源库误判为
   // 不在最近 30 个交易日内。额外保留最近 14 个自然日的日期文件。
   for (let i = 0; i < 14; i += 1) {
     retainedTradingDays.add(isoFromCompactDate(shiftDay(nowDay, -i)));
+    closeDbRetainedTradingDays.add(isoFromCompactDate(shiftDay(nowDay, -i)));
   }
   const dateCleanupOptions = retainedTradingDays.size ? { keepDays: retainedTradingDays } : {};
+  const closeDbCleanupOptions = closeDbRetainedTradingDays.size ? { keepDays: closeDbRetainedTradingDays } : dateCleanupOptions;
   const results = [];
   results.push(await cleanupDateNamedEntries(LIMIT_UP_DB_DIR, retentionDays, nowDay, dateCleanupOptions));
   results.push(await cleanupDateNamedEntries(LIMIT_UP_MAIN_REASON_DB_DIR, retentionDays, nowDay, dateCleanupOptions));
@@ -19491,8 +19512,8 @@ async function cleanupOldLocalData(options = {}) {
     ...dateCleanupOptions,
     keepNames: new Set(['auto', 'tgb-hunan-ocr-cache', 'tgb-hunan-structured', 'tgb-hunan-raw', 'jiuyangongshe-structured', 'jiuyangongshe-diagram', 'tonghuashun-structured', 'tonghuashun-official-images', 'tonghuashun-api-candidates', 'kaipanla-fupanla', 'eastmoney-fpl-limit-reason', 'xuangubao-limit-up']),
   }));
-  results.push(await cleanupDateNamedEntries(EASTMONEY_CLOSE_DIR, retentionDays, nowDay, {
-    ...dateCleanupOptions,
+  results.push(await cleanupDateNamedEntries(EASTMONEY_CLOSE_DIR, CLOSE_DB_RETENTION_TRADING_DAYS, nowDay, {
+    ...closeDbCleanupOptions,
     keepNames: new Set(['_tmp']),
   }));
   results.push(await cleanupDateNamedEntries(TGB_HUNAN_OCR_CACHE_DIR, retentionDays, nowDay, dateCleanupOptions));
