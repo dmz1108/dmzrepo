@@ -1143,3 +1143,38 @@ Deployment:
 Notes for next agent:
 - 部署验证点：`https://dreamerqi.com/vendor/react.production.min.js` 返回 200；主页正常渲染；浏览器控制台不再有 React 开发版警告。
 - 若未来升级 React 版本,同步更新 Qi/vendor/ 两个文件即可,不要改回 CDN 加载。
+
+## 2026-07-09 - Codex - Review, merge, and deploy Claude React self-hosting change
+
+Changed:
+- Reviewed Claude branch `claude/dreamerqi-orientation-yuiha3` at `cc80c03` and fast-forwarded `main`.
+- Confirmed the change only self-hosts React/ReactDOM production UMD files for the homepage and adds static mappings for those files.
+- No business logic, market logic, auth flow, review-source policy, strategy logic, or visual layout was intentionally changed.
+
+Files:
+- `Qi/index.html`
+- `Qi/vendor/react.production.min.js`
+- `Qi/vendor/react-dom.production.min.js`
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`.
+- Verified local vendor file sha256 matches both unpkg and jsdelivr official React 18.3.1 production UMD builds.
+- Public `https://dreamerqi.com/vendor/react.production.min.js` returned 200.
+- Public `https://dreamerqi.com/vendor/react-dom.production.min.js` returned 200.
+- Public homepage HTML now loads `vendor/react.production.min.js` and `vendor/react-dom.production.min.js` instead of unpkg React development builds.
+- Public `https://market.dreamerqi.com/api/limit-up-main-reason-db/source-view?day=2026-07-08` returned only final, kaipanla, xuangubao, jiuyangongshe, and tgb tabs.
+- Public `https://market.dreamerqi.com/api/strategy-mainlines?day=2026-07-08` returned `ok: true`, `count: 10`, first mainline `算力AI`.
+
+Deployment:
+- Production touched: yes.
+- Git main deployed: `cc80c03`.
+- Backup before upload: `C:\PandaDashboard\backups\deploy-react-self-host-20260709-070407`.
+- Uploaded `Qi/index.html`, `Qi/vendor/react.production.min.js`, `Qi/vendor/react-dom.production.min.js`, `kpl-stats-server.js`, and `docs/DAILY_HANDOFF.md`.
+- Restarted only `PandaDashboard-KPL-Server`; new listener PID was `13076`.
+- Did not restart Caddy or `yule-server.js`.
+
+Notes for next agent:
+- The old Claude entry above correctly says Claude did not deploy it. This Codex entry records the later merge and production deployment.
+- Keep Eastmoney/Tonghuashun out of the formal limit-up review tabs unless the owner explicitly changes the current four-source policy.
