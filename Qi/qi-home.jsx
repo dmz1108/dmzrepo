@@ -857,7 +857,7 @@ function SpbDiscover() {
     return raw.replace(/线索/g, '').trim() || '城市线索';
   };
   const sourceTone = (item) => {
-    if (item?.poi?.verified) return '地图已校验';
+    if (item?.poi?.verified) return '地址已核验';
     const raw = String(item?.sourceName || '');
     if (/站内地点资料/.test(raw)) return '已整理';
     if (/大众点评|微信|百度新闻/.test(raw)) return '公开线索';
@@ -870,9 +870,14 @@ function SpbDiscover() {
   };
   const visitCheckText = (item) => {
     const poi = item?.poi?.verified ? item.poi : null;
-    if (poi?.tel) return `地图已校验地址，可电话 ${poi.tel} 确认营业和排队`;
-    if (poi?.address) return `地图已校验地址，出发前再确认营业时间和预约`;
+    if (poi?.tel) return `地址已核验，可电话 ${poi.tel} 确认营业和排队`;
+    if (poi?.address) return `地址已核验，出发前再确认营业时间和预约`;
     return '确认营业时间、预约和排队情况';
+  };
+  const scoreText = (item) => {
+    const score = Math.round(Number(item?.recommendationScore || item?.qualityScore || 0));
+    const label = item?.recommendationLevel || (score >= 88 ? '优先安排' : score >= 78 ? '值得收藏' : score >= 68 ? '顺路可去' : '先观察');
+    return score ? `${label} ${score}` : label;
   };
   const itemReason = (item) => {
     const parts = [item?.sceneTag, item?.category, item?.poi?.businessArea || item?.district].filter(Boolean);
@@ -882,7 +887,7 @@ function SpbDiscover() {
   const sourcePlan = [
     ['新店雷达', '新开、首店、试营业、快闪和上新，是探索页的第一层线索。'],
     ['口碑校验', '优先看本地公众号、榜单线索、城市新闻和地点资料，过滤泛资讯。'],
-    ['地图核验', '配置地图服务后，会补充真实地址、商圈、电话和坐标，区分线索与可到达地点。'],
+    ['地址核验', '配置校验服务后，会补充真实地址、电话和商圈，区分线索与可到达地点。'],
     ['路线价值', '不只列店名，还判断适合约饭、拍照、慢逛、看展还是夜间小聚。'],
     ['到店提醒', '详情里保留营业、预约、排队、临时调整等二次确认提醒。'],
   ];
@@ -892,8 +897,40 @@ function SpbDiscover() {
   };
   const featuredItems = visibleCities
     .flatMap(city => (city.items || []).map(item => ({ ...item, cityName: city.name, cityId: city.id })))
-    .sort((a, b) => (Number(b.qualityScore || 0) - Number(a.qualityScore || 0)) || String(b.discoveredAt || b.publishedAt || '').localeCompare(String(a.discoveredAt || a.publishedAt || '')))
+    .sort((a, b) => (Number(b.recommendationScore || b.qualityScore || 0) - Number(a.recommendationScore || a.qualityScore || 0)) || String(b.discoveredAt || b.publishedAt || '').localeCompare(String(a.discoveredAt || a.publishedAt || '')))
     .slice(0, 5);
+  const allVisibleItems = visibleCities
+    .flatMap(city => (city.items || []).map(item => ({ ...item, cityName: city.name, cityId: city.id })))
+    .sort((a, b) => Number(b.recommendationScore || b.qualityScore || 0) - Number(a.recommendationScore || a.qualityScore || 0));
+  const categorySpotlights = categories
+    .filter(item => item !== '全部')
+    .map(name => {
+      const items = allVisibleItems.filter(item => item.category === name).slice(0, 3);
+      return { name, count: allVisibleItems.filter(item => item.category === name).length, items };
+    })
+    .filter(group => group.count)
+    .slice(0, 8);
+  const pickRouteItem = (items, categoryNames, used) => {
+    const hit = items.find(item => categoryNames.includes(item.category) && !used.has(item.id || item.name));
+    if (hit) {
+      used.add(hit.id || hit.name);
+      return hit;
+    }
+    const fallback = items.find(item => !used.has(item.id || item.name));
+    if (fallback) used.add(fallback.id || fallback.name);
+    return fallback || null;
+  };
+  const weekendRoutes = visibleCities.map(city => {
+    const items = (city.items || []).map(item => ({ ...item, cityName: city.name, cityId: city.id }))
+      .sort((a, b) => Number(b.recommendationScore || b.qualityScore || 0) - Number(a.recommendationScore || a.qualityScore || 0));
+    const used = new Set();
+    const stops = [
+      { time: '上午', title: '先找一个轻起点', item: pickRouteItem(items, ['咖啡', '面包烘焙', '茶饮', '甜品'], used) },
+      { time: '下午', title: '安排主目的地', item: pickRouteItem(items, ['展览空间', '买手店', '餐厅'], used) },
+      { time: '傍晚', title: '用一餐或小聚收尾', item: pickRouteItem(items, ['餐厅', '酒吧', '甜品', '咖啡'], used) },
+    ].filter(stop => stop.item);
+    return { city, stops };
+  }).filter(route => route.stops.length >= 2).slice(0, 4);
   return (
     <section style={shell}>
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 24, alignItems: 'end' }}>
@@ -939,6 +976,73 @@ function SpbDiscover() {
       {error ? <div style={{ marginTop: 28, color: 'oklch(0.72 0.2 28)', fontSize: 15 }}>{error}</div> : null}
       {loading ? <div style={{ marginTop: 34, color: spb.sub, fontSize: 16 }}>正在加载今日探索内容...</div> : null}
 
+      {!loading && weekendRoutes.length ? (
+        <div style={{ marginTop: 34, border: `1px solid ${spb.line}`, borderRadius: 20, padding: '20px clamp(18px, 3vw, 24px)', background: 'linear-gradient(180deg, oklch(0.245 0.015 265 / 0.86), oklch(0.18 0.014 265 / 0.86))', boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.08)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', gap: 18, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontFamily: spb.mono, fontSize: 12, letterSpacing: '0.08em', color: spb.blueSoft, textTransform: 'uppercase' }}>Weekend routes</div>
+              <h2 style={{ margin: '8px 0 0', fontFamily: spb.disp, color: spb.ink, fontSize: 30, lineHeight: 1.12, letterSpacing: '-0.025em' }}>周末可以这样逛</h2>
+            </div>
+            <div style={{ maxWidth: 360, color: spb.sub, fontSize: 13.5, lineHeight: 1.6 }}>按城市、类型和推荐分自动串联，不需要切换应用也能先判断路线是否顺。</div>
+          </div>
+          <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 270px), 1fr))', gap: 14 }}>
+            {weekendRoutes.map(route => (
+              <article key={route.city.id} style={{ border: `1px solid ${spb.line}`, borderRadius: 16, padding: 16, background: 'oklch(0.19 0.014 265 / 0.72)' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+                  <h3 style={{ margin: 0, color: spb.ink, fontSize: 18, fontWeight: 850 }}>{route.city.name}</h3>
+                  <span style={{ color: spb.blueSoft, fontFamily: spb.mono, fontSize: 11 }}>{route.stops.length} stops</span>
+                </div>
+                <div style={{ marginTop: 13, display: 'grid', gap: 10 }}>
+                  {route.stops.map((stop, index) => (
+                    <button key={`${route.city.id}-${stop.time}-${stop.item.id || stop.item.name}`} type="button" onClick={() => openItem(route.city, stop.item)} style={{ display: 'grid', gridTemplateColumns: '46px minmax(0, 1fr)', gap: 11, alignItems: 'start', textAlign: 'left', border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}>
+                      <div style={{ width: 38, height: 38, borderRadius: 12, display: 'grid', placeItems: 'center', background: index === 1 ? spb.blueSoft : 'oklch(0.245 0.018 265)', color: index === 1 ? spb.bg : spb.blueSoft, fontFamily: spb.mono, fontSize: 12, fontWeight: 850, border: `1px solid ${spb.line}` }}>{stop.time}</div>
+                      <div style={{ minWidth: 0, paddingBottom: 10, borderBottom: index === route.stops.length - 1 ? 'none' : `1px solid ${spb.line}` }}>
+                        <div style={{ color: spb.faint, fontSize: 12.5 }}>{stop.title}</div>
+                        <div style={{ marginTop: 3, color: spb.ink, fontSize: 15.5, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stop.item.name}</div>
+                        <div style={{ marginTop: 5, color: spb.sub, fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{[stop.item.category, stop.item.poi?.businessArea || stop.item.district, scoreText(stop.item)].filter(Boolean).join(' · ')}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {!loading && categorySpotlights.length ? (
+        <div style={{ marginTop: 34 }}>
+          <div style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontFamily: spb.mono, fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', color: spb.blueSoft }}>Categories</div>
+              <h2 style={{ margin: '8px 0 0', fontFamily: spb.disp, color: spb.ink, fontSize: 30, lineHeight: 1.12, letterSpacing: '-0.025em' }}>按主题先看</h2>
+            </div>
+            <div style={{ color: spb.sub, fontSize: 14, lineHeight: 1.6 }}>每类只露出最值得先看的前三个，减少重复信息</div>
+          </div>
+          <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 250px), 1fr))', gap: 14 }}>
+            {categorySpotlights.map(group => (
+              <article key={group.name} style={{ border: `1px solid ${spb.line}`, borderRadius: 17, padding: 16, background: 'oklch(0.205 0.014 265 / 0.68)', boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.07)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
+                  <h3 style={{ margin: 0, color: spb.ink, fontSize: 18, fontWeight: 850 }}>{group.name}</h3>
+                  <button type="button" onClick={() => setCategory(group.name)} style={{ border: `1px solid ${spb.line}`, borderRadius: 999, background: 'transparent', color: spb.blueSoft, padding: '5px 9px', cursor: 'pointer', fontSize: 12 }}>看全部 {group.count}</button>
+                </div>
+                <div style={{ marginTop: 12, display: 'grid', gap: 9 }}>
+                  {group.items.map(item => (
+                    <button key={`${group.name}-${item.id || item.name}`} type="button" onClick={() => openItem({ id: item.cityId, name: item.cityName }, item)} style={{ textAlign: 'left', border: `1px solid ${spb.line}`, borderRadius: 13, background: 'oklch(0.18 0.014 265 / 0.62)', padding: '10px 11px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+                        <span style={{ color: spb.ink, fontSize: 14.5, fontWeight: 780, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+                        <span style={{ color: spb.blueSoft, fontFamily: spb.mono, fontSize: 11, whiteSpace: 'nowrap' }}>{scoreText(item)}</span>
+                      </div>
+                      <div style={{ marginTop: 5, color: spb.faint, fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{[item.cityName, item.poi?.businessArea || item.district, item.sceneTag].filter(Boolean).join(' · ')}</div>
+                    </button>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {!loading && featuredItems.length ? (
         <div style={{ marginTop: 34 }}>
           <div style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap' }}>
@@ -946,7 +1050,7 @@ function SpbDiscover() {
               <div style={{ fontFamily: spb.mono, fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', color: spb.blueSoft }}>Today picks</div>
               <h2 style={{ margin: '9px 0 0', fontFamily: spb.disp, color: spb.ink, fontSize: 31, lineHeight: 1.12, letterSpacing: '-0.025em' }}>今日值得先看的去处</h2>
             </div>
-            <div style={{ color: spb.sub, fontSize: 14, lineHeight: 1.6 }}>按近期热度、图文完整度和本地相关性排序</div>
+            <div style={{ color: spb.sub, fontSize: 14, lineHeight: 1.6 }}>按推荐指数、近期热度和图文完整度排序</div>
           </div>
           <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: 16 }}>
             {featuredItems.map((item, index) => {
@@ -985,6 +1089,7 @@ function SpbDiscover() {
                         <span key={text} style={{ color: spb.ink, background: 'oklch(0.12 0.01 265 / 0.48)', border: '1px solid oklch(1 0 0 / 0.2)', borderRadius: 999, padding: '6px 9px', fontSize: 12, fontWeight: 760, backdropFilter: 'blur(10px)' }}>{text}</span>
                       ))}
                       <span style={{ color: spb.bg, background: spb.blueSoft, border: '1px solid oklch(1 0 0 / 0.16)', borderRadius: 999, padding: '6px 9px', fontSize: 12, fontWeight: 820 }}>{sourceTone(item)}</span>
+                      <span style={{ color: spb.ink, background: 'oklch(0.12 0.01 265 / 0.48)', border: '1px solid oklch(1 0 0 / 0.2)', borderRadius: 999, padding: '6px 9px', fontSize: 12, fontWeight: 820, backdropFilter: 'blur(10px)' }}>{scoreText(item)}</span>
                     </div>
                     <div style={{ marginTop: 13, color: spb.ink, fontFamily: spb.disp, fontSize: isLead ? 'clamp(28px, 4vw, 42px)' : 25, lineHeight: 1.08, letterSpacing: '-0.025em', fontWeight: 650 }}>{item.name}</div>
                     <div style={{ marginTop: 8, color: spb.blueSoft, fontSize: 13.5, fontWeight: 760 }}>{itemReason(item)}</div>
@@ -993,7 +1098,7 @@ function SpbDiscover() {
                     ) : null}
                     <div style={{ marginTop: 10, color: 'oklch(0.9 0.02 255)', lineHeight: 1.58, fontSize: isLead ? 15.5 : 14.5, display: '-webkit-box', WebkitLineClamp: isLead ? 3 : 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.editorialSummary || item.summary || ''}</div>
                     <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, color: 'oklch(0.86 0.025 255 / 0.82)', fontSize: 12.5 }}>
-                      <span>{sourceLabel(item)}</span>
+                      <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.bestVisitTime || sourceLabel(item)}</span>
                       <span>查看详情</span>
                     </div>
                   </div>
@@ -1046,7 +1151,7 @@ function SpbDiscover() {
                       <div style={{ minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                           <span style={{ color: spb.ink, fontSize: 17.5, fontWeight: 760, lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
-                          <span style={{ color: spb.bg, background: spb.blueSoft, borderRadius: 999, padding: '4px 8px', fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap' }}>{item.category || '其他'}</span>
+                          <span style={{ color: spb.bg, background: spb.blueSoft, borderRadius: 999, padding: '4px 8px', fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap' }}>{scoreText(item)}</span>
                         </div>
                         <div style={{ marginTop: 7, color: spb.sub, lineHeight: 1.58, fontSize: 14.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.editorialSummary || item.summary || item.tagline || ''}</div>
                         {poiLine(item) ? (
@@ -1056,7 +1161,7 @@ function SpbDiscover() {
                           <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                             {item.district ? <span style={{ color: spb.blueSoft, fontSize: 12.5 }}>{item.district}</span> : null}
                             {item.sceneTag ? <span style={{ color: spb.faint, border: `1px solid ${spb.line}`, borderRadius: 999, padding: '3px 8px', fontSize: 12 }}>{item.sceneTag}</span> : null}
-                            {item?.poi?.verified ? <span style={{ color: 'oklch(0.82 0.045 150)', border: '1px solid oklch(0.72 0.1 150 / 0.35)', borderRadius: 999, padding: '3px 8px', fontSize: 12 }}>地图已校验</span> : null}
+                            {item?.poi?.verified ? <span style={{ color: 'oklch(0.82 0.045 150)', border: '1px solid oklch(0.72 0.1 150 / 0.35)', borderRadius: 999, padding: '3px 8px', fontSize: 12 }}>地址已核验</span> : null}
                             <span style={{ color: spb.faint, border: `1px solid ${spb.line}`, borderRadius: 999, padding: '3px 8px', fontSize: 12 }}>{sourceLabel(item)}</span>
                           </div>
                         ) : null}
@@ -1110,7 +1215,7 @@ function SpbDiscover() {
               )}
               <button type="button" onClick={() => setSelectedItem(null)} aria-label="关闭" style={{ position: 'absolute', top: 16, right: 16, width: 42, height: 42, borderRadius: 999, border: `1px solid ${spb.line}`, background: 'oklch(0.165 0.013 265 / 0.72)', color: spb.ink, fontSize: 24, lineHeight: 1, cursor: 'pointer', boxShadow: '0 12px 32px rgba(0,0,0,0.26)' }}>×</button>
               <div style={{ position: 'absolute', left: 22, bottom: 20, display: 'flex', gap: 9, flexWrap: 'wrap' }}>
-                {[selectedItem.cityName || selectedItem.city, selectedItem.category, selectedItem.district, selectedItem?.poi?.verified ? '地图已校验' : ''].filter(Boolean).map(text => (
+                {[selectedItem.cityName || selectedItem.city, selectedItem.category, selectedItem.district, selectedItem?.poi?.verified ? '地址已核验' : '', scoreText(selectedItem)].filter(Boolean).map(text => (
                   <span key={text} style={{ border: `1px solid oklch(1 0 0 / 0.22)`, background: 'oklch(0.12 0.01 265 / 0.5)', color: spb.ink, borderRadius: 999, padding: '7px 11px', fontSize: 12.5, fontWeight: 750, backdropFilter: 'blur(12px)' }}>{text}</span>
                 ))}
               </div>
@@ -1124,8 +1229,8 @@ function SpbDiscover() {
                 <div style={{ color: spb.faint, fontSize: 13, textAlign: 'right', lineHeight: 1.6 }}>
                   <div>{selectedItem.cityName || selectedItem.city}</div>
                   <div>{[selectedItem.category, selectedItem.sceneTag].filter(Boolean).join(' · ')}</div>
-                  {selectedItem?.poi?.verified ? <div style={{ color: 'oklch(0.82 0.045 150)' }}>地图已校验</div> : null}
-                  <div>{sourceLabel(selectedItem)}</div>
+                  {selectedItem?.poi?.verified ? <div style={{ color: 'oklch(0.82 0.045 150)' }}>地址已核验</div> : null}
+                  <div>{scoreText(selectedItem)}</div>
                 </div>
               </div>
               {selectedItem.editorialTitle || selectedItem.tagline ? (
@@ -1134,9 +1239,12 @@ function SpbDiscover() {
               <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10 }}>
                 {[
                   ['为什么看', itemReason(selectedItem)],
-                  ['信息来源', sourceLabel(selectedItem)],
+                  ['推荐指数', scoreText(selectedItem)],
                   ['出发前', visitCheckText(selectedItem)],
-                  ...(selectedItem?.poi?.verified ? [['地址', selectedItem.poi.address], ['电话', selectedItem.poi.tel || '暂无公开电话']] : []),
+                  ...(selectedItem?.poi?.verified ? [['地址', selectedItem.poi.address], ['电话', selectedItem.poi.tel || '暂无公开电话'], ['商圈', selectedItem.poi.businessArea || selectedItem.poi.district || selectedItem.district || '暂无商圈']] : []),
+                  ['最佳时间', selectedItem.bestVisitTime || '按距离和当天行程安排'],
+                  ['适合谁', selectedItem.visitAudience || '适合近期城市探索'],
+                  ['附近还能去哪', selectedItem.nearbySuggestion || '搭配同商圈咖啡、餐厅或展览空间'],
                 ].map(([title, text]) => (
                   <div key={title} style={{ border: `1px solid ${spb.line}`, borderRadius: 16, padding: '13px 14px', background: 'oklch(0.205 0.014 265 / 0.62)' }}>
                     <div style={{ color: spb.faint, fontFamily: spb.mono, fontSize: 11.5, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{title}</div>

@@ -4267,7 +4267,7 @@ async function adminCloudHealth(url, req, res) {
   checks.push(await jsonFileHealth('邮箱 SMTP 配置', AUTH_MAIL_CONFIG_PATH, { key: 'smtp-config', optional: true }));
   checks.push(await jsonFileHealth('韭研自动登录配置', JIUYANGONGSHE_AUTH_PATH, { key: 'jiuyangongshe-auth', optional: true }));
   checks.push(await jsonFileHealth('图片结构化服务配置', SOURCE_STRUCTURER_CONFIG_PATH, { key: 'source-structurer', optional: true }));
-  checks.push(await jsonFileHealth('探索地图校验配置', DISCOVERY_CONFIG_PATH, { key: 'discovery-poi-config', optional: true }));
+  checks.push(await jsonFileHealth('探索地址校验配置', DISCOVERY_CONFIG_PATH, { key: 'discovery-poi-config', optional: true }));
 
   const smtp = publicSmtpConfig(await getSmtpConfig());
   push(
@@ -4281,9 +4281,9 @@ async function adminCloudHealth(url, req, res) {
   const poiConfig = publicDiscoveryPoiConfig(await readDiscoveryPoiConfig());
   push(
     'discovery-poi-ready',
-    '探索地图 POI 校验',
+    '探索地址/电话校验',
     poiConfig.configured ? 'ok' : 'warn',
-    poiConfig.configured ? '高德 Web 服务 Key 已配置，可校验地址和坐标' : '未配置地图 Web 服务 Key，探索页只显示公开线索',
+    poiConfig.configured ? '地址校验服务已配置，可补充电话、地址和商圈' : '未配置地址校验服务，探索页只显示公开线索',
     { configured: poiConfig.configured, provider: poiConfig.provider, keyMasked: poiConfig.amapKeyMasked }
   );
 
@@ -8220,7 +8220,7 @@ function normalizeDiscoveryPoi(poi) {
   const name = normalizeDiscoveryShopName(poi.name || '');
   const address = normalizeDiscoveryPoiText(poi.address || '');
   const location = normalizeDiscoveryPoiText(poi.location || '');
-  if (!name || !address || !location) return null;
+  if (!name || !address) return null;
   return {
     verified: poi.verified !== false,
     provider: poi.provider || 'amap-web-service',
@@ -8277,7 +8277,7 @@ function discoveryAmapPoiToRecord(city, item, poi) {
   const location = discoveryAmapField(poi.location);
   const confidence = discoveryPoiNameConfidence(item?.name || '', name);
   const sameCity = !city?.name || cityName.includes(city.name) || district.includes(city.name) || String(poi.pname || '').includes(city.name);
-  if (!name || !address || !location || !sameCity || confidence < 55) return null;
+  if (!name || !address || !sameCity || confidence < 55) return null;
   return normalizeDiscoveryPoi({
     verified: true,
     provider: 'amap-web-service',
@@ -8362,7 +8362,7 @@ async function enrichDiscoveryItemsWithPoi(items, city) {
     if (poi?.verified) {
       item.poi = poi;
       if (!item.district && poi.district) item.district = poi.district;
-      if (!item.tags?.includes('地图已校验')) item.tags = ['地图已校验'].concat(Array.isArray(item.tags) ? item.tags : []).slice(0, 4);
+      if (!item.tags?.includes('地址已核验')) item.tags = ['地址已核验'].concat(Array.isArray(item.tags) ? item.tags : []).slice(0, 4);
       enriched += 1;
     }
     await sleep(120);
@@ -8472,6 +8472,63 @@ function discoveryCategoryFocus(category) {
   if (category === '买手店') return '品牌组合、陈列审美、单品风格和街区氛围';
   if (category === '展览空间') return '展期、预约方式、展览主题和周边路线';
   return '位置、类型、近期热度和是否适合加入路线';
+}
+
+function discoveryRecommendationScore(item) {
+  const base = Math.round(Math.max(0, Math.min(100, 52 + discoveryQualityScore(item) / 3)));
+  const poi = normalizeDiscoveryPoi(item?.poi);
+  let score = base;
+  if (poi?.verified) score += 8;
+  if (poi?.tel) score += 3;
+  if (poi?.businessArea || poi?.district || item?.district) score += 3;
+  if (Array.isArray(item?.photos) && item.photos.some(photo => !discoveryImageLooksGeneric(photo))) score += 4;
+  if (/首店|试营业|新店|新开|新展|市集|快闪/.test(discoveryOriginalText(item))) score += 5;
+  if (item?.category && item.category !== '其他') score += 2;
+  return Math.max(45, Math.min(96, score));
+}
+
+function discoveryRecommendationLevel(score) {
+  const n = Number(score || 0);
+  if (n >= 88) return '优先安排';
+  if (n >= 78) return '值得收藏';
+  if (n >= 68) return '顺路可去';
+  return '先观察';
+}
+
+function discoveryBestVisitTime(category) {
+  if (category === '咖啡') return '工作日下午或周末 14:00 前后，人少时更适合坐下判断空间和出品。';
+  if (category === '餐厅') return '午餐前或晚餐前提前预约，热门新店尽量避开饭点直接到店排队。';
+  if (category === '甜品') return '下午茶时段最合适，顺路搭配咖啡、买手店或展览空间。';
+  if (category === '面包烘焙') return '上午或下午出炉时段更值得去，适合先外带再继续路线。';
+  if (category === '茶饮') return '逛街中段或饭后顺路去，不建议只为一杯饮品专程绕路。';
+  if (category === '酒吧') return '晚间 20:00 后更能看氛围，出发前确认预约、低消和当天活动。';
+  if (category === '买手店') return '下午慢逛更合适，可以和咖啡、展览或街区散步连在一起。';
+  if (category === '展览空间') return '周末上午或下午早些去，给周边咖啡、餐厅和市集留时间。';
+  return '按距离和当天行程安排，出发前确认营业与预约状态。';
+}
+
+function discoveryVisitAudience(category) {
+  if (category === '咖啡') return '适合想找安静空间、精品咖啡、下午聊天或短时间办公的人。';
+  if (category === '餐厅') return '适合约饭、小聚、尝新店或想按商圈安排一餐的人。';
+  if (category === '甜品') return '适合下午茶、拍照、饭后补充路线或想尝季节限定的人。';
+  if (category === '面包烘焙') return '适合早餐、外带、下午茶和喜欢顺路买新品的人。';
+  if (category === '茶饮') return '适合逛街顺手买、饭后散步或想试新品的人。';
+  if (category === '酒吧') return '适合夜间小聚、朋友聊天、听音乐或想换一个轻社交空间的人。';
+  if (category === '买手店') return '适合喜欢穿搭、生活方式选品、街区慢逛和空间审美的人。';
+  if (category === '展览空间') return '适合周末半日计划、看展、市集、快闪和城市活动。';
+  return '适合把它作为近期城市探索备选，再按距离和时间筛选。';
+}
+
+function discoveryNearbySuggestion(category) {
+  if (category === '咖啡') return '附近优先搭配展览空间、买手店、甜品或街区散步。';
+  if (category === '餐厅') return '附近优先搭配咖啡、甜品、酒吧或饭后散步路线。';
+  if (category === '甜品') return '附近优先搭配咖啡、买手店、商场或轻量展览。';
+  if (category === '面包烘焙') return '附近优先搭配咖啡、茶饮、社区小店或公园散步。';
+  if (category === '茶饮') return '附近优先搭配餐厅、商场、买手店或短途步行路线。';
+  if (category === '酒吧') return '附近优先搭配晚餐、夜间街区、Livehouse 或江边/街区散步。';
+  if (category === '买手店') return '附近优先搭配咖啡、甜品、展览空间和街区慢逛。';
+  if (category === '展览空间') return '附近优先搭配咖啡、餐厅、市集和生活方式空间。';
+  return '附近优先搭配同商圈的咖啡、餐厅或展览空间。';
 }
 
 function discoveryCopyLooksInternal(value) {
@@ -8613,14 +8670,21 @@ function decorateDiscoveryItem(item) {
     ? `${name}是${locationText}的${category || '城市生活'}去处，近期线索集中在${sceneTag}：${sourceHint}`
     : `${name}是${locationText}的${category || '城市生活'}去处，适合按${focus}来判断是否加入这次路线。`;
   const poiLine = poi?.verified
-    ? `地图校验显示它位于${poi.address}${poi.businessArea ? `，靠近${poi.businessArea}` : ''}${poi.tel ? `，可用电话 ${poi.tel} 做出发前确认` : ''}。`
+    ? `地址校验显示它位于${poi.address}${poi.businessArea ? `，靠近${poi.businessArea}` : ''}${poi.tel ? `，可用电话 ${poi.tel} 做出发前确认` : ''}。`
     : '';
+  const recommendationScore = discoveryRecommendationScore({ ...item, name, category, district, poi, imageUrl, photos: photoList });
+  const recommendationLevel = discoveryRecommendationLevel(recommendationScore);
+  const bestVisitTime = discoveryBestVisitTime(category);
+  const visitAudience = discoveryVisitAudience(category);
+  const nearbySuggestion = discoveryNearbySuggestion(category);
   const editorialDetail = [
     `${name}是${locationText}的具体${category || '城市生活'}地点。这个条目只围绕这个店铺或地点展开，适合和同城同类内容放在一起比较，不会把你带到外部文章才能看重点。`,
     sourceHint
       ? `目前最值得先看的线索是：${sourceHint}。如果你正在筛选${city || '本地'}${category || '去处'}，可以先把它当作一个具体备选，再和同页其他地点对比。`
       : `目前可用信息主要集中在地点、类型和适合场景。可以先按距离、时间和喜好放入候选；有新的开业、上新、活动或探店线索时，内容会继续补全。`,
     poiLine,
+    `推荐判断：${recommendationLevel}，综合分 ${recommendationScore}。适合人群是：${visitAudience}`,
+    `建议时间：${bestVisitTime} ${nearbySuggestion}`,
     `${category || '城市生活'}类内容重点看${focus}。${angles.decision}`,
     `${angles.route}${mood ? ` ${mood}` : ''}`,
     `到店前建议再确认营业时间、预约状态、排队情况和当天是否有临时调整。${angles.note}`,
@@ -8639,6 +8703,11 @@ function decorateDiscoveryItem(item) {
     sceneTag,
     tagline: `${locationText} · ${sceneTag}`,
     qualityScore: discoveryQualityScore({ ...item, name, category, district, poi, imageUrl, photos: photoList }),
+    recommendationScore,
+    recommendationLevel,
+    bestVisitTime,
+    visitAudience,
+    nearbySuggestion,
     editorialTitle: `${name}｜${locationText} · ${category || sceneTag}`,
     editorialSummary,
     editorialDetail,
@@ -8647,7 +8716,8 @@ function decorateDiscoveryItem(item) {
       { title: '类型', text: category || sceneTag },
       { title: '看点', text: sceneTag },
       { title: '适合', text: mood.replace(/。$/, '') },
-      { title: poi?.verified ? '地图校验' : '位置', text: poi?.verified ? poi.address : locationText },
+      { title: '推荐', text: `${recommendationLevel} · ${recommendationScore}` },
+      { title: poi?.verified ? '地址核验' : '位置', text: poi?.verified ? poi.address : locationText },
     ],
   };
 }

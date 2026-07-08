@@ -920,3 +920,43 @@ Notes for next agent:
 - To enable POI verification on the cloud server, save a Gaode/AMap Web Service key through `/api/admin/discovery/poi-config` or set `PANDA_DISCOVERY_AMAP_KEY` / `AMAP_WEB_SERVICE_KEY` on the server, then run Explore sync.
 - Do not commit `panda-discovery-config.json`; it is a runtime-only secret-bearing config.
 - The POI layer is a verification/enrichment layer only. It should not replace the Explore source-selection logic or turn the page into a generic travel guide.
+
+## 2026-07-08 - Codex - Add Explore routes, sections, and recommendation scoring
+
+Changed:
+- Refined Explore wording so the user-facing page no longer presents this as a map feature; verified places now read as `地址已核验` and focus on address, phone, and business-area details.
+- Added backend recommendation fields for every Explore item: `recommendationScore`, `recommendationLevel`, `bestVisitTime`, `visitAudience`, and `nearbySuggestion`.
+- Added a `周末可以这样逛` section that automatically builds city route cards from visible Explore items: light start, main destination, and evening/meal finish.
+- Added an `按主题先看` section that groups top items by category and gives each category a quick drill-in button.
+- Updated featured and city cards to show recommendation score/level more prominently.
+- Expanded the item detail modal with practical decision details: recommendation score, before-going check, address, phone, business area, best visit time, audience fit, and nearby pairing. Removed the `信息来源` detail card per user request.
+
+Files:
+- `kpl-stats-server.js`
+- `Qi/index.html`
+- `Qi/qi-home.jsx`
+- `Qi/qi-home.compiled.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node Qi/build-home.js`
+- `node --check kpl-stats-server.js`
+- `node --check Qi/qi-home.compiled.js`
+- `git diff --check`
+- Cloud `node --check .\kpl-stats-server.js`
+- Cloud `node --check .\Qi\qi-home.compiled.js`
+- Public `https://explore.dreamerqi.com/`
+- Public `https://explore.dreamerqi.com/api/discovery`
+- Public discovery API returned `ready`, `generatedDay: 2026-07-08`, `itemCount: 168`, and all 168 items had recommendation scores. First sampled item had `recommendationScore: 89`, `recommendationLevel: 优先安排`, and populated best-visit-time/audience fields.
+
+Deployment:
+- Production touched: yes.
+- Backup before upload: `C:\PandaDashboard\backups\discovery-routes-score-20260708-223941`.
+- Uploaded `kpl-stats-server.js`, `Qi/index.html`, `Qi/qi-home.jsx`, and `Qi/qi-home.compiled.js`.
+- Restarted only `PandaDashboard-KPL-Server` using the scheduled task; new listener PID was `15296`.
+- Did not restart Caddy or `yule-server.js`.
+
+Notes for next agent:
+- Keep Explore focused on city new shops and places. Do not turn it into a generic tourism guide.
+- User explicitly does not want a map surface here; use address, phone, business area, and practical trip-planning fields instead.
+- Detail modal should not re-add an `信息来源` card unless the user asks for it.
