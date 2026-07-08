@@ -707,3 +707,36 @@ Deployment:
 Notes for next agent:
 - The 2026-07-08 raw limit-up DB still contains 47 because it includes Beijing exchange code `920857`; the recap/source-view business layer correctly excludes it and uses 46.
 - If the data-health panel appears stale in the browser, hard refresh the market page; the backend now returns the corrected source coverage.
+
+## 2026-07-08 - Codex - Merge and deploy Claude strategy mainline update
+
+Changed:
+- Fast-forwarded `main` to Claude branch commit `b240949`.
+- Deployed the strategy mainline prediction, early-radar, L2 star-stock, first-day-theme, and card-polish update to the cloud server.
+- Wrote matching cloud operation notes.
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `git diff --check`
+- `node --check kpl-stats-server.js`
+- `node --check local-l2-task-queue.js`
+- `node --check strategy-backend.js`
+- Dashboard inline script parsed successfully.
+- Cloud `node --check .\kpl-stats-server.js`
+- Cloud dashboard inline script parsed successfully.
+- Public `/health`, `/kpl`, `/api/strategy-mainlines?day=2026-07-08`, `/api/limit-up-main-reason-db/source-view?day=2026-07-08&force=1`, and `/api/after-close-status?day=2026-07-08&mainReasonMode=same-day`.
+
+Deployment:
+- Production touched: yes.
+- Backup before upload: `C:\PandaDashboard\backups\claude-strategy-main-20260708-201351`.
+- Uploaded `kpl-stats-server.js` and `kpl-dashboard_17_apple.html`.
+- Restarted only `PandaDashboard-KPL-Server`.
+- Did not restart Caddy or `yule-server.js`.
+
+Notes for next agent:
+- This release adds automatic strategy L2 scan queuing during trading sessions when the local L2 worker token is configured; watch the first live session for queue volume and whether the worker is online.
+- The 2026-07-08 source-view and same-day health checks still show all four recap sources at 46.
