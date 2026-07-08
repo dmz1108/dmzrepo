@@ -773,3 +773,39 @@ Deployment:
 Notes for next agent:
 - This fix addresses the reported issue where the strategy `消费` card contained technology stocks such as 网宿科技、电科网安、紫光股份 because `IPv6` was misclassified through the short keyword `IP`.
 - If similar leakage appears later, check both taxonomy keyword boundary behavior and whether `strategyMainlineAttachRealtimeBoardToSeed` is receiving the intended matched code set.
+
+## 2026-07-08 - Codex - Improve strategy mainline cards and leaders
+
+Changed:
+- Reworked strategy mainline card layout so the mainline name can wrap and key metrics no longer disappear in a cramped header.
+- Added a stable four-cell signal strip for limit-ups, big gain/near-limit count, board gain, and net inflow/outflow.
+- Added leader trend badges in expanded `龙头候选`.
+- Updated backend leader candidate scoring to include recent 10-day limit-up count plus 10-day and 30-day gain.
+- Used the latest available close day when today's close DB is not ready, and prevented null trend values from displaying as fake `0.0%`.
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- Dashboard inline script parsed successfully.
+- `git diff --check`
+- Cloud `node --check .\kpl-stats-server.js`
+- Cloud dashboard inline script parsed successfully.
+- Public `https://market.dreamerqi.com/kpl`
+- Public `https://market.dreamerqi.com/api/strategy-mainlines?day=2026-07-09`
+- Verified page contains `ml-signal-strip`, `ml-trend-pill`, and `10/30日涨幅综合排序`.
+- Verified leader rows carry `zt10/gain10` where available and do not show fake `gain30=0`.
+
+Deployment:
+- Production touched: yes.
+- Backup before upload: `C:\PandaDashboard\backups\strategy-mainline-card-ui-20260708-210059`.
+- Uploaded `kpl-stats-server.js` and `kpl-dashboard_17_apple.html`.
+- Restarted only `PandaDashboard-KPL-Server`.
+- Did not restart Caddy or `yule-server.js`.
+
+Notes for next agent:
+- The expanded mainline leader list now uses current strength plus 10-day limit-up count and 10/30-day gain. If 30-day close data is missing or flat/no-signal, the 30-day badge is intentionally omitted.
+- The card header now reserves a visible metric strip for net inflow/outflow and board gain; avoid moving these back into the single-line subtitle.

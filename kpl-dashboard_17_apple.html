@@ -7952,13 +7952,250 @@
     white-space: nowrap !important;
   }
 
-  body.view-strategy .sc-pick-pair span b {
-    color: #36dd96 !important;
-    font-size: 12px !important;
-    font-weight: 800 !important;
-  }
+	  body.view-strategy .sc-pick-pair span b {
+	    color: #36dd96 !important;
+	    font-size: 12px !important;
+	    font-weight: 800 !important;
+	  }
 
-  body.view-strategy .sc-pick-pair em {
+	  /* ===== Strategy mainline card legibility pass 2026-07-08 ===== */
+	  body.view-strategy .ml-card {
+	    min-height: 248px !important;
+	    gap: 9px !important;
+	  }
+
+	  body.view-strategy .ml-top {
+	    grid-template-columns: 28px minmax(0, 1fr) minmax(104px, auto) !important;
+	    align-items: start !important;
+	    gap: 9px !important;
+	  }
+
+	  body.view-strategy .ml-rank {
+	    width: 26px !important;
+	    height: 26px !important;
+	    border-radius: 7px !important;
+	  }
+
+	  body.view-strategy .ml-name-row {
+	    align-items: flex-start !important;
+	    flex-wrap: wrap !important;
+	    gap: 5px 7px !important;
+	  }
+
+	  body.view-strategy .ml-name {
+	    flex: 1 1 100% !important;
+	    min-width: 0 !important;
+	    overflow: visible !important;
+	    display: block !important;
+	    color: var(--dq-text, var(--text)) !important;
+	    font-size: 16px !important;
+	    line-height: 1.25 !important;
+	    white-space: normal !important;
+	    overflow-wrap: anywhere !important;
+	    text-overflow: clip !important;
+	  }
+
+	  body.view-strategy .ml-sub {
+	    margin-top: 5px !important;
+	    display: -webkit-box !important;
+	    overflow: hidden !important;
+	    color: var(--strategy-comfort-muted, var(--text-faint)) !important;
+	    font-size: 11px !important;
+	    line-height: 1.35 !important;
+	    text-overflow: clip !important;
+	    white-space: normal !important;
+	    -webkit-line-clamp: 2;
+	    -webkit-box-orient: vertical;
+	  }
+
+	  body.view-strategy .ml-score-wrap {
+	    align-items: stretch !important;
+	    justify-content: flex-end !important;
+	    gap: 5px !important;
+	  }
+
+	  body.view-strategy .ml-score,
+	  body.view-strategy .ml-predict {
+	    min-width: 48px !important;
+	    padding: 4px 6px !important;
+	    align-items: center !important;
+	  }
+
+	  body.view-strategy .ml-score b {
+	    font-size: 18px !important;
+	  }
+
+	  body.view-strategy .ml-predict b {
+	    font-size: 14px !important;
+	  }
+
+	  body.view-strategy .ml-signal-strip {
+	    display: grid;
+	    grid-template-columns: repeat(4, minmax(0, 1fr));
+	    gap: 6px;
+	    margin-top: 1px;
+	  }
+
+	  body.view-strategy .ml-signal-cell {
+	    min-width: 0;
+	    min-height: 42px;
+	    display: flex;
+	    flex-direction: column;
+	    justify-content: center;
+	    gap: 2px;
+	    padding: 6px 7px;
+	    border: 1px solid rgba(174,190,214,0.10);
+	    border-radius: 7px;
+	    background: rgba(255,255,255,0.026);
+	  }
+
+	  body.view-strategy .ml-signal-cell i {
+	    overflow: hidden;
+	    color: rgba(174,190,214,0.72);
+	    font-size: 10px;
+	    font-style: normal;
+	    line-height: 1.1;
+	    text-overflow: ellipsis;
+	    white-space: nowrap;
+	  }
+
+	  body.view-strategy .ml-signal-cell b {
+	    overflow: hidden;
+	    color: #eaf2ff;
+	    font-size: 12px;
+	    font-weight: 800;
+	    line-height: 1.1;
+	    text-overflow: ellipsis;
+	    white-space: nowrap;
+	  }
+
+	  body.view-strategy .ml-signal-cell.up b {
+	    color: var(--up);
+	  }
+
+	  body.view-strategy .ml-signal-cell.down b {
+	    color: var(--down);
+	  }
+
+	  body.view-strategy .ml-signal-cell.empty b,
+	  body.view-strategy .ml-signal-cell.flat b {
+	    color: var(--flat);
+	  }
+
+	  body.view-strategy .ml-leader {
+	    display: grid !important;
+	    grid-template-columns: auto minmax(0, 1fr) auto auto !important;
+	    align-items: center !important;
+	  }
+
+	  body.view-strategy .ml-leader-list-title {
+	    display: flex !important;
+	    align-items: baseline !important;
+	    justify-content: space-between !important;
+	    gap: 10px !important;
+	  }
+
+	  body.view-strategy .ml-leader-list-title small {
+	    overflow: hidden;
+	    color: rgba(174,190,214,0.58);
+	    font-size: 10.5px;
+	    font-weight: 600;
+	    text-align: right;
+	    text-overflow: ellipsis;
+	    white-space: nowrap;
+	  }
+
+	  body.view-strategy .ml-leader-mini {
+	    grid-template-columns: 22px minmax(0, 1fr) auto !important;
+	    align-items: start !important;
+	  }
+
+	  body.view-strategy .ml-leader-mini-main b {
+	    overflow: visible !important;
+	    white-space: normal !important;
+	  }
+
+	  body.view-strategy .ml-leader-trend {
+	    grid-column: 2 / -1;
+	    display: flex;
+	    flex-wrap: wrap;
+	    gap: 5px;
+	    margin-top: 2px;
+	  }
+
+	  body.view-strategy .ml-leader > .ml-leader-trend {
+	    grid-column: 1 / -1;
+	    margin-top: 6px;
+	  }
+
+	  body.view-strategy .ml-trend-pill {
+	    min-height: 22px;
+	    display: inline-flex;
+	    align-items: center;
+	    gap: 5px;
+	    padding: 0 7px;
+	    border: 1px solid rgba(174,190,214,0.12);
+	    border-radius: 999px;
+	    background: rgba(255,255,255,0.035);
+	    color: #aebed6;
+	    font-size: 10.5px;
+	    line-height: 20px;
+	  }
+
+	  body.view-strategy .ml-trend-pill i {
+	    color: rgba(174,190,214,0.68);
+	    font-style: normal;
+	  }
+
+	  body.view-strategy .ml-trend-pill b {
+	    color: #edf3fa;
+	    font-weight: 780;
+	  }
+
+	  body.view-strategy .ml-trend-pill.hot {
+	    border-color: rgba(255,186,73,0.28);
+	    background: rgba(255,186,73,0.085);
+	  }
+
+	  body.view-strategy .ml-trend-pill.hot b {
+	    color: #ffd48a;
+	  }
+
+	  body.view-strategy .ml-trend-pill.up b {
+	    color: var(--up);
+	  }
+
+	  body.view-strategy .ml-trend-pill.down b {
+	    color: var(--down);
+	  }
+
+	  @media (max-width: 760px) {
+	    body.view-strategy .ml-top {
+	      grid-template-columns: 28px minmax(0, 1fr) !important;
+	    }
+
+	    body.view-strategy .ml-score-wrap {
+	      grid-column: 2;
+	      justify-content: flex-start !important;
+	    }
+
+	    body.view-strategy .ml-signal-strip {
+	      grid-template-columns: repeat(2, minmax(0, 1fr));
+	    }
+
+	    body.view-strategy .ml-leader-list-title {
+	      align-items: flex-start !important;
+	      flex-direction: column;
+	      gap: 3px !important;
+	    }
+
+	    body.view-strategy .ml-leader-list-title small {
+	      text-align: left;
+	      white-space: normal;
+	    }
+	  }
+
+	  body.view-strategy .sc-pick-pair em {
     min-width: 0 !important;
     overflow: hidden !important;
     font-style: normal !important;
@@ -10688,11 +10925,35 @@ function strategyLeaderReasonText(leader) {
   if (Number(leader?.leadScore) > 0) list.push(`引领分${Number(leader.leadScore).toFixed(0)}`);
   return [...new Set(list.filter(Boolean))].slice(0, 2).join(' / ');
 }
+function strategyTrendPctText(value, label) {
+  if (value === null || value === undefined || value === '') return '';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '';
+  return `${label}${n >= 0 ? '+' : ''}${n.toFixed(1)}%`;
+}
+function strategyLeaderTrendText(leader) {
+  return [
+    Number(leader?.zt10) > 0 ? `10日${Number(leader.zt10)}次` : '',
+    strategyTrendPctText(leader?.gain10, '10日'),
+    strategyTrendPctText(leader?.gain30, '30日'),
+  ].filter(Boolean).join(' · ');
+}
+function strategyLeaderTrendBadgesHTML(leader) {
+  const items = [
+    Number(leader?.zt10) > 0 ? ['10日涨停', `${Number(leader.zt10)}次`, 'hot'] : null,
+    strategyTrendPctText(leader?.gain10, '') ? ['10日涨幅', strategyTrendPctText(leader.gain10, ''), Number(leader.gain10) >= 0 ? 'up' : 'down'] : null,
+    strategyTrendPctText(leader?.gain30, '') ? ['30日涨幅', strategyTrendPctText(leader.gain30, ''), Number(leader.gain30) >= 0 ? 'up' : 'down'] : null,
+  ].filter(Boolean);
+  if (!items.length) return '';
+  return `<div class="ml-leader-trend">${items.map(([label, value, cls]) =>
+    `<span class="ml-trend-pill ${escapeHTML(cls)}"><i>${escapeHTML(label)}</i><b>${escapeHTML(value)}</b></span>`
+  ).join('')}</div>`;
+}
 function strategyMainlineLeadersHTML(m) {
   const leaders = Array.isArray(m?.leaders) ? m.leaders.slice(0, 3) : [];
   if (!leaders.length) return '';
   return `<div class="ml-leader-list">
-    <div class="ml-leader-list-title">龙头候选</div>
+    <div class="ml-leader-list-title">龙头候选 <small>按当前强度 × 10日涨停次数 × 10/30日涨幅综合排序</small></div>
     ${leaders.map((leader, idx) => {
       const meta = [
         Number(leader.lianban) >= 2 ? `${Number(leader.lianban)}板` : '',
@@ -10707,6 +10968,7 @@ function strategyMainlineLeadersHTML(m) {
           ${reason ? `<small>${escapeHTML(reason)}</small>` : ''}
         </div>
         ${meta ? `<em>${escapeHTML(meta)}</em>` : ''}
+        ${strategyLeaderTrendBadgesHTML(leader)}
       </div>`;
     }).join('')}
   </div>`;
@@ -10829,8 +11091,16 @@ function renderStrategyMainlinesHTML(d) {
     const recent = (m.recentTopStocks || []).slice(0, 2).map(s =>
       `<span class="ml-stock">${escapeHTML(s.name || s.code || '')}<i>${Number(s.count) || 0}次</i></span>`
     ).join('');
-    const inflowClass = Number(m.netInflow) > 0 ? 'up' : (Number(m.netInflow) < 0 ? 'down' : 'flat');
-    const inflow = m.netInflow != null ? `<span class="ml-inflow ${inflowClass}">${fmtInflow(m.netInflow)}</span>` : '';
+    const inflowClass = m.netInflow == null ? 'empty' : (Number(m.netInflow) > 0 ? 'up' : (Number(m.netInflow) < 0 ? 'down' : 'flat'));
+    const gainValue = Number(m.boardGainPct);
+    const gainClass = !Number.isFinite(gainValue) ? 'empty' : (gainValue > 0 ? 'up' : (gainValue < 0 ? 'down' : 'flat'));
+    const metricCell = (label, value, cls = '') => `<span class="ml-signal-cell ${escapeHTML(cls)}"><i>${escapeHTML(label)}</i><b>${escapeHTML(value)}</b></span>`;
+    const signalStrip = `<div class="ml-signal-strip">
+      ${metricCell('涨停', String(Number(m.count) || 0))}
+      ${metricCell('大涨/冲板', `${Number(m.bigGainCount) || 0}/${Number(m.nearLimitCount) || 0}`)}
+      ${metricCell(m.boardGainName ? String(m.boardGainName).slice(0, 6) : '板块涨幅', Number.isFinite(gainValue) ? `${gainValue > 0 ? '+' : ''}${gainValue.toFixed(2)}%` : '--', gainClass)}
+      ${metricCell(Number(m.netInflow) < 0 ? '净流出' : '净流入', m.netInflow != null ? fmtInflow(m.netInflow) : '--', inflowClass)}
+    </div>`;
     const driver = strategyMainlineTopScorePart(m.scoreParts);
     const scoreMeta = strategyMainlineScoreMetaHTML(m);
     const leadersHtml = strategyMainlineLeadersHTML(m);
@@ -10873,17 +11143,18 @@ function renderStrategyMainlinesHTML(d) {
         <span class="ml-rank">${Number(m.rank) || i + 1}</span>
         <div class="ml-namebox">
           <div class="ml-name-row">
-            <div class="ml-name">${escapeHTML(m.theme || '')}</div>
+            <div class="ml-name" title="${escapeHTML(m.theme || '')}">${escapeHTML(m.theme || '')}</div>
             ${combinedBadge}
             ${newThemeBadge}
           </div>
-          <div class="ml-sub">涨停${Number(m.count) || 0} · 冲板${Number(m.nearLimitCount) || 0} · 大涨${Number(m.bigGainCount) || 0}${inflow ? ' · ' : ''}${inflow}</div>
+          <div class="ml-sub">${escapeHTML(driver.label)} · ${Number(m.boardCount) || 0}个共振板块${m.netInflowBoard ? ` · 资金板块 ${escapeHTML(m.netInflowBoard)}` : ''}</div>
         </div>
         <div class="ml-score-wrap">
           ${m.predictScore != null ? `<div class="ml-score" title="只含前瞻信号:大涨扩散/冲板/普涨广度/动能/历史主因/资金"><b>${Number(m.predictScore || 0).toFixed(0)}</b><span>预判分</span></div>` : ''}
           ${m.predictScore == null || Math.round(Number(m.predictScore)) !== Math.round(Number(m.score || 0)) ? `<div class="ml-predict" title="含涨停/高度/连板确认分的完整主线强度"><b>${Number(m.score || 0).toFixed(0)}</b><span>主线分</span></div>` : ''}
         </div>
       </div>
+      ${signalStrip}
       ${stars ? `<div class="ml-proof-row ml-star-row"><span class="ml-proof-lbl">明星</span>${stars}</div>` : ''}
       ${focus ? `<div class="ml-proof-row"><span class="ml-proof-lbl">潜力</span>${focus}</div>` : ''}
       ${reasonLine ? `<div class="ml-reason">${escapeHTML(reasonLine)}</div>` : ''}
@@ -10906,6 +11177,7 @@ function renderStrategyMainlinesHTML(d) {
           ${Number.isFinite(leaderScore) ? `<em>${leaderScore.toFixed(0)}</em>` : ''}
           ${leaderMeta ? `<i>${escapeHTML(leaderMeta)}</i>` : ''}
         </div>
+        ${strategyLeaderTrendBadgesHTML(leader)}
         ${basis ? `<div class="ml-basis">${basis}</div>` : ''}
         ${strategyMainlineExplainHTML(m)}
         ${leadersHtml}

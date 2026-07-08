@@ -18097,8 +18097,6 @@ async function buildMainlineTopGainStocks(endDay, themes, scanDays = 30, limit =
   const apiKey = await readSavedApiKey().catch(() => '');
   const tradingDays = await getRecentTradingDays(endDay, apiKey, Math.max(31, scanDays)).catch(() => []);
   if (!tradingDays.length) return { byTheme: new Map(), tradingDays: [], baseDay: null };
-  const last = tradingDays.length - 1;
-  const baseDay = last - 10 >= 0 ? tradingDays[last - 10] : null;
   const closeMapOf = async d => {
     if (!d) return new Map();
     const cdb = await readEastmoneyCloseDbDay(d).catch(() => null);
@@ -18106,8 +18104,26 @@ async function buildMainlineTopGainStocks(endDay, themes, scanDays = 30, limit =
       .map(s => [normalizeReasonSourceCode(s.code), Number(s.close)])
       .filter(([c, v]) => c && Number.isFinite(v) && v > 0));
   };
-  const [c0, c10] = await Promise.all([closeMapOf(isoFromCompactDate(endDay)), closeMapOf(baseDay)]);
-  if (!c0.size || !c10.size) return { byTheme: new Map(), tradingDays, baseDay };
+  let closeDay = isoFromCompactDate(endDay);
+  let closeIndex = tradingDays.indexOf(closeDay);
+  let c0 = await closeMapOf(closeDay);
+  if (!c0.size) {
+    for (let i = tradingDays.length - 1; i >= 0; i -= 1) {
+      const candidateDay = tradingDays[i];
+      const candidateMap = await closeMapOf(candidateDay);
+      if (candidateMap.size) {
+        closeDay = candidateDay;
+        closeIndex = i;
+        c0 = candidateMap;
+        break;
+      }
+    }
+  }
+  if (closeIndex < 0) closeIndex = tradingDays.length - 1;
+  const baseDay = closeIndex - 10 >= 0 ? tradingDays[closeIndex - 10] : null;
+  const baseDay30 = closeIndex - 30 >= 0 ? tradingDays[closeIndex - 30] : null;
+  const [c10, c30] = await Promise.all([closeMapOf(baseDay), closeMapOf(baseDay30)]);
+  if (!c0.size || (!c10.size && !c30.size)) return { byTheme: new Map(), tradingDays, baseDay };
   const last10 = new Set(tradingDays.slice(-10));
   const aggByTheme = new Map();
   for (const d of tradingDays.slice(Math.max(0, tradingDays.length - scanDays))) {
@@ -18145,12 +18161,18 @@ async function buildMainlineTopGainStocks(endDay, themes, scanDays = 30, limit =
     const rows = [...stockMap.values()].map(item => {
       const p0 = c0.get(item.code);
       const p10 = c10.get(item.code);
-      const gain10 = (Number.isFinite(p0) && Number.isFinite(p10)) ? Number(((p0 / p10 - 1) * 100).toFixed(2)) : null;
-      return { ...item, gain10 };
-    }).filter(item => Number.isFinite(item.gain10))
+      const p30 = c30.get(item.code);
+      const rawGain10 = (Number.isFinite(p0) && Number.isFinite(p10)) ? Number(((p0 / p10 - 1) * 100).toFixed(2)) : null;
+      const rawGain30 = (Number.isFinite(p0) && Number.isFinite(p30)) ? Number(((p0 / p30 - 1) * 100).toFixed(2)) : null;
+      const gain10 = rawGain10 != null && Math.abs(rawGain10) >= 0.05 ? rawGain10 : null;
+      const gain30 = rawGain30 != null && Math.abs(rawGain30) >= 0.05 ? rawGain30 : null;
+      return { ...item, gain10, gain30 };
+    }).filter(item => Number.isFinite(item.gain10) || Number.isFinite(item.gain30))
       .sort((a, b) =>
-        (Number(b.gain10) || -9999) - (Number(a.gain10) || -9999) ||
         (Number(b.zt10) || 0) - (Number(a.zt10) || 0) ||
+        (Number(b.gain10) || -9999) - (Number(a.gain10) || -9999) ||
+        (Number(b.gain30) || -9999) - (Number(a.gain30) || -9999) ||
+        (Number(b.zt30) || 0) - (Number(a.zt30) || 0) ||
         String(a.code || '').localeCompare(String(b.code || ''))
       )
       .slice(0, limit)
@@ -18158,6 +18180,7 @@ async function buildMainlineTopGainStocks(endDay, themes, scanDays = 30, limit =
         code: item.code,
         name: item.name,
         gain10: item.gain10,
+        gain30: item.gain30,
         zt10: item.zt10,
         zt30: item.zt30,
         days: item.days,
@@ -20553,8 +20576,13 @@ function strategyMainlineAddCandidate(map, raw, extra = {}) {
     inResonance: false,
     bigGain: false,
     nearLimit: false,
+    trendLeader: false,
     tier: '',
     agreeCount: 0,
+    zt10: 0,
+    zt30: 0,
+    gain10: null,
+    gain30: null,
     sourceTags: new Set(),
   };
   if (!cur.name && raw?.name) cur.name = String(raw.name);
@@ -20577,7 +20605,14 @@ function strategyMainlineAddCandidate(map, raw, extra = {}) {
   if (extra.inResonance) cur.inResonance = true;
   if (extra.bigGain) cur.bigGain = true;
   if (extra.nearLimit) cur.nearLimit = true;
+  if (extra.trendLeader) cur.trendLeader = true;
   if (extra.tag) cur.sourceTags.add(extra.tag);
+  cur.zt10 = Math.max(cur.zt10 || 0, Number(raw?.zt10 || 0) || 0);
+  cur.zt30 = Math.max(cur.zt30 || 0, Number(raw?.zt30 || 0) || 0);
+  const gain10 = isFiniteNumeric(raw?.gain10) ? Number(raw.gain10) : null;
+  if (gain10 != null) cur.gain10 = cur.gain10 == null ? gain10 : Math.max(cur.gain10, gain10);
+  const gain30 = isFiniteNumeric(raw?.gain30) ? Number(raw.gain30) : null;
+  if (gain30 != null) cur.gain30 = cur.gain30 == null ? gain30 : Math.max(cur.gain30, gain30);
   const rawTier = String(raw?.tier || raw?.consensusTier || '');
   if (strategyMainlineTierRank(rawTier) > strategyMainlineTierRank(cur.tier)) cur.tier = rawTier;
   cur.agreeCount = Math.max(cur.agreeCount || 0, Number(raw?.agreeCount || 0) || 0);
@@ -20587,16 +20622,23 @@ function strategyMainlineAddCandidate(map, raw, extra = {}) {
 function strategyMainlineScoreLeader(c) {
   const sealMin = strategyParseSealMinutes(c.firstLimitTime);
   const sealTie = Math.min(4, strategySealBonus(sealMin) / 15);
+  const gain10 = isFiniteNumeric(c.gain10) ? Number(c.gain10) : null;
+  const gain30 = isFiniteNumeric(c.gain30) ? Number(c.gain30) : null;
   const score =
     (Math.min(Number(c.lianban) || 0, 6) * 34) +
     (c.inTodayTheme ? 18 : 0) +
     (c.inResonance ? 22 : 0) +
+    (c.trendLeader ? 10 : 0) +
     (strategyMainlineTierRank(c.tier) * 10) +
     (c.nearLimit ? 18 : (c.bigGain ? 8 : 0)) +
     (Math.min(Number(c.agreeCount) || 0, 4) * 4) +
     (Math.min(Number(c.recentCount) || 0, 8) * 3) +
+    (Math.min(Number(c.zt10) || 0, 5) * 12) +
+    (Math.min(Number(c.zt30) || 0, 10) * 2) +
     (Math.min(Number(c.maxRecentLianban) || 0, 6) * 2) +
     (Number.isFinite(Number(c.gain)) ? Math.max(0, Math.min(8, Number(c.gain) / 3)) : 0) +
+    (gain10 != null ? Math.max(0, Math.min(24, gain10 * 0.45)) : 0) +
+    (gain30 != null ? Math.max(0, Math.min(20, gain30 * 0.28)) : 0) +
     sealTie;
   return Number(score.toFixed(1));
 }
@@ -20609,6 +20651,9 @@ function strategyMainlineLeaderBasis(c) {
   if (c.tier === 'strong') tags.push(`${Number(c.agreeCount) || 0}源高度一致`);
   else if (c.tier === 'majority') tags.push(`${Number(c.agreeCount) || 0}源确认`);
   if (Number(c.recentCount) > 0) tags.push(`近15日${Number(c.recentCount)}次`);
+  if (Number(c.zt10) > 0) tags.push(`10日涨停${Number(c.zt10)}次`);
+  if (isFiniteNumeric(c.gain10)) tags.push(`10日${Number(c.gain10) >= 0 ? '+' : ''}${Number(c.gain10).toFixed(1)}%`);
+  if (isFiniteNumeric(c.gain30)) tags.push(`30日${Number(c.gain30) >= 0 ? '+' : ''}${Number(c.gain30).toFixed(1)}%`);
   if (!tags.length && c.detail) tags.push(c.detail);
   return tags.slice(0, 4);
 }
@@ -20671,6 +20716,13 @@ function strategyMainlineLeaderExplain(c) {
   if (c?.tier === 'strong') explain.push(`${Number(c.agreeCount) || 0}个来源对主因高度一致。`);
   else if (c?.tier === 'majority') explain.push(`${Number(c.agreeCount) || 0}个来源确认主因。`);
   if (Number(c?.recentCount) > 0) explain.push(`近15个交易日出现${Number(c.recentCount)}次。`);
+  if (Number(c?.zt10) > 0) explain.push(`近10日同主线涨停${Number(c.zt10)}次，龙头连续性更强。`);
+  if (isFiniteNumeric(c?.gain10) || isFiniteNumeric(c?.gain30)) {
+    const parts = [];
+    if (isFiniteNumeric(c?.gain10)) parts.push(`10日${Number(c.gain10) >= 0 ? '+' : ''}${Number(c.gain10).toFixed(1)}%`);
+    if (isFiniteNumeric(c?.gain30)) parts.push(`30日${Number(c.gain30) >= 0 ? '+' : ''}${Number(c.gain30).toFixed(1)}%`);
+    explain.push(`阶段涨幅${parts.join('、')}参与龙头预判。`);
+  }
   if (!explain.length && c?.detail) explain.push(String(c.detail));
   return explain.slice(0, 4);
 }
@@ -20693,8 +20745,13 @@ function strategyMainlineStockBrief(c, role = '') {
     sealAmount: strategyMainlineSealAmount(c),
     detail: c?.detail || '',
     recentCount: Number(c?.recentCount) || 0,
+    zt10: Number(c?.zt10) || 0,
+    zt30: Number(c?.zt30) || 0,
+    gain10: Number.isFinite(Number(c?.gain10)) ? Number(Number(c.gain10).toFixed(2)) : null,
+    gain30: Number.isFinite(Number(c?.gain30)) ? Number(Number(c.gain30).toFixed(2)) : null,
     bigGain: !!c?.bigGain,
     nearLimit: !!c?.nearLimit,
+    trendLeader: !!c?.trendLeader,
     leadScore: Number.isFinite(Number(c?.leadScore)) ? Number(Number(c.leadScore).toFixed(1)) : 0,
     basis: Array.isArray(c?.basis) ? c.basis.slice(0, 3) : [],
     explain: Array.isArray(c?.explain) ? c.explain.slice(0, 3) : [],
@@ -21769,8 +21826,21 @@ async function getStrategyMainlines(day) {
     for (const s of (t.recentTopStocks || [])) {
       strategyMainlineAddCandidate(candidateMap, s, { tag: '近15日' });
     }
+    const topGainStocks = gainLeaders.byTheme.get(key) || [];
+    for (const s of topGainStocks) {
+      strategyMainlineAddCandidate(candidateMap, {
+        code: s.code,
+        name: s.name,
+        count: s.zt10,
+        zt10: s.zt10,
+        zt30: s.zt30,
+        gain10: s.gain10,
+        gain30: s.gain30,
+        finalDetailReason: s.latestDetail || '',
+      }, { trendLeader: true, tag: '10/30日强势' });
+    }
     const candidates = [...candidateMap.values()]
-      .filter(c => c.inTodayTheme || c.inResonance)
+      .filter(c => c.inTodayTheme || c.inResonance || c.trendLeader)
       .map(c => ({
         ...c,
         sourceTags: [...(c.sourceTags || [])].slice(0, 4),
@@ -21781,6 +21851,9 @@ async function getStrategyMainlines(day) {
       .sort((a, b) =>
         (Number(b.leadScore) || 0) - (Number(a.leadScore) || 0) ||
         (Number(b.lianban) || 0) - (Number(a.lianban) || 0) ||
+        (Number(b.zt10) || 0) - (Number(a.zt10) || 0) ||
+        (Number(b.gain10) || -9999) - (Number(a.gain10) || -9999) ||
+        (Number(b.gain30) || -9999) - (Number(a.gain30) || -9999) ||
         (Number(b.recentCount) || 0) - (Number(a.recentCount) || 0) ||
         (strategyParseSealMinutes(a.firstLimitTime) ?? 9999) - (strategyParseSealMinutes(b.firstLimitTime) ?? 9999) ||
         String(a.code || '').localeCompare(String(b.code || ''))
