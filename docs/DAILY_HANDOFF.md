@@ -644,3 +644,66 @@ Deployment:
 
 Notes for next agent:
 - 本地渲染方法可复用：静态服务 + Playwright route 拦截 /api/*（注意 Playwright 后注册路由优先,兜底路由要最先注册）,mock 见会话记录;适合以后前端改动的自查。
+
+## 2026-07-08 - Codex - Deploy combined strategy main to cloud
+
+Changed:
+- Deployed `main` commit `e073fed` to the cloud production server.
+- Uploaded the combined Codex/Claude strategy changes for current-day mainline prediction, lifecycle labels, early-window quick-read, live focus metrics, and clearer L2 offline status.
+- Wrote matching deployment notes into the cloud operation logs.
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `strategy-backend.js`
+- `local-l2-task-queue.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Local checks passed: `git diff --check`, server syntax, strategy backend syntax, local L2 queue syntax, and dashboard inline script syntax.
+- Cloud checks passed after upload for the same production files.
+- Public checks passed: `https://dreamerqi.com/health`, `https://market.dreamerqi.com/kpl`, `https://market.dreamerqi.com/api/strategy/today?day=2026-07-08`, and `https://market.dreamerqi.com/api/strategy-mainlines?day=2026-07-08`.
+- Verified strategy focus metrics returned same-day values for sampled focus boards, and mainline API returned the new `breadth-momentum` basis plus `sessionPhase`.
+
+Deployment:
+- Production touched: yes.
+- Backup created before upload: `C:\PandaDashboard\backups\main-strategy-merge-20260708-182229`.
+- Restarted only `PandaDashboard-KPL-Server`.
+- Did not restart Caddy or `yule-server.js`.
+
+Notes for next agent:
+- `api/strategy-mainlines` completed successfully but took about 23 seconds during public verification; consider performance tuning if the page feels slow during trading hours.
+- L2 scan still depends on the separate local L2 worker being online; this deployment only improved queue/auth handling and user-facing offline status.
+
+## 2026-07-08 - Codex - TGB Hunan recap and Jiuyangongshe health source fix
+
+Changed:
+- Fixed data-source health coverage for the limit-up recap: same-day health now refreshes source coverage from source-view stats instead of trusting stale saved `sourceCoverage` when real source files already exist.
+- Fixed TGB Hunan structuring validation to use the same review exclusion rule as the recap page, so Beijing exchange/ST/new-listing/retiring names are excluded from the validation baseline.
+- Collected and structured the 2026-07-08 TGB Hunan recap on the cloud server.
+- Wrote matching cloud operation notes on the production server.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- `git diff --check`
+- Cloud `node --check .\kpl-stats-server.js`
+- TGB raw evidence collected from `https://www.tgb.cn/a/2tgsKpIqhjy` with 18 images downloaded.
+- TGB structured validation passed for 2026-07-08: declared 46, baseline 46, parsed 46, no missing codes, no extra codes, weakCount 0.
+- Public `source-view` for 2026-07-08 shows: final 46, kaipanla 46, xuangubao 46, jiuyangongshe 46, tgb 46.
+- Public same-day `after-close-status` for 2026-07-08 shows all four recap source groups at 46 with 100% coverage.
+
+Deployment:
+- Production touched: yes.
+- Backup before code upload: `C:\PandaDashboard\backups\tgb-jyg-health-fix-20260708-195005`.
+- Uploaded `kpl-stats-server.js`.
+- Restarted only `PandaDashboard-KPL-Server`.
+- Did not restart Caddy or `yule-server.js`.
+- Runtime data written on cloud only: `C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-07-08.json`.
+
+Notes for next agent:
+- The 2026-07-08 raw limit-up DB still contains 47 because it includes Beijing exchange code `920857`; the recap/source-view business layer correctly excludes it and uses 46.
+- If the data-health panel appears stale in the browser, hard refresh the market page; the backend now returns the corrected source coverage.
