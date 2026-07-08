@@ -7010,6 +7010,50 @@
     background: rgba(255,186,73,0.09);
     color: #ffd48a;
   }
+  body.view-strategy .ml-cert {
+    flex: 0 0 auto;
+    min-height: 22px;
+    padding: 0 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 760;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+  }
+  body.view-strategy .ml-cert-high {
+    border: 1px solid rgba(255,92,92,0.36);
+    background: rgba(255,92,92,0.12);
+    color: #ff9a9a;
+  }
+  body.view-strategy .ml-cert-medium {
+    border: 1px solid rgba(255,186,73,0.32);
+    background: rgba(255,186,73,0.10);
+    color: #ffd48a;
+  }
+  body.view-strategy .ml-cert-watch {
+    border: 1px solid rgba(174,190,214,0.22);
+    background: rgba(174,190,214,0.07);
+    color: #aebed6;
+  }
+  body.view-strategy .ml-stock.ml-focus i { color: #ffb4c8; }
+  body.view-strategy .ml-stock.ml-focus.near {
+    border-color: rgba(255,92,92,0.34);
+    background: rgba(255,92,92,0.09);
+  }
+  body.view-strategy .ml-trend {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border: 1px solid rgba(11,208,106,0.26);
+    border-radius: 999px;
+    background: rgba(11,208,106,0.08);
+    color: #7be3af;
+    font-size: 11px;
+    font-weight: 720;
+    white-space: nowrap;
+  }
   body.view-strategy .ml-verdict {
     margin-top: 10px;
     padding: 9px 10px;
@@ -10587,7 +10631,7 @@ function renderStrategyMainlinesHTML(d) {
     return `<section class="mainline-wrap">
       <div class="ml-title">
         <span>今日主线榜</span>
-        <small>实时板块涨幅 × 资金净流入 × 成分股大涨 × 冲板候选 × 历史四源主因预判${sourceSuffix}${dayNote}</small>
+        <small>实时板块涨幅 × 资金净流入 × 成分股大涨/普涨广度 × 冲板候选 × 盘中动能 × 历史四源主因预判${sourceSuffix}${dayNote}</small>
       </div>
       <div class="rht-loading">暂无可用主线数据，请先同步今日实时看板。</div>
     </section>`;
@@ -10618,12 +10662,30 @@ function renderStrategyMainlinesHTML(d) {
     const rising = nearRows.slice(0, 3).map(s =>
       `<span class="ml-stock">${escapeHTML(s.name || s.code || '')}<i>${s.gain != null ? `${Number(s.gain) > 0 ? '+' : ''}${Number(s.gain).toFixed(1)}%` : ''}</i></span>`
     ).join('');
+    const cert = m.certainty || null;
+    const certHtml = cert ? `<span class="ml-cert ml-cert-${escapeHTML(String(cert.level || 'watch'))}" title="${escapeHTML((cert.signals || []).join(' · '))}">${escapeHTML(cert.label || '')}</span>` : '';
+    const focus = (m.focusStocks || []).slice(0, 3).map(s => {
+      const tag = Array.isArray(s.basis) && s.basis.length ? ` · ${s.basis[0]}` : '';
+      return `<span class="ml-stock ml-focus${s.nearLimit ? ' near' : ''}">${escapeHTML(s.name || s.code || '')}<i>${Number(s.gain) > 0 ? '+' : ''}${Number(s.gain).toFixed(1)}%${escapeHTML(tag)}</i></span>`;
+    }).join('');
+    const breadthHtml = m.breadth && m.breadth.upPct != null
+      ? `<span class="ml-stock">${escapeHTML(m.breadth.boardName || '成分广度')}<i>${Number(m.breadth.upPct)}%上涨 · 中位${Number(m.breadth.medianGainPct) >= 0 ? '+' : ''}${Number(m.breadth.medianGainPct)}%</i></span>`
+      : '';
+    const trendParts = [];
+    if (m.trend) {
+      if (Number(m.trend.bigGainDelta) > 0) trendParts.push(`大涨+${Number(m.trend.bigGainDelta)}`);
+      if (Number(m.trend.nearLimitDelta) > 0) trendParts.push(`冲板+${Number(m.trend.nearLimitDelta)}`);
+      if (Number(m.trend.limitUpDelta) > 0) trendParts.push(`涨停+${Number(m.trend.limitUpDelta)}`);
+      if (m.trend.inflowDelta != null && Number(m.trend.inflowDelta) > 0) trendParts.push(`净流入${fmtInflow(m.trend.inflowDelta)}`);
+    }
+    const trendHtml = trendParts.length && m.trend ? `<span class="ml-trend">▲ ${Number(m.trend.minutes)}分钟 ${escapeHTML(trendParts.join(' '))}</span>` : '';
     return `<article class="ml-card${i === 0 ? ' lead' : ''}">
       <div class="ml-top">
         <span class="ml-rank">${Number(m.rank) || i + 1}</span>
         <div class="ml-namebox">
           <div class="ml-name-row">
             <div class="ml-name">${escapeHTML(m.theme || '')}</div>
+            ${certHtml}
             <span class="ml-driver ml-driver-${escapeHTML(driver.key)}">${escapeHTML(driver.label)}</span>
           </div>
           <div class="ml-sub">大涨${Number(m.bigGainCount) || 0} · 冲板${Number(m.nearLimitCount) || 0} · 涨停${Number(m.count) || 0}</div>
@@ -10650,7 +10712,9 @@ function renderStrategyMainlinesHTML(d) {
       ${strategyMainlineExplainHTML(m)}
       ${leadersHtml}
       <div class="ml-proof">
+        ${focus ? `<div class="ml-proof-row"><span class="ml-proof-lbl">潜力</span>${focus}</div>` : ''}
         ${rising ? `<div class="ml-proof-row"><span class="ml-proof-lbl">候选</span>${rising}</div>` : ''}
+        ${breadthHtml || trendHtml ? `<div class="ml-proof-row"><span class="ml-proof-lbl">强度</span>${breadthHtml}${trendHtml}</div>` : ''}
         ${boards ? `<div class="ml-proof-row"><span class="ml-proof-lbl">共振</span>${boards}</div>` : ''}
         ${recent ? `<div class="ml-proof-row"><span class="ml-proof-lbl">活跃</span>${recent}</div>` : ''}
         ${inflow ? `<div class="ml-proof-row"><span class="ml-proof-lbl">资金</span>${inflow}</div>` : ''}
@@ -10660,7 +10724,7 @@ function renderStrategyMainlinesHTML(d) {
   return `<section class="mainline-wrap">
     <div class="ml-title">
       <span>今日主线榜</span>
-      <small>实时板块涨幅 × 资金净流入 × 成分股大涨 × 冲板候选 × 历史四源主因预判 · ${Number(d.count) || lines.length} 条${sourceSuffix}${dayNote}</small>
+      <small>实时板块涨幅 × 资金净流入 × 成分股大涨/普涨广度 × 冲板候选 × 盘中动能 × 历史四源主因预判 · ${Number(d.count) || lines.length} 条${sourceSuffix}${dayNote}</small>
     </div>
     ${strategyMainlineQuickReadHTML(lines, d)}
     <div class="ml-grid">${cards}</div>
