@@ -1,6 +1,6 @@
 # Discussion: 优化今日主线榜出现速度
 
-Status: In Discussion
+Status: Accepted for Step A
 
 Owner Question:
 
@@ -183,7 +183,12 @@ Pending.
 
 ### Owner Challenges
 
-Pending.
+2026-07-09 owner final rules:
+
+- A same-day result older than 10 minutes may still be displayed when no newer qualified mainline has been found, but it must be clearly labeled as stale/expired.
+- Do not force the ranking to show many mainlines. A real trading day may only have one or two true mainlines.
+- Pre-market must not show yesterday's snapshot as today's strategy view. Yesterday remains available only by choosing yesterday's date.
+- Step A is approved; Step B keep-warm timer remains separate and should not be deployed as part of Step A.
 
 ## Revised Views
 
@@ -235,14 +240,14 @@ My proposed convergence target:
 
 **净结论:双方已实质收敛。** 分歧只剩数值(阈值表)交 owner 拍板。
 
-## Shared Decision (草案,待 Owner 批准 + Company Codex 补充)
+## Shared Decision (Owner Accepted for Step A)
 
 **方向:缓存优先 + 显式新鲜度契约;不做全链路 staged API;分两步实施。**
 
 **Step A(先行):响应元数据 + 绝不空转**
 - 每个主线榜响应携带:`generatedAt / ageSeconds / staleness(fresh|stale|expired|snapshot) / cacheState / refreshState / quality(主线数·资金覆盖·成分覆盖)`
 - 只要当天存在合格缓存,永远返回它;`preparing` 仅当"当天从未产出合格构建"
-- 缓存写入过质量闸,劣质构建不覆盖优质缓存
+- 合格缓存最低条件为 `mainlineCount >= 1`;质量摘要用于提示和诊断,不能为了凑数量强行扩充主线
 - UI 四态视觉 + 顶部年龄标注
 
 **Step B(A 落地后):带护栏的保温心跳**
@@ -255,7 +260,7 @@ My proposed convergence target:
 | 活跃交易 | ≤90s | 90s~10min | >10min(降级视觉仍展示) |
 | 午间休市 | 11:30 末榜整段 | — | — |
 | 收盘后/历史 | snapshot 态 | — | — |
-| 盘前 | 昨日快照以 snapshot 态展示(标注),不作今日预测 | — | — |
+| 盘前 | 不显示昨日快照;提示未开盘,用户可手动切到昨日 | — | — |
 
 **成功度量:**`preparing 出现次数/日`(目标≈0)、首个有效响应耗时(目标<1s)、缓存年龄分布、质量闸拦截次数。数据跑两周后再评估是否需要更复杂的 staged 方案。
 
@@ -265,21 +270,18 @@ My proposed convergence target:
 
 Pending.
 
-## Shared Decision
+## Implementation Status
 
-Pending owner and Claude response to Codex revised view.
+Step A is the accepted implementation target:
 
-Current likely convergence:
-
-- Cache lifecycle is the first target.
-- Staged fast/full API should wait unless measurements show cache warming is insufficient.
-- The owner should decide stale/expired tolerance, especially whether a >10-minute-old intraday cache should remain visible.
+- Return same-day usable cache instead of blank/preparing.
+- Mark generated time, age, cache freshness, refresh status, and quality summary.
+- Do not show yesterday snapshot during pre-market.
+- Do not deploy Claude's keep-warm timer experiment in this step.
 
 ## Implementation Plan
 
-Pending until discussion converges.
-
-Do not deploy Claude's keep-warm timer experiment until the group accepts the cache metadata/staleness contract or the owner explicitly asks to proceed with the experiment.
+Implement Step A first. Revisit Step B only after observing `preparing` frequency and cache-age behavior on real trading days.
 
 ## Validation Plan
 
@@ -308,8 +310,5 @@ Before implementation, define speed and quality targets:
 
 ## Open Questions
 
-- Should the page show preliminary results immediately, or should it wait for full enrichment?
-- What is the maximum acceptable age for a live mainline cache during trading?
-- Should background refresh be triggered by API requests, scheduled jobs, or both?
-- Should leader candidates appear only in full stage, or can preliminary stage show provisional leaders?
-- How much UI complexity is acceptable for showing `preliminary/full/refreshing` states?
+- Whether Step B should use a keep-warm timer after Step A has real trading-day measurements.
+- Whether cold-start should later include a minimal live-board placeholder when same-day cache has never existed.
