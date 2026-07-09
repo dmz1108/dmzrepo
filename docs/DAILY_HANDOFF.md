@@ -1777,3 +1777,13 @@ Notes for next agent:
 - For future “湖南人复盘” requests, read `docs/ops/TGB_HUNAN_DAILY_SOP.md` first.
 - Do not select TGB images by file size; the larger red 同花顺 image is not the TGB source.
 - If the admin health panel still shows a missing TGB source while source-view shows TGB rows, investigate the health endpoint/cache/口径, not the formal TGB file first.
+## 2026-07-09 - Claude - PR#10 评审修复:日文件缓存失效 + force 旁路
+
+Changed:
+- 按 Codex 评审意见补齐缓存失效:writeLimitUpDbDay 写后即更新 timed 缓存;writeLimitUpMainReasonDbDay 写后删除对应 timed 缓存(读取时重建以套 override);setLimitUpMainReasonOverride 同时失效 mainReasonDbCache 与 mainReasonDbDayTimedCache——同步/回补/手动TGB上传/管理员改主因不再有最长60秒陈化窗口。
+- 两个日文件读函数支持 options.force 旁路 timed 缓存;/api/limit-up-main-reason-db/day 接入 force=1(source-view 原有 force 链路不变)。
+- DAILY_HANDOFF 格式清理:压缩多余空行、确保结尾换行;经查无重复条目标题。
+
+Files: kpl-stats-server.js / docs/DAILY_HANDOFF.md
+Validated: node --check 通过;round-4 与龙头 v2 回归通过;新增缓存失效静态断言(三写路径失效语句、force 旁路、day 端点接线)全过。
+Deployment: GitHub branch only(PR #10)。Not deployed. No restart yet。

@@ -4678,9 +4678,9 @@ function normalizeLimitUpRow(row, day) {
 }
 
 const limitUpDbDayTimedCache = new Map();
-async function readLimitUpDbDay(day) {
+async function readLimitUpDbDay(day, options = {}) {
   const key = String(day || '');
-  const timed = limitUpDbDayTimedCache.get(key);
+  const timed = options.force ? null : limitUpDbDayTimedCache.get(key);
   if (timed && Date.now() - timed.at < 60 * 1000) return timed.payload;
   try {
     const body = await fs.readFile(limitUpDbPath(day), 'utf8');
@@ -4740,6 +4740,7 @@ async function writeLimitUpDbDay(day, stocks, source = 'kpl') {
     stocks: unique,
   };
   await fs.writeFile(limitUpDbPath(day), JSON.stringify(payload, null, 2), 'utf8');
+  limitUpDbDayTimedCache.set(String(day || ''), { at: Date.now(), payload });  // 写后即更新读缓存,避免 60s 陈化
   return payload;
 }
 
@@ -5330,7 +5331,8 @@ async function getMainReasonStalenessCheck(url, req, res) {
 
 async function getLimitUpMainReasonDbDay(url, req, res) {
   const day = url.searchParams.get('day') || chinaNowParts().day;
-  const payload = await readLimitUpMainReasonDbDay(day);
+  const force = url.searchParams.get('force') === '1' || url.searchParams.get('force') === 'true';
+  const payload = await readLimitUpMainReasonDbDay(day, { force });
   if (!payload) {
     return send(res, 200, {
       ok: false,
@@ -17728,9 +17730,9 @@ function applyMainReasonOverridesToPayload(payload, overrides) {
 // 历史日文件几乎不变,重复 读盘+解析+套override 是纯浪费;60s TTL 保证管理员改主因也能及时可见。
 const mainReasonDbDayTimedCache = new Map();
 const DAY_FILE_CACHE_TTL_MS = 60 * 1000;
-async function readLimitUpMainReasonDbDay(day) {
+async function readLimitUpMainReasonDbDay(day, options = {}) {
   const isoDay = isoFromCompactDate(day);
-  const timed = mainReasonDbDayTimedCache.get(isoDay);
+  const timed = options.force ? null : mainReasonDbDayTimedCache.get(isoDay);
   if (timed && Date.now() - timed.at < DAY_FILE_CACHE_TTL_MS) return timed.payload;
   try {
     const payload = JSON.parse(await fs.readFile(limitUpMainReasonDbPath(isoDay), 'utf8'));
@@ -18391,6 +18393,7 @@ async function writeLimitUpMainReasonDbDay(day, rows, source = 'kpl/zt_reason') 
     stocks: unique,
   };
   await fs.writeFile(limitUpMainReasonDbPath(isoDay), JSON.stringify(payload, null, 2), 'utf8');
+  mainReasonDbDayTimedCache.delete(isoDay);  // 删除而非覆盖:读取路径还要套 override,交给下次读重建
   await writeLimitUpMainReasonEvidenceAndQuality(isoDay, payload, autoPayload);
   applyMainReasonOverridesToPayload(payload, await readMainReasonOverrides(isoDay));
   mainReasonDbCache.set(isoDay, payload);
@@ -18733,6 +18736,7 @@ async function setLimitUpMainReasonOverride(url, req, res) {
   await fs.mkdir(LIMIT_UP_MAIN_REASON_OVERRIDE_DIR, { recursive: true });
   await fs.writeFile(mainReasonOverridePath(isoDay), JSON.stringify(overrides, null, 2), 'utf8');
   mainReasonDbCache.delete(isoDay);
+  mainReasonDbDayTimedCache.delete(isoDay);
   return send(res, 200, { ok: true, day: isoDay, code, boardTopic, removed });
 }
 
