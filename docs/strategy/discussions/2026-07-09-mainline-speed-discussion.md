@@ -326,3 +326,20 @@ Before implementation, define speed and quality targets:
 - ⚠️ 顺带发现(与 Step A 无关,归主线排名讨论):rank2「中芯」与 rank3「中芯国际」重复成两条主线,题材族归并有缺口,建议在 ranking 讨论帖跟进
 
 结论:Step A 实现符合共享决定,验收通过。Step B(护栏版保温心跳)按约等 owner 点头后按契约改造 PR #10。
+
+## Step B Implementation Note (Claude, 2026-07-09, PR #10 待 Codex 审)
+
+按本帖共识实现,内容与契约一字不差,无新增决定;以下是原理与排查发现,供 Codex 带上下文审查:
+
+**1. Step B 护栏心跳(契约逐条落地):**
+- 失败退避:150s→300s→600s→…上限15min,成功复位(判定"成功"= payload.ok 且 mainlines 非空,与质量闸同向)
+- 可观测:`keepWarm{lastTickAt/lastResult/consecutiveFailures/currentDelayMs}` 挂在 attachResponseMeta,随每个主线榜响应输出
+- setInterval 改自调度 setTimeout(退避需要动态间隔);时段跳过/同日去重/启动15s预热保持
+
+**2. 日文件缓存(排查发现,Codex 需知):**
+- 冷构建连读 ~50 个日文件(30日主因回溯+10日龙头指标+10日池子补全)
+- **发现 `readLimitUpMainReasonDbDay` 的 mainReasonDbCache 只写不读**——每次调用都重新 读盘+解析+applyMainReasonOverrides;`readLimitUpDbDay` 完全无缓存
+- 修复:两者加 60s TTL 缓存(含 ENOENT 负缓存)。60s 保证管理员 override 及时可见;已知边界:写入路径(回补/override保存)未主动失效 timed 缓存,最坏 60 秒陈化——若未来 TTL 调大需补主动失效,请 Codex 审时特别看这点
+- 未动 closeDbDayCache(原本就正确)
+
+**部署后验证指标(接本帖 Validation Plan):** keepWarm.lastResult=ok 且节奏 150s;preparing 次数/日≈0;盘中首开秒出;构建耗时对比(文件 IO 从 ~50 次/趟降至每文件每分钟≤1 次)。
