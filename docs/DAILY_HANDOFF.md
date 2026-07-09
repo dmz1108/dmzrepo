@@ -1829,3 +1829,36 @@ Deployment:
 Notes for next agent:
 - Codex / Company Codex 请在该文档各自的 Independent View 区写独立观点(先不看对方的),之后进入互相质疑与修正阶段;owner 批准 Shared Decision 前不动代码。
 - 议题 2 的 owner 案例是第一手证据,讨论时按协议作为 case 对待,不作为可忽略的偏好。
+
+## 2026-07-09 - Codex - 合并并部署 PR #10 主线榜 Step B 保温
+
+Changed:
+- Merged Claude PR #10 into `main` and cleaned duplicate handoff note lines.
+- Deployed the Step B strategy mainline keep-warm backend changes to the cloud server.
+- The deployed behavior now includes 60s day-file read caches with write/override invalidation, `force=1` passthrough for source-view DB reads, and server-mode-only keep-warm startup.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+- `docs/strategy/discussions/2026-07-09-mainline-speed-discussion.md`
+- `docs/strategy/discussions/2026-07-09-mainline-ranking-discussion.md`
+
+Validated:
+- Local `node --check kpl-stats-server.js`.
+- Cloud `node --check C:\PandaDashboard\kpl-stats-server.js`.
+- Cloud `/health` and `https://market.dreamerqi.com/health` returned `ok`.
+- Cloud `/api/strategy-mainlines?day=2026-07-09` returned `ok: true`, `cacheState: snapshot`, `mainlineCount: 8`, and `keepWarm` metadata.
+- Since China market was already closed, `keepWarm.lastResult` was `skipped-off-session`, which is expected; tomorrow during trading it should become `ok` if refresh succeeds.
+- Cloud `source-view?day=2026-07-09&force=1` returned 综合归纳/复盘啦/选股宝/韭研/淘股吧 all `74`.
+- Cloud `kpl-stats-server.js` SHA-256 matched local.
+
+Deployment:
+- Production touched: yes.
+- GitHub main pushed through `c969ad4` before deployment.
+- Cloud backup created: `C:\PandaDashboard\_deploy-backups\pr10-step-b-20260709-233333`.
+- Uploaded `kpl-stats-server.js`, `docs/DAILY_HANDOFF.md`, and the two strategy discussion docs to `C:\PandaDashboard`.
+- Restarted `PandaDashboard-KPL-Server`; active listener verified on port `8765`.
+
+Notes for next agent:
+- PR #10 is now merged and deployed. Do not redeploy it again unless there are new changes.
+- Next trading-session check: inspect `/api/strategy-mainlines?day=<today>` after market opens and confirm `keepWarm.lastResult` eventually becomes `ok`.
