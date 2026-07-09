@@ -19440,7 +19440,6 @@ async function fetchBoardRankingForSnapshot(zsType, apiKey, options = {}) {
         downCount: view.downCount,
         leadStockName: view.leadStockName,
         leadStockCode: view.leadStockCode,
-        ztCount: 0,
         source: 'eastmoney',
       };
     }).filter(board => board.plateId && board.name);
@@ -19473,7 +19472,6 @@ async function fetchBoardRankingForSnapshot(zsType, apiKey, options = {}) {
         downCount: null,
         leadStockName: '',
         leadStockCode: '',
-        ztCount: 0,
         source: 'ths',
       };
     }).filter(board => board.plateId && board.name);
@@ -19488,7 +19486,6 @@ async function fetchBoardRankingForSnapshot(zsType, apiKey, options = {}) {
     turnover: row[4],
     amount: row[5],
     netInflow: parseFloat(row[6]),
-    ztCount: 0,
   })).filter(board => board.plateId && board.name);
 }
 
@@ -20384,6 +20381,21 @@ async function getStrategyBoardsForDay(day, options = {}) {
   return out;
 }
 
+async function hydrateStrategyLiveBoardsForMembers(boards, apiKey, zsType, day) {
+  const list = Array.isArray(boards) ? boards : [];
+  const cardData = {};
+  const hydratedBoards = await mapLimit(list, 4, async raw => {
+    const plateId = String(raw?.plateId ?? raw?.id ?? raw?.code ?? '');
+    if (!plateId) return raw;
+    const board = { ...raw, plateId };
+    const hydrated = await hydrateBoardForSnapshot({ ...board }, apiKey, String(zsType), day).catch(() => null);
+    if (!hydrated?.board) return board;
+    if (hydrated.cardData) cardData[plateId] = hydrated.cardData;
+    return { ...board, ...hydrated.board };
+  });
+  return { boards: hydratedBoards, cardData };
+}
+
 // 读某日全部看板板块(name/plateId/ztCount/netInflow + 今日涨停成员 code),并**排除看板永久删除的板块**
 // (与看板同口径:getPermanentHiddenSet 黑名单,按 zsType 隔离)。供强势板块共振榜 + 热点榜资金流入共用。
 async function getDayBoardsWithMembers(day, options = {}) {
@@ -20428,7 +20440,8 @@ async function getDayBoardsWithMembers(day, options = {}) {
             .filter(board => !hidden.has(String(board?.plateId || '')))
             .filter(isBoardGainAllowed)
             .slice(0, Number(options.boardPool || 0) || STRATEGY_MAINLINE_RISING_BOARD_LIMIT);
-          await absorbPayload({ boards, cardData: {} }, z);
+          const hydrated = await hydrateStrategyLiveBoardsForMembers(boards, apiKey, z, requestedDay);
+          await absorbPayload(hydrated, z);
         } catch {}
       }
       if (bmap.size) source = 'live';
