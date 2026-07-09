@@ -20384,11 +20384,14 @@ async function getStrategyBoardsForDay(day, options = {}) {
 async function hydrateStrategyLiveBoardsForMembers(boards, apiKey, zsType, day) {
   const list = Array.isArray(boards) ? boards : [];
   const cardData = {};
-  const hydratedBoards = await mapLimit(list, 4, async raw => {
+  const hydratedBoards = await mapLimit(list, 8, async raw => {
     const plateId = String(raw?.plateId ?? raw?.id ?? raw?.code ?? '');
     if (!plateId) return raw;
     const board = { ...raw, plateId };
-    const hydrated = await hydrateBoardForSnapshot({ ...board }, apiKey, String(zsType), day).catch(() => null);
+    const hydrated = await Promise.race([
+      hydrateBoardForSnapshot({ ...board }, apiKey, String(zsType), day).catch(() => null),
+      new Promise(resolve => setTimeout(() => resolve(null), STRATEGY_MAINLINE_LIVE_HYDRATE_TIMEOUT_MS)),
+    ]);
     if (!hydrated?.board) return board;
     if (hydrated.cardData) cardData[plateId] = hydrated.cardData;
     return { ...board, ...hydrated.board };
@@ -20511,6 +20514,8 @@ const STRATEGY_STRONG_RESONANCE_MIN_STOCKS = 2;
 const STRATEGY_MAINLINE_BIG_GAIN_PCT = 5;
 const STRATEGY_MAINLINE_NEAR_LIMIT_GAP_PCT = 1.5;
 const STRATEGY_MAINLINE_RISING_BOARD_LIMIT = 18;
+const STRATEGY_MAINLINE_LIVE_BOARD_POOL = 12;
+const STRATEGY_MAINLINE_LIVE_HYDRATE_TIMEOUT_MS = 3500;
 const STRATEGY_MAINLINE_RISING_FETCH_TIMEOUT_MS = 4000;
 // 广度统计至少要有这么多有效成分股，否则小板块一两只股就能拉出虚高普涨率
 const STRATEGY_MAINLINE_BREADTH_MIN_MEMBERS = 8;
@@ -22243,7 +22248,7 @@ async function buildStrategyMainlinesLive(day, options = {}) {
   const boardPayload = await getDayBoardsWithMembers(requestedDay, {
     allowFallback: false,
     liveIfMissing: true,
-    boardPool: STRATEGY_MAINLINE_RISING_BOARD_LIMIT,
+    boardPool: STRATEGY_MAINLINE_LIVE_BOARD_POOL,
     liveRankCount: 80,
   }).catch(() => ({ useDay: requestedDay, boards: [], source: 'none' }));
   const isoDay = requestedDay;
