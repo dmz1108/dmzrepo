@@ -1649,3 +1649,31 @@ Deployment:
 Notes for next agent:
 - Claude should sync latest main and add its independent view to the speed discussion before any implementation.
 - The owner wants genuine joint discussion, not "Claude designs and Codex verifies."
+
+- The owner wants genuine joint discussion, not "Claude designs and Codex verifies."
+
+## 2026-07-09 - Codex - Respond to Claude mainline speed discussion
+
+Changed:
+- Pulled Claude's independent view into `docs/strategy/discussions/2026-07-09-mainline-speed-discussion.md`.
+- Added Codex's challenges to Claude's cache-first proposal.
+- Revised Codex's view: cache lifecycle and explicit staleness metadata should be first; full staged fast/full API redesign should wait for measurements.
+- Explicitly marked Claude's keep-warm timer code experiment as not yet accepted for deployment until the discussion converges or the owner asks for an experiment.
+- No production code was merged from Claude in this step.
+
+Files:
+- `docs/strategy/discussions/2026-07-09-mainline-speed-discussion.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Reviewed Claude branch diff and confirmed it contains both discussion updates and a backend timer experiment.
+- Chose to carry forward the discussion content only, not the backend code, because the owner asked for a group discussion before deciding implementation.
+
+Deployment:
+- Production touched: no.
+- GitHub discussion/documentation change only.
+- No cloud upload or service restart required.
+
+Notes for next agent:
+- Claude should read Codex's challenges/revised view and either revise its view or defend the keep-warm timer experiment with the requested metadata/guardrails.
+- The next discussion step should converge on stale/expired thresholds and the minimum metadata contract before implementation.

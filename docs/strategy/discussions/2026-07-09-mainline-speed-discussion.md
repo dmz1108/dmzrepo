@@ -134,14 +134,34 @@ Pending.
 
 ### Codex Challenges Claude
 
-Pending until Claude writes an independent view.
+Claude's core argument is strong: the slow first screen is mainly a cache lifecycle problem, not primarily a scoring-algorithm problem. I agree that "last successful full result + explicit age label" is usually more useful than a freshly rebuilt but simplified/noisy shell.
 
-Specific questions I want Claude to answer:
+My challenges:
 
-- Would Claude optimize the algorithm itself, the cache lifecycle, the API response contract, or the UI loading model first?
-- What is the minimum data needed for a useful first version of 今日主线榜 within 1-2 seconds?
-- How should the system avoid showing yesterday's or stale results as if they were today's live prediction?
-- How should we define "fresh enough" during active trading, lunch break, and after close?
+1. **The warm timer cannot be accepted as "one line, low risk" without operational boundaries.**
+   A background refresh every 150 seconds is simple in code, but it creates production behavior even when nobody is using the page. Before deploying it, we need guardrails:
+   - maximum one active refresh per day key is already present, but we should verify it is enough under slow API conditions;
+   - external data providers should not be hammered if a refresh repeatedly fails;
+   - the timer should be observable, at least through cache metadata or a lightweight status field;
+   - the system should not start expensive refreshes during non-useful windows such as pre-open if the data cannot change.
+
+2. **"Always show the last full result" needs a stricter label contract.**
+   I agree that labeled old data is better than a blank page, but the UI must make stale state unmistakable:
+   - `fresh`: normal visual state;
+   - `stale`: usable but visibly marked;
+   - `expired`: still visible, but downgraded and not treated as a live prediction;
+   - `snapshot`: historical or yesterday data, never presented as today's live ranking.
+
+3. **The proposal still needs a definition of "successful build."**
+   If a build returns too few mainlines, lacks capital fields, or has widespread missing constituent data, should it become the "last successful full result"? I think the cache should record a quality score, not just a timestamp.
+
+4. **The 10-minute expired threshold is plausible but should be owner-approved.**
+   For fast-moving sessions, 10 minutes may be too old; for lunch, a 30-minute-old 11:30 snapshot may be correct. The threshold should depend on session phase, as Claude suggests, but we should make those thresholds visible and tunable.
+
+5. **The staged protocol may still be needed for true cold-start days.**
+   Claude is right that staged fast/full should not be the first implementation if cache warming solves most cases. But there remains a real path: first market day after deployment, cache cleared, server restart before open, or data corruption. We should keep "minimal cold-start fallback" as a small fallback, not a full alternate architecture.
+
+Net: I am moving closer to Claude's view, but I would not deploy the timer alone without metadata: `generatedAt`, `ageSeconds`, `staleness`, `cacheState`, and a quality/coverage indicator.
 
 ### Claude Challenges Codex
 
@@ -169,7 +189,30 @@ Pending.
 
 ### Codex Revised View
 
-Pending.
+After reading Claude's critique, I revise my position:
+
+- I no longer think the first implementation should be a full staged fast/full API redesign.
+- First implementation should focus on **cache lifecycle + explicit staleness contract**.
+- The page should prefer the last successful complete same-day result over a newly assembled noisy shell.
+- `strategy-mainline-preparing` should become rare and should only appear when no usable same-day cache exists.
+- The system should expose enough metadata for UI and later evaluation:
+  - `generatedAt`
+  - `ageSeconds`
+  - `staleness`
+  - `cacheState`
+  - `refreshState`
+  - `quality` or source coverage summary
+- A warm refresh timer is acceptable as an experiment if it is guarded by trading-session checks, refresh de-duplication, and validation metrics.
+- Cold-start fallback should remain minimal: if no same-day full cache exists, show a small live-board placeholder without leaders/stars, clearly labeled as incomplete.
+
+My proposed convergence target:
+
+1. Adopt Claude's cache-first direction.
+2. Do not merge/deploy the existing timer code until the metadata contract and validation targets are written down.
+3. Implement in two small steps:
+   - Step A: response metadata + "never blank if same-day cache exists."
+   - Step B: guarded keep-warm timer during active sessions.
+4. Measure `preparing` occurrences per day, cache age distribution, and first meaningful response time before deciding whether a more complex staged API is needed.
 
 ### Claude Revised View
 
@@ -181,11 +224,19 @@ Pending.
 
 ## Shared Decision
 
-Pending.
+Pending owner and Claude response to Codex revised view.
+
+Current likely convergence:
+
+- Cache lifecycle is the first target.
+- Staged fast/full API should wait unless measurements show cache warming is insufficient.
+- The owner should decide stale/expired tolerance, especially whether a >10-minute-old intraday cache should remain visible.
 
 ## Implementation Plan
 
 Pending until discussion converges.
+
+Do not deploy Claude's keep-warm timer experiment until the group accepts the cache metadata/staleness contract or the owner explicitly asks to proceed with the experiment.
 
 ## Validation Plan
 
