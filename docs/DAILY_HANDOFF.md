@@ -1552,3 +1552,34 @@ Deployment:
 Notes for next agent:
 - 数据源健康 should read `sourceCoverage.reviewAutoSources`; if a source tab has rows, its health count should come from the same source-view tab stats.
 - 2026-07-09 still has 复盘啦 and 淘股吧 source gaps; this entry only fixed stale health reporting for sources already present in source-view.
+
+## 2026-07-09 - Codex - Harden review health against stale main DB coverage
+
+Changed:
+- Removed the last early-return path where 数据源健康 could skip source-view tab recomputation when the saved 综合主因库 was stale or missing stocks.
+- `resolveAfterCloseSourceCoverage()` now always attempts to derive source coverage from source-view tabs, then falls back to saved coverage only if no source tab has rows.
+- The coverage denominator now falls back to final tab count or max source tab count when saved main DB totals are unavailable.
+- This is intended to make the rule hard: if 涨停复盘 source tabs show a source with rows, 数据源健康 should show that source as present too.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`.
+- Public `https://market.dreamerqi.com/health` returned `ok:true`.
+- Public `after-close-status` for 2026-07-09 returns health sources: 韭研 74 and 选股宝 74.
+- Public `source-view` for 2026-07-09 returns matching tabs: 综合归纳 74, 选股宝 74, 韭研 74, 复盘啦 0, 淘股吧 0.
+- Cloud `kpl-stats-server.js` SHA256 matches Git main after upload.
+
+Deployment:
+- Production touched: yes.
+- Git main deployed: `6f6f73a`.
+- Backup before upload: `C:\PandaDashboard\backups\deploy-review-health-stale-main-db-guard-20260709-163830`.
+- Uploaded `kpl-stats-server.js`.
+- Restarted `PandaDashboard-KPL-Server`; current listener process after restart was `11012`.
+- Did not restart Caddy or `Panda Yule Server`.
+
+Notes for next agent:
+- If this mismatch appears again, check whether the source tab itself is actually nonzero first. If the tab is nonzero but health is zero, it is a bug in `resolveAfterCloseSourceCoverage()` or `recomputeReviewSourceStatsFromTabs()`.
+- Current 2026-07-09 remaining source gaps are real source gaps: 复盘啦 0 and 淘股吧 0.
