@@ -1842,3 +1842,27 @@ Deployment:
 Notes for next agent:
 - PR #10 is now merged and deployed. Do not redeploy it again unless there are new changes.
 - Next trading-session check: inspect `/api/strategy-mainlines?day=<today>` after market opens and confirm `keepWarm.lastResult` eventually becomes `ok`.
+
+## 2026-07-09 - Codex - 增加横向讨论矩阵模板
+
+Changed:
+- 新增 `docs/strategy/DISCUSSION_MATRIX_TEMPLATE.md`,用于 Owner、Codex、Claude、Company Codex 在同一张横向表里讨论策略问题。
+- 更新 `docs/strategy/DISCUSSION_TEMPLATE.md`,加入 `横向议题矩阵` 和 `Owner 横向发言区`。
+- 更新 `docs/strategy/AI_DISCUSSION_GROUP.md`,明确多细节点策略问题优先使用矩阵形式,每行只讨论一个细节点,Owner 可以直接在对应行补充方向。
+
+Files:
+- `docs/strategy/DISCUSSION_MATRIX_TEMPLATE.md`
+- `docs/strategy/DISCUSSION_TEMPLATE.md`
+- `docs/strategy/AI_DISCUSSION_GROUP.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 纯文档变更,未改代码。
+- 未加入 secrets/runtime 数据。
+
+Deployment:
+- GitHub branch only。未部署云端,无服务重启。
+
+Notes for next agent:
+- 后续涉及 `今日主线榜`、主线语义、龙头归属等复杂问题时,优先用 `DISCUSSION_MATRIX_TEMPLATE.md` 或在现有讨论文件顶部加入 `横向议题矩阵`。
+- 这个矩阵不是任务分工表,是共同讨论表;每个 agent 都应对同一个细节点发表判断并互相评论。

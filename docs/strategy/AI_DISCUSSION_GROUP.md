@@ -92,6 +92,24 @@ Owner Question:
 
 If one agent is unavailable, leave its section as `Pending` and do not pretend it participated.
 
+For complex strategy topics with multiple sub-questions, use the matrix form in `docs/strategy/DISCUSSION_MATRIX_TEMPLATE.md` or include a `横向议题矩阵` section near the top of the discussion file. The matrix is preferred when the owner wants to compare views line by line.
+
+The matrix should keep one sub-question per row and include these columns:
+
+- `细节点 / 子问题`
+- `Owner 观察或问题`
+- `可用证据`
+- `Codex 独立观点`
+- `Claude 独立观点`
+- `Company Codex 独立观点`
+- `Codex 对 Claude 的评论`
+- `Claude 对 Codex 的评论`
+- `Owner 补充 / 方向`
+- `暂定结论`
+- `是否进实施`
+
+The owner may add comments directly in `Owner 补充 / 方向` or the `Owner 横向发言区`. Agents should then update their comments or revised views in the same row, so the discussion remains readable without jumping between long paragraphs.
+
 ## How To Use It
 
 Preferred path:

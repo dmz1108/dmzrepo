@@ -15,6 +15,22 @@ Owner 问题：
 - 截图或例子：
 - 已知缺失数据：
 
+## 横向议题矩阵
+
+如果这个讨论包含多个细节点,优先在这里横向填写。每一行只讨论一个细节点,方便 Owner 同时看到 Codex、Claude、Company Codex 的观点和互评。
+
+| 编号 | 细节点 / 子问题 | Owner 观察或问题 | 可用证据 | Codex 独立观点 | Claude 独立观点 | Company Codex 独立观点 | Codex 对 Claude 的评论 | Claude 对 Codex 的评论 | Owner 补充 / 方向 | 暂定结论 | 是否进实施 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 待填写 | 待填写 | 待填写 | Pending | Pending | Pending | Pending | Pending | Pending | Pending | 否 |
+
+## Owner 横向发言区
+
+Owner 可以直接在这里追加想法,或点名要求某一行继续讨论。
+
+### YYYY-MM-DD HH:mm - Owner
+
+待填写。
+
 ## 时间线
 
 ### YYYY-MM-DD HH:mm - Owner
