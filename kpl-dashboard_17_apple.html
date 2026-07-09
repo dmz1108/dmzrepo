@@ -11490,7 +11490,7 @@ function hotSearchSort(key) {
 }
 function renderHotSearchCard() {
   const d = hotSearchState.data; if (!d) return;
-  const modeLabel = d.matchMode === 'main' ? '主因' : '细分';
+  const modeLabel = d.matchMode === 'main' ? '主因' : (d.matchMode === 'board' ? (d.matchedBoard?.label || '板块') : '细分');
   const k = hotSearchState.sortKey, dir = hotSearchState.sortDir;
   const stocks = [...d.stocks].sort((a, b) => dir * (((b[k] == null ? -99999 : b[k])) - ((a[k] == null ? -99999 : a[k]))));
   const pct = (v, bold) => v == null ? '<span style="opacity:.3">–</span>' : `<span style="color:${v > 0 ? '#f5455c' : (v < 0 ? '#3fae6b' : 'inherit')};${bold ? 'font-weight:600;' : ''}">${(v > 0 ? '+' : '') + Number(v).toFixed(2)}%</span>`;
@@ -11511,6 +11511,7 @@ function renderHotSearchCard() {
       <span style="font-size:18px;font-weight:600;">${escapeHTML(d.query)}</span>
       <span style="font-size:11px;padding:1px 8px;border-radius:6px;background:rgba(120,120,160,.18);color:${d.matchMode === 'main' ? 'var(--accent)' : '#b3a7e0'};">${modeLabel}</span>
       <span style="font-size:12px;opacity:.55;">命中 ${d.stockCount} 股</span>
+      ${d.matchedBoard?.name ? `<span style="font-size:12px;opacity:.55;">${escapeHTML(d.matchedBoard.name)} · ${Number(d.matchedBoard.stockCount) || d.stockCount}只成分股</span>` : ''}
     </div>
     <div style="display:flex;gap:16px;font-size:12px;opacity:.7;margin-bottom:12px;flex-wrap:wrap;">
       <span>近10日涨停 <b style="color:#f5455c;">${d.zt10Total}</b> 次</span>

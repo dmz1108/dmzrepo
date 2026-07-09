@@ -20119,6 +20119,55 @@ async function runAutoCloseDbBackfillIfDue() {
 
 // 行情页「热点/细分搜索」:输入热点板块名或细分词,扫近30交易日主因库,匹配「主因 或 细分原因」命中的涨停股,
 // 返回卡片数据:每股 近10/近30日涨停次数 + 10日/30日涨幅,默认按10日涨幅排序。细分词用 sub-theme-taxonomy 扩同义词。
+function normalizeHotThemeSearchText(value) {
+  return String(value || '').toLowerCase().replace(/[\s_\-·/\\()（）【】\[\]{}]+/g, '').trim();
+}
+
+async function findExternalBoardForHotThemeSearch(query, day) {
+  const q = String(query || '').trim();
+  const qn = normalizeHotThemeSearchText(q);
+  if (!qn) return null;
+  const [eastmoneyCatalog, thsCatalog] = await Promise.all([
+    readEastmoneyConceptCatalog().catch(() => null),
+    readThsConceptCatalog().catch(() => null),
+  ]);
+  const candidates = [];
+  const add = (source, label, boards) => {
+    for (const board of (Array.isArray(boards) ? boards : [])) {
+      const name = String(board?.name || board?.plateName || '').trim();
+      const plateId = String(board?.plateId || board?.id || '').trim();
+      if (!name || !plateId) continue;
+      const bn = normalizeHotThemeSearchText(name);
+      let score = 0;
+      if (bn === qn) score = 1000;
+      else if (name === q) score = 950;
+      else if (bn.includes(qn)) score = 700 - Math.max(0, bn.length - qn.length);
+      else if (qn.includes(bn) && bn.length >= 3) score = 500 - Math.max(0, qn.length - bn.length);
+      if (score > 0) candidates.push({ source, label, board, name, plateId, score });
+    }
+  };
+  add('eastmoney', '东财板块', eastmoneyCatalog?.boards);
+  add('ths', '同花顺板块', thsCatalog?.boards);
+  candidates.sort((a, b) => b.score - a.score || a.label.localeCompare(b.label) || a.name.localeCompare(b.name));
+  const hit = candidates[0];
+  if (!hit) return null;
+  const payload = hit.source === 'ths'
+    ? await getThsConceptBoardForDisplay(hit.plateId, day).catch(() => null)
+    : await getEastmoneyConceptBoardForDisplay(hit.plateId, day).catch(() => null);
+  const stocks = Array.isArray(payload?.stocks) ? payload.stocks : [];
+  if (!stocks.length) return null;
+  return {
+    ...hit,
+    board: {
+      ...hit.board,
+      ...(payload || {}),
+      plateId: payload?.plateId || hit.plateId,
+      name: payload?.name || hit.name,
+    },
+    stocks,
+  };
+}
+
 async function getHotThemeSearch(url, req, res) {
   const q = String(url.searchParams.get('q') || '').trim();
   if (!q) return send(res, 400, { ok: false, error: 'missing q' });
@@ -20160,9 +20209,42 @@ async function getHotThemeSearch(url, req, res) {
   // ③ 否则(氧化锆这种没人拿它当主因、却是别的题材keyword的词)→ detail,按细分原因字面精配,不被 standardTheme 模糊归大类。
   const hasExactMain = recs.some(r => String(r.s.finalBoardTopic || '') === q);
   const matchMode = subEntry ? 'sub' : (hasExactMain ? 'main' : 'detail');
-  const agg = collect(matchMode);
+  let agg = collect(matchMode);
+  let boardFallback = null;
+  if (!agg.size) {
+    boardFallback = await findExternalBoardForHotThemeSearch(q, isoDay).catch(() => null);
+    if (boardFallback?.stocks?.length) {
+      agg = new Map();
+      for (const stock of boardFallback.stocks) {
+        const code = normalizeReasonSourceCode(stock?.code);
+        const name = String(stock?.name || '').trim();
+        if (!code || !name || isExcludedFromReview(code, name)) continue;
+        const ztDays = new Set();
+        const topics = new Set([boardFallback.board?.name || boardFallback.name].filter(Boolean));
+        for (const rec of recs) {
+          if (rec.code !== code) continue;
+          ztDays.add(rec.d);
+          if (rec.s?.finalBoardTopic) topics.add(rec.s.finalBoardTopic);
+        }
+        agg.set(code, {
+          code,
+          name,
+          ztDays,
+          topics,
+          latest: boardFallback.board?.name || boardFallback.name,
+          todayGain: numOrNull(stock?.gain ?? stock?.gainPct),
+        });
+      }
+    }
+  }
   // 先按近30涨停次数取前60(最活跃),再算涨幅,避免给太多股拉K线
-  const capped = [...agg.values()].sort((x, y) => y.ztDays.size - x.ztDays.size).slice(0, 60);
+  const capped = [...agg.values()]
+    .sort((x, y) =>
+      y.ztDays.size - x.ztDays.size ||
+      (Number(y.todayGain) || -9999) - (Number(x.todayGain) || -9999) ||
+      String(x.code || '').localeCompare(String(y.code || ''))
+    )
+    .slice(0, 60);
   await mapLimit(capped, 6, async a => {
     a.zt10 = [...a.ztDays].filter(d => last10.has(d)).length;
     a.zt30 = a.ztDays.size;
@@ -20177,12 +20259,19 @@ async function getHotThemeSearch(url, req, res) {
   capped.sort((x, y) => (y.gain10 ?? -9999) - (x.gain10 ?? -9999));
   return send(res, 200, {
     ok: true, query: q, day: isoDay,
-    matchMode,   // 'main'=按主因精配 / 'sub'=词典细分 / 'detail'=自动细分(按细分原因)
+    matchMode: boardFallback ? 'board' : matchMode,   // 'main'=按主因精配 / 'sub'=词典细分 / 'detail'=自动细分 / 'board'=东财或同花顺板块目录
+    matchedBoard: boardFallback ? {
+      source: boardFallback.source,
+      label: boardFallback.label,
+      plateId: boardFallback.board?.plateId || boardFallback.plateId,
+      name: boardFallback.board?.name || boardFallback.name,
+      stockCount: Number(boardFallback.board?.stockCount || boardFallback.board?.total || boardFallback.stocks?.length || 0),
+    } : null,
     matchedTopics: [...new Set(capped.flatMap(a => [...a.topics]))].slice(0, 12),
     stockCount: capped.length,
     zt10Total: capped.reduce((s, a) => s + (a.zt10 || 0), 0),
     zt30Total: capped.reduce((s, a) => s + (a.zt30 || 0), 0),
-    stocks: capped.map(a => ({ code: a.code, name: a.name, mainTopic: a.latest, zt10: a.zt10, zt30: a.zt30, gain10: a.gain10, gain30: a.gain30 })),
+    stocks: capped.map(a => ({ code: a.code, name: a.name, mainTopic: a.latest, todayGain: a.todayGain ?? null, zt10: a.zt10, zt30: a.zt30, gain10: a.gain10, gain30: a.gain30 })),
   });
 }
 
