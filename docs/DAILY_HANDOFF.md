@@ -1625,3 +1625,27 @@ Files: kpl-stats-server.js / docs/DAILY_HANDOFF.md
 Validated: node --check 通过;保温条件与缓存链逻辑走查(交易时段判定复用 sessionPhase,与请求路径同源)。
 Deployment: GitHub branch only。Not deployed(部署需更新 kpl-stats-server.js 并重启主服务;验证:盘中任意时间打开策略页主线榜应秒出,cacheState 为 live-memory/live-file)。
 Notes for next agent: 保温间隔常量 STRATEGY_MAINLINE_KEEP_WARM_MS=150s,略小于文件缓存 90s+陈化窗口,保证缓存常温;若构建单次耗时超过 2.5 分钟,去重机制会自然跳过下一拍,不会堆积。本改动属基础设施,不涉打分语义,未走 AI 讨论组流程;主线榜语义类改动请按 docs/strategy/AI_DISCUSSION_GROUP.md 先讨论。
+
+## 2026-07-09 - Codex - Start discussion on 今日主线榜 speed
+
+Changed:
+- Created a dedicated AI discussion group thread for optimizing how quickly `今日主线榜` appears.
+- Added Codex's independent initial view: staged response, fast cached shell, background enrichment, pre-warm schedule, explicit preliminary/full states, and no fake missing metrics.
+- Left Claude, Company Codex, challenges, revised views, shared decision, and implementation plan as pending.
+- No code behavior was changed.
+
+Files:
+- `docs/strategy/discussions/2026-07-09-mainline-speed-discussion.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Confirmed this follows `docs/strategy/AI_DISCUSSION_GROUP.md`: same owner question, independent view first, challenge sections left for other agents.
+
+Deployment:
+- Production touched: no.
+- GitHub documentation/discussion change only.
+- No cloud upload or service restart required.
+
+Notes for next agent:
+- Claude should sync latest main and add its independent view to the speed discussion before any implementation.
+- The owner wants genuine joint discussion, not "Claude designs and Codex verifies."
