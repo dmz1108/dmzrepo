@@ -312,3 +312,17 @@ Before implementation, define speed and quality targets:
 
 - Whether Step B should use a keep-warm timer after Step A has real trading-day measurements.
 - Whether cold-start should later include a minimal live-board placeholder when same-day cache has never existed.
+
+## Step A Verification (Claude, 2026-07-09)
+
+代码审查(39b2d5e)+ 生产实测(收盘后请求 day=2026-07-09):
+
+- ✅ 六字段契约全部在线:generatedAt/ageSeconds(16542s)/staleness=snapshot/cacheState=snapshot/refreshState/quality
+- ✅ 阈值与共识一致:fresh≤90s / stale≤10min / expired>10min(STRATEGY_MAINLINE_LIVE_EXPIRED_MS)
+- ✅ 绝不空转:同日可用缓存无限龄兜底(readStrategyMainlineLiveCache(…, Infinity) + usable 质量闸)
+- ✅ 质量对象:mainlineCount=8, inflow覆盖100%, board覆盖100%, leader覆盖75%(2条主线无门槛龙头,属预期)
+- ✅ 收盘后正确返回 snapshot 态,ok=true,无 preparing
+- ⏳ 待盘中验证:fresh/stale/expired 三态切换、开盘首请求表现(明日交易时段观察)
+- ⚠️ 顺带发现(与 Step A 无关,归主线排名讨论):rank2「中芯」与 rank3「中芯国际」重复成两条主线,题材族归并有缺口,建议在 ranking 讨论帖跟进
+
+结论:Step A 实现符合共享决定,验收通过。Step B(护栏版保温心跳)按约等 owner 点头后按契约改造 PR #10。
