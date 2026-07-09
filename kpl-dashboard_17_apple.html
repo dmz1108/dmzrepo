@@ -6068,6 +6068,10 @@
     animation: qiOrbitDot 6.4s linear infinite;
     filter: drop-shadow(0 0 5px oklch(0.72 0.15 242 / 0.7));
   }
+  .qi-logo .qi-spark-svg-motion {
+    offset-path: none;
+    animation: none;
+  }
   @keyframes qiOrbitDot {
     0%     { offset-distance: 50%;  opacity: 1; }
     42.2%  { offset-distance: 100%; opacity: 1; }
@@ -8387,7 +8391,18 @@
       <circle cx="61" cy="68" r="30" stroke="var(--text)" stroke-width="11" fill="none"></circle>
       <path d="M78 84 L92 98" stroke="var(--text)" stroke-width="11" stroke-linecap="round"></path>
       <rect x="106.5" y="61" width="11" height="37" rx="5.5" fill="var(--text)"></rect>
-      <g transform="rotate(-28 65 68)"><circle class="qi-spark" r="9" fill="var(--accent)"></circle></g>
+      <g transform="rotate(-28 65 68)">
+        <circle class="qi-spark qi-spark-svg-motion" r="9" fill="var(--accent)">
+          <animateMotion dur="6.4s" repeatCount="indefinite" rotate="0"
+            path="M 11.8 68 a 53.2 22 0 1 0 106.4 0 a 53.2 22 0 1 0 -106.4 0"
+            keyTimes="0;0.422;0.4221;0.844;1"
+            keyPoints="0.5;1;0;0.5;0.5"
+            calcMode="linear"></animateMotion>
+          <animate attributeName="opacity" dur="6.4s" repeatCount="indefinite"
+            keyTimes="0;0.844;0.88;0.905;0.93;0.955;0.98;1"
+            values="1;1;1;0.12;1;0.12;1;1"></animate>
+        </circle>
+      </g>
     </svg>
   </div>
   <div class="breadth-cluster">
