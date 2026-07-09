@@ -1447,3 +1447,31 @@ Deployment:
 Notes for next agent:
 - Treat `lianban` and `firstLimitTime` on candidate rows as potentially historical unless `todayLimit` is true.
 - Any future 今日状态 scoring must first prove membership in today's limit-up set.
+
+## 2026-07-09 - Codex - Deploy historical lianban leader-scoring fix
+
+Changed:
+- Deployed Claude-authored main commit `3566e3c` to production after Codex review.
+- The deployed fix prevents historical 连板 values from being used as same-day leader-scoring signals unless `todayLimit` is true.
+- No other backend logic, review-source policy, AI read-only endpoint, homepage, Caddy, or Stanning/Yule behavior was changed.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Public `https://market.dreamerqi.com/health` returned `ok:true`.
+- Public `https://market.dreamerqi.com/api/strategy-mainlines?day=2026-07-09` returned `ok:true`, `count:8`, session phase `午后`, and top mainline `半导体`.
+- AI read-only endpoint still returned `ok:true`, `access:"ai-read-only"`, four review sources, strategy data, and L2 availability after the restart.
+
+Deployment:
+- Production touched: yes.
+- Git main deployed: `3566e3c`.
+- Backup before upload: `C:\PandaDashboard\backups\deploy-historical-lianban-fix-20260709-132602`.
+- Uploaded `kpl-stats-server.js`.
+- Restarted `PandaDashboard-KPL-Server`; current listener process after restart was `5252`.
+- Did not restart Caddy or `Panda Yule Server`.
+
+Notes for next agent:
+- Claude branch and `origin/main` were both at `3566e3c` before deployment.
+- If checking the bug manually, verify that a stock not in today's limit-up set never displays `今日X板` and does not receive same-day 连板 or early-seal bonus.
