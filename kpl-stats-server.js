@@ -203,6 +203,8 @@ const STATIC_FILES = new Map([
   ['/qi/vendor/react.production.min.js', 'Qi/vendor/react.production.min.js'],
   ['/vendor/react-dom.production.min.js', 'Qi/vendor/react-dom.production.min.js'],
   ['/qi/vendor/react-dom.production.min.js', 'Qi/vendor/react-dom.production.min.js'],
+  ['/vendor/dreamerqi-fonts.css', 'Qi/vendor/dreamerqi-fonts.css'],
+  ['/qi/vendor/dreamerqi-fonts.css', 'Qi/vendor/dreamerqi-fonts.css'],
   ['/kpl', 'kpl-dashboard_17_apple.html'],
   ['/kpl/', 'kpl-dashboard_17_apple.html'],
   ['/admin', 'panda-admin.html'],
@@ -1802,12 +1804,26 @@ async function authPasswordResetConfirm(url, req, res) {
 
 function staticContentType(fileName) {
   if (fileName.endsWith('.html')) return 'text/html; charset=utf-8';
+  if (fileName.endsWith('.css')) return 'text/css; charset=utf-8';
   if (fileName.endsWith('.js') || fileName.endsWith('.jsx')) return 'text/javascript; charset=utf-8';
   if (fileName.endsWith('.webmanifest')) return 'application/manifest+json; charset=utf-8';
   if (fileName.endsWith('.svg')) return 'image/svg+xml; charset=utf-8';
   if (fileName === 'favicon.ico') return 'image/x-icon';
   if (fileName.endsWith('.png')) return 'image/png';
+  if (fileName.endsWith('.ttf')) return 'font/ttf';
+  if (fileName.endsWith('.woff')) return 'font/woff';
+  if (fileName.endsWith('.woff2')) return 'font/woff2';
   return 'application/octet-stream';
+}
+
+function resolveVendorFontStatic(pathname) {
+  const raw = String(pathname || '');
+  const prefix = raw.startsWith('/qi/vendor/fonts/') ? '/qi/vendor/fonts/' :
+    raw.startsWith('/vendor/fonts/') ? '/vendor/fonts/' : '';
+  if (!prefix) return '';
+  const fileName = decodeURIComponent(raw.slice(prefix.length));
+  if (!/^[a-z0-9._-]+\.(ttf|woff2?|otf)$/i.test(fileName)) return '';
+  return `Qi/vendor/fonts/${fileName}`;
 }
 
 async function sendStatic(req, res, fileName) {
@@ -22789,6 +22805,10 @@ const server = http.createServer(async (req, res) => {
     }
     if ((req.method === 'GET' || req.method === 'HEAD') && STATIC_FILES.has(url.pathname)) {
       return await sendStatic(req, res, STATIC_FILES.get(url.pathname));
+    }
+    if (req.method === 'GET' || req.method === 'HEAD') {
+      const vendorFontFile = resolveVendorFontStatic(url.pathname);
+      if (vendorFontFile) return await sendStatic(req, res, vendorFontFile);
     }
     if (url.pathname === '/health') return send(res, 200, { ok: true });
     if (url.pathname === '/api/admin/login') return await adminLogin(url, req, res);

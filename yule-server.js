@@ -1710,7 +1710,18 @@ function sendJson(res, code, obj) {
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' });
   res.end(buf);
 }
-const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif', '.html': 'text/html; charset=utf-8' };
+const MIME = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.ttf': 'font/ttf',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+};
 function serveFile(res, filePath) {
   try {
     if (!fs.existsSync(filePath)) { res.writeHead(404); res.end('not found'); return; }
@@ -1778,6 +1789,16 @@ function deleteAdminItem(id) {
 
 const YULE_PAGE = path.join(SCRIPT_DIR, 'yule.html');
 const YULE_ADMIN_PAGE = path.join(SCRIPT_DIR, 'yule-admin.html');
+const SHARED_VENDOR_DIR = path.join(SCRIPT_DIR, 'Qi', 'vendor');
+
+function vendorFontPath(pathname) {
+  const raw = String(pathname || '');
+  if (raw === '/vendor/dreamerqi-fonts.css') return path.join(SHARED_VENDOR_DIR, 'dreamerqi-fonts.css');
+  if (!raw.startsWith('/vendor/fonts/')) return '';
+  const fileName = decodeURIComponent(raw.slice('/vendor/fonts/'.length));
+  if (!/^[a-z0-9._-]+\.(ttf|woff2?|otf)$/i.test(fileName)) return '';
+  return path.join(SHARED_VENDOR_DIR, 'fonts', fileName);
+}
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -1795,6 +1816,8 @@ const server = http.createServer(async (req, res) => {
     if (p === '/yule-admin' || p === '/yule-admin/' || p === '/yule-admin.html') {
       return serveFile(res, YULE_ADMIN_PAGE);
     }
+    const vendorFile = vendorFontPath(p);
+    if (vendorFile) return serveFile(res, vendorFile);
     if (p === '/api/yule/admin/items') {
       const items = listItems('', { includeHidden: true }).map(adminItemOf);
       return sendJson(res, 200, { ok: true, items, categories: CONFIG.categories || [] });
