@@ -39,6 +39,12 @@ For small bug fixes, typos, or obvious one-line repairs, normal implementation c
 7. The conclusion must explain rejected options.
    The final plan should say what was not chosen and why.
 
+## Language Rule
+
+Git discussion files should use Chinese by default, including the owner question, agent views, challenges, revised views, shared decision, implementation plan, validation plan, and timeline notes.
+
+Use English only when the owner explicitly asks for English, when copying an external English quote, or when a technical identifier is naturally English.
+
 ## Required Format
 
 Every discussion thread should use this structure:
