@@ -1357,3 +1357,34 @@ Notes for next agent:
 - 今日主线榜 is intentionally predictive during the session. Its `count` is the unique stock-code count collected into the mainline family, not the simple sum of the visible board chips.
 - Runtime live cache file `C:\PandaDashboard\strategy-data\mainline-live-cache-2026-07-09.json` is production data and is not committed to Git.
 - If the user wants exact `ztCount` for a searched board outside the mainline candidate pool, add selected-board lazy hydration instead of hydrating all ranking boards.
+
+## 2026-07-09 - Codex - Fallback 今日实时 search to concept boards
+
+Changed:
+- Fixed 今日实时 top search for cases where the query is a real 东财/同花顺 concept board but not a recent-30-day review main-reason word.
+- `/api/hot-theme-search` still searches the recent main-reason DB first; if it finds no stocks, it now falls back to 东财/同花顺 concept catalogs and returns the matched board constituents.
+- Frontend search result label now shows `东财板块` / `同花顺板块` plus the matched board name and constituent count.
+- No change to review-source collection, strategy mainline scoring, auth, homepage, Caddy, or Stanning/Yule.
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`.
+- Inline dashboard script compilation check passed.
+- Public `https://market.dreamerqi.com/api/hot-theme-search?q=中国AI%2050&day=2026-07-09` returned `ok:true`, `matchMode: board`, `matchedBoard.label: 同花顺板块`, `plateId: 309187`, `stockCount: 50`.
+- Same validation returned sample constituents including 锐捷网络, 盛科通信, 紫光股份, 浪潮信息, with near-10/30-day gain and limit-up count fields populated.
+
+Deployment:
+- Production touched: yes.
+- Git main deployed: `5cd2b4b`.
+- Backup before upload: `C:\PandaDashboard\backups\hot-search-concept-board-20260709-104916`.
+- Uploaded `kpl-stats-server.js` and `kpl-dashboard_17_apple.html`.
+- Restarted `PandaDashboard-KPL-Server`; current listener process is `14540`.
+- Did not restart Caddy or `Panda Yule Server`.
+
+Notes for next agent:
+- 今日实时 top search is still not a full board-management UI. It now uses concept board fallback only when the main-reason DB search is empty.
+- Board fallback currently computes each constituent's 10/30-day gain by pulling K-line data, so first-time searches for 50-stock boards can take noticeable time.
