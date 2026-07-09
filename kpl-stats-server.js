@@ -20513,13 +20513,13 @@ async function getDayThemeNetInflow(day) {
 const STRATEGY_STRONG_RESONANCE_MIN_STOCKS = 2;
 const STRATEGY_MAINLINE_BIG_GAIN_PCT = 5;
 const STRATEGY_MAINLINE_NEAR_LIMIT_GAP_PCT = 1.5;
-const STRATEGY_MAINLINE_RISING_BOARD_LIMIT = 9;
-const STRATEGY_MAINLINE_LIVE_BOARD_POOL = 8;
-const STRATEGY_MAINLINE_LIVE_HYDRATE_TIMEOUT_MS = 1800;
-const STRATEGY_MAINLINE_RISING_FETCH_TIMEOUT_MS = 2200;
-const STRATEGY_MAINLINE_CATALOG_TIMEOUT_MS = 1200;
-const STRATEGY_MAINLINE_TOP_GAIN_TIMEOUT_MS = 3000;
-const STRATEGY_MAINLINE_REWORK_TIMEOUT_MS = 2000;
+const STRATEGY_MAINLINE_RISING_BOARD_LIMIT = 5;
+const STRATEGY_MAINLINE_LIVE_BOARD_POOL = 5;
+const STRATEGY_MAINLINE_LIVE_HYDRATE_TIMEOUT_MS = 1200;
+const STRATEGY_MAINLINE_RISING_FETCH_TIMEOUT_MS = 1500;
+const STRATEGY_MAINLINE_CATALOG_TIMEOUT_MS = 800;
+const STRATEGY_MAINLINE_TOP_GAIN_TIMEOUT_MS = 1800;
+const STRATEGY_MAINLINE_REWORK_TIMEOUT_MS = 1200;
 const STRATEGY_MAINLINE_LIVE_CACHE_MS = 90 * 1000;
 const strategyMainlineLiveCache = new Map();
 // 广度统计至少要有这么多有效成分股，否则小板块一两只股就能拉出虚高普涨率
@@ -21394,6 +21394,9 @@ function strategyMainlineAttachRealtimeBoardToSeed(seed, board, matchedCodes = n
     .filter(Boolean))];
   const restrictToMatched = Array.isArray(matchedCodes);
   const matchedSet = new Set(codes);
+  const sourceLimitCodes = [...new Set((Array.isArray(board?.codes) ? board.codes : [])
+    .map(normalizeReasonSourceCode)
+    .filter(Boolean))];
   seed.boardKeySet.add(boardKey);
   for (const code of codes) {
     seed.codeSet.add(code);
@@ -21420,7 +21423,7 @@ function strategyMainlineAttachRealtimeBoardToSeed(seed, board, matchedCodes = n
     name: boardName,
     plateId: String(board?.plateId || ''),
     zsType: board?.zsType,
-    ztCount: zt != null ? zt : codes.length,
+    ztCount: zt != null ? zt : (sourceLimitCodes.length ? sourceLimitCodes.length : null),
     netInflow,
     gainPct,
     confirmedCount: codes.length || (zt != null ? zt : 0),
@@ -21709,6 +21712,7 @@ const STRATEGY_MAINLINE_DATA_DIR = path.join(__dirname, 'strategy-data');
 function strategyMainlineConfirmPath(day) { return path.join(STRATEGY_MAINLINE_DATA_DIR, `mainline-confirm-${day}.json`); }
 function strategyMainlinePredictPath(day) { return path.join(STRATEGY_MAINLINE_DATA_DIR, `mainline-predict-${day}.json`); }
 function strategyMainlineSnapshotPath(day) { return path.join(STRATEGY_MAINLINE_DATA_DIR, `strategy-mainline-snapshot-${day}.json`); }
+function strategyMainlineLiveCachePath(day) { return path.join(STRATEGY_MAINLINE_DATA_DIR, `mainline-live-cache-${day}.json`); }
 async function readMainlineConfirm(day) {
   try { return JSON.parse(await fs.readFile(strategyMainlineConfirmPath(day), 'utf8')); } catch { return null; }
 }
@@ -21736,6 +21740,34 @@ async function readStrategyMainlineSnapshot(day) {
   } catch {
     return null;
   }
+}
+async function readStrategyMainlineLiveCache(day, maxAgeMs = STRATEGY_MAINLINE_LIVE_CACHE_MS) {
+  try {
+    const data = JSON.parse(await fs.readFile(strategyMainlineLiveCachePath(day), 'utf8'));
+    const savedAtMs = Date.parse(data?.liveCacheSavedAt || data?.savedAt || '');
+    if (!Number.isFinite(savedAtMs) || Date.now() - savedAtMs > maxAgeMs) return null;
+    return {
+      ...data,
+      ok: data.ok !== false,
+      day: data.day || day,
+      requestedDay: data.requestedDay || day,
+      cacheState: 'live-file',
+    };
+  } catch {
+    return null;
+  }
+}
+async function writeStrategyMainlineLiveCache(day, payload) {
+  if (!payload?.ok || !Array.isArray(payload.mainlines) || !payload.mainlines.length) return null;
+  await fs.mkdir(STRATEGY_MAINLINE_DATA_DIR, { recursive: true });
+  const data = JSON.parse(JSON.stringify({
+    ...payload,
+    day,
+    requestedDay: day,
+    liveCacheSavedAt: new Date().toISOString(),
+  }));
+  await fs.writeFile(strategyMainlineLiveCachePath(day), JSON.stringify(data, null, 2), 'utf8');
+  return data;
 }
 async function writeStrategyMainlineSnapshot(day, payload, reason = '') {
   if (!payload?.ok || !Array.isArray(payload.mainlines) || !payload.mainlines.length) return null;
@@ -22721,12 +22753,21 @@ async function getStrategyMainlines(day) {
   if (cached?.expiresAt > Date.now() && cached.payload) {
     return { ...cached.payload, cacheState: 'live-memory' };
   }
+  const fileCached = await readStrategyMainlineLiveCache(requestedDay).catch(() => null);
+  if (fileCached) {
+    strategyMainlineLiveCache.set(cacheKey, {
+      expiresAt: Date.now() + STRATEGY_MAINLINE_LIVE_CACHE_MS,
+      payload: fileCached,
+    });
+    return fileCached;
+  }
   const live = await buildStrategyMainlinesLive(requestedDay, { writePredict: true });
   if (live?.ok && Array.isArray(live.mainlines) && live.mainlines.length) {
     strategyMainlineLiveCache.set(cacheKey, {
       expiresAt: Date.now() + STRATEGY_MAINLINE_LIVE_CACHE_MS,
       payload: live,
     });
+    writeStrategyMainlineLiveCache(requestedDay, live).catch(() => {});
   }
   return live;
 }
