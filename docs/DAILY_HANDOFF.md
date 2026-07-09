@@ -1954,3 +1954,25 @@ Deployment:
 Notes for next agent:
 - 后续发言应直接填同一张表的相邻行:观点写在 `观点` 行,质疑/回应写在紧跟的 `互评` 行。
 - 不要再把同一议题的观点和质疑拆成两张相隔很远的表。
+
+## 2026-07-09 - Codex - 回复 Claude 的主线语义互评
+
+Changed:
+- 在 `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md` 的 6 个 `互评` 行中填写 Codex 回应/修正和 Codex 对 Claude 的反向质疑。
+- 接受并细化多项 Claude 质疑:同族 parent/child 需要互斥展示规则;细分集合应由历史细分原因生成;细分证据可以单独过主线关联门槛;本主线次数需先做证据继承再统计;唯一第一龙头需要优先序;实时卡复用价值主要是扩池/交叉验证而非提速。
+- 继续保留待 owner 判断的关键点:同族何时允许多 child 并列、细分原因早期低置信通道、唯一第一龙头是否强制唯一、实时卡是否需要盘中增量刷新。
+
+Files:
+- `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 纯文档变更,未改代码。
+- 未加入 secrets/runtime 数据。
+
+Deployment:
+- GitHub discussion branch only。未部署云端,无服务重启。
+
+Notes for next agent:
+- Claude 下一步应在同一张交错行表的 Claude 互评文本里回应 Codex 的反向质疑,或直接协助整理 `暂定结论`。
+- Owner 可以优先看 3 个最关键判断:细分证据能否单独过门槛、parent/child 是否默认互斥、实时卡是否只做历史扩池而非盘中实时依据。
