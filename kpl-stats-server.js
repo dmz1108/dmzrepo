@@ -20645,7 +20645,7 @@ const STRATEGY_MAINLINE_CATALOG_TIMEOUT_MS = 800;
 const STRATEGY_MAINLINE_TOP_GAIN_TIMEOUT_MS = 1800;
 const STRATEGY_MAINLINE_REWORK_TIMEOUT_MS = 1200;
 const STRATEGY_MAINLINE_LIVE_CACHE_MS = 90 * 1000;
-const STRATEGY_MAINLINE_LIVE_STALE_CACHE_MS = 5 * 60 * 1000;
+const STRATEGY_MAINLINE_LIVE_EXPIRED_MS = 10 * 60 * 1000;
 const STRATEGY_MAINLINE_QUICK_BUILD_TIMEOUT_MS = 12000;
 const strategyMainlineLiveCache = new Map();
 const strategyMainlineRefreshJobs = new Map();
@@ -21840,6 +21840,54 @@ function strategyMainlineConfirmPath(day) { return path.join(STRATEGY_MAINLINE_D
 function strategyMainlinePredictPath(day) { return path.join(STRATEGY_MAINLINE_DATA_DIR, `mainline-predict-${day}.json`); }
 function strategyMainlineSnapshotPath(day) { return path.join(STRATEGY_MAINLINE_DATA_DIR, `strategy-mainline-snapshot-${day}.json`); }
 function strategyMainlineLiveCachePath(day) { return path.join(STRATEGY_MAINLINE_DATA_DIR, `mainline-live-cache-${day}.json`); }
+function strategyMainlineSavedAt(payload) {
+  return String(payload?.generatedAt || payload?.liveCacheSavedAt || payload?.snapshotSavedAt || payload?.savedAt || '').trim();
+}
+function strategyMainlineAgeMs(payload, nowMs = Date.now()) {
+  const savedAtMs = Date.parse(strategyMainlineSavedAt(payload));
+  return Number.isFinite(savedAtMs) ? Math.max(0, nowMs - savedAtMs) : null;
+}
+function strategyMainlineQuality(payload) {
+  const mainlines = Array.isArray(payload?.mainlines) ? payload.mainlines : [];
+  const mainlineCount = mainlines.length;
+  const withInflow = mainlines.filter(item => isFiniteNumeric(item?.netInflow)).length;
+  const withBoards = mainlines.filter(item => Number(item?.boardCount) > 0 || (Array.isArray(item?.resonanceBoards) && item.resonanceBoards.length)).length;
+  const withLeaders = mainlines.filter(item => item?.mainLeader || (Array.isArray(item?.leaders) && item.leaders.length)).length;
+  const pct = value => mainlineCount ? Number((value / mainlineCount * 100).toFixed(1)) : 0;
+  return {
+    ok: mainlineCount >= 1,
+    mainlineCount,
+    inflowCoveragePct: pct(withInflow),
+    boardCoveragePct: pct(withBoards),
+    leaderCoveragePct: pct(withLeaders),
+  };
+}
+function strategyMainlineIsUsablePayload(payload) {
+  return !!(payload?.ok && Array.isArray(payload.mainlines) && payload.mainlines.length >= 1);
+}
+function strategyMainlineStaleness(payload, sessionPhase = '', nowMs = Date.now()) {
+  if (payload?.snapshot || payload?.frozen || payload?.snapshotState === 'frozen') return 'snapshot';
+  const ageMs = strategyMainlineAgeMs(payload, nowMs);
+  if (ageMs == null) return '';
+  if (sessionPhase === '午间休市' && ageMs <= 2 * 60 * 60 * 1000) return 'fresh';
+  if (ageMs <= STRATEGY_MAINLINE_LIVE_CACHE_MS) return 'fresh';
+  if (ageMs <= STRATEGY_MAINLINE_LIVE_EXPIRED_MS) return 'stale';
+  return 'expired';
+}
+function strategyMainlineAttachResponseMeta(payload, options = {}) {
+  const nowMs = Number.isFinite(Number(options.nowMs)) ? Number(options.nowMs) : Date.now();
+  const generatedAt = String(options.generatedAt || strategyMainlineSavedAt(payload) || new Date(nowMs).toISOString());
+  const base = { ...(payload || {}), generatedAt };
+  const ageMs = strategyMainlineAgeMs(base, nowMs);
+  return {
+    ...base,
+    ageSeconds: ageMs == null ? null : Math.floor(ageMs / 1000),
+    staleness: options.staleness || strategyMainlineStaleness(base, options.sessionPhase || base.sessionPhase || '', nowMs),
+    cacheState: options.cacheState || base.cacheState || '',
+    refreshState: options.refreshState ?? base.refreshState ?? '',
+    quality: base.quality || strategyMainlineQuality(base),
+  };
+}
 async function readMainlineConfirm(day) {
   try { return JSON.parse(await fs.readFile(strategyMainlineConfirmPath(day), 'utf8')); } catch { return null; }
 }
@@ -21855,7 +21903,7 @@ async function readMainlinePredict(day) {
 async function readStrategyMainlineSnapshot(day) {
   try {
     const data = JSON.parse(await fs.readFile(strategyMainlineSnapshotPath(day), 'utf8'));
-    return {
+    return strategyMainlineAttachResponseMeta({
       ...data,
       ok: data.ok !== false,
       day: data.day || day,
@@ -21863,7 +21911,7 @@ async function readStrategyMainlineSnapshot(day) {
       snapshot: true,
       frozen: true,
       snapshotState: 'frozen',
-    };
+    }, { cacheState: 'snapshot', staleness: 'snapshot' });
   } catch {
     return null;
   }
@@ -21871,35 +21919,40 @@ async function readStrategyMainlineSnapshot(day) {
 async function readStrategyMainlineLiveCache(day, maxAgeMs = STRATEGY_MAINLINE_LIVE_CACHE_MS) {
   try {
     const data = JSON.parse(await fs.readFile(strategyMainlineLiveCachePath(day), 'utf8'));
-    const savedAtMs = Date.parse(data?.liveCacheSavedAt || data?.savedAt || '');
-    if (!Number.isFinite(savedAtMs) || Date.now() - savedAtMs > maxAgeMs) return null;
-    return {
+    const ageMs = strategyMainlineAgeMs(data);
+    if (ageMs == null || (Number.isFinite(maxAgeMs) && ageMs > maxAgeMs)) return null;
+    return strategyMainlineAttachResponseMeta({
       ...data,
       ok: data.ok !== false,
       day: data.day || day,
       requestedDay: data.requestedDay || day,
-      cacheState: 'live-file',
-    };
+    }, { cacheState: 'live-file' });
   } catch {
     return null;
   }
 }
 async function writeStrategyMainlineLiveCache(day, payload) {
-  if (!payload?.ok || !Array.isArray(payload.mainlines) || !payload.mainlines.length) return null;
+  if (!strategyMainlineIsUsablePayload(payload)) return null;
   await fs.mkdir(STRATEGY_MAINLINE_DATA_DIR, { recursive: true });
+  const liveCacheSavedAt = new Date().toISOString();
   const data = JSON.parse(JSON.stringify({
     ...payload,
     day,
     requestedDay: day,
-    liveCacheSavedAt: new Date().toISOString(),
+    liveCacheSavedAt,
+    generatedAt: payload.generatedAt || liveCacheSavedAt,
+    quality: strategyMainlineQuality(payload),
   }));
   await fs.writeFile(strategyMainlineLiveCachePath(day), JSON.stringify(data, null, 2), 'utf8');
   return data;
 }
 async function buildStrategyMainlinesLiveAndCache(day, options = {}) {
   const isoDay = isoFromCompactDate(day);
-  const live = await buildStrategyMainlinesLive(isoDay, options);
-  if (live?.ok && Array.isArray(live.mainlines) && live.mainlines.length) {
+  const live = strategyMainlineAttachResponseMeta(
+    await buildStrategyMainlinesLive(isoDay, options),
+    { cacheState: 'live-build' }
+  );
+  if (strategyMainlineIsUsablePayload(live)) {
     strategyMainlineLiveCache.set(isoDay, {
       expiresAt: Date.now() + STRATEGY_MAINLINE_LIVE_CACHE_MS,
       payload: live,
@@ -21938,10 +21991,17 @@ async function writeStrategyMainlineSnapshot(day, payload, reason = '') {
   return snapshot;
 }
 function strategyMainlineEmptyPayload(day, requestedDay, reason, message, sessionPhase = '') {
+  const generatedAt = new Date().toISOString();
   return {
     ok: false,
     mode: 'intraday-mainline',
     basis: 'realtime-board-gain-inflow-big-gainers-breadth-momentum-plus-prior-main-reason',
+    generatedAt,
+    ageSeconds: 0,
+    staleness: '',
+    cacheState: 'empty',
+    refreshState: '',
+    quality: { ok: false, mainlineCount: 0, inflowCoveragePct: 0, boardCoveragePct: 0, leaderCoveragePct: 0 },
     day,
     requestedDay: requestedDay || day,
     sessionPhase,
@@ -22961,25 +23021,40 @@ async function getStrategyMainlines(day) {
 
   const cacheKey = requestedDay;
   const cached = strategyMainlineLiveCache.get(cacheKey);
-  if (cached?.expiresAt > Date.now() && cached.payload) {
-    return { ...cached.payload, cacheState: 'live-memory' };
+  if (strategyMainlineIsUsablePayload(cached?.payload)) {
+    const cachedPayload = strategyMainlineAttachResponseMeta(cached.payload, { cacheState: 'live-memory', sessionPhase });
+    if (cachedPayload.staleness === 'fresh') return cachedPayload;
+    startStrategyMainlineRefresh(requestedDay, { writePredict: true });
+    return strategyMainlineAttachResponseMeta(cached.payload, {
+      cacheState: 'live-memory-refreshing',
+      refreshState: 'running',
+      sessionPhase,
+    });
   }
   const fileCached = await readStrategyMainlineLiveCache(requestedDay).catch(() => null);
-  if (fileCached) {
+  if (strategyMainlineIsUsablePayload(fileCached)) {
     strategyMainlineLiveCache.set(cacheKey, {
       expiresAt: Date.now() + STRATEGY_MAINLINE_LIVE_CACHE_MS,
       payload: fileCached,
     });
-    return fileCached;
+    return strategyMainlineAttachResponseMeta(fileCached, { cacheState: 'live-file', sessionPhase });
   }
-  const staleCached = await readStrategyMainlineLiveCache(requestedDay, STRATEGY_MAINLINE_LIVE_STALE_CACHE_MS).catch(() => null);
-  if (staleCached) {
+  const reusableCached = await readStrategyMainlineLiveCache(requestedDay, Infinity).catch(() => null);
+  if (strategyMainlineIsUsablePayload(reusableCached)) {
+    strategyMainlineLiveCache.set(cacheKey, {
+      expiresAt: Date.now() + STRATEGY_MAINLINE_LIVE_CACHE_MS,
+      payload: reusableCached,
+    });
     startStrategyMainlineRefresh(requestedDay, { writePredict: true });
-    return { ...staleCached, cacheState: 'live-file-refreshing' };
+    return strategyMainlineAttachResponseMeta(reusableCached, {
+      cacheState: 'live-file-refreshing',
+      refreshState: 'running',
+      sessionPhase,
+    });
   }
   const job = startStrategyMainlineRefresh(requestedDay, { writePredict: true });
   const live = await strategyMainlineWithTimeout(job, STRATEGY_MAINLINE_QUICK_BUILD_TIMEOUT_MS, null);
-  if (live?.ok && Array.isArray(live.mainlines) && live.mainlines.length) return live;
+  if (strategyMainlineIsUsablePayload(live)) return strategyMainlineAttachResponseMeta(live, { cacheState: 'live-build', sessionPhase });
   return {
     ...strategyMainlineEmptyPayload(
       requestedDay,
@@ -23236,8 +23311,12 @@ async function buildAiStrategyLivePayload(url) {
       message: strategyPayload?.message || '',
       mode: strategyPayload?.mode || '',
       basis: strategyPayload?.basis || '',
+      generatedAt: strategyPayload?.generatedAt || '',
+      ageSeconds: strategyPayload?.ageSeconds ?? null,
+      staleness: strategyPayload?.staleness || '',
       cacheState: strategyPayload?.cacheState || '',
       refreshState: strategyPayload?.refreshState || '',
+      quality: strategyPayload?.quality || null,
       sessionPhase: strategyPayload?.sessionPhase || sessionPhase,
       confirmedMainline: strategyPayload?.confirmedMainline || null,
       count: mainlines.length,

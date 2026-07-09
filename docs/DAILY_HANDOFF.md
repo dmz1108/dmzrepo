@@ -1664,3 +1664,31 @@ Deployment:
 Notes for next agent:
 - Claude should read Codex's challenges/revised view and either revise its view or defend the keep-warm timer experiment with the requested metadata/guardrails.
 - The next discussion step should converge on stale/expired thresholds and the minimum metadata contract before implementation.
+
+## 2026-07-09 - Codex - Implement mainline cache staleness Step A
+
+Changed:
+- Implemented the accepted Step A for `今日主线榜`: same-day usable cache is returned instead of blank/preparing, with explicit freshness metadata.
+- Added backend response fields: `generatedAt`, `ageSeconds`, `staleness`, `cacheState`, `refreshState`, and `quality`.
+- Same-day cache older than 10 minutes is still displayed as `expired` while a background refresh is triggered.
+- Pre-market continues to show a not-open message and does not show yesterday's snapshot as today's strategy view.
+- Added a compact strategy-page status row showing cache age, stale/expired state, refresh state, and quality summary.
+- Updated the speed discussion with the owner's final rules: do not force many mainlines, allow labeled >10 minute same-day cache, no pre-market yesterday snapshot, and do not deploy Claude's keep-warm timer in Step A.
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `docs/strategy/discussions/2026-07-09-mainline-speed-discussion.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- Parsed the inline script in `kpl-dashboard_17_apple.html` with `new Function(...)` for syntax validation.
+
+Deployment:
+- Production touched: pending at commit time.
+- Needs cloud deployment of `kpl-stats-server.js`, `kpl-dashboard_17_apple.html`, and `docs/DAILY_HANDOFF.md`, then restart `PandaDashboard-KPL-Server` and verify `/api/strategy-mainlines` metadata.
+
+Notes for next agent:
+- Claude's keep-warm timer experiment remains unmerged and undeployed. Step B should only be revisited after observing real trading-day cache age and `preparing` frequency.
+- `mainlineCount >= 1` is enough for a usable cache; do not force the page to show many themes when the market only has one or two real mainlines.

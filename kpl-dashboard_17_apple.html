@@ -3358,6 +3358,43 @@
     line-height: 1.35;
     text-align: right;
   }
+  body.view-strategy .ml-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 7px;
+    margin: -2px 0 12px;
+    color: var(--text-faint);
+    font-size: 11px;
+  }
+  body.view-strategy .ml-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: rgba(140,160,190,0.72);
+    box-shadow: 0 0 0 3px rgba(140,160,190,0.10);
+  }
+  body.view-strategy .ml-status.fresh .ml-status-dot,
+  body.view-strategy .ml-status.snapshot .ml-status-dot {
+    background: rgba(35,205,128,0.90);
+    box-shadow: 0 0 0 3px rgba(35,205,128,0.12);
+  }
+  body.view-strategy .ml-status.stale .ml-status-dot {
+    background: rgba(255,179,64,0.95);
+    box-shadow: 0 0 0 3px rgba(255,179,64,0.14);
+  }
+  body.view-strategy .ml-status.expired .ml-status-dot {
+    background: rgba(255,103,103,0.95);
+    box-shadow: 0 0 0 3px rgba(255,103,103,0.14);
+  }
+  body.view-strategy .ml-status b {
+    color: var(--text);
+    font-weight: 680;
+  }
+  body.view-strategy .ml-status em {
+    font-style: normal;
+    color: var(--text-faint);
+  }
   body.view-strategy .ml-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -11139,6 +11176,40 @@ function strategyMainlineEarlyRadarHTML(lines) {
     <small>未批量涨停的方向按预判分排序 · 等涨停底库出来就晚了</small>
   </div>`;
 }
+function strategyMainlineAgeText(seconds) {
+  const n = Number(seconds);
+  if (!Number.isFinite(n) || n < 0) return '';
+  if (n < 60) return '刚刚生成';
+  const minutes = Math.floor(n / 60);
+  if (minutes < 60) return `${minutes}分钟前`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${hours}小时${rest}分钟前` : `${hours}小时前`;
+}
+function strategyMainlineStatusHTML(d) {
+  if (!d || (!d.staleness && !d.cacheState && d.reason !== 'strategy-mainline-preparing')) return '';
+  const state = String(d.staleness || '').trim() || (d.snapshotState === 'frozen' ? 'snapshot' : 'unknown');
+  const ageText = strategyMainlineAgeText(d.ageSeconds);
+  const q = d.quality || {};
+  const refresh = d.refreshState === 'running' ? '后台刷新中' : '';
+  let label = '';
+  if (state === 'snapshot') label = '收盘快照';
+  else if (state === 'expired') label = `${ageText || '同日旧数据'} · 超过10分钟，先显示最近同日主线`;
+  else if (state === 'stale') label = `${ageText || '同日缓存'} · 正在确认是否有新主线`;
+  else if (state === 'fresh') label = ageText || '实时数据';
+  else if (d.reason === 'strategy-mainline-preparing') label = '当天还没有可用主线缓存';
+  else label = ageText || '主线状态';
+  const meta = [
+    refresh,
+    Number(q.mainlineCount) > 0 ? `主线${Number(q.mainlineCount)}条` : '',
+    Number.isFinite(Number(q.inflowCoveragePct)) && Number(q.inflowCoveragePct) < 100 ? `资金覆盖${Number(q.inflowCoveragePct).toFixed(0)}%` : '',
+  ].filter(Boolean);
+  return `<div class="ml-status ${escapeHTML(state)}" title="${escapeHTML([d.cacheState || '', d.refreshState || '', d.generatedAt || ''].filter(Boolean).join(' · '))}">
+    <span class="ml-status-dot"></span>
+    <b>${escapeHTML(label)}</b>
+    ${meta.length ? `<em>${escapeHTML(meta.join(' · '))}</em>` : ''}
+  </div>`;
+}
 function renderStrategyMainlinesHTML(d) {
   const lines = (d && d.mainlines) || [];
   const usingFallbackDay = d && d.requestedDay && d.day && d.requestedDay !== d.day;
@@ -11156,14 +11227,17 @@ function renderStrategyMainlinesHTML(d) {
     const emptyText = d && d.message
       ? String(d.message)
       : '暂无可用主线数据，请先同步今日实时看板。';
+    const statusHtml = strategyMainlineStatusHTML(d);
     return `<section class="mainline-wrap">
       <div class="ml-title">
         <span>今日主线榜</span>
         <small>实时板块涨幅 × 资金净流入 × 成分股大涨/普涨广度 × 冲板候选 × 盘中动能 × 历史四源主因预判${sourceSuffix}${dayNote}</small>
       </div>
+      ${statusHtml}
       <div class="rht-loading">${escapeHTML(emptyText)}</div>
     </section>`;
   }
+  const statusHtml = strategyMainlineStatusHTML(d);
   const cards = lines.slice(0, 8).map((m, i) => {
     const leader = m.mainLeader || {};
     const leaderName = leader.name || leader.code || '--';
@@ -11313,6 +11387,7 @@ function renderStrategyMainlinesHTML(d) {
       <span>今日主线榜</span>
       <small>实时板块涨幅 × 资金净流入 × 成分股大涨/普涨广度 × 冲板候选 × 盘中动能 × 历史四源主因预判 · ${Number(d.count) || lines.length} 条${sourceSuffix}${dayNote}</small>
     </div>
+    ${statusHtml}
     ${strategyMainlineQuickReadHTML(lines, d)}
     ${strategyMainlineEarlyRadarHTML(lines)}
     <div class="ml-grid">${cards}</div>
