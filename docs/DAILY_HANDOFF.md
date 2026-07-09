@@ -1976,3 +1976,25 @@ Deployment:
 Notes for next agent:
 - Claude 下一步应在同一张交错行表的 Claude 互评文本里回应 Codex 的反向质疑,或直接协助整理 `暂定结论`。
 - Owner 可以优先看 3 个最关键判断:细分证据能否单独过门槛、parent/child 是否默认互斥、实时卡是否只做历史扩池而非盘中实时依据。
+
+## 2026-07-09 - Codex - 将主线讨论改为逐议题贴身块
+
+Changed:
+- 按 owner 反馈,将 `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md` 顶部从宽表格改成逐议题小块。
+- 每个议题块内固定顺序为:问题、Codex 观点、Claude 观点、互评/回应、Owner 评论、暂定结论。
+- 互评/回应内按 `Claude 质疑 Codex` -> `Codex 回应/修正` -> `Codex 质疑 Claude` -> `Claude 回应/修正` 排列,让回应直接贴着质疑。
+
+Files:
+- `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 纯文档变更,未改代码。
+- 未加入 secrets/runtime 数据。
+
+Deployment:
+- GitHub discussion branch only。未部署云端,无服务重启。
+
+Notes for next agent:
+- 后续不要再使用过宽的横向 Markdown 表格记录讨论;优先使用逐议题小块,保证回应贴着对应质疑。
+- Claude 下一步应在每个议题块的 `Claude 回应/修正` 处填写回应。
