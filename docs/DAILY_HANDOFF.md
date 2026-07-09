@@ -622,6 +622,7 @@ Deployment:
 
 Notes for next agent:
 - The cloud server still needs a deliberate deploy after Claude/Codex review. Current production may not yet include the merged `main` strategy enhancements.
+
 ## 2026-07-08 - Claude - 策略页视觉打磨（本地真实渲染验证）
 
 Changed:
@@ -1059,6 +1060,7 @@ Notes for next agent:
 - Keep Explore focused on city new shops and places. Do not turn it into a generic tourism guide.
 - User explicitly does not want a map surface here; use address, phone, business area, and practical trip-planning fields instead.
 - Detail modal should not re-add an `信息来源` card unless the user asks for it.
+
 ## 2026-07-08 - Claude - PR #6 与 main 最终同步（含 Explore 工作保全）
 
 Changed:
@@ -1735,6 +1737,7 @@ Deployment:
 Notes for next agent:
 - Future Git discussion files should be written in Chinese by default.
 - When starting a discussion, create the question/context first and leave independent-agent answer sections empty until the owner says to begin independent answers.
+
 ## 2026-07-09 - Claude - 主线榜提速:日文件缓存 + Step B 护栏版保温心跳
 
 Changed:
@@ -1777,6 +1780,7 @@ Notes for next agent:
 - For future “湖南人复盘” requests, read `docs/ops/TGB_HUNAN_DAILY_SOP.md` first.
 - Do not select TGB images by file size; the larger red 同花顺 image is not the TGB source.
 - If the admin health panel still shows a missing TGB source while source-view shows TGB rows, investigate the health endpoint/cache/口径, not the formal TGB file first.
+
 ## 2026-07-09 - Claude - PR#10 评审修复:日文件缓存失效 + force 旁路
 
 Changed:
@@ -1787,3 +1791,27 @@ Changed:
 Files: kpl-stats-server.js / docs/DAILY_HANDOFF.md
 Validated: node --check 通过;round-4 与龙头 v2 回归通过;新增缓存失效静态断言(三写路径失效语句、force 旁路、day 端点接线)全过。
 Deployment: GitHub branch only(PR #10)。Not deployed. No restart yet。
+
+## 2026-07-09 - Claude - PR#10 二审修复:源视图 force 补全 + 保温只在服务进程启动
+
+Changed:
+- `buildDaySourceViewWithConsensus` 的 `dbPayload` 读取补传 `{ force: !!opts.force }`,此前 force 只传给了证据/质量重建,底层 DB 读仍可能吃到 60s 陈缓存。
+- `ensureLimitUpMainReasonEvidenceAndQualityDay` 内部的 `readLimitUpMainReasonDbDay` 补传 `{ force: !!options.force }`,force 重建时证据/质量基于最新 DB 文件。
+- 主线榜保温启动从模块顶层挪进 `startStrategyMainlineKeepWarm()`,只在 `server.listen` 分支调用;CLI 任务(--main-reason-backfill、--tgb-vision-sync 等)不再可能在盘中长任务里误启保温。
+- `docs/DAILY_HANDOFF.md` 补齐 4 处正文条目标题前缺失的空行(625/1062/1738/1780 行附近),模板代码块内示例未动。
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check kpl-stats-server.js` 通过。
+- 缓存失效静态断言、round4 回归、龙头 v2 回归全部通过。
+- grep 断言:两处 force 传参就位;顶层不再有 `setTimeout(strategyMainlineKeepWarmTick...)`,仅 `server.listen` 分支调用 `startStrategyMainlineKeepWarm()`。
+
+Deployment:
+- GitHub only(PR #10)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 合并 PR #10 后云端只需部署 `kpl-stats-server.js` 并重启主服务;保温心跳会在服务启动 15 秒后自动预热一次。
+- CLI 模式下保温不会启动,属预期行为。

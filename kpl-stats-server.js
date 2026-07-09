@@ -6460,7 +6460,7 @@ function recomputeReviewSourceStatsFromTabs(payload) {
 async function buildDaySourceViewWithConsensus(day, opts = {}) {
   const isoDay = isoFromCompactDate(day);
   const { evidence } = await ensureLimitUpMainReasonEvidenceAndQualityDay(day, { force: !!opts.force });
-  const dbPayload = await readLimitUpMainReasonDbDay(day).catch(() => null);
+  const dbPayload = await readLimitUpMainReasonDbDay(day, { force: !!opts.force }).catch(() => null);
   const baseEvidence = evidence?.stocks?.length ? evidence : {
     day: isoDay,
     stocks: [],
@@ -18165,7 +18165,7 @@ async function ensureLimitUpMainReasonEvidenceAndQualityDay(day, options = {}) {
     ]);
     if (evidence && quality) return { evidence, quality };
   }
-  const payload = await readLimitUpMainReasonDbDay(isoDay);
+  const payload = await readLimitUpMainReasonDbDay(isoDay, { force: !!options.force });
   if (!payload?.stocks?.length) return { evidence: null, quality: null };
   const autoPayload = options.force
     ? await ensureLimitUpMainReasonAutoSourceDay(isoDay, payload.stocks || [], { force: true })
@@ -22043,7 +22043,10 @@ function strategyMainlineKeepWarmTick() {
     strategyMainlineScheduleWarm(STRATEGY_MAINLINE_KEEP_WARM_MS);
   }
 }
-setTimeout(strategyMainlineKeepWarmTick, 15 * 1000).unref?.();  // 启动 15 秒后先预热一次(重启后不冷场)
+// 只在服务进程里启动(server.listen 分支调用);CLI 任务(--main-reason-backfill 等)不该跑保温
+function startStrategyMainlineKeepWarm() {
+  setTimeout(strategyMainlineKeepWarmTick, 15 * 1000).unref?.();  // 启动 15 秒后先预热一次(重启后不冷场)
+}
 
 function startStrategyMainlineRefresh(day, options = {}) {
   const isoDay = isoFromCompactDate(day);
@@ -24056,6 +24059,7 @@ if (process.argv.includes('--refresh-zt10')) {
   }
   scheduleDailyAutoCleanup();
   strategy.startCron();
+  startStrategyMainlineKeepWarm();
 
   setInterval(() => {
     runAutoCloseDbBackfillIfDue().catch(err => {
