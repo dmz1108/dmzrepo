@@ -1289,3 +1289,34 @@ Deployment:
 Notes for next agent:
 - Strategy mainline history is now deliberately frozen. If a historical date has no `strategy-mainline-snapshot-YYYY-MM-DD.json`, the API should say the snapshot is missing instead of rebuilding from newer data.
 - The 2026-07-08 snapshot is runtime data on the cloud server and is intentionally not committed to Git.
+
+## 2026-07-09 - Codex - Derive live strategy limit-up counts
+
+Changed:
+- Fixed a misleading intraday strategy count issue where live ranking-only board rows were given fake `ztCount: 0`.
+- Unhydrated live ranking rows now leave `ztCount` empty instead of showing a false zero.
+- 今日主线榜 now hydrates the live candidate board pool by reading constituent stocks and deriving real limit-up members before building mainline counts.
+- No review-source policy, snapshot lifecycle, TGB/manual review data, auth, homepage, Caddy, or Stanning/Yule logic was changed.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`.
+- Public `https://market.dreamerqi.com/health` returned `ok:true`.
+- Public `https://market.dreamerqi.com/api/strategy-mainlines?day=2026-07-09` returned `ok:true`, `sessionPhase: 早盘`, `count: 10`.
+- After the fix, 今日主线榜 examples: 半导体 `count: 19`, 算力AI `count: 6`, 消费电子/显示 `count: 6`.
+- Public `https://market.dreamerqi.com/api/strategy/today?day=2026-07-09` no longer reports fake `ztCount: 0` for unhydrated 医药-related boards; those values are `null` until a board is specifically hydrated.
+
+Deployment:
+- Production touched: yes.
+- Git main deployed: `6f16a8c`.
+- Backup before upload: `C:\PandaDashboard\backups\strategy-live-zt-count-20260709-101754`.
+- Uploaded `kpl-stats-server.js`.
+- Restarted `PandaDashboard-KPL-Server`; current listener process is `7944`.
+- Did not restart Caddy or `Panda Yule Server`.
+
+Notes for next agent:
+- The remaining limitation is intentional for now: `/api/strategy/today` returns many ranking-only boards, and only displayed/focused/mainline-candidate boards should be hydrated because hydrating every board would be too slow during trading.
+- If a specific searched board needs exact intraday `ztCount`, add a lazy board-metric endpoint or hydrate selected search results, not all 800+ live ranking rows.
