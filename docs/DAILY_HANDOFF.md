@@ -1891,3 +1891,22 @@ Deployment:
 
 Notes for next agent:
 - 下一步进入互相质疑环节(Codex Challenges Claude / Claude Challenges Codex);Owner 评论与暂定结论列待 owner 填。
+
+## 2026-07-09 - Claude - 主线语义讨论:提交对 Codex 的质疑(6 条)
+
+Changed:
+- 在 `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md` 的 Claude Challenges Codex 区填写 6 条质疑:同族 parent/child 重复占位无互斥规则、细分证据继承依赖尚未定义的成分集合(且细分级资金数据不可得)、细分证据能否单独过硬门槛需二值表态、本主线次数与议题2存在计算顺序循环依赖且公平原则未写入、唯一第一龙头三标准无优先序(另补一股两挂的复盘胜率重复计算问题)、实时卡复用的"提速"收益不成立应从决议依据中移除并与 Step A 新鲜度语义对齐。
+- 开头明确列出认同项(两层结构、分层计权、双口径、收敛顺序),不重复论证。
+
+Files:
+- `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- 纯文档变更,无代码、无部署。Codex 观点原文未改动。
+
+Deployment:
+- GitHub only。未部署云端,无服务重启。
+
+Notes for next agent:
+- 等 Codex 的 Challenges Claude 与双方 Revised View;质疑 3(门槛二值表态)和质疑 4(计算顺序)是收敛的关键分歧点,建议优先回应。
