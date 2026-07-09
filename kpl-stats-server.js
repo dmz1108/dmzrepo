@@ -490,7 +490,7 @@ function send(res, status, data) {
       'Content-Type': 'application/json; charset=utf-8',
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-      'Access-Control-Allow-Headers': 'x-api-key,x-admin-token,x-site-sync-token,content-type',
+      'Access-Control-Allow-Headers': 'x-api-key,x-admin-token,x-site-sync-token,x-ai-read-token,authorization,content-type',
   });
   res.end(body);
 }
@@ -22897,6 +22897,285 @@ async function getStrategyMainlines(day) {
   };
 }
 
+async function readAiReadOnlyToken() {
+  const envToken = String(process.env.PANDA_AI_READONLY_TOKEN || process.env.PANDA_AI_STRATEGY_TOKEN || '').trim();
+  if (envToken) return envToken;
+  try {
+    const payload = JSON.parse(await fs.readFile(RUNTIME_CONFIG_PATH, 'utf8'));
+    return String(payload.aiReadOnlyToken || payload.aiStrategyToken || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+async function validateAiReadOnlyRequest(url, req) {
+  const configured = await readAiReadOnlyToken();
+  if (!configured) return { ok: false, status: 503, error: 'ai read-only token not configured' };
+  const bearer = String(req?.headers?.authorization || '').replace(/^Bearer\s+/i, '').trim();
+  const provided = String(url.searchParams.get('token') || req?.headers?.['x-ai-read-token'] || bearer || '').trim();
+  if (!secureEqualText(provided, configured)) return { ok: false, status: 403, error: 'invalid ai read-only token' };
+  return { ok: true };
+}
+
+function aiNum(value, digits = 2) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Number(n.toFixed(digits)) : null;
+}
+
+function aiCompactBoard(board) {
+  if (!board) return null;
+  return {
+    plateId: String(board.plateId || ''),
+    name: String(board.name || ''),
+    zsType: board.zsType ?? null,
+    gainPct: aiNum(board.gainPct),
+    ztCount: aiNum(board.ztCount, 0),
+    netInflow: aiNum(board.netInflow, 0),
+    qiLeaders: board.qiLeaders || null,
+  };
+}
+
+function aiCompactStock(stock) {
+  if (!stock) return null;
+  return {
+    code: normalizeReasonSourceCode(stock.code),
+    name: String(stock.name || ''),
+    gain: aiNum(stock.gain ?? stock.gainPct ?? stock.todayGain),
+    gain10: aiNum(stock.gain10),
+    gain30: aiNum(stock.gain30),
+    zt10: aiNum(stock.zt10, 0),
+    zt30: aiNum(stock.zt30, 0),
+    limitUpCount: aiNum(stock.limitUpCount ?? stock.lianban, 0),
+    firstLimitTime: stock.firstLimitTime || '',
+    sealAmount: aiNum(stock.sealAmount, 0),
+    finalBoardTopic: stock.finalBoardTopic || stock.mainTopic || '',
+    finalDetailReason: stock.finalDetailReason || stock.detail || stock.latestDetail || stock.reason || '',
+  };
+}
+
+function aiCompactMainline(mainline) {
+  if (!mainline) return null;
+  return {
+    rank: Number(mainline.rank || 0),
+    theme: String(mainline.theme || ''),
+    key: String(mainline.familyKey || mainline.key || ''),
+    score: aiNum(mainline.score, 1),
+    predictScore: aiNum(mainline.predictScore, 1),
+    count: aiNum(mainline.count, 0),
+    bigGainCount: aiNum(mainline.bigGainCount, 0),
+    nearLimitCount: aiNum(mainline.nearLimitCount, 0),
+    priorReasonCount: aiNum(mainline.priorReasonCount, 0),
+    boardCount: aiNum(mainline.boardCount, 0),
+    netInflow: aiNum(mainline.netInflow, 0),
+    netInflowBoard: mainline.netInflowBoard || '',
+    boardGainPct: aiNum(mainline.boardGainPct),
+    boardGainName: mainline.boardGainName || '',
+    explain: mainline.explain || '',
+    stage: mainline.stage || null,
+    certainty: mainline.certainty || null,
+    scoreParts: mainline.scoreParts || {},
+    mainLeader: aiCompactStock(mainline.mainLeader),
+    leaders: (mainline.leaders || []).slice(0, 8).map(aiCompactStock).filter(Boolean),
+    topGainStocks: (mainline.topGainStocks || []).slice(0, 8).map(aiCompactStock).filter(Boolean),
+    risingStocks: (mainline.risingStocks || []).slice(0, 12).map(aiCompactStock).filter(Boolean),
+    nearLimitStocks: (mainline.nearLimitStocks || []).slice(0, 12).map(aiCompactStock).filter(Boolean),
+    resonanceBoards: (mainline.resonanceBoards || []).slice(0, 8).map(board => ({
+      name: String(board.name || ''),
+      plateId: String(board.plateId || ''),
+      zsType: board.zsType ?? null,
+      ztCount: aiNum(board.ztCount, 0),
+      gainPct: aiNum(board.gainPct),
+      netInflow: aiNum(board.netInflow, 0),
+      bigGainCount: aiNum(board.bigGainCount, 0),
+      nearLimitCount: aiNum(board.nearLimitCount, 0),
+      breadth: board.breadth || null,
+    })),
+    warnings: [
+      ...((mainline.resonanceBoards || []).some(board => board.ztCount == null) ? ['some resonance board ztCount is unknown/null'] : []),
+      ...(Number(mainline.netInflow) < 0 ? ['negative net inflow'] : []),
+    ],
+  };
+}
+
+function aiReviewSourceSummary(payload) {
+  const tabs = Array.isArray(payload?.tabs) ? payload.tabs : [];
+  return tabs.filter(tab => tab.key !== 'final').map(tab => ({
+    key: tab.key,
+    label: tab.label || tab.name || tab.key,
+    count: Number(tab.count || tab.rows?.length || 0),
+    topics: (tab.topics || []).slice(0, 20),
+  }));
+}
+
+function aiFinalReviewRows(payload, limit = 160) {
+  const finalTab = (payload?.tabs || []).find(tab => tab.key === 'final') || {};
+  return (finalTab.rows || [])
+    .filter(row => !isExcludedFromReview(row?.code, row?.name))
+    .slice(0, limit)
+    .map(row => ({
+      code: normalizeReasonSourceCode(row.code),
+      name: String(row.name || ''),
+      finalBoardTopic: row.finalBoardTopic || '',
+      finalDetailReason: row.finalDetailReason || row.reasonHeadline || '',
+      consensusTier: row.consensusTier || '',
+      agreeCount: Number(row.agreeCount || 0),
+      limitUpCount: row.limitUpCount || '',
+      firstLimitTime: row.firstLimitTime || '',
+      eventReason: row.eventReason || '',
+    }));
+}
+
+function aiReviewArtifactStatus(status) {
+  return {
+    group: status?.group || '',
+    label: status?.label || reviewSourceLabel(status?.group || ''),
+    ok: !!status?.ok,
+    exists: !!status?.exists,
+    count: Number(status?.count || 0),
+    savedAt: status?.savedAt || '',
+    source: status?.source || '',
+    outdated: !!status?.outdated,
+    error: status?.error || '',
+  };
+}
+
+function aiWarnings({ mainlines, realtimeBoards, reviewArtifacts, strategyPayload }) {
+  const warnings = [];
+  if (!strategyPayload?.ok) warnings.push(`strategy mainline not ready: ${strategyPayload?.reason || strategyPayload?.error || 'unknown'}`);
+  if ((mainlines || []).some(line => /医|药|医疗|创新药/.test(String(line.theme || '')))) warnings.push('medicine-related theme appears in mainline ranking; verify if this is market-driven');
+  const nullZtBoards = (realtimeBoards || []).filter(board => board.ztCount == null).length;
+  if (nullZtBoards) warnings.push(`${nullZtBoards} realtime boards have unknown ztCount`);
+  if (reviewArtifacts?.missingLabels?.length) warnings.push(`review source missing: ${reviewArtifacts.missingLabels.join(', ')}`);
+  return warnings;
+}
+
+async function buildAiStrategyLivePayload(url) {
+  const requestedDay = isoFromCompactDate(url.searchParams.get('day') || chinaNowParts().day);
+  const reviewDayParam = url.searchParams.get('reviewDay') || '';
+  const maxRows = Math.max(40, Math.min(300, Number(url.searchParams.get('limit') || 160)));
+  const now = chinaNowParts();
+  const isToday = requestedDay === isoFromCompactDate(now.day);
+  const marketStatus = chinaMarketDayStatus(requestedDay);
+  const sessionPhase = isToday ? strategyMainlineSessionPhase(now) : '';
+  const apiKey = await readSavedApiKey().catch(() => '');
+  const reviewDay = reviewDayParam
+    ? isoFromCompactDate(reviewDayParam)
+    : await resolveMainReasonStatusDay(requestedDay, apiKey).catch(() => requestedDay);
+
+  const [strategyPayload, realtimeBoardsRaw, reviewBundle, reviewArtifacts, hotThemes, resonance, l2Status, closeDb] = await Promise.all([
+    strategyMainlineWithTimeout(getStrategyMainlines(requestedDay), 15000, { ok: false, reason: 'strategy-mainline-timeout', mainlines: [] }),
+    strategyMainlineWithTimeout(getStrategyBoardsForDay(requestedDay, { allowFallback: false, liveIfMissing: true, liveRankCount: 160 }), 10000, []),
+    strategyMainlineWithTimeout(buildDaySourceViewWithConsensus(reviewDay), 12000, null),
+    strategyMainlineWithTimeout(summarizeRequiredReviewSourceArtifacts(reviewDay), 5000, null),
+    strategyMainlineWithTimeout(buildLimitUpMainReasonHotThemesData(reviewDay), 8000, null),
+    strategyMainlineWithTimeout(getStrategyStrongResonance(requestedDay), 8000, null),
+    Promise.resolve().then(() => (typeof localL2TaskQueue?.status === 'function' ? localL2TaskQueue.status() : null)).catch(() => null),
+    readEastmoneyCloseDbDay(requestedDay).catch(() => null),
+  ]);
+
+  const realtimeBoards = (Array.isArray(realtimeBoardsRaw) ? realtimeBoardsRaw : []).map(aiCompactBoard).filter(Boolean);
+  const byGain = realtimeBoards.filter(board => board.gainPct != null)
+    .sort((a, b) => Number(b.gainPct) - Number(a.gainPct)).slice(0, 30);
+  const byInflow = realtimeBoards.filter(board => board.netInflow != null)
+    .sort((a, b) => Number(b.netInflow) - Number(a.netInflow)).slice(0, 30);
+  const byZt = realtimeBoards.filter(board => board.ztCount != null)
+    .sort((a, b) => Number(b.ztCount) - Number(a.ztCount)).slice(0, 30);
+  const mainlines = (strategyPayload?.mainlines || []).map(aiCompactMainline).filter(Boolean);
+  const reviewPayload = reviewBundle?.payload || null;
+  const mainReasonDb = reviewBundle?.dbPayload || await readLimitUpMainReasonDbDay(reviewDay).catch(() => null);
+  const sourceStats = aiReviewSourceSummary(reviewPayload);
+  const finalRows = aiFinalReviewRows(reviewPayload, maxRows);
+
+  return {
+    ok: true,
+    access: 'ai-read-only',
+    generatedAt: new Date().toISOString(),
+    beijingNow: now,
+    day: requestedDay,
+    reviewDay,
+    limits: {
+      finalReviewRows: maxRows,
+      realtimeBoardsPerList: 30,
+      mainlineLeadersPerTheme: 8,
+    },
+    market: {
+      isToday,
+      isTradingDay: !!marketStatus.isTradingDay,
+      marketClosed: !!marketStatus.marketClosed,
+      marketClosedReason: marketStatus.marketClosedReason || '',
+      marketClosedLabel: marketStatus.marketClosedLabel || '',
+      sessionPhase,
+    },
+    realtime: {
+      boardCount: realtimeBoards.length,
+      gainLeaders: byGain,
+      inflowLeaders: byInflow,
+      limitUpLeaders: byZt,
+      unknownZtCount: realtimeBoards.filter(board => board.ztCount == null).length,
+      closeDb: {
+        count: Number(closeDb?.count || closeDb?.stocks?.length || 0),
+        savedAt: closeDb?.savedAt || '',
+        source: closeDb?.source || '',
+      },
+    },
+    review: {
+      db: {
+        day: reviewDay,
+        count: Number(mainReasonDb?.count || mainReasonDb?.stocks?.length || 0),
+        savedAt: mainReasonDb?.savedAt || '',
+        ruleVersion: mainReasonDb?.ruleVersion || '',
+      },
+      requiredSources: (reviewArtifacts?.required || []).map(aiReviewArtifactStatus),
+      missingSources: reviewArtifacts?.missing || [],
+      missingSourceLabels: reviewArtifacts?.missingLabels || [],
+      sourceStats,
+      sourceErrors: reviewPayload?.sourceErrors || [],
+      hotThemes: (hotThemes?.themes || []).slice(0, 20),
+      finalRows,
+      finalRowCountReturned: finalRows.length,
+      finalRowCountTotal: Number((reviewPayload?.tabs || []).find(tab => tab.key === 'final')?.count || finalRows.length),
+    },
+    strategy: {
+      ok: !!strategyPayload?.ok,
+      reason: strategyPayload?.reason || '',
+      message: strategyPayload?.message || '',
+      mode: strategyPayload?.mode || '',
+      basis: strategyPayload?.basis || '',
+      cacheState: strategyPayload?.cacheState || '',
+      refreshState: strategyPayload?.refreshState || '',
+      sessionPhase: strategyPayload?.sessionPhase || sessionPhase,
+      confirmedMainline: strategyPayload?.confirmedMainline || null,
+      count: mainlines.length,
+      stockCount: Number(strategyPayload?.stockCount || 0),
+      mainlines,
+      strongResonance: resonance ? {
+        day: resonance.day,
+        strongCount: Number(resonance.strongCount || 0),
+        boards: (resonance.boards || []).slice(0, 20),
+      } : null,
+      l2: l2Status ? {
+        available: !!l2Status.available,
+        configured: !!l2Status.configured,
+        workerOnline: !!l2Status.workerOnline,
+        pending: Number(l2Status.pending || 0),
+        totalJobs: Number(l2Status.totalJobs || 0),
+        mode: l2Status.mode || '',
+        note: l2Status.note || '',
+      } : null,
+    },
+    warnings: aiWarnings({ mainlines, realtimeBoards, reviewArtifacts, strategyPayload }),
+    promptHint: 'Use this read-only payload to evaluate whether the intraday mainline ranking is reasonable. Focus on realtime board strength, capital inflow, big-gainer/near-limit constituents, historical review reasons, source coverage, and misplaced themes.',
+  };
+}
+
+async function aiStrategyLiveApi(url, req, res) {
+  if (req.method !== 'GET') return send(res, 405, { ok: false, error: 'method not allowed' });
+  const auth = await validateAiReadOnlyRequest(url, req);
+  if (!auth.ok) return send(res, auth.status, { ok: false, error: auth.error });
+  const payload = await buildAiStrategyLivePayload(url);
+  return send(res, 200, payload);
+}
+
 // 反向关节(stock 视角，**主因口径**):个股「💪强势」标的正确含义=该股综合归纳出的「唯一主因」
 // 恰是当日某个强势板块的 dominantTheme。这样 13 板块归属被综合归纳收敛成 1 个主因后只问一次。
 // dominantTheme 与共振榜同口径:只认板块名称与最终主因同题材,且至少2只成员股坐实。硬闸:涨停≥2 且 净流入>0、排永久隐藏。
@@ -23156,6 +23435,7 @@ const server = http.createServer(async (req, res) => {
       if (vendorFontFile) return await sendStatic(req, res, vendorFontFile);
     }
     if (url.pathname === '/health') return send(res, 200, { ok: true });
+    if (url.pathname === '/api/ai/strategy-live') return await aiStrategyLiveApi(url, req, res);
     if (url.pathname === '/api/admin/login') return await adminLogin(url, req, res);
     if (url.pathname === '/api/admin/status') return await adminStatus(url, req, res);
     if (url.pathname === '/api/admin/cloud-health') return await adminCloudHealth(url, req, res);
