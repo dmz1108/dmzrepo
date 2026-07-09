@@ -1718,3 +1718,33 @@ Deployment:
 Notes for next agent:
 - Future Git discussion files should be written in Chinese by default.
 - When starting a discussion, create the question/context first and leave independent-agent answer sections empty until the owner says to begin independent answers.
+
+## 2026-07-09 - Codex - 固化 TGB 湖南人每日复盘 SOP 并补录 7.9
+
+Changed:
+- Added a fixed daily SOP for manually handling `@TGB湖南人` recaps so future runs do not rediscover the method or accidentally use the wrong image.
+- The SOP explicitly requires the official white `@TGB湖南人` table image, excludes 同花顺红色数据可视化图、回帖图、二维码、广告图、炸板区, and requires count/missing/extra/duplicate validation before writing the formal source file.
+- Forced the cloud TGB evidence refresh for `2026-07-09`; raw article/image evidence was saved from `https://www.tgb.cn/a/2ti94HvHhhA`.
+- Qwen OCR/vision was configured but failed with provider `Arrearage`, so the formal file was manually transcribed from the official image `image-01-06.png`.
+- Uploaded the formal TGB source file for `2026-07-09` and rebuilt the multi-source main-reason DB.
+
+Files:
+- `docs/ops/TGB_HUNAN_DAILY_SOP.md`
+- `docs/DAILY_HANDOFF.md`
+- Runtime only on cloud: `C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-07-09.json`
+
+Validated:
+- Local structured file validation passed: declared total `74`, baseline count `74`, missing `0`, extra `0`, duplicates `0`, weak rows `0`.
+- TGB board counts from the official image: 半导体 `19`, 长鑫科技 `13`, AI硬件 `10`, 业绩 `8`, PCB `6`, 机器人 `6`, 其他热点 `6`, 其他个股 `6`.
+- Public source-view after upload shows `2026-07-09`: 综合归纳 `74`, 复盘啦 `74`, 选股宝 `74`, 韭研 `74`, 淘股吧 `74`.
+
+Deployment:
+- Production touched: yes, runtime data only.
+- No application code was deployed.
+- No service restart was required.
+- Cloud operation log appended to `C:\PandaDashboard\_cloud-change-log-20260705.md`.
+
+Notes for next agent:
+- For future “湖南人复盘” requests, read `docs/ops/TGB_HUNAN_DAILY_SOP.md` first.
+- Do not select TGB images by file size; the larger red 同花顺 image is not the TGB source.
+- If the admin health panel still shows a missing TGB source while source-view shows TGB rows, investigate the health endpoint/cache/口径, not the formal TGB file first.
