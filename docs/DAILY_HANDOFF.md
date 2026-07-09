@@ -1320,3 +1320,40 @@ Deployment:
 Notes for next agent:
 - The remaining limitation is intentional for now: `/api/strategy/today` returns many ranking-only boards, and only displayed/focused/mainline-candidate boards should be hydrated because hydrating every board would be too slow during trading.
 - If a specific searched board needs exact intraday `ztCount`, add a lazy board-metric endpoint or hydrate selected search results, not all 800+ live ranking rows.
+
+## 2026-07-09 - Codex - Make live strategy mainlines responsive
+
+Changed:
+- Follow-up to the live strategy count fix: bounded 今日主线榜 live hydration and rising-stock scans so the page does not wait on every candidate board.
+- Parallelized the live board-source pass for 东财/同花顺/KPL ranking data when no same-day snapshot exists.
+- Kept unknown intraday board limit-up counts as `null` in mainline cards instead of turning them into false `0`.
+- Added short memory/file caching for today's live mainline payload and a non-blocking refresh path: the API can return a recent cached result or a clear `strategy-mainline-preparing` state while the server refreshes in the background.
+- No changes to review-source collection policy, TGB/韭研/复盘啦/选股宝 data, auth, homepage, Caddy, or Stanning/Yule.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`.
+- Public `https://market.dreamerqi.com/health` returned `ok:true`.
+- Public `https://market.dreamerqi.com/api/strategy/today?day=2026-07-09` no longer reports fake `ztCount: 0` for unhydrated 医药-related ranking boards; those fields are `null`.
+- Public `https://market.dreamerqi.com/api/strategy-mainlines?day=2026-07-09` now returns from live cache in about 0.07s after refresh.
+- Latest observed 2026-07-09 mainline cache: `count: 7`, top mainline `半导体`, `hasMedicine: false`; example board counts include `先进封装 zt: 8`, `存储芯片 zt: 3`, and unknown catalog-only boards as `zt: null`.
+
+Deployment:
+- Production touched: yes.
+- Git main deployed through `156056a`.
+- Backups before upload:
+  - `C:\PandaDashboard\backups\strategy-mainline-hydrate-bound-20260709-102641`
+  - `C:\PandaDashboard\backups\strategy-mainline-live-speed-20260709-103501`
+  - `C:\PandaDashboard\backups\strategy-mainline-live-cache-20260709-103804`
+  - `C:\PandaDashboard\backups\strategy-mainline-nonblocking-20260709-104034`
+- Uploaded `kpl-stats-server.js`.
+- Restarted `PandaDashboard-KPL-Server`; current listener process is `11744`.
+- Did not restart Caddy or `Panda Yule Server`.
+
+Notes for next agent:
+- 今日主线榜 is intentionally predictive during the session. Its `count` is the unique stock-code count collected into the mainline family, not the simple sum of the visible board chips.
+- Runtime live cache file `C:\PandaDashboard\strategy-data\mainline-live-cache-2026-07-09.json` is production data and is not committed to Git.
+- If the user wants exact `ztCount` for a searched board outside the mainline candidate pool, add selected-board lazy hydration instead of hydrating all ranking boards.
