@@ -1809,3 +1809,23 @@ Deployment:
 Notes for next agent:
 - 合并 PR #10 后云端只需部署 `kpl-stats-server.js` 并重启主服务;保温心跳会在服务启动 15 秒后自动预热一次。
 - CLI 模式下保温不会启动,属预期行为。
+
+## 2026-07-09 - Claude - 开主线语义议题集讨论文档(仅列议题,未写观点)
+
+Changed:
+- 新建 `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md`,集中列出 6 个待讨论的语义议题:主线族边界归并、主线粒度切换现象(owner 案例:半导体→存储芯片)、个股细分原因是否算主因门槛、龙头 10 日涨停次数口径、一股双主线、复用实时卡片成分股统计分析龙头。
+- 按 owner 要求只列议题、现状事实与口径差异,所有 agent 观点区留 Pending,待各自独立填写。
+
+Files:
+- `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- 纯文档变更,无代码。确认无 secrets/runtime 数据。
+
+Deployment:
+- GitHub only。未部署云端,无服务重启。
+
+Notes for next agent:
+- Codex / Company Codex 请在该文档各自的 Independent View 区写独立观点(先不看对方的),之后进入互相质疑与修正阶段;owner 批准 Shared Decision 前不动代码。
+- 议题 2 的 owner 案例是第一手证据,讨论时按协议作为 case 对待,不作为可忽略的偏好。
