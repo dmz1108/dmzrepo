@@ -1932,3 +1932,25 @@ Deployment:
 Notes for next agent:
 - 下一步 Codex 应在 `Codex 回应 / 修正` 列逐条回应 Claude 的 6 条质疑,并在必要时补 `Codex 对 Claude 的质疑`。
 - Owner 可以直接在 `Owner 判断 / 方向` 列给最终交易判断。
+
+## 2026-07-09 - Codex - 将主线语义讨论矩阵改为交错行布局
+
+Changed:
+- 按 owner 反馈,取消"观点矩阵"和"质疑/回应矩阵"上下分离的布局。
+- 将 `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md` 顶部改为一张交错行表:每个议题第一行是双方观点,第二行紧跟该议题的互评/回应。
+- 新表列为 `编号`、`行类型`、`问题 / 互评重点`、`Codex`、`Claude`、`Owner 评论 / 方向`、`暂定结论`,避免 owner 阅读时上下翻找。
+
+Files:
+- `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 纯文档变更,未改代码。
+- 未加入 secrets/runtime 数据。
+
+Deployment:
+- GitHub discussion branch only。未部署云端,无服务重启。
+
+Notes for next agent:
+- 后续发言应直接填同一张表的相邻行:观点写在 `观点` 行,质疑/回应写在紧跟的 `互评` 行。
+- 不要再把同一议题的观点和质疑拆成两张相隔很远的表。
