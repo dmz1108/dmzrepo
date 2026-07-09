@@ -1227,3 +1227,28 @@ Deployment:
 Notes for next agent:
 - The font bundle is now the shared source for homepage, market, and Stanning pages. Do not reintroduce Google Fonts runtime links unless explicitly requested.
 - `Qi/build-home.js` may still use network resources at build time; this task only removed runtime font dependencies.
+
+## 2026-07-09 - Codex - Animate market header Qi logo spark
+
+Changed:
+- Fixed the market page top-left Qi logo spark so it uses SVG native `animateMotion` instead of relying only on CSS `offset-path`.
+- The change affects the shared market header, so it applies across 今日实时, 涨停复盘, and 今日策略.
+- No strategy logic, data APIs, source policy, auth, or page layout was changed.
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Frontend inline script compilation check for `kpl-dashboard_17_apple.html`.
+- Public `https://market.dreamerqi.com/kpl` contains `qi-spark-svg-motion`, `animateMotion`, and `keyPoints` for the top-left Qi logo spark.
+
+Deployment:
+- Production touched: yes.
+- Git main deployed: `432e781`.
+- Backup before upload: `C:\PandaDashboard\backups\market-logo-motion-20260709-081317`.
+- Uploaded `kpl-dashboard_17_apple.html` only.
+- No service restart needed or performed.
+
+Notes for next agent:
+- Homepage logo still uses the CSS offset-path implementation. Market header now uses SVG native motion because it is more reliable inside the larger dashboard stylesheet.
