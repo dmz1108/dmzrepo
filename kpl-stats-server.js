@@ -4677,12 +4677,21 @@ function normalizeLimitUpRow(row, day) {
   };
 }
 
-async function readLimitUpDbDay(day) {
+const limitUpDbDayTimedCache = new Map();
+async function readLimitUpDbDay(day, options = {}) {
+  const key = String(day || '');
+  const timed = options.force ? null : limitUpDbDayTimedCache.get(key);
+  if (timed && Date.now() - timed.at < 60 * 1000) return timed.payload;
   try {
     const body = await fs.readFile(limitUpDbPath(day), 'utf8');
-    return JSON.parse(body);
+    const payload = JSON.parse(body);
+    limitUpDbDayTimedCache.set(key, { at: Date.now(), payload });
+    return payload;
   } catch (err) {
-    if (err.code === 'ENOENT') return null;
+    if (err.code === 'ENOENT') {
+      limitUpDbDayTimedCache.set(key, { at: Date.now(), payload: null });
+      return null;
+    }
     throw err;
   }
 }
@@ -4731,6 +4740,7 @@ async function writeLimitUpDbDay(day, stocks, source = 'kpl') {
     stocks: unique,
   };
   await fs.writeFile(limitUpDbPath(day), JSON.stringify(payload, null, 2), 'utf8');
+  limitUpDbDayTimedCache.set(String(day || ''), { at: Date.now(), payload });  // 写后即更新读缓存,避免 60s 陈化
   return payload;
 }
 
@@ -5321,7 +5331,8 @@ async function getMainReasonStalenessCheck(url, req, res) {
 
 async function getLimitUpMainReasonDbDay(url, req, res) {
   const day = url.searchParams.get('day') || chinaNowParts().day;
-  const payload = await readLimitUpMainReasonDbDay(day);
+  const force = url.searchParams.get('force') === '1' || url.searchParams.get('force') === 'true';
+  const payload = await readLimitUpMainReasonDbDay(day, { force });
   if (!payload) {
     return send(res, 200, {
       ok: false,
@@ -6449,7 +6460,7 @@ function recomputeReviewSourceStatsFromTabs(payload) {
 async function buildDaySourceViewWithConsensus(day, opts = {}) {
   const isoDay = isoFromCompactDate(day);
   const { evidence } = await ensureLimitUpMainReasonEvidenceAndQualityDay(day, { force: !!opts.force });
-  const dbPayload = await readLimitUpMainReasonDbDay(day).catch(() => null);
+  const dbPayload = await readLimitUpMainReasonDbDay(day, { force: !!opts.force }).catch(() => null);
   const baseEvidence = evidence?.stocks?.length ? evidence : {
     day: isoDay,
     stocks: [],
@@ -17715,15 +17726,25 @@ function applyMainReasonOverridesToPayload(payload, overrides) {
   }
   return payload;
 }
-async function readLimitUpMainReasonDbDay(day) {
+// 日文件短 TTL 缓存:主线榜冷构建要连读 ~50 个日文件(30日主因回溯+10日龙头指标+10日池子补全),
+// 历史日文件几乎不变,重复 读盘+解析+套override 是纯浪费;60s TTL 保证管理员改主因也能及时可见。
+const mainReasonDbDayTimedCache = new Map();
+const DAY_FILE_CACHE_TTL_MS = 60 * 1000;
+async function readLimitUpMainReasonDbDay(day, options = {}) {
   const isoDay = isoFromCompactDate(day);
+  const timed = options.force ? null : mainReasonDbDayTimedCache.get(isoDay);
+  if (timed && Date.now() - timed.at < DAY_FILE_CACHE_TTL_MS) return timed.payload;
   try {
     const payload = JSON.parse(await fs.readFile(limitUpMainReasonDbPath(isoDay), 'utf8'));
     applyMainReasonOverridesToPayload(payload, await readMainReasonOverrides(isoDay));
     mainReasonDbCache.set(isoDay, payload);
+    mainReasonDbDayTimedCache.set(isoDay, { at: Date.now(), payload });
     return payload;
   } catch (err) {
-    if (err.code === 'ENOENT') return null;
+    if (err.code === 'ENOENT') {
+      mainReasonDbDayTimedCache.set(isoDay, { at: Date.now(), payload: null });
+      return null;
+    }
     throw err;
   }
 }
@@ -18144,7 +18165,7 @@ async function ensureLimitUpMainReasonEvidenceAndQualityDay(day, options = {}) {
     ]);
     if (evidence && quality) return { evidence, quality };
   }
-  const payload = await readLimitUpMainReasonDbDay(isoDay);
+  const payload = await readLimitUpMainReasonDbDay(isoDay, { force: !!options.force });
   if (!payload?.stocks?.length) return { evidence: null, quality: null };
   const autoPayload = options.force
     ? await ensureLimitUpMainReasonAutoSourceDay(isoDay, payload.stocks || [], { force: true })
@@ -18372,6 +18393,7 @@ async function writeLimitUpMainReasonDbDay(day, rows, source = 'kpl/zt_reason') 
     stocks: unique,
   };
   await fs.writeFile(limitUpMainReasonDbPath(isoDay), JSON.stringify(payload, null, 2), 'utf8');
+  mainReasonDbDayTimedCache.delete(isoDay);  // 删除而非覆盖:读取路径还要套 override,交给下次读重建
   await writeLimitUpMainReasonEvidenceAndQuality(isoDay, payload, autoPayload);
   applyMainReasonOverridesToPayload(payload, await readMainReasonOverrides(isoDay));
   mainReasonDbCache.set(isoDay, payload);
@@ -18714,6 +18736,7 @@ async function setLimitUpMainReasonOverride(url, req, res) {
   await fs.mkdir(LIMIT_UP_MAIN_REASON_OVERRIDE_DIR, { recursive: true });
   await fs.writeFile(mainReasonOverridePath(isoDay), JSON.stringify(overrides, null, 2), 'utf8');
   mainReasonDbCache.delete(isoDay);
+  mainReasonDbDayTimedCache.delete(isoDay);
   return send(res, 200, { ok: true, day: isoDay, code, boardTopic, removed });
 }
 
@@ -21886,6 +21909,12 @@ function strategyMainlineAttachResponseMeta(payload, options = {}) {
     cacheState: options.cacheState || base.cacheState || '',
     refreshState: options.refreshState ?? base.refreshState ?? '',
     quality: base.quality || strategyMainlineQuality(base),
+    keepWarm: {
+      lastTickAt: strategyMainlineWarmState.lastTickAt,
+      lastResult: strategyMainlineWarmState.lastResult,
+      consecutiveFailures: strategyMainlineWarmState.consecutiveFailures,
+      currentDelayMs: strategyMainlineWarmState.currentDelayMs,
+    },
   };
 }
 async function readMainlineConfirm(day) {
@@ -21961,6 +21990,64 @@ async function buildStrategyMainlinesLiveAndCache(day, options = {}) {
   }
   return live;
 }
+// 主线榜保温:交易时段每 2.5 分钟后台自动刷新缓存,任何用户打开都是秒出,
+// 不再由"第一个访问者"垫背等待冷构建。startStrategyMainlineRefresh 自带同日去重,重入安全。
+const STRATEGY_MAINLINE_KEEP_WARM_MS = 150 * 1000;
+const STRATEGY_MAINLINE_KEEP_WARM_MAX_MS = 15 * 60 * 1000;
+// Step B 契约护栏(讨论帖共识):失败退避×2(150s→300s→…→15min,成功复位)保护外部数据源;
+// 可观测状态随主线榜响应输出(keepWarm 字段);无效时段跳过;同日刷新去重由 startStrategyMainlineRefresh 保证。
+const strategyMainlineWarmState = {
+  lastTickAt: '', lastResult: '', consecutiveFailures: 0,
+  currentDelayMs: STRATEGY_MAINLINE_KEEP_WARM_MS,
+};
+function strategyMainlineScheduleWarm(delayMs) {
+  strategyMainlineWarmState.currentDelayMs = delayMs;
+  setTimeout(strategyMainlineKeepWarmTick, delayMs).unref?.();
+}
+function strategyMainlineKeepWarmTick() {
+  try {
+    const now = chinaNowParts();
+    const today = isoFromCompactDate(now.day);
+    const phase = strategyMainlineSessionPhase(now);
+    strategyMainlineWarmState.lastTickAt = new Date().toISOString();
+    if (!chinaMarketDayStatus(today).isTradingDay || !['早盘', '上午盘', '午后', '尾盘'].includes(phase)) {
+      strategyMainlineWarmState.lastResult = 'skipped-off-session';
+      strategyMainlineScheduleWarm(STRATEGY_MAINLINE_KEEP_WARM_MS);
+      return;
+    }
+    Promise.resolve(startStrategyMainlineRefresh(today, { writePredict: true }))
+      .then(payload => {
+        const ok = !!(payload?.ok && Array.isArray(payload.mainlines) && payload.mainlines.length);
+        if (ok) {
+          strategyMainlineWarmState.lastResult = 'ok';
+          strategyMainlineWarmState.consecutiveFailures = 0;
+          strategyMainlineScheduleWarm(STRATEGY_MAINLINE_KEEP_WARM_MS);
+        } else {
+          strategyMainlineWarmState.lastResult = `not-ready:${payload?.reason || 'unknown'}`;
+          strategyMainlineWarmState.consecutiveFailures += 1;
+          strategyMainlineScheduleWarm(Math.min(
+            STRATEGY_MAINLINE_KEEP_WARM_MAX_MS,
+            STRATEGY_MAINLINE_KEEP_WARM_MS * Math.pow(2, strategyMainlineWarmState.consecutiveFailures)
+          ));
+        }
+      })
+      .catch(err => {
+        strategyMainlineWarmState.lastResult = `error:${String(err?.message || err).slice(0, 80)}`;
+        strategyMainlineWarmState.consecutiveFailures += 1;
+        strategyMainlineScheduleWarm(Math.min(
+          STRATEGY_MAINLINE_KEEP_WARM_MAX_MS,
+          STRATEGY_MAINLINE_KEEP_WARM_MS * Math.pow(2, strategyMainlineWarmState.consecutiveFailures)
+        ));
+      });
+  } catch {
+    strategyMainlineScheduleWarm(STRATEGY_MAINLINE_KEEP_WARM_MS);
+  }
+}
+// 只在服务进程里启动(server.listen 分支调用);CLI 任务(--main-reason-backfill 等)不该跑保温
+function startStrategyMainlineKeepWarm() {
+  setTimeout(strategyMainlineKeepWarmTick, 15 * 1000).unref?.();  // 启动 15 秒后先预热一次(重启后不冷场)
+}
+
 function startStrategyMainlineRefresh(day, options = {}) {
   const isoDay = isoFromCompactDate(day);
   const existing = strategyMainlineRefreshJobs.get(isoDay);
@@ -23972,6 +24059,7 @@ if (process.argv.includes('--refresh-zt10')) {
   }
   scheduleDailyAutoCleanup();
   strategy.startCron();
+  startStrategyMainlineKeepWarm();
 
   setInterval(() => {
     runAutoCloseDbBackfillIfDue().catch(err => {

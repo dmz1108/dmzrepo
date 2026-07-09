@@ -622,6 +622,7 @@ Deployment:
 
 Notes for next agent:
 - The cloud server still needs a deliberate deploy after Claude/Codex review. Current production may not yet include the merged `main` strategy enhancements.
+
 ## 2026-07-08 - Claude - 策略页视觉打磨（本地真实渲染验证）
 
 Changed:
@@ -1059,6 +1060,7 @@ Notes for next agent:
 - Keep Explore focused on city new shops and places. Do not turn it into a generic tourism guide.
 - User explicitly does not want a map surface here; use address, phone, business area, and practical trip-planning fields instead.
 - Detail modal should not re-add an `信息来源` card unless the user asks for it.
+
 ## 2026-07-08 - Claude - PR #6 与 main 最终同步（含 Explore 工作保全）
 
 Changed:
@@ -1615,6 +1617,17 @@ Notes for next agent:
 - For important strategy work, especially 今日主线榜, start or update a discussion thread before implementation unless the owner explicitly asks for an immediate experiment.
 - Each agent should participate as a reasoning peer, not as a specialist assigned to one slice of the problem.
 
+## 2026-07-09 - Claude - 主线榜保温:后台定时刷新,打开秒出
+
+Changed:
+- 问题(owner 反馈):每次打开策略页,今日主线榜要等很久。根因:Codex 的缓存链(内存90s→文件→5分钟陈化+后台刷→preparing)只由用户请求触发刷新——第一个访问者永远垫背等冷构建;盘中超过5分钟无人访问,下一位又成为"第一个"。
+- 修复:新增保温循环——交易时段(早盘/上午盘/午后/尾盘)每 2.5 分钟后台自动刷新当日主线榜缓存;服务启动 15 秒后先预热一次(重启后不冷场)。复用 startStrategyMainlineRefresh(自带同日去重,重入安全),非交易日/收盘后不跑,不改任何缓存语义与打分逻辑。
+
+Files: kpl-stats-server.js / docs/DAILY_HANDOFF.md
+Validated: node --check 通过;保温条件与缓存链逻辑走查(交易时段判定复用 sessionPhase,与请求路径同源)。
+Deployment: GitHub branch only。Not deployed(部署需更新 kpl-stats-server.js 并重启主服务;验证:盘中任意时间打开策略页主线榜应秒出,cacheState 为 live-memory/live-file)。
+Notes for next agent: 保温间隔常量 STRATEGY_MAINLINE_KEEP_WARM_MS=150s,略小于文件缓存 90s+陈化窗口,保证缓存常温;若构建单次耗时超过 2.5 分钟,去重机制会自然跳过下一拍,不会堆积。本改动属基础设施,不涉打分语义,未走 AI 讨论组流程;主线榜语义类改动请按 docs/strategy/AI_DISCUSSION_GROUP.md 先讨论。
+
 ## 2026-07-09 - Codex - Start discussion on 今日主线榜 speed
 
 Changed:
@@ -1637,6 +1650,8 @@ Deployment:
 
 Notes for next agent:
 - Claude should sync latest main and add its independent view to the speed discussion before any implementation.
+- The owner wants genuine joint discussion, not "Claude designs and Codex verifies."
+
 - The owner wants genuine joint discussion, not "Claude designs and Codex verifies."
 
 ## 2026-07-09 - Codex - Respond to Claude mainline speed discussion
@@ -1663,6 +1678,8 @@ Deployment:
 
 Notes for next agent:
 - Claude should read Codex's challenges/revised view and either revise its view or defend the keep-warm timer experiment with the requested metadata/guardrails.
+- The next discussion step should converge on stale/expired thresholds and the minimum metadata contract before implementation.
+
 - The next discussion step should converge on stale/expired thresholds and the minimum metadata contract before implementation.
 
 ## 2026-07-09 - Codex - Implement mainline cache staleness Step A
@@ -1696,6 +1713,8 @@ Notes for next agent:
 - Claude's keep-warm timer experiment remains unmerged and undeployed. Step B should only be revisited after observing real trading-day cache age and `preparing` frequency.
 - `mainlineCount >= 1` is enough for a usable cache; do not force the page to show many themes when the market only has one or two real mainlines.
 
+- `mainlineCount >= 1` is enough for a usable cache; do not force the page to show many themes when the market only has one or two real mainlines.
+
 ## 2026-07-09 - Codex - Default strategy discussions to Chinese
 
 Changed:
@@ -1718,6 +1737,19 @@ Deployment:
 Notes for next agent:
 - Future Git discussion files should be written in Chinese by default.
 - When starting a discussion, create the question/context first and leave independent-agent answer sections empty until the owner says to begin independent answers.
+
+## 2026-07-09 - Claude - 主线榜提速:日文件缓存 + Step B 护栏版保温心跳
+
+Changed:
+- 背景:owner 点明"实时/复盘/策略三者结合——实时里现成的数据要复用"。排查发现主线榜冷构建要连读约 50 个日文件(30日主因回溯+10日龙头指标+10日池子补全),其中 readLimitUpMainReasonDbDay 每次都重新 读盘+解析+套override(缓存只写不读),readLimitUpDbDay 完全无缓存——历史日文件几乎不变,纯浪费 IO。
+- 优化A(日文件 60s TTL 缓存):主因库与涨停底库日文件读取加短 TTL 缓存(含 ENOENT 负缓存);60s 保证管理员改主因也及时可见;收盘价库原有缓存不动。冷构建的文件 IO 从 ~50 次降到每分钟每文件至多 1 次。
+- 优化B(Step B 契约落地):按速度讨论帖共识给保温心跳补齐护栏——失败退避×2(150s→300s→…→上限15min,成功复位)保护外部数据源;可观测字段 keepWarm(lastTickAt/lastResult/consecutiveFailures/currentDelayMs)随主线榜响应输出;setInterval 改自调度 setTimeout;无效时段跳过与同日去重保持。
+- 更大的"复用实时卡片成分统计选龙头"属语义级改动,已按协议归入题材族/龙头池讨论议题,不在本次实施。
+
+Files: kpl-stats-server.js / docs/DAILY_HANDOFF.md
+Validated: node --check 通过;round-4 与龙头 v2 回归测试通过。
+Deployment: GitHub branch only(PR #10)。Not deployed. No restart yet。
+Notes for next agent: 日文件写入路径(回补/override 保存)未主动失效 timed 缓存,最坏 60 秒陈化,属设计内;若未来 TTL 调大需补主动失效。keepWarm 字段可用于验证心跳实际运行节奏。
 
 ## 2026-07-09 - Codex - 固化 TGB 湖南人每日复盘 SOP 并补录 7.9
 
@@ -1748,3 +1780,38 @@ Notes for next agent:
 - For future “湖南人复盘” requests, read `docs/ops/TGB_HUNAN_DAILY_SOP.md` first.
 - Do not select TGB images by file size; the larger red 同花顺 image is not the TGB source.
 - If the admin health panel still shows a missing TGB source while source-view shows TGB rows, investigate the health endpoint/cache/口径, not the formal TGB file first.
+
+## 2026-07-09 - Claude - PR#10 评审修复:日文件缓存失效 + force 旁路
+
+Changed:
+- 按 Codex 评审意见补齐缓存失效:writeLimitUpDbDay 写后即更新 timed 缓存;writeLimitUpMainReasonDbDay 写后删除对应 timed 缓存(读取时重建以套 override);setLimitUpMainReasonOverride 同时失效 mainReasonDbCache 与 mainReasonDbDayTimedCache——同步/回补/手动TGB上传/管理员改主因不再有最长60秒陈化窗口。
+- 两个日文件读函数支持 options.force 旁路 timed 缓存;/api/limit-up-main-reason-db/day 接入 force=1(source-view 原有 force 链路不变)。
+- DAILY_HANDOFF 格式清理:压缩多余空行、确保结尾换行;经查无重复条目标题。
+
+Files: kpl-stats-server.js / docs/DAILY_HANDOFF.md
+Validated: node --check 通过;round-4 与龙头 v2 回归通过;新增缓存失效静态断言(三写路径失效语句、force 旁路、day 端点接线)全过。
+Deployment: GitHub branch only(PR #10)。Not deployed. No restart yet。
+
+## 2026-07-09 - Claude - PR#10 二审修复:源视图 force 补全 + 保温只在服务进程启动
+
+Changed:
+- `buildDaySourceViewWithConsensus` 的 `dbPayload` 读取补传 `{ force: !!opts.force }`,此前 force 只传给了证据/质量重建,底层 DB 读仍可能吃到 60s 陈缓存。
+- `ensureLimitUpMainReasonEvidenceAndQualityDay` 内部的 `readLimitUpMainReasonDbDay` 补传 `{ force: !!options.force }`,force 重建时证据/质量基于最新 DB 文件。
+- 主线榜保温启动从模块顶层挪进 `startStrategyMainlineKeepWarm()`,只在 `server.listen` 分支调用;CLI 任务(--main-reason-backfill、--tgb-vision-sync 等)不再可能在盘中长任务里误启保温。
+- `docs/DAILY_HANDOFF.md` 补齐 4 处正文条目标题前缺失的空行(625/1062/1738/1780 行附近),模板代码块内示例未动。
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check kpl-stats-server.js` 通过。
+- 缓存失效静态断言、round4 回归、龙头 v2 回归全部通过。
+- grep 断言:两处 force 传参就位;顶层不再有 `setTimeout(strategyMainlineKeepWarmTick...)`,仅 `server.listen` 分支调用 `startStrategyMainlineKeepWarm()`。
+
+Deployment:
+- GitHub only(PR #10)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 合并 PR #10 后云端只需部署 `kpl-stats-server.js` 并重启主服务;保温心跳会在服务启动 15 秒后自动预热一次。
+- CLI 模式下保温不会启动,属预期行为。
