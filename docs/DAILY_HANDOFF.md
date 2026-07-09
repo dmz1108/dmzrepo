@@ -1686,8 +1686,11 @@ Validated:
 - Parsed the inline script in `kpl-dashboard_17_apple.html` with `new Function(...)` for syntax validation.
 
 Deployment:
-- Production touched: pending at commit time.
-- Needs cloud deployment of `kpl-stats-server.js`, `kpl-dashboard_17_apple.html`, and `docs/DAILY_HANDOFF.md`, then restart `PandaDashboard-KPL-Server` and verify `/api/strategy-mainlines` metadata.
+- Production touched: yes.
+- Cloud backup created: `C:\PandaDashboard\_deploy-backups\mainline-step-a-20260709-192831`.
+- Uploaded `kpl-stats-server.js`, `kpl-dashboard_17_apple.html`, `docs/DAILY_HANDOFF.md`, and `docs/strategy/discussions/2026-07-09-mainline-speed-discussion.md` to `C:\PandaDashboard`.
+- Restarted `PandaDashboard-KPL-Server`; verified `/health` and `/api/strategy-mainlines?day=2026-07-09`.
+- Verified strategy response metadata includes `generatedAt`, `ageSeconds`, `staleness`, `cacheState`, `refreshState`, and `quality`.
 
 Notes for next agent:
 - Claude's keep-warm timer experiment remains unmerged and undeployed. Step B should only be revisited after observing real trading-day cache age and `preparing` frequency.
