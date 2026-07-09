@@ -1388,3 +1388,38 @@ Deployment:
 Notes for next agent:
 - 今日实时 top search is still not a full board-management UI. It now uses concept board fallback only when the main-reason DB search is empty.
 - Board fallback currently computes each constituent's 10/30-day gain by pulling K-line data, so first-time searches for 50-stock boards can take noticeable time.
+
+## 2026-07-09 - Codex - Add AI read-only strategy live endpoint
+
+Changed:
+- Added `GET /api/ai/strategy-live` for external AI analysis without SSH or admin access.
+- The endpoint is read-only and protected by a runtime-only AI read token from environment/config, never from Git.
+- The payload gives a controlled analysis bundle across three areas: 今日实时 board summaries, 涨停复盘 source/final summaries, and 今日策略 mainline/L2 status.
+- Sanitized the response so it does not include API keys, cookies, admin/user data, sync tokens, runtime config values, or server file paths.
+- Extended CORS allowed headers to support `x-ai-read-token` for this AI-only read path.
+- No write actions, no config mutation endpoint, and no raw full-database dump were added.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`.
+- Public `https://market.dreamerqi.com/api/ai/strategy-live?day=2026-07-09` without token returns `403` and `invalid ai read-only token`.
+- Public request with `x-ai-read-token` returns `ok:true`, `access:"ai-read-only"`, `reviewDay:"2026-07-08"`, four review source statuses, strategy mainlines, and L2 status.
+- Response inspection found no secret-like strings for API keys, cookies, passwords, sync token, AI read token, or runtime key names.
+- Source status output is sanitized and does not expose `C:\...` server paths.
+
+Deployment:
+- Production touched: yes.
+- Git main deployed: `1f7225a`.
+- Backup before upload: `C:\PandaDashboard\backups\ai-readonly-strategy-live-20260709-114405`.
+- Uploaded `kpl-stats-server.js`.
+- Configured `aiReadOnlyToken` in `C:\PandaDashboard\kpl-runtime-config.json`; token value is intentionally not logged or committed.
+- Restarted `PandaDashboard-KPL-Server`; latest verified listener process was `916`.
+- Did not restart Caddy or `Panda Yule Server`.
+
+Notes for next agent:
+- Use `x-ai-read-token` header for Claude or other AI readers; only share the token out-of-band with trusted agents.
+- This endpoint is intentionally not a raw DB export. If deeper inspection is needed, add a narrow read-only endpoint such as source/date/board detail with capped rows and sanitized fields.
+- The endpoint is intended for analysis of strategy, review, and realtime market context; it must not become an admin or sync surface.
