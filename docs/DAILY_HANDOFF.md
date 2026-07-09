@@ -1178,3 +1178,52 @@ Deployment:
 Notes for next agent:
 - The old Claude entry above correctly says Claude did not deploy it. This Codex entry records the later merge and production deployment.
 - Keep Eastmoney/Tonghuashun out of the formal limit-up review tabs unless the owner explicitly changes the current four-source policy.
+
+## 2026-07-09 - Codex - Self-host site font bundle
+
+Changed:
+- Replaced runtime Google Fonts links with a local font bundle served from `Qi/vendor/`.
+- Added local font CSS plus Space Grotesk, Space Mono, IBM Plex Mono, and JetBrains Mono font files.
+- Updated homepage, market dashboard, Stanning/entertainment page, logo page, and the Guandan game page to use the local font CSS.
+- Added main-server static routes for `/vendor/dreamerqi-fonts.css`, `/qi/vendor/dreamerqi-fonts.css`, and `/vendor/fonts/*`.
+- Added Yule server static handling for `/vendor/dreamerqi-fonts.css` and `/vendor/fonts/*` so `stanning.dreamerqi.com` can load the same local font files through the entertainment service.
+- No visual redesign, business logic, review-source policy, auth flow, or strategy scoring logic was intentionally changed.
+
+Files:
+- `Qi/index.html`
+- `Qi/logo.html`
+- `Qi/games/掼蛋.html`
+- `Qi/vendor/dreamerqi-fonts.css`
+- `Qi/vendor/fonts/*`
+- `kpl-dashboard_17_apple.html`
+- `kpl-dashboard_17_apple_hierarchy.html`
+- `kpl-stats-server.js`
+- `yule.html`
+- `yule-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`.
+- `node --check yule-server.js`.
+- Target pages no longer contain `fonts.googleapis.com` or `fonts.gstatic.com`.
+- Local font CSS references 13 local font files and all files exist.
+- Public `https://dreamerqi.com/vendor/dreamerqi-fonts.css` returned 200.
+- Public `https://dreamerqi.com/vendor/fonts/space-grotesk-600.ttf` returned 200.
+- Public `https://stanning.dreamerqi.com/vendor/dreamerqi-fonts.css` returned 200.
+- Public `https://stanning.dreamerqi.com/vendor/fonts/space-mono-700.ttf` returned 200.
+- Public homepage, market page, and Stanning HTML now reference `vendor/dreamerqi-fonts.css` and do not reference Google Fonts.
+- Public `https://market.dreamerqi.com/api/limit-up-main-reason-db/source-view?day=2026-07-08` kept the current five tabs: final, kaipanla, xuangubao, jiuyangongshe, tgb.
+- Public `https://market.dreamerqi.com/api/strategy-mainlines?day=2026-07-08` returned `ok: true`, `count: 10`, first mainline `算力AI`.
+
+Deployment:
+- Production touched: yes.
+- Git main deployed: `9a63ccf`.
+- Backup before upload: `C:\PandaDashboard\backups\deploy-local-fonts-20260709-080314`.
+- Uploaded changed pages, `Qi/vendor/`, `kpl-stats-server.js`, `yule-server.js`, and `docs/DAILY_HANDOFF.md`.
+- Restarted `PandaDashboard-KPL-Server`; new listener PID was `13736`.
+- Restarted `Panda Yule Server`; new listener PID was `15212`.
+- Did not restart Caddy.
+
+Notes for next agent:
+- The font bundle is now the shared source for homepage, market, and Stanning pages. Do not reintroduce Google Fonts runtime links unless explicitly requested.
+- `Qi/build-home.js` may still use network resources at build time; this task only removed runtime font dependencies.
