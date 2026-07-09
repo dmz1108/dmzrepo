@@ -6366,6 +6366,84 @@ function attachFinalConsensusTier(sv) {
   return sv;
 }
 
+function recomputeReviewSourceStatsFromTabs(payload) {
+  if (!payload || !Array.isArray(payload.tabs)) return payload;
+  payload.tabs = payload.tabs.filter(tab => !isDisabledReviewSource('', tab.key));
+  for (const tab of payload.tabs) {
+    const rows = (tab.rows || []).filter(row => !isExcludedFromReview(row?.code, row?.name));
+    tab.rows = rows;
+    tab.count = rows.length;
+    tab.topics = limitUpMainReasonSourceViewTopics(rows);
+  }
+  const codesOf = rows => {
+    const set = new Set();
+    for (const row of rows || []) {
+      const code = normalizeReasonSourceCode(row?.code);
+      if (code) set.add(code);
+    }
+    return set;
+  };
+  const enabledTabs = payload.tabs.filter(tab => !isDisabledReviewSource('', tab.key));
+  const tabByGroup = new Map(enabledTabs.filter(tab => tab.key !== 'final').map(tab => [String(tab.key), tab]));
+  let reviewTotal = codesOf((enabledTabs.find(tab => tab.key === 'final') || {}).rows).size;
+  if (!reviewTotal) {
+    reviewTotal = Math.max(0, ...[...tabByGroup.values()].map(tab => codesOf(tab.rows).size));
+  }
+  const sourceByGroup = {
+    kaipanla: 'review/kaipanla-fupanla',
+    xuangubao: 'review/xuangubao-limit-up',
+    jiuyangongshe: 'review/jiuyangongshe-structured',
+    tgb: 'review/tgb-hunan-structured',
+  };
+  const existingStats = Array.isArray(payload.sourceStats) ? payload.sourceStats : [];
+  const statsBase = existingStats.length
+    ? existingStats
+    : [...tabByGroup.entries()]
+      .filter(([, tab]) => Number(tab?.count || (Array.isArray(tab?.rows) ? tab.rows.length : 0)) > 0)
+      .map(([group]) => ({ source: sourceByGroup[group] || `review/${group}`, group }));
+  payload.sourceStats = statsBase
+    .map(stat => {
+      const group = String(stat?.group || reviewSourceGroup(stat?.source || ''));
+      if (isDisabledReviewSource(stat?.source, group)) return null;
+      const tab = tabByGroup.get(group);
+      if (!tab) return stat;
+      const rows = tab.rows || [];
+      const stockCodes = new Set();
+      const mainReasonCodes = new Set();
+      const lowConfidenceCodes = new Set();
+      for (const row of rows) {
+        const code = normalizeReasonSourceCode(row?.code);
+        if (code) stockCodes.add(code);
+        const quality = String(row?.reasonQuality || '').toLowerCase();
+        const confidence = Number(row?.confidence || 0);
+        if (code && quality !== 'fallback' && (row?.primaryRawTopic || row?.reasonText)) mainReasonCodes.add(code);
+        if (code && (quality === 'fallback' || confidence < 0.8 || row?.ocrFallback)) lowConfidenceCodes.add(code);
+      }
+      return {
+        ...stat,
+        group,
+        source: stat?.source || sourceByGroup[group] || `review/${group}`,
+        rowCount: rows.length,
+        stockCount: stockCodes.size,
+        coveragePct: reviewTotal ? Number(((stockCodes.size / reviewTotal) * 100).toFixed(2)) : 0,
+        mainReasonStockCount: mainReasonCodes.size,
+        mainReasonCoveragePct: reviewTotal ? Number(((mainReasonCodes.size / reviewTotal) * 100).toFixed(2)) : 0,
+        lowConfidenceStockCount: lowConfidenceCodes.size,
+      };
+    })
+    .filter(Boolean);
+  const readyGroups = new Set(payload.sourceStats
+    .filter(stat => Number(stat?.stockCount || stat?.rowCount || 0) > 0)
+    .map(stat => String(stat?.group || reviewSourceGroup(stat?.source || ''))));
+  if (Array.isArray(payload.sourceErrors) && readyGroups.size) {
+    payload.sourceErrors = payload.sourceErrors.filter(error => {
+      const group = reviewSourceGroup(error?.group || error?.source || '');
+      return !readyGroups.has(group);
+    });
+  }
+  return payload;
+}
+
 // 复用件:构建某日完整源视图(4源合并链)并挂上每股共识档(agreeCount/consensusTier)。
 // 综合归纳源视图端点 与 强势板块共振榜 共用此件,保证共识口径完全一致。
 async function buildDaySourceViewWithConsensus(day, opts = {}) {
@@ -6430,59 +6508,7 @@ async function getLimitUpMainReasonDbSourceView(url, req, res) {
   // 让来源统计 sourceStats 走同一个「统一复盘排除」闸口：按过滤后的各来源 tab 重算
   // 行数/股票数/覆盖率，字段口径与 buildReviewSourceStats 一致。否则数据健康面板会读到
   // 底稿原始行数（如韭研含北交所 920249 导致显示 86、覆盖率 101.18%）。
-  {
-    const codesOf = rows => {
-      const set = new Set();
-      for (const row of rows || []) {
-        const code = normalizeReasonSourceCode(row?.code);
-        if (code) set.add(code);
-      }
-      return set;
-    };
-    const tabByGroup = new Map(payload.tabs.filter(tab => tab.key !== 'final').map(tab => [String(tab.key), tab]));
-    let reviewTotal = codesOf((payload.tabs.find(tab => tab.key === 'final') || {}).rows).size;
-    if (!reviewTotal) {
-      reviewTotal = Math.max(0, ...[...tabByGroup.values()].map(tab => codesOf(tab.rows).size));
-    }
-    const sourceByGroup = {
-      kaipanla: 'review/kaipanla-fupanla',
-      xuangubao: 'review/xuangubao-limit-up',
-      jiuyangongshe: 'review/jiuyangongshe-structured',
-      tgb: 'review/tgb-hunan-structured',
-    };
-    const existingStats = Array.isArray(payload.sourceStats) ? payload.sourceStats : [];
-    const statsBase = existingStats.length
-      ? existingStats
-      : [...tabByGroup.entries()]
-        .filter(([, tab]) => Number(tab?.count || (Array.isArray(tab?.rows) ? tab.rows.length : 0)) > 0)
-        .map(([group]) => ({ source: sourceByGroup[group] || `review/${group}`, group }));
-    payload.sourceStats = statsBase.map(stat => {
-      const group = String(stat?.group || reviewSourceGroup(stat?.source || ''));
-      const tab = tabByGroup.get(group);
-      if (!tab) return stat;
-      const rows = tab.rows || [];
-      const stockCodes = new Set();
-      const mainReasonCodes = new Set();
-      const lowConfidenceCodes = new Set();
-      for (const row of rows) {
-        const code = normalizeReasonSourceCode(row?.code);
-        if (code) stockCodes.add(code);
-        const quality = String(row?.reasonQuality || '').toLowerCase();
-        const confidence = Number(row?.confidence || 0);
-        if (code && quality !== 'fallback' && (row?.primaryRawTopic || row?.reasonText)) mainReasonCodes.add(code);
-        if (code && (quality === 'fallback' || confidence < 0.8 || row?.ocrFallback)) lowConfidenceCodes.add(code);
-      }
-      return {
-        ...stat,
-        rowCount: rows.length,
-        stockCount: stockCodes.size,
-        coveragePct: reviewTotal ? Number(((stockCodes.size / reviewTotal) * 100).toFixed(2)) : 0,
-        mainReasonStockCount: mainReasonCodes.size,
-        mainReasonCoveragePct: reviewTotal ? Number(((mainReasonCodes.size / reviewTotal) * 100).toFixed(2)) : 0,
-        lowConfidenceStockCount: lowConfidenceCodes.size,
-      };
-    });
-  }
+  recomputeReviewSourceStatsFromTabs(payload);
   const finalTab = payload.tabs.find(tab => tab.key === 'final');
   if (payload.sourceLayerOnly) {
     payload.count = Math.max(0, ...payload.tabs.filter(tab => tab.key !== 'final').map(tab => Number(tab.count || 0)));
@@ -6698,6 +6724,7 @@ async function resolveAfterCloseSourceCoverage(mainReasonDay, mainReasonDb) {
   let sourceCoverage = mainReasonDb?.sourceCoverage || null;
   if (!mainReasonDb?.stocks?.length) return sourceCoverage;
   const { payload } = await buildDaySourceViewWithConsensus(mainReasonDay, {}).catch(() => ({ payload: null }));
+  recomputeReviewSourceStatsFromTabs(payload);
   const sourceStats = (Array.isArray(payload?.sourceStats) ? payload.sourceStats : [])
     .filter(stat => Number(stat?.stockCount || stat?.rowCount || 0) > 0);
   if (!sourceStats.length) return sourceCoverage;
