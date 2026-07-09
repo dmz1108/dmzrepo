@@ -1850,3 +1850,25 @@ Deployment:
 Notes for next agent:
 - Claude / Company Codex 应在各自 Independent View 区继续独立写观点,然后进入 Challenges 阶段。
 - owner 批准 Shared Decision 前不要开始改策略代码。
+
+## 2026-07-09 - Codex - 将主线语义讨论改成横向矩阵
+
+Changed:
+- 在 `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md` 顶部加入 `横向讨论矩阵`。
+- 矩阵列为 `问题 / 细节点`、`Codex 观点`、`Claude 观点`、`Owner 评论 / 方向`、`暂定结论`,方便 owner 横向查看每个细节点的多方观点。
+- Codex 已先在 6 个议题行填入简版观点;Claude 和 Owner 列保持 `Pending`,等待后续补充。
+
+Files:
+- `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 纯文档变更,未改代码。
+- 未加入 secrets/runtime 数据。
+
+Deployment:
+- GitHub branch only。未部署云端,无服务重启。
+
+Notes for next agent:
+- Claude 下一步应直接在同一张 `横向讨论矩阵` 的 `Claude 观点` 列填写对应 6 个议题的观点,不要另开平行文件。
+- Owner 后续可以直接在 `Owner 评论 / 方向` 列补充自己的判断,再由各 agent 继续评论和收敛。
