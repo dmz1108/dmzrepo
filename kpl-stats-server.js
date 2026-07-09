@@ -20521,7 +20521,10 @@ const STRATEGY_MAINLINE_CATALOG_TIMEOUT_MS = 800;
 const STRATEGY_MAINLINE_TOP_GAIN_TIMEOUT_MS = 1800;
 const STRATEGY_MAINLINE_REWORK_TIMEOUT_MS = 1200;
 const STRATEGY_MAINLINE_LIVE_CACHE_MS = 90 * 1000;
+const STRATEGY_MAINLINE_LIVE_STALE_CACHE_MS = 5 * 60 * 1000;
+const STRATEGY_MAINLINE_QUICK_BUILD_TIMEOUT_MS = 12000;
 const strategyMainlineLiveCache = new Map();
+const strategyMainlineRefreshJobs = new Map();
 // 广度统计至少要有这么多有效成分股，否则小板块一两只股就能拉出虚高普涨率
 const STRATEGY_MAINLINE_BREADTH_MIN_MEMBERS = 8;
 // 盘中动能采样：同一主线族两次采样至少隔 3 分钟，只保留 45 分钟窗口，重启后自然冷启动
@@ -21769,6 +21772,30 @@ async function writeStrategyMainlineLiveCache(day, payload) {
   await fs.writeFile(strategyMainlineLiveCachePath(day), JSON.stringify(data, null, 2), 'utf8');
   return data;
 }
+async function buildStrategyMainlinesLiveAndCache(day, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  const live = await buildStrategyMainlinesLive(isoDay, options);
+  if (live?.ok && Array.isArray(live.mainlines) && live.mainlines.length) {
+    strategyMainlineLiveCache.set(isoDay, {
+      expiresAt: Date.now() + STRATEGY_MAINLINE_LIVE_CACHE_MS,
+      payload: live,
+    });
+    writeStrategyMainlineLiveCache(isoDay, live).catch(() => {});
+  }
+  return live;
+}
+function startStrategyMainlineRefresh(day, options = {}) {
+  const isoDay = isoFromCompactDate(day);
+  const existing = strategyMainlineRefreshJobs.get(isoDay);
+  if (existing) return existing;
+  const job = buildStrategyMainlinesLiveAndCache(isoDay, options)
+    .catch(err => ({ ok: false, error: String(err?.message || err), day: isoDay }))
+    .finally(() => {
+      strategyMainlineRefreshJobs.delete(isoDay);
+    });
+  strategyMainlineRefreshJobs.set(isoDay, job);
+  return job;
+}
 async function writeStrategyMainlineSnapshot(day, payload, reason = '') {
   if (!payload?.ok || !Array.isArray(payload.mainlines) || !payload.mainlines.length) return null;
   await fs.mkdir(STRATEGY_MAINLINE_DATA_DIR, { recursive: true });
@@ -22761,15 +22788,24 @@ async function getStrategyMainlines(day) {
     });
     return fileCached;
   }
-  const live = await buildStrategyMainlinesLive(requestedDay, { writePredict: true });
-  if (live?.ok && Array.isArray(live.mainlines) && live.mainlines.length) {
-    strategyMainlineLiveCache.set(cacheKey, {
-      expiresAt: Date.now() + STRATEGY_MAINLINE_LIVE_CACHE_MS,
-      payload: live,
-    });
-    writeStrategyMainlineLiveCache(requestedDay, live).catch(() => {});
+  const staleCached = await readStrategyMainlineLiveCache(requestedDay, STRATEGY_MAINLINE_LIVE_STALE_CACHE_MS).catch(() => null);
+  if (staleCached) {
+    startStrategyMainlineRefresh(requestedDay, { writePredict: true });
+    return { ...staleCached, cacheState: 'live-file-refreshing' };
   }
-  return live;
+  const job = startStrategyMainlineRefresh(requestedDay, { writePredict: true });
+  const live = await strategyMainlineWithTimeout(job, STRATEGY_MAINLINE_QUICK_BUILD_TIMEOUT_MS, null);
+  if (live?.ok && Array.isArray(live.mainlines) && live.mainlines.length) return live;
+  return {
+    ...strategyMainlineEmptyPayload(
+      requestedDay,
+      requestedDay,
+      'strategy-mainline-preparing',
+      '今日主线榜正在根据实时板块、资金流和成分股表现生成，请稍后刷新。',
+      sessionPhase
+    ),
+    refreshState: 'running',
+  };
 }
 
 // 反向关节(stock 视角，**主因口径**):个股「💪强势」标的正确含义=该股综合归纳出的「唯一主因」
