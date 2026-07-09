@@ -1614,3 +1614,27 @@ Deployment:
 Notes for next agent:
 - For important strategy work, especially 今日主线榜, start or update a discussion thread before implementation unless the owner explicitly asks for an immediate experiment.
 - Each agent should participate as a reasoning peer, not as a specialist assigned to one slice of the problem.
+
+## 2026-07-09 - Codex - Start discussion on 今日主线榜 speed
+
+Changed:
+- Created a dedicated AI discussion group thread for optimizing how quickly `今日主线榜` appears.
+- Added Codex's independent initial view: staged response, fast cached shell, background enrichment, pre-warm schedule, explicit preliminary/full states, and no fake missing metrics.
+- Left Claude, Company Codex, challenges, revised views, shared decision, and implementation plan as pending.
+- No code behavior was changed.
+
+Files:
+- `docs/strategy/discussions/2026-07-09-mainline-speed-discussion.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Confirmed this follows `docs/strategy/AI_DISCUSSION_GROUP.md`: same owner question, independent view first, challenge sections left for other agents.
+
+Deployment:
+- Production touched: no.
+- GitHub documentation/discussion change only.
+- No cloud upload or service restart required.
+
+Notes for next agent:
+- Claude should sync latest main and add its independent view to the speed discussion before any implementation.
+- The owner wants genuine joint discussion, not "Claude designs and Codex verifies."
