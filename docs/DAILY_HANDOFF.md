@@ -1490,3 +1490,34 @@ Files: kpl-stats-server.js / docs/DAILY_HANDOFF.md
 Validated: node --check 通过;v2回归测试(紫光vs长源真实数据)通过。
 Deployment: GitHub branch only。Not deployed. No restart(部署需更新 kpl-stats-server.js 并重启主服务)。
 Notes for next agent: 分值常量集中在 strategyMainlineReworkLeaders;30日涨幅已双源核验(长源+25.4%/紫光+16.6%);预判回看攒数据后按胜率调参。
+
+## 2026-07-09 - Codex - Deploy leader scoring v2
+
+Changed:
+- Reviewed and fast-forwarded Claude commit `501c079` into `main`, then deployed it to production.
+- The deployed strategy leader scoring v2 adds fair same-value scoring, main-reason freshness, present-day participation, deterministic tie-breaking, and a fuller 10-trading-day candidate pool.
+- No review-source policy, sync logic, AI read-only endpoint, auth, homepage, Caddy, or Stanning/Yule behavior was changed.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`.
+- Public `https://market.dreamerqi.com/health` returned `ok:true`.
+- After restart, the first strategy request briefly returned `strategy-mainline-preparing` while live refresh ran; follow-up polling returned stable `ok:true`.
+- Public `https://market.dreamerqi.com/api/strategy-mainlines?day=2026-07-09` returned `ok:true`, `count:6`, phase `午后`; observed top mainlines included `半导体` with leader `新亚强` and `光模块` with leader `星网锐捷`.
+- AI read-only endpoint still returned `ok:true`, `access:"ai-read-only"`, four review sources, strategy data, and L2 availability.
+- Cloud `kpl-stats-server.js` SHA256 matches Git main after upload.
+
+Deployment:
+- Production touched: yes.
+- Git main deployed: `501c079`.
+- Backup before upload: `C:\PandaDashboard\backups\deploy-leader-score-v2-20260709-142749`.
+- Uploaded `kpl-stats-server.js`.
+- Restarted `PandaDashboard-KPL-Server`; current listener process after restart was `3528`.
+- Did not restart Caddy or `Panda Yule Server`.
+
+Notes for next agent:
+- The immediate `strategy-mainline-preparing` response after a backend restart is expected while live cache refreshes; verify with a second request before treating it as failure.
+- Watch real-session results before changing score constants again; v2 intentionally shifts leaders toward recent main-reason evidence and present-day participation.
