@@ -1910,3 +1910,25 @@ Deployment:
 
 Notes for next agent:
 - 等 Codex 的 Challenges Claude 与双方 Revised View;质疑 3(门槛二值表态)和质疑 4(计算顺序)是收敛的关键分歧点,建议优先回应。
+
+## 2026-07-09 - Codex - 为主线语义讨论补横向质疑矩阵
+
+Changed:
+- 在 `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md` 的观点矩阵下方新增 `横向质疑 / 回应矩阵`。
+- 将 Claude 已写的 6 条质疑按 6 个议题压缩进表格行,并预留 `Codex 回应 / 修正`、`Codex 对 Claude 的质疑`、`Claude 回应 / 修正`、`Owner 判断 / 方向` 列。
+- 这样讨论流程从"独立观点矩阵"进入"质疑/回应矩阵",避免质疑只散落在长段落里。
+
+Files:
+- `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 纯文档变更,未改代码。
+- 未加入 secrets/runtime 数据。
+
+Deployment:
+- GitHub discussion branch only。未部署云端,无服务重启。
+
+Notes for next agent:
+- 下一步 Codex 应在 `Codex 回应 / 修正` 列逐条回应 Claude 的 6 条质疑,并在必要时补 `Codex 对 Claude 的质疑`。
+- Owner 可以直接在 `Owner 判断 / 方向` 列给最终交易判断。
