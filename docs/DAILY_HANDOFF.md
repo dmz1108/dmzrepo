@@ -1735,3 +1735,15 @@ Deployment:
 Notes for next agent:
 - Future Git discussion files should be written in Chinese by default.
 - When starting a discussion, create the question/context first and leave independent-agent answer sections empty until the owner says to begin independent answers.
+## 2026-07-09 - Claude - 主线榜提速:日文件缓存 + Step B 护栏版保温心跳
+
+Changed:
+- 背景:owner 点明"实时/复盘/策略三者结合——实时里现成的数据要复用"。排查发现主线榜冷构建要连读约 50 个日文件(30日主因回溯+10日龙头指标+10日池子补全),其中 readLimitUpMainReasonDbDay 每次都重新 读盘+解析+套override(缓存只写不读),readLimitUpDbDay 完全无缓存——历史日文件几乎不变,纯浪费 IO。
+- 优化A(日文件 60s TTL 缓存):主因库与涨停底库日文件读取加短 TTL 缓存(含 ENOENT 负缓存);60s 保证管理员改主因也及时可见;收盘价库原有缓存不动。冷构建的文件 IO 从 ~50 次降到每分钟每文件至多 1 次。
+- 优化B(Step B 契约落地):按速度讨论帖共识给保温心跳补齐护栏——失败退避×2(150s→300s→…→上限15min,成功复位)保护外部数据源;可观测字段 keepWarm(lastTickAt/lastResult/consecutiveFailures/currentDelayMs)随主线榜响应输出;setInterval 改自调度 setTimeout;无效时段跳过与同日去重保持。
+- 更大的"复用实时卡片成分统计选龙头"属语义级改动,已按协议归入题材族/龙头池讨论议题,不在本次实施。
+
+Files: kpl-stats-server.js / docs/DAILY_HANDOFF.md
+Validated: node --check 通过;round-4 与龙头 v2 回归测试通过。
+Deployment: GitHub branch only(PR #10)。Not deployed. No restart yet。
+Notes for next agent: 日文件写入路径(回补/override 保存)未主动失效 timed 缓存,最坏 60 秒陈化,属设计内;若未来 TTL 调大需补主动失效。keepWarm 字段可用于验证心跳实际运行节奏。
