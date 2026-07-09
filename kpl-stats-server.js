@@ -6722,13 +6722,21 @@ async function getLimitUpMainReasonRecentUniverse(url, req, res) {
 
 async function resolveAfterCloseSourceCoverage(mainReasonDay, mainReasonDb) {
   let sourceCoverage = mainReasonDb?.sourceCoverage || null;
-  if (!mainReasonDb?.stocks?.length) return sourceCoverage;
   const { payload } = await buildDaySourceViewWithConsensus(mainReasonDay, {}).catch(() => ({ payload: null }));
   recomputeReviewSourceStatsFromTabs(payload);
   const sourceStats = (Array.isArray(payload?.sourceStats) ? payload.sourceStats : [])
     .filter(stat => Number(stat?.stockCount || stat?.rowCount || 0) > 0);
   if (!sourceStats.length) return sourceCoverage;
-  const total = Number(sourceCoverage?.total || mainReasonDb?.count || mainReasonDb?.stocks?.length || 0);
+  const finalTab = (payload?.tabs || []).find(tab => tab.key === 'final');
+  const tabMax = Math.max(0, ...(payload?.tabs || [])
+    .filter(tab => tab.key !== 'final')
+    .map(tab => Number(tab?.count || 0)));
+  const total = Number(sourceCoverage?.total
+    || mainReasonDb?.count
+    || mainReasonDb?.stocks?.length
+    || finalTab?.count
+    || tabMax
+    || 0);
   const covered = Math.max(0, ...sourceStats.map(stat => Number(stat?.stockCount || 0)));
   const sourceErrors = Array.isArray(payload?.sourceErrors)
     ? payload.sourceErrors
