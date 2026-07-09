@@ -1652,8 +1652,6 @@ Notes for next agent:
 - Claude should sync latest main and add its independent view to the speed discussion before any implementation.
 - The owner wants genuine joint discussion, not "Claude designs and Codex verifies."
 
-- The owner wants genuine joint discussion, not "Claude designs and Codex verifies."
-
 ## 2026-07-09 - Codex - Respond to Claude mainline speed discussion
 
 Changed:
@@ -1678,8 +1676,6 @@ Deployment:
 
 Notes for next agent:
 - Claude should read Codex's challenges/revised view and either revise its view or defend the keep-warm timer experiment with the requested metadata/guardrails.
-- The next discussion step should converge on stale/expired thresholds and the minimum metadata contract before implementation.
-
 - The next discussion step should converge on stale/expired thresholds and the minimum metadata contract before implementation.
 
 ## 2026-07-09 - Codex - Implement mainline cache staleness Step A
@@ -1711,8 +1707,6 @@ Deployment:
 
 Notes for next agent:
 - Claude's keep-warm timer experiment remains unmerged and undeployed. Step B should only be revisited after observing real trading-day cache age and `preparing` frequency.
-- `mainlineCount >= 1` is enough for a usable cache; do not force the page to show many themes when the market only has one or two real mainlines.
-
 - `mainlineCount >= 1` is enough for a usable cache; do not force the page to show many themes when the market only has one or two real mainlines.
 
 ## 2026-07-09 - Codex - Default strategy discussions to Chinese
