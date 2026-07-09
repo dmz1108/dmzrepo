@@ -21983,38 +21983,90 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay) {
     }
     poolByMainline.push({ m, rows: [...pool.values()] });
   }
+  if (!poolByMainline.length) return;
+  // 池子补全:近10日凡因本主线主因涨停过的股全部入池(当天休息也保留参选资格),同时记录“最近一次本主线主因涨停”距今几个交易日(主因新鲜度)。
+  const td10 = await getRecentTradingDays(isoDay, apiKey, 10).catch(() => []);
+  const themeDayHits = new Map(); // themeKey -> Map(code -> {name, lastIdx})
+  for (let di = 0; di < td10.length; di += 1) {
+    const db = await readLimitUpMainReasonDbDay(td10[di]).catch(() => null);
+    for (const s of (db?.stocks || [])) {
+      const code = normalizeReasonSourceCode(s?.code);
+      if (!code || isExcludedFromReview(s?.code, s?.name)) continue;
+      const topic = canonicalTopicName(String(s.finalBoardTopic || ''));
+      if (!topic) continue;
+      if (!themeDayHits.has(topic)) themeDayHits.set(topic, new Map());
+      const cur = themeDayHits.get(topic).get(code) || { name: String(s.name || ''), lastIdx: -1 };
+      cur.lastIdx = Math.max(cur.lastIdx, di);
+      themeDayHits.get(topic).set(code, cur);
+    }
+  }
+  const lastN = td10.length - 1;
+  for (const entry of poolByMainline) {
+    const { m } = entry;
+    const topics = [...new Set([m.theme, ...(m.mergedThemes || [])].map(t => canonicalTopicName(String(t || ''))).filter(Boolean))];
+    entry.freshByCode = new Map();
+    for (const topic of topics) {
+      for (const [code, hit] of (themeDayHits.get(topic) || new Map())) {
+        const dist = lastN - hit.lastIdx; // 0=今天,1=昨天...
+        const prev = entry.freshByCode.get(code);
+        if (prev == null || dist < prev) entry.freshByCode.set(code, dist);
+        if (!entry.rows.some(r => r.code === code)) {
+          const row = { code, name: hit.name, gain: null, lianban: 0, firstLimitTime: '', nearLimit: false, finalBoardTopic: m.theme, todayLimit: false, star: null };
+          entry.rows.push(row);
+          allRows.push(row);
+        }
+      }
+    }
+  }
   if (!allRows.length) return;
   await enrichReviewLeaderMetrics(allRows, isoDay, apiKey).catch(() => {});
-  for (const { m, rows } of poolByMainline) {
+  for (const entry of poolByMainline) {
+    const { m, rows } = entry;
+    const freshByCode = entry.freshByCode || new Map();
     if (!rows.length) continue;
-    const rankOf = (sorted, code) => { const i = sorted.findIndex(r => r.code === code); return i >= 0 ? i + 1 : 0; };
+    const rankOf = (sorted, code, field) => {
+      const i = sorted.findIndex(r => r.code === code);
+      if (i < 0) return 0;
+      if (!field) return i + 1;
+      const v = Number(sorted[i][field]);
+      const first = sorted.findIndex(r => Number(r[field]) === v);  // 数值相同 → 同名次同分
+      return first + 1;
+    };
     const byZt = rows.slice().filter(r => (Number(r.zt10Count) || 0) > 0).sort((a, b) => (b.zt10Count || 0) - (a.zt10Count || 0));
     const byG10 = rows.slice().filter(r => isFiniteNumeric(r.gain10)).sort((a, b) => Number(b.gain10) - Number(a.gain10));
     const byG30 = rows.slice().filter(r => isFiniteNumeric(r.gain30)).sort((a, b) => Number(b.gain30) - Number(a.gain30));
     const scored = rows.map(r => {
       const ztRank = rankOf(byZt, r.code);
-      const g10Rank = rankOf(byG10, r.code);
-      const g30Rank = rankOf(byG30, r.code);
+      const g10Rank = rankOf(byG10, r.code, 'gain10');
+      const g30Rank = rankOf(byG30, r.code, 'gain30');
       // 「今日」信号必须以今天真的在涨停名单里为前提。候选池里的 lianban/firstLimitTime
       // 可能来自近15日活跃股的历史数据(maxLianban),不设门槛会把历史连板错当今日连板计分。
       const todayLimit = !!r.todayLimit;
       const todayLianban = todayLimit ? (Number(r.lianban) || 0) : 0;
       const sealMin = todayLimit ? strategyParseSealMinutes(r.firstLimitTime) : null;
       const starBonus = r.star ? (r.star.level === 'confirmed' ? 15 : 8) : 0;
+      // v2 公平打分(owner 定稿):涨停次数按值给分(同次数同分,每次14上限40);
+      // 主因新鲜度:最近一次本主线主因涨停距今 ≤3交易日+10 / ≤6日+6 / 10日内+2;
+      // 当日在场:今日涨停或大涨≥3% +6。
+      const freshDist = freshByCode.has(r.code) ? freshByCode.get(r.code) : null;
+      const freshScore = freshDist == null ? 0 : (freshDist <= 3 ? 10 : freshDist <= 6 ? 6 : 2);
+      const present = todayLimit || (isFiniteNumeric(r.gain) && Number(r.gain) >= 3);
       const leadScore = Number((
-        strategyLeaderRankScore(ztRank, 5, 40, 6) +
+        Math.min(40, (Number(r.zt10Count) || 0) * 14) +
         strategyLeaderRankScore(g10Rank, 10, 30, 3) +
         strategyLeaderRankScore(g30Rank, 10, 20, 2) +
+        freshScore +
+        (present ? 6 : 0) +
         (todayLimit ? 10 : 0) +
         Math.min(24, todayLianban * 8) +
         starBonus +
         (sealMin != null && sealMin <= 600 ? 6 : 0)
       ).toFixed(1));
       const basis = [];
-      if (Number(r.zt10Count) > 0) basis.push(`10日${r.zt10Count}板${ztRank && ztRank <= 5 ? `(第${ztRank})` : ''}`);
+      if (Number(r.zt10Count) > 0) basis.push(`10日${r.zt10Count}板`);
       if (isFiniteNumeric(r.gain10)) basis.push(`10日${Number(r.gain10) > 0 ? '+' : ''}${r.gain10}%${g10Rank && g10Rank <= 10 ? `(第${g10Rank})` : ''}`);
       if (isFiniteNumeric(r.gain30)) basis.push(`30日${Number(r.gain30) > 0 ? '+' : ''}${r.gain30}%${g30Rank && g30Rank <= 10 ? `(第${g30Rank})` : ''}`);
-      basis.push(`主因${Number(r.mainZt10Count) || 0}次`);
+      basis.push(`主因${Number(r.mainZt10Count) || 0}次${freshDist != null ? `·最近${freshDist === 0 ? '今日' : freshDist + '日前'}` : ''}`);
       if (todayLianban >= 2) basis.push(`今日${todayLianban}板`);
       else if (todayLimit) basis.push('今日涨停');
       else if (isFiniteNumeric(r.gain) && Number(r.gain) >= 5) basis.push(`今日+${Number(r.gain).toFixed(1)}%`);
@@ -22022,7 +22074,11 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay) {
     });
     // 龙头是「历史挣出来的」：三榜排名+主因门槛。没人过门槛就是没有龙头——不用今日强势股冒充。
     // （首日新题材天然无复盘数据 → 无龙头，只看明星；次日它进了主因库，龙头才开始产生。）
-    const gated = scored.filter(r => r.gated).sort((a, b) => b.leadScore - a.leadScore || (b.zt10Count || 0) - (a.zt10Count || 0));
+    const gated = scored.filter(r => r.gated).sort((a, b) =>
+      b.leadScore - a.leadScore ||
+      ((freshByCode.get(a.code) ?? 99) - (freshByCode.get(b.code) ?? 99)) ||
+      ((Number(b.gain) || -999) - (Number(a.gain) || -999)) ||
+      String(a.code).localeCompare(String(b.code)));
     if (gated.length) {
       // 综合打分选出 1-3 个最佳可能龙头,第一个为主龙头(用于预判记录/回看)。
       m.leaders = gated.slice(0, 3)
