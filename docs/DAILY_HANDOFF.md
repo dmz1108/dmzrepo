@@ -1695,3 +1695,26 @@ Deployment:
 Notes for next agent:
 - Claude's keep-warm timer experiment remains unmerged and undeployed. Step B should only be revisited after observing real trading-day cache age and `preparing` frequency.
 - `mainlineCount >= 1` is enough for a usable cache; do not force the page to show many themes when the market only has one or two real mainlines.
+
+## 2026-07-09 - Codex - Default strategy discussions to Chinese
+
+Changed:
+- Added a language rule to the AI discussion group protocol: Git discussion files should use Chinese by default unless the owner explicitly asks for English or an external quote/technical identifier requires English.
+- Converted the strategy discussion template to a Chinese, timeline-based format so future discussions can record Owner, Codex, Claude, and Company Codex messages in order.
+
+Files:
+- `docs/strategy/AI_DISCUSSION_GROUP.md`
+- `docs/strategy/DISCUSSION_TEMPLATE.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Documentation-only change; reviewed the template structure for future "question first, no answers yet" discussions.
+
+Deployment:
+- Production touched: no.
+- GitHub documentation/process change only.
+- No cloud upload or service restart required.
+
+Notes for next agent:
+- Future Git discussion files should be written in Chinese by default.
+- When starting a discussion, create the question/context first and leave independent-agent answer sections empty until the owner says to begin independent answers.

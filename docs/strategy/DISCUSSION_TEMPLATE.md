@@ -1,78 +1,115 @@
-# Discussion: <short title>
+# 讨论：<简短标题>
 
-Status: Proposed
-Owner Question:
+状态：仅问题 / 独立回答中 / 互相质疑中 / 已收敛 / 已实施 / 暂停
 
-## Context
+Owner 问题：
 
-What happened, what the owner noticed, and why this matters.
+## 背景
 
-## Evidence Available
+这里记录发生了什么、Owner 观察到的问题、为什么这件事重要。
 
-- Dates:
-- Pages/APIs:
-- Screenshots or examples:
-- Known missing data:
+## 可用证据
 
-## Codex Independent View
+- 日期：
+- 页面/API：
+- 截图或例子：
+- 已知缺失数据：
 
-Pending.
+## 时间线
 
-## Claude Independent View
+### YYYY-MM-DD HH:mm - Owner
 
-Pending.
+提出问题：
 
-## Company Codex Independent View
+待填写。
 
-Pending.
+### YYYY-MM-DD HH:mm - Codex
 
-## Challenges
+独立观点：
 
-### Codex Challenges Claude
+待填写。
 
-Pending.
+### YYYY-MM-DD HH:mm - Claude
 
-### Claude Challenges Codex
+独立观点：
 
-Pending.
+待填写。
 
-### Company Codex Challenges
+### YYYY-MM-DD HH:mm - Company Codex
 
-Pending.
+独立观点：
 
-### Owner Challenges
+待填写。
 
-Pending.
+## 独立观点
 
-## Revised Views
+### Codex 独立观点
 
-### Codex Revised View
+待填写。
 
-Pending.
+### Claude 独立观点
 
-### Claude Revised View
+待填写。
 
-Pending.
+### Company Codex 独立观点
 
-### Company Codex Revised View
+待填写。
 
-Pending.
+## 互相质疑
 
-## Shared Decision
+### Codex 质疑 Claude
 
-Pending.
+待填写。
 
-## Implementation Plan
+### Claude 质疑 Codex
 
-Do not fill this until the discussion converges or the owner explicitly asks for an experiment.
+待填写。
 
-## Validation Plan
+### Company Codex 质疑
 
-- Cases to test:
-- APIs/pages to verify:
-- Expected visible result:
-- Rollback condition:
+待填写。
 
-## Open Questions
+### Owner 补充或质疑
 
-- Pending.
+待填写。
+
+## 修正观点
+
+### Codex 修正观点
+
+待填写。
+
+### Claude 修正观点
+
+待填写。
+
+### Company Codex 修正观点
+
+待填写。
+
+## 共同结论
+
+待填写。
+
+## 接受的规则
+
+待填写。
+
+## 否决的方案
+
+待填写。
+
+## 实施计划
+
+讨论收敛前不要填写；除非 Owner 明确要求先做实验。
+
+## 验证计划
+
+- 要测试的真实案例：
+- 要验证的 API/页面：
+- 期望看到的结果：
+- 回退条件：
+
+## 未决问题
+
+- 待填写。
