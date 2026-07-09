@@ -1423,3 +1423,27 @@ Notes for next agent:
 - Use `x-ai-read-token` header for Claude or other AI readers; only share the token out-of-band with trusted agents.
 - This endpoint is intentionally not a raw DB export. If deeper inspection is needed, add a narrow read-only endpoint such as source/date/board detail with capped rows and sanitized fields.
 - The endpoint is intended for analysis of strategy, review, and realtime market context; it must not become an admin or sync surface.
+
+## 2026-07-09 - Claude - Fix historical lianban counted as today's leader signal
+
+Changed:
+- Fixed a 今日策略 leader-scoring bug found during live review: a candidate stock could carry historical `maxLianban/latestLianban` into the `lianban` field, then be scored and explained as if it had a same-day 连板.
+- Same-day signals now require `todayLimit === true` before adding 今日涨停 points, 连板 points, early-seal points, or 今日X板/今日涨停 explanation text.
+- If the stock is not actually in today's limit-up set, `lianban` is normalized to `0`, `firstLimitTime` does not contribute to scoring, and the explanation falls back to same-day gain when available.
+- Historical 10-day/30-day gains, historical main-reason counts, and leader gating still work as before.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Claude reported `node --check` passed.
+- Claude reported a regression case for the 长源东谷-style bug: historical `maxLianban=2` but no same-day limit-up no longer receives same-day 连板 text or bonus.
+- Codex reviewed the diff before merging to main and confirmed it does not touch review-source policy, AI read-only endpoint, auth, homepage, Caddy, or Stanning/Yule.
+
+Deployment:
+- GitHub main only at merge time. Not deployed by this entry. No production restart for this merge yet.
+
+Notes for next agent:
+- Treat `lianban` and `firstLimitTime` on candidate rows as potentially historical unless `todayLimit` is true.
+- Any future 今日状态 scoring must first prove membership in today's limit-up set.

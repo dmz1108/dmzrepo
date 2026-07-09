@@ -21995,14 +21995,18 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay) {
       const ztRank = rankOf(byZt, r.code);
       const g10Rank = rankOf(byG10, r.code);
       const g30Rank = rankOf(byG30, r.code);
-      const sealMin = strategyParseSealMinutes(r.firstLimitTime);
+      // 「今日」信号必须以今天真的在涨停名单里为前提。候选池里的 lianban/firstLimitTime
+      // 可能来自近15日活跃股的历史数据(maxLianban),不设门槛会把历史连板错当今日连板计分。
+      const todayLimit = !!r.todayLimit;
+      const todayLianban = todayLimit ? (Number(r.lianban) || 0) : 0;
+      const sealMin = todayLimit ? strategyParseSealMinutes(r.firstLimitTime) : null;
       const starBonus = r.star ? (r.star.level === 'confirmed' ? 15 : 8) : 0;
       const leadScore = Number((
         strategyLeaderRankScore(ztRank, 5, 40, 6) +
         strategyLeaderRankScore(g10Rank, 10, 30, 3) +
         strategyLeaderRankScore(g30Rank, 10, 20, 2) +
-        (r.todayLimit ? 10 : 0) +
-        Math.min(24, (Number(r.lianban) || 0) * 8) +
+        (todayLimit ? 10 : 0) +
+        Math.min(24, todayLianban * 8) +
         starBonus +
         (sealMin != null && sealMin <= 600 ? 6 : 0)
       ).toFixed(1));
@@ -22011,10 +22015,10 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay) {
       if (isFiniteNumeric(r.gain10)) basis.push(`10日${Number(r.gain10) > 0 ? '+' : ''}${r.gain10}%${g10Rank && g10Rank <= 10 ? `(第${g10Rank})` : ''}`);
       if (isFiniteNumeric(r.gain30)) basis.push(`30日${Number(r.gain30) > 0 ? '+' : ''}${r.gain30}%${g30Rank && g30Rank <= 10 ? `(第${g30Rank})` : ''}`);
       basis.push(`主因${Number(r.mainZt10Count) || 0}次`);
-      if ((Number(r.lianban) || 0) >= 2) basis.push(`今日${r.lianban}板`);
-      else if (r.todayLimit) basis.push('今日涨停');
+      if (todayLianban >= 2) basis.push(`今日${todayLianban}板`);
+      else if (todayLimit) basis.push('今日涨停');
       else if (isFiniteNumeric(r.gain) && Number(r.gain) >= 5) basis.push(`今日+${Number(r.gain).toFixed(1)}%`);
-      return { ...r, leadScore, basis, gated: (Number(r.mainZt10Count) || 0) >= 1 };
+      return { ...r, lianban: todayLianban, leadScore, basis, gated: (Number(r.mainZt10Count) || 0) >= 1 };
     });
     // 龙头是「历史挣出来的」：三榜排名+主因门槛。没人过门槛就是没有龙头——不用今日强势股冒充。
     // （首日新题材天然无复盘数据 → 无龙头，只看明星；次日它进了主因库，龙头才开始产生。）
