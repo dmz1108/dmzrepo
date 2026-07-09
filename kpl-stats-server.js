@@ -21908,6 +21908,22 @@ async function buildStrategyMainlinesLiveAndCache(day, options = {}) {
   }
   return live;
 }
+// 主线榜保温:交易时段每 2.5 分钟后台自动刷新缓存,任何用户打开都是秒出,
+// 不再由"第一个访问者"垫背等待冷构建。startStrategyMainlineRefresh 自带同日去重,重入安全。
+const STRATEGY_MAINLINE_KEEP_WARM_MS = 150 * 1000;
+function strategyMainlineKeepWarmTick() {
+  try {
+    const now = chinaNowParts();
+    const today = isoFromCompactDate(now.day);
+    if (!chinaMarketDayStatus(today).isTradingDay) return;
+    const phase = strategyMainlineSessionPhase(now);
+    if (!['早盘', '上午盘', '午后', '尾盘'].includes(phase)) return;
+    startStrategyMainlineRefresh(today, { writePredict: true });
+  } catch {}
+}
+setInterval(strategyMainlineKeepWarmTick, STRATEGY_MAINLINE_KEEP_WARM_MS).unref?.();
+setTimeout(strategyMainlineKeepWarmTick, 15 * 1000).unref?.();  // 启动 15 秒后先预热一次(重启后不冷场)
+
 function startStrategyMainlineRefresh(day, options = {}) {
   const isoDay = isoFromCompactDate(day);
   const existing = strategyMainlineRefreshJobs.get(isoDay);
