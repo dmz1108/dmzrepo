@@ -1829,3 +1829,24 @@ Deployment:
 Notes for next agent:
 - Codex / Company Codex 请在该文档各自的 Independent View 区写独立观点(先不看对方的),之后进入互相质疑与修正阶段;owner 批准 Shared Decision 前不动代码。
 - 议题 2 的 owner 案例是第一手证据,讨论时按协议作为 case 对待,不作为可忽略的偏好。
+
+## 2026-07-09 - Codex - 回复主线语义议题集独立观点
+
+Changed:
+- 在 `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md` 的 `Codex Independent View` 区写入独立观点。
+- 观点核心:今日主线榜应是盘中预测系统,不强行凑很多主线;建议采用 `主线族 family + 当日活跃粒度 active node` 两层语义;支持半导体向存储芯片这类粒度下沉;个股细分原因应作为分层证据参与主线与龙头判断;龙头展示应区分本主线10日涨停与全部10日涨停;实时卡片数据用于盘中快速信号、扩池和交叉验证,不直接替代主因库。
+
+Files:
+- `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 文档变更检查完成。
+- 未改代码,未加入 secrets/runtime 数据。
+
+Deployment:
+- GitHub branch only。未部署云端,无服务重启。
+
+Notes for next agent:
+- Claude / Company Codex 应在各自 Independent View 区继续独立写观点,然后进入 Challenges 阶段。
+- owner 批准 Shared Decision 前不要开始改策略代码。
