@@ -1252,3 +1252,40 @@ Deployment:
 
 Notes for next agent:
 - Homepage logo still uses the CSS offset-path implementation. Market header now uses SVG native motion because it is more reliable inside the larger dashboard stylesheet.
+
+## 2026-07-09 - Codex - Freeze strategy mainline daily snapshots
+
+Changed:
+- Changed 今日策略 / 今日主线榜 lifecycle so it no longer regenerates historical dates on every open.
+- Today before market open or during call auction now returns a clear not-open state instead of generating from stale prior-day data.
+- During trading hours it still builds the live predictive mainline list from 今日实时强势板块, capital flow, big-gainer/near-limit constituents, and prior reason history.
+- After 15:30 China time the server writes one frozen strategy mainline snapshot for the day; historical date queries read only that frozen snapshot.
+- Added daily cleanup coverage for strategy mainline snapshot/predict/confirm files under the existing recent-trading-day retention policy.
+- Backfilled a production-only frozen snapshot for 2026-07-08 so yesterday can still be viewed after the lifecycle change.
+- No changes to review-source policy, TGB/韭研/复盘啦/选股宝 source collection, auth, Caddy, or Stanning/Yule.
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`.
+- Inline script compilation check for `kpl-dashboard_17_apple.html`.
+- Local `/api/strategy-mainlines?day=2026-07-09` returned `ok:false`, `reason: market-not-open`, `sessionPhase: 盘前`, `count: 0`.
+- Public `https://market.dreamerqi.com/health` returned `ok:true`.
+- Public `https://market.dreamerqi.com/api/strategy-mainlines?day=2026-07-09` returned `ok:false`, `reason: market-not-open`, `sessionPhase: 盘前`, `count: 0`.
+- Public `https://market.dreamerqi.com/api/strategy-mainlines?day=2026-07-08` returned `ok:true`, `snapshotState: frozen`, `count: 10`, first mainline `算力AI`.
+- Public `https://market.dreamerqi.com/kpl` contains the updated loading text and frozen snapshot label handling.
+
+Deployment:
+- Production touched: yes.
+- Git main deployed: `28a7968`.
+- Backup before upload: `C:\PandaDashboard\backups\strategy-mainline-snapshot-20260709-082939`.
+- Uploaded `kpl-stats-server.js`, `kpl-dashboard_17_apple.html`, and production runtime snapshot `C:\PandaDashboard\strategy-data\strategy-mainline-snapshot-2026-07-08.json`.
+- Restarted `PandaDashboard-KPL-Server`; current listener process is `5212`.
+- Did not restart Caddy or `Panda Yule Server`.
+
+Notes for next agent:
+- Strategy mainline history is now deliberately frozen. If a historical date has no `strategy-mainline-snapshot-YYYY-MM-DD.json`, the API should say the snapshot is missing instead of rebuilding from newer data.
+- The 2026-07-08 snapshot is runtime data on the cloud server and is intentionally not committed to Git.
