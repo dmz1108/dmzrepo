@@ -19890,6 +19890,7 @@ async function cleanupOldLocalData(options = {}) {
   for (const scope of snapshotScopes.filter(entry => entry.isDirectory())) {
     results.push(await cleanupDateNamedEntries(path.join(SNAPSHOT_DIR, scope.name), retentionDays, nowDay, dateCleanupOptions));
   }
+  results.push(await cleanupDateNamedEntries(STRATEGY_MAINLINE_DATA_DIR, retentionDays, nowDay, dateCleanupOptions));
   results.push(await cleanupOldFilesByMtime(PERSIST_CACHE_DIR, cacheRetentionDays));
   results.push(await cleanupDateNamedEntries(JIUYANGONGSHE_STRUCTURED_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));
   results.push(await cleanupDateNamedEntries(JIUYANGONGSHE_DIAGRAM_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));
@@ -19994,6 +19995,9 @@ async function runAutoSnapshotIfDue() {
     const data = await buildDashboardSnapshotData(now.day, zsType, apiKey);
     await writeDashboardSnapshot(data);
   }
+  await ensureStrategyMainlineSnapshot(now.day, 'auto-after-15:30').catch(err => {
+    console.error('strategy mainline auto snapshot failed:', err.message);
+  });
   autoSnapshotDay = now.day;
 }
 
@@ -21681,6 +21685,7 @@ function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase) {
 const STRATEGY_MAINLINE_DATA_DIR = path.join(__dirname, 'strategy-data');
 function strategyMainlineConfirmPath(day) { return path.join(STRATEGY_MAINLINE_DATA_DIR, `mainline-confirm-${day}.json`); }
 function strategyMainlinePredictPath(day) { return path.join(STRATEGY_MAINLINE_DATA_DIR, `mainline-predict-${day}.json`); }
+function strategyMainlineSnapshotPath(day) { return path.join(STRATEGY_MAINLINE_DATA_DIR, `strategy-mainline-snapshot-${day}.json`); }
 async function readMainlineConfirm(day) {
   try { return JSON.parse(await fs.readFile(strategyMainlineConfirmPath(day), 'utf8')); } catch { return null; }
 }
@@ -21692,6 +21697,55 @@ async function writeMainlineConfirm(day, data) {
 }
 async function readMainlinePredict(day) {
   try { return JSON.parse(await fs.readFile(strategyMainlinePredictPath(day), 'utf8')); } catch { return null; }
+}
+async function readStrategyMainlineSnapshot(day) {
+  try {
+    const data = JSON.parse(await fs.readFile(strategyMainlineSnapshotPath(day), 'utf8'));
+    return {
+      ...data,
+      ok: data.ok !== false,
+      day: data.day || day,
+      requestedDay: data.requestedDay || day,
+      snapshot: true,
+      frozen: true,
+      snapshotState: 'frozen',
+    };
+  } catch {
+    return null;
+  }
+}
+async function writeStrategyMainlineSnapshot(day, payload, reason = '') {
+  if (!payload?.ok || !Array.isArray(payload.mainlines) || !payload.mainlines.length) return null;
+  await fs.mkdir(STRATEGY_MAINLINE_DATA_DIR, { recursive: true });
+  const snapshot = JSON.parse(JSON.stringify({
+    ...payload,
+    day,
+    requestedDay: day,
+    snapshot: true,
+    frozen: true,
+    snapshotState: 'frozen',
+    snapshotSavedAt: new Date().toISOString(),
+    snapshotReason: reason || 'after-close',
+    sessionPhase: payload.sessionPhase || '已收盘',
+  }));
+  await fs.writeFile(strategyMainlineSnapshotPath(day), JSON.stringify(snapshot, null, 2), 'utf8');
+  return snapshot;
+}
+function strategyMainlineEmptyPayload(day, requestedDay, reason, message, sessionPhase = '') {
+  return {
+    ok: false,
+    mode: 'intraday-mainline',
+    basis: 'realtime-board-gain-inflow-big-gainers-breadth-momentum-plus-prior-main-reason',
+    day,
+    requestedDay: requestedDay || day,
+    sessionPhase,
+    sourceDay: { realtime: '', boards: '', priorReason: '', history: '', hotThemes: '', resonance: '' },
+    reason,
+    message,
+    count: 0,
+    stockCount: 0,
+    mainlines: [],
+  };
 }
 // 盘中持续覆盖当天预判快照；收盘后不再覆盖已有快照（保留“收盘前最后一次预判”作为回测基准）。
 async function writeMainlinePredict(day, sessionPhase, mainlines, confirm) {
@@ -22171,7 +22225,7 @@ async function buildStrategyMainlineHistoryContext(endDay, themeKeys, days = 15,
   return { byTheme, tradingDays, endDay: historyEndDay, recentWindow: tradingDays.length };
 }
 
-async function getStrategyMainlines(day) {
+async function buildStrategyMainlinesLive(day, options = {}) {
   const requestedDay = isoFromCompactDate(day || chinaNowParts().day);
   const boardPayload = await getDayBoardsWithMembers(requestedDay, {
     allowFallback: false,
@@ -22531,7 +22585,7 @@ async function getStrategyMainlines(day) {
       m.isConfirmedMainline = (m.familyKey || m.key) === mainlineConfirm.key || m.theme === mainlineConfirm.theme;
     }
   }
-  if (isTodayQuery) writeMainlinePredict(isoDay, sessionPhaseNow, mainlines, mainlineConfirm);
+  if (isTodayQuery && options.writePredict !== false) writeMainlinePredict(isoDay, sessionPhaseNow, mainlines, mainlineConfirm);
   return {
     ok: true,
     mode: 'intraday-mainline',
@@ -22550,6 +22604,84 @@ async function getStrategyMainlines(day) {
     ])).size,
     mainlines,
   };
+}
+
+async function ensureStrategyMainlineSnapshot(day, reason = '') {
+  const isoDay = isoFromCompactDate(day);
+  if (!isChinaMarketTradingDay(isoDay)) return { skipped: true, reason: 'market-closed', day: isoDay };
+  const existing = await readStrategyMainlineSnapshot(isoDay);
+  if (existing) return { skipped: true, reason: 'exists', day: isoDay, snapshot: existing };
+  const live = await buildStrategyMainlinesLive(isoDay, { writePredict: false });
+  if (!live?.ok || !Array.isArray(live.mainlines) || !live.mainlines.length) {
+    return { skipped: true, reason: live?.reason || 'not-ready', day: isoDay, payload: live };
+  }
+  const snapshot = await writeStrategyMainlineSnapshot(isoDay, live, reason || 'after-close');
+  return { ok: !!snapshot, day: isoDay, snapshot };
+}
+
+async function getStrategyMainlines(day) {
+  const requestedDay = isoFromCompactDate(day || chinaNowParts().day);
+  const now = chinaNowParts();
+  const today = isoFromCompactDate(now.day);
+  const isTodayQuery = requestedDay === today;
+  const marketStatus = chinaMarketDayStatus(requestedDay);
+  const sessionPhase = isTodayQuery ? strategyMainlineSessionPhase(now) : '';
+
+  if (!marketStatus.isTradingDay) {
+    return strategyMainlineEmptyPayload(
+      requestedDay,
+      requestedDay,
+      'market-closed',
+      marketStatus.marketClosedNote || '今日非交易日，今日主线榜不生成盘中预测。',
+      sessionPhase
+    );
+  }
+
+  if (!isTodayQuery) {
+    const snapshot = await readStrategyMainlineSnapshot(requestedDay);
+    if (snapshot) return snapshot;
+    return strategyMainlineEmptyPayload(
+      requestedDay,
+      requestedDay,
+      'strategy-mainline-snapshot-not-found',
+      `${requestedDay} 暂无今日主线榜收盘快照。历史日期不再临时重算，避免复盘结果漂移。`,
+      ''
+    );
+  }
+
+  if (sessionPhase === '盘前' || sessionPhase === '集合竞价') {
+    return strategyMainlineEmptyPayload(
+      requestedDay,
+      requestedDay,
+      'market-not-open',
+      sessionPhase === '集合竞价'
+        ? '今日仍处于集合竞价阶段，等待 09:30 后的盘中实时板块和成分股数据再生成今日主线榜。'
+        : '今日未开盘，等待盘中实时板块、资金流和大涨成分股数据后再生成今日主线榜。',
+      sessionPhase
+    );
+  }
+
+  if (sessionPhase === '已收盘') {
+    const snapshot = await readStrategyMainlineSnapshot(requestedDay);
+    if (snapshot) return snapshot;
+    const saved = await ensureStrategyMainlineSnapshot(requestedDay, 'api-after-close');
+    if (saved?.snapshot) return saved.snapshot;
+    const fallback = saved?.payload || strategyMainlineEmptyPayload(
+      requestedDay,
+      requestedDay,
+      'strategy-mainline-snapshot-not-ready',
+      '今日已收盘，但今日主线榜快照尚未生成成功，请稍后重试。',
+      sessionPhase
+    );
+    return {
+      ...fallback,
+      sessionPhase,
+      snapshotState: 'missing-after-close',
+      message: fallback.message || '今日已收盘，但今日主线榜快照尚未生成成功，请稍后重试。',
+    };
+  }
+
+  return await buildStrategyMainlinesLive(requestedDay, { writePredict: true });
 }
 
 // 反向关节(stock 视角，**主因口径**):个股「💪强势」标的正确含义=该股综合归纳出的「唯一主因」

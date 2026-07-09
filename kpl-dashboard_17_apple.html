@@ -10897,7 +10897,7 @@ function ensureReviewDetailDrag() {
 function reviewHotGainColor(g) { g = Number(g); return g > 0 ? 'var(--up)' : (g < 0 ? 'var(--down)' : 'var(--text-faint)'); }
 async function loadStrategyMainlines(day) {
   const el = document.getElementById('strategy-mainlines'); if (!el) return;
-  el.innerHTML = '<div class="rht-loading">正在生成今日主线榜…</div>';
+  el.innerHTML = '<div class="rht-loading">正在读取今日主线榜状态…</div>';
   try {
     const res = await fetch(`${KPL_STATS_BASE}/api/strategy-mainlines?day=${encodeURIComponent(day)}&_=${Date.now()}`, { cache: 'no-store' });
     const d = await res.json();
@@ -11146,6 +11146,7 @@ function renderStrategyMainlinesHTML(d) {
   const realtimeDay = d && d.sourceDay && d.sourceDay.realtime;
   const priorDay = d && d.sourceDay && d.sourceDay.priorReason;
   const sourceNote = [
+    d && d.snapshotState === 'frozen' ? '收盘快照' : '',
     d && d.sessionPhase ? String(d.sessionPhase) : '',
     realtimeDay ? `盘中${formatStatusDay(realtimeDay)}` : '',
     priorDay && priorDay !== realtimeDay ? `主因参考${formatStatusDay(priorDay)}` : '',
