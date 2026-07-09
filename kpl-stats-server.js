@@ -20433,7 +20433,7 @@ async function getDayBoardsWithMembers(day, options = {}) {
   if (!bmap.size && options.liveIfMissing && isChinaMarketTradingDay(requestedDay)) {
     const apiKey = await readSavedApiKey().catch(() => '');
     if (apiKey) {
-      for (const z of [6, 5, 7]) {
+      await mapLimit([6, 5, 7], 3, async z => {
         try {
           let hidden; try { hidden = await getPermanentHiddenSet(z); } catch { hidden = new Set(); }
           const rankBoards = await fetchBoardRankingForSnapshot(String(z), apiKey, {
@@ -20446,7 +20446,7 @@ async function getDayBoardsWithMembers(day, options = {}) {
           const hydrated = await hydrateStrategyLiveBoardsForMembers(boards, apiKey, z, requestedDay);
           await absorbPayload(hydrated, z);
         } catch {}
-      }
+      });
       if (bmap.size) source = 'live';
     }
   }
@@ -20513,10 +20513,15 @@ async function getDayThemeNetInflow(day) {
 const STRATEGY_STRONG_RESONANCE_MIN_STOCKS = 2;
 const STRATEGY_MAINLINE_BIG_GAIN_PCT = 5;
 const STRATEGY_MAINLINE_NEAR_LIMIT_GAP_PCT = 1.5;
-const STRATEGY_MAINLINE_RISING_BOARD_LIMIT = 18;
-const STRATEGY_MAINLINE_LIVE_BOARD_POOL = 12;
-const STRATEGY_MAINLINE_LIVE_HYDRATE_TIMEOUT_MS = 3500;
-const STRATEGY_MAINLINE_RISING_FETCH_TIMEOUT_MS = 4000;
+const STRATEGY_MAINLINE_RISING_BOARD_LIMIT = 9;
+const STRATEGY_MAINLINE_LIVE_BOARD_POOL = 8;
+const STRATEGY_MAINLINE_LIVE_HYDRATE_TIMEOUT_MS = 1800;
+const STRATEGY_MAINLINE_RISING_FETCH_TIMEOUT_MS = 2200;
+const STRATEGY_MAINLINE_CATALOG_TIMEOUT_MS = 1200;
+const STRATEGY_MAINLINE_TOP_GAIN_TIMEOUT_MS = 3000;
+const STRATEGY_MAINLINE_REWORK_TIMEOUT_MS = 2000;
+const STRATEGY_MAINLINE_LIVE_CACHE_MS = 90 * 1000;
+const strategyMainlineLiveCache = new Map();
 // 广度统计至少要有这么多有效成分股，否则小板块一两只股就能拉出虚高普涨率
 const STRATEGY_MAINLINE_BREADTH_MIN_MEMBERS = 8;
 // 盘中动能采样：同一主线族两次采样至少隔 3 分钟，只保留 45 分钟窗口，重启后自然冷启动
@@ -21286,7 +21291,7 @@ async function getStrategyMainlineRealtimeCatalogBoards(day) {
       memberCount: view.stockCount,
       gainPct: numOrNull(view.gain),
       netInflow: numOrNull(view.netInflow),
-      ztCount: 0,
+      ztCount: null,
       source: 'eastmoney',
       zsType: 6,
     };
@@ -21299,7 +21304,7 @@ async function getStrategyMainlineRealtimeCatalogBoards(day) {
       memberCount: view.stockCount,
       gainPct: numOrNull(view.gain),
       netInflow: numOrNull(view.netInflow),
-      ztCount: 0,
+      ztCount: null,
       source: 'ths',
       zsType: 5,
     };
@@ -21328,7 +21333,7 @@ async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day) {
       (Number(b?.netInflow) || 0) - (Number(a?.netInflow) || 0)
     )
     .slice(0, STRATEGY_MAINLINE_RISING_BOARD_LIMIT);
-  await mapLimit(targets, 3, async board => {
+  await mapLimit(targets, 6, async board => {
     const plateId = String(board?.plateId || '');
     if (!plateId) return;
     const limitCodes = new Set((Array.isArray(board?.codes) ? board.codes : [])
@@ -22358,7 +22363,11 @@ async function buildStrategyMainlinesLive(day, options = {}) {
       strategyMainlineAttachRealtimeBoardToSeed(seed, board, matchedAllCodes);
     }
   }
-  const catalogBoards = await getStrategyMainlineRealtimeCatalogBoards(isoDay).catch(() => []);
+  const catalogBoards = await strategyMainlineWithTimeout(
+    getStrategyMainlineRealtimeCatalogBoards(isoDay).catch(() => []),
+    STRATEGY_MAINLINE_CATALOG_TIMEOUT_MS,
+    []
+  );
   for (const seed of seedByKey.values()) {
     strategyMainlineAttachBestCatalogBoard(seed, catalogBoards);
   }
@@ -22427,8 +22436,12 @@ async function buildStrategyMainlinesLive(day, options = {}) {
       resonanceStockCount: realtimeCodes.length || (seed.boards.length ? count : 0),
     };
   });
-  const gainLeaders = await buildMainlineTopGainStocks(isoDay, seeds.map(t => t.theme), 30, 5)
-    .catch(() => ({ byTheme: new Map(), tradingDays: [], baseDay: null }));
+  const gainLeaders = await strategyMainlineWithTimeout(
+    buildMainlineTopGainStocks(isoDay, seeds.map(t => t.theme), 30, 5)
+      .catch(() => ({ byTheme: new Map(), tradingDays: [], baseDay: null })),
+    STRATEGY_MAINLINE_TOP_GAIN_TIMEOUT_MS,
+    { byTheme: new Map(), tradingDays: [], baseDay: null }
+  );
   const rawMainlines = seeds.map((t) => {
     const theme = String(t.theme || '');
     const key = t.key || strategyMainlineTopicKey(theme);
@@ -22569,7 +22582,7 @@ async function buildStrategyMainlinesLive(day, options = {}) {
         name: b.name,
         plateId: String(b.plateId || ''),
         zsType: b.zsType,
-        ztCount: Number(b.ztCount) || 0,
+        ztCount: numOrNull(b.ztCount),
         netInflow: b.netInflow,
         gainPct: b.gainPct,
         confirmedCount: Number(b.confirmedCount) || 0,
@@ -22596,7 +22609,11 @@ async function buildStrategyMainlinesLive(day, options = {}) {
     )
     .slice(0, 10)
     .map((x, i) => ({ ...x, rank: i + 1 }));
-  await strategyMainlineReworkLeaders(mainlines, isoDay).catch(() => {});
+  await strategyMainlineWithTimeout(
+    strategyMainlineReworkLeaders(mainlines, isoDay).catch(() => {}),
+    STRATEGY_MAINLINE_REWORK_TIMEOUT_MS,
+    null
+  );
   const mainlineConfirm = await readMainlineConfirm(isoDay).catch(() => null);
   if (mainlineConfirm) {
     for (const m of mainlines) {
@@ -22699,7 +22716,19 @@ async function getStrategyMainlines(day) {
     };
   }
 
-  return await buildStrategyMainlinesLive(requestedDay, { writePredict: true });
+  const cacheKey = requestedDay;
+  const cached = strategyMainlineLiveCache.get(cacheKey);
+  if (cached?.expiresAt > Date.now() && cached.payload) {
+    return { ...cached.payload, cacheState: 'live-memory' };
+  }
+  const live = await buildStrategyMainlinesLive(requestedDay, { writePredict: true });
+  if (live?.ok && Array.isArray(live.mainlines) && live.mainlines.length) {
+    strategyMainlineLiveCache.set(cacheKey, {
+      expiresAt: Date.now() + STRATEGY_MAINLINE_LIVE_CACHE_MS,
+      payload: live,
+    });
+  }
+  return live;
 }
 
 // 反向关节(stock 视角，**主因口径**):个股「💪强势」标的正确含义=该股综合归纳出的「唯一主因」
