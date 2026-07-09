@@ -23,7 +23,20 @@ GitHub is the source of truth for **code and documentation**, but **not** for pr
   - `CLAUDE.md`
   - `docs/CLAUDE_HANDOFF_EN.md`
   - `docs/DAILY_HANDOFF.md` (latest entries)
+  - `docs/strategy/AI_DISCUSSION_GROUP.md`
 - If the task depends on production state, check or ask for the latest cloud operation log summary.
+
+## AI Discussion Group
+
+For high-impact product or strategy work, especially `今日策略` and `今日主线榜`, use the AI discussion group protocol before implementation:
+
+- Read `docs/strategy/AI_DISCUSSION_GROUP.md`.
+- Open or update a discussion thread in GitHub Issues or `docs/strategy/discussions/`.
+- Each available agent writes an independent view on the same owner question.
+- Agents challenge each other's reasoning and revise their views.
+- The owner approves the shared decision before major code changes.
+
+This is not a task split. Do not treat it as "Claude designs, Codex verifies". Each agent should reason about the strategy itself, challenge assumptions, and help converge on the best decision.
 
 ## Branch Rules
 

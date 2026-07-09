@@ -1,0 +1,104 @@
+name: Strategy Discussion
+description: Joint discussion before changing important strategy logic
+title: "[Strategy Discussion] "
+labels:
+  - strategy-discussion
+  - needs-discussion
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for important strategy/product questions that should be discussed by the owner, Codex, Company Codex, and Claude before implementation.
+
+  - type: textarea
+    id: owner-question
+    attributes:
+      label: Owner question
+      description: What are we trying to decide?
+      placeholder: "Example: Why did today's mainline ranking put theme A above theme B, and should the scoring logic change?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What happened, where was it seen, and why does it matter?
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence available
+      description: Dates, pages, APIs, screenshots, examples, or missing data.
+      placeholder: |
+        - Date:
+        - Page/API:
+        - Current result:
+        - Owner expected result:
+
+  - type: textarea
+    id: codex-view
+    attributes:
+      label: Codex independent view
+      value: "Pending."
+
+  - type: textarea
+    id: claude-view
+    attributes:
+      label: Claude independent view
+      value: "Pending."
+
+  - type: textarea
+    id: company-codex-view
+    attributes:
+      label: Company Codex independent view
+      value: "Pending."
+
+  - type: textarea
+    id: challenges
+    attributes:
+      label: Challenges and objections
+      description: Each agent should challenge the others' assumptions before convergence.
+      value: |
+        Codex challenges:
+
+        Claude challenges:
+
+        Company Codex challenges:
+
+        Owner challenges:
+
+  - type: textarea
+    id: revised-views
+    attributes:
+      label: Revised views
+      description: Each agent updates or defends its view after critique.
+      value: |
+        Codex revised view:
+
+        Claude revised view:
+
+        Company Codex revised view:
+
+  - type: textarea
+    id: shared-decision
+    attributes:
+      label: Shared decision
+      description: What did the group decide, and what options were rejected?
+      value: "Pending."
+
+  - type: textarea
+    id: validation-plan
+    attributes:
+      label: Validation plan
+      description: Cases, APIs/pages, expected visible result, and rollback condition.
+      value: |
+        Cases to test:
+
+        APIs/pages to verify:
+
+        Expected visible result:
+
+        Rollback condition:

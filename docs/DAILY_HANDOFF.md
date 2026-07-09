@@ -1583,3 +1583,34 @@ Deployment:
 Notes for next agent:
 - If this mismatch appears again, check whether the source tab itself is actually nonzero first. If the tab is nonzero but health is zero, it is a bug in `resolveAfterCloseSourceCoverage()` or `recomputeReviewSourceStatsFromTabs()`.
 - Current 2026-07-09 remaining source gaps are real source gaps: 复盘啦 0 and 淘股吧 0.
+
+## 2026-07-09 - Codex - Establish AI discussion group protocol
+
+Changed:
+- Added a formal AI discussion group protocol for high-impact product and strategy decisions.
+- The protocol explicitly rejects simple task splitting. Agents must answer the same owner question, write independent views, challenge each other, revise views, and converge before major implementation.
+- Added a reusable discussion template and the first 今日主线榜 discussion thread.
+- Added a GitHub issue template for future strategy discussions.
+- Updated `CLAUDE.md` and `docs/COLLABORATION_WORKFLOW.md` so future agents read and follow the discussion protocol.
+
+Files:
+- `docs/strategy/AI_DISCUSSION_GROUP.md`
+- `docs/strategy/DISCUSSION_TEMPLATE.md`
+- `docs/strategy/discussions/2026-07-09-mainline-ranking-discussion.md`
+- `.github/ISSUE_TEMPLATE/strategy-discussion.yml`
+- `CLAUDE.md`
+- `docs/COLLABORATION_WORKFLOW.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Reviewed the new protocol content for the owner requirement: "not division of labor, but joint discussion before deciding how to achieve the goal."
+- Confirmed the discussion thread is seeded for 今日主线榜 and leaves agent views as `Pending` until each agent participates.
+
+Deployment:
+- Production touched: no.
+- GitHub documentation/process change only.
+- No cloud upload or service restart required.
+
+Notes for next agent:
+- For important strategy work, especially 今日主线榜, start or update a discussion thread before implementation unless the owner explicitly asks for an immediate experiment.
+- Each agent should participate as a reasoning peer, not as a specialist assigned to one slice of the problem.

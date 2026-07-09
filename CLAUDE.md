@@ -8,8 +8,9 @@ You are joining the DreamerQi / PandaDashboard project. Start by understanding t
 2. Read `docs/CLAUDE_HANDOFF_EN.md`.
 3. Read `docs/DAILY_HANDOFF.md`.
 4. Read `docs/COLLABORATION_WORKFLOW.md`.
-5. Read `docs/PROJECT_MAP.md` and `docs/SANITIZATION.md`.
-6. Optionally read the sanitized operation notes:
+5. Read `docs/strategy/AI_DISCUSSION_GROUP.md`.
+6. Read `docs/PROJECT_MAP.md` and `docs/SANITIZATION.md`.
+7. Optionally read the sanitized operation notes:
    - `docs/PROJECT_HANDOFF.sanitized.md`
    - `docs/panda-cloud-ops-2026-06-19.sanitized.md`
    - `docs/cloud-change-log-20260705.sanitized.md`
@@ -21,6 +22,7 @@ Then respond with a short summary of:
 - the recent homepage changes,
 - the market/admin risk areas,
 - the latest relevant notes in `docs/DAILY_HANDOFF.md`,
+- whether the current task needs the AI discussion group protocol,
 - the files you intend to edit.
 
 ## Hard Rules
