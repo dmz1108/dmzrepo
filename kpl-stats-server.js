@@ -23314,8 +23314,13 @@ async function buildStrategyMainlinesLive(day, options = {}) {
   const isTodayQuery = isoDay === chinaTodayIso;
   const sessionPhaseNow = isTodayQuery ? strategyMainlineSessionPhase(chinaNow) : '';
   strategyMainlineMaybeAutoScan(boardPayload?.boards || [], isoDay, isTodayQuery, sessionPhaseNow);
-  const mainlines = strategyMergeMainlineFamilies(rawMainlines)
-    .map(item => strategyMainlineAugmentPrediction(item, isTodayQuery, isoDay))
+  const mainlineConfirm = await readMainlineConfirm(isoDay).catch(() => null);
+  const inflowGate = strategyMainlineApplyInflowGate(
+    strategyMergeMainlineFamilies(rawMainlines)
+      .map(item => strategyMainlineAugmentPrediction(item, isTodayQuery, isoDay)),
+    mainlineConfirm
+  );
+  const mainlines = inflowGate.kept
     .sort((a, b) =>
       (Number(b.score) || 0) - (Number(a.score) || 0) ||
       (Number(b.count) || 0) - (Number(a.count) || 0) ||
@@ -23328,7 +23333,6 @@ async function buildStrategyMainlinesLive(day, options = {}) {
     STRATEGY_MAINLINE_REWORK_TIMEOUT_MS,
     null
   );
-  const mainlineConfirm = await readMainlineConfirm(isoDay).catch(() => null);
   if (mainlineConfirm) {
     for (const m of mainlines) {
       m.isConfirmedMainline = (m.familyKey || m.key) === mainlineConfirm.key || m.theme === mainlineConfirm.theme;
@@ -23345,6 +23349,7 @@ async function buildStrategyMainlinesLive(day, options = {}) {
     requestedDay,
     sourceDay: { realtime: isoDay, boards: isoDay, priorReason: priorReason.endDay || '', history: history.endDay || '', hotThemes: history.endDay || isoDay, resonance: isoDay },
     realtimeSource: boardPayload.source || 'snapshot',
+    inflowGate: { rule: 'net-inflow-required', excluded: inflowGate.excluded.slice(0, 10) },
     recentWindow: history.recentWindow || 15,
     count: mainlines.length,
     stockCount: new Set(seeds.flatMap(t => [
@@ -23353,6 +23358,33 @@ async function buildStrategyMainlinesLive(day, options = {}) {
     ])).size,
     mainlines,
   };
+}
+
+// Owner 规则(2026-07-10):主线当天资金必须净流入——净流出/零流入的板块不是当天主线。
+// 两条保护:netInflow 为 null(数据缺失)不视为流出,不误杀(缺数据不得造假);
+// owner 已确认的主线不被自动规则移除(人工确认优先于自动规则)。
+// 被排除项记入 excluded 供观测(响应 inflowGate 字段),不悄悄消失。
+function strategyMainlineApplyInflowGate(items, mainlineConfirm) {
+  const list = Array.isArray(items) ? items : [];
+  const isConfirmed = (item) => !!mainlineConfirm &&
+    ((item.familyKey || item.key) === mainlineConfirm.key || item.theme === mainlineConfirm.theme);
+  const kept = [];
+  const excluded = [];
+  for (const item of list) {
+    const v = numOrNull(item?.netInflow);
+    if (v != null && v <= 0 && !isConfirmed(item)) {
+      excluded.push({
+        theme: String(item?.theme || ''),
+        netInflow: v,
+        count: Number(item?.count) || 0,
+        boardCount: Number(item?.boardCount) || 0,
+        reason: 'net-outflow',
+      });
+      continue;
+    }
+    kept.push(item);
+  }
+  return { kept, excluded };
 }
 
 async function ensureStrategyMainlineSnapshot(day, reason = '') {
