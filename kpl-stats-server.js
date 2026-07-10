@@ -21808,10 +21808,47 @@ function strategyMainlineBucketRatios(bucket) {
   };
 }
 
-// 明星股判定：未涨停大涨股看「资金是否已活跃」，已涨停股看「涨停瞬间是否吃光卖压」。
+// ===== 明星股三层判定(Owner 定稿 2026-07-10,详见 docs/strategy/discussions/2026-07-10-star-leader-prediction.md) =====
+// 第一层·每档先决:每个档位的主动比与被动比各自 ≥1.5(不是相加);
+// 第二层·最大档特征:该股最大可统计档 三比值 2/3>1.8(涨停前,"预期明星")/ 2/3≥2(封板,"明星确认"),
+//   且最大档主动买入累计 ≥3亿 为涨停前预判信号;
+// 第三层·必含该股最大可统计档:3元股即300w档,10元以上即1000w档,按股价自适应。
+const STRATEGY_MAINLINE_ALL_BUCKETS = [500000, 3000000, 5000000, 8000000, 10000000];
+const STRATEGY_MAINLINE_STAR_MAX_PRE_RATIO = 1.8;   // 第二层:最大档涨停前 2/3 比值下限
+const STRATEGY_MAINLINE_STAR_MAX_BUY_MIN = 3e8;     // 第二层:最大档主动买入累计成交下限(预判信号)
+const STRATEGY_MAINLINE_STAR_LEVEL_ORDER = { confirmed: 0, expected: 1, active: 2 };  // 展示排序:确认 > 预期 > 活跃
+// 限价单笔申报上限(股):主板100万 / 创业板30万 / 科创板10万(按代码前缀;精确交易所规则核实记录见讨论文档议题A)
+function strategyMainlinePerOrderShareCap(code) {
+  const c = String(code || '');
+  if (/^30/.test(c)) return 300000;
+  if (/^68/.test(c)) return 100000;
+  return 1000000;
+}
+// 该股最大可统计档 = 五档中 ≤(股价×单笔申报上限)的最高档(Owner 案例:3元→300w,5元→500w,10元→1000w)。
+// 行内无股价时用数据回推:结果里有成交记录的最高档,即该股实际可达的最大档。
+function strategyMainlineMaxObservableBucket(row) {
+  const price = numOrNull(row?.price ?? row?.close ?? row?.lastPrice);
+  if (price != null && price > 0) {
+    const maxAmount = price * strategyMainlinePerOrderShareCap(row?.code);
+    const fit = STRATEGY_MAINLINE_ALL_BUCKETS.filter(b => b <= maxAmount);
+    if (fit.length) return fit[fit.length - 1];
+    return STRATEGY_MAINLINE_ALL_BUCKETS[0];
+  }
+  const thresholds = row?.thresholds || {};
+  for (let i = STRATEGY_MAINLINE_ALL_BUCKETS.length - 1; i >= 0; i -= 1) {
+    const b = STRATEGY_MAINLINE_ALL_BUCKETS[i];
+    if (strategyMainlineBucketRatios(thresholds[String(b)])) return b;
+  }
+  return null;
+}
+// 明星股判定:未涨停大涨股看「资金是否已活跃/是否预期明星」,已涨停股看「涨停瞬间是否吃光卖压」。
 function strategyMainlineStarStatus(row) {
   const thresholds = row?.thresholds || {};
-  const buckets = STRATEGY_MAINLINE_STAR_BUCKETS
+  const maxBucketAmount = strategyMainlineMaxObservableBucket(row);
+  // 第三层:判定档位集合 = 固定档 ∪ 该股最大可统计档(超出该股可达范围的档位天然无数据,会被过滤)
+  const bucketAmounts = [...new Set([...STRATEGY_MAINLINE_STAR_BUCKETS, ...(maxBucketAmount ? [maxBucketAmount] : [])])]
+    .sort((a, b) => a - b);
+  const buckets = bucketAmounts
     .map(amount => ({ amount, ratios: strategyMainlineBucketRatios(thresholds[String(amount)]) }))
     .filter(item => item.ratios);
   if (!buckets.length) return null;
@@ -21821,19 +21858,54 @@ function strategyMainlineStarStatus(row) {
     passiveRatio: Number(base.passiveRatio.toFixed(2)),
     supportRatio: Number(base.supportRatio.toFixed(2)),
   };
+  // Owner 澄清(2026-07-10):最大档字段存在但无买单/为零 = 明星条件不成立,绝不回退小档;
+  // 只有 worker 压根没采集该档字段(字段缺失)才算"数据不完整",此时按旧行为保守处理并打标。
+  const maxField = maxBucketAmount ? thresholds[String(maxBucketAmount)] : undefined;
+  const maxFieldPresent = maxField !== undefined && maxField !== null;
+  const maxRatios = maxFieldPresent ? strategyMainlineBucketRatios(maxField) : null;
+  const maxBucketEmpty = !!(maxBucketAmount && maxFieldPresent && !maxRatios);   // 字段在、数据空/零 → 条件失败
+  const maxBucketDataMissing = !!(maxBucketAmount && !maxFieldPresent);          // 字段缺失 → 数据不完整
+  const maxActiveBuy = maxFieldPresent ? Number(maxField?.activeBuy || 0) : 0;
+  const maxBucket = maxBucketAmount ? {
+    amount: maxBucketAmount,
+    activeBuy: Math.round(maxActiveBuy),
+    empty: maxBucketEmpty,
+    dataMissing: maxBucketDataMissing,
+    ratios: maxRatios ? {
+      activeRatio: Number(maxRatios.activeRatio.toFixed(2)),
+      passiveRatio: Number(maxRatios.passiveRatio.toFixed(2)),
+      supportRatio: Number(maxRatios.supportRatio.toFixed(2)),
+    } : null,
+  } : null;
   const gain = numOrNull(row?.gainPct ?? row?.gain);
   const sealed = gain != null && gain >= limitUpThreshold(row?.code, row?.name);
   if (sealed) {
-    const passCount = [base.activeRatio, base.passiveRatio, base.supportRatio]
+    if (maxBucketEmpty) {
+      // 最大档有字段但没有大单 → 大资金缺席,不是明星(小档再强也不回退)
+      return { level: 'sealedWeak', label: '涨停但最大档无大单', gain, ratios: display, maxBucket };
+    }
+    // 最大档字段缺失(worker 未采集)→ 数据不完整,退回最小档判定并打标,供修 worker 后复核
+    const sealRatios = maxRatios || base;
+    const passCount = [sealRatios.activeRatio, sealRatios.passiveRatio, sealRatios.supportRatio]
       .filter(v => v >= STRATEGY_MAINLINE_STAR_SEAL_RATIO).length;
-    if (passCount >= 2) return { level: 'confirmed', label: '明星确认', gain, ratios: display };
-    return { level: 'sealedWeak', label: '涨停但比值未达标', gain, ratios: display };
+    if (passCount >= 2) return { level: 'confirmed', label: '明星确认', gain, ratios: display, maxBucket };
+    return { level: 'sealedWeak', label: '涨停但比值未达标', gain, ratios: display, maxBucket };
   }
   if (gain != null && gain >= STRATEGY_MAINLINE_BIG_GAIN_PCT) {
+    if (maxBucketEmpty) return null;   // 最大档无大单 → 明星条件不成立,连"资金活跃"也不给
     const allPass = buckets.every(({ ratios }) =>
       ratios.activeRatio >= STRATEGY_MAINLINE_STAR_PRE_RATIO &&
       ratios.passiveRatio >= STRATEGY_MAINLINE_STAR_PRE_RATIO);
-    if (allPass) return { level: 'active', label: '资金活跃', gain, ratios: display };
+    if (!allPass) return null;
+    // 第二层涨停前预判:最大档三比值 2/3 > 1.8 且最大档主动买累计 ≥3亿 → 预期明星(未封板已见强烈买入意愿)
+    if (maxRatios) {
+      const strongCount = [maxRatios.activeRatio, maxRatios.passiveRatio, maxRatios.supportRatio]
+        .filter(v => v > STRATEGY_MAINLINE_STAR_MAX_PRE_RATIO).length;
+      if (strongCount >= 2 && maxActiveBuy >= STRATEGY_MAINLINE_STAR_MAX_BUY_MIN) {
+        return { level: 'expected', label: '预期明星', gain, ratios: display, maxBucket };
+      }
+    }
+    return { level: 'active', label: '资金活跃', gain, ratios: display, maxBucket };
   }
   return null;
 }
@@ -22674,10 +22746,10 @@ function strategyMainlineAugmentPrediction(item, isToday, day) {
   ].filter(Boolean));
   const starStocks = [...starByCode.values()]
     .filter(star => themeCodes.has(star.code) && star.level !== 'sealedWeak')
-    .sort((a, b) => (a.level === 'confirmed' ? 0 : 1) - (b.level === 'confirmed' ? 0 : 1) || (Number(b.gain) || 0) - (Number(a.gain) || 0))
+    .sort((a, b) => (STRATEGY_MAINLINE_STAR_LEVEL_ORDER[a.level] ?? 9) - (STRATEGY_MAINLINE_STAR_LEVEL_ORDER[b.level] ?? 9) || (Number(b.gain) || 0) - (Number(a.gain) || 0))
     .slice(0, 4);
   const starConfirmed = starStocks.some(star => star.level === 'confirmed');
-  const starActive = starStocks.some(star => star.level === 'active');
+  const starActive = starStocks.some(star => star.level === 'active' || star.level === 'expected');
   if (starStocks.length) {
     scoreParts.star = Number(Math.min(40, starStocks.reduce((sum, star) => sum + (star.level === 'confirmed' ? 15 : 8), 0)).toFixed(1));
   }
