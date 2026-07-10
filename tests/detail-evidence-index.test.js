@@ -91,7 +91,7 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
       { key: 'final', rows: [row('600001', '甲', '大类词', '细分词甲')] },
     ],
     '2026-07-10': [
-      { key: 'tgb', rows: [row('600003', '丙', '大类词', '细分词甲'), row('600001', '甲', '大类词', '细分词甲')] },
+      { key: 'tgb', rows: [row('600003', '丙', '大类词', '细分词甲'), row('600001', '甲', '大类词', '细分词甲'), row('600009', '丁', '大类词', '并列词一+并列词二')] },
       { key: 'xuangubao', rows: [row('600001', '甲', '大类词', '细分词乙')] },
       { key: 'final', rows: [row('600003', '丙', '大类词', '')] },
     ],
@@ -111,6 +111,8 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   A(!!wBig && wBig.kinds.includes('board') && wBig.broadTopic === '', '大主题同样入索引(kind=board),broad 与 word 相同时留空');
   const cand = idx.aliasCandidates.find(c => (c.a === '细分词甲' && c.b === '细分词乙') || (c.a === '细分词乙' && c.b === '细分词甲'));
   A(!!cand && cand.count === 2 && cand.stockCount === 1, '别名自动候选(同股同日不同源,两日=count2)');
+  A(!idx.aliasCandidates.find(c => c.a === '并列词一' || c.b === '并列词一' || c.a === '并列词二' || c.b === '并列词二'), '同一来源 + 拆出的并列词不进别名候选');
+  A(!!idx.words.find(w => w.word === '并列词一') && !!idx.words.find(w => w.word === '并列词二'), '并列词仍各自入索引词条(只是不互为别名候选)');
 
   // 3. 人工词典:confirm 合并,veto 排除候选
   aliasDictContent = JSON.stringify({ confirm: [['细分词甲', '细分词乙']], veto: [] });

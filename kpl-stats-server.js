@@ -22231,7 +22231,7 @@ async function buildDetailEvidenceIndex(endDay, options = {}) {
   for (const day of tradingDays) {
     const sv = await buildDaySourceViewWithConsensus(day, {}).catch(() => null);
     const tabs = sv?.payload?.tabs || [];
-    const perStockWords = new Map();  // code -> Set(细分证据词,跨真实源) 供当日别名候选配对
+    const perStockWords = new Map();  // code -> Map(细分证据词 -> Set(来源)) 供当日跨源别名候选配对
     for (const tab of tabs) {
       const source = String(tab.key || '');
       for (const row of (tab.rows || [])) {
@@ -22252,16 +22252,23 @@ async function buildDetailEvidenceIndex(endDay, options = {}) {
           cur.hits += 1;
           words.set(word, cur);
           if (kind === 'detail' && source !== 'final') {
-            if (!perStockWords.has(code)) perStockWords.set(code, new Set());
-            perStockWords.get(code).add(word);
+            if (!perStockWords.has(code)) perStockWords.set(code, new Map());
+            const wordSources = perStockWords.get(code);
+            if (!wordSources.has(word)) wordSources.set(word, new Set());
+            wordSources.get(word).add(source);
           }
         }
       }
     }
-    for (const [code, set] of perStockWords) {
-      const list = [...set].sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'));
+    for (const [code, wordSources] of perStockWords) {
+      const list = [...wordSources.keys()].sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'));
       for (let i = 0; i < list.length; i += 1) {
         for (let j = i + 1; j < list.length; j += 1) {
+          // 别名候选只在"不同真实来源给同一股票的不同细分词"之间产生;
+          // 同一来源用 + 拆出的两个词是并列原因,不是同义关系,不进候选。
+          const srcA = wordSources.get(list[i]);
+          const srcB = wordSources.get(list[j]);
+          if (new Set([...srcA, ...srcB]).size < 2) continue;
           const key = `${list[i]}${list[j]}`;
           if (vetoSet.has(key)) continue;
           const cur = pairCounts.get(key) || { count: 0, codes: new Set() };
