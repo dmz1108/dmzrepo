@@ -20661,6 +20661,10 @@ const STRATEGY_STRONG_RESONANCE_MIN_STOCKS = 2;
 const STRATEGY_MAINLINE_BIG_GAIN_PCT = 5;
 const STRATEGY_MAINLINE_NEAR_LIMIT_GAP_PCT = 1.5;
 const STRATEGY_MAINLINE_RISING_BOARD_LIMIT = 5;
+// P1-B 补选通道(讨论批准 2026-07-10):主通道涨停数优先会漏"资金强/涨幅强但涨停少"的新发方向,
+// 从已获取的实时榜按 净流入>涨幅 补选;可配置可关闭(0=关),默认 3。
+const STRATEGY_MAINLINE_SUPPLEMENT_BOARDS = Math.max(0, Number(process.env.STRATEGY_MAINLINE_SUPPLEMENT_BOARDS ?? 3) || 0);
+let strategyMainlineSupplementState = null;  // 最近一次补选观测(scanSupplement 字段随响应输出)
 const STRATEGY_MAINLINE_LIVE_BOARD_POOL = 5;
 const STRATEGY_MAINLINE_LIVE_HYDRATE_TIMEOUT_MS = 1200;
 const STRATEGY_MAINLINE_RISING_FETCH_TIMEOUT_MS = 1500;
@@ -21473,9 +21477,9 @@ async function getStrategyMainlineRealtimeCatalogBoards(day) {
   });
 }
 
-async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day) {
+async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day, options = {}) {
   const list = Array.isArray(boards) ? boards : [];
-  const targets = list
+  const primary = list
     .slice()
     .sort((a, b) =>
       (Number(b?.zt) || 0) - (Number(a?.zt) || 0) ||
@@ -21483,6 +21487,39 @@ async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day) {
       (Number(b?.netInflow) || 0) - (Number(a?.netInflow) || 0)
     )
     .slice(0, STRATEGY_MAINLINE_RISING_BOARD_LIMIT);
+  for (const b of primary) { if (b) b.scanChannel = 'primary'; }
+  // 补选通道(会签约束2/3):只有真盘中榜(realtimeSource='live')可补选,快照不得伪装成盘中证据;
+  // 每个补选板块记录进入原因(净流入/涨幅/涨停数/榜单位置),观测状态随响应输出。
+  const realtimeSource = String(options.realtimeSource || '');
+  const supplements = [];
+  if (STRATEGY_MAINLINE_SUPPLEMENT_BOARDS > 0 && realtimeSource === 'live') {
+    const chosen = new Set(primary.map(b => String(b?.plateId || '')));
+    const ranked = list.slice().sort((a, b) =>
+      (Number(b?.netInflow) || 0) - (Number(a?.netInflow) || 0) ||
+      (Math.max(0, Number(b?.gainPct) || 0)) - (Math.max(0, Number(a?.gainPct) || 0)));
+    for (const b of ranked) {
+      if (supplements.length >= STRATEGY_MAINLINE_SUPPLEMENT_BOARDS) break;
+      const pid = String(b?.plateId || '');
+      if (!pid || chosen.has(pid)) continue;
+      const netInflow = Number(b?.netInflow) || 0;
+      const gainPct = Number(b?.gainPct) || 0;
+      if (netInflow <= 0 && gainPct <= 0) continue;   // 毫无实时强度的板块不补
+      chosen.add(pid);
+      b.scanChannel = 'supplement';
+      b.supplementBasis = { netInflow, gainPct, zt: Number(b?.zt) || 0, liveRankIndex: list.indexOf(b) + 1 };
+      supplements.push(b);
+    }
+  }
+  strategyMainlineSupplementState = {
+    day: String(day || ''),
+    at: new Date().toISOString(),
+    realtimeSource,
+    enabled: STRATEGY_MAINLINE_SUPPLEMENT_BOARDS > 0,
+    limit: STRATEGY_MAINLINE_SUPPLEMENT_BOARDS,
+    // picked 即"若无补选会漏掉的板块"清单(它们都不在主通道 top-5 里)
+    picked: supplements.map(b => ({ name: String(b?.name || ''), plateId: String(b?.plateId || ''), ...b.supplementBasis })),
+  };
+  const targets = [...primary, ...supplements];
   await mapLimit(targets, 6, async board => {
     const plateId = String(board?.plateId || '');
     if (!plateId) return;
@@ -21915,6 +21952,7 @@ function strategyMainlineAttachResponseMeta(payload, options = {}) {
       consecutiveFailures: strategyMainlineWarmState.consecutiveFailures,
       currentDelayMs: strategyMainlineWarmState.currentDelayMs,
     },
+    scanSupplement: strategyMainlineSupplementState,   // P1-B 补选观测(最近一次扫描;picked=若无补选会漏的板块)
   };
 }
 async function readMainlineConfirm(day) {
@@ -22923,7 +22961,7 @@ async function buildStrategyMainlinesLive(day, options = {}) {
       mainlines: [],
     };
   }
-  await strategyMainlineEnrichBoardsWithRisingStocks(boardPayload?.boards || [], isoDay).catch(() => []);
+  await strategyMainlineEnrichBoardsWithRisingStocks(boardPayload?.boards || [], isoDay, { realtimeSource: boardPayload?.source || '' }).catch(() => []);
   const limitUpDb = await readLimitUpDbDay(isoDay).catch(() => null);
   const prevDay = strategyMainlinePrevTradingDay(isoDay);
   const prevDb = prevDay ? await readLimitUpMainReasonDbDay(prevDay).catch(() => null) : null;

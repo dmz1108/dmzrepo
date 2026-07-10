@@ -1967,3 +1967,26 @@ Deployment:
 
 Notes for next agent:
 - 别名候选语义自此为"跨源同义假设";同源并列原因如需分析,直接看词条本身的 stocksByDay。
+
+## 2026-07-10 - Claude - P1-B 扫描补选通道(第一阶段第三项,已批准)
+
+Changed:
+- `strategyMainlineEnrichBoardsWithRisingStocks` 增加补选通道:主通道(涨停数>涨幅>净流入 top-5)不变;从已获取的实时榜(liveRankCount=80,不新增外部拉取)按 净流入>涨幅 补选"涨停少但实时强"的板块,与主通道去重,零强度(净流入与涨幅均<=0)不补。
+- 会签约束2:可配置可关闭——`STRATEGY_MAINLINE_SUPPLEMENT_BOARDS`(env 可覆写,默认 3,配 0 即关);每个补选板块记录进入原因 `supplementBasis`(净流入/涨幅/涨停数/榜单位置),板块带 `scanChannel` 标记;观测状态 `scanSupplement` 随主线榜响应输出,`picked` 即"若无补选会漏的板块"清单。
+- 会签约束3:只有 `realtimeSource='live'` 参与补选,快照源零补选,不把历史快照伪装成盘中证据。
+- 调用点传入 `boardPayload.source`;成员股拉取沿用原 mapLimit 并发与 1.5s 超时,补选仅增加最多 3 个板块的拉取量。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/scan-supplement.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;`node tests/scan-supplement.test.js` 11 项全过(主通道排序不变、补选取数与依据记录、snapshot 零补选、配0关闭、零强度不补、去重);detail-evidence-index 31 项、predict-records 17 项回归通过。
+
+Deployment:
+- GitHub only(分支 claude/p1b-scan-supplement)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 部署后可通过响应里 `scanSupplement.picked` 观察每日补选;连续多日 picked 无一进入主线候选则说明补选键不对,按 Validation Plan 调整或配 0 回退。
+- 剩余 P1-D 口径元数据待本项合并后开工。
