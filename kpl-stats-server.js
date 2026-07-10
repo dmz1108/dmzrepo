@@ -22171,6 +22171,195 @@ async function writeMainlinePredict(day, sessionPhase, mainlines, confirm) {
   } catch {}
 }
 
+// ===== P1-A 细分证据索引库(讨论批准 2026-07-10) =====
+// 盘后从四源 tab 行 + 综合库聚合"证据词"索引:{证据词,别名,股票集合(按日),来源数,首末出现日}。
+// 会签约束1:只建衍生索引,只读四源与综合库,绝不反写来源库。
+// 设计原则:大主题/产业链细分/事件链条/核心公司链条一视同仁,全是证据词,不硬编码任何具体词;
+// 层级归属由 alias/family 配置另行维护。别名自动候选(同股同日不同源)只进候选区,人工词典确认后生效。
+const DETAIL_EVIDENCE_INDEX_DAYS = 30;
+const DETAIL_EVIDENCE_MAX_WORDS = 2000;
+const DETAIL_EVIDENCE_ALIAS_DICT_PATH = path.join(STRATEGY_MAINLINE_DATA_DIR, 'detail-evidence-alias.json');  // 运行时人工词典(confirm/veto 对),不入 Git
+function detailEvidenceIndexPath(day) { return path.join(STRATEGY_MAINLINE_DATA_DIR, `detail-evidence-index-${day}.json`); }
+
+// 细分原因文本 -> 证据词:按常见连接符拆词,去括注/后缀,滤掉过短过长与纯数字
+function detailEvidenceSplitTerms(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return [];
+  return raw
+    .split(/[+/、,，;；|·\s]+/u)
+    .map(t => t.replace(/[()（）[\]【】“”"'’‘]/gu, '').trim())
+    .map(t => t.replace(/概念$/u, '').trim())
+    .filter(t => t.length >= 2 && t.length <= 12)
+    .filter(t => !/^[\d.]+%?$/.test(t));
+}
+function detailEvidenceCanonTerm(term) {
+  const canon = canonicalTopicName(term);
+  return String(canon || term || '').trim();
+}
+async function readDetailEvidenceAliasDict() {
+  try {
+    const dict = JSON.parse(await fs.readFile(DETAIL_EVIDENCE_ALIAS_DICT_PATH, 'utf8'));
+    return { confirm: Array.isArray(dict?.confirm) ? dict.confirm : [], veto: Array.isArray(dict?.veto) ? dict.veto : [] };
+  } catch { return { confirm: [], veto: [] }; }
+}
+async function readDetailEvidenceIndex(day) {
+  try { return JSON.parse(await fs.readFile(detailEvidenceIndexPath(day), 'utf8')); } catch { return null; }
+}
+async function buildDetailEvidenceIndex(endDay, options = {}) {
+  const isoDay = isoFromCompactDate(endDay);
+  const windowDays = Math.max(5, Math.min(60, Number(options.days) || DETAIL_EVIDENCE_INDEX_DAYS));
+  const apiKey = await readSavedApiKey().catch(() => '');
+  const tradingDays = await getRecentTradingDays(isoDay, apiKey, windowDays).catch(() => []);
+  if (!tradingDays.length) return { ok: false, reason: 'no-trading-days', day: isoDay };
+  const dict = await readDetailEvidenceAliasDict();
+  const aliasTo = new Map();  // 别名 -> 规范词(人工 confirm 对,首词为规范)
+  for (const pair of dict.confirm) {
+    if (!Array.isArray(pair) || pair.length < 2) continue;
+    const canon = detailEvidenceCanonTerm(pair[0]);
+    if (!canon) continue;
+    for (const alias of pair.slice(1)) {
+      const a = detailEvidenceCanonTerm(alias);
+      if (a && a !== canon) aliasTo.set(a, canon);
+    }
+  }
+  const vetoSet = new Set(dict.veto
+    .filter(p => Array.isArray(p) && p.length >= 2)
+    .map(p => [detailEvidenceCanonTerm(p[0]), detailEvidenceCanonTerm(p[1])].sort().join('')));
+  const words = new Map();      // 证据词 -> { kinds, sources, days: Map(day -> Set(code)), hits }
+  const pairCounts = new Map(); // 'ab' -> { count, codes: Set } 别名自动候选
+  for (const day of tradingDays) {
+    const sv = await buildDaySourceViewWithConsensus(day, {}).catch(() => null);
+    const tabs = sv?.payload?.tabs || [];
+    const perStockWords = new Map();  // code -> Set(细分证据词,跨真实源) 供当日别名候选配对
+    for (const tab of tabs) {
+      const source = String(tab.key || '');
+      for (const row of (tab.rows || [])) {
+        const code = normalizeReasonSourceCode(row?.code);
+        if (!code) continue;
+        const entries = [];
+        for (const t of detailEvidenceSplitTerms(row?.boardTopic)) entries.push({ term: t, kind: 'board' });
+        for (const t of detailEvidenceSplitTerms(row?.detailReason)) entries.push({ term: t, kind: 'detail' });
+        for (const { term, kind } of entries) {
+          let word = detailEvidenceCanonTerm(term);
+          if (aliasTo.has(word)) word = aliasTo.get(word);
+          if (!word) continue;
+          const cur = words.get(word) || { kinds: new Set(), sources: new Set(), days: new Map(), hits: 0 };
+          cur.kinds.add(kind);
+          cur.sources.add(source);
+          if (!cur.days.has(day)) cur.days.set(day, new Set());
+          cur.days.get(day).add(code);
+          cur.hits += 1;
+          words.set(word, cur);
+          if (kind === 'detail' && source !== 'final') {
+            if (!perStockWords.has(code)) perStockWords.set(code, new Set());
+            perStockWords.get(code).add(word);
+          }
+        }
+      }
+    }
+    for (const [code, set] of perStockWords) {
+      const list = [...set].sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'));
+      for (let i = 0; i < list.length; i += 1) {
+        for (let j = i + 1; j < list.length; j += 1) {
+          const key = `${list[i]}${list[j]}`;
+          if (vetoSet.has(key)) continue;
+          const cur = pairCounts.get(key) || { count: 0, codes: new Set() };
+          cur.count += 1;
+          cur.codes.add(code);
+          pairCounts.set(key, cur);
+        }
+      }
+    }
+  }
+  const sortedWords = [...words.entries()]
+    .sort((a, b) => b[1].hits - a[1].hits || a[0].localeCompare(b[0], 'zh-Hans-CN'))
+    .slice(0, DETAIL_EVIDENCE_MAX_WORDS)
+    .map(([word, w]) => {
+      const daysList = [...w.days.keys()].sort();
+      return {
+        word,
+        kinds: [...w.kinds].sort(),
+        sources: [...w.sources].sort(),
+        sourceCount: [...w.sources].filter(s => s !== 'final').length,  // 真实源数(细分多源共识依据)
+        hits: w.hits,
+        dayCount: daysList.length,
+        firstDay: daysList[0] || '',
+        lastDay: daysList[daysList.length - 1] || '',
+        stockCount: new Set(daysList.flatMap(d => [...w.days.get(d)])).size,
+        stocksByDay: Object.fromEntries(daysList.map(d => [d, [...w.days.get(d)].sort()])),
+      };
+    });
+  const aliasCandidates = [...pairCounts.entries()]
+    .map(([key, v]) => {
+      const [a, b] = key.split('');
+      return { a, b, count: v.count, stockCount: v.codes.size, sampleCodes: [...v.codes].slice(0, 5) };
+    })
+    .filter(c => c.count >= 2)
+    .sort((x, y) => y.count - x.count || y.stockCount - x.stockCount)
+    .slice(0, 200);
+  const payload = {
+    ok: true, version: 1, day: isoDay,
+    windowDays: tradingDays.length, tradingDays,
+    generatedAt: new Date().toISOString(),
+    wordCount: sortedWords.length,
+    aliasConfirmedPairs: dict.confirm.length,
+    aliasVetoedPairs: dict.veto.length,
+    words: sortedWords,
+    aliasCandidates,
+  };
+  await fs.mkdir(STRATEGY_MAINLINE_DATA_DIR, { recursive: true });
+  await fs.writeFile(detailEvidenceIndexPath(isoDay), JSON.stringify(payload), 'utf8');
+  return payload;
+}
+
+let autoDetailEvidenceIndexDay = '';
+async function runAutoDetailEvidenceIndexIfDue() {
+  const now = chinaNowParts();
+  if (now.hour < 16) return;  // 收盘后 16 点起构建,等四源盘后数据基本齐
+  if (autoDetailEvidenceIndexDay === now.day) return;
+  autoDetailEvidenceIndexDay = now.day;
+  if (!isChinaMarketTradingDay(now.day)) return;
+  await buildDetailEvidenceIndex(now.day).catch(err => {
+    console.error('detail evidence index build failed:', err.message);
+  });
+}
+
+// GET /api/detail-evidence-index?day=&word=&limit= 只读;rebuild=1 需管理员(现场重建当日索引)
+async function getDetailEvidenceIndexApi(url, req, res) {
+  const day = isoFromCompactDate(url.searchParams.get('day') || chinaNowParts().day);
+  const rebuild = url.searchParams.get('rebuild') === '1';
+  if (rebuild && !requireAdmin(req, res)) return;
+  let payload = rebuild ? await buildDetailEvidenceIndex(day).catch(e => ({ ok: false, error: String(e?.message || e), day })) : await readDetailEvidenceIndex(day);
+  let indexDay = day;
+  if (!payload) {
+    // 当日无索引(盘中/未构建):回退最近一份,明确标注 indexDay,不冒充当日
+    const apiKey = await readSavedApiKey().catch(() => '');
+    const td = await getRecentTradingDays(day, apiKey, 10).catch(() => []);
+    for (let i = td.length - 1; i >= 0 && !payload; i -= 1) {
+      payload = await readDetailEvidenceIndex(td[i]);
+      if (payload) indexDay = td[i];
+    }
+  }
+  if (!payload) return send(res, 200, { ok: false, reason: 'no-index', requestedDay: day, message: '细分证据索引尚未构建(每日收盘后自动生成)' });
+  const word = String(url.searchParams.get('word') || '').trim();
+  const limit = Math.min(500, Math.max(1, Number(url.searchParams.get('limit')) || 100));
+  const meta = {
+    ok: payload.ok !== false, requestedDay: day, indexDay: payload.day || indexDay,
+    generatedAt: payload.generatedAt || '', windowDays: payload.windowDays || 0,
+    wordCount: payload.wordCount || 0,
+    aliasConfirmedPairs: payload.aliasConfirmedPairs || 0, aliasVetoedPairs: payload.aliasVetoedPairs || 0,
+  };
+  if (word) {
+    const canon = detailEvidenceCanonTerm(word);
+    const matches = (payload.words || [])
+      .filter(w => w.word === canon || w.word.includes(canon) || canon.includes(w.word))
+      .slice(0, limit);
+    return send(res, 200, { ...meta, query: word, canonQuery: canon, matches });
+  }
+  const summary = (payload.words || []).slice(0, limit).map(({ stocksByDay, ...rest }) => rest);
+  return send(res, 200, { ...meta, words: summary, aliasCandidates: (payload.aliasCandidates || []).slice(0, 50) });
+}
+
 // ===== 龙头重构：池内三榜排名（10日涨停次数前5 / 10日涨幅前10 / 30日涨幅前10，均按交易日）+ 主因硬门槛 =====
 // 复用 enrichReviewLeaderMetrics：gain10/gain30 来自收盘价库，zt10Count 来自涨停底库，
 // mainZt10Count = 近10日「复盘综合归纳指向本主线」的涨停次数——个股涨停必须和板块主因结合，这就是硬门槛。
@@ -23809,6 +23998,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/limit-up-main-reason-db/pending') return await getLimitUpMainReasonPending(url, req, res);
     if (url.pathname === '/api/limit-up-main-reason-db/hot-themes') return await getLimitUpMainReasonHotThemes(url, req, res);
     if (url.pathname === '/api/strategy-mainlines') return send(res, 200, await getStrategyMainlines(url.searchParams.get('day') || chinaNowParts().day).catch(e => ({ ok: false, error: String(e && e.message || e) })));
+    if (url.pathname === '/api/detail-evidence-index') return await getDetailEvidenceIndexApi(url, req, res);
     if (url.pathname === '/api/strategy-mainline-review') {
       const reviewDays = Math.min(30, Math.max(1, Number(url.searchParams.get('days')) || 10));
       return send(res, 200, await getStrategyMainlineReview(reviewDays).catch(e => ({ ok: false, error: String(e && e.message || e) })));
@@ -24132,6 +24322,9 @@ if (process.argv.includes('--refresh-zt10')) {
     runAutoDiscoverySyncIfDue().catch(err => {
       console.error('discovery auto sync failed:', err.message);
     });
+    runAutoDetailEvidenceIndexIfDue().catch(err => {
+      console.error('detail evidence index auto build failed:', err.message);
+    });
   }, 60 * 1000);
 
   setTimeout(() => {
@@ -24155,6 +24348,9 @@ if (process.argv.includes('--refresh-zt10')) {
     });
     runAutoDiscoverySyncIfDue().catch(err => {
       console.error('discovery auto sync failed:', err.message);
+    });
+    runAutoDetailEvidenceIndexIfDue().catch(err => {
+      console.error('detail evidence index auto build failed:', err.message);
     });
   }, 3000);
 }
