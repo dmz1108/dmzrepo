@@ -2228,3 +2228,37 @@ Deployment:
 
 Notes for next agent:
 - tooltip 为 title 属性纯文本;若后续想做更醒目的管理员浮层,另开需求,勿混入本 PR。
+
+## 2026-07-10 - Codex - Merge and deploy mainline inflow gate + star max-bucket rules
+
+Changed:
+- Merged `origin/claude/mainline-inflow-gate` into `main`.
+- Merged `origin/claude/star-l2-max-bucket` into `main`, resolving `docs/DAILY_HANDOFF.md` by keeping all handoff entries.
+- Deployed the merged backend/frontend files to the cloud server. Cloud does not currently have Git installed, so deployment used backup + direct file upload instead of `git pull`.
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/inflow-gate.test.js`
+- `tests/star-l2-layers.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- Local merged `main`: `node --check kpl-stats-server.js`; `tests/inflow-gate.test.js`; `tests/star-l2-layers.test.js`; `tests/scan-supplement.test.js`; `tests/detail-evidence-index.test.js`; `tests/predict-records.test.js`; `tests/metric-profile.test.js` all passed.
+- Cloud after upload: `node --check kpl-stats-server.js`; `tests/inflow-gate.test.js`; `tests/star-l2-layers.test.js`; `tests/metric-profile.test.js` all passed.
+- Public health passed: `https://market.dreamerqi.com/health` returned `{"ok":true}`.
+- Public KPL page loaded and contains `starMaxBucketAdminInfo`, confirming the admin-only max-bucket tooltip code is deployed.
+- `GET https://market.dreamerqi.com/api/strategy-mainlines?day=2026-07-10` returned the existing frozen after-close snapshot from before this deploy, so `inflowGate` is not visible on that snapshot; next live build/snapshot should carry the new field.
+
+Deployment:
+- Production touched: yes.
+- GitHub `main` pushed at merge commit `342454f`.
+- Cloud backup created: `C:\PandaDashboard\_deploy-backups\mainline-star-inflow-20260710-184512`.
+- Restart method: stopped old Node listener on port `8765` and restarted via scheduled task `Panda Dashboard Server`.
+- Old PID: `13452`; new PID: `14144`.
+- Cloud operation logs updated on the server.
+
+Notes for next agent:
+- Cloud server currently has no `git` command in PATH and no Git install detected at common paths; deploys from this machine used direct upload. Re-check before assuming `git pull` works on production.
+- Existing 2026-07-10 strategy snapshot was frozen before this deploy; do not treat absence of `inflowGate` in that snapshot as a failed deployment.
+- Admin-only max-bucket evidence is exposed only in strategy page star-stock tooltip when `state.adminLoggedIn` is true.
