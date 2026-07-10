@@ -2397,6 +2397,35 @@ Validation:
 Deployment:
 - GitHub only(PR #18)。未部署云端,无服务重启。
 
+## 2026-07-10 - Codex - Merge and deploy PR #18 QI mainline states
+
+Changed:
+- Reviewed Claude's QI mainline three-state implementation and two follow-up fixes.
+- Merged `claude/qi-mainline-states` into `main` as `835d26c`.
+- Deployed the independent `l2VerificationStatus` states, expected-star display, conservative completed-scan negative gate, and removal of user-visible potential-stock copy.
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/qi-mainline-states.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Merged `main`: `node --check` and all nine repository test suites passed.
+- Cloud staging and production paths: QI states, star layers, scan supplement, prediction records, metric profile, and L2 persistence tests passed.
+- Production file SHA-256 values match Git `main`.
+- Internal `/health` and `/kpl`, plus public `https://market.dreamerqi.com/` and `/kpl`, returned 200; public page contains the QI mainline markup and TLS verification passed.
+
+Deployment:
+- Production touched: yes.
+- Backup: `C:\PandaDashboard\_deploy-backups\qi-mainline-pr18-20260710-234714`.
+- Restarted scheduled task `Panda Dashboard Server`; PID `13612` -> `7196`, start time `2026-07-10 23:53:03`.
+- An initial post-restart task-state query failed and triggered the automatic rollback; the previous version remained healthy. The corrected deployment then completed successfully.
+- Cloud operation logs updated; no secrets were recorded.
+
+Notes for next agent:
+- This deployment does not modify the company-side L2 worker. The cloud queue supports five thresholds, but the current worker still needs its separate five-bucket/price/version upgrade before all QI expected-star paths have complete data.
+
 ## 2026-07-10 - Claude - PR#18 二审修复:判负只认 done 覆盖 + pending 门
 
 Changed:
