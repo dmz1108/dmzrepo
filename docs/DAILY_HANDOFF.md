@@ -2139,3 +2139,26 @@ Deployment:
 Notes for next agent:
 - PR #15 / P1-D is merged and deployed. First phase P1-C/P1-A/P1-B/P1-D is now complete.
 - Next work is observation, not immediate second-phase rule changes: collect roughly 10 trading days of prediction candidates and detail evidence index data, then return to the discussion branch for owner-approved second-phase semantics.
+
+## 2026-07-10 - Claude - 主线净流入门槛(Owner 规则,当日直接下达)
+
+Changed:
+- 新增 `strategyMainlineApplyInflowGate`:主线当天资金必须净流入——netInflow 有数据且 <=0 的板块不再进入当日主线榜(Owner 规则,案例:2026-07-10 人形机器人净流出103亿仍列第7)。
+- 两条保护:netInflow=null(数据缺失)不视为流出、不误杀(守则:缺数据不得造假);Owner 已确认主线不被自动规则移除(人工确认优先)。
+- 排除项可观测:响应新增 `inflowGate: { rule: 'net-inflow-required', excluded: [...] }`(含主题/净流出值/涨停数),被排除主线不悄悄消失。
+- 门槛在 augment 之后、排序与 top-10 截断之前执行;`readMainlineConfirm` 提前读取以支持确认保护(原逻辑复用,不重复读)。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/inflow-gate.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;inflow-gate 9 项全过(净流出/零流入排除、null 不误杀、确认保护、观测字段、接线顺序静态断言、空输入);scan-supplement/detail-evidence-index/predict-records/metric-profile 四套回归全过。
+
+Deployment:
+- GitHub only(分支 claude/mainline-inflow-gate)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 这是 Owner 当日直接下达的主线定义规则,非第二阶段讨论产物;已在讨论文档留痕。零流入(=0)按"必须净流入"排除;若实盘发现某数据源用 0 表示缺失,再改为 null 语义。
+- 部署后当日效果可从响应 inflowGate.excluded 观察。
