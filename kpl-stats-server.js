@@ -5832,7 +5832,7 @@ async function mergeJiuyangongsheStructuredSourceViewTab(sourceView, day, dbPayl
       name,
       sourceKey: 'jiuyangongshe',
       source: 'review/jiuyangongshe-structured',
-      sourceLabel: '闊爺',
+      sourceLabel: '\u97ed\u7814',
       group: 'jiuyangongshe',
       boardTopic,
       primaryTopic: boardTopic,
@@ -5866,7 +5866,7 @@ async function mergeJiuyangongsheStructuredSourceViewTab(sourceView, day, dbPayl
     String(a.code || '').localeCompare(String(b.code || ''))
   ));
   for (const row of rows) {
-    row.sourceLabel = '\u540c\u82b1\u987a';
+    row.sourceLabel = '\u97ed\u7814';
   }
   tab.rows = rows;
   tab.count = rows.length;
@@ -6406,12 +6406,21 @@ function recomputeReviewSourceStatsFromTabs(payload) {
     jiuyangongshe: 'review/jiuyangongshe-structured',
     tgb: 'review/tgb-hunan-structured',
   };
-  const existingStats = Array.isArray(payload.sourceStats) ? payload.sourceStats : [];
-  const statsBase = existingStats.length
-    ? existingStats
-    : [...tabByGroup.entries()]
-      .filter(([, tab]) => Number(tab?.count || (Array.isArray(tab?.rows) ? tab.rows.length : 0)) > 0)
-      .map(([group]) => ({ source: sourceByGroup[group] || `review/${group}`, group }));
+  const statsByGroup = new Map();
+  for (const stat of (Array.isArray(payload.sourceStats) ? payload.sourceStats : [])) {
+    const group = String(stat?.group || reviewSourceGroup(stat?.source || ''));
+    if (!group || isDisabledReviewSource(stat?.source, group)) continue;
+    statsByGroup.set(group, { ...stat, group, source: stat?.source || sourceByGroup[group] || `review/${group}` });
+  }
+  for (const [group, tab] of tabByGroup.entries()) {
+    if (isDisabledReviewSource('', group)) continue;
+    const count = Number(tab?.count || (Array.isArray(tab?.rows) ? tab.rows.length : 0));
+    if (!(count > 0)) continue;
+    if (!statsByGroup.has(group)) {
+      statsByGroup.set(group, { source: sourceByGroup[group] || `review/${group}`, group });
+    }
+  }
+  const statsBase = [...statsByGroup.values()];
   payload.sourceStats = statsBase
     .map(stat => {
       const group = String(stat?.group || reviewSourceGroup(stat?.source || ''));

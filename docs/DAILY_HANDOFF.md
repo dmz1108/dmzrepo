@@ -2262,3 +2262,31 @@ Notes for next agent:
 - Cloud server currently has no `git` command in PATH and no Git install detected at common paths; deploys from this machine used direct upload. Re-check before assuming `git pull` works on production.
 - Existing 2026-07-10 strategy snapshot was frozen before this deploy; do not treat absence of `inflowGate` in that snapshot as a failed deployment.
 - Admin-only max-bucket evidence is exposed only in strategy page star-stock tooltip when `state.adminLoggedIn` is true.
+
+## 2026-07-10 - Codex - Fix review data-health source stats from source tabs
+
+Changed:
+- Fixed the review source-health chain so `sourceStats` is rebuilt from every enabled source tab that actually has rows, instead of being limited to stale `payload.sourceStats` groups.
+- Fixed Jiuyangongshe source row labels from mojibake / Tonghuashun to `韭研`.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- Local: `node --check kpl-stats-server.js` passed.
+- Cloud after deploy: `node --check .\kpl-stats-server.js` passed and `/health` returned `{"ok":true}`.
+- Cloud `GET /api/limit-up-main-reason-db/source-view?day=2026-07-10` now reports sourceStats for Jiuyangongshe, Kaipanla, and Xuangubao; TGB remains zero because the 2026-07-10 TGB structured source is absent.
+- Cloud `GET /api/after-close-status?day=2026-07-10&mainReasonMode=same-day` now reports the same three reviewAutoSources, matching the review page tabs.
+
+Deployment:
+- Production touched: yes.
+- Cloud backup created: `C:\PandaDashboard\_deploy-backups\review-health-source-stats-20260710-185650`.
+- Uploaded `kpl-stats-server.js` directly to `C:\PandaDashboard`.
+- Restart method: stopped Node listener on port `8765` and restarted scheduled task `Panda Dashboard Server`.
+- New PID: `12784`.
+- Cloud operation logs updated on the server.
+
+Notes for next agent:
+- This fixes a recurring mismatch where the review page showed a source tab with data, but the data-health panel still marked it missing because `sourceStats` did not include tabs merged after the original evidence payload.
+- For 2026-07-10, the remaining missing source is TGB only; adding the TGB structured file should automatically flow into sourceStats after this fix.
