@@ -2541,6 +2541,27 @@ Notes for next agent:
 - PR #19 只改善云端扫描选择、队列优先级和观测指标，不会凭空补出公司 worker 尚未回传的五档数据。
 - 下一个交易日应观察 `priorityCodes`、`firstResultAt`、`rowsWithPrice`、`rowsWithAllBuckets` 的实际值，再判断扫描吞吐是否需要调整。
 
+## 2026-07-10 - Claude - 第④项:每日验收 Routine 提示词扩项(无代码变更)
+
+Changed:
+- 删旧建新两个每日定时验收(周一至周五,自动触发到 Claude 会话):
+  - 主线观察-14:59北京(新 ID trig_012D2BHTN4rqRBQmtwneFPA3):原有补选转化/keepWarm/新鲜度/质量检查之外,新增 inflowGate.excluded 名单核对(疑似误伤单独指出)、QI 三态分布与预期明星名单记录(供次日复盘)、maxBucket empty/dataMissing 比率趋势、扫描优先队列观察(priorityCodes 下发、firstResultAt、rowsWithPrice/rowsWithAllBuckets,接口未暴露则标"数据不可得")。
+  - 索引验收-16:33北京(新 ID trig_01W3aUYs9gU7KP6Y6PCSe7k3):原有细分证据索引验收之外,新增 预期明星次日命中率复盘(对照前日14:59名单,维护滚动统计——"真主线必有1-2明星"规则的核心验证数据)、inflowGate 排除板块收盘复盘(反例详细记录)、L2 持久化验收(当日任务落盘 rows>0,非交易日/worker 未启标不适用)、maxBucket 当日汇总。
+- Shared Decision v1 四步计划状态:①公司端 L2 worker 五档升级,等待公司 Codex 实施,属于下一优先级 ②QI 三态(PR #18 已合并部署)③扫描优先队列(PR #19 已合并部署)④本项完成。
+
+Files:
+- `docs/DAILY_HANDOFF.md`(仅此文件,Routine 为服务端配置,不在仓库内)
+
+Validation:
+- 两个新 Routine 创建成功,下次触发 2026-07-13(周一)14:59 / 16:33 北京时间。
+
+Deployment:
+- 无代码、无部署、无服务重启。PR #19 已由 Codex 合并进 main 并部署云端(3f4006c)。
+
+Notes for next agent:
+- 预期明星命中率从 7-13(周一)起开始积累;L2 回放/回测也从 7-13 的持久化数据起可用。
+- 第①项(公司端 L2 worker 五档升级)等待公司 Codex 实施,属于下一优先级;rowsWithPrice/rowsWithAllBuckets 实测数据可作为其实施前后的对照验收指标。
+
 ## 2026-07-10 - Claude - 静态缓存 + 认证安全加固(整站优化第1、4项)
 
 Changed:
