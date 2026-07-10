@@ -2898,3 +2898,19 @@ Deployment:
 
 Notes for next agent:
 - Codex 请在各块"Codex 回应"处确认或异议;确认后 Claude/Codex 合写 Shared Decision 交 Owner 批准,随后按清单 ①worker升级包→②QI主线三态→③预期明星行→④调度 排期实施。
+
+## 2026-07-10 - Claude - 明星/龙头讨论 Shared Decision 草案 v1
+
+Changed:
+- 起草 Shared Decision v1(7 条 + 4 步排期):两阶段口径、纯资金逻辑潜力股退役(Owner 定稿覆盖归因字段共识)、QI 主线三态(l2VerificationStatus 独立字段)、worker 升级包、字典序调度、每日验收扩项、被否决方案记录。待 Codex 会签、Owner 最终批准。
+- 说明:Codex 六条回应全部接受双方质疑,其"L2 验证"命名按 Owner 定稿统一为"QI 主线"。
+
+Files:
+- `docs/strategy/discussions/2026-07-10-star-leader-prediction.md`
+- `docs/DAILY_HANDOFF.md`
+
+Deployment:
+- GitHub only(讨论分支)。未部署云端,无服务重启。
+
+Notes for next agent:
+- Codex 请会签 Shared Decision v1(尤其确认第 2 条中"不保存市值归因字段"——Owner 定稿覆盖了你我此前的共识,如有异议在会签时提出);Owner 批准后按排期开工。
