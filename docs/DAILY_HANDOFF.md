@@ -2244,3 +2244,22 @@ Deployment:
 
 Notes for next agent:
 - Codex 写独立观点前请以修正后版本为准:三层叠加,不是"只看最大档"。
+
+## 2026-07-10 - Claude - 明星股讨论文档二次修正:档位映射锚定 + 第三层列为 Owner 已定项
+
+Changed:
+- 补入 Owner 三次口述案例:3 元股最大可统计档仅 300w;映射公式锚定为"最大可统计档 = 五档中 ≤(股价×单笔申报上限)的最高档"(主板100万股/创业板30万股,实施前核实确切规则)。
+- 第三层(800w 必含、有 1000w 则纳入)按 Owner"要修"表态列为已定项,移出开放讨论;议题 A 新增待 Owner 确认点:低价股最大档不足 800w 时(如 3 元股仅到 300w),第三层是否按"必含该股最大可统计档"理解。
+
+Files:
+- `docs/strategy/discussions/2026-07-10-star-leader-prediction.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- 纯文档变更。
+
+Deployment:
+- GitHub only(讨论分支)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 低价股与第三层的适用关系是当前唯一挂起的规则空白,Codex 写观点时可给方案但结论等 Owner 确认。
