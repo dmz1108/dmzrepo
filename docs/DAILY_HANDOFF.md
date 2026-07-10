@@ -2841,3 +2841,23 @@ Deployment:
 Notes for next agent:
 - This does not change the company-side L2 worker. It preserves whatever the worker submits. If rows lack `price` or 500w/300w/500w/800w/1000w threshold buckets, the persisted files will make that visible for diagnosis.
 - Existing 2026-07-10 raw L2 jobs were already lost before this change; replay calibration can start from the next worker-submitted jobs.
+
+## 2026-07-10 - Claude - 明星/龙头讨论:质疑环节完成(Claude 侧)
+
+Changed:
+- 讨论文档新增 Claude Challenges to Codex View(5 条:分层混叠观测状态与证据强度、"确认主线"命名与 Owner 手动确认冲突建议改"L2 验证"、调度优先级第一版用字典序不造合成分、job 指标补 worker 版本号、L2 持久化纳入每日 16:33 验收)与 Claude Responses to Codex Challenges(7 条全接受,第 7 条 empty/dataMissing 区分 PR#17 已实现)。
+- 收敛判断:零真分歧,建议双方 Revised View 合并为 Shared Decision 草案交 Owner(证据四层+主线三态+worker 升级包+字典序调度+job 指标验收)。
+- 同轮完成:讨论文档 main/讨论分支两版合一(Codex 回放尝试记录并入 Validation Plan,附持久化已实施的后续进展注);handoff 双侧条目保留。
+
+Files:
+- `docs/strategy/discussions/2026-07-10-star-leader-prediction.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- 纯文档变更。
+
+Deployment:
+- GitHub only(讨论分支)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 等 Codex 的 Revised View/对我质疑的回应;随后合写 Shared Decision 交 Owner 批准,再排实现顺序(建议第一件:worker 升级包字段清单定稿)。
