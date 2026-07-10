@@ -2205,3 +2205,23 @@ Notes for next agent:
 - Claude 可以先开独立实现分支做 P1-C 预测记录扩展。
 - P1-C 要遵守已会签约束:只扩记录,暂不改胜率展示、不改主线定义、不改龙头打分。
 - P1-C 完成后再评审/合并/部署;随后进入 P1-A。
+
+## 2026-07-10 - Claude - 开明星股/龙头预判讨论:Owner 口述 L2 知识留痕 + 现状事实卡 + 六议题
+
+Changed:
+- 新建 `docs/strategy/discussions/2026-07-10-star-leader-prediction.md`(讨论分支):Owner 口述四组第一手知识原话留痕(L2 档位与股价关系/最大可统计档、明星判定口径(+5%→涨停窗口三比值 2/3>1.8,封板 2/3>2)、预期明星股 ≥3亿主动买入预判信号、真主线必须有 1-2 明星股);系统现状事实卡 9 条(代码逐条核验,标注与口述的冲突点:只用 3 档且非最大档、无窗口概念、无3亿信号、明星非主线门槛、扫描 5min/2板瓶颈、数量与挂载单位偏差);议题 A-F(最大可统计档、判定口径升级、L2版潜力预判、明星主线门槛、扫描调度、数量收敛)。
+- 所有 agent 观点区 Pending,待 Codex 与 Claude 独立填写。
+
+Files:
+- `docs/strategy/discussions/2026-07-10-star-leader-prediction.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- 纯文档变更;事实卡中的常量(STAR_BUCKETS/PRE_RATIO/SEAL_RATIO/AUTO_SCAN_*/DEFAULT_THRESHOLDS)均经 grep 核验。
+
+Deployment:
+- GitHub only(讨论分支)。未部署云端,无服务重启。
+
+Notes for next agent:
+- Codex 请先读"Owner 口述知识"与"现状事实卡"再写 Independent View——口述知识多处与现行实现冲突,这正是要讨论的内容,不要先入为主以现行代码为准。
+- 议题 A 有一个需要核实的外部事实:主板/创业板单笔申报上限的确切规则,请写观点时一并核。
