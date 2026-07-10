@@ -2080,3 +2080,28 @@ Notes for next agent:
 - PR #14 / P1-B is merged and deployed; do not redeploy it unless there are new changes.
 - During the next live trading session, inspect `scanSupplement.picked` on same-day live strategy responses to see which strong-but-few-limit-up boards were added by the supplement channel.
 - Next approved phase item is P1-D 口径元数据.
+
+## 2026-07-10 - Claude - P1-D 口径元数据(第一阶段第四项,已批准)
+
+Changed:
+- 后端:`strategyMainlineAttachResponseMeta` 新增静态 `metricProfile` 口径声明(leaderGain=收盘价库口径/leaderZt=涨停底库/realtimeBoard=盘中实时或快照/cardKlineGain=K线口径含盘中),每族含字段清单与说明;所有主线榜响应携带,AI 与前端按此区分同名指标口径。
+- 前端 `kpl-dashboard_17_apple.html` 四处口径标注:龙头候选列表标题与主线卡龙头行 tooltip 标注"10/30日涨幅为收盘口径(不含今日盘中)";QI 徽章 tooltip 标注"涨幅为K线口径(含快照日盘中)";热门题材搜索结果标注"涨幅为K线口径(含当日盘中)"。
+- 会签约束5对照:盘中K线/收盘/快照三种口径在元数据与展示层均可区分;未改任何现有字段名(避免破坏前端),同名不同义靠 metricProfile+标注消除。
+- 顺带修 scan-supplement 测试桩缺新常量定义的问题。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/metric-profile.test.js`
+- `tests/scan-supplement.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;metric-profile 11 项(含前端四处标注静态断言与内联脚本编译检查)、scan-supplement 21 项、detail-evidence-index 31 项、predict-records 17 项全过。
+
+Deployment:
+- GitHub only(分支 claude/p1d-metric-metadata)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 前端为静态文件变更,部署可不重启服务;后端 metricProfile 需随 kpl-stats-server.js 部署重启生效。
+- 至此第一阶段 P1-C/P1-A/P1-B/P1-D 四项全部完成;第二阶段语义规则待 P1-A 索引与 P1-C 记录积累约 10 个交易日后回讨论分支定规则并二次批准。

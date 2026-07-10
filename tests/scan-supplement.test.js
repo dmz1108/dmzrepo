@@ -117,6 +117,7 @@ const board = (plateId, name, zt, gainPct, netInflow) => ({ plateId, name, zt, g
       const strategyMainlineStaleness = () => 'fresh';
       const strategyMainlineQuality = () => ({ ok: true });
       const strategyMainlineWarmState = { lastTickAt: '', lastResult: '', consecutiveFailures: 0, currentDelayMs: 0 };
+      const STRATEGY_MAINLINE_METRIC_PROFILE = {};
       const strategyMainlineSupplementState = ${stateDay ? `{ day: '${stateDay}', picked: [] }` : 'null'};
     `;
     eval(metaPrelude + metaSrc + '; out = strategyMainlineAttachResponseMeta;');

@@ -21937,6 +21937,14 @@ function strategyMainlineStaleness(payload, sessionPhase = '', nowMs = Date.now(
   if (ageMs <= STRATEGY_MAINLINE_LIVE_EXPIRED_MS) return 'stale';
   return 'expired';
 }
+// P1-D 口径元数据(会签约束5):同名指标不同口径必须可区分——静态声明本响应各指标族的数据口径,
+// 前端与 AI 分析按此标注展示,不得把收盘口径当盘中口径混用。
+const STRATEGY_MAINLINE_METRIC_PROFILE = {
+  leaderGain: { fields: ['gain10', 'gain30'], source: 'eastmoney-close-db', basis: 'close', note: '龙头10/30日涨幅为收盘价库口径,盘中不含今日涨幅' },
+  leaderZt: { fields: ['zt10Count', 'mainZt10Count'], source: 'limit-up-db', basis: 'daily', note: '涨停次数按涨停底库交易日统计' },
+  realtimeBoard: { fields: ['gainPct', 'netInflow', 'zt'], source: 'live-board-rank', basis: 'intraday-live', note: '板块涨幅/净流入/涨停数在 realtimeSource=live 时为盘中实时,snapshot 时为快照口径' },
+  cardKlineGain: { fields: ['cardData.gain10', 'cardData.gain30', 'qiLeaders'], source: 'board-snapshot-kline', basis: 'intraday-kline', note: '实时卡展开与QI龙头的10/30日涨幅为K线口径,含快照日盘中涨幅' },
+};
 function strategyMainlineAttachResponseMeta(payload, options = {}) {
   const nowMs = Number.isFinite(Number(options.nowMs)) ? Number(options.nowMs) : Date.now();
   const generatedAt = String(options.generatedAt || strategyMainlineSavedAt(payload) || new Date(nowMs).toISOString());
@@ -21961,6 +21969,7 @@ function strategyMainlineAttachResponseMeta(payload, options = {}) {
       (strategyMainlineSupplementState.day === String(base.day || '') ||
        strategyMainlineSupplementState.day === String(base.requestedDay || '')))
       ? strategyMainlineSupplementState : null,
+    metricProfile: STRATEGY_MAINLINE_METRIC_PROFILE,   // P1-D 指标口径声明(静态,见常量注释)
   };
 }
 async function readMainlineConfirm(day) {
