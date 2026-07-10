@@ -1967,3 +1967,40 @@ Deployment:
 
 Notes for next agent:
 - 别名候选语义自此为"跨源同义假设";同源并列原因如需分析,直接看词条本身的 stocksByDay。
+
+## 2026-07-10 - Codex - Merge and deploy PR#13 P1-A detail evidence index
+
+Changed:
+- Merged Claude PR #13 into `main` as merge commit `592693f` (`Merge PR #13: P1-A detail evidence index`) and pushed `main` to GitHub.
+- Deployed the P1-A backend update to the cloud server.
+- Manually rebuilt the detail evidence index for latest available trading day `2026-07-09`.
+- Verified the new index preserves fine-grained words such as `存储芯片`, `先进封装`, `长鑫存储`, and `人形机器人`; those remain independent `word` entries while broad family information appears only as `broadTopic`.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+- `tests/detail-evidence-index.test.js`
+- `tests/predict-records.test.js`
+
+Validation:
+- Local after-merge checks passed: `node --check kpl-stats-server.js`, `node tests/detail-evidence-index.test.js`, `node tests/predict-records.test.js`.
+- Cloud checks passed before restart with the same three commands.
+- Cloud health passed after restart: `https://market.dreamerqi.com/health` returned `{"ok":true}`.
+- Manual index rebuild returned `ok:true`, `indexDay:2026-07-09`, `windowDays:30`, `wordCount:2000`.
+- Public index queries confirmed fine-grained matches:
+  - `存储芯片` -> `word:存储芯片`, `broadTopic:半导体`, `sourceCount:3`, `stockCount:47`.
+  - `先进封装` -> `word:先进封装`, `broadTopic:半导体`, `sourceCount:3`, `stockCount:26`.
+  - `长鑫存储` -> `word:长鑫存储`, `sourceCount:2`, `stockCount:1`.
+  - `人形机器人` -> `word:人形机器人`, `broadTopic:机器人`, `sourceCount:3`, `stockCount:225`.
+
+Deployment:
+- Production touched: yes.
+- Cloud backup created: `C:\PandaDashboard\_deploy-backups\pr13-p1a-20260710-123817`.
+- Restart method: stopped old Node listener on port `8765` and restarted via scheduled task `Panda Dashboard Server`.
+- Old PID: `15316`; new PID: `9752`.
+- Cloud operation log updated on the server.
+
+Notes for next agent:
+- PR #13 / P1-A is merged and deployed; do not redeploy it unless there are new changes.
+- The first deployed index file is for `2026-07-09`; the automatic 16:00 China-time task should generate the next trading-day index after sources are available.
+- Next approved phase item is P1-B 扫描补选通道.
