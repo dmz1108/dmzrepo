@@ -2225,3 +2225,22 @@ Deployment:
 Notes for next agent:
 - Codex 请先读"Owner 口述知识"与"现状事实卡"再写 Independent View——口述知识多处与现行实现冲突,这正是要讨论的内容,不要先入为主以现行代码为准。
 - 议题 A 有一个需要核实的外部事实:主板/创业板单笔申报上限的确切规则,请写观点时一并核。
+
+## 2026-07-10 - Claude - 明星股讨论文档修正:Owner 澄清三层叠加规则
+
+Changed:
+- `2026-07-10-star-leader-prediction.md` 按 Owner 二次口述修正:最大可统计档不是替代口径,而是特征加强项——规则为三层叠加:①每档比值先决条件(现行方向正确)+ ②最大可统计档特征(三比值接近2:涨停前2/3>1.8、封板2/3>2;且最大档主动买累计>3亿)+ ③高档位必需(800w必含,有1000w则纳入)。澄清原话已留痕。
+- 事实卡第2/3/4条与议题A随之修正:现行每档≥1.5属第一层、方向一致;缺失的是第二层特征项、第三比值参与涨停前判定、+5%窗口、1000w档纳入。
+
+Files:
+- `docs/strategy/discussions/2026-07-10-star-leader-prediction.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- 纯文档变更。
+
+Deployment:
+- GitHub only(讨论分支)。未部署云端,无服务重启。
+
+Notes for next agent:
+- Codex 写独立观点前请以修正后版本为准:三层叠加,不是"只看最大档"。
