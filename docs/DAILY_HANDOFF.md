@@ -2355,3 +2355,62 @@ Deployment:
 Notes for next agent:
 - This does not change the company-side L2 worker. It preserves whatever the worker submits. If rows lack `price` or 500w/300w/500w/800w/1000w threshold buckets, the persisted files will make that visible for diagnosis.
 - Existing 2026-07-10 raw L2 jobs were already lost before this change; replay calibration can start from the next worker-submitted jobs.
+
+## 2026-07-10 - Claude - 实施 Shared Decision 第②项:QI 主线三态 + 预期明星行(第①项 Owner 指示暂缓)
+
+Changed:
+- 后端:`strategyMainlineCollectStars` 返回 `{byCode, scannedPlates}`;augment 推导独立字段 `l2VerificationStatus`(unscanned=待验证不惩罚 / qi=已扫且有预期明星或明星确认 / scanned-no-star=已扫无明星);已扫无明星时确定性封顶"中等"(定性降级,不造打分常量,只封顶不叠罚);P1-C 预测记录携带该状态。
+- 前端:主线卡新增三态徽章(QI 主线/L2 未见明星/L2 待验证),与 Owner 手动"当日主线"徽章并列独立;明星行只展示 明星确认/预期明星 至多 3 只(资金活跃不再占卡位);"潜力"行退役(Owner 定稿,focusStocks 后端数据保留供第③项调度用)。
+- 第①项 worker 升级包 Owner 指示暂缓:worker 现仅产出 50w/500w 两档,多数股最大档将走 dataMissing 保守路径,预期明星/QI 态实盘触发受限,主线多显示"L2 待验证"——属诚实状态,待①实施后自然激活(依赖关系已告知 Owner)。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/qi-mainline-states.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;qi-mainline-states 16 项全过(certainty 封顶四例、后端接线六项、前端四项、内联编译);全部七套既有回归通过。
+
+Deployment:
+- GitHub only(分支 claude/qi-mainline-states)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 第③项(字典序调度+priorityCodes)待本项合并后开工;第①项恢复时 worker 需产五档+price,QI 态即可实际触发。
+
+## 2026-07-10 - Claude - PR#18 评审修复:判负门槛(完成+覆盖)+ 潜力股彻底退役
+
+Changed:
+- 评审点1:新增 `strategyMainlineDeriveL2Status` 独立推导函数——发现预期明星/明星确认立即 QI;只有扫描完成(job.status=done)且主线相关股确实被结果覆盖(小主线全覆盖,大主线至少3只)才判 scanned-no-star;queued/running/分批未完/覆盖不足一律 unscanned 不降权。collectStars 增返 completedPlates/coveredCodes。
+- 评审点2:explain"潜力股X只待冲板"改为"预期明星X只,首选…(盘中涨幅、最大档主动买)",无预期明星不补位;抢跑雷达 focusStocks 改为 预期明星/明星确认,无则不显示个股;阶段建议"盯潜力股能否首板"→"盯预期明星能否首板";卡片 focus 芯片死代码删除。focusStocks 仅存后台(调度输入)。
+- 测试扩至 29 项:新增行为测试七例(运行中不判负/完成+覆盖才判负/无关覆盖不判负/覆盖不足不判负/预期明星立即QI/小主线全覆盖规则)与文案断言五例(前端用户可见零"潜力"字样)。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/qi-mainline-states.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;qi-mainline-states 29 项、全部七套回归通过。
+
+Deployment:
+- GitHub only(PR #18)。未部署云端,无服务重启。
+
+## 2026-07-10 - Claude - PR#18 二审修复:判负只认 done 覆盖 + pending 门
+
+Changed:
+- `collectStars` 增返 `pendingPlates`(排队/运行中的相关板块)与 `completedCoveredCodes`(仅 done 任务结果覆盖的股票);无结果的 queued/running 任务也计入 pending。
+- `strategyMainlineDeriveL2Status` 两道新门:相关板块存在 pending 任务 → 一律 unscanned(结论未定);判负覆盖只统计 `completedCoveredCodes`,running 分批回传的覆盖不给判负凑数。
+- 测试 29→33 项:新增二审组合场景四例(一done一running 不判负、done覆盖够但仍有running 不判负、无pending且done覆盖达标可判负、done覆盖不足running残留不计)。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/qi-mainline-states.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;qi-mainline-states 33 项、全部回归通过。
+
+Deployment:
+- GitHub only(PR #18)。未部署云端,无服务重启。

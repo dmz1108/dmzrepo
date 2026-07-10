@@ -21723,7 +21723,9 @@ function strategyMainlineCertainty(item, trend, extra = {}) {
   if (extra.starConfirmed) signals.push('明星股确认');
   else if (extra.starActive) signals.push('资金活跃股');
   if (extra.isNewTheme) signals.push('首日新题材');
-  const level = signals.length >= 5 ? 'high' : signals.length >= 3 ? 'medium' : 'watch';
+  let level = signals.length >= 5 ? 'high' : signals.length >= 3 ? 'medium' : 'watch';
+  // 已扫描但核心成分无任何预期明星/明星确认:主线可信度封顶"中等"(真主线必有明星的逆否降权,不一票否决)
+  if (extra.scannedNoStar && level === 'high') level = 'medium';
   return {
     level,
     label: level === 'high' ? '高确定性' : level === 'medium' ? '中等确定性' : '观察中',
@@ -21748,7 +21750,7 @@ function strategyMainlineStage(item, trend) {
       ? { key: 'launch', label: '启动期', advice: '首批涨停出现且冲板/大涨储备充足，属主升窗口。' }
       : { key: 'launch', label: '启动期', advice: '首批涨停出现但扩散度一般，看大涨股能否跟上再确认。' };
   }
-  if (bigGain >= 2 || nearLimit >= 1) return { key: 'brewing', label: '酝酿期', advice: '尚未大规模涨停，正是预判窗口，盯潜力股能否首板。' };
+  if (bigGain >= 2 || nearLimit >= 1) return { key: 'brewing', label: '酝酿期', advice: '尚未大规模涨停，正是预判窗口，盯预期明星能否首板。' };
   return { key: 'quiet', label: '平静', advice: '' };
 }
 
@@ -21922,20 +21924,51 @@ function strategyMainlineStarStatus(row) {
 // 读取主线相关板块当日已有的 L2 扫描结果（只消费，不在这里触发扫描），产出 code -> 明星判定。
 function strategyMainlineCollectStars(boards, day) {
   const byCode = new Map();
+  const scannedPlates = new Set();         // 当日有 L2 扫描结果的板块(含运行中分批回传)
+  const completedPlates = new Set();       // 扫描已完成(job done)的板块
+  const pendingPlates = new Set();         // 仍在排队/运行的板块——存在即不允许判负(结论未定)
+  const coveredCodes = new Set();          // 全部结果行覆盖到的股票(含 running 分批,仅供观测)
+  const completedCoveredCodes = new Set(); // 仅 done 任务结果覆盖的股票——判负只认这份(评审二修)
   for (const board of (Array.isArray(boards) ? boards : [])) {
     const plateId = String(board?.plateId || '');
     if (!plateId) continue;
     let job = null;
     try { job = localL2TaskQueue.latest(plateId, day); } catch { continue; }
-    if (!job || !Array.isArray(job.results) || !job.results.length) continue;
+    if (!job) continue;
+    const jobStatus = String(job.status || '');
+    if (jobStatus === 'queued' || jobStatus === 'running') pendingPlates.add(plateId);
+    if (!Array.isArray(job.results) || !job.results.length) continue;
+    scannedPlates.add(plateId);
+    const jobDone = jobStatus === 'done';
+    if (jobDone) completedPlates.add(plateId);
     for (const row of job.results) {
       const code = normalizeReasonSourceCode(row?.code);
-      if (!code || byCode.has(code)) continue;
+      if (!code) continue;
+      coveredCodes.add(code);
+      if (jobDone) completedCoveredCodes.add(code);
+      if (byCode.has(code)) continue;
       const star = strategyMainlineStarStatus(row);
       if (star) byCode.set(code, { ...star, code, name: String(row?.name || ''), boardName: String(board?.name || job.boardName || '') });
     }
   }
-  return byCode;
+  return { byCode, scannedPlates, completedPlates, pendingPlates, coveredCodes, completedCoveredCodes };
+}
+
+// QI 三态推导(PR#18 评审修正):发现预期明星/明星确认 → 立即 QI;
+// 只有相关扫描完成(job done)且主线相关股确实被结果覆盖(小主线需全覆盖,大主线至少3只),才判"已扫无明星";
+// queued/running/分批未完/覆盖不足 一律 unscanned(待验证,不降权)——防止 worker 分批回传阶段错误判负。
+function strategyMainlineDeriveL2Status(l2Stars, hasQiStar, themeCodes) {
+  if (hasQiStar) return 'qi';
+  if (!l2Stars || !l2Stars.completedPlates || !l2Stars.completedPlates.size) return 'unscanned';
+  // 相关板块仍有排队/运行中的任务:结论未定,不判负(评审二修)
+  if (l2Stars.pendingPlates && l2Stars.pendingPlates.size) return 'unscanned';
+  const codes = [...(themeCodes || [])];
+  if (!codes.length) return 'unscanned';
+  // 判负覆盖只认 done 任务产生的代码,running 分批结果不给判负凑数(评审二修)
+  const doneCovered = l2Stars.completedCoveredCodes || new Set();
+  const covered = codes.filter(code => doneCovered.has(code));
+  if (covered.length > 0 && covered.length >= Math.min(3, codes.length)) return 'scanned-no-star';
+  return 'unscanned';
 }
 
 // 自动派发 L2 扫描：净流入≥8亿且板内涨停≥2 的前排板块；5 分钟窗口最多 2 个、串行、当天扫过不重复、无目标不扫。
@@ -22256,6 +22289,7 @@ function strategyPredictCandidateRecord(m) {
     stage: m.stage?.label || '',
     certainty: m.certainty?.label || '',
     isNewTheme: !!m.isNewTheme,
+    l2VerificationStatus: m.l2VerificationStatus || '',
     lowConfidence: null,                   // 低置信通道未上线,先记 null 占位(false=成熟,true=低置信)
     netInflow: isFiniteNumeric(m.netInflow) ? Number(m.netInflow) : null,
     boardCount: Number(m.boardCount) || 0,
@@ -22747,7 +22781,8 @@ function strategyMainlineAugmentPrediction(item, isToday, day) {
   if (momentum > 0) scoreParts.momentum = momentum;
   const focusStocks = strategyMainlineFocusStocks(item);
   // 明星股：只匹配本主线相关的股票（今日涨停/大涨/潜力股），避免把邻板块扫描结果错挂进来。
-  const starByCode = strategyMainlineCollectStars(item?.resonanceBoards, day);
+  const l2Stars = strategyMainlineCollectStars(item?.resonanceBoards, day);
+  const starByCode = l2Stars.byCode;
   const themeCodes = new Set([
     ...(Array.isArray(item?.todayCodes) ? item.todayCodes : []),
     ...(Array.isArray(item?.risingStocks) ? item.risingStocks.map(s => normalizeReasonSourceCode(s?.code)) : []),
@@ -22759,6 +22794,10 @@ function strategyMainlineAugmentPrediction(item, isToday, day) {
     .slice(0, 4);
   const starConfirmed = starStocks.some(star => star.level === 'confirmed');
   const starActive = starStocks.some(star => star.level === 'active' || star.level === 'expected');
+  // QI 主线三态(Shared Decision v1 第3条):独立观测状态字段,不复用 isConfirmedMainline。
+  // unscanned=待验证(不惩罚) / qi=已扫且有 L2 全方位符合明星(预期明星或明星确认) / scanned-no-star=已扫无明星(降一级确定性+标注)
+  const hasQiStar = starStocks.some(star => star.level === 'confirmed' || star.level === 'expected');
+  const l2VerificationStatus = strategyMainlineDeriveL2Status(l2Stars, hasQiStar, themeCodes);
   if (starStocks.length) {
     scoreParts.star = Number(Math.min(40, starStocks.reduce((sum, star) => sum + (star.level === 'confirmed' ? 15 : 8), 0)).toFixed(1));
   }
@@ -22767,7 +22806,7 @@ function strategyMainlineAugmentPrediction(item, isToday, day) {
     ((Number(item?.bigGainCount) || 0) >= 2 || (Number(item?.count) || 0) >= 1 || (Number(item?.nearLimitCount) || 0) >= 1);
   const score = Number(Object.values(scoreParts).reduce((sum, v) => sum + (Number(v) || 0), 0).toFixed(1));
   const withBreadth = { ...item, breadth: breadth || null };
-  const certainty = strategyMainlineCertainty(withBreadth, trend, { isNewTheme, starConfirmed, starActive });
+  const certainty = strategyMainlineCertainty(withBreadth, trend, { isNewTheme, starConfirmed, starActive, scannedNoStar: l2VerificationStatus === 'scanned-no-star' });
   const stage = strategyMainlineStage(withBreadth, trend);
   const explain = [...(Array.isArray(item?.explain) ? item.explain : [])];
   if (stage.advice) explain.push(`当前处于${stage.label}：${stage.advice}`);
@@ -22786,9 +22825,11 @@ function strategyMainlineAugmentPrediction(item, isToday, day) {
     if (isFiniteNumeric(trend.inflowDelta) && Number(trend.inflowDelta) > 0) parts.push(`净流入+${strategyMainlinePlainYi(trend.inflowDelta)}`);
     if (parts.length) explain.push(`近${trend.minutes}分钟${parts.join('、')}，信号在加速。`);
   }
-  if (focusStocks.length) {
-    const top = focusStocks[0];
-    explain.push(`潜力股${focusStocks.length}只待冲板，首选${top.name || top.code}（${top.basis.join('，') || `盘中+${top.gain}%`}）。`);
+  const expectedStars = starStocks.filter(star => star.level === 'expected');
+  if (expectedStars.length) {
+    const top = expectedStars[0];
+    const buyYi = top.maxBucket && Number(top.maxBucket.activeBuy) > 0 ? `、最大档主动买${(Number(top.maxBucket.activeBuy) / 1e8).toFixed(1)}亿` : '';
+    explain.push(`预期明星${expectedStars.length}只，首选${top.name || top.code}（盘中+${Number(top.gain).toFixed(1)}%${buyYi}）。`);
   }
   // 预判分 = 总分剔除「确认类」得分（涨停/高度/连板）。确认类是已发生的事实，
   // 预判分只保留前瞻信号：大涨扩散、冲板储备、普涨广度、盘中动能、历史主因、连续性、资金、板块涨幅、共振。
@@ -22806,6 +22847,7 @@ function strategyMainlineAugmentPrediction(item, isToday, day) {
     focusStocks,
     starStocks,
     isNewTheme,
+    l2VerificationStatus,
     certainty,
     stage,
     explain: explain.slice(0, 9),
