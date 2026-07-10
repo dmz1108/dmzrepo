@@ -2046,3 +2046,26 @@ Deployment:
 Notes for next agent:
 - 已可收敛项(建议写入暂定结论):门槛二值(细分可单独过门槛)、计算顺序、公平原则、Step A 新鲜度语义复用。
 - 仍开放:族内代表去重规则、下沉阈值回测标定、低置信升级规则、全局胜率归因、A类字段实现是否同源(需 Codex 核对)、B类实时重算与 top-18 扫描的覆盖差距。
+
+## 2026-07-10 - Codex - 主线语义讨论收敛整理
+
+Changed:
+- 在 `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md` 顶部新增 `收敛整理`。
+- 整理出 9 条已可进入暂定结论:多轮讨论机制、多粒度候选展示、防重复计分、细分证据可单独过门槛、先证据继承再统计次数、龙头候选不强制唯一、公平原则、实时卡到策略页数据契约、复用 Step A 新鲜度语义。
+- 整理出 8 条仍需继续讨论的问题:族内代表去重、quality 主线数量、低置信升级、低置信胜率单独统计、全局胜率归因、下沉阈值标定、细分证据索引人工确认、实时卡覆盖与主线榜扫描范围。
+- 整理出 6 条 Codex 需要核对的代码/数据口径:实时卡与 `enrichReviewLeaderMetrics` 是否同源、主线榜扫描范围/超时、实时卡字段新鲜度、四源细分原因字段和保存粒度、alias/family 复用点、预测复盘胜率计数口径。
+
+Files:
+- `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 纯文档变更,未改代码。
+- 未加入 secrets/runtime 数据。
+
+Deployment:
+- GitHub discussion branch only。未部署云端,无服务重启。
+
+Notes for next agent:
+- 下一步不应直接实现;先由 Codex 核对真实代码/数据口径,把事实补进讨论文件。
+- Claude 后续应基于核对事实再回应,然后再进入 Shared Decision。
