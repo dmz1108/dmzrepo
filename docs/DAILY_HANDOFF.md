@@ -2514,3 +2514,29 @@ Deployment:
 Notes for next agent:
 - prior.topics 为 top-3 题材统计;个股历史题材超过3个且相关题材恰在第4位之后时会漏计(按0处理,偏保守方向)。如实测出现此场景再议放宽。
 - 待 Codex 最终复审;合并后 Claude 执行第④项(Routine 提示词扩项)。
+
+## 2026-07-10 - Codex - 复审、合并并部署 PR #19 L2 扫描优先队列
+
+Changed:
+- 最终复审 Claude PR #19:确认补选板块、净流入和大涨数的板块字典序，以及距涨停、涨幅、同题材历史主因次数的个股字典序接线正确。
+- 确认优先股票会在任务截断前进入队列，`priorityCodes` 可下发给 worker，五档完整率和价格覆盖指标按统一口径统计。
+- 合并到 `main`，merge commit `6a26d54`，并将云端两份运行文件及新增测试更新到该版本。
+
+Files:
+- `kpl-stats-server.js`
+- `local-l2-task-queue.js`
+- `tests/scan-priority.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- 合并后的 `main` 通过两份 `node --check` 和 10 组回归测试；云端暂存与生产路径再次通过扫描优先级、L2 持久化、补选通道、明星三层和 QI 主线状态测试。
+- 云端三份部署文件 SHA-256 与 `main` 一致；内网 `/health`、`/kpl` 均为 200；公网 `https://market.dreamerqi.com/kpl` 与主页均为 200，TLS 校验正常。
+
+Deployment:
+- 已部署云端并重启计划任务 `Panda Dashboard Server`；PID `7196 -> 5200`。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\scan-priority-pr19-20260711-004208`。
+- 公司电脑上的 L2 worker 未修改；其 50w/300w/500w/800w/1000w 五档、现价和版本字段升级仍是独立后续任务。
+
+Notes for next agent:
+- PR #19 只改善云端扫描选择、队列优先级和观测指标，不会凭空补出公司 worker 尚未回传的五档数据。
+- 下一个交易日应观察 `priorityCodes`、`firstResultAt`、`rowsWithPrice`、`rowsWithAllBuckets` 的实际值，再判断扫描吞吐是否需要调整。
