@@ -2414,3 +2414,27 @@ Validation:
 
 Deployment:
 - GitHub only(PR #18)。未部署云端,无服务重启。
+
+## 2026-07-10 - Claude - 实施 Shared Decision 第③项:扫描字典序优先队列 + priorityCodes
+
+Changed:
+- 板块级字典序(不做加权公式):补选来源 > 净流入 > 大涨数(memberRows 内涨幅≥5% 计数);补选板块豁免"涨停≥2"门槛(仍需净流入达标)。
+- 个股猎场优先列表 `strategyMainlineScanPriorityCodes`:板内涨幅 5%~涨停前(Owner 定义猎场),字典序 距板距离 > 当日涨幅 > 历史主因命中,上限 20 只,随任务下发。
+- 队列 `start()` 接受 priorityCodes:优先股排到任务最前(组内保持涨幅序),分批回传时猎场股最先出结果;job 记录 priorityCodes。
+- job 指标(SD 第5条):claim/update 盖 workerVersion;firstResultAt;metrics{resultRows, rowsWithPrice, rowsWithAllBuckets}——吞吐扩容(5min/2板)依据这些指标实测后另议。
+
+Files:
+- `kpl-stats-server.js`
+- `local-l2-task-queue.js`
+- `tests/scan-priority.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 两文件通过;scan-priority 15 项全过(猎场过滤与三键排序、板块豁免与字典序静态断言、队列真实实例行为:优先排序/版本盖章/指标);其余八套回归全过。
+
+Deployment:
+- GitHub only(分支 claude/scan-priority-queue)。未部署云端,无服务重启。
+
+Notes for next agent:
+- rowsWithPrice/rowsWithAllBuckets 在第①项(worker 升级包)实施前会偏低,属预期——这两个指标正好用于量化①的必要性。
+- 第④项(每日验收扩项)为定时器提示词更新,不动代码,待本项合并后由 Claude 直接调整 Routine。

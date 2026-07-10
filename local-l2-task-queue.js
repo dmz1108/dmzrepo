@@ -317,13 +317,20 @@ class LocalL2TaskQueue {
     const normalizedStocks = rawStocks
       .map((stock, index) => normalizeStock(stock, index))
       .filter(Boolean);
-    const stocks = normalizedStocks
+    // 优先扫描股票列表(SD v1 第5条):priorityCodes 中的股排到最前(组内保持涨幅序),
+    // 分批回传时猎场股最先出结果——服务预判,不改截断数量。
+    const prioritySet = new Set((Array.isArray(payload.priorityCodes) ? payload.priorityCodes : [])
+      .map(code => String(code || '').trim()).filter(Boolean));
+    const sortedStocks = normalizedStocks
       .sort((a, b) => {
         const ag = Number.isFinite(a.gainPct) ? a.gainPct : -Infinity;
         const bg = Number.isFinite(b.gainPct) ? b.gainPct : -Infinity;
         return bg - ag || a.sourceIndex - b.sourceIndex || a.code.localeCompare(b.code);
       })
-      .slice(0, limitStocks > 0 ? limitStocks : undefined)
+      .slice(0, limitStocks > 0 ? limitStocks : undefined);
+    const stocks = (prioritySet.size
+      ? [...sortedStocks.filter(st => prioritySet.has(st.code)), ...sortedStocks.filter(st => !prioritySet.has(st.code))]
+      : sortedStocks)
       .map((stock, index) => ({
         ...stock,
         rank: index + 1,
@@ -349,6 +356,7 @@ class LocalL2TaskQueue {
       sortSnapshotAt: payload.sortSnapshotAt || new Date().toISOString(),
       sortBy: '实时涨幅快照',
       total: stocks.length,
+      priorityCodes: [...prioritySet],
       excludedStockCount,
       scanned: 0,
       batchSize: this.batchSize,
@@ -409,6 +417,7 @@ class LocalL2TaskQueue {
       job.updatedAt = job.startedAt;
       job.note = '本机计算助手已领取任务';
       job.claimedBy = this.worker.id || this.worker.host || 'local-worker';
+      job.workerVersion = this.worker.version || '';
       this.persistJob(job);
       return { ok: true, job: workerJob(job) };
     }
@@ -427,10 +436,20 @@ class LocalL2TaskQueue {
     if (Number.isFinite(Number(body.scanned))) job.scanned = Number(body.scanned);
     if (Number.isFinite(Number(body.currentBatch))) job.currentBatch = Number(body.currentBatch);
     if (body.note) job.note = String(body.note);
+    if (body.version) {
+      this.worker.version = String(body.version);
+      job.workerVersion = String(body.version);
+    }
     if (Array.isArray(body.results)) {
       const threshold = Number(job.threshold || 1.5);
       const minAmount = PICK_SIGNAL_MIN_AMOUNT;
       const withSignals = body.results.map(row => addPickSignals(row, threshold, minAmount));
+      if (withSignals.length && !job.firstResultAt) job.firstResultAt = job.updatedAt;
+      job.metrics = {
+        resultRows: withSignals.length,
+        rowsWithPrice: withSignals.filter(r => Number(r?.price) > 0).length,
+        rowsWithAllBuckets: withSignals.filter(r => DEFAULT_THRESHOLDS.every(t => r?.thresholds?.[String(t)])).length,
+      };
       job.results = withSignals;
       job.picked = withSignals
         .filter(row => row.pickReason)
