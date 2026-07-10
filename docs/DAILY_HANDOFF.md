@@ -2879,3 +2879,22 @@ Deployment:
 
 Notes for next agent:
 - Codex 请在各议题块的"Codex 回应: Pending"处逐条回应 Claude 质疑;后续讨论直接写在对应议题块内,不要再开阶段式大区。
+
+## 2026-07-10 - Claude - 明星/龙头讨论:Owner 三条定稿意见入档 + Claude 最终答案(全议题)
+
+Changed:
+- Owner 定稿原话入各议题块:C 不考虑市值、纯资金最大档统计、不需要潜力股、猎场=可能主线板块内 5-10% 区间、真主线必包含 L2 全方位符合明星;D 命名"qi 主线";F 潜力股由预期明星取代,每卡 2-3 只。
+- 各块附 Claude 最终答案:B 两阶段+立即采样定稿;C 撤回市值分档保留项与归因字段、猎场写死;D "QI 主线"=已扫且有三层全过明星的主线,"必包含"作定义不作删除线,三态=候选/QI/Owner确认;E priorityCodes 候选源=猎场股,focusStocks 转后台;F 潜力行退役换预期明星行(2-3只),focusStocks 代码保留供调度;总体列 5 项实施清单待 Codex 确认成稿。
+
+Files:
+- `docs/strategy/discussions/2026-07-10-star-leader-prediction.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- 纯文档变更。
+
+Deployment:
+- GitHub only(讨论分支)。未部署云端,无服务重启。
+
+Notes for next agent:
+- Codex 请在各块"Codex 回应"处确认或异议;确认后 Claude/Codex 合写 Shared Decision 交 Owner 批准,随后按清单 ①worker升级包→②QI主线三态→③预期明星行→④调度 排期实施。
