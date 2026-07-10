@@ -1,10 +1,13 @@
 'use strict';
 
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 const DEFAULT_BATCH_SIZE = 50;
 const DEFAULT_THRESHOLDS = [500000, 3000000, 5000000, 8000000, 10000000];
 const PICK_SIGNAL_MIN_AMOUNT = 500000;
+const DEFAULT_PERSIST_DAYS = 30;
 
 function isExcludedL2StockCode(code) {
   const text = String(code || '').replace(/\D/g, '').slice(0, 6);
@@ -96,6 +99,43 @@ function latestJobKey(plateId, day) {
   return `${String(day || '')}:${String(plateId || '')}`;
 }
 
+function safePathPart(value) {
+  const text = String(value || '').trim().replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 96);
+  return text || 'unknown';
+}
+
+function timestampPathPart(date = new Date()) {
+  return date.toISOString().replace(/[:.]/g, '-');
+}
+
+function isIsoDay(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
+}
+
+function atomicWriteJson(file, value) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.tmp-${process.pid}-${Date.now()}`;
+  fs.writeFileSync(tmp, JSON.stringify(value, null, 2), 'utf8');
+  fs.renameSync(tmp, file);
+}
+
+function normalizeRestoredJob(job) {
+  if (!job || !job.jobId || !job.day) return null;
+  const copy = { ...job };
+  copy.stocks = Array.isArray(copy.stocks) ? copy.stocks : [];
+  copy.picked = Array.isArray(copy.picked) ? copy.picked : [];
+  copy.results = Array.isArray(copy.results) ? copy.results : [];
+  copy.thresholds = Array.isArray(copy.thresholds) && copy.thresholds.length ? copy.thresholds : DEFAULT_THRESHOLDS.slice();
+  copy.batchSize = Number(copy.batchSize || DEFAULT_BATCH_SIZE);
+  copy.total = Number(copy.total || copy.stocks.length || 0);
+  copy.scanned = Number(copy.scanned || 0);
+  copy.pickedCount = Number(copy.pickedCount || copy.picked.length || 0);
+  copy.available = copy.available !== false;
+  copy.mode = copy.mode || 'local-worker';
+  copy.claimedBy = '';
+  return copy;
+}
+
 function workerJob(job) {
   return {
     jobId: job.jobId,
@@ -127,12 +167,24 @@ class LocalL2TaskQueue {
     this.jobs = new Map();
     this.latestByPlate = new Map();
     this.queue = [];
+    this.persistDir = String(options.persistDir || options.dataDir || '').trim();
+    this.persistDays = Math.max(1, Number(options.persistDays || options.cleanupDays || DEFAULT_PERSIST_DAYS));
+    this.persistence = {
+      enabled: !!this.persistDir,
+      dir: this.persistDir,
+      days: this.persistDays,
+      restoredJobs: 0,
+      lastPersistAt: '',
+      lastPersistError: '',
+    };
     this.worker = {
       lastSeenAt: '',
       id: '',
       version: '',
       host: '',
     };
+    this.cleanupPersistedJobs();
+    this.restorePersistedJobs();
   }
 
   configured() {
@@ -160,7 +212,101 @@ class LocalL2TaskQueue {
       worker: this.worker,
       pending: this.queue.length,
       totalJobs: this.jobs.size,
+      persistence: {
+        enabled: this.persistence.enabled,
+        dir: this.persistence.dir,
+        days: this.persistence.days,
+        restoredJobs: this.persistence.restoredJobs,
+        lastPersistAt: this.persistence.lastPersistAt,
+        lastPersistError: this.persistence.lastPersistError,
+      },
     };
+  }
+
+  persistJob(job, options = {}) {
+    if (!this.persistence.enabled || !job?.jobId || !job?.day) return;
+    const savedAt = new Date().toISOString();
+    const payload = {
+      version: 1,
+      savedAt,
+      job: {
+        ...job,
+        claimedBy: '',
+      },
+    };
+    const jobDir = path.join(this.persistDir, safePathPart(job.day), safePathPart(job.jobId));
+    try {
+      atomicWriteJson(path.join(jobDir, 'latest.json'), payload);
+      if (options.sample) {
+        const suffix = crypto.randomBytes(3).toString('hex');
+        atomicWriteJson(path.join(jobDir, 'samples', `${timestampPathPart(new Date(savedAt))}-${suffix}.json`), payload);
+      }
+      this.persistence.lastPersistAt = savedAt;
+      this.persistence.lastPersistError = '';
+    } catch (err) {
+      this.persistence.lastPersistError = err?.message || String(err);
+    }
+  }
+
+  restorePersistedJobs() {
+    if (!this.persistence.enabled) return;
+    let restored = 0;
+    try {
+      if (!fs.existsSync(this.persistDir)) return;
+      const dayDirs = fs.readdirSync(this.persistDir, { withFileTypes: true })
+        .filter(d => d.isDirectory() && isIsoDay(d.name))
+        .map(d => d.name)
+        .sort();
+      for (const day of dayDirs) {
+        const dayDir = path.join(this.persistDir, day);
+        const jobDirs = fs.readdirSync(dayDir, { withFileTypes: true }).filter(d => d.isDirectory());
+        for (const jobEntry of jobDirs) {
+          const latestFile = path.join(dayDir, jobEntry.name, 'latest.json');
+          if (!fs.existsSync(latestFile)) continue;
+          let payload = null;
+          try {
+            payload = JSON.parse(fs.readFileSync(latestFile, 'utf8'));
+          } catch {
+            continue;
+          }
+          const job = normalizeRestoredJob(payload?.job || payload);
+          if (!job) continue;
+          const existing = this.jobs.get(job.jobId);
+          if (existing && String(existing.updatedAt || '') > String(job.updatedAt || '')) continue;
+          if (job.status === 'queued' || job.status === 'running') {
+            job.note = `${job.note || '本机计算任务'}；服务重启后已从落盘结果恢复，等待重新发起扫描`;
+          }
+          this.jobs.set(job.jobId, job);
+          const key = latestJobKey(job.plateId, job.day);
+          const existingLatest = this.jobs.get(this.latestByPlate.get(key));
+          if (!existingLatest || String(job.createdAt || job.updatedAt || '') >= String(existingLatest.createdAt || existingLatest.updatedAt || '')) {
+            this.latestByPlate.set(key, job.jobId);
+          }
+          restored += 1;
+        }
+      }
+      this.persistence.restoredJobs = restored;
+      this.persistence.lastPersistError = '';
+    } catch (err) {
+      this.persistence.lastPersistError = err?.message || String(err);
+    }
+  }
+
+  cleanupPersistedJobs() {
+    if (!this.persistence.enabled) return;
+    try {
+      if (!fs.existsSync(this.persistDir)) return;
+      const cutoff = Date.now() - this.persistDays * 24 * 60 * 60 * 1000;
+      for (const entry of fs.readdirSync(this.persistDir, { withFileTypes: true })) {
+        if (!entry.isDirectory() || !isIsoDay(entry.name)) continue;
+        const dayMs = Date.parse(`${entry.name}T00:00:00Z`);
+        if (Number.isFinite(dayMs) && dayMs < cutoff) {
+          fs.rmSync(path.join(this.persistDir, entry.name), { recursive: true, force: true });
+        }
+      }
+    } catch (err) {
+      this.persistence.lastPersistError = err?.message || String(err);
+    }
   }
 
   start(payload = {}) {
@@ -226,6 +372,7 @@ class LocalL2TaskQueue {
       job.note = excludedStockCount ? '板块成分股已排除688和北交所，剩余没有可扫描股票' : '板块没有可扫描成分股';
       job.endedAt = new Date().toISOString();
     }
+    this.persistJob(job);
     return publicJob(job);
   }
 
@@ -262,6 +409,7 @@ class LocalL2TaskQueue {
       job.updatedAt = job.startedAt;
       job.note = '本机计算助手已领取任务';
       job.claimedBy = this.worker.id || this.worker.host || 'local-worker';
+      this.persistJob(job);
       return { ok: true, job: workerJob(job) };
     }
     return { ok: true, job: null, worker: this.worker };
@@ -302,6 +450,7 @@ class LocalL2TaskQueue {
     } else {
       job.status = 'running';
     }
+    this.persistJob(job, { sample: Array.isArray(body.results) });
     return { ok: true, job: publicJob(job) };
   }
 }

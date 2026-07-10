@@ -24050,7 +24050,11 @@ async function getStrategyBoardRealtimeStocks(plateId, day, info) {
   return getStrategyBoardStocks(plateId, day, info);
 }
 const l2FocusScanner = createL2FocusScanner({ baseDir: __dirname });
-const localL2TaskQueue = createLocalL2TaskQueue(readLocalL2WorkerConfig());
+const localL2TaskQueue = createLocalL2TaskQueue({
+  ...readLocalL2WorkerConfig(),
+  persistDir: path.join(__dirname, 'strategy-data', 'local-l2-jobs'),
+  persistDays: 30,
+});
 const strategy = createStrategyBackend({
   dataDir: path.join(__dirname, 'strategy-data'),
   nowParts: () => chinaNowParts(),
