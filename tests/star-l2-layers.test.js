@@ -105,4 +105,29 @@ const row3yuan = {
 const s3 = strategyMainlineStarStatus(row3yuan);
 A(s3?.level === 'expected' && s3.maxBucket.amount === 3000000, '3元股按自己的最大档(300w)判定预期明星');
 
+// 8. Owner 澄清:最大档字段存在但为空/零 = 条件不成立,绝不回退小档
+const sealedEmptyMax = {
+  code: '600001', price: 10, gainPct: 10,
+  thresholds: { '500000': th(4e8, 1.5e8, 3e8, 1.2e8), '3000000': th(4e8, 1.5e8, 3e8, 1.2e8),
+    '8000000': th(4e8, 1.5e8, 3e8, 1.2e8), '10000000': th(0, 0, 0, 0) },   // 最大档字段在、数据为零
+};
+const sEmpty = strategyMainlineStarStatus(sealedEmptyMax);
+A(sEmpty?.level === 'sealedWeak' && sEmpty.label === '涨停但最大档无大单', '封板:最大档字段在但无大单→不是明星,不回退小档');
+A(sEmpty.maxBucket.empty === true && sEmpty.maxBucket.dataMissing === false, 'empty 标志正确');
+
+const preEmptyMax = { ...sealedEmptyMax, gainPct: 7 };
+A(strategyMainlineStarStatus(preEmptyMax) === null, '涨停前:最大档无大单→连资金活跃也不给');
+
+// 9. 最大档字段缺失(worker 未采集)= 数据不完整,退回旧行为并打标
+const sealedMissingMax = {
+  code: '600001', price: 10, gainPct: 10,
+  thresholds: { '500000': th(4e8, 1.5e8, 3e8, 1.2e8), '3000000': th(4e8, 1.5e8, 3e8, 1.2e8),
+    '8000000': th(4e8, 1.5e8, 3e8, 1.2e8) },   // 无 10000000 字段
+};
+const sMissing = strategyMainlineStarStatus(sealedMissingMax);
+A(sMissing?.level === 'confirmed' && sMissing.maxBucket.dataMissing === true, '封板:最大档字段缺失→按旧行为判定并打 dataMissing 标');
+const preMissingMax = { ...sealedMissingMax, gainPct: 7 };
+const sPreMissing = strategyMainlineStarStatus(preMissingMax);
+A(sPreMissing?.level === 'active' && sPreMissing.maxBucket.dataMissing === true, '涨停前:字段缺失→可判资金活跃但不可能预期明星,带标');
+
 console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL STAR-L2-LAYERS CHECKS PASSED');

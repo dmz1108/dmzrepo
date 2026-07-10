@@ -2163,3 +2163,25 @@ Notes for next agent:
 - 交易所单笔申报上限按代码前缀近似(30→创业板30万股,68→科创板10万股,其余主板100万股),北交所等特殊板未细分,评审时请 Codex 把关。
 - L2 结果行若无 price 字段则走数据回推,建议后续让 worker 在结果行带上现价,映射更准。
 - 讨论文档议题 B(+5%→涨停窗口的分段统计)与 C/D/E/F 仍开放;本次只实施 Owner 已定稿的第二/三层。
+
+## 2026-07-10 - Claude - 明星最大档规则收严(Owner 澄清):字段在但无大单=条件不成立
+
+Changed:
+- 按 Owner 澄清修正 PR#17:最大可统计档**字段存在但无买单/为零**(bucketRatios 为 null)= 明星条件不成立——封板判为"涨停但最大档无大单"(sealedWeak),涨停前连"资金活跃"也不给;**绝不回退小档判定**。
+- 仅当最大档**字段缺失**(worker 未采集)才算数据不完整:退回旧行为(封板用最小档比值)并打 `maxBucket.dataMissing` 标,供修 worker 后复核;字段在数据空则打 `maxBucket.empty` 标。
+- star-l2-layers 测试 18→24 项,新增空档不回退(封板/涨停前)与字段缺失打标四组断言。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/star-l2-layers.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;star-l2-layers 24 项、scan-supplement/detail-evidence-index/predict-records/metric-profile 回归全过。
+
+Deployment:
+- GitHub only(PR #17)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 语义要点:empty(字段在数据零)=大资金缺席,判死;dataMissing(字段不在)=采集缺陷,保守放行并打标——两者必须区分,不可混为"无数据"。
+- 建议后续核查 worker 是否在所有任务都写全五档字段,消灭 dataMissing 场景。

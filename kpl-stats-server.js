@@ -21858,12 +21858,19 @@ function strategyMainlineStarStatus(row) {
     passiveRatio: Number(base.passiveRatio.toFixed(2)),
     supportRatio: Number(base.supportRatio.toFixed(2)),
   };
-  const maxEntry = maxBucketAmount ? buckets.find(b => b.amount === maxBucketAmount) : null;
-  const maxRatios = maxEntry ? maxEntry.ratios : null;
-  const maxActiveBuy = maxBucketAmount ? Number(thresholds[String(maxBucketAmount)]?.activeBuy || 0) : 0;
+  // Owner 澄清(2026-07-10):最大档字段存在但无买单/为零 = 明星条件不成立,绝不回退小档;
+  // 只有 worker 压根没采集该档字段(字段缺失)才算"数据不完整",此时按旧行为保守处理并打标。
+  const maxField = maxBucketAmount ? thresholds[String(maxBucketAmount)] : undefined;
+  const maxFieldPresent = maxField !== undefined && maxField !== null;
+  const maxRatios = maxFieldPresent ? strategyMainlineBucketRatios(maxField) : null;
+  const maxBucketEmpty = !!(maxBucketAmount && maxFieldPresent && !maxRatios);   // 字段在、数据空/零 → 条件失败
+  const maxBucketDataMissing = !!(maxBucketAmount && !maxFieldPresent);          // 字段缺失 → 数据不完整
+  const maxActiveBuy = maxFieldPresent ? Number(maxField?.activeBuy || 0) : 0;
   const maxBucket = maxBucketAmount ? {
     amount: maxBucketAmount,
     activeBuy: Math.round(maxActiveBuy),
+    empty: maxBucketEmpty,
+    dataMissing: maxBucketDataMissing,
     ratios: maxRatios ? {
       activeRatio: Number(maxRatios.activeRatio.toFixed(2)),
       passiveRatio: Number(maxRatios.passiveRatio.toFixed(2)),
@@ -21873,7 +21880,11 @@ function strategyMainlineStarStatus(row) {
   const gain = numOrNull(row?.gainPct ?? row?.gain);
   const sealed = gain != null && gain >= limitUpThreshold(row?.code, row?.name);
   if (sealed) {
-    // 第二层封板口径:比值取该股最大可统计档(该档无数据时退回最小档,与旧版行为一致)
+    if (maxBucketEmpty) {
+      // 最大档有字段但没有大单 → 大资金缺席,不是明星(小档再强也不回退)
+      return { level: 'sealedWeak', label: '涨停但最大档无大单', gain, ratios: display, maxBucket };
+    }
+    // 最大档字段缺失(worker 未采集)→ 数据不完整,退回最小档判定并打标,供修 worker 后复核
     const sealRatios = maxRatios || base;
     const passCount = [sealRatios.activeRatio, sealRatios.passiveRatio, sealRatios.supportRatio]
       .filter(v => v >= STRATEGY_MAINLINE_STAR_SEAL_RATIO).length;
@@ -21881,6 +21892,7 @@ function strategyMainlineStarStatus(row) {
     return { level: 'sealedWeak', label: '涨停但比值未达标', gain, ratios: display, maxBucket };
   }
   if (gain != null && gain >= STRATEGY_MAINLINE_BIG_GAIN_PCT) {
+    if (maxBucketEmpty) return null;   // 最大档无大单 → 明星条件不成立,连"资金活跃"也不给
     const allPass = buckets.every(({ ratios }) =>
       ratios.activeRatio >= STRATEGY_MAINLINE_STAR_PRE_RATIO &&
       ratios.passiveRatio >= STRATEGY_MAINLINE_STAR_PRE_RATIO);
