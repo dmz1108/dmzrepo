@@ -2048,3 +2048,35 @@ Deployment:
 
 Notes for next agent:
 - 放宽后 live 分支会多 hydrate 最多 3 个板块(与补选数同源),成本有界;补选配 0 时 boardPool 回到 5,与放宽前完全一致。
+
+## 2026-07-10 - Codex - Merge and deploy PR#14 P1-B scan supplement channel
+
+Changed:
+- Merged Claude PR #14 into `main` as merge commit `c94d9b5` (`Merge PR #14: P1-B scan supplement channel`) and pushed `main` to GitHub.
+- Deployed the P1-B backend update to the cloud server.
+- Resolved a `docs/DAILY_HANDOFF.md` merge conflict by preserving both the PR #13 deployment record and Claude's PR #14 handoff records.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+- `tests/scan-supplement.test.js`
+- `tests/detail-evidence-index.test.js`
+- `tests/predict-records.test.js`
+
+Validation:
+- Local after-merge checks passed: `node --check kpl-stats-server.js`, `node tests/scan-supplement.test.js`, `node tests/detail-evidence-index.test.js`, `node tests/predict-records.test.js`.
+- Cloud checks passed before restart with the same four commands.
+- Cloud health passed after restart: `https://market.dreamerqi.com/health` returned `{"ok":true}`.
+- Strategy historical request checked: `GET /api/strategy-mainlines?day=2026-07-09` returned `ok:true`, `cacheState:snapshot`, `staleness:snapshot`, `count:8`, and `scanSupplement:null`, confirming cross-day supplement state does not pollute snapshot responses.
+
+Deployment:
+- Production touched: yes.
+- Cloud backup created: `C:\PandaDashboard\_deploy-backups\pr14-p1b-20260710-135412`.
+- Restart method: stopped old Node listener on port `8765` and restarted via scheduled task `Panda Dashboard Server`.
+- Old PID: `9752`; new PID: `15292`.
+- Cloud operation log updated on the server.
+
+Notes for next agent:
+- PR #14 / P1-B is merged and deployed; do not redeploy it unless there are new changes.
+- During the next live trading session, inspect `scanSupplement.picked` on same-day live strategy responses to see which strong-but-few-limit-up boards were added by the supplement channel.
+- Next approved phase item is P1-D 口径元数据.
