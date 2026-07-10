@@ -5832,7 +5832,7 @@ async function mergeJiuyangongsheStructuredSourceViewTab(sourceView, day, dbPayl
       name,
       sourceKey: 'jiuyangongshe',
       source: 'review/jiuyangongshe-structured',
-      sourceLabel: '闊爺',
+      sourceLabel: '\u97ed\u7814',
       group: 'jiuyangongshe',
       boardTopic,
       primaryTopic: boardTopic,
@@ -5866,7 +5866,7 @@ async function mergeJiuyangongsheStructuredSourceViewTab(sourceView, day, dbPayl
     String(a.code || '').localeCompare(String(b.code || ''))
   ));
   for (const row of rows) {
-    row.sourceLabel = '\u540c\u82b1\u987a';
+    row.sourceLabel = '\u97ed\u7814';
   }
   tab.rows = rows;
   tab.count = rows.length;
@@ -6406,12 +6406,21 @@ function recomputeReviewSourceStatsFromTabs(payload) {
     jiuyangongshe: 'review/jiuyangongshe-structured',
     tgb: 'review/tgb-hunan-structured',
   };
-  const existingStats = Array.isArray(payload.sourceStats) ? payload.sourceStats : [];
-  const statsBase = existingStats.length
-    ? existingStats
-    : [...tabByGroup.entries()]
-      .filter(([, tab]) => Number(tab?.count || (Array.isArray(tab?.rows) ? tab.rows.length : 0)) > 0)
-      .map(([group]) => ({ source: sourceByGroup[group] || `review/${group}`, group }));
+  const statsByGroup = new Map();
+  for (const stat of (Array.isArray(payload.sourceStats) ? payload.sourceStats : [])) {
+    const group = String(stat?.group || reviewSourceGroup(stat?.source || ''));
+    if (!group || isDisabledReviewSource(stat?.source, group)) continue;
+    statsByGroup.set(group, { ...stat, group, source: stat?.source || sourceByGroup[group] || `review/${group}` });
+  }
+  for (const [group, tab] of tabByGroup.entries()) {
+    if (isDisabledReviewSource('', group)) continue;
+    const count = Number(tab?.count || (Array.isArray(tab?.rows) ? tab.rows.length : 0));
+    if (!(count > 0)) continue;
+    if (!statsByGroup.has(group)) {
+      statsByGroup.set(group, { source: sourceByGroup[group] || `review/${group}`, group });
+    }
+  }
+  const statsBase = [...statsByGroup.values()];
   payload.sourceStats = statsBase
     .map(stat => {
       const group = String(stat?.group || reviewSourceGroup(stat?.source || ''));
@@ -20661,6 +20670,10 @@ const STRATEGY_STRONG_RESONANCE_MIN_STOCKS = 2;
 const STRATEGY_MAINLINE_BIG_GAIN_PCT = 5;
 const STRATEGY_MAINLINE_NEAR_LIMIT_GAP_PCT = 1.5;
 const STRATEGY_MAINLINE_RISING_BOARD_LIMIT = 5;
+// P1-B 补选通道(讨论批准 2026-07-10):主通道涨停数优先会漏"资金强/涨幅强但涨停少"的新发方向,
+// 从已获取的实时榜按 净流入>涨幅 补选;可配置可关闭(0=关),默认 3。
+const STRATEGY_MAINLINE_SUPPLEMENT_BOARDS = Math.max(0, Number(process.env.STRATEGY_MAINLINE_SUPPLEMENT_BOARDS ?? 3) || 0);
+let strategyMainlineSupplementState = null;  // 最近一次补选观测(scanSupplement 字段随响应输出)
 const STRATEGY_MAINLINE_LIVE_BOARD_POOL = 5;
 const STRATEGY_MAINLINE_LIVE_HYDRATE_TIMEOUT_MS = 1200;
 const STRATEGY_MAINLINE_RISING_FETCH_TIMEOUT_MS = 1500;
@@ -21473,16 +21486,52 @@ async function getStrategyMainlineRealtimeCatalogBoards(day) {
   });
 }
 
-async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day) {
+async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day, options = {}) {
   const list = Array.isArray(boards) ? boards : [];
-  const targets = list
-    .slice()
+  // 主通道候选锁定在原始榜序前 primaryPool 个(=补选前的 boardPool 裁剪行为),
+  // 保证主通道选出的板块集合与补选功能上线前逐一一致;补选通道才看全量 list。
+  const primaryPoolSize = Number(options.primaryPool) > 0 ? Number(options.primaryPool) : list.length;
+  const primary = list
+    .slice(0, primaryPoolSize)
     .sort((a, b) =>
       (Number(b?.zt) || 0) - (Number(a?.zt) || 0) ||
       (Math.max(0, Number(b?.gainPct) || 0)) - (Math.max(0, Number(a?.gainPct) || 0)) ||
       (Number(b?.netInflow) || 0) - (Number(a?.netInflow) || 0)
     )
     .slice(0, STRATEGY_MAINLINE_RISING_BOARD_LIMIT);
+  for (const b of primary) { if (b) b.scanChannel = 'primary'; }
+  // 补选通道(会签约束2/3):只有真盘中榜(realtimeSource='live')可补选,快照不得伪装成盘中证据;
+  // 每个补选板块记录进入原因(净流入/涨幅/涨停数/榜单位置),观测状态随响应输出。
+  const realtimeSource = String(options.realtimeSource || '');
+  const supplements = [];
+  if (STRATEGY_MAINLINE_SUPPLEMENT_BOARDS > 0 && realtimeSource === 'live') {
+    const chosen = new Set(primary.map(b => String(b?.plateId || '')));
+    const ranked = list.slice().sort((a, b) =>
+      (Number(b?.netInflow) || 0) - (Number(a?.netInflow) || 0) ||
+      (Math.max(0, Number(b?.gainPct) || 0)) - (Math.max(0, Number(a?.gainPct) || 0)));
+    for (const b of ranked) {
+      if (supplements.length >= STRATEGY_MAINLINE_SUPPLEMENT_BOARDS) break;
+      const pid = String(b?.plateId || '');
+      if (!pid || chosen.has(pid)) continue;
+      const netInflow = Number(b?.netInflow) || 0;
+      const gainPct = Number(b?.gainPct) || 0;
+      if (netInflow <= 0 && gainPct <= 0) continue;   // 毫无实时强度的板块不补
+      chosen.add(pid);
+      b.scanChannel = 'supplement';
+      b.supplementBasis = { netInflow, gainPct, zt: Number(b?.zt) || 0, liveRankIndex: list.indexOf(b) + 1 };
+      supplements.push(b);
+    }
+  }
+  strategyMainlineSupplementState = {
+    day: String(day || ''),
+    at: new Date().toISOString(),
+    realtimeSource,
+    enabled: STRATEGY_MAINLINE_SUPPLEMENT_BOARDS > 0,
+    limit: STRATEGY_MAINLINE_SUPPLEMENT_BOARDS,
+    // picked 即"若无补选会漏掉的板块"清单(它们都不在主通道 top-5 里)
+    picked: supplements.map(b => ({ name: String(b?.name || ''), plateId: String(b?.plateId || ''), ...b.supplementBasis })),
+  };
+  const targets = [...primary, ...supplements];
   await mapLimit(targets, 6, async board => {
     const plateId = String(board?.plateId || '');
     if (!plateId) return;
@@ -21768,10 +21817,47 @@ function strategyMainlineBucketRatios(bucket) {
   };
 }
 
-// 明星股判定：未涨停大涨股看「资金是否已活跃」，已涨停股看「涨停瞬间是否吃光卖压」。
+// ===== 明星股三层判定(Owner 定稿 2026-07-10,详见 docs/strategy/discussions/2026-07-10-star-leader-prediction.md) =====
+// 第一层·每档先决:每个档位的主动比与被动比各自 ≥1.5(不是相加);
+// 第二层·最大档特征:该股最大可统计档 三比值 2/3>1.8(涨停前,"预期明星")/ 2/3≥2(封板,"明星确认"),
+//   且最大档主动买入累计 ≥3亿 为涨停前预判信号;
+// 第三层·必含该股最大可统计档:3元股即300w档,10元以上即1000w档,按股价自适应。
+const STRATEGY_MAINLINE_ALL_BUCKETS = [500000, 3000000, 5000000, 8000000, 10000000];
+const STRATEGY_MAINLINE_STAR_MAX_PRE_RATIO = 1.8;   // 第二层:最大档涨停前 2/3 比值下限
+const STRATEGY_MAINLINE_STAR_MAX_BUY_MIN = 3e8;     // 第二层:最大档主动买入累计成交下限(预判信号)
+const STRATEGY_MAINLINE_STAR_LEVEL_ORDER = { confirmed: 0, expected: 1, active: 2 };  // 展示排序:确认 > 预期 > 活跃
+// 限价单笔申报上限(股):主板100万 / 创业板30万 / 科创板10万(按代码前缀;精确交易所规则核实记录见讨论文档议题A)
+function strategyMainlinePerOrderShareCap(code) {
+  const c = String(code || '');
+  if (/^30/.test(c)) return 300000;
+  if (/^68/.test(c)) return 100000;
+  return 1000000;
+}
+// 该股最大可统计档 = 五档中 ≤(股价×单笔申报上限)的最高档(Owner 案例:3元→300w,5元→500w,10元→1000w)。
+// 行内无股价时用数据回推:结果里有成交记录的最高档,即该股实际可达的最大档。
+function strategyMainlineMaxObservableBucket(row) {
+  const price = numOrNull(row?.price ?? row?.close ?? row?.lastPrice);
+  if (price != null && price > 0) {
+    const maxAmount = price * strategyMainlinePerOrderShareCap(row?.code);
+    const fit = STRATEGY_MAINLINE_ALL_BUCKETS.filter(b => b <= maxAmount);
+    if (fit.length) return fit[fit.length - 1];
+    return STRATEGY_MAINLINE_ALL_BUCKETS[0];
+  }
+  const thresholds = row?.thresholds || {};
+  for (let i = STRATEGY_MAINLINE_ALL_BUCKETS.length - 1; i >= 0; i -= 1) {
+    const b = STRATEGY_MAINLINE_ALL_BUCKETS[i];
+    if (strategyMainlineBucketRatios(thresholds[String(b)])) return b;
+  }
+  return null;
+}
+// 明星股判定:未涨停大涨股看「资金是否已活跃/是否预期明星」,已涨停股看「涨停瞬间是否吃光卖压」。
 function strategyMainlineStarStatus(row) {
   const thresholds = row?.thresholds || {};
-  const buckets = STRATEGY_MAINLINE_STAR_BUCKETS
+  const maxBucketAmount = strategyMainlineMaxObservableBucket(row);
+  // 第三层:判定档位集合 = 固定档 ∪ 该股最大可统计档(超出该股可达范围的档位天然无数据,会被过滤)
+  const bucketAmounts = [...new Set([...STRATEGY_MAINLINE_STAR_BUCKETS, ...(maxBucketAmount ? [maxBucketAmount] : [])])]
+    .sort((a, b) => a - b);
+  const buckets = bucketAmounts
     .map(amount => ({ amount, ratios: strategyMainlineBucketRatios(thresholds[String(amount)]) }))
     .filter(item => item.ratios);
   if (!buckets.length) return null;
@@ -21781,19 +21867,54 @@ function strategyMainlineStarStatus(row) {
     passiveRatio: Number(base.passiveRatio.toFixed(2)),
     supportRatio: Number(base.supportRatio.toFixed(2)),
   };
+  // Owner 澄清(2026-07-10):最大档字段存在但无买单/为零 = 明星条件不成立,绝不回退小档;
+  // 只有 worker 压根没采集该档字段(字段缺失)才算"数据不完整",此时按旧行为保守处理并打标。
+  const maxField = maxBucketAmount ? thresholds[String(maxBucketAmount)] : undefined;
+  const maxFieldPresent = maxField !== undefined && maxField !== null;
+  const maxRatios = maxFieldPresent ? strategyMainlineBucketRatios(maxField) : null;
+  const maxBucketEmpty = !!(maxBucketAmount && maxFieldPresent && !maxRatios);   // 字段在、数据空/零 → 条件失败
+  const maxBucketDataMissing = !!(maxBucketAmount && !maxFieldPresent);          // 字段缺失 → 数据不完整
+  const maxActiveBuy = maxFieldPresent ? Number(maxField?.activeBuy || 0) : 0;
+  const maxBucket = maxBucketAmount ? {
+    amount: maxBucketAmount,
+    activeBuy: Math.round(maxActiveBuy),
+    empty: maxBucketEmpty,
+    dataMissing: maxBucketDataMissing,
+    ratios: maxRatios ? {
+      activeRatio: Number(maxRatios.activeRatio.toFixed(2)),
+      passiveRatio: Number(maxRatios.passiveRatio.toFixed(2)),
+      supportRatio: Number(maxRatios.supportRatio.toFixed(2)),
+    } : null,
+  } : null;
   const gain = numOrNull(row?.gainPct ?? row?.gain);
   const sealed = gain != null && gain >= limitUpThreshold(row?.code, row?.name);
   if (sealed) {
-    const passCount = [base.activeRatio, base.passiveRatio, base.supportRatio]
+    if (maxBucketEmpty) {
+      // 最大档有字段但没有大单 → 大资金缺席,不是明星(小档再强也不回退)
+      return { level: 'sealedWeak', label: '涨停但最大档无大单', gain, ratios: display, maxBucket };
+    }
+    // 最大档字段缺失(worker 未采集)→ 数据不完整,退回最小档判定并打标,供修 worker 后复核
+    const sealRatios = maxRatios || base;
+    const passCount = [sealRatios.activeRatio, sealRatios.passiveRatio, sealRatios.supportRatio]
       .filter(v => v >= STRATEGY_MAINLINE_STAR_SEAL_RATIO).length;
-    if (passCount >= 2) return { level: 'confirmed', label: '明星确认', gain, ratios: display };
-    return { level: 'sealedWeak', label: '涨停但比值未达标', gain, ratios: display };
+    if (passCount >= 2) return { level: 'confirmed', label: '明星确认', gain, ratios: display, maxBucket };
+    return { level: 'sealedWeak', label: '涨停但比值未达标', gain, ratios: display, maxBucket };
   }
   if (gain != null && gain >= STRATEGY_MAINLINE_BIG_GAIN_PCT) {
+    if (maxBucketEmpty) return null;   // 最大档无大单 → 明星条件不成立,连"资金活跃"也不给
     const allPass = buckets.every(({ ratios }) =>
       ratios.activeRatio >= STRATEGY_MAINLINE_STAR_PRE_RATIO &&
       ratios.passiveRatio >= STRATEGY_MAINLINE_STAR_PRE_RATIO);
-    if (allPass) return { level: 'active', label: '资金活跃', gain, ratios: display };
+    if (!allPass) return null;
+    // 第二层涨停前预判:最大档三比值 2/3 > 1.8 且最大档主动买累计 ≥3亿 → 预期明星(未封板已见强烈买入意愿)
+    if (maxRatios) {
+      const strongCount = [maxRatios.activeRatio, maxRatios.passiveRatio, maxRatios.supportRatio]
+        .filter(v => v > STRATEGY_MAINLINE_STAR_MAX_PRE_RATIO).length;
+      if (strongCount >= 2 && maxActiveBuy >= STRATEGY_MAINLINE_STAR_MAX_BUY_MIN) {
+        return { level: 'expected', label: '预期明星', gain, ratios: display, maxBucket };
+      }
+    }
+    return { level: 'active', label: '资金活跃', gain, ratios: display, maxBucket };
   }
   return null;
 }
@@ -21897,6 +22018,14 @@ function strategyMainlineStaleness(payload, sessionPhase = '', nowMs = Date.now(
   if (ageMs <= STRATEGY_MAINLINE_LIVE_EXPIRED_MS) return 'stale';
   return 'expired';
 }
+// P1-D 口径元数据(会签约束5):同名指标不同口径必须可区分——静态声明本响应各指标族的数据口径,
+// 前端与 AI 分析按此标注展示,不得把收盘口径当盘中口径混用。
+const STRATEGY_MAINLINE_METRIC_PROFILE = {
+  leaderGain: { fields: ['gain10', 'gain30'], source: 'eastmoney-close-db', basis: 'close', note: '龙头10/30日涨幅为收盘价库口径,盘中不含今日涨幅' },
+  leaderZt: { fields: ['zt10Count', 'mainZt10Count'], source: 'limit-up-db', basis: 'daily', note: '涨停次数按涨停底库交易日统计' },
+  realtimeBoard: { fields: ['gainPct', 'netInflow', 'zt'], source: 'live-board-rank', basis: 'intraday-live', note: '板块涨幅/净流入/涨停数在 realtimeSource=live 时为盘中实时,snapshot 时为快照口径' },
+  cardKlineGain: { fields: ['cardData.gain10', 'cardData.gain30', 'qiLeaders'], source: 'board-snapshot-kline', basis: 'intraday-kline', note: '实时卡展开与QI龙头的10/30日涨幅为K线口径,含快照日盘中涨幅' },
+};
 function strategyMainlineAttachResponseMeta(payload, options = {}) {
   const nowMs = Number.isFinite(Number(options.nowMs)) ? Number(options.nowMs) : Date.now();
   const generatedAt = String(options.generatedAt || strategyMainlineSavedAt(payload) || new Date(nowMs).toISOString());
@@ -21915,6 +22044,13 @@ function strategyMainlineAttachResponseMeta(payload, options = {}) {
       consecutiveFailures: strategyMainlineWarmState.consecutiveFailures,
       currentDelayMs: strategyMainlineWarmState.currentDelayMs,
     },
+    // P1-B 补选观测(picked=若无补选会漏的板块)。全局状态只描述最近一次扫描,
+    // 仅当其 day 与本响应的 day/requestedDay 一致时输出,历史/快照/跨日缓存响应不得被污染。
+    scanSupplement: (strategyMainlineSupplementState &&
+      (strategyMainlineSupplementState.day === String(base.day || '') ||
+       strategyMainlineSupplementState.day === String(base.requestedDay || '')))
+      ? strategyMainlineSupplementState : null,
+    metricProfile: STRATEGY_MAINLINE_METRIC_PROFILE,   // P1-D 指标口径声明(静态,见常量注释)
   };
 }
 async function readMainlineConfirm(day) {
@@ -22101,6 +22237,53 @@ function strategyMainlineEmptyPayload(day, requestedDay, reason, message, sessio
   };
 }
 // 盘中持续覆盖当天预判快照；收盘后不再覆盖已有快照（保留“收盘前最后一次预判”作为回测基准）。
+// P1-C(讨论批准 2026-07-10):在 top/confirmedKey 之外增记 candidates 全量展示候选,
+// 供第二阶段用真实样本定胜率去重/低置信规则。只扩记录:top 结构与回看统计均不动。
+function strategyPredictCandidateRecord(m) {
+  if (!m) return null;
+  const stock = s => s ? {
+    code: s.code || '', name: s.name || '',
+    gain: isFiniteNumeric(s.gain) ? Number(s.gain) : null,
+  } : null;
+  return {
+    key: m.familyKey || m.key || '',
+    familyKey: m.familyKey || '',          // 族归属(现状=归并族键;active node 细分待第二阶段)
+    theme: m.theme || '',
+    mergedThemes: Array.isArray(m.mergedThemes) ? m.mergedThemes.slice(0, 8) : [],
+    rank: m.rank || 0,
+    score: m.score ?? null,
+    predictScore: m.predictScore ?? null,
+    stage: m.stage?.label || '',
+    certainty: m.certainty?.label || '',
+    isNewTheme: !!m.isNewTheme,
+    lowConfidence: null,                   // 低置信通道未上线,先记 null 占位(false=成熟,true=低置信)
+    netInflow: isFiniteNumeric(m.netInflow) ? Number(m.netInflow) : null,
+    boardCount: Number(m.boardCount) || 0,
+    limitUpCount: Number(m.count) || 0,
+    bigGainCount: Number(m.bigGainCount) || 0,
+    nearLimitCount: Number(m.nearLimitCount) || 0,
+    leaderBasisMode: m.leaderBasisMode || '',
+    leaderNote: m.leaderNote || '',
+    leaders: (Array.isArray(m.leaders) ? m.leaders : []).slice(0, 3).map(r => ({
+      ...stock(r),
+      leadScore: isFiniteNumeric(r.leadScore) ? Number(r.leadScore) : null,
+      basis: Array.isArray(r.basis) ? r.basis.slice(0, 6) : [],   // 依据类型(次数/涨幅榜位/主因新鲜度/今日状态)
+      todayLimit: !!r.todayLimit,
+      lianban: Number(r.lianban) || 0,
+      zt10Count: Number(r.zt10Count) || 0,
+      mainZt10Count: Number(r.mainZt10Count) || 0,
+      gain10: isFiniteNumeric(r.gain10) ? Number(r.gain10) : null,
+      gain30: isFiniteNumeric(r.gain30) ? Number(r.gain30) : null,
+    })),
+    stars: (Array.isArray(m.starStocks) ? m.starStocks : []).slice(0, 4).map(s => ({
+      ...stock(s), level: s.level || '', label: s.label || '',
+    })),
+    focusStocks: (Array.isArray(m.focusStocks) ? m.focusStocks : []).slice(0, 6).map(s => ({
+      ...stock(s), basis: Array.isArray(s.basis) ? s.basis.slice(0, 4) : [],
+    })),
+    todayLimitCodes: (Array.isArray(m.todayCodes) ? m.todayCodes : []).slice(0, 16),   // 主要贡献股票(当日涨停)
+  };
+}
 async function writeMainlinePredict(day, sessionPhase, mainlines, confirm) {
   try {
     const existing = await readMainlinePredict(day);
@@ -22114,12 +22297,224 @@ async function writeMainlinePredict(day, sessionPhase, mainlines, confirm) {
     } : null;
     const top = (mainlines || []).slice(0, 3).map(pick).filter(Boolean);
     if (!top.length) return;
+    const candidates = (mainlines || []).slice(0, 12).map(strategyPredictCandidateRecord).filter(Boolean);
     await fs.mkdir(STRATEGY_MAINLINE_DATA_DIR, { recursive: true });
     await fs.writeFile(strategyMainlinePredictPath(day), JSON.stringify({
       day, savedAt: new Date().toISOString(), sessionPhase: sessionPhase || '',
       confirmedKey: confirm?.key || '', top,
+      schemaVersion: 2, candidates,
     }, null, 2), 'utf8');
   } catch {}
+}
+
+// ===== P1-A 细分证据索引库(讨论批准 2026-07-10) =====
+// 盘后从四源 tab 行 + 综合库聚合"证据词"索引:{证据词,别名,股票集合(按日),来源数,首末出现日}。
+// 会签约束1:只建衍生索引,只读四源与综合库,绝不反写来源库。
+// 设计原则:大主题/产业链细分/事件链条/核心公司链条一视同仁,全是证据词,不硬编码任何具体词;
+// 层级归属由 alias/family 配置另行维护。别名自动候选(同股同日不同源)只进候选区,人工词典确认后生效。
+const DETAIL_EVIDENCE_INDEX_DAYS = 30;
+const DETAIL_EVIDENCE_MAX_WORDS = 2000;
+const DETAIL_EVIDENCE_ALIAS_DICT_PATH = path.join(STRATEGY_MAINLINE_DATA_DIR, 'detail-evidence-alias.json');  // 运行时人工词典(confirm/veto 对),不入 Git
+function detailEvidenceIndexPath(day) { return path.join(STRATEGY_MAINLINE_DATA_DIR, `detail-evidence-index-${day}.json`); }
+
+// 细分原因文本 -> 证据词:按常见连接符拆词,去括注/后缀,滤掉过短过长与纯数字
+function detailEvidenceSplitTerms(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return [];
+  return raw
+    .split(/[+/、,，;；|·\s]+/u)
+    .map(t => t.replace(/[()（）[\]【】“”"'’‘]/gu, '').trim())
+    .map(t => t.replace(/概念$/u, '').trim())
+    .filter(t => t.length >= 2 && t.length <= 12)
+    .filter(t => !/^[\d.]+%?$/.test(t));
+}
+// 证据词保持原始细分粒度,绝不用 canonicalTopicName 压成大类(否则细分词会塌缩进大主题,
+// 破坏多粒度主线判断);大类归属只作为 broadTopic 附注另存,不替换 word 本身。
+function detailEvidenceNormalizeTerm(term) {
+  return String(term || '').trim();
+}
+async function readDetailEvidenceAliasDict() {
+  try {
+    const dict = JSON.parse(await fs.readFile(DETAIL_EVIDENCE_ALIAS_DICT_PATH, 'utf8'));
+    return { confirm: Array.isArray(dict?.confirm) ? dict.confirm : [], veto: Array.isArray(dict?.veto) ? dict.veto : [] };
+  } catch { return { confirm: [], veto: [] }; }
+}
+async function readDetailEvidenceIndex(day) {
+  try { return JSON.parse(await fs.readFile(detailEvidenceIndexPath(day), 'utf8')); } catch { return null; }
+}
+async function buildDetailEvidenceIndex(endDay, options = {}) {
+  const isoDay = isoFromCompactDate(endDay);
+  const windowDays = Math.max(5, Math.min(60, Number(options.days) || DETAIL_EVIDENCE_INDEX_DAYS));
+  const apiKey = await readSavedApiKey().catch(() => '');
+  const tradingDays = await getRecentTradingDays(isoDay, apiKey, windowDays).catch(() => []);
+  if (!tradingDays.length) return { ok: false, reason: 'no-trading-days', day: isoDay };
+  const dict = await readDetailEvidenceAliasDict();
+  const aliasTo = new Map();  // 别名 -> 规范词(人工 confirm 对,首词为规范)
+  for (const pair of dict.confirm) {
+    if (!Array.isArray(pair) || pair.length < 2) continue;
+    const canon = detailEvidenceNormalizeTerm(pair[0]);
+    if (!canon) continue;
+    for (const alias of pair.slice(1)) {
+      const a = detailEvidenceNormalizeTerm(alias);
+      if (a && a !== canon) aliasTo.set(a, canon);
+    }
+  }
+  const vetoSet = new Set(dict.veto
+    .filter(p => Array.isArray(p) && p.length >= 2)
+    .map(p => [detailEvidenceNormalizeTerm(p[0]), detailEvidenceNormalizeTerm(p[1])].sort((a, b) => a.localeCompare(b, 'zh-Hans-CN')).join('')));
+  const words = new Map();      // 证据词 -> { kinds, sources, days: Map(day -> Set(code)), hits }
+  const pairCounts = new Map(); // 'ab' -> { count, codes: Set } 别名自动候选
+  for (const day of tradingDays) {
+    const sv = await buildDaySourceViewWithConsensus(day, {}).catch(() => null);
+    const tabs = sv?.payload?.tabs || [];
+    const perStockWords = new Map();  // code -> Map(细分证据词 -> Set(来源)) 供当日跨源别名候选配对
+    for (const tab of tabs) {
+      const source = String(tab.key || '');
+      for (const row of (tab.rows || [])) {
+        const code = normalizeReasonSourceCode(row?.code);
+        if (!code) continue;
+        const entries = [];
+        for (const t of detailEvidenceSplitTerms(row?.boardTopic)) entries.push({ term: t, kind: 'board' });
+        for (const t of detailEvidenceSplitTerms(row?.detailReason)) entries.push({ term: t, kind: 'detail' });
+        for (const { term, kind } of entries) {
+          let word = detailEvidenceNormalizeTerm(term);
+          if (aliasTo.has(word)) word = aliasTo.get(word);
+          if (!word) continue;
+          const cur = words.get(word) || { kinds: new Set(), sources: new Set(), days: new Map(), hits: 0 };
+          cur.kinds.add(kind);
+          cur.sources.add(source);
+          if (!cur.days.has(day)) cur.days.set(day, new Set());
+          cur.days.get(day).add(code);
+          cur.hits += 1;
+          words.set(word, cur);
+          if (kind === 'detail' && source !== 'final') {
+            if (!perStockWords.has(code)) perStockWords.set(code, new Map());
+            const wordSources = perStockWords.get(code);
+            if (!wordSources.has(word)) wordSources.set(word, new Set());
+            wordSources.get(word).add(source);
+          }
+        }
+      }
+    }
+    for (const [code, wordSources] of perStockWords) {
+      const list = [...wordSources.keys()].sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'));
+      for (let i = 0; i < list.length; i += 1) {
+        for (let j = i + 1; j < list.length; j += 1) {
+          // 别名候选只在"不同真实来源给同一股票的不同细分词"之间产生;
+          // 同一来源用 + 拆出的两个词是并列原因,不是同义关系,不进候选。
+          const srcA = wordSources.get(list[i]);
+          const srcB = wordSources.get(list[j]);
+          if (new Set([...srcA, ...srcB]).size < 2) continue;
+          const key = `${list[i]}${list[j]}`;
+          if (vetoSet.has(key)) continue;
+          const cur = pairCounts.get(key) || { count: 0, codes: new Set() };
+          cur.count += 1;
+          cur.codes.add(code);
+          pairCounts.set(key, cur);
+        }
+      }
+    }
+  }
+  const sortedWords = [...words.entries()]
+    .sort((a, b) => b[1].hits - a[1].hits || a[0].localeCompare(b[0], 'zh-Hans-CN'))
+    .slice(0, DETAIL_EVIDENCE_MAX_WORDS)
+    .map(([word, w]) => {
+      const daysList = [...w.days.keys()].sort();
+      const broad = canonicalTopicName(word);
+      return {
+        word,
+        broadTopic: broad && broad !== word ? broad : '',   // 大类归属附注,仅供 family 参考,不替换 word
+        kinds: [...w.kinds].sort(),
+        sources: [...w.sources].sort(),
+        sourceCount: [...w.sources].filter(s => s !== 'final').length,  // 真实源数(细分多源共识依据)
+        hits: w.hits,
+        dayCount: daysList.length,
+        firstDay: daysList[0] || '',
+        lastDay: daysList[daysList.length - 1] || '',
+        stockCount: new Set(daysList.flatMap(d => [...w.days.get(d)])).size,
+        stocksByDay: Object.fromEntries(daysList.map(d => [d, [...w.days.get(d)].sort()])),
+      };
+    });
+  const aliasCandidates = [...pairCounts.entries()]
+    .map(([key, v]) => {
+      const [a, b] = key.split('');
+      return { a, b, count: v.count, stockCount: v.codes.size, sampleCodes: [...v.codes].slice(0, 5) };
+    })
+    .filter(c => c.count >= 2)
+    .sort((x, y) => y.count - x.count || y.stockCount - x.stockCount)
+    .slice(0, 200);
+  const payload = {
+    ok: true, version: 1, day: isoDay,
+    windowDays: tradingDays.length, tradingDays,
+    generatedAt: new Date().toISOString(),
+    wordCount: sortedWords.length,
+    aliasConfirmedPairs: dict.confirm.length,
+    aliasVetoedPairs: dict.veto.length,
+    words: sortedWords,
+    aliasCandidates,
+  };
+  await fs.mkdir(STRATEGY_MAINLINE_DATA_DIR, { recursive: true });
+  await fs.writeFile(detailEvidenceIndexPath(isoDay), JSON.stringify(payload), 'utf8');
+  return payload;
+}
+
+let autoDetailEvidenceIndexDay = '';
+let autoDetailEvidenceIndexLastTryMs = 0;
+async function runAutoDetailEvidenceIndexIfDue() {
+  const now = chinaNowParts();
+  if (now.hour < 16) return;  // 收盘后 16 点起构建,等四源盘后数据基本齐
+  if (autoDetailEvidenceIndexDay === now.day) return;
+  if (!isChinaMarketTradingDay(now.day)) { autoDetailEvidenceIndexDay = now.day; return; }
+  // 失败后间隔 10 分钟重试(数据未齐/构建失败当天还能再试),避免每分钟重跑 30 日重建
+  if (Date.now() - autoDetailEvidenceIndexLastTryMs < 10 * 60 * 1000) return;
+  autoDetailEvidenceIndexLastTryMs = Date.now();
+  try {
+    const payload = await buildDetailEvidenceIndex(now.day);
+    if (payload?.ok && Number(payload.wordCount) > 0) {
+      autoDetailEvidenceIndexDay = now.day;   // 成功生成有效索引后才标记当天完成
+    } else {
+      console.error('detail evidence index build not ok:', String(payload?.reason || 'empty-index'));
+    }
+  } catch (err) {
+    console.error('detail evidence index build failed:', err.message);
+  }
+}
+
+// GET /api/detail-evidence-index?day=&word=&limit= 只读;rebuild=1 需管理员(现场重建当日索引)
+async function getDetailEvidenceIndexApi(url, req, res) {
+  const day = isoFromCompactDate(url.searchParams.get('day') || chinaNowParts().day);
+  const rebuild = url.searchParams.get('rebuild') === '1';
+  if (rebuild && !requireAdmin(req, res)) return;
+  let payload = rebuild ? await buildDetailEvidenceIndex(day).catch(e => ({ ok: false, error: String(e?.message || e), day })) : await readDetailEvidenceIndex(day);
+  let indexDay = day;
+  if (!payload) {
+    // 当日无索引(盘中/未构建):回退最近一份,明确标注 indexDay,不冒充当日
+    const apiKey = await readSavedApiKey().catch(() => '');
+    const td = await getRecentTradingDays(day, apiKey, 10).catch(() => []);
+    for (let i = td.length - 1; i >= 0 && !payload; i -= 1) {
+      payload = await readDetailEvidenceIndex(td[i]);
+      if (payload) indexDay = td[i];
+    }
+  }
+  if (!payload) return send(res, 200, { ok: false, reason: 'no-index', requestedDay: day, message: '细分证据索引尚未构建(每日收盘后自动生成)' });
+  const word = String(url.searchParams.get('word') || '').trim();
+  const limit = Math.min(500, Math.max(1, Number(url.searchParams.get('limit')) || 100));
+  const meta = {
+    ok: payload.ok !== false, requestedDay: day, indexDay: payload.day || indexDay,
+    generatedAt: payload.generatedAt || '', windowDays: payload.windowDays || 0,
+    wordCount: payload.wordCount || 0,
+    aliasConfirmedPairs: payload.aliasConfirmedPairs || 0, aliasVetoedPairs: payload.aliasVetoedPairs || 0,
+  };
+  if (word) {
+    const q = detailEvidenceNormalizeTerm(word);
+    // 按原始细分词匹配,broadTopic 仅作补充命中;查询词不做大类归一
+    const matches = (payload.words || [])
+      .filter(w => w.word === q || w.word.includes(q) || q.includes(w.word) || (w.broadTopic && w.broadTopic === q))
+      .slice(0, limit);
+    return send(res, 200, { ...meta, query: q, matches });
+  }
+  const summary = (payload.words || []).slice(0, limit).map(({ stocksByDay, ...rest }) => rest);
+  return send(res, 200, { ...meta, words: summary, aliasCandidates: (payload.aliasCandidates || []).slice(0, 50) });
 }
 
 // ===== 龙头重构：池内三榜排名（10日涨停次数前5 / 10日涨幅前10 / 30日涨幅前10，均按交易日）+ 主因硬门槛 =====
@@ -22360,10 +22755,10 @@ function strategyMainlineAugmentPrediction(item, isToday, day) {
   ].filter(Boolean));
   const starStocks = [...starByCode.values()]
     .filter(star => themeCodes.has(star.code) && star.level !== 'sealedWeak')
-    .sort((a, b) => (a.level === 'confirmed' ? 0 : 1) - (b.level === 'confirmed' ? 0 : 1) || (Number(b.gain) || 0) - (Number(a.gain) || 0))
+    .sort((a, b) => (STRATEGY_MAINLINE_STAR_LEVEL_ORDER[a.level] ?? 9) - (STRATEGY_MAINLINE_STAR_LEVEL_ORDER[b.level] ?? 9) || (Number(b.gain) || 0) - (Number(a.gain) || 0))
     .slice(0, 4);
   const starConfirmed = starStocks.some(star => star.level === 'confirmed');
-  const starActive = starStocks.some(star => star.level === 'active');
+  const starActive = starStocks.some(star => star.level === 'active' || star.level === 'expected');
   if (starStocks.length) {
     scoreParts.star = Number(Math.min(40, starStocks.reduce((sum, star) => sum + (star.level === 'confirmed' ? 15 : 8), 0)).toFixed(1));
   }
@@ -22640,10 +23035,12 @@ async function buildStrategyMainlineHistoryContext(endDay, themeKeys, days = 15,
 
 async function buildStrategyMainlinesLive(day, options = {}) {
   const requestedDay = isoFromCompactDate(day || chinaNowParts().day);
+  // P1-B:boardPool 按补选配置放宽,补选通道才能看到主通道之外的实时候选;
+  // 主通道仍锁定在原前 STRATEGY_MAINLINE_LIVE_BOARD_POOL 个(primaryPool),行为与补选前完全一致。
   const boardPayload = await getDayBoardsWithMembers(requestedDay, {
     allowFallback: false,
     liveIfMissing: true,
-    boardPool: STRATEGY_MAINLINE_LIVE_BOARD_POOL,
+    boardPool: STRATEGY_MAINLINE_LIVE_BOARD_POOL + STRATEGY_MAINLINE_SUPPLEMENT_BOARDS,
     liveRankCount: 80,
   }).catch(() => ({ useDay: requestedDay, boards: [], source: 'none' }));
   const isoDay = requestedDay;
@@ -22664,7 +23061,15 @@ async function buildStrategyMainlinesLive(day, options = {}) {
       mainlines: [],
     };
   }
-  await strategyMainlineEnrichBoardsWithRisingStocks(boardPayload?.boards || [], isoDay).catch(() => []);
+  await strategyMainlineEnrichBoardsWithRisingStocks(boardPayload?.boards || [], isoDay, {
+    realtimeSource: boardPayload?.source || '',
+    primaryPool: STRATEGY_MAINLINE_LIVE_BOARD_POOL,
+  }).catch(() => []);
+  // 只保留被主通道/补选通道选中的板块进入后续 seeds:
+  // 放宽 boardPool 带来的未选中板块不得改变原有主线候选语义。
+  if (Array.isArray(boardPayload?.boards)) {
+    boardPayload.boards = boardPayload.boards.filter(b => b && b.scanChannel);
+  }
   const limitUpDb = await readLimitUpDbDay(isoDay).catch(() => null);
   const prevDay = strategyMainlinePrevTradingDay(isoDay);
   const prevDb = prevDay ? await readLimitUpMainReasonDbDay(prevDay).catch(() => null) : null;
@@ -22990,8 +23395,13 @@ async function buildStrategyMainlinesLive(day, options = {}) {
   const isTodayQuery = isoDay === chinaTodayIso;
   const sessionPhaseNow = isTodayQuery ? strategyMainlineSessionPhase(chinaNow) : '';
   strategyMainlineMaybeAutoScan(boardPayload?.boards || [], isoDay, isTodayQuery, sessionPhaseNow);
-  const mainlines = strategyMergeMainlineFamilies(rawMainlines)
-    .map(item => strategyMainlineAugmentPrediction(item, isTodayQuery, isoDay))
+  const mainlineConfirm = await readMainlineConfirm(isoDay).catch(() => null);
+  const inflowGate = strategyMainlineApplyInflowGate(
+    strategyMergeMainlineFamilies(rawMainlines)
+      .map(item => strategyMainlineAugmentPrediction(item, isTodayQuery, isoDay)),
+    mainlineConfirm
+  );
+  const mainlines = inflowGate.kept
     .sort((a, b) =>
       (Number(b.score) || 0) - (Number(a.score) || 0) ||
       (Number(b.count) || 0) - (Number(a.count) || 0) ||
@@ -23004,7 +23414,6 @@ async function buildStrategyMainlinesLive(day, options = {}) {
     STRATEGY_MAINLINE_REWORK_TIMEOUT_MS,
     null
   );
-  const mainlineConfirm = await readMainlineConfirm(isoDay).catch(() => null);
   if (mainlineConfirm) {
     for (const m of mainlines) {
       m.isConfirmedMainline = (m.familyKey || m.key) === mainlineConfirm.key || m.theme === mainlineConfirm.theme;
@@ -23021,6 +23430,7 @@ async function buildStrategyMainlinesLive(day, options = {}) {
     requestedDay,
     sourceDay: { realtime: isoDay, boards: isoDay, priorReason: priorReason.endDay || '', history: history.endDay || '', hotThemes: history.endDay || isoDay, resonance: isoDay },
     realtimeSource: boardPayload.source || 'snapshot',
+    inflowGate: { rule: 'net-inflow-required', excluded: inflowGate.excluded.slice(0, 10) },
     recentWindow: history.recentWindow || 15,
     count: mainlines.length,
     stockCount: new Set(seeds.flatMap(t => [
@@ -23029,6 +23439,33 @@ async function buildStrategyMainlinesLive(day, options = {}) {
     ])).size,
     mainlines,
   };
+}
+
+// Owner 规则(2026-07-10):主线当天资金必须净流入——净流出/零流入的板块不是当天主线。
+// 两条保护:netInflow 为 null(数据缺失)不视为流出,不误杀(缺数据不得造假);
+// owner 已确认的主线不被自动规则移除(人工确认优先于自动规则)。
+// 被排除项记入 excluded 供观测(响应 inflowGate 字段),不悄悄消失。
+function strategyMainlineApplyInflowGate(items, mainlineConfirm) {
+  const list = Array.isArray(items) ? items : [];
+  const isConfirmed = (item) => !!mainlineConfirm &&
+    ((item.familyKey || item.key) === mainlineConfirm.key || item.theme === mainlineConfirm.theme);
+  const kept = [];
+  const excluded = [];
+  for (const item of list) {
+    const v = numOrNull(item?.netInflow);
+    if (v != null && v <= 0 && !isConfirmed(item)) {
+      excluded.push({
+        theme: String(item?.theme || ''),
+        netInflow: v,
+        count: Number(item?.count) || 0,
+        boardCount: Number(item?.boardCount) || 0,
+        reason: 'net-outflow',
+      });
+      continue;
+    }
+    kept.push(item);
+  }
+  return { kept, excluded };
 }
 
 async function ensureStrategyMainlineSnapshot(day, reason = '') {
@@ -23613,7 +24050,11 @@ async function getStrategyBoardRealtimeStocks(plateId, day, info) {
   return getStrategyBoardStocks(plateId, day, info);
 }
 const l2FocusScanner = createL2FocusScanner({ baseDir: __dirname });
-const localL2TaskQueue = createLocalL2TaskQueue(readLocalL2WorkerConfig());
+const localL2TaskQueue = createLocalL2TaskQueue({
+  ...readLocalL2WorkerConfig(),
+  persistDir: path.join(__dirname, 'strategy-data', 'local-l2-jobs'),
+  persistDays: 30,
+});
 const strategy = createStrategyBackend({
   dataDir: path.join(__dirname, 'strategy-data'),
   nowParts: () => chinaNowParts(),
@@ -23760,6 +24201,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/limit-up-main-reason-db/pending') return await getLimitUpMainReasonPending(url, req, res);
     if (url.pathname === '/api/limit-up-main-reason-db/hot-themes') return await getLimitUpMainReasonHotThemes(url, req, res);
     if (url.pathname === '/api/strategy-mainlines') return send(res, 200, await getStrategyMainlines(url.searchParams.get('day') || chinaNowParts().day).catch(e => ({ ok: false, error: String(e && e.message || e) })));
+    if (url.pathname === '/api/detail-evidence-index') return await getDetailEvidenceIndexApi(url, req, res);
     if (url.pathname === '/api/strategy-mainline-review') {
       const reviewDays = Math.min(30, Math.max(1, Number(url.searchParams.get('days')) || 10));
       return send(res, 200, await getStrategyMainlineReview(reviewDays).catch(e => ({ ok: false, error: String(e && e.message || e) })));
@@ -24083,6 +24525,9 @@ if (process.argv.includes('--refresh-zt10')) {
     runAutoDiscoverySyncIfDue().catch(err => {
       console.error('discovery auto sync failed:', err.message);
     });
+    runAutoDetailEvidenceIndexIfDue().catch(err => {
+      console.error('detail evidence index auto build failed:', err.message);
+    });
   }, 60 * 1000);
 
   setTimeout(() => {
@@ -24106,6 +24551,9 @@ if (process.argv.includes('--refresh-zt10')) {
     });
     runAutoDiscoverySyncIfDue().catch(err => {
       console.error('discovery auto sync failed:', err.message);
+    });
+    runAutoDetailEvidenceIndexIfDue().catch(err => {
+      console.error('detail evidence index auto build failed:', err.message);
     });
   }, 3000);
 }

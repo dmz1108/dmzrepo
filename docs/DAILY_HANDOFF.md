@@ -2212,6 +2212,496 @@ Changed:
 - 新建 `docs/strategy/discussions/2026-07-10-star-leader-prediction.md`(讨论分支):Owner 口述四组第一手知识原话留痕(L2 档位与股价关系/最大可统计档、明星判定口径(+5%→涨停窗口三比值 2/3>1.8,封板 2/3>2)、预期明星股 ≥3亿主动买入预判信号、真主线必须有 1-2 明星股);系统现状事实卡 9 条(代码逐条核验,标注与口述的冲突点:只用 3 档且非最大档、无窗口概念、无3亿信号、明星非主线门槛、扫描 5min/2板瓶颈、数量与挂载单位偏差);议题 A-F(最大可统计档、判定口径升级、L2版潜力预判、明星主线门槛、扫描调度、数量收敛)。
 - 所有 agent 观点区 Pending,待 Codex 与 Claude 独立填写。
 
+## 2026-07-09 - Codex - 合并并部署 PR #10 主线榜 Step B 保温
+
+Changed:
+- Merged Claude PR #10 into `main` and cleaned duplicate handoff note lines.
+- Deployed the Step B strategy mainline keep-warm backend changes to the cloud server.
+- The deployed behavior now includes 60s day-file read caches with write/override invalidation, `force=1` passthrough for source-view DB reads, and server-mode-only keep-warm startup.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+- `docs/strategy/discussions/2026-07-09-mainline-speed-discussion.md`
+- `docs/strategy/discussions/2026-07-09-mainline-ranking-discussion.md`
+
+Validated:
+- Local `node --check kpl-stats-server.js`.
+- Cloud `node --check C:\PandaDashboard\kpl-stats-server.js`.
+- Cloud `/health` and `https://market.dreamerqi.com/health` returned `ok`.
+- Cloud `/api/strategy-mainlines?day=2026-07-09` returned `ok: true`, `cacheState: snapshot`, `mainlineCount: 8`, and `keepWarm` metadata.
+- Since China market was already closed, `keepWarm.lastResult` was `skipped-off-session`, which is expected; tomorrow during trading it should become `ok` if refresh succeeds.
+- Cloud `source-view?day=2026-07-09&force=1` returned 综合归纳/复盘啦/选股宝/韭研/淘股吧 all `74`.
+- Cloud `kpl-stats-server.js` SHA-256 matched local.
+
+Deployment:
+- Production touched: yes.
+- GitHub main pushed through `c969ad4` before deployment.
+- Cloud backup created: `C:\PandaDashboard\_deploy-backups\pr10-step-b-20260709-233333`.
+- Uploaded `kpl-stats-server.js`, `docs/DAILY_HANDOFF.md`, and the two strategy discussion docs to `C:\PandaDashboard`.
+- Restarted `PandaDashboard-KPL-Server`; active listener verified on port `8765`.
+
+Notes for next agent:
+- PR #10 is now merged and deployed. Do not redeploy it again unless there are new changes.
+- Next trading-session check: inspect `/api/strategy-mainlines?day=<today>` after market opens and confirm `keepWarm.lastResult` eventually becomes `ok`.
+
+## 2026-07-10 - Claude - P1-C 预测记录扩展(第一阶段第一项,已批准)
+
+Changed:
+- `writeMainlinePredict` 增记 `schemaVersion: 2` 与 `candidates` 数组:全量展示候选(上限12条),每条含 族键/主题/归并主题/名次/总分/预判分/阶段/确定性/首日标志/低置信占位(null,通道未上线)/资金净流入/板块数/涨停・大涨・冲板计数/龙头1-3(打分+依据+今日状态+涨停次数口径+10・30日涨幅)/明星(级别)/潜力股(依据)/当日贡献股票码。
+- 新增辅助函数 `strategyPredictCandidateRecord`,纯取值映射。
+- 严格遵守已会签约束4:`top`/`confirmedKey` 结构与取值不变,`getStrategyMainlineReview` 胜率统计零改动;不改主线定义、不改龙头打分;收盘后不覆盖既有预判的行为保持。
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过。
+- 新增 P1-C 功能测试 17 项全部通过(top 字段与旧版逐一比对一致、candidates 全量与上限、空值处理、收盘不覆盖、空主线不写)。
+- 既有回归(round4 / leader-v2 / cache-inv)通过。
+
+Deployment:
+- GitHub only(分支 claude/p1c-predict-records)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 等 Codex/Owner 审查合并后部署(仅 kpl-stats-server.js,需重启主服务);部署次日起 strategy-data/mainline-predict-*.json 开始带 candidates 样本。
+- candidates.lowConfidence 恒为 null 属预期(低置信通道待 P1-A 索引与第二阶段规则)。
+- 下一项 P1-A 细分证据索引库,待本项合并后开工。
+
+## 2026-07-10 - Codex - 合并并部署 PR #12 P1-C 预测记录扩展
+
+Changed:
+- Reviewed Claude PR #12 (`claude/p1c-predict-records`) and merged it into `main`.
+- Deployed `kpl-stats-server.js` and `docs/DAILY_HANDOFF.md` to cloud `C:\PandaDashboard`.
+- Restarted the cloud KPL server through the existing scheduled task `Panda Dashboard Server`.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Local `node --check kpl-stats-server.js` passed before merge.
+- PR diff check passed; P1-C only adds `schemaVersion: 2` and `candidates` to prediction records.
+- Confirmed no changes to `top`, `confirmedKey`, `getStrategyMainlineReview`, mainline definition, or leader scoring.
+- Cloud `node --check C:\PandaDashboard\kpl-stats-server.js` passed.
+- Cloud file SHA-256 matched local for `kpl-stats-server.js` and `docs/DAILY_HANDOFF.md`.
+- Cloud `/health` returned `{"ok":true}`.
+- Cloud `/api/strategy-mainlines` returned `ok:true`, `day:2026-07-10`, `cacheState:live-file`, `staleness:fresh`, `count:7`.
+
+Deployment:
+- Production touched: yes.
+- GitHub main pushed through merge commit `215f800` before deployment.
+- Cloud backup created: `C:\PandaDashboard\_deploy-backups\pr12-p1c-20260710-105230`.
+- Cloud process is running on port `8765` with PID `15316`.
+- Existing scheduled task used for restart: `Panda Dashboard Server`.
+
+Notes for next agent:
+- PR #12 / P1-C is merged and deployed; do not redeploy it unless there are new changes.
+- Starting with the next successful intraday prediction write, `strategy-data\mainline-predict-*.json` should include `schemaVersion: 2` and `candidates`.
+- Next approved phase item is P1-A 细分证据索引库.
+
+## 2026-07-10 - Claude - P1-A 细分证据索引库(第一阶段第二项,已批准)
+
+Changed:
+- 新增细分证据索引:盘后任务 `buildDetailEvidenceIndex` 读取近 30 交易日四源 tab 行(boardTopic/detailReason)与综合库,拆词后**保留原始细分词**为证据词(不压大类,broadTopic 仅作大类附注),聚合为 `{证据词, broadTopic, kinds(board/detail), 来源集合, 真实源数, 首末出现日, 按日股票集合}`,写 `strategy-data/detail-evidence-index-<day>.json`(证据词上限 2000)。(注:本条初版曾写"复用 canonicalTopicName 归一",经 PR#13 评审修正为现行逻辑,见后续两条评审修复记录。)
+- 别名自动候选:同股同日不同真实源的细分词两两成对计数(count>=2 入候选区,上限 200);人工词典 `strategy-data/detail-evidence-alias.json`(运行时文件,不入 Git)confirm 对生效合并、veto 对排除候选。
+- 自动调度:`runAutoDetailEvidenceIndexIfDue`(交易日 16 点后一次)挂入现有分钟级调度与启动补跑两处。
+- 只读端点 `GET /api/detail-evidence-index?day=&word=&limit=`:摘要模式不带按日股票集合,word 查询带;当日无索引回退最近一份并显式标注 indexDay(不冒充当日);`rebuild=1` 需管理员。
+- 会签约束1对照:索引只读四源/综合库,纯衍生数据,零反写;不硬编码任何具体主题词,大主题/细分一视同仁为证据词。
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过。
+- 新增 P1-A 功能测试 20 项全过(拆词/归一、聚合字段、别名候选与词典 confirm/veto、端点摘要/查询/回退/管理员拦截)。
+- 回归:P1-C 17 项、round4、leader-v2、cache-inv 全过。
+
+Deployment:
+- GitHub only(分支 claude/p1a-detail-evidence-index)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 部署后首个交易日 16 点起自动生成索引;也可管理员 `rebuild=1` 手动构建历史日。
+- 30 日窗口构建走四源合并链,属盘后批处理,耗时可接受;若首次构建慢属预期。
+- 索引质量抽查按讨论文档 Validation Plan:三方各抽 5 个证据词交叉核对。下一项 P1-B 待本项合并后开工。
+
+## 2026-07-10 - Claude - PR#13 评审修复:证据词保粒度 + 自动任务成功才标记 + 测试入库
+
+Changed:
+- 评审点1(粒度):证据词不再经 canonicalTopicName 归一(细分词会塌缩进大类,破坏多粒度判断);word 保留原始细分词,大类归属另存 broadTopic 附注字段(与 word 相同时留空)。端点查询词同样不做大类归一,broadTopic 仅作补充命中。
+- 评审点2(调度):runAutoDetailEvidenceIndexIfDue 改为构建成功且 wordCount>0 后才标记当天完成;失败/空索引当天可重试,重试间隔 10 分钟(避免每分钟重跑 30 日重建)。
+- 评审点3(测试):测试正式入库 `tests/detail-evidence-index.test.js`(29 项,含新增的粒度保留、broadTopic、自动任务标记与重试间隔断言)与 `tests/predict-records.test.js`(P1-C 17 项);运行命令 `node tests/<file>`。
+- 测试顺带抓出并修复一个真 bug:veto 键用默认码位排序而候选配对键用 zh localeCompare,顺序不一致导致 veto 匹配失效;两处统一为 localeCompare。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/detail-evidence-index.test.js`
+- `tests/predict-records.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;tests/detail-evidence-index.test.js 29 项、tests/predict-records.test.js 17 项全过;round4/leader-v2 回归通过。
+
+Deployment:
+- GitHub only(PR #13)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 索引 words[].word 现为原始细分词;family/大类聚合请用 broadTopic 或后续 alias/family 配置,不要假设 word 已归一。
+
+## 2026-07-10 - Claude - PR#13 二审两点小修:候选只跨源配对 + handoff 表述订正
+
+Changed:
+- 别名自动候选改为只在"不同真实来源给同一股票的不同细分词"之间产生:perStockWords 记录每词的来源集合,两词来源并集 <2 个源则不配对——同一来源用 + 拆出的并列原因不再误入候选(并列词仍各自入索引词条)。
+- 订正本文件 P1-A 初版记录中"复用 canonicalTopicName 归一"的过时表述为现行逻辑(保留原始细分词,broadTopic 仅作附注),并加注修正来源。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/detail-evidence-index.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;tests/detail-evidence-index.test.js 31 项全过(新增"同源并列词不进候选"与"并列词仍入词条"断言);tests/predict-records.test.js 17 项通过。
+
+Deployment:
+- GitHub only(PR #13)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 别名候选语义自此为"跨源同义假设";同源并列原因如需分析,直接看词条本身的 stocksByDay。
+
+## 2026-07-10 - Codex - Merge and deploy PR#13 P1-A detail evidence index
+
+Changed:
+- Merged Claude PR #13 into `main` as merge commit `592693f` (`Merge PR #13: P1-A detail evidence index`) and pushed `main` to GitHub.
+- Deployed the P1-A backend update to the cloud server.
+- Manually rebuilt the detail evidence index for latest available trading day `2026-07-09`.
+- Verified the new index preserves fine-grained words such as `存储芯片`, `先进封装`, `长鑫存储`, and `人形机器人`; those remain independent `word` entries while broad family information appears only as `broadTopic`.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+- `tests/detail-evidence-index.test.js`
+- `tests/predict-records.test.js`
+
+Validation:
+- Local after-merge checks passed: `node --check kpl-stats-server.js`, `node tests/detail-evidence-index.test.js`, `node tests/predict-records.test.js`.
+- Cloud checks passed before restart with the same three commands.
+- Cloud health passed after restart: `https://market.dreamerqi.com/health` returned `{"ok":true}`.
+- Manual index rebuild returned `ok:true`, `indexDay:2026-07-09`, `windowDays:30`, `wordCount:2000`.
+- Public index queries confirmed fine-grained matches:
+  - `存储芯片` -> `word:存储芯片`, `broadTopic:半导体`, `sourceCount:3`, `stockCount:47`.
+  - `先进封装` -> `word:先进封装`, `broadTopic:半导体`, `sourceCount:3`, `stockCount:26`.
+  - `长鑫存储` -> `word:长鑫存储`, `sourceCount:2`, `stockCount:1`.
+  - `人形机器人` -> `word:人形机器人`, `broadTopic:机器人`, `sourceCount:3`, `stockCount:225`.
+
+Deployment:
+- Production touched: yes.
+- Cloud backup created: `C:\PandaDashboard\_deploy-backups\pr13-p1a-20260710-123817`.
+- Restart method: stopped old Node listener on port `8765` and restarted via scheduled task `Panda Dashboard Server`.
+- Old PID: `15316`; new PID: `9752`.
+- Cloud operation log updated on the server.
+
+Notes for next agent:
+- PR #13 / P1-A is merged and deployed; do not redeploy it unless there are new changes.
+- The first deployed index file is for `2026-07-09`; the automatic 16:00 China-time task should generate the next trading-day index after sources are available.
+- Next approved phase item is P1-B 扫描补选通道.
+
+## 2026-07-10 - Claude - P1-B 扫描补选通道(第一阶段第三项,已批准)
+
+Changed:
+- `strategyMainlineEnrichBoardsWithRisingStocks` 增加补选通道:主通道(涨停数>涨幅>净流入 top-5)不变;从已获取的实时榜(liveRankCount=80,不新增外部拉取)按 净流入>涨幅 补选"涨停少但实时强"的板块,与主通道去重,零强度(净流入与涨幅均<=0)不补。
+- 会签约束2:可配置可关闭——`STRATEGY_MAINLINE_SUPPLEMENT_BOARDS`(env 可覆写,默认 3,配 0 即关);每个补选板块记录进入原因 `supplementBasis`(净流入/涨幅/涨停数/榜单位置),板块带 `scanChannel` 标记;观测状态 `scanSupplement` 随主线榜响应输出,`picked` 即"若无补选会漏的板块"清单。
+- 会签约束3:只有 `realtimeSource='live'` 参与补选,快照源零补选,不把历史快照伪装成盘中证据。
+- 调用点传入 `boardPayload.source`;成员股拉取沿用原 mapLimit 并发与 1.5s 超时,补选仅增加最多 3 个板块的拉取量。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/scan-supplement.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;`node tests/scan-supplement.test.js` 11 项全过(主通道排序不变、补选取数与依据记录、snapshot 零补选、配0关闭、零强度不补、去重);detail-evidence-index 31 项、predict-records 17 项回归通过。
+
+Deployment:
+- GitHub only(分支 claude/p1b-scan-supplement)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 部署后可通过响应里 `scanSupplement.picked` 观察每日补选;连续多日 picked 无一进入主线候选则说明补选键不对,按 Validation Plan 调整或配 0 回退。
+- 剩余 P1-D 口径元数据待本项合并后开工。
+
+## 2026-07-10 - Claude - PR#14 评审修复:补选真正看宽池 + scanSupplement 跨日不污染
+
+Changed:
+- 评审点1(候选池):`buildStrategyMainlinesLive` 的 boardPool 从固定 5 放宽为 `LIVE_BOARD_POOL + SUPPLEMENT_BOARDS`,补选通道由此真正看到主通道之外的实时候选(此前 getDayBoardsWithMembers 先裁到 5,补选在同一批里空转)。主通道语义严格不变:enrich 增加 `primaryPool` 参数,主通道候选锁定在原始榜序前 5 个(等价于放宽前的裁剪行为);enrich 后将 boards 裁剪为仅 scanChannel 选中板块,放宽带来的未选中板块不进 seeds,不改变原有主线候选语义。
+- 评审点2(跨日污染):`scanSupplement` 仅当全局状态的 day 与响应 day/requestedDay 一致时输出,否则为 null;历史日、快照、跨日缓存响应不再显示错日期的补选状态。
+- 测试从 11 项扩到 21 项:新增 主通道锁定原前 N(高涨停宽池板块不得挤进主通道)、宽池经补选进入、接线静态断言(boardPool 放宽/裁剪/primaryPool 传参)、attachResponseMeta 同日输出/历史日 null/requestedDay 匹配/无状态 null。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/scan-supplement.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;scan-supplement 21 项、detail-evidence-index 31 项、predict-records 17 项全过。
+
+Deployment:
+- GitHub only(PR #14)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 放宽后 live 分支会多 hydrate 最多 3 个板块(与补选数同源),成本有界;补选配 0 时 boardPool 回到 5,与放宽前完全一致。
+
+## 2026-07-10 - Codex - Merge and deploy PR#14 P1-B scan supplement channel
+
+Changed:
+- Merged Claude PR #14 into `main` as merge commit `c94d9b5` (`Merge PR #14: P1-B scan supplement channel`) and pushed `main` to GitHub.
+- Deployed the P1-B backend update to the cloud server.
+- Resolved a `docs/DAILY_HANDOFF.md` merge conflict by preserving both the PR #13 deployment record and Claude's PR #14 handoff records.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+- `tests/scan-supplement.test.js`
+- `tests/detail-evidence-index.test.js`
+- `tests/predict-records.test.js`
+
+Validation:
+- Local after-merge checks passed: `node --check kpl-stats-server.js`, `node tests/scan-supplement.test.js`, `node tests/detail-evidence-index.test.js`, `node tests/predict-records.test.js`.
+- Cloud checks passed before restart with the same four commands.
+- Cloud health passed after restart: `https://market.dreamerqi.com/health` returned `{"ok":true}`.
+- Strategy historical request checked: `GET /api/strategy-mainlines?day=2026-07-09` returned `ok:true`, `cacheState:snapshot`, `staleness:snapshot`, `count:8`, and `scanSupplement:null`, confirming cross-day supplement state does not pollute snapshot responses.
+
+Deployment:
+- Production touched: yes.
+- Cloud backup created: `C:\PandaDashboard\_deploy-backups\pr14-p1b-20260710-135412`.
+- Restart method: stopped old Node listener on port `8765` and restarted via scheduled task `Panda Dashboard Server`.
+- Old PID: `9752`; new PID: `15292`.
+- Cloud operation log updated on the server.
+
+Notes for next agent:
+- PR #14 / P1-B is merged and deployed; do not redeploy it unless there are new changes.
+- During the next live trading session, inspect `scanSupplement.picked` on same-day live strategy responses to see which strong-but-few-limit-up boards were added by the supplement channel.
+- Next approved phase item is P1-D 口径元数据.
+
+## 2026-07-10 - Claude - P1-D 口径元数据(第一阶段第四项,已批准)
+
+Changed:
+- 后端:`strategyMainlineAttachResponseMeta` 新增静态 `metricProfile` 口径声明(leaderGain=收盘价库口径/leaderZt=涨停底库/realtimeBoard=盘中实时或快照/cardKlineGain=K线口径含盘中),每族含字段清单与说明;所有主线榜响应携带,AI 与前端按此区分同名指标口径。
+- 前端 `kpl-dashboard_17_apple.html` 四处口径标注:龙头候选列表标题与主线卡龙头行 tooltip 标注"10/30日涨幅为收盘口径(不含今日盘中)";QI 徽章 tooltip 标注"涨幅为K线口径(含快照日盘中)";热门题材搜索结果标注"涨幅为K线口径(含当日盘中)"。
+- 会签约束5对照:盘中K线/收盘/快照三种口径在元数据与展示层均可区分;未改任何现有字段名(避免破坏前端),同名不同义靠 metricProfile+标注消除。
+- 顺带修 scan-supplement 测试桩缺新常量定义的问题。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/metric-profile.test.js`
+- `tests/scan-supplement.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;metric-profile 11 项(含前端四处标注静态断言与内联脚本编译检查)、scan-supplement 21 项、detail-evidence-index 31 项、predict-records 17 项全过。
+
+Deployment:
+- GitHub only(分支 claude/p1d-metric-metadata)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 前端为静态文件变更,部署可不重启服务;后端 metricProfile 需随 kpl-stats-server.js 部署重启生效。
+- 至此第一阶段 P1-C/P1-A/P1-B/P1-D 四项全部完成;第二阶段语义规则待 P1-A 索引与 P1-C 记录积累约 10 个交易日后回讨论分支定规则并二次批准。
+
+## 2026-07-10 - Codex - Merge and deploy PR#15 P1-D metric metadata
+
+Changed:
+- Merged Claude PR #15 into `main` as merge commit `35f786c` (`Merge PR #15: P1-D metric metadata`) and pushed `main` to GitHub.
+- Deployed the P1-D backend and strategy page update to the cloud server.
+- Fixed one trailing blank-line formatting issue in `docs/DAILY_HANDOFF.md` during merge; no functional changes beyond Claude's PR.
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `docs/DAILY_HANDOFF.md`
+- `tests/metric-profile.test.js`
+- `tests/scan-supplement.test.js`
+- `tests/detail-evidence-index.test.js`
+- `tests/predict-records.test.js`
+
+Validation:
+- Local after-merge checks passed: `node --check kpl-stats-server.js`, `node tests/metric-profile.test.js`, `node tests/scan-supplement.test.js`, `node tests/detail-evidence-index.test.js`, `node tests/predict-records.test.js`.
+- Cloud checks passed before restart with the same five commands.
+- Cloud health passed after restart: `https://market.dreamerqi.com/health` returned `{"ok":true}`.
+- Strategy API check: `GET /api/strategy-mainlines?day=2026-07-09` returned `metricProfile` with `leaderGain.basis=close`, `realtimeBoard.basis=intraday-live`, `cardKlineGain.basis=intraday-kline`.
+- Strategy page check: `https://market.dreamerqi.com/kpl` contains the new caliber labels for close-basis leader gains and K-line-basis QI/hot-search gains.
+
+Deployment:
+- Production touched: yes.
+- Cloud backup created: `C:\PandaDashboard\_deploy-backups\pr15-p1d-20260710-140753`.
+- Restart method: stopped old Node listener on port `8765` and restarted via scheduled task `Panda Dashboard Server`.
+- Old PID: `15292`; new PID: `13452`.
+- Cloud operation log updated on the server.
+
+Notes for next agent:
+- PR #15 / P1-D is merged and deployed. First phase P1-C/P1-A/P1-B/P1-D is now complete.
+- Next work is observation, not immediate second-phase rule changes: collect roughly 10 trading days of prediction candidates and detail evidence index data, then return to the discussion branch for owner-approved second-phase semantics.
+
+## 2026-07-10 - Claude - 主线净流入门槛(Owner 规则,当日直接下达)
+
+Changed:
+- 新增 `strategyMainlineApplyInflowGate`:主线当天资金必须净流入——netInflow 有数据且 <=0 的板块不再进入当日主线榜(Owner 规则,案例:2026-07-10 人形机器人净流出103亿仍列第7)。
+- 两条保护:netInflow=null(数据缺失)不视为流出、不误杀(守则:缺数据不得造假);Owner 已确认主线不被自动规则移除(人工确认优先)。
+- 排除项可观测:响应新增 `inflowGate: { rule: 'net-inflow-required', excluded: [...] }`(含主题/净流出值/涨停数),被排除主线不悄悄消失。
+- 门槛在 augment 之后、排序与 top-10 截断之前执行;`readMainlineConfirm` 提前读取以支持确认保护(原逻辑复用,不重复读)。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/inflow-gate.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;inflow-gate 9 项全过(净流出/零流入排除、null 不误杀、确认保护、观测字段、接线顺序静态断言、空输入);scan-supplement/detail-evidence-index/predict-records/metric-profile 四套回归全过。
+
+Deployment:
+- GitHub only(分支 claude/mainline-inflow-gate)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 这是 Owner 当日直接下达的主线定义规则,非第二阶段讨论产物;已在讨论文档留痕。零流入(=0)按"必须净流入"排除;若实盘发现某数据源用 0 表示缺失,再改为 null 语义。
+- 部署后当日效果可从响应 inflowGate.excluded 观察。
+
+## 2026-07-10 - Claude - 明星股三层判定第二/三层实施(Owner 定稿规则)
+
+Changed:
+- 新增 `strategyMainlineMaxObservableBucket`:最大可统计档 = 五档中 ≤(股价×单笔申报上限)的最高档(主板100万股/创业板30万股/科创板10万股,按代码前缀);行内无股价时按"有成交记录的最高档"数据回推;极低价保底50w档。
+- 第三层(必含该股最大可统计档):判定档位集合 = 固定三档 ∪ 该股最大档——10元股的1000w档从此参与每档先决条件,任一档不达标整体不过。
+- 第二层(最大档特征):新增明星等级 `expected`(预期明星)——涨停前涨幅≥5%、每档先决通过、最大档三比值(主/被/合力)2/3 > 1.8、且最大档主动买入累计 ≥3亿;封板"明星确认"的 2/3≥2 判定改取最大档比值(该档无数据退回最小档,兼容旧行为)。
+- 明星结果新增 `maxBucket` 观测字段(档位/主动买累计/三比值);展示排序 确认>预期>活跃;`starActive` 信号含预期级;龙头打分权重不变(预期按非确认档8分)。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/star-l2-layers.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;star-l2-layers 18 项全过(Owner 三个价格案例逐一断言、第三层档位纳入、预期明星四种边界、封板取最大档、3元股按自己最大档判定);scan-supplement/detail-evidence-index/predict-records/metric-profile 回归全过(inflow-gate 测试属 PR #16 分支,本分支无此文件,非回归)。
+
+Deployment:
+- GitHub only(分支 claude/star-l2-max-bucket)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 交易所单笔申报上限按代码前缀近似(30→创业板30万股,68→科创板10万股,其余主板100万股),北交所等特殊板未细分,评审时请 Codex 把关。
+- L2 结果行若无 price 字段则走数据回推,建议后续让 worker 在结果行带上现价,映射更准。
+- 讨论文档议题 B(+5%→涨停窗口的分段统计)与 C/D/E/F 仍开放;本次只实施 Owner 已定稿的第二/三层。
+
+## 2026-07-10 - Claude - 明星最大档规则收严(Owner 澄清):字段在但无大单=条件不成立
+
+Changed:
+- 按 Owner 澄清修正 PR#17:最大可统计档**字段存在但无买单/为零**(bucketRatios 为 null)= 明星条件不成立——封板判为"涨停但最大档无大单"(sealedWeak),涨停前连"资金活跃"也不给;**绝不回退小档判定**。
+- 仅当最大档**字段缺失**(worker 未采集)才算数据不完整:退回旧行为(封板用最小档比值)并打 `maxBucket.dataMissing` 标,供修 worker 后复核;字段在数据空则打 `maxBucket.empty` 标。
+- star-l2-layers 测试 18→24 项,新增空档不回退(封板/涨停前)与字段缺失打标四组断言。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/star-l2-layers.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;star-l2-layers 24 项、scan-supplement/detail-evidence-index/predict-records/metric-profile 回归全过。
+
+Deployment:
+- GitHub only(PR #17)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 语义要点:empty(字段在数据零)=大资金缺席,判死;dataMissing(字段不在)=采集缺陷,保守放行并打标——两者必须区分,不可混为"无数据"。
+- 建议后续核查 worker 是否在所有任务都写全五档字段,消灭 dataMissing 场景。
+
+## 2026-07-10 - Claude - 明星最大档证据:管理员专属展示(Owner 需求)
+
+Changed:
+- 策略页明星股 tooltip 增加管理员专属证据段(`starMaxBucketAdminInfo`):最大档档位(300w/500w/800w/1000w 按股价自适应)、最大档主动买累计(亿)、三比值、empty 状态("最大档字段在但无大单:非明星")、dataMissing 状态("最大档字段缺失:需检查worker采集")。
+- 仅 `state.adminLoggedIn` 为真时拼接;普通用户返回空串,雷达条与主线卡两处明星 tooltip 均覆盖。后端明星判定逻辑零改动(维持按股价自适应最大档,不限定 800w/1000w)。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `tests/star-l2-layers.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- star-l2-layers 28 项全过(新增管理员函数存在与空串守卫、两处拼接、状态文案、内联脚本编译四组断言);metric-profile 回归通过。
+
+Deployment:
+- GitHub only(PR #17)。未部署云端,无服务重启。
+
+Notes for next agent:
+- tooltip 为 title 属性纯文本;若后续想做更醒目的管理员浮层,另开需求,勿混入本 PR。
+
+## 2026-07-10 - Codex - Merge and deploy mainline inflow gate + star max-bucket rules
+
+Changed:
+- Merged `origin/claude/mainline-inflow-gate` into `main`.
+- Merged `origin/claude/star-l2-max-bucket` into `main`, resolving `docs/DAILY_HANDOFF.md` by keeping all handoff entries.
+- Deployed the merged backend/frontend files to the cloud server. Cloud does not currently have Git installed, so deployment used backup + direct file upload instead of `git pull`.
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/inflow-gate.test.js`
+- `tests/star-l2-layers.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- Local merged `main`: `node --check kpl-stats-server.js`; `tests/inflow-gate.test.js`; `tests/star-l2-layers.test.js`; `tests/scan-supplement.test.js`; `tests/detail-evidence-index.test.js`; `tests/predict-records.test.js`; `tests/metric-profile.test.js` all passed.
+- Cloud after upload: `node --check kpl-stats-server.js`; `tests/inflow-gate.test.js`; `tests/star-l2-layers.test.js`; `tests/metric-profile.test.js` all passed.
+- Public health passed: `https://market.dreamerqi.com/health` returned `{"ok":true}`.
+- Public KPL page loaded and contains `starMaxBucketAdminInfo`, confirming the admin-only max-bucket tooltip code is deployed.
+- `GET https://market.dreamerqi.com/api/strategy-mainlines?day=2026-07-10` returned the existing frozen after-close snapshot from before this deploy, so `inflowGate` is not visible on that snapshot; next live build/snapshot should carry the new field.
+
+Deployment:
+- Production touched: yes.
+- GitHub `main` pushed at merge commit `342454f`.
+- Cloud backup created: `C:\PandaDashboard\_deploy-backups\mainline-star-inflow-20260710-184512`.
+- Restart method: stopped old Node listener on port `8765` and restarted via scheduled task `Panda Dashboard Server`.
+- Old PID: `13452`; new PID: `14144`.
+- Cloud operation logs updated on the server.
+
+Notes for next agent:
+- Cloud server currently has no `git` command in PATH and no Git install detected at common paths; deploys from this machine used direct upload. Re-check before assuming `git pull` works on production.
+- Existing 2026-07-10 strategy snapshot was frozen before this deploy; do not treat absence of `inflowGate` in that snapshot as a failed deployment.
+- Admin-only max-bucket evidence is exposed only in strategy page star-stock tooltip when `state.adminLoggedIn` is true.
+
+## 2026-07-10 - Codex - Fix review data-health source stats from source tabs
+
+Changed:
+- Fixed the review source-health chain so `sourceStats` is rebuilt from every enabled source tab that actually has rows, instead of being limited to stale `payload.sourceStats` groups.
+- Fixed Jiuyangongshe source row labels from mojibake / Tonghuashun to `韭研`.
+
+Files:
+- `kpl-stats-server.js`
+- `tests/review-source-health.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- Local: `node --check kpl-stats-server.js` passed.
+- Local: `node tests/review-source-health.test.js` passed.
+- Cloud after deploy: `node --check .\kpl-stats-server.js` passed and `/health` returned `{"ok":true}`.
+- Cloud `GET /api/limit-up-main-reason-db/source-view?day=2026-07-10` now reports sourceStats for Jiuyangongshe, Kaipanla, and Xuangubao; TGB remains zero because the 2026-07-10 TGB structured source is absent.
+- Cloud `GET /api/after-close-status?day=2026-07-10&mainReasonMode=same-day` now reports the same three reviewAutoSources, matching the review page tabs.
+
+Deployment:
+- Production touched: yes.
+- Cloud backup created: `C:\PandaDashboard\_deploy-backups\review-health-source-stats-20260710-185650`.
+- Uploaded `kpl-stats-server.js` directly to `C:\PandaDashboard`.
+- Restart method: stopped Node listener on port `8765` and restarted scheduled task `Panda Dashboard Server`.
+- New PID: `12784`.
+- Cloud operation logs updated on the server.
+
+Notes for next agent:
+- This fixes a recurring mismatch where the review page showed a source tab with data, but the data-health panel still marked it missing because `sourceStats` did not include tabs merged after the original evidence payload.
+- For 2026-07-10, the remaining missing source is TGB only; adding the TGB structured file should automatically flow into sourceStats after this fix.
+
+## 2026-07-10 - Codex - L2 star replay pre-check found missing persisted raw jobs
+
+Changed:
+- Added a discussion/validation note for the requested 2026-07-10 L2 new-star-rule replay.
+- Documented that a full replay cannot be performed from current cloud state because `local-l2-task-queue` stores `job.results` in memory only, and the service restart cleared `totalJobs` to 0.
+- Preserved the old snapshot's 2026-07-10 star summary for reference and listed the five requested questions as currently unanswerable without raw threshold rows.
+
 Files:
 - `docs/strategy/discussions/2026-07-10-star-leader-prediction.md`
 - `docs/DAILY_HANDOFF.md`
@@ -2300,3 +2790,54 @@ Deployment:
 
 Notes for next agent:
 - 等 Codex 独立观点(勿先看本观点)与 L2 回放结果(Owner 已转交回放请求);两者齐后进质疑环节。
+
+- Read-only cloud check: `/api/strategy/focus-l2-scan` as L2 admin returned `totalJobs: 0`, `pending: 0`, `workerOnline: false`.
+- Searched cloud `strategy-data` and logs for raw L2 fields (`thresholds`, `activeBuy`, `passiveBuy`, `activeSell`, `passiveSell`) and found no persisted 2026-07-10 job rows.
+- Parsed `strategy-data/mainline-live-cache-2026-07-10.json` and `strategy-data/strategy-mainline-snapshot-2026-07-10.json` with Node; both only contain old star summaries, not raw five-bucket data.
+
+Deployment:
+- GitHub only.
+- Production code not changed.
+- No deployment and no service restart.
+
+Notes for next agent:
+- Before Monday live validation, consider asking Owner to approve a small persistence fix: save local L2 worker `job.results` per day/job under `strategy-data`, and require worker rows to include all five `thresholds` buckets plus `price`/`lastPrice`.
+- Without raw persisted rows, PR #17 thresholds (`1.8` and `3e8`) cannot be calibrated from 2026-07-10 after a restart.
+
+## 2026-07-10 - Codex - Persist local L2 worker task results
+
+Changed:
+- Added disk persistence for the cloud-side local L2 task queue so worker-submitted `job.results` survive server restarts.
+- Every job now writes `latest.json`; every worker result update also writes a timestamped sample under `samples/`.
+- The queue restores persisted jobs on service start for readback/replay, but does not re-enqueue stale queued/running work after a restart.
+- Added automatic cleanup for persisted local L2 job folders older than 30 days.
+- Wired production persistence to `strategy-data/local-l2-jobs`.
+
+Files:
+- `local-l2-task-queue.js`
+- `kpl-stats-server.js`
+- `tests/local-l2-persistence.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- Local: `node --check local-l2-task-queue.js` passed.
+- Local: `node --check kpl-stats-server.js` passed.
+- Local: `node tests/local-l2-persistence.test.js` passed.
+- Local: `node tests/star-l2-layers.test.js` passed.
+- Local: `node tests/scan-supplement.test.js` passed.
+- Cloud after upload: `node --check .\local-l2-task-queue.js`; `node --check .\kpl-stats-server.js`; `node .\tests\local-l2-persistence.test.js`; `node .\tests\star-l2-layers.test.js`; `node .\tests\scan-supplement.test.js` all passed.
+- Cloud admin status for `/api/strategy/focus-l2-scan` now reports `persistence.enabled: true`, `persistence.days: 30`, `totalJobs: 0`, `pending: 0`.
+- `/health` returned 200 after restart.
+
+Deployment:
+- Production touched: yes.
+- GitHub `main` pushed at commit `92e1bfe`.
+- Cloud backup created: `C:\PandaDashboard\_deploy-backups\l2-job-persistence-20260710-195046`.
+- Uploaded `kpl-stats-server.js`, `local-l2-task-queue.js`, and `tests/local-l2-persistence.test.js` directly to `C:\PandaDashboard`.
+- Restart method: stopped old Node listener on port `8765` and restarted scheduled task `Panda Dashboard Server`.
+- New PID: `14396`, start time `2026-07-10 19:56:51`.
+- Cloud operation logs updated on the server.
+
+Notes for next agent:
+- This does not change the company-side L2 worker. It preserves whatever the worker submits. If rows lack `price` or 500w/300w/500w/800w/1000w threshold buckets, the persisted files will make that visible for diagnosis.
+- Existing 2026-07-10 raw L2 jobs were already lost before this change; replay calibration can start from the next worker-submitted jobs.
