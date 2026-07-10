@@ -2491,3 +2491,26 @@ Deployment:
 
 Notes for next agent:
 - 待 Codex 复审 PR #19;合并后 Claude 执行第④项(两个每日 Routine 提示词扩项,不动代码)。
+
+## 2026-07-10 - Claude - PR #19 二审两点修复
+
+Changed:
+- 二审修正1(第三键题材未对齐板块):`strategyMainlineScanPriorityCodes` 的历史主因命中改为只累计与当前 `board.name` 同题材的次数——复用 `strategyMainlineBoardThemeRelated` 对 `prior.topics`(top-3 题材统计)逐项过滤求和,无同题材命中计0。历史"算力"10次不再给"消费"板块的个股加权。
+- 二审修正2(rowsWithPrice 口径不齐):队列指标价格覆盖改为 `Number(r?.price ?? r?.close ?? r?.lastPrice) > 0`,与策略取价口径(kpl-stats-server 明星判定同链)完全一致;只回传 lastPrice 的有效行不再误计为缺价格。
+
+Files:
+- `kpl-stats-server.js`
+- `local-l2-task-queue.js`
+- `tests/scan-priority.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 两文件通过;scan-priority 18→20 项全过(新增:无关题材10次不得压过相关题材1次、多题材只累计同题材次数、题材过滤复用 strategyMainlineBoardThemeRelated 静态断言、lastPrice-only 行计入 rowsWithPrice);题材匹配在测试中走真实 strategyMainlineBoardThemeRelated(仅 stub topicKey/分类学依赖);七套回归全过。
+- main 已是最新(73019b4),无需再合。
+
+Deployment:
+- GitHub only(PR #19 分支)。未部署云端,无服务重启。
+
+Notes for next agent:
+- prior.topics 为 top-3 题材统计;个股历史题材超过3个且相关题材恰在第4位之后时会漏计(按0处理,偏保守方向)。如实测出现此场景再议放宽。
+- 待 Codex 最终复审;合并后 Claude 执行第④项(Routine 提示词扩项)。

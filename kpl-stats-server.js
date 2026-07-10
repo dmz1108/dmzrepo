@@ -21978,10 +21978,17 @@ function strategyMainlineScanPriorityCodes(board, priorByCode) {
   const rows = Array.isArray(board?.memberRows) ? board.memberRows : [];
   // 历史主因命中次数取自真实主因上下文(buildStrategyMainlinePriorReasonContext 的 byCode:code -> {count,...});
   // memberRows 行本身不带 priorReason(normalize 只留 code/name/gain),必须从上下文查,否则第三键恒为 0(评审修正)。
+  // 二审修正:只计与当前板块同题材的历史命中——讨论原文要求"历史细分原因与当前板块一致",
+  // 历史"算力"10次不得给"消费"板块的个股加权;无同题材命中时按 0 处理。
   const priorCountOf = (r) => {
     const code = normalizeReasonSourceCode(r?.code);
     const prior = priorByCode && typeof priorByCode.get === 'function' ? priorByCode.get(code) : null;
-    return Number(prior?.count) || 0;
+    if (!prior) return 0;
+    const topics = Array.isArray(prior.topics) && prior.topics.length
+      ? prior.topics
+      : [{ theme: prior.theme, count: prior.count }];
+    return topics.reduce((sum, t) =>
+      sum + (strategyMainlineBoardThemeRelated(board?.name, t?.theme) ? (Number(t?.count) || 0) : 0), 0);
   };
   return rows
     .filter(r => {

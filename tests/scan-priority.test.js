@@ -22,6 +22,11 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
 const STRATEGY_MAINLINE_BIG_GAIN_PCT = 5;
 const limitUpThreshold = (code) => /^(30|68)/.test(String(code || '')) ? 20 : 10;
 const normalizeReasonSourceCode = c => String(c || '').trim();
+// 二审修正1:第三键只计与当前板块同题材的历史命中。题材匹配走真实 strategyMainlineBoardThemeRelated,
+// 仅 stub 其依赖(topicKey 归一化、分类学查询返回空)。
+const strategyMainlineTopicKey = t => String(t || '').trim().toLowerCase();
+const strategyThemeTaxonomyInfo = () => null;
+eval(extractFn('strategyMainlineBoardThemeRelated'));
 eval(extractFn('strategyMainlineScanPriorityCodes'));
 
 (async () => {
@@ -33,7 +38,6 @@ eval(extractFn('strategyMainlineScanPriorityCodes'));
   const getRecentTradingDays = async () => ['2026-07-08', '2026-07-09'];
   const isExcludedFromReview = () => false;
   const isDroppedThemeWord = () => false;
-  const strategyMainlineTopicKey = t => String(t || '');
   const strategyParseLianban = () => 1;
   const dbByDay = {
     '2026-07-08': { stocks: [
@@ -49,7 +53,7 @@ eval(extractFn('strategyMainlineScanPriorityCodes'));
   const ctx = await buildStrategyMainlinePriorReasonContext('2026-07-10', ['600001', '600006', '600002'], 30);
   A(ctx.byCode.get('600006')?.count === 2 && ctx.byCode.get('600001')?.count === 1, '真实链路:上下文统计主因命中次数(600006=2次,600001=1次)');
 
-  const board = { memberRows: [
+  const board = { name: '示例主题', memberRows: [
     { code: '600001', name: 'a', gain: 9.2 },   // 距板 0.8,主因1次
     { code: '600002', name: 'b', gain: 6.0 },   // 距板 4.0
     { code: '600003', name: 'c', gain: 10.0 },  // 已涨停,不进猎场
@@ -63,6 +67,15 @@ eval(extractFn('strategyMainlineScanPriorityCodes'));
   A(codes.indexOf('600002') < codes.indexOf('300005'), '距板 4.0 优先于 8.0');
   const codesNoCtx = strategyMainlineScanPriorityCodes(board, null);
   A(codesNoCtx[0] === '600001' && codesNoCtx[1] === '600006', '无上下文时第三键为0,同距板退回代码序(不抛错)');
+
+  // 1b. 二审修正1:历史题材必须与当前板块一致才计数——无关题材10次不得压过相关题材1次。
+  const priorMixed = new Map([
+    ['600001', { code: '600001', theme: '无关题材', count: 10, topics: [{ theme: '无关题材', count: 10 }] }],
+    ['600006', { code: '600006', theme: '示例主题', count: 1, topics: [{ theme: '示例主题', count: 1 }, { theme: '无关题材', count: 5 }] }],
+  ]);
+  const codesTheme = strategyMainlineScanPriorityCodes(board, priorMixed);
+  A(codesTheme[0] === '600006' && codesTheme[1] === '600001', '无关题材10次计0,相关题材1次胜出;多题材只累计同题材次数(无关5次不叠加)');
+  A(src.includes('strategyMainlineBoardThemeRelated(board?.name, t?.theme)'), '第三键题材过滤复用 strategyMainlineBoardThemeRelated');
 
   // 2. 板块级字典序与豁免 + 调用点接线(静态断言)
   A(src.includes("(b?.scanChannel === 'supplement' || Number(b?.zt) >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT)"), '补选板块豁免涨停>=2门槛');
@@ -111,11 +124,11 @@ eval(extractFn('strategyMainlineScanPriorityCodes'));
   const fiveWithEmptyObj = { ...fiveFull, '10000000': {} };
   q.update({ token: 'x'.repeat(24), jobId: job2.jobId, results: [
     { code: '600011', name: 'B', price: 12.5, thresholds: fiveFull },          // 齐全(含全零档,0 合法)
-    { code: '600012', name: 'C', thresholds: fiveWithEmptyObj },               // 空对象档 → 不齐全
-    { code: '600010', name: 'A', thresholds: { '500000': fullBucket(1) } },    // 缺档 → 不齐全
+    { code: '600012', name: 'C', lastPrice: 8.8, thresholds: fiveWithEmptyObj },  // 只回传 lastPrice 也算有价格(二审修正2);空对象档 → 不齐全
+    { code: '600010', name: 'A', thresholds: { '500000': fullBucket(1) } },    // 缺档 → 不齐全,且无任何价格字段
   ] });
   const after = q.get(job2.jobId);
-  A(after.metrics.resultRows === 3 && after.metrics.rowsWithPrice === 1, 'job 指标:行数/价格覆盖');
+  A(after.metrics.resultRows === 3 && after.metrics.rowsWithPrice === 2, 'job 指标:价格覆盖统一策略口径(price ?? close ?? lastPrice),lastPrice-only 行计入');
   A(after.metrics.rowsWithAllBuckets === 1, '五档齐全只认四项金额均有限数值(全零档合法,空对象与缺档不算)');
   A(!!after.firstResultAt && q.get(job2.jobId).workerVersion === 'p1w-test', '首批时间与版本盖章');
   q.update({ token: 'x'.repeat(24), jobId: job2.jobId, version: 'p1w-test2', results: [] });

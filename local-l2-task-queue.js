@@ -450,7 +450,7 @@ class LocalL2TaskQueue {
       if (withSignals.length && !job.firstResultAt) job.firstResultAt = job.updatedAt;
       job.metrics = {
         resultRows: withSignals.length,
-        rowsWithPrice: withSignals.filter(r => Number(r?.price) > 0).length,
+        rowsWithPrice: withSignals.filter(r => Number(r?.price ?? r?.close ?? r?.lastPrice) > 0).length,   // 与策略取价口径一致(price ?? close ?? lastPrice)
         rowsWithAllBuckets: withSignals.filter(r => DEFAULT_THRESHOLDS.every(t => {
           const b = r?.thresholds?.[String(t)];
           return b && ['activeBuy', 'activeSell', 'passiveBuy', 'passiveSell']
