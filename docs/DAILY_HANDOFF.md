@@ -2292,3 +2292,28 @@ Deployment:
 Notes for next agent:
 - This fixes a recurring mismatch where the review page showed a source tab with data, but the data-health panel still marked it missing because `sourceStats` did not include tabs merged after the original evidence payload.
 - For 2026-07-10, the remaining missing source is TGB only; adding the TGB structured file should automatically flow into sourceStats after this fix.
+
+## 2026-07-10 - Codex - L2 star replay pre-check found missing persisted raw jobs
+
+Changed:
+- Added a discussion/validation note for the requested 2026-07-10 L2 new-star-rule replay.
+- Documented that a full replay cannot be performed from current cloud state because `local-l2-task-queue` stores `job.results` in memory only, and the service restart cleared `totalJobs` to 0.
+- Preserved the old snapshot's 2026-07-10 star summary for reference and listed the five requested questions as currently unanswerable without raw threshold rows.
+
+Files:
+- `docs/strategy/discussions/2026-07-10-star-leader-prediction.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- Read-only cloud check: `/api/strategy/focus-l2-scan` as L2 admin returned `totalJobs: 0`, `pending: 0`, `workerOnline: false`.
+- Searched cloud `strategy-data` and logs for raw L2 fields (`thresholds`, `activeBuy`, `passiveBuy`, `activeSell`, `passiveSell`) and found no persisted 2026-07-10 job rows.
+- Parsed `strategy-data/mainline-live-cache-2026-07-10.json` and `strategy-data/strategy-mainline-snapshot-2026-07-10.json` with Node; both only contain old star summaries, not raw five-bucket data.
+
+Deployment:
+- GitHub only.
+- Production code not changed.
+- No deployment and no service restart.
+
+Notes for next agent:
+- Before Monday live validation, consider asking Owner to approve a small persistence fix: save local L2 worker `job.results` per day/job under `strategy-data`, and require worker rows to include all five `thresholds` buckets plus `price`/`lastPrice`.
+- Without raw persisted rows, PR #17 thresholds (`1.8` and `3e8`) cannot be calibrated from 2026-07-10 after a restart.
