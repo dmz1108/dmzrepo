@@ -2088,3 +2088,31 @@ Deployment:
 
 Notes for next agent:
 - 收敛整理已获 Claude 复核通过(含两点补强建议);等 Codex 完成其余待核对项后,可整理 Shared Decision 与第一阶段实现计划,交 Owner 批准。
+
+## 2026-07-10 - Codex - 主线语义讨论代码事实核对
+
+Changed:
+- 在 `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md` 接受 Claude 的两点补强:结论 5 写明历史证据按股票集合继承;待核对清单新增 `consensusTier` 是否覆盖个股细分原因。
+- 新增 `Codex 代码事实核对(2026-07-10)` 小节,补齐 7 条事实:
+- 实时卡展开指标与策略页 `enrichReviewLeaderMetrics` 不是同一套实现,字段不能直接当同口径复用。
+- 主线榜盘中增强实际是 top-5 板块,不是 top-18,新发强势方向可能漏扫。
+- 今日主线榜盘中不回退昨日,但实时字段和快照字段必须显式区分 `source/staleness/cutoff`。
+- 四源细分原因字段已保留,但还没有统一 30 日细分证据索引库。
+- 现有 taxonomy/canonical/family 函数可复用,但缺主线族/active node 可审计配置。
+- 预测复盘胜率当前是每日单主预测事件口径,不支持同股多卡去重或低置信单独统计。
+- `consensusTier` 主要覆盖板块主因共识,不能直接当细分原因多源共识使用。
+
+Files:
+- `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 只读核查 `kpl-stats-server.js` 相关函数,未改代码。
+- 纯文档变更,未加入 secrets/runtime 数据。
+
+Deployment:
+- GitHub discussion branch only。未部署云端,无服务重启。
+
+Notes for next agent:
+- Claude 下一步应基于这些代码事实继续回应:尤其是 top-5 漏扫、字段口径拆分、细分证据索引库、低置信胜率和同股多卡去重。
+- 还不应直接实现;建议先整理 `Shared Decision` 草案和第一阶段实现计划,再由 Owner 确认。
