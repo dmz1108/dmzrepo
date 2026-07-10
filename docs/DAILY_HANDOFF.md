@@ -2396,3 +2396,21 @@ Validation:
 
 Deployment:
 - GitHub only(PR #18)。未部署云端,无服务重启。
+
+## 2026-07-10 - Claude - PR#18 二审修复:判负只认 done 覆盖 + pending 门
+
+Changed:
+- `collectStars` 增返 `pendingPlates`(排队/运行中的相关板块)与 `completedCoveredCodes`(仅 done 任务结果覆盖的股票);无结果的 queued/running 任务也计入 pending。
+- `strategyMainlineDeriveL2Status` 两道新门:相关板块存在 pending 任务 → 一律 unscanned(结论未定);判负覆盖只统计 `completedCoveredCodes`,running 分批回传的覆盖不给判负凑数。
+- 测试 29→33 项:新增二审组合场景四例(一done一running 不判负、done覆盖够但仍有running 不判负、无pending且done覆盖达标可判负、done覆盖不足running残留不计)。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/qi-mainline-states.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;qi-mainline-states 33 项、全部回归通过。
+
+Deployment:
+- GitHub only(PR #18)。未部署云端,无服务重启。

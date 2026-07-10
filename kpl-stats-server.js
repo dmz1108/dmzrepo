@@ -21924,27 +21924,34 @@ function strategyMainlineStarStatus(row) {
 // 读取主线相关板块当日已有的 L2 扫描结果（只消费，不在这里触发扫描），产出 code -> 明星判定。
 function strategyMainlineCollectStars(boards, day) {
   const byCode = new Map();
-  const scannedPlates = new Set();    // 当日有 L2 扫描结果的板块(含运行中分批回传)
-  const completedPlates = new Set();  // 扫描已完成(job done)的板块——只有完成才有资格判"已扫无明星"
-  const coveredCodes = new Set();     // 结果行实际覆盖到的股票(判负需相关股确实被扫过)
+  const scannedPlates = new Set();         // 当日有 L2 扫描结果的板块(含运行中分批回传)
+  const completedPlates = new Set();       // 扫描已完成(job done)的板块
+  const pendingPlates = new Set();         // 仍在排队/运行的板块——存在即不允许判负(结论未定)
+  const coveredCodes = new Set();          // 全部结果行覆盖到的股票(含 running 分批,仅供观测)
+  const completedCoveredCodes = new Set(); // 仅 done 任务结果覆盖的股票——判负只认这份(评审二修)
   for (const board of (Array.isArray(boards) ? boards : [])) {
     const plateId = String(board?.plateId || '');
     if (!plateId) continue;
     let job = null;
     try { job = localL2TaskQueue.latest(plateId, day); } catch { continue; }
-    if (!job || !Array.isArray(job.results) || !job.results.length) continue;
+    if (!job) continue;
+    const jobStatus = String(job.status || '');
+    if (jobStatus === 'queued' || jobStatus === 'running') pendingPlates.add(plateId);
+    if (!Array.isArray(job.results) || !job.results.length) continue;
     scannedPlates.add(plateId);
-    if (String(job.status || '') === 'done') completedPlates.add(plateId);
+    const jobDone = jobStatus === 'done';
+    if (jobDone) completedPlates.add(plateId);
     for (const row of job.results) {
       const code = normalizeReasonSourceCode(row?.code);
       if (!code) continue;
       coveredCodes.add(code);
+      if (jobDone) completedCoveredCodes.add(code);
       if (byCode.has(code)) continue;
       const star = strategyMainlineStarStatus(row);
       if (star) byCode.set(code, { ...star, code, name: String(row?.name || ''), boardName: String(board?.name || job.boardName || '') });
     }
   }
-  return { byCode, scannedPlates, completedPlates, coveredCodes };
+  return { byCode, scannedPlates, completedPlates, pendingPlates, coveredCodes, completedCoveredCodes };
 }
 
 // QI 三态推导(PR#18 评审修正):发现预期明星/明星确认 → 立即 QI;
@@ -21953,9 +21960,13 @@ function strategyMainlineCollectStars(boards, day) {
 function strategyMainlineDeriveL2Status(l2Stars, hasQiStar, themeCodes) {
   if (hasQiStar) return 'qi';
   if (!l2Stars || !l2Stars.completedPlates || !l2Stars.completedPlates.size) return 'unscanned';
+  // 相关板块仍有排队/运行中的任务:结论未定,不判负(评审二修)
+  if (l2Stars.pendingPlates && l2Stars.pendingPlates.size) return 'unscanned';
   const codes = [...(themeCodes || [])];
   if (!codes.length) return 'unscanned';
-  const covered = codes.filter(code => l2Stars.coveredCodes.has(code));
+  // 判负覆盖只认 done 任务产生的代码,running 分批结果不给判负凑数(评审二修)
+  const doneCovered = l2Stars.completedCoveredCodes || new Set();
+  const covered = codes.filter(code => doneCovered.has(code));
   if (covered.length > 0 && covered.length >= Math.min(3, codes.length)) return 'scanned-no-star';
   return 'unscanned';
 }
