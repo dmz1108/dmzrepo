@@ -2377,3 +2377,22 @@ Deployment:
 
 Notes for next agent:
 - 第③项(字典序调度+priorityCodes)待本项合并后开工;第①项恢复时 worker 需产五档+price,QI 态即可实际触发。
+
+## 2026-07-10 - Claude - PR#18 评审修复:判负门槛(完成+覆盖)+ 潜力股彻底退役
+
+Changed:
+- 评审点1:新增 `strategyMainlineDeriveL2Status` 独立推导函数——发现预期明星/明星确认立即 QI;只有扫描完成(job.status=done)且主线相关股确实被结果覆盖(小主线全覆盖,大主线至少3只)才判 scanned-no-star;queued/running/分批未完/覆盖不足一律 unscanned 不降权。collectStars 增返 completedPlates/coveredCodes。
+- 评审点2:explain"潜力股X只待冲板"改为"预期明星X只,首选…(盘中涨幅、最大档主动买)",无预期明星不补位;抢跑雷达 focusStocks 改为 预期明星/明星确认,无则不显示个股;阶段建议"盯潜力股能否首板"→"盯预期明星能否首板";卡片 focus 芯片死代码删除。focusStocks 仅存后台(调度输入)。
+- 测试扩至 29 项:新增行为测试七例(运行中不判负/完成+覆盖才判负/无关覆盖不判负/覆盖不足不判负/预期明星立即QI/小主线全覆盖规则)与文案断言五例(前端用户可见零"潜力"字样)。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/qi-mainline-states.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;qi-mainline-states 29 项、全部七套回归通过。
+
+Deployment:
+- GitHub only(PR #18)。未部署云端,无服务重启。

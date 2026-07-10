@@ -11157,9 +11157,9 @@ function strategyMainlineEarlyRadarHTML(lines) {
     .slice(0, 3);
   if (!early.length) return '';
   const items = early.map(m => {
-    const focusTop = Array.isArray(m.focusStocks) && m.focusStocks.length ? m.focusStocks[0] : null;
-    const focusText = focusTop
-      ? `${focusTop.name || focusTop.code}${focusTop.nearLimit ? '·冲板' : ` +${Number(focusTop.gain).toFixed(1)}%`}`
+    const starTop = (m.starStocks || []).find(x => x.level === 'expected' || x.level === 'confirmed') || null;
+    const focusText = starTop
+      ? `${starTop.name || starTop.code}·${starTop.level === 'confirmed' ? '明星' : '预期明星'}`
       : '';
     const cert = m.certainty || {};
     return `<div class="ml-radar-item ml-radar-${escapeHTML(String(m.stage.key))}">
@@ -11300,7 +11300,7 @@ function renderStrategyMainlinesHTML(d) {
       `<span class="ml-stock ml-starstock${s.level === 'confirmed' ? ' confirmed' : ''}" title="${escapeHTML((s.boardName || '') + ` L2:主动比${s.ratios?.activeRatio ?? '-'} 被动比${s.ratios?.passiveRatio ?? '-'} 合计比${s.ratios?.supportRatio ?? '-'}` + starMaxBucketAdminInfo(s))}">⭐${escapeHTML(s.name || s.code || '')}<i>主${s.ratios?.activeRatio ?? '-'}/被${s.ratios?.passiveRatio ?? '-'}</i></span>`
     ).join('');
     const reasonLine = (stage && stage.advice) || (Array.isArray(m.explain) && m.explain.length ? m.explain[0] : '');
-    // 角色标签可叠加:同一只股可以同时是龙头/明星/潜力,三行独立展示,芯片上叠加对方角标(👑龙头 ⭐明星)。
+    // 角色标签可叠加:同一只股可以同时是龙头/明星,芯片上叠加对方角标(👑龙头 ⭐明星);潜力股角色已退役(Shared Decision v1)。
     const leaderCodeSet = new Set((m.leaders || []).map(l => String(l.code || '')));
     const starCodeSet = new Set((m.starStocks || []).map(s => String(s.code || '')));
     const leaderChips = (m.leaders || []).slice(0, 3).map((l, idx) => {
@@ -11328,12 +11328,6 @@ function renderStrategyMainlinesHTML(d) {
         ? `<button type="button" class="ml-confirm-btn on" onclick="unconfirmMainlineTheme()">取消确认</button>`
         : `<button type="button" class="ml-confirm-btn" data-key="${escapeHTML(m.familyKey || m.key || '')}" data-theme="${escapeHTML(m.theme || '')}" onclick="confirmMainlineTheme(this.dataset.key, this.dataset.theme)">确认主线</button>`)
       : '';
-    const focus = (m.focusStocks || []).slice(0, 6).map(s => {
-      const tag = Array.isArray(s.basis) && s.basis.length ? ` · ${s.basis[0]}` : '';
-      const fLeader = (m.leaders || []).some(l => String(l.code || '') === String(s.code || ''));
-      const fStar = (m.starStocks || []).some(x => String(x.code || '') === String(s.code || ''));
-      return `<span class="ml-stock ml-focus${s.nearLimit ? ' near' : ''}">${fLeader ? '👑' : ''}${fStar ? '⭐' : ''}${escapeHTML(s.name || s.code || '')}<i>${Number(s.gain) > 0 ? '+' : ''}${Number(s.gain).toFixed(1)}%${escapeHTML(tag)}</i></span>`;
-    }).join('');
     const breadthHtml = m.breadth && m.breadth.upPct != null
       ? `<span class="ml-stock">${escapeHTML(m.breadth.boardName || '成分广度')}<i>${Number(m.breadth.upPct)}%上涨 · 中位${Number(m.breadth.medianGainPct) >= 0 ? '+' : ''}${Number(m.breadth.medianGainPct)}%</i></span>`
       : '';

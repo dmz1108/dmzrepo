@@ -32,8 +32,8 @@ const mid = strategyMainlineCertainty({ count: 1, bigGainCount: 3, nearLimitCoun
 A(mid.level !== 'high', '中等及以下不再额外降(只封顶不叠罚)');
 
 // 2. 接线静态断言(后端)
-A(src.includes('return { byCode, scannedPlates };'), 'collectStars 返回扫描板块集合');
-A(src.includes("? 'unscanned'") && src.includes("(hasQiStar ? 'qi' : 'scanned-no-star')"), '三态推导:unscanned/qi/scanned-no-star');
+A(src.includes('return { byCode, scannedPlates, completedPlates, coveredCodes };'), 'collectStars 返回扫描/完成/覆盖三集合');
+A(src.includes('strategyMainlineDeriveL2Status(l2Stars, hasQiStar, themeCodes)'), '三态推导走独立函数(含完成与覆盖门槛)');
 A(src.includes("star.level === 'confirmed' || star.level === 'expected'"), 'QI 判定=预期明星或明星确认(L2 全方位符合)');
 A(src.includes("l2VerificationStatus: m.l2VerificationStatus || ''"), 'P1-C 预测记录携带 QI 状态');
 A(src.includes("scannedNoStar: l2VerificationStatus === 'scanned-no-star'"), 'certainty 接收已扫无明星标志');
@@ -52,5 +52,31 @@ for (const m2 of html.matchAll(/<script(?![^>]*src=)[^>]*>([\s\S]*?)<\/script>/g
   try { new Function(m2[1]); } catch (e) { ok = false; console.error('compile failed:', e.message); }
 }
 A(ok, '前端内联脚本可编译');
+
+// 5. 评审修正:三态推导行为测试(分批回传不判负/完成+覆盖才判负/预期明星立即QI)
+eval(extractFn('strategyMainlineDeriveL2Status'));
+const mk = (completed, covered) => ({
+  completedPlates: new Set(completed),
+  coveredCodes: new Set(covered),
+  scannedPlates: new Set(completed.length ? completed : ['p1']),
+});
+const theme5 = new Set(['A1', 'A2', 'A3', 'A4', 'A5']);
+A(strategyMainlineDeriveL2Status(mk([], ['A1', 'A2', 'A3']), false, theme5) === 'unscanned', '运行中分批回传(无完成任务):不判负,保持待验证');
+A(strategyMainlineDeriveL2Status(mk(['p1'], ['A1', 'A2', 'A3']), false, theme5) === 'scanned-no-star', '扫描完成且相关股覆盖(>=3):才判已扫无明星');
+A(strategyMainlineDeriveL2Status(mk(['p1'], ['X1', 'X2', 'X3']), false, theme5) === 'unscanned', '扫描完成但覆盖的都是无关股:不判负');
+A(strategyMainlineDeriveL2Status(mk(['p1'], ['A1']), false, theme5) === 'unscanned', '完成但相关覆盖不足(1/5<3):不判负');
+A(strategyMainlineDeriveL2Status(mk([], []), true, theme5) === 'qi', '发现预期明星/明星确认:即使扫描未完成也立即 QI');
+const theme2 = new Set(['B1', 'B2']);
+A(strategyMainlineDeriveL2Status(mk(['p1'], ['B1']), false, theme2) === 'unscanned', '小主线(2只)只覆盖1只:不判负');
+A(strategyMainlineDeriveL2Status(mk(['p1'], ['B1', 'B2']), false, theme2) === 'scanned-no-star', '小主线全覆盖:可判负');
+
+// 6. 评审修正:用户可见文案不再出现潜力股
+A(!src.includes('潜力股${'), '后端 explain 不再输出潜力股文案');
+A(src.includes('预期明星${expectedStars.length}只'), 'explain 改为预期明星(无预期明星不补位)');
+A(src.includes('盯预期明星能否首板'), '阶段建议文案已替换');
+A(!html.includes('m.focusStocks[0]') && !html.includes('const focus = (m.focusStocks'), '抢跑雷达与卡片不再使用 focusStocks');
+A(html.includes("x.level === 'expected' || x.level === 'confirmed'"), '抢跑雷达改用预期明星/明星确认,无则不补位');
+const visiblePotential = html.split('\n').filter(l => l.includes('潜力') && !l.trim().startsWith('//'));
+A(visiblePotential.length === 0, '前端用户可见内容零"潜力"字样(仅存代码注释)');
 
 console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL QI-MAINLINE-STATES CHECKS PASSED');
