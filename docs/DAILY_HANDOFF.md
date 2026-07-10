@@ -2271,10 +2271,12 @@ Changed:
 
 Files:
 - `kpl-stats-server.js`
+- `tests/review-source-health.test.js`
 - `docs/DAILY_HANDOFF.md`
 
 Validation:
 - Local: `node --check kpl-stats-server.js` passed.
+- Local: `node tests/review-source-health.test.js` passed.
 - Cloud after deploy: `node --check .\kpl-stats-server.js` passed and `/health` returned `{"ok":true}`.
 - Cloud `GET /api/limit-up-main-reason-db/source-view?day=2026-07-10` now reports sourceStats for Jiuyangongshe, Kaipanla, and Xuangubao; TGB remains zero because the 2026-07-10 TGB structured source is absent.
 - Cloud `GET /api/after-close-status?day=2026-07-10&mainReasonMode=same-day` now reports the same three reviewAutoSources, matching the review page tabs.
