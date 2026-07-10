@@ -130,4 +130,15 @@ const preMissingMax = { ...sealedMissingMax, gainPct: 7 };
 const sPreMissing = strategyMainlineStarStatus(preMissingMax);
 A(sPreMissing?.level === 'active' && sPreMissing.maxBucket.dataMissing === true, '涨停前:字段缺失→可判资金活跃但不可能预期明星,带标');
 
+// 10. 前端管理员证据(静态断言 + 内联脚本编译)
+const html = fsReal.readFileSync(pathReal.join(__dirname, '..', 'kpl-dashboard_17_apple.html'), 'utf8');
+A(html.includes('function starMaxBucketAdminInfo(s)') && html.includes("if (!state.adminLoggedIn || !s || !s.maxBucket) return ''"), '管理员证据函数存在且非管理员返回空串');
+A((html.match(/starMaxBucketAdminInfo\(s\)/g) || []).length >= 2, '两处明星 tooltip 均拼接管理员证据');
+A(html.includes('最大档字段在但无大单:非明星') && html.includes('最大档字段缺失:需检查worker采集'), 'empty/dataMissing 两种状态文案齐备');
+let htmlCompiled = true;
+for (const m2 of html.matchAll(/<script(?![^>]*src=)[^>]*>([\s\S]*?)<\/script>/g)) {
+  try { new Function(m2[1]); } catch (e) { htmlCompiled = false; console.error('inline compile failed:', e.message); }
+}
+A(htmlCompiled, '前端内联脚本仍可编译');
+
 console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL STAR-L2-LAYERS CHECKS PASSED');

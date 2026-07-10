@@ -2185,3 +2185,23 @@ Deployment:
 Notes for next agent:
 - 语义要点:empty(字段在数据零)=大资金缺席,判死;dataMissing(字段不在)=采集缺陷,保守放行并打标——两者必须区分,不可混为"无数据"。
 - 建议后续核查 worker 是否在所有任务都写全五档字段,消灭 dataMissing 场景。
+
+## 2026-07-10 - Claude - 明星最大档证据:管理员专属展示(Owner 需求)
+
+Changed:
+- 策略页明星股 tooltip 增加管理员专属证据段(`starMaxBucketAdminInfo`):最大档档位(300w/500w/800w/1000w 按股价自适应)、最大档主动买累计(亿)、三比值、empty 状态("最大档字段在但无大单:非明星")、dataMissing 状态("最大档字段缺失:需检查worker采集")。
+- 仅 `state.adminLoggedIn` 为真时拼接;普通用户返回空串,雷达条与主线卡两处明星 tooltip 均覆盖。后端明星判定逻辑零改动(维持按股价自适应最大档,不限定 800w/1000w)。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `tests/star-l2-layers.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- star-l2-layers 28 项全过(新增管理员函数存在与空串守卫、两处拼接、状态文案、内联脚本编译四组断言);metric-profile 回归通过。
+
+Deployment:
+- GitHub only(PR #17)。未部署云端,无服务重启。
+
+Notes for next agent:
+- tooltip 为 title 属性纯文本;若后续想做更醒目的管理员浮层,另开需求,勿混入本 PR。
