@@ -2181,3 +2181,27 @@ Deployment:
 
 Notes for next agent:
 - 三方讨论闭环:独立观点 -> 互相质疑 -> 修正 -> 收敛整理 -> 事实核对 -> Shared Decision 草案 -> Codex 会签(5 约束)-> Claude 确认。现在只差 Owner 批准。批准后第一个实现分支建议从 P1-C 开始。
+
+## 2026-07-10 - Owner/Codex - 批准主线语义第一阶段实现顺序
+
+Changed:
+- 在 `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md` 新增 `Owner 批准(2026-07-10)` 小节。
+- 将 Shared Decision 状态从草案改为已获 Codex 会签与 Owner 批准,允许进入第一阶段实现。
+- 将第一阶段顺序明确为: **P1-C -> P1-A -> P1-B -> P1-D**。
+- 记录 Owner 原因: P1-C 改动最小但样本等不来,晚一天少一天回测数据;P1-A 是第二阶段语义优化地基;第二阶段等 P1-A/P1-C 跑约 10 个交易日后再回讨论分支定规则并二次批准。
+
+Files:
+- `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 纯文档变更,未改代码。
+- 未加入 secrets/runtime 数据。
+
+Deployment:
+- GitHub discussion branch only。未部署云端,无服务重启。
+
+Notes for next agent:
+- Claude 可以先开独立实现分支做 P1-C 预测记录扩展。
+- P1-C 要遵守已会签约束:只扩记录,暂不改胜率展示、不改主线定义、不改龙头打分。
+- P1-C 完成后再评审/合并/部署;随后进入 P1-A。
