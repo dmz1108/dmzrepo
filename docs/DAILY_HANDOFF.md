@@ -2317,3 +2317,41 @@ Deployment:
 Notes for next agent:
 - Before Monday live validation, consider asking Owner to approve a small persistence fix: save local L2 worker `job.results` per day/job under `strategy-data`, and require worker rows to include all five `thresholds` buckets plus `price`/`lastPrice`.
 - Without raw persisted rows, PR #17 thresholds (`1.8` and `3e8`) cannot be calibrated from 2026-07-10 after a restart.
+
+## 2026-07-10 - Codex - Persist local L2 worker task results
+
+Changed:
+- Added disk persistence for the cloud-side local L2 task queue so worker-submitted `job.results` survive server restarts.
+- Every job now writes `latest.json`; every worker result update also writes a timestamped sample under `samples/`.
+- The queue restores persisted jobs on service start for readback/replay, but does not re-enqueue stale queued/running work after a restart.
+- Added automatic cleanup for persisted local L2 job folders older than 30 days.
+- Wired production persistence to `strategy-data/local-l2-jobs`.
+
+Files:
+- `local-l2-task-queue.js`
+- `kpl-stats-server.js`
+- `tests/local-l2-persistence.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- Local: `node --check local-l2-task-queue.js` passed.
+- Local: `node --check kpl-stats-server.js` passed.
+- Local: `node tests/local-l2-persistence.test.js` passed.
+- Local: `node tests/star-l2-layers.test.js` passed.
+- Local: `node tests/scan-supplement.test.js` passed.
+- Cloud after upload: `node --check .\local-l2-task-queue.js`; `node --check .\kpl-stats-server.js`; `node .\tests\local-l2-persistence.test.js`; `node .\tests\star-l2-layers.test.js`; `node .\tests\scan-supplement.test.js` all passed.
+- Cloud admin status for `/api/strategy/focus-l2-scan` now reports `persistence.enabled: true`, `persistence.days: 30`, `totalJobs: 0`, `pending: 0`.
+- `/health` returned 200 after restart.
+
+Deployment:
+- Production touched: yes.
+- GitHub `main` pushed at commit `92e1bfe`.
+- Cloud backup created: `C:\PandaDashboard\_deploy-backups\l2-job-persistence-20260710-195046`.
+- Uploaded `kpl-stats-server.js`, `local-l2-task-queue.js`, and `tests/local-l2-persistence.test.js` directly to `C:\PandaDashboard`.
+- Restart method: stopped old Node listener on port `8765` and restarted scheduled task `Panda Dashboard Server`.
+- New PID: `14396`, start time `2026-07-10 19:56:51`.
+- Cloud operation logs updated on the server.
+
+Notes for next agent:
+- This does not change the company-side L2 worker. It preserves whatever the worker submits. If rows lack `price` or 500w/300w/500w/800w/1000w threshold buckets, the persisted files will make that visible for diagnosis.
+- Existing 2026-07-10 raw L2 jobs were already lost before this change; replay calibration can start from the next worker-submitted jobs.
