@@ -11079,7 +11079,7 @@ function strategyMainlineLeadersHTML(m) {
   const leaders = Array.isArray(m?.leaders) ? m.leaders.slice(0, 3) : [];
   if (!leaders.length) return '';
   return `<div class="ml-leader-list">
-    <div class="ml-leader-list-title">龙头候选 <small>按当前强度 × 10日涨停次数 × 10/30日涨幅综合排序</small></div>
+    <div class="ml-leader-list-title">龙头候选 <small>按当前强度 × 10日涨停次数 × 10/30日涨幅综合排序 · 10/30日涨幅为收盘口径(不含今日盘中)</small></div>
     ${leaders.map((leader, idx) => {
       const meta = [
         Number(leader.lianban) >= 2 ? `${Number(leader.lianban)}板` : '',
@@ -11296,7 +11296,7 @@ function renderStrategyMainlinesHTML(d) {
       return `<span class="ml-stock ml-leaderstock${idx === 0 ? ' top' : ''}" title="${escapeHTML((l.basis || []).join(' · '))}">${marks}${escapeHTML(l.name || l.code || '')}<i>${escapeHTML(lb)}</i></span>`;
     }).join('');
     const leaderRow = leaderChips
-      ? `<div class="ml-proof-row"><span class="ml-proof-lbl" title="按10日涨停次数/10日30日涨幅池内排名+主因门槛综合打分,最多3个可能龙头;⭐=同时是明星">龙头</span>${leaderChips}</div>`
+      ? `<div class="ml-proof-row"><span class="ml-proof-lbl" title="按10日涨停次数/10日30日涨幅池内排名+主因门槛综合打分,最多3个可能龙头;⭐=同时是明星;10/30日涨幅为收盘口径(不含今日盘中)">龙头</span>${leaderChips}</div>`
       : (m.leaderNote ? `<div class="ml-proof-row"><span class="ml-proof-lbl">龙头</span><span class="ml-leader-none">${escapeHTML(m.leaderNote)}</span></div>` : '');
     const starChips = (m.starStocks || []).slice(0, 2)
       .map(s => `<span class="ml-stock ml-starstock${s.level === 'confirmed' ? ' confirmed' : ''}" title="L2:主动比${s.ratios?.activeRatio ?? '-'} 被动比${s.ratios?.passiveRatio ?? '-'} 合计比${s.ratios?.supportRatio ?? '-'}">⭐${leaderCodeSet.has(String(s.code || '')) ? '👑' : ''}${escapeHTML(s.name || s.code || '')}<i>${escapeHTML(s.label || '')} 主${s.ratios?.activeRatio ?? '-'}/被${s.ratios?.passiveRatio ?? '-'}</i></span>`)
@@ -11591,6 +11591,7 @@ function renderHotSearchCard() {
     <div style="display:flex;gap:16px;font-size:12px;opacity:.7;margin-bottom:12px;flex-wrap:wrap;">
       <span>近10日涨停 <b style="color:#f5455c;">${d.zt10Total}</b> 次</span>
       <span>近30日涨停 <b style="color:#f5455c;">${d.zt30Total}</b> 次</span>
+      <span style="opacity:.75;">涨幅为K线口径(含当日盘中)</span>
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:13px;">
       <thead><tr>
@@ -12631,8 +12632,8 @@ function markQiRows(rows, qi) {
 function qiTagBadge(kind) {
   const num = kind === '30' ? '30' : '10';
   const tip = kind === '30'
-    ? '30日QI：近10日因本板块涨停次数(≥2)与近30日涨幅均居板块前列'
-    : '10日QI：近10日因本板块涨停次数(≥2)与近10日涨幅均居板块前列';
+    ? '30日QI：近10日因本板块涨停次数(≥2)与近30日涨幅均居板块前列;涨幅为K线口径(含快照日盘中)'
+    : '10日QI：近10日因本板块涨停次数(≥2)与近10日涨幅均居板块前列;涨幅为K线口径(含快照日盘中)';
   // 与原表格徽章一致(同 .badge .badge-star 类 + 同 qi-badge-mark logo)；蓝点改用与左上角品牌一致的绕轨动画(qi-spark)
   const mark = `<svg class="qi-badge-mark" viewBox="12 28 116 84" aria-hidden="true"><ellipse cx="65" cy="68" rx="53.2" ry="22" transform="rotate(-28 65 68)" stroke="var(--border-strong)" stroke-width="4" fill="none"></ellipse><circle cx="61" cy="68" r="30" stroke="currentColor" stroke-width="13" fill="none"></circle><path d="M78 84 L92 98" stroke="currentColor" stroke-width="13" stroke-linecap="round"></path><rect x="105" y="60" width="13" height="38" rx="6.5" fill="currentColor"></rect><g transform="rotate(-28 65 68)"><circle class="qi-spark" r="9" fill="var(--accent)"></circle></g></svg>`;
   return `<span class="badge badge-star qi-tag" title="${tip}">${mark}<b class="qi-tag-num">${num}</b></span>`;
