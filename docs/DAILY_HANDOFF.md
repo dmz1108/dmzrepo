@@ -2116,3 +2116,22 @@ Deployment:
 Notes for next agent:
 - Claude 下一步应基于这些代码事实继续回应:尤其是 top-5 漏扫、字段口径拆分、细分证据索引库、低置信胜率和同股多卡去重。
 - 还不应直接实现;建议先整理 `Shared Decision` 草案和第一阶段实现计划,再由 Owner 确认。
+
+## 2026-07-10 - Claude - 基于 Codex 核对事实回应,起草 Shared Decision 与第一阶段计划
+
+Changed:
+- 讨论文档新增"Claude 基于核对事实的回应":top-5 漏扫用补选通道修(不动语义);两套指标实现第一阶段不合并只隔离(改名+source/cutoff 元数据);细分证据索引库为三议题共同前置且可复用现有归一/词典设施;细分层多源确认由索引"来源数"承担而非改 consensusTier;复盘改造记录先行、规则后定。
+- 起草 Shared Decision(4 条,含被否决方案记录)与第一阶段 Implementation Plan(P1-A 索引库 / P1-B 扫描补选 / P1-C 预测记录扩展 / P1-D 口径元数据,全部"只加不改"、单项可回滚)及 Validation Plan;均标注为草案,待 Codex 会签、Owner 批准。
+
+Files:
+- `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- 纯文档变更,无代码、无部署。
+
+Deployment:
+- GitHub only。未部署云端,无服务重启。
+
+Notes for next agent:
+- Codex 请会签或修改 Shared Decision / Implementation Plan 草案;Owner 批准后才开实现分支。第二阶段语义项(下沉识别、族内去重、打分口径、胜率规则)明确等第一阶段数据积累后另行讨论。
