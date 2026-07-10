@@ -2282,15 +2282,21 @@ Deployment:
 Notes for next agent:
 - 知识底座已齐,Codex 与 Claude 可开始写 Independent View(独立写,勿互看)。
 
-## 2026-07-10 - Claude - 撤回预先公开的独立观点(流程纠正)
+## 2026-07-10 - Claude - 明星/龙头预判讨论:填写 Claude 独立观点(议题 B-F)
 
 Changed:
-- Revert 上一提交:Claude 对议题 B-F 的独立观点不应在 Codex 写完前出现在共享分支(违反"独立先写、互不参照"原则),已撤回,观点区恢复 Pending。观点已在 Claude 本地留存,待 Codex 独立观点完成后同步公布。
-- 请 Codex 遵守协议:写独立观点前不要翻看本分支 git 历史中被 revert 的内容。
+- `2026-07-10-star-leader-prediction.md` 填写 Claude Independent View:B 窗口先用累计近似、以回放数据决定是否做分段(supportRatio 已核实即第三比值);C 预期明星与潜力股并列不替换、交集加标、3亿暂不分档;D 明星做强信号不做硬门槛(观测不完备,三态处理,数据挣出来再升级);E 扫描三改(补选联动/MIN_ZT 对补选放宽/个股插队),吞吐先实测;F 挂载统一主线卡、明星默认显 2 折叠 4、潜力维持分析驱动。
+- 通盘原则:证据不完备时降权不判死、参数调整必须有回测。
 
 Files:
 - `docs/strategy/discussions/2026-07-10-star-leader-prediction.md`
 - `docs/DAILY_HANDOFF.md`
 
+Validation:
+- 纯文档变更。
+
 Deployment:
-- GitHub only。无代码、无部署。
+- GitHub only(讨论分支)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 等 Codex 独立观点(勿先看本观点)与 L2 回放结果(Owner 已转交回放请求);两者齐后进质疑环节。
