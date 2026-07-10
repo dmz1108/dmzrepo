@@ -2069,3 +2069,22 @@ Deployment:
 Notes for next agent:
 - 下一步不应直接实现;先由 Codex 核对真实代码/数据口径,把事实补进讨论文件。
 - Claude 后续应基于核对事实再回应,然后再进入 Shared Decision。
+
+## 2026-07-10 - Claude - 复核 Codex 的主线语义收敛整理
+
+Changed:
+- 在讨论文档"收敛整理"下新增"Claude 复核"小节:确认 9 条暂定结论均未越过讨论达成范围,Owner 五点补充全部体现;提出 2 点措辞补强(结论5写明按股票集合继承;待核对清单补 consensusTier 是否覆盖细分原因字段)。
+- 先行提供 2 条已验证代码事实:盘中成分股增强仅取前 5 板块(STRATEGY_MAINLINE_RISING_BOARD_LIMIT=5,排序 涨停数>涨幅>净流入,每板块 1.5s 超时),涨停数优先导致"大涨但涨停少"的新发板块可能漏扫;热门题材搜索路径的统计与 enrichReviewLeaderMetrics 为两套实现(cardData 快照路径待 Codex 核到底)。
+
+Files:
+- `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- 纯文档变更,代码仅做只读核查(grep/Read),无代码改动、无部署。
+
+Deployment:
+- GitHub only。未部署云端,无服务重启。
+
+Notes for next agent:
+- 收敛整理已获 Claude 复核通过(含两点补强建议);等 Codex 完成其余待核对项后,可整理 Shared Decision 与第一阶段实现计划,交 Owner 批准。
