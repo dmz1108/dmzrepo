@@ -21479,8 +21479,11 @@ async function getStrategyMainlineRealtimeCatalogBoards(day) {
 
 async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day, options = {}) {
   const list = Array.isArray(boards) ? boards : [];
+  // 主通道候选锁定在原始榜序前 primaryPool 个(=补选前的 boardPool 裁剪行为),
+  // 保证主通道选出的板块集合与补选功能上线前逐一一致;补选通道才看全量 list。
+  const primaryPoolSize = Number(options.primaryPool) > 0 ? Number(options.primaryPool) : list.length;
   const primary = list
-    .slice()
+    .slice(0, primaryPoolSize)
     .sort((a, b) =>
       (Number(b?.zt) || 0) - (Number(a?.zt) || 0) ||
       (Math.max(0, Number(b?.gainPct) || 0)) - (Math.max(0, Number(a?.gainPct) || 0)) ||
@@ -21952,7 +21955,12 @@ function strategyMainlineAttachResponseMeta(payload, options = {}) {
       consecutiveFailures: strategyMainlineWarmState.consecutiveFailures,
       currentDelayMs: strategyMainlineWarmState.currentDelayMs,
     },
-    scanSupplement: strategyMainlineSupplementState,   // P1-B 补选观测(最近一次扫描;picked=若无补选会漏的板块)
+    // P1-B 补选观测(picked=若无补选会漏的板块)。全局状态只描述最近一次扫描,
+    // 仅当其 day 与本响应的 day/requestedDay 一致时输出,历史/快照/跨日缓存响应不得被污染。
+    scanSupplement: (strategyMainlineSupplementState &&
+      (strategyMainlineSupplementState.day === String(base.day || '') ||
+       strategyMainlineSupplementState.day === String(base.requestedDay || '')))
+      ? strategyMainlineSupplementState : null,
   };
 }
 async function readMainlineConfirm(day) {
@@ -22937,10 +22945,12 @@ async function buildStrategyMainlineHistoryContext(endDay, themeKeys, days = 15,
 
 async function buildStrategyMainlinesLive(day, options = {}) {
   const requestedDay = isoFromCompactDate(day || chinaNowParts().day);
+  // P1-B:boardPool 按补选配置放宽,补选通道才能看到主通道之外的实时候选;
+  // 主通道仍锁定在原前 STRATEGY_MAINLINE_LIVE_BOARD_POOL 个(primaryPool),行为与补选前完全一致。
   const boardPayload = await getDayBoardsWithMembers(requestedDay, {
     allowFallback: false,
     liveIfMissing: true,
-    boardPool: STRATEGY_MAINLINE_LIVE_BOARD_POOL,
+    boardPool: STRATEGY_MAINLINE_LIVE_BOARD_POOL + STRATEGY_MAINLINE_SUPPLEMENT_BOARDS,
     liveRankCount: 80,
   }).catch(() => ({ useDay: requestedDay, boards: [], source: 'none' }));
   const isoDay = requestedDay;
@@ -22961,7 +22971,15 @@ async function buildStrategyMainlinesLive(day, options = {}) {
       mainlines: [],
     };
   }
-  await strategyMainlineEnrichBoardsWithRisingStocks(boardPayload?.boards || [], isoDay, { realtimeSource: boardPayload?.source || '' }).catch(() => []);
+  await strategyMainlineEnrichBoardsWithRisingStocks(boardPayload?.boards || [], isoDay, {
+    realtimeSource: boardPayload?.source || '',
+    primaryPool: STRATEGY_MAINLINE_LIVE_BOARD_POOL,
+  }).catch(() => []);
+  // 只保留被主通道/补选通道选中的板块进入后续 seeds:
+  // 放宽 boardPool 带来的未选中板块不得改变原有主线候选语义。
+  if (Array.isArray(boardPayload?.boards)) {
+    boardPayload.boards = boardPayload.boards.filter(b => b && b.scanChannel);
+  }
   const limitUpDb = await readLimitUpDbDay(isoDay).catch(() => null);
   const prevDay = strategyMainlinePrevTradingDay(isoDay);
   const prevDb = prevDay ? await readLimitUpMainReasonDbDay(prevDay).catch(() => null) : null;

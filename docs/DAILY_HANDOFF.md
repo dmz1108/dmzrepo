@@ -1990,3 +1990,24 @@ Deployment:
 Notes for next agent:
 - 部署后可通过响应里 `scanSupplement.picked` 观察每日补选;连续多日 picked 无一进入主线候选则说明补选键不对,按 Validation Plan 调整或配 0 回退。
 - 剩余 P1-D 口径元数据待本项合并后开工。
+
+## 2026-07-10 - Claude - PR#14 评审修复:补选真正看宽池 + scanSupplement 跨日不污染
+
+Changed:
+- 评审点1(候选池):`buildStrategyMainlinesLive` 的 boardPool 从固定 5 放宽为 `LIVE_BOARD_POOL + SUPPLEMENT_BOARDS`,补选通道由此真正看到主通道之外的实时候选(此前 getDayBoardsWithMembers 先裁到 5,补选在同一批里空转)。主通道语义严格不变:enrich 增加 `primaryPool` 参数,主通道候选锁定在原始榜序前 5 个(等价于放宽前的裁剪行为);enrich 后将 boards 裁剪为仅 scanChannel 选中板块,放宽带来的未选中板块不进 seeds,不改变原有主线候选语义。
+- 评审点2(跨日污染):`scanSupplement` 仅当全局状态的 day 与响应 day/requestedDay 一致时输出,否则为 null;历史日、快照、跨日缓存响应不再显示错日期的补选状态。
+- 测试从 11 项扩到 21 项:新增 主通道锁定原前 N(高涨停宽池板块不得挤进主通道)、宽池经补选进入、接线静态断言(boardPool 放宽/裁剪/primaryPool 传参)、attachResponseMeta 同日输出/历史日 null/requestedDay 匹配/无状态 null。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/scan-supplement.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;scan-supplement 21 项、detail-evidence-index 31 项、predict-records 17 项全过。
+
+Deployment:
+- GitHub only(PR #14)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 放宽后 live 分支会多 hydrate 最多 3 个板块(与补选数同源),成本有界;补选配 0 时 boardPool 回到 5,与放宽前完全一致。

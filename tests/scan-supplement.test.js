@@ -86,5 +86,47 @@ const board = (plateId, name, zt, gainPct, netInflow) => ({ plateId, name, zt, g
   A(!picked4.includes('A') && !picked4.includes('B'), '主通道已选板块不重复补选');
   A(picked4.length === 3, '上限内按强度补齐(D/F/C)');
 
+  // 5. 宽候选池只惠及补选通道;主通道锁定在原始榜序前 primaryPool 个(与补选前行为一致)
+  // 榜序:G(zt1) H(zt2) | I(zt9,资金5亿) D(zt0,资金9亿) —— primaryPool=2 时,
+  // 补选前行为 = boardPool 裁到 [G,H] 再排序 → 主通道必须仍是 H,G;I 虽 zt9 也不得进主通道,只能走补选。
+  const t5 = makeEnrich(2, 2);
+  const b5 = [
+    board('G', '板G', 1, 1.0, 0.5e8),
+    board('H', '板H', 2, 1.5, 0.8e8),
+    board('I', '板I', 9, 2.5, 5e8),
+    board('D2', '板D2', 0, 4.0, 9e8),
+  ];
+  await t5.run(b5, '2026-07-10', { realtimeSource: 'live', primaryPool: 2 });
+  const ids5 = t5.captured.map(b => b.plateId);
+  A(JSON.stringify(ids5.slice(0, 2)) === JSON.stringify(['H', 'G']), '主通道只从原前 primaryPool 个里选(高zt的I不得挤进主通道)');
+  A(ids5.includes('I') && ids5.includes('D2') && t5.captured.find(b => b.plateId === 'I').scanChannel === 'supplement', '宽池板块经补选通道进入(I/D2)');
+  A(t5.state.picked.map(p => p.plateId).sort().join(',') === 'D2,I', '补选观测记录宽池来源');
+
+  // 6. buildStrategyMainlinesLive 接线事实(静态断言):boardPool 按补选配置放宽 + enrich 后裁剪未选中板块
+  A(src.includes('boardPool: STRATEGY_MAINLINE_LIVE_BOARD_POOL + STRATEGY_MAINLINE_SUPPLEMENT_BOARDS'), 'boardPool 已按补选配置放宽(补选真正看到 top-5 之外的实时候选)');
+  A(src.includes('boardPayload.boards = boardPayload.boards.filter(b => b && b.scanChannel)'), 'enrich 后仅保留已选中板块进 seeds(未选中板块不改变原有语义)');
+  A(src.includes('primaryPool: STRATEGY_MAINLINE_LIVE_BOARD_POOL'), '调用点传入 primaryPool 锁定主通道候选范围');
+
+  // 7. scanSupplement 跨日不污染:仅当状态 day 与响应 day/requestedDay 一致时输出
+  const metaSrc = extractFn('strategyMainlineAttachResponseMeta');
+  const makeMeta = (stateDay) => {
+    let out;
+    const metaPrelude = `
+      const strategyMainlineSavedAt = p => String(p?.generatedAt || '');
+      const strategyMainlineAgeMs = () => 1000;
+      const strategyMainlineStaleness = () => 'fresh';
+      const strategyMainlineQuality = () => ({ ok: true });
+      const strategyMainlineWarmState = { lastTickAt: '', lastResult: '', consecutiveFailures: 0, currentDelayMs: 0 };
+      const strategyMainlineSupplementState = ${stateDay ? `{ day: '${stateDay}', picked: [] }` : 'null'};
+    `;
+    eval(metaPrelude + metaSrc + '; out = strategyMainlineAttachResponseMeta;');
+    return out;
+  };
+  const metaFn = makeMeta('2026-07-10');
+  A(metaFn({ day: '2026-07-10', mainlines: [] }).scanSupplement?.day === '2026-07-10', '同日响应输出 scanSupplement');
+  A(metaFn({ day: '2026-07-09', requestedDay: '2026-07-09', mainlines: [] }).scanSupplement === null, '历史日响应不输出跨日补选状态');
+  A(metaFn({ day: '2026-07-09', requestedDay: '2026-07-10', mainlines: [] }).scanSupplement?.day === '2026-07-10', 'requestedDay 匹配也可输出(回退场景仍标注)');
+  A(makeMeta(null)({ day: '2026-07-10', mainlines: [] }).scanSupplement === null, '无补选状态输出 null');
+
   console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL SCAN-SUPPLEMENT CHECKS PASSED');
 })();
