@@ -2467,3 +2467,27 @@ Deployment:
 Notes for next agent:
 - rowsWithPrice/rowsWithAllBuckets 在第①项(worker 升级包)实施前会偏低,属预期——这两个指标正好用于量化①的必要性。
 - 第④项(每日验收扩项)为定时器提示词更新,不动代码,待本项合并后由 Claude 直接调整 Routine。
+
+## 2026-07-10 - Claude - PR #19 评审四点修复(Codex 复审前)
+
+Changed:
+- 修正1(截断吃掉优先股):队列 `start()` 改为先按涨幅排全量、再按优先组/普通组分组、最后才做 limitStocks 截断——原排第4的优先股在 limitStocks=2 时也能入选;`job.priorityCodes` 只保留最终任务中真实存在的代码(无效代码剔除)。
+- 修正2(第三键无真实数据):`strategyMainlineScanPriorityCodes(board, priorByCode)` 改为吃 `buildStrategyMainlinePriorReasonContext` 的 byCode Map(code→count),不再依赖 memberRows 行上不存在的 priorReason 字段;`strategyMainlineMaybeAutoScan` 增 priorByCode 参数,调用点传 `priorReason?.byCode`。
+- 修正3(workerJob 缺字段):`workerJob()` 显式返回 `priorityCodes`(旧 worker 忽略该字段亦兼容)。
+- 修正4(空对象档误计):`rowsWithAllBuckets` 要求五档中每档 activeBuy/activeSell/passiveBuy/passiveSell 四项均为有限数值(0 合法,空对象/缺档不算)。
+
+Files:
+- `kpl-stats-server.js`
+- `local-l2-task-queue.js`
+- `tests/scan-priority.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 两文件通过;scan-priority 重写为 18 项全过(真实链路测主因上下文喂第三键、limitStocks=2 截断保优先股、claim 下发 priorityCodes、全零档合法/空对象档不算);qi-mainline-states、star-l2-layers、scan-supplement、detail-evidence-index、predict-records、metric-profile、inflow-gate 七套回归全过。
+- 已同步最新 main(835d26c..73019b4),DAILY_HANDOFF 双方记录均保留。
+
+Deployment:
+- GitHub only(PR #19 分支)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 待 Codex 复审 PR #19;合并后 Claude 执行第④项(两个每日 Routine 提示词扩项,不动代码)。

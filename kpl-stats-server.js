@@ -21974,8 +21974,15 @@ function strategyMainlineDeriveL2Status(l2Stars, hasQiStar, themeCodes) {
 // 自动派发 L2 扫描：净流入≥8亿且板内涨停≥2 的前排板块；5 分钟窗口最多 2 个、串行、当天扫过不重复、无目标不扫。
 // 个股优先扫描列表(SD v1 第5条):猎场 = 板内涨幅 5% ~ 涨停前(Owner 定义的预期明星候选区);
 // 字典序:距板距离近 > 当日涨幅高 > 历史主因命中多(行上无 priorReason 时按 0 处理),上限 20 只。
-function strategyMainlineScanPriorityCodes(board) {
+function strategyMainlineScanPriorityCodes(board, priorByCode) {
   const rows = Array.isArray(board?.memberRows) ? board.memberRows : [];
+  // 历史主因命中次数取自真实主因上下文(buildStrategyMainlinePriorReasonContext 的 byCode:code -> {count,...});
+  // memberRows 行本身不带 priorReason(normalize 只留 code/name/gain),必须从上下文查,否则第三键恒为 0(评审修正)。
+  const priorCountOf = (r) => {
+    const code = normalizeReasonSourceCode(r?.code);
+    const prior = priorByCode && typeof priorByCode.get === 'function' ? priorByCode.get(code) : null;
+    return Number(prior?.count) || 0;
+  };
   return rows
     .filter(r => {
       const gain = Number(r?.gain);
@@ -21987,7 +21994,7 @@ function strategyMainlineScanPriorityCodes(board) {
       const gapB = limitUpThreshold(b?.code, b?.name) - Number(b.gain);
       return gapA - gapB ||
         Number(b.gain) - Number(a.gain) ||
-        (Number(b?.priorReason?.count) || 0) - (Number(a?.priorReason?.count) || 0) ||
+        priorCountOf(b) - priorCountOf(a) ||
         String(a?.code || '').localeCompare(String(b?.code || ''));
     })
     .map(r => normalizeReasonSourceCode(r?.code))
@@ -21995,7 +22002,7 @@ function strategyMainlineScanPriorityCodes(board) {
     .slice(0, 20);
 }
 
-function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase) {
+function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase, priorByCode) {
   try {
     if (!isToday) return;
     if (!['早盘', '上午盘', '午后', '尾盘'].includes(String(sessionPhase || ''))) return;
@@ -22031,7 +22038,7 @@ function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase) {
         boardName: String(board.name || ''),
         day,
         stocks: board.memberRows,
-        priorityCodes: strategyMainlineScanPriorityCodes(board),   // 猎场股优先扫
+        priorityCodes: strategyMainlineScanPriorityCodes(board, priorByCode),   // 猎场股优先扫(主因命中来自真实上下文)
         limitStocks: STRATEGY_MAINLINE_AUTO_SCAN_LIMIT_STOCKS,
       });
       st.dispatched += 1;
@@ -23466,7 +23473,7 @@ async function buildStrategyMainlinesLive(day, options = {}) {
   const chinaTodayIso = isoFromCompactDate(chinaNow.day);
   const isTodayQuery = isoDay === chinaTodayIso;
   const sessionPhaseNow = isTodayQuery ? strategyMainlineSessionPhase(chinaNow) : '';
-  strategyMainlineMaybeAutoScan(boardPayload?.boards || [], isoDay, isTodayQuery, sessionPhaseNow);
+  strategyMainlineMaybeAutoScan(boardPayload?.boards || [], isoDay, isTodayQuery, sessionPhaseNow, priorReason?.byCode);
   const mainlineConfirm = await readMainlineConfirm(isoDay).catch(() => null);
   const inflowGate = strategyMainlineApplyInflowGate(
     strategyMergeMainlineFamilies(rawMainlines)

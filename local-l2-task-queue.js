@@ -149,6 +149,7 @@ function workerJob(job) {
     thresholds: job.thresholds,
     total: job.total,
     batchSize: job.batchSize,
+    priorityCodes: Array.isArray(job.priorityCodes) ? job.priorityCodes : [],
     stocks: job.stocks,
   };
 }
@@ -317,25 +318,27 @@ class LocalL2TaskQueue {
     const normalizedStocks = rawStocks
       .map((stock, index) => normalizeStock(stock, index))
       .filter(Boolean);
-    // 优先扫描股票列表(SD v1 第5条):priorityCodes 中的股排到最前(组内保持涨幅序),
-    // 分批回传时猎场股最先出结果——服务预判,不改截断数量。
+    // 优先扫描股票列表(SD v1 第5条,评审修正):先"优先组+普通组"分组排序,再统一截断——
+    // 保证截断范围外的优先股不被丢弃;组内均保持涨幅序。job.priorityCodes 只记录最终任务中真实存在的代码。
     const prioritySet = new Set((Array.isArray(payload.priorityCodes) ? payload.priorityCodes : [])
       .map(code => String(code || '').trim()).filter(Boolean));
-    const sortedStocks = normalizedStocks
+    const sortedAll = normalizedStocks
       .sort((a, b) => {
         const ag = Number.isFinite(a.gainPct) ? a.gainPct : -Infinity;
         const bg = Number.isFinite(b.gainPct) ? b.gainPct : -Infinity;
         return bg - ag || a.sourceIndex - b.sourceIndex || a.code.localeCompare(b.code);
-      })
-      .slice(0, limitStocks > 0 ? limitStocks : undefined);
-    const stocks = (prioritySet.size
-      ? [...sortedStocks.filter(st => prioritySet.has(st.code)), ...sortedStocks.filter(st => !prioritySet.has(st.code))]
-      : sortedStocks)
+      });
+    const grouped = prioritySet.size
+      ? [...sortedAll.filter(st => prioritySet.has(st.code)), ...sortedAll.filter(st => !prioritySet.has(st.code))]
+      : sortedAll;
+    const stocks = grouped
+      .slice(0, limitStocks > 0 ? limitStocks : undefined)
       .map((stock, index) => ({
         ...stock,
         rank: index + 1,
         batch: Math.floor(index / this.batchSize) + 1,
       }));
+    const effectivePriorityCodes = stocks.filter(st => prioritySet.has(st.code)).map(st => st.code);
     const id = crypto.randomBytes(8).toString('hex');
     const excludedStockCount = rawStocks.length - normalizedStocks.length;
     const job = {
@@ -356,7 +359,7 @@ class LocalL2TaskQueue {
       sortSnapshotAt: payload.sortSnapshotAt || new Date().toISOString(),
       sortBy: '实时涨幅快照',
       total: stocks.length,
-      priorityCodes: [...prioritySet],
+      priorityCodes: effectivePriorityCodes,
       excludedStockCount,
       scanned: 0,
       batchSize: this.batchSize,
@@ -448,7 +451,11 @@ class LocalL2TaskQueue {
       job.metrics = {
         resultRows: withSignals.length,
         rowsWithPrice: withSignals.filter(r => Number(r?.price) > 0).length,
-        rowsWithAllBuckets: withSignals.filter(r => DEFAULT_THRESHOLDS.every(t => r?.thresholds?.[String(t)])).length,
+        rowsWithAllBuckets: withSignals.filter(r => DEFAULT_THRESHOLDS.every(t => {
+          const b = r?.thresholds?.[String(t)];
+          return b && ['activeBuy', 'activeSell', 'passiveBuy', 'passiveSell']
+            .every(k => Number.isFinite(Number(b[k])) && b[k] !== null && b[k] !== '');
+        })).length,
       };
       job.results = withSignals;
       job.picked = withSignals
