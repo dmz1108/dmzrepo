@@ -2263,3 +2263,21 @@ Deployment:
 
 Notes for next agent:
 - 低价股与第三层的适用关系是当前唯一挂起的规则空白,Codex 写观点时可给方案但结论等 Owner 确认。
+
+## 2026-07-10 - Claude - 明星股三层规则定稿:第三层=必含该股最大可统计档
+
+Changed:
+- Owner 确认第三层为"必含该股自己的最大可统计档"(3元股即300w档,10元股即1000w档;800w/1000w 只是对够得着的股的举例)。议题 A 的低价股疑问随之关闭,三层规则至此完整定稿,仅剩实现细节(股价取点/最大档无数据处理/L2 结果字段是否齐)留在议题内。
+
+Files:
+- `docs/strategy/discussions/2026-07-10-star-leader-prediction.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- 纯文档变更。
+
+Deployment:
+- GitHub only(讨论分支)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 知识底座已齐,Codex 与 Claude 可开始写 Independent View(独立写,勿互看)。
