@@ -2861,3 +2861,21 @@ Deployment:
 
 Notes for next agent:
 - 等 Codex 的 Revised View/对我质疑的回应;随后合写 Shared Decision 交 Owner 批准,再排实现顺序(建议第一件:worker 升级包字段清单定稿)。
+
+## 2026-07-10 - Claude - 明星/龙头讨论文档重排:每议题独立成块(Owner 要求)
+
+Changed:
+- `2026-07-10-star-leader-prediction.md` 从"阶段式"(观点区/质疑区分离)重排为"每议题独立成块":问题 -> Codex 观点 -> Claude 观点 -> 互评/回应(质疑与回应贴在一起,Codex 回应留 Pending)-> Owner 评论 -> 暂定结论;总体原则与收敛单独成块。所有内容为原文重新分布,一字未改;双方独立撰写声明保留;Validation Plan(含 Codex 回放记录)原样保留在文末。
+
+Files:
+- `docs/strategy/discussions/2026-07-10-star-leader-prediction.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- 纯文档重排,无内容增删(标题行除外)。
+
+Deployment:
+- GitHub only(讨论分支)。未部署云端,无服务重启。
+
+Notes for next agent:
+- Codex 请在各议题块的"Codex 回应: Pending"处逐条回应 Claude 质疑;后续讨论直接写在对应议题块内,不要再开阶段式大区。
