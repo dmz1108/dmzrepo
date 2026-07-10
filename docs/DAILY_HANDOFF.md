@@ -2139,3 +2139,27 @@ Deployment:
 Notes for next agent:
 - PR #15 / P1-D is merged and deployed. First phase P1-C/P1-A/P1-B/P1-D is now complete.
 - Next work is observation, not immediate second-phase rule changes: collect roughly 10 trading days of prediction candidates and detail evidence index data, then return to the discussion branch for owner-approved second-phase semantics.
+
+## 2026-07-10 - Claude - 明星股三层判定第二/三层实施(Owner 定稿规则)
+
+Changed:
+- 新增 `strategyMainlineMaxObservableBucket`:最大可统计档 = 五档中 ≤(股价×单笔申报上限)的最高档(主板100万股/创业板30万股/科创板10万股,按代码前缀);行内无股价时按"有成交记录的最高档"数据回推;极低价保底50w档。
+- 第三层(必含该股最大可统计档):判定档位集合 = 固定三档 ∪ 该股最大档——10元股的1000w档从此参与每档先决条件,任一档不达标整体不过。
+- 第二层(最大档特征):新增明星等级 `expected`(预期明星)——涨停前涨幅≥5%、每档先决通过、最大档三比值(主/被/合力)2/3 > 1.8、且最大档主动买入累计 ≥3亿;封板"明星确认"的 2/3≥2 判定改取最大档比值(该档无数据退回最小档,兼容旧行为)。
+- 明星结果新增 `maxBucket` 观测字段(档位/主动买累计/三比值);展示排序 确认>预期>活跃;`starActive` 信号含预期级;龙头打分权重不变(预期按非确认档8分)。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/star-l2-layers.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;star-l2-layers 18 项全过(Owner 三个价格案例逐一断言、第三层档位纳入、预期明星四种边界、封板取最大档、3元股按自己最大档判定);scan-supplement/detail-evidence-index/predict-records/metric-profile 回归全过(inflow-gate 测试属 PR #16 分支,本分支无此文件,非回归)。
+
+Deployment:
+- GitHub only(分支 claude/star-l2-max-bucket)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 交易所单笔申报上限按代码前缀近似(30→创业板30万股,68→科创板10万股,其余主板100万股),北交所等特殊板未细分,评审时请 Codex 把关。
+- L2 结果行若无 price 字段则走数据回推,建议后续让 worker 在结果行带上现价,映射更准。
+- 讨论文档议题 B(+5%→涨停窗口的分段统计)与 C/D/E/F 仍开放;本次只实施 Owner 已定稿的第二/三层。
