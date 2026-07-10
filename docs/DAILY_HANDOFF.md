@@ -1866,3 +1866,35 @@ Notes for next agent:
 - 等 Codex/Owner 审查合并后部署(仅 kpl-stats-server.js,需重启主服务);部署次日起 strategy-data/mainline-predict-*.json 开始带 candidates 样本。
 - candidates.lowConfidence 恒为 null 属预期(低置信通道待 P1-A 索引与第二阶段规则)。
 - 下一项 P1-A 细分证据索引库,待本项合并后开工。
+
+## 2026-07-10 - Codex - 合并并部署 PR #12 P1-C 预测记录扩展
+
+Changed:
+- Reviewed Claude PR #12 (`claude/p1c-predict-records`) and merged it into `main`.
+- Deployed `kpl-stats-server.js` and `docs/DAILY_HANDOFF.md` to cloud `C:\PandaDashboard`.
+- Restarted the cloud KPL server through the existing scheduled task `Panda Dashboard Server`.
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Local `node --check kpl-stats-server.js` passed before merge.
+- PR diff check passed; P1-C only adds `schemaVersion: 2` and `candidates` to prediction records.
+- Confirmed no changes to `top`, `confirmedKey`, `getStrategyMainlineReview`, mainline definition, or leader scoring.
+- Cloud `node --check C:\PandaDashboard\kpl-stats-server.js` passed.
+- Cloud file SHA-256 matched local for `kpl-stats-server.js` and `docs/DAILY_HANDOFF.md`.
+- Cloud `/health` returned `{"ok":true}`.
+- Cloud `/api/strategy-mainlines` returned `ok:true`, `day:2026-07-10`, `cacheState:live-file`, `staleness:fresh`, `count:7`.
+
+Deployment:
+- Production touched: yes.
+- GitHub main pushed through merge commit `215f800` before deployment.
+- Cloud backup created: `C:\PandaDashboard\_deploy-backups\pr12-p1c-20260710-105230`.
+- Cloud process is running on port `8765` with PID `15316`.
+- Existing scheduled task used for restart: `Panda Dashboard Server`.
+
+Notes for next agent:
+- PR #12 / P1-C is merged and deployed; do not redeploy it unless there are new changes.
+- Starting with the next successful intraday prediction write, `strategy-data\mainline-predict-*.json` should include `schemaVersion: 2` and `candidates`.
+- Next approved phase item is P1-A 细分证据索引库.
