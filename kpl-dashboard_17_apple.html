@@ -11311,10 +11311,17 @@ function renderStrategyMainlinesHTML(d) {
     const leaderRow = leaderChips
       ? `<div class="ml-proof-row"><span class="ml-proof-lbl" title="按10日涨停次数/10日30日涨幅池内排名+主因门槛综合打分,最多3个可能龙头;⭐=同时是明星;10/30日涨幅为收盘口径(不含今日盘中)">龙头</span>${leaderChips}</div>`
       : (m.leaderNote ? `<div class="ml-proof-row"><span class="ml-proof-lbl">龙头</span><span class="ml-leader-none">${escapeHTML(m.leaderNote)}</span></div>` : '');
-    const starChips = (m.starStocks || []).slice(0, 2)
+    const starChips = (m.starStocks || []).filter(s => s.level === 'confirmed' || s.level === 'expected').slice(0, 3)
       .map(s => `<span class="ml-stock ml-starstock${s.level === 'confirmed' ? ' confirmed' : ''}" title="${escapeHTML(`L2:主动比${s.ratios?.activeRatio ?? '-'} 被动比${s.ratios?.passiveRatio ?? '-'} 合计比${s.ratios?.supportRatio ?? '-'}` + starMaxBucketAdminInfo(s))}">⭐${leaderCodeSet.has(String(s.code || '')) ? '👑' : ''}${escapeHTML(s.name || s.code || '')}<i>${escapeHTML(s.label || '')} 主${s.ratios?.activeRatio ?? '-'}/被${s.ratios?.passiveRatio ?? '-'}</i></span>`)
       .join('');
     const starRow = starChips ? `<div class="ml-proof-row"><span class="ml-proof-lbl" title="纯当日L2数据判定:涨停前主动/被动比≥1.5=资金活跃,涨停后三比值2个≥2=明星确认;👑=同时是龙头">明星</span>${starChips}</div>` : '';
+    const qiBadge = m.l2VerificationStatus === 'qi'
+      ? `<span class="ml-confirmed" style="background:rgba(74,155,255,.16);color:#4a9bff;" title="QI 主线:已扫描且至少 1 只 L2 全方位符合的明星股(预期明星或明星确认)">QI 主线</span>`
+      : (m.l2VerificationStatus === 'scanned-no-star'
+        ? `<span class="ml-newtheme" title="已完成 L2 扫描但未见预期明星/明星确认,确定性封顶中等">L2 未见明星</span>`
+        : (m.l2VerificationStatus === 'unscanned'
+          ? `<span class="ml-newtheme" style="opacity:.65;" title="尚未进行 L2 扫描,不作惩罚,待扫描验证">L2 待验证</span>`
+          : ''));
     const confirmedBadge = m.isConfirmedMainline ? `<span class="ml-confirmed">✔ 当日主线</span>` : '';
     const confirmBtn = state.adminLoggedIn
       ? (m.isConfirmedMainline
@@ -11344,7 +11351,7 @@ function renderStrategyMainlinesHTML(d) {
         <div class="ml-namebox">
           <div class="ml-name-row">
             <div class="ml-name" title="${escapeHTML(m.theme || '')}">${escapeHTML(m.theme || '')}</div>
-            ${confirmedBadge}
+            ${qiBadge}${confirmedBadge}
             ${combinedBadge}
             ${newThemeBadge}
           </div>
@@ -11358,7 +11365,7 @@ function renderStrategyMainlinesHTML(d) {
       ${signalStrip}
       ${leaderRow}
       ${starRow}
-      ${focus ? `<div class="ml-proof-row"><span class="ml-proof-lbl" title="有望成为明星的观察股:盘中大涨/临板,若涨停前L2比值达标升级为资金活跃,封板吃单达标升级为明星确认">潜力</span>${focus}</div>` : ''}
+
       ${reasonLine ? `<div class="ml-reason">${escapeHTML(reasonLine)}</div>` : ''}
       <div class="ml-card-actions">
         <button type="button" class="ml-toggle" onclick="const c=this.closest('.ml-card');c.classList.toggle('open');this.textContent=c.classList.contains('open')?'收起详情 ▴':'展开详情 ▾'">展开详情 ▾</button>

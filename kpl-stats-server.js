@@ -21723,7 +21723,9 @@ function strategyMainlineCertainty(item, trend, extra = {}) {
   if (extra.starConfirmed) signals.push('明星股确认');
   else if (extra.starActive) signals.push('资金活跃股');
   if (extra.isNewTheme) signals.push('首日新题材');
-  const level = signals.length >= 5 ? 'high' : signals.length >= 3 ? 'medium' : 'watch';
+  let level = signals.length >= 5 ? 'high' : signals.length >= 3 ? 'medium' : 'watch';
+  // 已扫描但核心成分无任何预期明星/明星确认:主线可信度封顶"中等"(真主线必有明星的逆否降权,不一票否决)
+  if (extra.scannedNoStar && level === 'high') level = 'medium';
   return {
     level,
     label: level === 'high' ? '高确定性' : level === 'medium' ? '中等确定性' : '观察中',
@@ -21922,12 +21924,14 @@ function strategyMainlineStarStatus(row) {
 // 读取主线相关板块当日已有的 L2 扫描结果（只消费，不在这里触发扫描），产出 code -> 明星判定。
 function strategyMainlineCollectStars(boards, day) {
   const byCode = new Map();
+  const scannedPlates = new Set();   // 当日有 L2 扫描结果的板块(QI 三态:未扫≠没有)
   for (const board of (Array.isArray(boards) ? boards : [])) {
     const plateId = String(board?.plateId || '');
     if (!plateId) continue;
     let job = null;
     try { job = localL2TaskQueue.latest(plateId, day); } catch { continue; }
     if (!job || !Array.isArray(job.results) || !job.results.length) continue;
+    scannedPlates.add(plateId);
     for (const row of job.results) {
       const code = normalizeReasonSourceCode(row?.code);
       if (!code || byCode.has(code)) continue;
@@ -21935,7 +21939,7 @@ function strategyMainlineCollectStars(boards, day) {
       if (star) byCode.set(code, { ...star, code, name: String(row?.name || ''), boardName: String(board?.name || job.boardName || '') });
     }
   }
-  return byCode;
+  return { byCode, scannedPlates };
 }
 
 // 自动派发 L2 扫描：净流入≥8亿且板内涨停≥2 的前排板块；5 分钟窗口最多 2 个、串行、当天扫过不重复、无目标不扫。
@@ -22256,6 +22260,7 @@ function strategyPredictCandidateRecord(m) {
     stage: m.stage?.label || '',
     certainty: m.certainty?.label || '',
     isNewTheme: !!m.isNewTheme,
+    l2VerificationStatus: m.l2VerificationStatus || '',
     lowConfidence: null,                   // 低置信通道未上线,先记 null 占位(false=成熟,true=低置信)
     netInflow: isFiniteNumeric(m.netInflow) ? Number(m.netInflow) : null,
     boardCount: Number(m.boardCount) || 0,
@@ -22747,7 +22752,8 @@ function strategyMainlineAugmentPrediction(item, isToday, day) {
   if (momentum > 0) scoreParts.momentum = momentum;
   const focusStocks = strategyMainlineFocusStocks(item);
   // 明星股：只匹配本主线相关的股票（今日涨停/大涨/潜力股），避免把邻板块扫描结果错挂进来。
-  const starByCode = strategyMainlineCollectStars(item?.resonanceBoards, day);
+  const l2Stars = strategyMainlineCollectStars(item?.resonanceBoards, day);
+  const starByCode = l2Stars.byCode;
   const themeCodes = new Set([
     ...(Array.isArray(item?.todayCodes) ? item.todayCodes : []),
     ...(Array.isArray(item?.risingStocks) ? item.risingStocks.map(s => normalizeReasonSourceCode(s?.code)) : []),
@@ -22759,6 +22765,12 @@ function strategyMainlineAugmentPrediction(item, isToday, day) {
     .slice(0, 4);
   const starConfirmed = starStocks.some(star => star.level === 'confirmed');
   const starActive = starStocks.some(star => star.level === 'active' || star.level === 'expected');
+  // QI 主线三态(Shared Decision v1 第3条):独立观测状态字段,不复用 isConfirmedMainline。
+  // unscanned=待验证(不惩罚) / qi=已扫且有 L2 全方位符合明星(预期明星或明星确认) / scanned-no-star=已扫无明星(降一级确定性+标注)
+  const hasQiStar = starStocks.some(star => star.level === 'confirmed' || star.level === 'expected');
+  const l2VerificationStatus = !l2Stars.scannedPlates.size
+    ? 'unscanned'
+    : (hasQiStar ? 'qi' : 'scanned-no-star');
   if (starStocks.length) {
     scoreParts.star = Number(Math.min(40, starStocks.reduce((sum, star) => sum + (star.level === 'confirmed' ? 15 : 8), 0)).toFixed(1));
   }
@@ -22767,7 +22779,7 @@ function strategyMainlineAugmentPrediction(item, isToday, day) {
     ((Number(item?.bigGainCount) || 0) >= 2 || (Number(item?.count) || 0) >= 1 || (Number(item?.nearLimitCount) || 0) >= 1);
   const score = Number(Object.values(scoreParts).reduce((sum, v) => sum + (Number(v) || 0), 0).toFixed(1));
   const withBreadth = { ...item, breadth: breadth || null };
-  const certainty = strategyMainlineCertainty(withBreadth, trend, { isNewTheme, starConfirmed, starActive });
+  const certainty = strategyMainlineCertainty(withBreadth, trend, { isNewTheme, starConfirmed, starActive, scannedNoStar: l2VerificationStatus === 'scanned-no-star' });
   const stage = strategyMainlineStage(withBreadth, trend);
   const explain = [...(Array.isArray(item?.explain) ? item.explain : [])];
   if (stage.advice) explain.push(`当前处于${stage.label}：${stage.advice}`);
@@ -22806,6 +22818,7 @@ function strategyMainlineAugmentPrediction(item, isToday, day) {
     focusStocks,
     starStocks,
     isNewTheme,
+    l2VerificationStatus,
     certainty,
     stage,
     explain: explain.slice(0, 9),
