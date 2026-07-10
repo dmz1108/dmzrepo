@@ -1898,3 +1898,72 @@ Notes for next agent:
 - PR #12 / P1-C is merged and deployed; do not redeploy it unless there are new changes.
 - Starting with the next successful intraday prediction write, `strategy-data\mainline-predict-*.json` should include `schemaVersion: 2` and `candidates`.
 - Next approved phase item is P1-A 细分证据索引库.
+
+## 2026-07-10 - Claude - P1-A 细分证据索引库(第一阶段第二项,已批准)
+
+Changed:
+- 新增细分证据索引:盘后任务 `buildDetailEvidenceIndex` 读取近 30 交易日四源 tab 行(boardTopic/detailReason)与综合库,拆词后**保留原始细分词**为证据词(不压大类,broadTopic 仅作大类附注),聚合为 `{证据词, broadTopic, kinds(board/detail), 来源集合, 真实源数, 首末出现日, 按日股票集合}`,写 `strategy-data/detail-evidence-index-<day>.json`(证据词上限 2000)。(注:本条初版曾写"复用 canonicalTopicName 归一",经 PR#13 评审修正为现行逻辑,见后续两条评审修复记录。)
+- 别名自动候选:同股同日不同真实源的细分词两两成对计数(count>=2 入候选区,上限 200);人工词典 `strategy-data/detail-evidence-alias.json`(运行时文件,不入 Git)confirm 对生效合并、veto 对排除候选。
+- 自动调度:`runAutoDetailEvidenceIndexIfDue`(交易日 16 点后一次)挂入现有分钟级调度与启动补跑两处。
+- 只读端点 `GET /api/detail-evidence-index?day=&word=&limit=`:摘要模式不带按日股票集合,word 查询带;当日无索引回退最近一份并显式标注 indexDay(不冒充当日);`rebuild=1` 需管理员。
+- 会签约束1对照:索引只读四源/综合库,纯衍生数据,零反写;不硬编码任何具体主题词,大主题/细分一视同仁为证据词。
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过。
+- 新增 P1-A 功能测试 20 项全过(拆词/归一、聚合字段、别名候选与词典 confirm/veto、端点摘要/查询/回退/管理员拦截)。
+- 回归:P1-C 17 项、round4、leader-v2、cache-inv 全过。
+
+Deployment:
+- GitHub only(分支 claude/p1a-detail-evidence-index)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 部署后首个交易日 16 点起自动生成索引;也可管理员 `rebuild=1` 手动构建历史日。
+- 30 日窗口构建走四源合并链,属盘后批处理,耗时可接受;若首次构建慢属预期。
+- 索引质量抽查按讨论文档 Validation Plan:三方各抽 5 个证据词交叉核对。下一项 P1-B 待本项合并后开工。
+
+## 2026-07-10 - Claude - PR#13 评审修复:证据词保粒度 + 自动任务成功才标记 + 测试入库
+
+Changed:
+- 评审点1(粒度):证据词不再经 canonicalTopicName 归一(细分词会塌缩进大类,破坏多粒度判断);word 保留原始细分词,大类归属另存 broadTopic 附注字段(与 word 相同时留空)。端点查询词同样不做大类归一,broadTopic 仅作补充命中。
+- 评审点2(调度):runAutoDetailEvidenceIndexIfDue 改为构建成功且 wordCount>0 后才标记当天完成;失败/空索引当天可重试,重试间隔 10 分钟(避免每分钟重跑 30 日重建)。
+- 评审点3(测试):测试正式入库 `tests/detail-evidence-index.test.js`(29 项,含新增的粒度保留、broadTopic、自动任务标记与重试间隔断言)与 `tests/predict-records.test.js`(P1-C 17 项);运行命令 `node tests/<file>`。
+- 测试顺带抓出并修复一个真 bug:veto 键用默认码位排序而候选配对键用 zh localeCompare,顺序不一致导致 veto 匹配失效;两处统一为 localeCompare。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/detail-evidence-index.test.js`
+- `tests/predict-records.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;tests/detail-evidence-index.test.js 29 项、tests/predict-records.test.js 17 项全过;round4/leader-v2 回归通过。
+
+Deployment:
+- GitHub only(PR #13)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 索引 words[].word 现为原始细分词;family/大类聚合请用 broadTopic 或后续 alias/family 配置,不要假设 word 已归一。
+
+## 2026-07-10 - Claude - PR#13 二审两点小修:候选只跨源配对 + handoff 表述订正
+
+Changed:
+- 别名自动候选改为只在"不同真实来源给同一股票的不同细分词"之间产生:perStockWords 记录每词的来源集合,两词来源并集 <2 个源则不配对——同一来源用 + 拆出的并列原因不再误入候选(并列词仍各自入索引词条)。
+- 订正本文件 P1-A 初版记录中"复用 canonicalTopicName 归一"的过时表述为现行逻辑(保留原始细分词,broadTopic 仅作附注),并加注修正来源。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/detail-evidence-index.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;tests/detail-evidence-index.test.js 31 项全过(新增"同源并列词不进候选"与"并列词仍入词条"断言);tests/predict-records.test.js 17 项通过。
+
+Deployment:
+- GitHub only(PR #13)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 别名候选语义自此为"跨源同义假设";同源并列原因如需分析,直接看词条本身的 stocksByDay。
