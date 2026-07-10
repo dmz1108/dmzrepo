@@ -2105,3 +2105,37 @@ Deployment:
 Notes for next agent:
 - 前端为静态文件变更,部署可不重启服务;后端 metricProfile 需随 kpl-stats-server.js 部署重启生效。
 - 至此第一阶段 P1-C/P1-A/P1-B/P1-D 四项全部完成;第二阶段语义规则待 P1-A 索引与 P1-C 记录积累约 10 个交易日后回讨论分支定规则并二次批准。
+
+## 2026-07-10 - Codex - Merge and deploy PR#15 P1-D metric metadata
+
+Changed:
+- Merged Claude PR #15 into `main` as merge commit `35f786c` (`Merge PR #15: P1-D metric metadata`) and pushed `main` to GitHub.
+- Deployed the P1-D backend and strategy page update to the cloud server.
+- Fixed one trailing blank-line formatting issue in `docs/DAILY_HANDOFF.md` during merge; no functional changes beyond Claude's PR.
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `docs/DAILY_HANDOFF.md`
+- `tests/metric-profile.test.js`
+- `tests/scan-supplement.test.js`
+- `tests/detail-evidence-index.test.js`
+- `tests/predict-records.test.js`
+
+Validation:
+- Local after-merge checks passed: `node --check kpl-stats-server.js`, `node tests/metric-profile.test.js`, `node tests/scan-supplement.test.js`, `node tests/detail-evidence-index.test.js`, `node tests/predict-records.test.js`.
+- Cloud checks passed before restart with the same five commands.
+- Cloud health passed after restart: `https://market.dreamerqi.com/health` returned `{"ok":true}`.
+- Strategy API check: `GET /api/strategy-mainlines?day=2026-07-09` returned `metricProfile` with `leaderGain.basis=close`, `realtimeBoard.basis=intraday-live`, `cardKlineGain.basis=intraday-kline`.
+- Strategy page check: `https://market.dreamerqi.com/kpl` contains the new caliber labels for close-basis leader gains and K-line-basis QI/hot-search gains.
+
+Deployment:
+- Production touched: yes.
+- Cloud backup created: `C:\PandaDashboard\_deploy-backups\pr15-p1d-20260710-140753`.
+- Restart method: stopped old Node listener on port `8765` and restarted via scheduled task `Panda Dashboard Server`.
+- Old PID: `15292`; new PID: `13452`.
+- Cloud operation log updated on the server.
+
+Notes for next agent:
+- PR #15 / P1-D is merged and deployed. First phase P1-C/P1-A/P1-B/P1-D is now complete.
+- Next work is observation, not immediate second-phase rule changes: collect roughly 10 trading days of prediction candidates and detail evidence index data, then return to the discussion branch for owner-approved second-phase semantics.
