@@ -22192,9 +22192,10 @@ function detailEvidenceSplitTerms(text) {
     .filter(t => t.length >= 2 && t.length <= 12)
     .filter(t => !/^[\d.]+%?$/.test(t));
 }
-function detailEvidenceCanonTerm(term) {
-  const canon = canonicalTopicName(term);
-  return String(canon || term || '').trim();
+// 证据词保持原始细分粒度,绝不用 canonicalTopicName 压成大类(否则细分词会塌缩进大主题,
+// 破坏多粒度主线判断);大类归属只作为 broadTopic 附注另存,不替换 word 本身。
+function detailEvidenceNormalizeTerm(term) {
+  return String(term || '').trim();
 }
 async function readDetailEvidenceAliasDict() {
   try {
@@ -22215,16 +22216,16 @@ async function buildDetailEvidenceIndex(endDay, options = {}) {
   const aliasTo = new Map();  // 别名 -> 规范词(人工 confirm 对,首词为规范)
   for (const pair of dict.confirm) {
     if (!Array.isArray(pair) || pair.length < 2) continue;
-    const canon = detailEvidenceCanonTerm(pair[0]);
+    const canon = detailEvidenceNormalizeTerm(pair[0]);
     if (!canon) continue;
     for (const alias of pair.slice(1)) {
-      const a = detailEvidenceCanonTerm(alias);
+      const a = detailEvidenceNormalizeTerm(alias);
       if (a && a !== canon) aliasTo.set(a, canon);
     }
   }
   const vetoSet = new Set(dict.veto
     .filter(p => Array.isArray(p) && p.length >= 2)
-    .map(p => [detailEvidenceCanonTerm(p[0]), detailEvidenceCanonTerm(p[1])].sort().join('')));
+    .map(p => [detailEvidenceNormalizeTerm(p[0]), detailEvidenceNormalizeTerm(p[1])].sort((a, b) => a.localeCompare(b, 'zh-Hans-CN')).join('')));
   const words = new Map();      // 证据词 -> { kinds, sources, days: Map(day -> Set(code)), hits }
   const pairCounts = new Map(); // 'ab' -> { count, codes: Set } 别名自动候选
   for (const day of tradingDays) {
@@ -22240,7 +22241,7 @@ async function buildDetailEvidenceIndex(endDay, options = {}) {
         for (const t of detailEvidenceSplitTerms(row?.boardTopic)) entries.push({ term: t, kind: 'board' });
         for (const t of detailEvidenceSplitTerms(row?.detailReason)) entries.push({ term: t, kind: 'detail' });
         for (const { term, kind } of entries) {
-          let word = detailEvidenceCanonTerm(term);
+          let word = detailEvidenceNormalizeTerm(term);
           if (aliasTo.has(word)) word = aliasTo.get(word);
           if (!word) continue;
           const cur = words.get(word) || { kinds: new Set(), sources: new Set(), days: new Map(), hits: 0 };
@@ -22276,8 +22277,10 @@ async function buildDetailEvidenceIndex(endDay, options = {}) {
     .slice(0, DETAIL_EVIDENCE_MAX_WORDS)
     .map(([word, w]) => {
       const daysList = [...w.days.keys()].sort();
+      const broad = canonicalTopicName(word);
       return {
         word,
+        broadTopic: broad && broad !== word ? broad : '',   // 大类归属附注,仅供 family 参考,不替换 word
         kinds: [...w.kinds].sort(),
         sources: [...w.sources].sort(),
         sourceCount: [...w.sources].filter(s => s !== 'final').length,  // 真实源数(细分多源共识依据)
@@ -22313,15 +22316,25 @@ async function buildDetailEvidenceIndex(endDay, options = {}) {
 }
 
 let autoDetailEvidenceIndexDay = '';
+let autoDetailEvidenceIndexLastTryMs = 0;
 async function runAutoDetailEvidenceIndexIfDue() {
   const now = chinaNowParts();
   if (now.hour < 16) return;  // 收盘后 16 点起构建,等四源盘后数据基本齐
   if (autoDetailEvidenceIndexDay === now.day) return;
-  autoDetailEvidenceIndexDay = now.day;
-  if (!isChinaMarketTradingDay(now.day)) return;
-  await buildDetailEvidenceIndex(now.day).catch(err => {
+  if (!isChinaMarketTradingDay(now.day)) { autoDetailEvidenceIndexDay = now.day; return; }
+  // 失败后间隔 10 分钟重试(数据未齐/构建失败当天还能再试),避免每分钟重跑 30 日重建
+  if (Date.now() - autoDetailEvidenceIndexLastTryMs < 10 * 60 * 1000) return;
+  autoDetailEvidenceIndexLastTryMs = Date.now();
+  try {
+    const payload = await buildDetailEvidenceIndex(now.day);
+    if (payload?.ok && Number(payload.wordCount) > 0) {
+      autoDetailEvidenceIndexDay = now.day;   // 成功生成有效索引后才标记当天完成
+    } else {
+      console.error('detail evidence index build not ok:', String(payload?.reason || 'empty-index'));
+    }
+  } catch (err) {
     console.error('detail evidence index build failed:', err.message);
-  });
+  }
 }
 
 // GET /api/detail-evidence-index?day=&word=&limit= 只读;rebuild=1 需管理员(现场重建当日索引)
@@ -22350,11 +22363,12 @@ async function getDetailEvidenceIndexApi(url, req, res) {
     aliasConfirmedPairs: payload.aliasConfirmedPairs || 0, aliasVetoedPairs: payload.aliasVetoedPairs || 0,
   };
   if (word) {
-    const canon = detailEvidenceCanonTerm(word);
+    const q = detailEvidenceNormalizeTerm(word);
+    // 按原始细分词匹配,broadTopic 仅作补充命中;查询词不做大类归一
     const matches = (payload.words || [])
-      .filter(w => w.word === canon || w.word.includes(canon) || canon.includes(w.word))
+      .filter(w => w.word === q || w.word.includes(q) || q.includes(w.word) || (w.broadTopic && w.broadTopic === q))
       .slice(0, limit);
-    return send(res, 200, { ...meta, query: word, canonQuery: canon, matches });
+    return send(res, 200, { ...meta, query: q, matches });
   }
   const summary = (payload.words || []).slice(0, limit).map(({ stocksByDay, ...rest }) => rest);
   return send(res, 200, { ...meta, words: summary, aliasCandidates: (payload.aliasCandidates || []).slice(0, 50) });
