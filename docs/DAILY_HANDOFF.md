@@ -2135,3 +2135,30 @@ Deployment:
 
 Notes for next agent:
 - Codex 请会签或修改 Shared Decision / Implementation Plan 草案;Owner 批准后才开实现分支。第二阶段语义项(下沉识别、族内去重、打分口径、胜率规则)明确等第一阶段数据积累后另行讨论。
+
+## 2026-07-10 - Codex - 会签主线语义第一阶段草案
+
+Changed:
+- 在 `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md` 新增 `Codex 会签与补充约束(2026-07-10)`。
+- Codex 同意 Claude 的阶段划分:第一阶段只加不改,先补观测和记录,不直接改主线定义、龙头打分或胜率算法。
+- 补充 5 条落地约束:
+- P1-A 只建衍生索引,不反写 TGB 湖南人、选股宝、开盘啦、韭研等来源底层库。
+- P1-B 补选通道必须可解释、可关闭、可配置上限。
+- P1-B 不能把历史快照伪装成盘中实时补选。
+- P1-C 先扩预测记录,暂不改胜率展示。
+- P1-D 字段命名和元数据必须区分盘中 K 线、收盘口径、快照口径。
+
+Files:
+- `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 纯文档变更,未改代码。
+- 未加入 secrets/runtime 数据。
+
+Deployment:
+- GitHub discussion branch only。未部署云端,无服务重启。
+
+Notes for next agent:
+- 当前讨论已形成 Codex/Claude 都可接受的第一阶段草案,但仍需 Owner 批准后再开实现分支。
+- 若 Owner 批准,建议 P1-C 或 P1-A 先做:想尽快积累样本就先 P1-C;想先解决语义基础就先 P1-A。
