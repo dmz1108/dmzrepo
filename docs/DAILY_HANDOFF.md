@@ -2540,3 +2540,29 @@ Deployment:
 Notes for next agent:
 - PR #19 只改善云端扫描选择、队列优先级和观测指标，不会凭空补出公司 worker 尚未回传的五档数据。
 - 下一个交易日应观察 `priorityCodes`、`firstResultAt`、`rowsWithPrice`、`rowsWithAllBuckets` 的实际值，再判断扫描吞吐是否需要调整。
+
+## 2026-07-10 - Claude - 静态缓存 + 认证安全加固(整站优化第1、4项)
+
+Changed:
+- 静态缓存(第1项):`sendStatic` 从一律 no-cache 改为分层——字体30天、react vendor 7天、图片/CSS 1天;HTML/qi-home.compiled.js/manifest 保持 no-cache 但新增 ETag(size+mtime),If-None-Match 命中回 304 不读文件体。回头客加载量预计降 90%+(仅字体就 1.3MB 不再重复下载)。
+- 认证限流(第4项):新增纯内存滑动窗限流器(单机部署,重启清零;只记失败,成功清零)。接入六个入口:用户/管理登录(单账号 8 次/10分钟 + 单 IP 30 次/10分钟)、注册/重置验证码邮件(单 IP 5 封/小时 + 单邮箱 3 封/小时,防轰炸)、注册/重置验证码确认(IP+邮箱 10 次/15分钟,封 6 位数字码穷举——原先可无限尝试)。超限回 429,登录事件记 rate-limited。
+- yule 管理接口漏洞修复(第4项核查发现,线上可复现):`/api/yule/admin/*`(列隐藏项/改/删)与 `/api/yule/collect`(POST 触发采集)经 stanning 域代理完全无鉴权,任何人可增删改娱乐内容。修复:主服务代理层强制 admin 会话(`requireAdmin`)。admin cookie 域为 .dreamerqi.com,owner 在市场页登录后 stanning 管理页照常可用。
+- 管理接口权限审计:主服务 14 个 admin handler 全部确认有服务端门控(requireAdmin/isAdminRequest),无需改动。
+- 密扫复核:docs/SECRET_SCAN_REVIEW_REQUIRED.txt 的命中全部为字段名(与 CLAUDE.md 预期一致);全仓库长字符串赋值扫描仅一处命中且为测试夹具,无真实密钥。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/static-cache-auth-hardening.test.js`(新增,22 项)
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;新测试 22 项全过(缓存分层、ETag/304 不读文件体、限流触发/清零/窗口过期、六入口接线、yule 门控);其余十套回归全过。
+- 线上漏洞在部署前仍存在:`stanning.dreamerqi.com/api/yule/admin/items` 当前无凭据返回 200,建议尽快合并部署。
+
+Deployment:
+- GitHub only(分支 claude/static-cache-hardening)。未部署云端,无服务重启。**本 PR 合并后需要 Codex 部署并重启主服务才能封住 yule 漏洞。**
+
+Notes for next agent:
+- 限流为纯内存,多实例部署时需改共享存储(当前单机,不适用)。
+- yule-server 自身仍无鉴权,依赖主服务代理层门控;若未来 8766 端口直接对外,需在 yule-server 内补鉴权。
+- 前端登录页 429 时会显示英文 error 文案,与现有 401 文案风格一致,未做本地化。

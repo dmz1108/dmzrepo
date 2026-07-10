@@ -1129,14 +1129,45 @@ function requireAccount(req, res) {
   return null;
 }
 
+// 认证接口频率限制:纯内存滑动窗(单机部署,重启清零)。只记失败,成功清零,
+// 上限设置为正常用户不可能触碰的水平——目的是挡暴力穷举(密码、6位验证码)与验证码邮件轰炸。
+const AUTH_RATE_WINDOWS = new Map();
+function authRateExceeded(key, limit, windowMs) {
+  const now = Date.now();
+  const hits = (AUTH_RATE_WINDOWS.get(key) || []).filter(t => now - t < windowMs);
+  if (hits.length) AUTH_RATE_WINDOWS.set(key, hits); else AUTH_RATE_WINDOWS.delete(key);
+  return hits.length >= limit;
+}
+function authRateRecord(key) {
+  if (AUTH_RATE_WINDOWS.size > 10000 && !AUTH_RATE_WINDOWS.has(key)) {
+    for (const [k, hits] of AUTH_RATE_WINDOWS) {
+      if (!hits.length || Date.now() - hits[hits.length - 1] > 3600000) AUTH_RATE_WINDOWS.delete(k);
+    }
+  }
+  const hits = AUTH_RATE_WINDOWS.get(key) || [];
+  hits.push(Date.now());
+  AUTH_RATE_WINDOWS.set(key, hits);
+}
+function authRateClear(key) { AUTH_RATE_WINDOWS.delete(key); }
+const AUTH_RATE_LOGIN_WINDOW_MS = 10 * 60 * 1000;
+const AUTH_RATE_CODE_WINDOW_MS = 15 * 60 * 1000;
+const AUTH_RATE_MAIL_WINDOW_MS = 60 * 60 * 1000;
+
 async function adminLogin(url, req, res) {
   if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
   const body = await readJsonBody(req);
   const username = String(body.username || '').trim();
   const password = String(body.password || '').trim();
+  const rateIp = requestIp(req);
+  const rateKeys = [`login-ip:${rateIp}`, `login:${rateIp}:${username.toLowerCase()}`];
+  if (authRateExceeded(rateKeys[0], 30, AUTH_RATE_LOGIN_WINDOW_MS) || authRateExceeded(rateKeys[1], 8, AUTH_RATE_LOGIN_WINDOW_MS)) {
+    await recordLoginEvent(req, { type: 'admin-login', username, success: false, reason: 'rate-limited' });
+    return send(res, 429, { error: 'too many attempts, try again later' });
+  }
   const result = await verifyAdminLogin(username, password);
   if (!result.configured) return send(res, 400, { error: 'admin account not configured' });
   if (!result.ok) {
+    rateKeys.forEach(authRateRecord);
     await recordLoginEvent(req, {
       type: 'admin-login',
       username,
@@ -1145,6 +1176,7 @@ async function adminLogin(url, req, res) {
     });
     return send(res, 401, { error: 'invalid admin credentials' });
   }
+  authRateClear(rateKeys[1]);
   const session = createAuthSession(result.user);
   await touchAuthUserLogin(result.user.id);
   await recordLoginEvent(req, {
@@ -1191,6 +1223,10 @@ async function authRegister(url, req, res) {
   const passwordError = validateNewPassword(password);
   if (passwordError) return send(res, 400, { error: passwordError });
   if (!/^\d{6}$/.test(emailCode)) return send(res, 400, { error: 'email verification code required' });
+  const codeKey = `register-confirm:${requestIp(req)}:${email}`;
+  if (authRateExceeded(codeKey, 10, AUTH_RATE_CODE_WINDOW_MS)) {
+    return send(res, 429, { error: 'too many attempts, try again later' });
+  }
   const db = await readAuthDb();
   const usernameLower = username.toLowerCase();
   if (db.users.some(user => String(user.username || '').toLowerCase() === usernameLower)) {
@@ -1212,6 +1248,7 @@ async function authRegister(url, req, res) {
     iterations: verification.iterations,
     digest: verification.digest,
   })) {
+    authRateRecord(codeKey);
     await recordLoginEvent(req, {
       type: 'register',
       username,
@@ -1221,6 +1258,7 @@ async function authRegister(url, req, res) {
     });
     return send(res, 400, { error: 'invalid email verification code' });
   }
+  authRateClear(codeKey);
   const now = authNowIso();
   const user = {
     id: authId('usr'),
@@ -1282,6 +1320,13 @@ async function authRegisterRequestCode(url, req, res) {
   if (!await isSmtpConfigured()) {
     return send(res, 503, { error: 'smtp not configured', smtpConfigured: false });
   }
+  const mailIpKey = `mail-ip:${requestIp(req)}`;
+  const mailToKey = `mail-to:${email}`;
+  if (authRateExceeded(mailIpKey, 5, AUTH_RATE_MAIL_WINDOW_MS) || authRateExceeded(mailToKey, 3, AUTH_RATE_MAIL_WINDOW_MS)) {
+    return send(res, 429, { error: 'too many code requests, try again later' });
+  }
+  authRateRecord(mailIpKey);
+  authRateRecord(mailToKey);
   const code = String(crypto.randomInt(100000, 1000000));
   const hashInfo = hashSecret(code);
   const now = Date.now();
@@ -1348,9 +1393,16 @@ async function authLogin(url, req, res) {
   const body = await readJsonBody(req);
   const login = normalizeLoginName(body.username || body.login);
   const password = String(body.password || '');
+  const rateIp = requestIp(req);
+  const rateKeys = [`login-ip:${rateIp}`, `login:${rateIp}:${login.toLowerCase()}`];
+  if (authRateExceeded(rateKeys[0], 30, AUTH_RATE_LOGIN_WINDOW_MS) || authRateExceeded(rateKeys[1], 8, AUTH_RATE_LOGIN_WINDOW_MS)) {
+    await recordLoginEvent(req, { type: 'login', username: login, success: false, reason: 'rate-limited' });
+    return send(res, 429, { error: 'too many attempts, try again later' });
+  }
   const db = await readAuthDb();
   const user = findAuthUser(db, login);
   if (!user || user.disabled || !verifySecret(password, user)) {
+    rateKeys.forEach(authRateRecord);
     await recordLoginEvent(req, {
       type: 'login',
       username: login,
@@ -1361,6 +1413,7 @@ async function authLogin(url, req, res) {
     });
     return send(res, 401, { error: 'invalid credentials' });
   }
+  authRateClear(rateKeys[1]);
   const session = createAuthSession(user);
   await touchAuthUserLogin(user.id);
   await recordLoginEvent(req, {
@@ -1707,6 +1760,14 @@ async function authPasswordResetRequest(url, req, res) {
   if (!await isSmtpConfigured()) {
     return send(res, 503, { error: 'smtp not configured', smtpConfigured: false });
   }
+  // 无论邮箱是否存在都先记一次并做同样的限流判断,避免通过 429 差异探测账户存在性。
+  const mailIpKey = `mail-ip:${requestIp(req)}`;
+  const mailToKey = `mail-to:${email}`;
+  if (authRateExceeded(mailIpKey, 5, AUTH_RATE_MAIL_WINDOW_MS) || authRateExceeded(mailToKey, 3, AUTH_RATE_MAIL_WINDOW_MS)) {
+    return send(res, 429, { error: 'too many code requests, try again later' });
+  }
+  authRateRecord(mailIpKey);
+  authRateRecord(mailToKey);
   const db = await readAuthDb();
   const user = db.users.find(item => String(item.email || '').toLowerCase() === email && !item.disabled);
   if (!user) return send(res, 200, { ok: true });
@@ -1763,9 +1824,17 @@ async function authPasswordResetConfirm(url, req, res) {
   const newPassword = String(body.newPassword || '');
   const passwordError = validateNewPassword(newPassword);
   if (passwordError) return send(res, 400, { error: passwordError });
+  // 6位数字码 + 无限次尝试 = 可穷举;按 IP+邮箱限 10 次/15分钟,窗口内穷举期望命中率 <0.01%。
+  const codeKey = `reset-confirm:${requestIp(req)}:${email}`;
+  if (authRateExceeded(codeKey, 10, AUTH_RATE_CODE_WINDOW_MS)) {
+    return send(res, 429, { error: 'too many attempts, try again later' });
+  }
   const db = await readAuthDb();
   const user = db.users.find(item => String(item.email || '').toLowerCase() === email && !item.disabled);
-  if (!user) return send(res, 400, { error: 'invalid reset code' });
+  if (!user) {
+    authRateRecord(codeKey);
+    return send(res, 400, { error: 'invalid reset code' });
+  }
   const now = Date.now();
   const reset = [...db.passwordResets]
     .reverse()
@@ -1776,6 +1845,7 @@ async function authPasswordResetConfirm(url, req, res) {
     iterations: reset.iterations,
     digest: reset.digest,
   })) {
+    authRateRecord(codeKey);
     await recordLoginEvent(req, {
       type: 'password-reset',
       userId: user.id,
@@ -1786,6 +1856,7 @@ async function authPasswordResetConfirm(url, req, res) {
     });
     return send(res, 400, { error: 'invalid reset code' });
   }
+  authRateClear(codeKey);
   Object.assign(user, hashSecret(newPassword), {
     updatedAt: authNowIso(),
     passwordChangedAt: authNowIso(),
@@ -1826,13 +1897,33 @@ function resolveVendorFontStatic(pathname) {
   return `Qi/vendor/fonts/${fileName}`;
 }
 
+// 缓存策略分层:字体永不改名(30天)、react vendor 冻结版本(7天);
+// HTML/qi-home.compiled.js/manifest 会随发布变化,必须每次协商(no-cache + ETag → 304 只省传输不省新鲜度)。
+function staticCacheControl(fileName) {
+  if (/\.(ttf|woff2?|otf)$/i.test(fileName)) return 'public, max-age=2592000';
+  if (/vendor\/react(-dom)?\.production\.min\.js$/.test(fileName)) return 'public, max-age=604800';
+  if (/\.(png|svg|ico)$/i.test(fileName) || fileName.endsWith('.css')) return 'public, max-age=86400';
+  return 'no-cache';
+}
+
 async function sendStatic(req, res, fileName) {
-  const body = await fs.readFile(path.join(__dirname, fileName));
-  res.writeHead(200, {
+  const filePath = path.join(__dirname, fileName);
+  const headers = {
     'Content-Type': staticContentType(fileName),
-    'Cache-Control': 'no-cache',
+    'Cache-Control': staticCacheControl(fileName),
     'Access-Control-Allow-Origin': '*',
-  });
+  };
+  try {
+    const st = await fs.stat(filePath);
+    const etag = `"${st.size.toString(16)}-${Math.floor(st.mtimeMs).toString(16)}"`;
+    headers.ETag = etag;
+    if (req.headers['if-none-match'] === etag) {
+      res.writeHead(304, headers);
+      return res.end();
+    }
+  } catch {}
+  const body = await fs.readFile(filePath);
+  res.writeHead(200, headers);
   if (req.method === 'HEAD') return res.end();
   res.end(body);
 }
@@ -24201,6 +24292,11 @@ const server = http.createServer(async (req, res) => {
         url.pathname === '/yule' || url.pathname.startsWith('/yule/') ||
         url.pathname === '/yule-admin' || url.pathname.startsWith('/yule-admin/') ||
         url.pathname.startsWith('/api/yule/') || url.pathname.startsWith('/yule-img/')) {
+      // yule-server 自身无会话体系,管理/采集接口必须在代理层用主服务的 admin 会话把关,
+      // 否则任何人可经 stanning 域直接增删改娱乐内容(安全核查发现的线上漏洞)。
+      const yuleNeedsAdmin = url.pathname.startsWith('/api/yule/admin/') ||
+        (url.pathname === '/api/yule/collect' && req.method !== 'GET');
+      if (yuleNeedsAdmin && !requireAdmin(req, res)) return;
       return proxyToYule(req, res);
     }
     if (url.pathname.startsWith('/api/strategy/')) {
