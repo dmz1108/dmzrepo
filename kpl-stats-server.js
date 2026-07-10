@@ -22101,6 +22101,53 @@ function strategyMainlineEmptyPayload(day, requestedDay, reason, message, sessio
   };
 }
 // 盘中持续覆盖当天预判快照；收盘后不再覆盖已有快照（保留“收盘前最后一次预判”作为回测基准）。
+// P1-C(讨论批准 2026-07-10):在 top/confirmedKey 之外增记 candidates 全量展示候选,
+// 供第二阶段用真实样本定胜率去重/低置信规则。只扩记录:top 结构与回看统计均不动。
+function strategyPredictCandidateRecord(m) {
+  if (!m) return null;
+  const stock = s => s ? {
+    code: s.code || '', name: s.name || '',
+    gain: isFiniteNumeric(s.gain) ? Number(s.gain) : null,
+  } : null;
+  return {
+    key: m.familyKey || m.key || '',
+    familyKey: m.familyKey || '',          // 族归属(现状=归并族键;active node 细分待第二阶段)
+    theme: m.theme || '',
+    mergedThemes: Array.isArray(m.mergedThemes) ? m.mergedThemes.slice(0, 8) : [],
+    rank: m.rank || 0,
+    score: m.score ?? null,
+    predictScore: m.predictScore ?? null,
+    stage: m.stage?.label || '',
+    certainty: m.certainty?.label || '',
+    isNewTheme: !!m.isNewTheme,
+    lowConfidence: null,                   // 低置信通道未上线,先记 null 占位(false=成熟,true=低置信)
+    netInflow: isFiniteNumeric(m.netInflow) ? Number(m.netInflow) : null,
+    boardCount: Number(m.boardCount) || 0,
+    limitUpCount: Number(m.count) || 0,
+    bigGainCount: Number(m.bigGainCount) || 0,
+    nearLimitCount: Number(m.nearLimitCount) || 0,
+    leaderBasisMode: m.leaderBasisMode || '',
+    leaderNote: m.leaderNote || '',
+    leaders: (Array.isArray(m.leaders) ? m.leaders : []).slice(0, 3).map(r => ({
+      ...stock(r),
+      leadScore: isFiniteNumeric(r.leadScore) ? Number(r.leadScore) : null,
+      basis: Array.isArray(r.basis) ? r.basis.slice(0, 6) : [],   // 依据类型(次数/涨幅榜位/主因新鲜度/今日状态)
+      todayLimit: !!r.todayLimit,
+      lianban: Number(r.lianban) || 0,
+      zt10Count: Number(r.zt10Count) || 0,
+      mainZt10Count: Number(r.mainZt10Count) || 0,
+      gain10: isFiniteNumeric(r.gain10) ? Number(r.gain10) : null,
+      gain30: isFiniteNumeric(r.gain30) ? Number(r.gain30) : null,
+    })),
+    stars: (Array.isArray(m.starStocks) ? m.starStocks : []).slice(0, 4).map(s => ({
+      ...stock(s), level: s.level || '', label: s.label || '',
+    })),
+    focusStocks: (Array.isArray(m.focusStocks) ? m.focusStocks : []).slice(0, 6).map(s => ({
+      ...stock(s), basis: Array.isArray(s.basis) ? s.basis.slice(0, 4) : [],
+    })),
+    todayLimitCodes: (Array.isArray(m.todayCodes) ? m.todayCodes : []).slice(0, 16),   // 主要贡献股票(当日涨停)
+  };
+}
 async function writeMainlinePredict(day, sessionPhase, mainlines, confirm) {
   try {
     const existing = await readMainlinePredict(day);
@@ -22114,10 +22161,12 @@ async function writeMainlinePredict(day, sessionPhase, mainlines, confirm) {
     } : null;
     const top = (mainlines || []).slice(0, 3).map(pick).filter(Boolean);
     if (!top.length) return;
+    const candidates = (mainlines || []).slice(0, 12).map(strategyPredictCandidateRecord).filter(Boolean);
     await fs.mkdir(STRATEGY_MAINLINE_DATA_DIR, { recursive: true });
     await fs.writeFile(strategyMainlinePredictPath(day), JSON.stringify({
       day, savedAt: new Date().toISOString(), sessionPhase: sessionPhase || '',
       confirmedKey: confirm?.key || '', top,
+      schemaVersion: 2, candidates,
     }, null, 2), 'utf8');
   } catch {}
 }

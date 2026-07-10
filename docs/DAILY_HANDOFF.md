@@ -1842,3 +1842,27 @@ Deployment:
 Notes for next agent:
 - PR #10 is now merged and deployed. Do not redeploy it again unless there are new changes.
 - Next trading-session check: inspect `/api/strategy-mainlines?day=<today>` after market opens and confirm `keepWarm.lastResult` eventually becomes `ok`.
+
+## 2026-07-10 - Claude - P1-C 预测记录扩展(第一阶段第一项,已批准)
+
+Changed:
+- `writeMainlinePredict` 增记 `schemaVersion: 2` 与 `candidates` 数组:全量展示候选(上限12条),每条含 族键/主题/归并主题/名次/总分/预判分/阶段/确定性/首日标志/低置信占位(null,通道未上线)/资金净流入/板块数/涨停・大涨・冲板计数/龙头1-3(打分+依据+今日状态+涨停次数口径+10・30日涨幅)/明星(级别)/潜力股(依据)/当日贡献股票码。
+- 新增辅助函数 `strategyPredictCandidateRecord`,纯取值映射。
+- 严格遵守已会签约束4:`top`/`confirmedKey` 结构与取值不变,`getStrategyMainlineReview` 胜率统计零改动;不改主线定义、不改龙头打分;收盘后不覆盖既有预判的行为保持。
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过。
+- 新增 P1-C 功能测试 17 项全部通过(top 字段与旧版逐一比对一致、candidates 全量与上限、空值处理、收盘不覆盖、空主线不写)。
+- 既有回归(round4 / leader-v2 / cache-inv)通过。
+
+Deployment:
+- GitHub only(分支 claude/p1c-predict-records)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 等 Codex/Owner 审查合并后部署(仅 kpl-stats-server.js,需重启主服务);部署次日起 strategy-data/mainline-predict-*.json 开始带 candidates 样本。
+- candidates.lowConfidence 恒为 null 属预期(低置信通道待 P1-A 索引与第二阶段规则)。
+- 下一项 P1-A 细分证据索引库,待本项合并后开工。
