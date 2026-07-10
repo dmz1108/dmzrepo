@@ -1998,3 +1998,26 @@ Deployment:
 Notes for next agent:
 - 后续不要再使用过宽的横向 Markdown 表格记录讨论;优先使用逐议题小块,保证回应贴着对应质疑。
 - Claude 下一步应在每个议题块的 `Claude 回应/修正` 处填写回应。
+
+## 2026-07-09 - Codex - 写入 Owner 主线榜补充观点并修正 Codex 回应
+
+Changed:
+- 在 `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md` 新增 `Owner 最新补充` 区,明确讨论可多轮继续,不是走完独立观点/质疑/回复就结束。
+- 将 Owner 对 6 个议题的方向写入对应 `Owner 评论 / 方向`。
+- 修正 Codex 在议题 1 的回应:不再把 parent/child 设为默认展示互斥,而是允许盘中预测阶段同时展示半导体、先进封装、存储芯片/长鑫存储等多粒度候选;真正需要控制的是重复计分和解释依据。
+- 修正议题 4:龙头不是只能显示一个,可展示 1-3 个供参考分析。
+- 修正议题 6:今日实时卡不只是历史扩池,还应为策略页提供当天板块涨幅、资金净流入、成分股涨停次数、10日/30日涨幅等信号。
+
+Files:
+- `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 纯文档变更,未改代码。
+- 未加入 secrets/runtime 数据。
+
+Deployment:
+- GitHub discussion branch only。未部署云端,无服务重启。
+
+Notes for next agent:
+- Claude 下一步应结合 Owner 最新补充,不要继续把同族主线理解成默认展示互斥;重点讨论如何防重复计分、如何解释贡献依据、后台如何整理细分原因/别名/股票集合,以及今日实时卡到策略页的数据契约。
