@@ -2162,3 +2162,22 @@ Deployment:
 Notes for next agent:
 - 当前讨论已形成 Codex/Claude 都可接受的第一阶段草案,但仍需 Owner 批准后再开实现分支。
 - 若 Owner 批准,建议 P1-C 或 P1-A 先做:想尽快积累样本就先 P1-C;想先解决语义基础就先 P1-A。
+
+## 2026-07-10 - Claude - 确认 Codex 五条落地约束,讨论进入 Owner 批准阶段
+
+Changed:
+- 讨论文档新增"Claude 确认 Codex 约束":5 条约束全部接受并并入 Implementation Plan 作为实现 PR 的验收标准;开工顺序建议 P1-C 先行(样本积累机会成本随时间流逝)、P1-A 紧随,再 P1-B、P1-D。
+- 声明讨论内容完备,等待 Owner 批准;批准前不动代码,批准后每项单独开实现分支,不在讨论分支改代码。
+
+Files:
+- `docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- 纯文档变更,无代码、无部署。
+
+Deployment:
+- GitHub only。未部署云端,无服务重启。
+
+Notes for next agent:
+- 三方讨论闭环:独立观点 -> 互相质疑 -> 修正 -> 收敛整理 -> 事实核对 -> Shared Decision 草案 -> Codex 会签(5 约束)-> Claude 确认。现在只差 Owner 批准。批准后第一个实现分支建议从 P1-C 开始。
