@@ -1,6 +1,6 @@
 # Discussion: 策略页的核心——如何提前预判选出明星股和龙头股
 
-Status: Proposed
+Status: In Discussion(第二/三层已按 Owner 指示先行实施:PR #17,分支 claude/star-l2-max-bucket;议题 B/C/D/E/F 继续讨论)
 
 Owner Question:
 
