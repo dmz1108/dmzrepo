@@ -2540,3 +2540,33 @@ Deployment:
 Notes for next agent:
 - PR #19 只改善云端扫描选择、队列优先级和观测指标，不会凭空补出公司 worker 尚未回传的五档数据。
 - 下一个交易日应观察 `priorityCodes`、`firstResultAt`、`rowsWithPrice`、`rowsWithAllBuckets` 的实际值，再判断扫描吞吐是否需要调整。
+
+## 2026-07-10 - Codex - 公司端 L2 worker 五档升级规范与契约验收包
+
+Changed:
+- 新增公司端 worker 正式实施规范：固定 50w/300w/500w/800w/1000w 五档、按委托号累计、人民币元单位、主动/被动四方向、现价/版本字段、累计结果上报、错误与回退口径。
+- 新增无密钥输出校验器，可对真实 claim/result 脱敏文件检查五档完整性、数值类型、档位单调性、任务覆盖、优先顺序、现价单位和 workerVersion。
+- 新增合成样例和契约回归：覆盖拆分成交先聚合再过档、零值与缺档区分、错误不能伪装成零值、云端结果整批替换、真实队列指标落盘。
+- AXTICK 下载基准工具统一为云端五档，并导出聚合/worker 档位转换函数供公司实现和测试复用。
+
+Files:
+- `docs/strategy/L2_COMPANY_WORKER_UPGRADE_SPEC.md`
+- `tools/validate-l2-worker-output.js`
+- `tools/axtick_down_benchmark.js`
+- `tests/l2-worker-contract.test.js`
+- `tests/fixtures/l2-worker-claim.example.json`
+- `tests/fixtures/l2-worker-result.example.json`
+- `docs/PROJECT_MAP.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- 三个新增/修改 JS 文件通过 `node --check`；`l2-worker-contract` 全部检查通过。
+- 现有 `scan-priority`、`local-l2-persistence`、`star-l2-layers` 回归通过。
+- 样例均为合成数据，不含账号、token、Cookie、用户数据或真实逐笔行情。
+
+Deployment:
+- GitHub only。未修改或部署公司电脑实际 worker，未改云端运行文件，未重启任何服务。
+
+Notes for next agent:
+- 公司电脑实际常驻 worker 的脚本路径和启动方式不在本仓库中；公司 Codex 必须先识别并备份真实运行文件，不能把旧本地项目或 `l2-focus-scanner.js` 直接覆盖云端。
+- 实施后先用脱敏真实 claim/result 跑校验器，再做单任务云端联调；只有 `resultRows == rowsWithPrice == rowsWithAllBuckets == total` 且原始逐笔抽查一致才能替换正式 worker。

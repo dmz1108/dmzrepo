@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "job": {
+    "jobId": "job-example-001",
+    "plateId": "BKDEMO",
+    "boardName": "示例板块",
+    "day": "2026-07-13",
+    "threshold": 1.5,
+    "minAmount": 500000,
+    "thresholds": [
+      500000,
+      3000000,
+      5000000,
+      8000000,
+      10000000
+    ],
+    "total": 2,
+    "batchSize": 50,
+    "priorityCodes": [
+      "600001"
+    ],
+    "stocks": [
+      {
+        "code": "600001",
+        "name": "样例科技",
+        "gainPct": 9.1,
+        "rank": 1,
+        "batch": 1
+      },
+      {
+        "code": "600002",
+        "name": "样例制造",
+        "gainPct": 6.2,
+        "rank": 2,
+        "batch": 1
+      }
+    ]
+  }
+}

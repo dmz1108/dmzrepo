@@ -10,7 +10,7 @@ const PWD = process.env.AXTICK_PWD || '';
 const STOCK = (process.env.AXTICK_STOCK || argValue('--stock') || '002185.SZ').toUpperCase();
 const USE_GZIP = String(process.env.AXTICK_GZIP || argValue('--gzip') || 'false').toLowerCase() === 'true';
 const SUMMARY_ONLY = process.argv.includes('--summary') || String(process.env.AXTICK_SUMMARY || '').toLowerCase() === 'true';
-const THRESHOLDS = [500000, 1000000, 3000000, 5000000, 10000000];
+const THRESHOLDS = [500000, 3000000, 5000000, 8000000, 10000000];
 
 function argValue(name) {
   const exact = process.argv.find((arg) => arg.startsWith(name + '='));
@@ -222,6 +222,18 @@ function parseAndAggregate(csvText) {
   };
 }
 
+function workerThresholdsFromAggregate(aggregate) {
+  return Object.fromEntries(THRESHOLDS.map((threshold) => {
+    const source = aggregate?.thresholds?.[String(threshold)] || {};
+    const bucket = {};
+    for (const key of ['activeBuy', 'activeSell', 'passiveBuy', 'passiveSell']) {
+      bucket[key] = Math.round(Number(source?.[key]?.amount || 0));
+      bucket[`${key}Count`] = Math.max(0, Math.floor(Number(source?.[key]?.count || 0)));
+    }
+    return [String(threshold), bucket];
+  }));
+}
+
 async function main() {
   if (!USER || !PWD) {
     throw new Error('Set AXTICK_USER and AXTICK_PWD before running this benchmark.');
@@ -281,7 +293,15 @@ async function main() {
   console.log(JSON.stringify(output, null, 2));
 }
 
-main().catch((err) => {
-  console.error(JSON.stringify({ ok: false, error: err.message }, null, 2));
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(JSON.stringify({ ok: false, error: err.message }, null, 2));
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  THRESHOLDS,
+  parseAndAggregate,
+  workerThresholdsFromAggregate,
+};

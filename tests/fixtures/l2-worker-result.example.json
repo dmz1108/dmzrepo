@@ -1,0 +1,140 @@
+{
+  "jobId": "job-example-001",
+  "version": "company-l2-worker/2.0.0",
+  "status": "done",
+  "scanned": 2,
+  "currentBatch": 1,
+  "note": "示例任务完成",
+  "results": [
+    {
+      "code": "600001",
+      "name": "样例科技",
+      "gainPct": 9.1,
+      "rank": 1,
+      "batch": 1,
+      "price": 10,
+      "activeBuy": 450000000,
+      "activeSell": 180000000,
+      "passiveBuy": 300000000,
+      "passiveSell": 120000000,
+      "netActive": 270000000,
+      "thresholds": {
+        "500000": {
+          "activeBuy": 450000000,
+          "activeSell": 180000000,
+          "passiveBuy": 300000000,
+          "passiveSell": 120000000,
+          "activeBuyCount": 90,
+          "activeSellCount": 50,
+          "passiveBuyCount": 70,
+          "passiveSellCount": 40
+        },
+        "3000000": {
+          "activeBuy": 380000000,
+          "activeSell": 150000000,
+          "passiveBuy": 250000000,
+          "passiveSell": 100000000,
+          "activeBuyCount": 70,
+          "activeSellCount": 40,
+          "passiveBuyCount": 55,
+          "passiveSellCount": 30
+        },
+        "5000000": {
+          "activeBuy": 330000000,
+          "activeSell": 130000000,
+          "passiveBuy": 210000000,
+          "passiveSell": 90000000,
+          "activeBuyCount": 55,
+          "activeSellCount": 32,
+          "passiveBuyCount": 44,
+          "passiveSellCount": 25
+        },
+        "8000000": {
+          "activeBuy": 300000000,
+          "activeSell": 115000000,
+          "passiveBuy": 190000000,
+          "passiveSell": 80000000,
+          "activeBuyCount": 40,
+          "activeSellCount": 25,
+          "passiveBuyCount": 32,
+          "passiveSellCount": 20
+        },
+        "10000000": {
+          "activeBuy": 280000000,
+          "activeSell": 100000000,
+          "passiveBuy": 180000000,
+          "passiveSell": 70000000,
+          "activeBuyCount": 30,
+          "activeSellCount": 20,
+          "passiveBuyCount": 25,
+          "passiveSellCount": 15
+        }
+      }
+    },
+    {
+      "code": "600002",
+      "name": "样例制造",
+      "gainPct": 6.2,
+      "rank": 2,
+      "batch": 1,
+      "price": 6,
+      "activeBuy": 60000000,
+      "activeSell": 50000000,
+      "passiveBuy": 40000000,
+      "passiveSell": 35000000,
+      "netActive": 10000000,
+      "thresholds": {
+        "500000": {
+          "activeBuy": 60000000,
+          "activeSell": 50000000,
+          "passiveBuy": 40000000,
+          "passiveSell": 35000000,
+          "activeBuyCount": 20,
+          "activeSellCount": 18,
+          "passiveBuyCount": 14,
+          "passiveSellCount": 12
+        },
+        "3000000": {
+          "activeBuy": 20000000,
+          "activeSell": 15000000,
+          "passiveBuy": 10000000,
+          "passiveSell": 8000000,
+          "activeBuyCount": 5,
+          "activeSellCount": 4,
+          "passiveBuyCount": 3,
+          "passiveSellCount": 2
+        },
+        "5000000": {
+          "activeBuy": 0,
+          "activeSell": 0,
+          "passiveBuy": 0,
+          "passiveSell": 0,
+          "activeBuyCount": 0,
+          "activeSellCount": 0,
+          "passiveBuyCount": 0,
+          "passiveSellCount": 0
+        },
+        "8000000": {
+          "activeBuy": 0,
+          "activeSell": 0,
+          "passiveBuy": 0,
+          "passiveSell": 0,
+          "activeBuyCount": 0,
+          "activeSellCount": 0,
+          "passiveBuyCount": 0,
+          "passiveSellCount": 0
+        },
+        "10000000": {
+          "activeBuy": 0,
+          "activeSell": 0,
+          "passiveBuy": 0,
+          "passiveSell": 0,
+          "activeBuyCount": 0,
+          "activeSellCount": 0,
+          "passiveBuyCount": 0,
+          "passiveSellCount": 0
+        }
+      }
+    }
+  ]
+}
