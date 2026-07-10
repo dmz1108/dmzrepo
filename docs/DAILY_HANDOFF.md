@@ -2443,3 +2443,74 @@ Validation:
 
 Deployment:
 - GitHub only(PR #18)。未部署云端,无服务重启。
+
+## 2026-07-10 - Claude - 实施 Shared Decision 第③项:扫描字典序优先队列 + priorityCodes
+
+Changed:
+- 板块级字典序(不做加权公式):补选来源 > 净流入 > 大涨数(memberRows 内涨幅≥5% 计数);补选板块豁免"涨停≥2"门槛(仍需净流入达标)。
+- 个股猎场优先列表 `strategyMainlineScanPriorityCodes`:板内涨幅 5%~涨停前(Owner 定义猎场),字典序 距板距离 > 当日涨幅 > 历史主因命中,上限 20 只,随任务下发。
+- 队列 `start()` 接受 priorityCodes:优先股排到任务最前(组内保持涨幅序),分批回传时猎场股最先出结果;job 记录 priorityCodes。
+- job 指标(SD 第5条):claim/update 盖 workerVersion;firstResultAt;metrics{resultRows, rowsWithPrice, rowsWithAllBuckets}——吞吐扩容(5min/2板)依据这些指标实测后另议。
+
+Files:
+- `kpl-stats-server.js`
+- `local-l2-task-queue.js`
+- `tests/scan-priority.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 两文件通过;scan-priority 15 项全过(猎场过滤与三键排序、板块豁免与字典序静态断言、队列真实实例行为:优先排序/版本盖章/指标);其余八套回归全过。
+
+Deployment:
+- GitHub only(分支 claude/scan-priority-queue)。未部署云端,无服务重启。
+
+Notes for next agent:
+- rowsWithPrice/rowsWithAllBuckets 在第①项(worker 升级包)实施前会偏低,属预期——这两个指标正好用于量化①的必要性。
+- 第④项(每日验收扩项)为定时器提示词更新,不动代码,待本项合并后由 Claude 直接调整 Routine。
+
+## 2026-07-10 - Claude - PR #19 评审四点修复(Codex 复审前)
+
+Changed:
+- 修正1(截断吃掉优先股):队列 `start()` 改为先按涨幅排全量、再按优先组/普通组分组、最后才做 limitStocks 截断——原排第4的优先股在 limitStocks=2 时也能入选;`job.priorityCodes` 只保留最终任务中真实存在的代码(无效代码剔除)。
+- 修正2(第三键无真实数据):`strategyMainlineScanPriorityCodes(board, priorByCode)` 改为吃 `buildStrategyMainlinePriorReasonContext` 的 byCode Map(code→count),不再依赖 memberRows 行上不存在的 priorReason 字段;`strategyMainlineMaybeAutoScan` 增 priorByCode 参数,调用点传 `priorReason?.byCode`。
+- 修正3(workerJob 缺字段):`workerJob()` 显式返回 `priorityCodes`(旧 worker 忽略该字段亦兼容)。
+- 修正4(空对象档误计):`rowsWithAllBuckets` 要求五档中每档 activeBuy/activeSell/passiveBuy/passiveSell 四项均为有限数值(0 合法,空对象/缺档不算)。
+
+Files:
+- `kpl-stats-server.js`
+- `local-l2-task-queue.js`
+- `tests/scan-priority.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 两文件通过;scan-priority 重写为 18 项全过(真实链路测主因上下文喂第三键、limitStocks=2 截断保优先股、claim 下发 priorityCodes、全零档合法/空对象档不算);qi-mainline-states、star-l2-layers、scan-supplement、detail-evidence-index、predict-records、metric-profile、inflow-gate 七套回归全过。
+- 已同步最新 main(835d26c..73019b4),DAILY_HANDOFF 双方记录均保留。
+
+Deployment:
+- GitHub only(PR #19 分支)。未部署云端,无服务重启。
+
+Notes for next agent:
+- 待 Codex 复审 PR #19;合并后 Claude 执行第④项(两个每日 Routine 提示词扩项,不动代码)。
+
+## 2026-07-10 - Claude - PR #19 二审两点修复
+
+Changed:
+- 二审修正1(第三键题材未对齐板块):`strategyMainlineScanPriorityCodes` 的历史主因命中改为只累计与当前 `board.name` 同题材的次数——复用 `strategyMainlineBoardThemeRelated` 对 `prior.topics`(top-3 题材统计)逐项过滤求和,无同题材命中计0。历史"算力"10次不再给"消费"板块的个股加权。
+- 二审修正2(rowsWithPrice 口径不齐):队列指标价格覆盖改为 `Number(r?.price ?? r?.close ?? r?.lastPrice) > 0`,与策略取价口径(kpl-stats-server 明星判定同链)完全一致;只回传 lastPrice 的有效行不再误计为缺价格。
+
+Files:
+- `kpl-stats-server.js`
+- `local-l2-task-queue.js`
+- `tests/scan-priority.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 两文件通过;scan-priority 18→20 项全过(新增:无关题材10次不得压过相关题材1次、多题材只累计同题材次数、题材过滤复用 strategyMainlineBoardThemeRelated 静态断言、lastPrice-only 行计入 rowsWithPrice);题材匹配在测试中走真实 strategyMainlineBoardThemeRelated(仅 stub topicKey/分类学依赖);七套回归全过。
+- main 已是最新(73019b4),无需再合。
+
+Deployment:
+- GitHub only(PR #19 分支)。未部署云端,无服务重启。
+
+Notes for next agent:
+- prior.topics 为 top-3 题材统计;个股历史题材超过3个且相关题材恰在第4位之后时会漏计(按0处理,偏保守方向)。如实测出现此场景再议放宽。
+- 待 Codex 最终复审;合并后 Claude 执行第④项(Routine 提示词扩项)。
