@@ -2961,3 +2961,24 @@ Validation:
 
 Deployment:
 - GitHub only(PR #23)。
+
+## 2026-07-11 - Claude - PR #23 六审修复(v8,诊断错误贯穿底层 + 诚实超时)
+
+Changed:
+- 新增 AsyncLocalStorage 诊断上下文 strategyMainlineDiagStore + note 函数(scrub 路径、区分 ENOENT=missing / 其它=readErrors)。低层读取函数 readLimitUpDbDay / readLimitUpMainReasonDbDay / 三处快照读取在 throw 前把真实错误压进上下文——调用方 .catch(()=>null) 吞掉控制流也不再静默。
+- strategyMainlineWithTimeout 增 label + 超时事件记录;debugMeta 改由 diagBuildMeta 按真实事件计算 fullWait/partial/complete/timeouts/missing,删除所有静态 fullWait:true。
+- collectSnapshotCardStatsForCode 去掉 debugErrors 参数(改用上下文);统一 buildStrategyMainlinesLive 的 debugErrors 到 diagStore.readErrors。
+- 端点级场景测试三例(损坏快照 / 历史主因 EACCES+ENOENT / 成分抓取超时),均带"无上下文时正式请求行为不变"对照。
+
+Files:
+- kpl-stats-server.js、tests/leader-pool-debug.test.js(65→79 项)、docs/ops/DATA_REPAIR_20260708_ZIGUANG.md、docs/DAILY_HANDOFF.md
+
+Validation:
+- node --check 通过;leader-pool-debug 79 项全过;十三套全回归通过。
+- 本地起服务冒烟:/health 200、/api/strategy-mainlines?day=历史 200(正式路径不受影响)、诊断端点无 admin 返回 403(门控完好)、AsyncLocalStorage 未影响启动。
+
+Deployment:
+- GitHub only(PR #23)。诊断端点成功路径需 admin token,本地无法验证,依赖 Codex 部署后云端跑;函数级测试已覆盖底层错误/超时路径。
+
+Notes for next agent:
+- enterWith 选型:整函数体包 run() 回调 diff 过大,enterWith 是官方支持的"设置到当前执行剩余部分"用法;admin-only + 每请求独立异步上下文,并发安全。

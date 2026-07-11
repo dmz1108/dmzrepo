@@ -28,6 +28,13 @@ function extractArr(name) {
 const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.exitCode = 1; } else console.log('ok: ' + msg); };
 
 (async () => {
+  // ---- 真实诊断上下文(六审):store + note 函数取自生产源,后续所有 extractFn 共用同一 store ----
+  const { AsyncLocalStorage } = require('async_hooks');
+  const strategyMainlineDiagStore = new AsyncLocalStorage();
+  eval(extractFn('strategyMainlineDiagScrubPath'));
+  eval(extractFn('strategyMainlineDiagErrorText'));
+  eval(extractFn('strategyMainlineDiagNoteRead'));
+  eval(extractFn('strategyMainlineDiagNoteTimeout'));
   // ---- 生产工具(不 stub):canonicalTopicName 及其依赖的题材簇 ----
   eval(extractArr('PRIMARY_TOPIC_CLUSTERS'));
   eval(extractFn('canonicalTopicName'));
@@ -132,7 +139,7 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   A(src.includes("url.pathname === '/api/strategy-mainline-leader-debug'"), '诊断端点已注册');
   A(src.match(/strategy-mainline-leader-debug'[\s\S]{0,300}requireAdmin\(req, res\)/), '诊断端点 admin 门控');
   A(src.includes('if (opts.historicalOnly) return getStrategyBoardSnapshotStocks'), '历史模式:实时成分接口改走快照还原(四审阻断1,取代三审的一刀切返回空)');
-  A(src.includes('const diagHistorical = diagMode && isoDay !== isoFromCompactDate(chinaNowParts().day)'), '历史诊断标志=诊断且非今天');
+  A(src.includes('const diagHistoricalBoards = diagMode && requestedDay !== isoFromCompactDate(chinaNowParts().day)'), '历史诊断标志=诊断且非今天(板块加载前判定)');
   A(src.includes('historicalOnly: diagHistorical') && src.includes('const catalogBoards = diagHistorical ? []'), '历史诊断:成分与 catalog 榜都禁实时数据');
   A(src.includes('liveIfMissing: !diagHistoricalBoards'), '历史诊断:板块榜快照缺失也不回退实时榜(自检补堵,宁空勿混)');
   A(src.includes('recordState: !diagMode') && src.includes('if (options.recordState !== false) {'), '诊断模式 recordState:false — 不写全局补选状态');
@@ -140,7 +147,7 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   A(src.includes('const allBoardsForTrace = diagMode ? (boardPayload?.boards || []).slice()'), '保留过滤前全量板块供 boardsWithCode');
   A(src.includes('(allBoardsForTrace || boardPayload?.boards || [])'), 'boardsWithCode 用过滤前全量板块(不漏未进主通道的原始板块)');
   A(src.match(/if \(diagMode\) \{\s*\n\s*try \{\s*\n\s*await strategyMainlineReworkLeaders\(mainlines, isoDay, reworkOpts\);/), '诊断模式完整等待龙头池重构(不吃 1.2s 超时,且不吞异常)');
-  A(src.includes('debugMeta') && src.includes('fullWait: true') && src.includes('recordState: false'), 'debugMeta 明示完整等待/未写全局状态/历史只读');
+  A(src.includes('debugMeta: diagBuildMeta(') && src.includes('fullWait: diagStore.timeouts.length === 0') && src.includes('partial: diagStore.timeouts.length > 0'), 'debugMeta 由真实事件计算(fullWait/partial/complete),不再静态声明 true');
   A(src.includes("'历史日期不再临时重算'") || src.includes('历史日期不再临时重算'), '事实:历史日展示走冻结快照,修复须重建当日快照');
   A(!fsReal.existsSync(pathReal.join(__dirname, '..', 'tools', 'patch-20260708-suanli-leaders.js')), '快照盲补脚本已废弃删除');
 
@@ -219,16 +226,17 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
     A(rows.length === 2 && rXW?.gainPct === 10.02, '历史成分=快照四表合并还原,ztList 行当日涨幅保留');
     A(rZG?.gainPct === 6.8, '紫光型(不在 ztList):三表行的 todayGain=6.8 还原为当日涨幅——真实快照核验后的补强,区间 gain 不混入');
 
-    const statsZG = await collectSnapshotCardStatsForCode('2026-07-08', '600802', []);
+    const statsZG = await collectSnapshotCardStatsForCode('2026-07-08', '600802');
     A(statsZG.length === 3 && statsZG.every(s => s.boardName === '云计算'), '紫光型:三套源快照均查(此处三次读到同板块)');
     A(statsZG[0].zt10?.totalCount === 2 && statsZG[0].zt10?.ztCount === 1 && statsZG[0].gain10?.gain === 21.55 && !statsZG[0].ztList, 'cardData 三表原值带出(totalCount/ztCount 两口径原样),ztList 缺席如实');
-    const statsNone = await collectSnapshotCardStatsForCode('2026-07-08', '999999', []);
+    const statsNone = await collectSnapshotCardStatsForCode('2026-07-08', '999999');
     A(statsNone.length === 0, '不在任何表的股:snapshotStats 为空(不虚构)');
-    const errs = [];
+    // 六审:损坏快照的错误进入诊断上下文,即使无人传入 debugErrors 数组
     const fsBad = { readFile: async () => '{broken' };
     eval(extractFn('collectSnapshotCardStatsForCode').replace(/fs\.readFile/g, 'fsBad.readFile'));
-    await collectSnapshotCardStatsForCode('2026-07-08', '600802', errs);
-    A(errs.length === 3 && errs[0].startsWith('snapshot zs'), '快照损坏不静默:记入 debugErrors(缺文件才是正常缺省)');
+    const badStore = { readErrors: [], timeouts: [], missing: [] };
+    await strategyMainlineDiagStore.run(badStore, () => collectSnapshotCardStatsForCode('2026-07-08', '600802'));
+    A(badStore.readErrors.length === 3 && badStore.readErrors[0].startsWith('snapshot-zs') && badStore.readErrors[0].includes('invalid JSON'), '快照损坏不静默:三源 JSON 损坏记入诊断上下文 readErrors(缺文件才走 missing)');
   }
 
   // 9. 行为测试(四审阻断2):动能采样 record=false 只读不写
@@ -277,9 +285,9 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
 
   // 11. 接线静态断言(四审)
   A(src.includes('if (opts.historicalOnly) return getStrategyBoardSnapshotStocks(plateId, day, info);'), '历史成分改走快照还原(不再一刀切返回空)');
-  A(src.includes('snapshotStats: await collectSnapshotCardStatsForCode(isoDay, code, debugErrors)'), 'debugTrace 带快照 cardData 三表携带证据');
+  A(src.includes('snapshotStats: await collectSnapshotCardStatsForCode(isoDay, code)'), 'debugTrace 带快照 cardData 三表携带证据');
   A(src.includes('strategyMainlineAugmentPrediction(item, isTodayQuery, isoDay, !diagMode)') && src.includes('}, recordTrend)'), '诊断今天不写 strategyMainlineTrendSamples(recordTrend 贯通)');
-  A(src.includes('const debugErrors = diagMode ? [...(diagEarlyErrors || [])] : null;') && src.includes('complete: debugErrors.length === 0'), 'debugMeta.complete/debugErrors 如实标注(含板块榜早期错误并入)');
+  A(src.includes('const debugErrors = diagStore ? diagStore.readErrors : null;') && src.includes('complete: diagStore.readErrors.length === 0 && diagStore.timeouts.length === 0'), 'debugMeta.complete 由读错误+超时共同决定,debugErrors 统一到诊断上下文');
   A(src.includes("debugErrors.push(`rework: ") && src.includes("debugErrors.push(`enrich: ") && src.includes('`board-members ${plateId}:') && src.includes('`leader-metrics:'), 'enrich/rework/单板/指标四类异常全部进 debugErrors,不吞');
 
   // 12. 五审阻断1:历史 breadth 必须 null(涨停名单≠完整成分),todayGain 个股信号照常参与
@@ -328,8 +336,88 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
     // 接线:四个关键读取全部走 diagAwait;gainLeaders 诊断模式完整等待;板块榜早退带 debugMeta
     A(src.includes("strategyMainlineDiagAwait('board-payload'") && src.includes("strategyMainlineDiagAwait('prior-reason'") && src.includes("strategyMainlineDiagAwait('history-context'") && src.includes("strategyMainlineDiagAwait('gain-leaders'"), 'boardPayload/priorReason/history/gainLeaders 四读取全部入账');
     A(src.match(/const gainLeaders = diagMode\s*\n?\s*\? await strategyMainlineDiagAwait/), 'gainLeaders:诊断完整等待(不吃 TOP_GAIN 超时),正式请求保持原超时兜底');
-    A(src.match(/伪装成"数据未准备"[\s\S]{0,400}complete: !\(diagEarlyErrors \|\| \[\]\)\.length/), '板块榜失败导致的早退:诊断模式带 complete:false 的 debugMeta');
+    A(src.match(/伪装成"数据未准备"[\s\S]{0,200}debugMeta: diagBuildMeta\(/), '板块榜失败导致的早退:诊断模式带 diagBuildMeta(complete 由真实事件决定)');
     A(src.includes('board.breadth = options.historicalOnly ? null : strategyMainlineBoardBreadth(normalized);'), 'breadth 历史隔离接线');
+  }
+
+  // 14. 六审场景一:损坏快照 — 底层读取函数把错误压进诊断上下文,历史成分还原也不静默
+  {
+    const isoFromCompactDate = d => String(d);
+    const numOrNull = v => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+    const snapshotPath = () => '/snap/6/2026-07-08.json';
+    const fs = { readFile: async () => { const e = new SyntaxError('Unexpected token'); throw e; } };
+    eval(extractFn('getStrategyBoardSnapshotStocks'));
+    // 无诊断上下文:安全返回空,不抛
+    const noCtx = await getStrategyBoardSnapshotStocks('p1', '2026-07-08', { zsType: 6 });
+    A(Array.isArray(noCtx) && noCtx.length === 0, '损坏快照:无诊断上下文时返回空且不抛(正式请求行为不变)');
+    // 有诊断上下文:损坏错误必被记录(即使返回空看起来"像缺数据")
+    const store = { readErrors: [], timeouts: [], missing: [] };
+    await strategyMainlineDiagStore.run(store, () => getStrategyBoardSnapshotStocks('p1', '2026-07-08', { zsType: 6 }));
+    A(store.readErrors.length === 1 && store.readErrors[0].includes('invalid JSON') && store.missing.length === 0, '损坏快照:记入 readErrors(非 missing)→ complete 将为 false');
+  }
+
+  // 15. 六审场景二:历史主因库读取失败 — 即使调用方 .catch(()=>null) 吞掉,底层仍把真实错误压进上下文
+  {
+    const isoFromCompactDate = d => String(d);
+    const mainReasonDbDayTimedCache = new Map();
+    const mainReasonDbCache = new Map();
+    const DAY_FILE_CACHE_TTL_MS = 60000;
+    const limitUpMainReasonDbPath = () => '/db/main-reason/2026-07-08.json';
+    const applyMainReasonOverridesToPayload = () => {};
+    const readMainReasonOverrides = async () => ({});
+    // 权限错误(EACCES):非 ENOENT,必须入 readErrors
+    const permErr = Object.assign(new Error('permission denied'), { code: 'EACCES' });
+    const fs = { readFile: async () => { throw permErr; } };
+    eval(extractFn('readLimitUpMainReasonDbDay').replace('readLimitUpMainReasonDbDay(', 'readMainReasonEacces('));
+    const store = { readErrors: [], timeouts: [], missing: [] };
+    // 关键:调用方按现网写法 .catch(()=>null) 吞掉——底层的 note-before-throw 仍已记录
+    const got = await strategyMainlineDiagStore.run(store, () => readMainReasonEacces('2026-07-08').catch(() => null));
+    A(got === null, '历史主因读取失败:调用方 .catch(()=>null) 照常拿到 null(控制流不变)');
+    A(store.readErrors.length === 1 && store.readErrors[0].startsWith('main-reason 2026-07-08') && store.readErrors[0].includes('EACCES'), '但底层已把 EACCES 压进诊断上下文(不再被 .catch 吞成静默)');
+    // 对照:ENOENT 只记 missing,不污染 readErrors(正常可选缺失)
+    {
+      const isoFromCompactDate = d => String(d);
+      const mainReasonDbDayTimedCache = new Map();
+      const mainReasonDbCache = new Map();
+      const DAY_FILE_CACHE_TTL_MS = 60000;
+      const limitUpMainReasonDbPath = () => '/db/main-reason/2026-07-09.json';
+      const applyMainReasonOverridesToPayload = () => {};
+      const readMainReasonOverrides = async () => ({});
+      const store2 = { readErrors: [], timeouts: [], missing: [] };
+      const enoErr = Object.assign(new Error('no such file'), { code: 'ENOENT' });
+      const fs = { readFile: async () => { throw enoErr; } };
+      eval(extractFn('readLimitUpMainReasonDbDay').replace('readLimitUpMainReasonDbDay(', 'readMainReasonEnoent('));
+      const got2 = await strategyMainlineDiagStore.run(store2, () => readMainReasonEnoent('2026-07-09').catch(() => null));
+      A(got2 === null && store2.readErrors.length === 0 && store2.missing[0] === 'main-reason 2026-07-09', 'ENOENT 缺文件只记 missing,不使 complete=false');
+    }
+  }
+
+  // 16. 六审场景三:实时成分抓取超时 — 超时兜底被如实记录,fullWait/complete 据此翻转
+  {
+    eval(extractFn('strategyMainlineWithTimeout'));
+    // 无上下文:与原行为一致(超时返回兜底,不记录)
+    const slow = new Promise(res => setTimeout(() => res('late'), 40));
+    const r0 = await strategyMainlineWithTimeout(slow, 5, 'fallback', 'members');
+    A(r0 === 'fallback', '超时:无上下文时返回兜底(正式请求行为不变)');
+    // 有上下文:超时事件入 timeouts;计算出的 debugMeta 应 partial=true / fullWait=false / complete=false
+    const store = { readErrors: [], timeouts: [], missing: [] };
+    const r1 = await strategyMainlineDiagStore.run(store, () =>
+      strategyMainlineWithTimeout(new Promise(res => setTimeout(() => res('late'), 40)), 5, 'fallback', 'board-members p1'));
+    A(r1 === 'fallback' && store.timeouts.length === 1 && store.timeouts[0] === 'board-members p1', '超时:诊断上下文记录 timeouts(不把半结果当完整)');
+    const diagBuildMeta = (extra = {}) => ({
+      fullWait: store.timeouts.length === 0,
+      partial: store.timeouts.length > 0,
+      timeouts: store.timeouts.slice(),
+      complete: store.readErrors.length === 0 && store.timeouts.length === 0,
+      ...extra,
+    });
+    const meta = diagBuildMeta();
+    A(meta.fullWait === false && meta.partial === true && meta.complete === false, '有超时时:fullWait=false / partial=true / complete=false(不再静态声明 fullWait:true)');
+    // 未超时对照:fullWait=true 是诚实的
+    const store2 = { readErrors: [], timeouts: [], missing: [] };
+    const r2 = await strategyMainlineDiagStore.run(store2, () =>
+      strategyMainlineWithTimeout(Promise.resolve('quick'), 50, 'fallback', 'board-members p2'));
+    A(r2 === 'quick' && store2.timeouts.length === 0, '未超时:如实全量,fullWait 保持 true 才成立');
   }
 
   console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL LEADER-POOL-DEBUG CHECKS PASSED');

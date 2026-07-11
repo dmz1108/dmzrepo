@@ -7,6 +7,36 @@ const path = require('path');
 const vm = require('vm');
 const crypto = require('crypto');
 const { execFile, spawn } = require('child_process');
+const { AsyncLocalStorage } = require('async_hooks');
+
+// 只读诊断的环境级错误/超时收集器(六审):低层读取函数在遭遇 JSON 损坏/权限/网络错误时,
+// 无论调用方是否 .catch 吞掉,都把真实错误写进当前诊断上下文;正常缺文件(ENOENT)只记 missing。
+// 用 AsyncLocalStorage 而非全局变量:并发诊断请求各自独立,互不串写。
+const strategyMainlineDiagStore = new AsyncLocalStorage();
+function strategyMainlineDiagScrubPath(text) {
+  return String(text || '')
+    .replace(/[A-Za-z]:\\[^\s"']+/g, '[path]')
+    .replace(/\/(?:[^\s/]+\/)+[^\s"']*/g, '[path]')
+    .slice(0, 240);
+}
+function strategyMainlineDiagErrorText(err) {
+  if (!err) return 'unknown read error';
+  if (err instanceof SyntaxError) return 'invalid JSON';
+  const code = String(err.code || '').trim();
+  if (code && code !== 'ENOENT') return `${code}: read failed`;
+  return strategyMainlineDiagScrubPath(err.message || err);
+}
+// label 形如 'main-reason 2026-07-08';missing=true 表示 ENOENT 正常缺失(不使 complete=false)。
+function strategyMainlineDiagNoteRead(label, err) {
+  const store = strategyMainlineDiagStore.getStore();
+  if (!store) return;
+  if (err && err.code === 'ENOENT') { store.missing.push(label); return; }
+  store.readErrors.push(`${label}: ${strategyMainlineDiagErrorText(err)}`);
+}
+function strategyMainlineDiagNoteTimeout(label) {
+  const store = strategyMainlineDiagStore.getStore();
+  if (store) store.timeouts.push(label);
+}
 
 const PORT = Number(process.env.KPL_STATS_PORT || 8765);
 const HOST = process.env.KPL_STATS_HOST || '127.0.0.1';
@@ -4826,6 +4856,8 @@ async function readLimitUpDbDay(day, options = {}) {
     limitUpDbDayTimedCache.set(key, { at: Date.now(), payload });
     return payload;
   } catch (err) {
+    // 诊断上下文取证:损坏/权限/网络错误必被记录,即使调用方 .catch(()=>null) 吞掉;ENOENT 只记 missing。
+    strategyMainlineDiagNoteRead(`limit-up ${key}`, err);
     if (err.code === 'ENOENT') {
       limitUpDbDayTimedCache.set(key, { at: Date.now(), payload: null });
       return null;
@@ -17888,6 +17920,7 @@ async function readLimitUpMainReasonDbDay(day, options = {}) {
     mainReasonDbDayTimedCache.set(isoDay, { at: Date.now(), payload });
     return payload;
   } catch (err) {
+    strategyMainlineDiagNoteRead(`main-reason ${isoDay}`, err);
     if (err.code === 'ENOENT') {
       mainReasonDbDayTimedCache.set(isoDay, { at: Date.now(), payload: null });
       return null;
@@ -20721,7 +20754,7 @@ async function getDayBoardsWithMembers(day, options = {}) {
     try {
       const p = JSON.parse(await fs.readFile(snapshotPath(useDay, String(z)), 'utf8'));
       await absorbPayload(p, z);
-    } catch {}
+    } catch (err) { strategyMainlineDiagNoteRead(`snapshot-zs${z} ${useDay}`, err); }
   }
   let source = bmap.size ? 'snapshot' : 'none';
   if (!bmap.size && options.liveIfMissing && isChinaMarketTradingDay(requestedDay)) {
@@ -21064,12 +21097,17 @@ async function strategyMainlineDiagAwait(label, promise, debugErrors, fallback) 
   }
 }
 
-function strategyMainlineWithTimeout(promise, ms, fallback) {
+function strategyMainlineWithTimeout(promise, ms, fallback, label = '') {
   let timer = null;
+  let timedOut = false;
   return Promise.race([
     Promise.resolve(promise),
-    new Promise(resolve => { timer = setTimeout(() => resolve(fallback), ms); }),
-  ]).finally(() => {
+    new Promise(resolve => { timer = setTimeout(() => { timedOut = true; resolve(fallback); }, ms); }),
+  ]).then(result => {
+    // 六审:诊断上下文中任何超时兜底都被如实记录,fullWait/complete 据此计算,不再静态声明。
+    if (timedOut) strategyMainlineDiagNoteTimeout(label || `timeout(${ms}ms)`);
+    return result;
+  }).finally(() => {
     if (timer) clearTimeout(timer);
   });
 }
@@ -23327,18 +23365,34 @@ async function buildStrategyMainlineHistoryContext(endDay, themeKeys, days = 15,
 
 async function buildStrategyMainlinesLive(day, options = {}) {
   const requestedDay = isoFromCompactDate(day || chinaNowParts().day);
+  const diagMode = !!options.leaderDebug;
+  // 六审:诊断请求全程绑定一个 AsyncLocalStorage 上下文——低层读取的损坏/权限/网络错误、
+  // 以及任何超时兜底,无论被哪层调用方 .catch 吞掉,都汇入这里。enterWith 只影响本请求的
+  // 异步链,并发诊断互不串写。在任何读取之前建立。
+  const diagStore = diagMode ? { readErrors: [], timeouts: [], missing: [] } : null;
+  if (diagStore) strategyMainlineDiagStore.enterWith(diagStore);
+  const diagBuildMeta = (extra = {}) => ({
+    // fullWait/complete 由真实事件计算,不再静态声明 true。
+    fullWait: diagStore.timeouts.length === 0,
+    partial: diagStore.timeouts.length > 0,
+    timeouts: diagStore.timeouts.slice(),
+    recordState: false,
+    complete: diagStore.readErrors.length === 0 && diagStore.timeouts.length === 0,
+    debugErrors: diagStore.readErrors.slice(),
+    missing: diagStore.missing.slice(),
+    ...extra,
+  });
   // 诊断历史日(三审修正1的板块榜侧):快照缺失也不得回退到"当前时刻"的实时板块榜——
   // 宁可空结果,不混入今天的数据。此判定必须在板块加载之前完成。
-  const diagHistoricalBoards = !!options.leaderDebug && requestedDay !== isoFromCompactDate(chinaNowParts().day);
+  const diagHistoricalBoards = diagMode && requestedDay !== isoFromCompactDate(chinaNowParts().day);
   // P1-B:boardPool 按补选配置放宽,补选通道才能看到主通道之外的实时候选;
   // 主通道仍锁定在原前 STRATEGY_MAINLINE_LIVE_BOARD_POOL 个(primaryPool),行为与补选前完全一致。
-  const diagEarlyErrors = options.leaderDebug ? [] : null;   // 板块榜读取早于 debugErrors 声明,先收后并
   const boardPayload = await strategyMainlineDiagAwait('board-payload', getDayBoardsWithMembers(requestedDay, {
     allowFallback: false,
     liveIfMissing: !diagHistoricalBoards,
     boardPool: STRATEGY_MAINLINE_LIVE_BOARD_POOL + STRATEGY_MAINLINE_SUPPLEMENT_BOARDS,
     liveRankCount: 80,
-  }), diagEarlyErrors, { useDay: requestedDay, boards: [], source: 'none' });
+  }), diagStore?.readErrors || null, { useDay: requestedDay, boards: [], source: 'none' });
   const isoDay = requestedDay;
   if (!Array.isArray(boardPayload?.boards) || !boardPayload.boards.length) {
     return {
@@ -23355,23 +23409,14 @@ async function buildStrategyMainlinesLive(day, options = {}) {
       count: 0,
       stockCount: 0,
       // 五审阻断2:板块榜读取失败导致的早退,诊断模式必须把失败亮出来,不得伪装成"数据未准备"。
-      ...(options.leaderDebug ? {
-        debugMeta: {
-          fullWait: true,
-          recordState: false,
-          historicalOnly: !!diagHistoricalBoards,
-          complete: !(diagEarlyErrors || []).length,
-          debugErrors: diagEarlyErrors || [],
-        },
-      } : {}),
+      ...(diagMode ? { debugMeta: diagBuildMeta({ historicalOnly: !!diagHistoricalBoards }) } : {}),
       mainlines: [],
     };
   }
   // 诊断模式(三审):完整等待、不写全局状态;历史日回放只用冻结快照,禁实时成分接口。
-  // 四审阻断3:诊断不吞错——enrich/rework/catalog 的异常收进 debugErrors,complete 如实标注。
-  const diagMode = !!options.leaderDebug;
-  const diagHistorical = diagMode && isoDay !== isoFromCompactDate(chinaNowParts().day);
-  const debugErrors = diagMode ? [...(diagEarlyErrors || [])] : null;
+  // 四审阻断3:诊断不吞错——enrich/rework/catalog 的异常收进诊断上下文,complete 如实标注。
+  const diagHistorical = diagHistoricalBoards;
+  const debugErrors = diagStore ? diagStore.readErrors : null;   // 统一到诊断上下文的读错误数组
   await strategyMainlineEnrichBoardsWithRisingStocks(boardPayload?.boards || [], isoDay, {
     realtimeSource: boardPayload?.source || '',
     primaryPool: STRATEGY_MAINLINE_LIVE_BOARD_POOL,
@@ -23806,7 +23851,7 @@ async function buildStrategyMainlinesLive(day, options = {}) {
         priorReason: prior ? { theme: prior.theme, count: prior.count, latestDay: prior.latestDay } : null,
         boardsWithCode,
         // 四审阻断1:当日快照 cardData 三表+ztList 的板块携带证据(原值,含快照记录的当日涨幅)
-        snapshotStats: await collectSnapshotCardStatsForCode(isoDay, code, debugErrors),
+        snapshotStats: await collectSnapshotCardStatsForCode(isoDay, code),
         mainlinesWithCode: mainlines
           .filter(m => (m.todayCodes || []).includes(code))
           .map(m => m.theme),
@@ -23817,16 +23862,14 @@ async function buildStrategyMainlinesLive(day, options = {}) {
     ok: true,
     ...(debugTrace ? { debugTrace } : {}),
     ...(diagMode ? {
-      debugMeta: {
-        fullWait: true,             // 全链路完整等待,无超时半结果
-        recordState: false,         // 未写任何全局运行状态(补选观测/扫描调度/动能采样)
+      // 六审:fullWait/complete/partial 全部由真实事件计算(diagBuildMeta),不再静态声明 true。
+      // 低层读取错误(损坏/权限/网络)与任何超时兜底都已汇入诊断上下文,无论哪层 .catch 吞掉。
+      debugMeta: diagBuildMeta({
         historicalOnly: diagHistorical,
-        complete: debugErrors.length === 0,   // 四审阻断3:有吞不掉的异常就如实标不完整
-        debugErrors,
         note: diagHistorical
           ? '历史回放只用冻结快照与历史库;成分行来自快照 ztList(含已记录当日涨幅),三表携带证据见 debugTrace.snapshotStats。'
-          : '诊断今天:实时接口完整等待,动能采样只读不写。',
-      },
+          : '诊断今天:实时接口完整等待,动能采样只读不写;若发生超时兜底会记入 timeouts 并置 partial=true。',
+      }),
     } : {}),
     mode: 'intraday-mainline',
     basis: 'realtime-board-gain-inflow-big-gainers-breadth-momentum-plus-prior-main-reason',
@@ -24461,12 +24504,15 @@ async function getStrategyBoardSnapshotStocks(plateId, day, info) {
       for (const row of (Array.isArray(card[key]) ? card[key] : [])) absorb(row, 'todayGain');
     }
     return [...byCode.values()];
-  } catch { return []; }
+  } catch (err) {
+    strategyMainlineDiagNoteRead(`snapshot-zs${Number(info?.zsType)} ${isoFromCompactDate(day)}`, err);
+    return [];
+  }
 }
 
 // 四审阻断1:某股在当日快照 cardData 的哪些板块/哪些表(zt10/gain10/gain30/ztList)中,原值原样带出。
 // 这正是"紫光数据在云计算 cardData 里却没进龙头前三"这类问题的直接证据通道。
-async function collectSnapshotCardStatsForCode(day, code, debugErrors) {
+async function collectSnapshotCardStatsForCode(day, code) {
   const isoDay = isoFromCompactDate(day);
   const out = [];
   for (const zsType of [6, 5, 7]) {
@@ -24474,8 +24520,8 @@ async function collectSnapshotCardStatsForCode(day, code, debugErrors) {
     try {
       payload = JSON.parse(await fs.readFile(snapshotPath(isoDay, String(zsType)), 'utf8'));
     } catch (e) {
-      if (Array.isArray(debugErrors) && e && e.code !== 'ENOENT') debugErrors.push(`snapshot zs${zsType}: ${String(e.message || e)}`);
-      continue;   // 无该源快照属正常缺省
+      strategyMainlineDiagNoteRead(`snapshot-zs${zsType} ${isoDay}`, e);
+      continue;   // ENOENT 记 missing;损坏/权限记 readErrors,均由诊断上下文统一收集
     }
     const boards = Array.isArray(payload?.boards) ? payload.boards : [];
     const nameOf = new Map(boards.map(b => [String(b?.plateId ?? b?.id ?? ''), String(b?.name || b?.plateName || '')]));

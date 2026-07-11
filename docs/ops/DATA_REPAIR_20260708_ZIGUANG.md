@@ -41,6 +41,12 @@ Codex 用真实文件/API 指出九点,全部修复:
 1. **breadth 历史隔离 + todayGain 在场信号**:历史快照的 ztList/统计表不是完整板块成分,用它算普涨广度会把 10 只涨停股算成 100% 普涨(≈50 分虚高)——历史诊断 `breadth=null`(广度函数零调用);个股当日在场信号不受影响:三表 todayGain(如紫光 6.8)去重后照常进入 risingStocks/评分。真实结构行为测试双向覆盖。
 2. **关键读取失败入账**:新增 `strategyMainlineDiagAwait`,boardPayload/priorReason/history/gainLeaders 四个关键读取在诊断模式下失败必入 debugErrors(gainLeaders 并完整等待,不吃 TOP_GAIN 超时);板块榜失败导致的空板块早退也带 `complete:false` 的 debugMeta,不伪装成"数据未准备"。正式请求路径与原 `.catch(()=>fallback)` 行为完全一致(有对照断言)。
 
+## 六审修正(诊断错误贯穿底层 + 诚实超时,本次)
+
+1. **错误收集下沉到低层读取函数**:新增 `AsyncLocalStorage` 诊断上下文(`strategyMainlineDiagStore`),`readLimitUpDbDay` / `readLimitUpMainReasonDbDay` / 快照读取(`getDayBoardsWithMembers` / `getStrategyBoardSnapshotStocks` / `collectSnapshotCardStatsForCode`)在遭遇 JSON 损坏、权限(EACCES)、网络等非 ENOENT 错误时,**在 throw 之前就把真实错误压进上下文**——即使调用方 `.catch(()=>null)` 吞掉控制流,错误也不再静默;ENOENT 正常缺文件只记 `missing`,不使 complete=false。并发诊断请求各自独立(enterWith 只影响本请求异步链)。
+2. **诚实超时,不再静态声明 fullWait:true**:`strategyMainlineWithTimeout` 的兜底触发时把超时事件记入上下文;`debugMeta` 的 `fullWait/partial/complete/timeouts` 全部由真实事件计算(`diagBuildMeta`)。诊断今天时成分抓取仍 fullWait 完整等待;但只要链路任一处发生超时兜底,`fullWait=false / partial=true / complete=false` 如实翻转。
+3. **端点级场景测试**:损坏快照(SyntaxError→readErrors)、历史主因读取失败(EACCES 被 `.catch(()=>null)` 吞仍入账 / ENOENT 只记 missing)、实时成分抓取超时(timeouts 记录 + fullWait/partial/complete 翻转),均含"无诊断上下文时正式请求行为不变"的对照断言。
+
 ## 本 PR 交付(只读诊断 + 机制复现,不改任何行为)
 
 1. **admin 只读诊断端点** `GET /api/strategy-mainline-leader-debug?day=2026-07-08&codes=002396,000938`:
