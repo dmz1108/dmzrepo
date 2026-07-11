@@ -662,9 +662,19 @@ function findAuthUser(db, login) {
   ) || null;
 }
 
+// X-Forwarded-For 只在请求确实来自本机可信代理(Caddy 回环转发)时才可信;
+// 8765 端口公网可直连,无条件读 XFF 等于允许伪造任意 IP 绕过全部限流(二审阻塞项)。
+// 取链尾:Caddy 会把它看到的真实客户端追加到链尾,链首是客户端可自报的任意值。
+const TRUSTED_PROXY_IPS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 function requestIp(req) {
-  const forwarded = String(req?.headers?.['x-forwarded-for'] || '').split(',')[0].trim();
-  return forwarded || req?.socket?.remoteAddress || '';
+  const socketIp = String(req?.socket?.remoteAddress || '');
+  const bare = socketIp.replace(/^::ffff:/, '');
+  if (TRUSTED_PROXY_IPS.has(socketIp) || TRUSTED_PROXY_IPS.has(bare)) {
+    const parts = String(req?.headers?.['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(Boolean);
+    const client = (parts[parts.length - 1] || '').replace(/^::ffff:/, '');
+    if (client && net.isIP(client)) return client;
+  }
+  return bare || socketIp;
 }
 
 function requestUserAgent(req) {
@@ -1925,11 +1935,14 @@ function resolveVendorFontStatic(pathname) {
   return `Qi/vendor/fonts/${fileName}`;
 }
 
-// 缓存策略(二审修正):强缓存只给带版本参数(?v=)的请求——引用方换版本号即换 URL,天然无脏缓存;
-// 无版本参数一律 no-cache + ETag 协商(304 只省传输不省新鲜度)。图片/CSS 维持 1 天短缓存(未版本化,可容忍短暂过期)。
+// 缓存策略(三审修正):HTML/JSX/manifest 无论是否带 ?v= 一律 no-cache(/kpl?v=1 也不许被强缓存);
+// 一年 immutable 只给带版本参数的 JS/CSS/字体/图片等静态资产——引用方换版本号即换 URL,天然无脏缓存;
+// 无版本参数的资产退回协商或 1 天短缓存。
 function staticCacheControl(fileName, versioned) {
-  if (versioned) return 'public, max-age=31536000, immutable';
-  if (/\.(png|svg|ico)$/i.test(fileName) || fileName.endsWith('.css')) return 'public, max-age=86400';
+  const f = String(fileName || '');
+  if (f.endsWith('.html') || f.endsWith('.jsx') || f.endsWith('.webmanifest')) return 'no-cache';
+  if (versioned && /\.(ttf|woff2?|otf|js|css|png|svg|ico|jpg|jpeg|webp)$/i.test(f)) return 'public, max-age=31536000, immutable';
+  if (/\.(png|svg|ico)$/i.test(f) || f.endsWith('.css')) return 'public, max-age=86400';
   return 'no-cache';
 }
 
@@ -1950,9 +1963,12 @@ async function sendStatic(req, res, fileName) {
       return res.end();
     }
   } catch {}
+  if (req.method === 'HEAD') {
+    res.writeHead(200, headers);
+    return res.end();
+  }
   const body = await fs.readFile(filePath);
   res.writeHead(200, headers);
-  if (req.method === 'HEAD') return res.end();
   res.end(body);
 }
 

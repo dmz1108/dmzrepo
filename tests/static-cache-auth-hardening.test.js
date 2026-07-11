@@ -27,6 +27,11 @@ A(staticCacheControl('Qi/vendor/react.production.min.js', false) === 'no-cache',
 A(staticCacheControl('favicon.ico', false) === 'public, max-age=86400' && staticCacheControl('Qi/vendor/dreamerqi-fonts.css', false) === 'public, max-age=86400', '图标/CSS 保持 1 天短缓存');
 A(staticCacheControl('kpl-dashboard_17_apple.html', false) === 'no-cache', 'HTML no-cache(每次协商,靠 304 省传输)');
 A(staticCacheControl('Qi/qi-home.compiled.js', false) === 'no-cache', 'qi-home.compiled.js 随首页构建变化,no-cache');
+// 三审修正2:/kpl?v=1、/?v=1、/admin?v=1 这类 HTML 页面即使带版本参数也绝不强缓存
+A(staticCacheControl('kpl-dashboard_17_apple.html', true) === 'no-cache', 'HTML 带 ?v= 仍 no-cache(强缓存只给静态资产)');
+A(staticCacheControl('panda-admin.html', true) === 'no-cache' && staticCacheControl('Qi/index.html', true) === 'no-cache', '/admin?v=1、/?v=1 同样 no-cache');
+A(staticCacheControl('Qi/qi-home.jsx', true) === 'no-cache' && staticCacheControl('site.webmanifest', true) === 'no-cache', 'JSX/manifest 带 ?v= 仍 no-cache');
+A(staticCacheControl('Qi/vendor/dreamerqi-fonts.css', true) === 'public, max-age=31536000, immutable', '版本化 CSS 允许 immutable');
 
 // 1b. 引用方已带版本参数(否则强缓存永远不生效)
 const fontsCss = fsReal.readFileSync(pathReal.join(__dirname, '..', 'Qi/vendor/dreamerqi-fonts.css'), 'utf8');
@@ -73,9 +78,28 @@ A(qiIndex.includes('dreamerqi-fonts.css?v='), '首页字体 CSS 引用版本化'
   await sendStatic({ method: 'GET', headers: {}, url: '/vendor/fonts/a.ttf' }, res3b, 'Qi/vendor/fonts/a.ttf');
   A(res3b.headers['Cache-Control'] === 'no-cache', '同一文件不带 ?v=:退回 no-cache 协商');
 
+  const res3c = mkRes();
+  await sendStatic({ method: 'GET', headers: {}, url: '/kpl?v=1' }, res3c, 'kpl-dashboard_17_apple.html');
+  A(res3c.headers['Cache-Control'] === 'no-cache', '行为验证:/kpl?v=1 响应头仍是 no-cache');
+
   const res4 = mkRes();
+  const beforeHead = readFileCalls;
   await sendStatic({ method: 'HEAD', headers: {}, url: '/kpl' }, res4, 'kpl-dashboard_17_apple.html');
-  A(res4.status === 200 && res4.body === undefined, 'HEAD:200 无正文');
+  A(res4.status === 200 && res4.body === undefined && readFileCalls === beforeHead, 'HEAD:200 无正文且不读文件体(三审建议项)');
+
+  // 2b. requestIp 信任边界(三审阻塞项1):公网直连伪造 XFF 无效,本机 Caddy 转发 XFF 生效
+  const net = require('net');
+  eval(extractFn('requestIp').replace(/TRUSTED_PROXY_IPS/g, 'TRUSTED_PROXY_IPS_T'));
+  const TRUSTED_PROXY_IPS_T = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+  const mkReq = (remote, xff) => ({ socket: { remoteAddress: remote }, headers: xff ? { 'x-forwarded-for': xff } : {} });
+  A(requestIp(mkReq('124.222.188.68', '9.9.9.9')) === '124.222.188.68', '公网直连伪造 XFF:忽略,使用 socket IP');
+  A(requestIp(mkReq('127.0.0.1', '58.100.1.9')) === '58.100.1.9', '本机 Caddy 转发:XFF 生效');
+  A(requestIp(mkReq('::ffff:127.0.0.1', '58.100.1.9')) === '58.100.1.9', 'IPv4-mapped 回环同样可信');
+  A(requestIp(mkReq('::1', '2001:db8::7')) === '2001:db8::7', 'IPv6 回环 + IPv6 客户端');
+  A(requestIp(mkReq('127.0.0.1', 'fake-junk, 58.100.1.9')) === '58.100.1.9', '伪造链首无效:取链尾(Caddy 追加的真实客户端)');
+  A(requestIp(mkReq('127.0.0.1', 'not-an-ip')) === '127.0.0.1', 'XFF 非法值(net.isIP 校验失败):回退 socket IP');
+  A(requestIp(mkReq('127.0.0.1', '')) === '127.0.0.1', '无 XFF:回退 socket IP');
+  A(requestIp(mkReq('::ffff:203.0.113.7', '9.9.9.9')) === '203.0.113.7', '公网 IPv4-mapped 直连:剥前缀用真实 socket IP,XFF 忽略');
 
   // 3. 认证限流:失败计数/上限拒绝/成功清零/窗口过期,以及硬上限与定期清理(二审)
   const AUTH_RATE_WINDOWS = new Map();

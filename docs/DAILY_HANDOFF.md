@@ -2611,3 +2611,24 @@ Deployment:
 Notes for next agent:
 - 字体/react 文件若替换内容,必须同步 bump 引用处 ?v= 版本号,否则老访客最长一年不更新;不 bump 就别改文件内容。
 - 限流仍为单机内存版;多实例部署需换共享存储。
+
+## 2026-07-11 - Claude - PR #21 三审两阻塞项修复(Codex 终审前)
+
+Changed:
+- requestIp 信任边界(阻塞1):X-Forwarded-For 仅当 socket.remoteAddress 为回环(127.0.0.1/::1/::ffff:127.0.0.1,即 Caddy 本机转发)时才读取,取链尾(Caddy 追加的真实客户端,链首是客户端可自报的任意值)并经 net.isIP 校验;公网直连 8765 的请求一律用 socket IP。修复前公网直连可伪造 XFF 绕过全部限流。
+- staticCacheControl 收紧(阻塞2):HTML/JSX/manifest 无论是否带 ?v= 一律 no-cache(/kpl?v=1、/?v=1、/admin?v=1 不再可能被强缓存);一年 immutable 只给带版本参数的 JS/CSS/字体/图片。
+- HEAD 优化(建议项):sendStatic 对 HEAD 请求不再读取文件正文(仅 stat 出 ETag)。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/static-cache-auth-hardening.test.js`(40→53 项)
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- 新增测试:公网直连伪造 XFF 不生效/本机转发生效/伪造链首取链尾/net.isIP 拒非法值/IPv6 与 IPv4-mapped 各形态 8 项;HTML/JSX/manifest 带 ?v= 仍 no-cache 及 /kpl?v=1 行为验证 5 项;HEAD 不读正文。hardening 53 项全过,其余十套回归全过,`node --check` 通过。
+
+Deployment:
+- GitHub only(PR #21 分支)。待 Codex 终审合并部署(yule 漏洞线上仍可复现,建议尽快)。
+
+Notes for next agent:
+- 若未来在非回环地址部署反代,需把代理地址加进 TRUSTED_PROXY_IPS。
