@@ -23228,8 +23228,7 @@ function strategyMainlineAddRealtimeBoardSeed(seedByKey, board) {
 function strategyMainlineDetachCodeFromSeed(seed, code) {
   if (!seed || !code) return false;
   strategyEnsureMainlineSeedShape(seed);
-  const wasRealtime = seed.realtimeCodeSet.has(code);
-  const present = seed.codeSet.has(code) || wasRealtime ||
+  const present = seed.codeSet.has(code) || seed.realtimeCodeSet.has(code) ||
     seed.risingCodeSet.has(code) || seed.nearLimitCodeSet.has(code) ||
     seed.risingStockMap.has(code) || seed.nearLimitStockMap.has(code);
   seed.codeSet.delete(code);
@@ -23238,26 +23237,45 @@ function strategyMainlineDetachCodeFromSeed(seed, code) {
   seed.nearLimitCodeSet.delete(code);
   seed.risingStockMap.delete(code);
   seed.nearLimitStockMap.delete(code);
-  // countFallback 是「板块 zt/成分数」的兜底计数(仅实时板块成分贡献,见 AddRealtimeBoardSeed);
-  // 移走一个实时成分应同步减 1,避免错误主线在 todayCodes 清空后仍用兜底数虚报 count。
-  if (wasRealtime && Number(seed.countFallback) > 0) seed.countFallback -= 1;
+  // 注意不动 countFallback:它按「板块 zt 数/成分数」逐板块累计(AddRealtimeBoardSeed),同一只股
+  // 会被多个板块/三套来源重复累计,按股减 1 不成立(Codex 二审)。盘后复核模式的 count 直接取
+  // 去重后的 todayCodes.length、不回退 countFallback(见 buildStrategyMainlinesLiveImpl 的 count 计算)。
   return present;
 }
 
-// 当日综合主因的归属置信度(Codex 复审第5点):
-// 只有多源共识(strong/majority 档,或候选源≥2 且至少一源板块题材与最终题材同族)才允许「硬」跨族改判;
-// 孤源/来源不足只能作为软证据,不得执行跨族删除。存储记录常未挂 consensusTier/agreeCount,
-// 故回退用已持久化的 candidates 做保守判定(纯读记录,不触外网)。
+// 当日综合主因的归属置信度(Codex 复审第5点;二审修正:按真实库结构读取)。
+// 真实 kpl-limitup-main-reason-db 记录的候选在 sourceEvidence.candidates(顶层无 candidates,
+// consensusTier/agreeCount 常为空);review-auto-consensus 等聚合候选的真实底层来源在
+// candidate.sourceSupport.groups(如 [jiuyangongshe, tgb])。证据导出包(strategy-evidence)
+// 是展平的顶层 candidates,离线回放兼容其次序。
+// 判定:只有多源共识才允许「硬」跨族改判——
+//   hard = strong/majority 档 或 agreeCount≥2 或(真实来源≥2 且至少一候选题材与最终题材同族);
+//   真实来源 = 聚合候选的 sourceSupport.groups 展开 ∪ 非兜底候选源(kpl-zt-reason/
+//   limit-up-db-reason/multi-source-consensus 为兜底回落源,不计入多源门槛,与主因评选口径一致);
+//   soft = 其余(孤源/来源不足),只作软证据,不执行跨族删除。纯读记录,不触外网。
+const STRATEGY_MAINLINE_NON_REVIEW_FALLBACK_SOURCE = /^(kpl-zt-reason|limit-up-db-reason|multi-source-consensus)$/;
 function strategyMainlineReasonAttributionConfidence(record, finalFamilyKey) {
   const tier = String(record?.consensusTier || '').trim();
   if (tier === 'strong' || tier === 'majority') return 'hard';
   const agree = Number(record?.agreeCount);
   if (Number.isFinite(agree) && agree >= 2) return 'hard';
-  const cands = Array.isArray(record?.candidates) ? record.candidates : [];
-  const realSources = new Set(cands.map(c => String(c?.source || '').trim()).filter(Boolean));
+  const nested = record?.sourceEvidence?.candidates;
+  const flat = record?.candidates;
+  const cands = Array.isArray(nested) && nested.length ? nested : (Array.isArray(flat) ? flat : []);
+  const realSources = new Set();
+  for (const c of cands) {
+    const support = c?.sourceSupport || c?.evidence?.sourceSupport || null;
+    const groups = Array.isArray(support?.groups) ? support.groups.map(g => String(g || '').trim()).filter(Boolean) : [];
+    if (groups.length) {
+      for (const g of groups) realSources.add(g);
+      continue;
+    }
+    const source = String(c?.source || '').trim();
+    if (source && !STRATEGY_MAINLINE_NON_REVIEW_FALLBACK_SOURCE.test(source)) realSources.add(source);
+  }
   if (realSources.size < 2) return 'soft';   // 来源不足 → 软证据
   const familyAgree = cands.some(c => {
-    const bt = String(c?.boardTopic || '').trim();
+    const bt = String(c?.boardTopic || c?.primaryRawTopic || c?.primaryTopic || '').trim();
     if (!bt) return false;
     return strategyMainlineFamilyInfo({ theme: canonicalTopicName(bt) }).key === finalFamilyKey;
   });
@@ -23739,7 +23757,11 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     });
     const lianbans = todayStocks.map(s => strategyParseLianban(s?.limitUpCount));
     const hist = history.byTheme.get(seed.key) || {};
-    const count = todayCodes.length || Number(seed.countFallback) || 0;
+    // 盘后复核模式:count 只信去重后的当日涨停贡献股数——跨族剔除清空 todayCodes 后必须为 0,
+    // 不得回退 countFallback(它按板块 zt/成分数重复累计,同一股可被多板块计多次,Codex 二审)。
+    const count = options.postCloseReview
+      ? todayCodes.length
+      : (todayCodes.length || Number(seed.countFallback) || 0);
     return {
       theme: seed.theme,
       key: seed.key,

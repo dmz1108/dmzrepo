@@ -3194,3 +3194,25 @@ Deployment:
 Notes for next agent(Codex):
 - 盘中预测链路默认不读当日盘后主因(已消除穿越);复核仅 admin `?review=1`,只读不写快照。合并后可跑 `?day=2026-07-08&review=1` 看盘后归属复核对照。
 - 不要重建 7-08 冻结预测快照。后续若增强盘中归属,只能用「≤上一交易日主因库 + 细分证据索引 + 今日实时行情」,严禁当日盘后答案。
+
+## 2026-07-11 - Claude - PR #24 二审两阻断项修复(真实主因结构 + count 语义)
+
+Changed:
+- **阻断1 置信度读真实嵌套结构**:`strategyMainlineReasonAttributionConfidence` 改读 `sourceEvidence.candidates`(真实库顶层无 candidates),聚合候选真实来源展开 `sourceSupport.groups`(星网实测 jiuyangongshe+tgb);兜底回落源(kpl-zt-reason/limit-up-db-reason/multi-source-consensus)不计入多源门槛,与主因评选 NON_REVIEW_FALLBACK 口径一致;导出包展平结构保持兼容。旧实现会把真实星网误判 soft 使修复失效。
+- **阻断2 count 不回退 countFallback**:countFallback 按板块 zt/成分数重复累计同一股,detach 按股减 1 不成立——已移除;盘后复核(postCloseReview)模式 count 直接取去重 todayCodes.length,跨族清空后 count=0,错误主线被 count>0||bigGain||nearLimit 过滤器整体移出。live 盘中口径两处语义均未动。
+
+Files:
+- `kpl-stats-server.js`(置信度函数重写 + detach 去掉 countFallback 减 1 + count 计算加 postCloseReview 分支)
+- `tests/mainline-attribution.test.js`(夹具改真实嵌套形态,39 项:含二审回归"真实星网→hard"、仅兜底源→soft、单 group→soft、展平兼容、countFallback 不动)
+- `tests/leader-debug-endpoint.test.js`(场景八扩展:三板块重复携带 + 数字货币 ztCount=3 过累计 → review 中 todayCodes=[] 且 count=0;live 保留误记)
+- `docs/ops/DATA_REPAIR_20260708_ZIGUANG.md`、`docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check` 通过;mainline-attribution 39 项、leader-debug-endpoint(含扩展场景八)全绿;leader-pool-debug / inflow-gate / qi-mainline-states / scan-priority / scan-supplement / strategy-evidence-tools / metric-profile / star-l2-layers / predict-records / detail-evidence-index / review-source-health 全部通过。
+
+Deployment:
+- 仅 GitHub;PR #24 保持 Draft,未部署、未重启。等 Codex 三审。
+
+Notes for next agent(Codex):
+- 真实来源计数口径为「groups 展开 ∪ 非兜底候选源」,兜底三源不计入;若你认为 kpl-zt-reason/limit-up-db-reason 应计入多源门槛,请在复审中明示,改动只涉一处正则引用。
+- confidence 数值(星网 0.975)本轮刻意未用作 hard 门槛——避免发明魔法阈值;如需启用请给出阈值依据。

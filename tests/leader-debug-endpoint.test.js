@@ -92,22 +92,38 @@ async function waitHealth(port, ms = 20000) {
     await fsp.writeFile(path.join(CLOSE, `${d}.json`), JSON.stringify({ day: d, stocks: [{ code: '600001', name: 'X', close: 10 }] }));
   }
 
-  // DAY_REVIEW:星网(002396)+ 真网络安全龙头(600002)都被"网络安全"板块携带且当日涨停;
-  // 当日综合主因把 002396 归为"算力"(多源:数据中心/中报增长/通信设备,含同族数据中心 → hard),600002 归"网络安全"。
-  // 无"算力"板块 → 盘中口径下算力AI 缺席、星网误记网络安全;盘后复核(review=1)应把星网归回算力AI 并从网络安全剔除。
+  // DAY_REVIEW:星网(002396)被三个板块重复携带(网络安全/数字货币/IPv6,均非算力AI 族)且当日涨停;
+  // 数字货币板块 ztCount=3 但 ztList 只有星网一只 → countFallback 累计 3(同一股被板块 zt 数重复累计的典型),
+  // 跨族删除清空 todayCodes 后 count 必须为 0,不得回退 countFallback=3(Codex 二审阻断2)。
+  // 主因库用真实嵌套结构:候选在 sourceEvidence.candidates,聚合候选真实来源在 sourceSupport.groups
+  // (星网实测形态:顶层无 candidates、consensusTier/agreeCount 空、confidence=0.975)——Codex 二审阻断1。
   const reviewSnap = JSON.stringify({
     day: DAY_REVIEW,
-    boards: [{ plateId: 'net', name: '网络安全', ztCount: 2, netInflow: 1e8, gainPct: 3 }],
-    cardData: { net: { ztList: [{ code: '002396', name: '星网锐捷', gain: 10 }, { code: '600002', name: '网安真龙', gain: 10 }], zt10: [], gain10: [], gain30: [] } },
+    boards: [
+      { plateId: 'net', name: '网络安全', ztCount: 2, netInflow: 1e8, gainPct: 3 },
+      { plateId: 'dc', name: '数字货币', ztCount: 3, netInflow: 9e7, gainPct: 2 },
+      { plateId: 'v6', name: 'IPv6', ztCount: 1, netInflow: 8e7, gainPct: 1 },
+    ],
+    cardData: {
+      net: { ztList: [{ code: '002396', name: '星网锐捷', gain: 10 }, { code: '600002', name: '网安真龙', gain: 10 }], zt10: [], gain10: [], gain30: [] },
+      dc: { ztList: [{ code: '002396', name: '星网锐捷', gain: 10 }], zt10: [], gain10: [], gain30: [] },
+      v6: { ztList: [{ code: '002396', name: '星网锐捷', gain: 10 }], zt10: [], gain10: [], gain30: [] },
+    },
   });
   for (const z of [5, 6, 7]) await writeSnap(DAY_REVIEW, z, reviewSnap);
   await fsp.writeFile(path.join(LU, `${DAY_REVIEW}.json`), JSON.stringify({ day: DAY_REVIEW, stocks: [
     { code: '002396', name: '星网锐捷', gain: 10 }, { code: '600002', name: '网安真龙', gain: 10 } ] }));
   await fsp.writeFile(path.join(MR, `${DAY_REVIEW}.json`), JSON.stringify({ day: DAY_REVIEW, stocks: [
-    { code: '002396', name: '星网锐捷', finalBoardTopic: '算力', limitUpCount: 1,
-      candidates: [{ source: 'review-auto-consensus', boardTopic: '数据中心' }, { source: 'kpl-zt-reason', boardTopic: '中报增长' }, { source: 'limit-up-db-reason', boardTopic: '通信设备' }] },
-    { code: '600002', name: '网安真龙', finalBoardTopic: '网络安全', limitUpCount: 1,
-      candidates: [{ source: 'a', boardTopic: '网络安全' }, { source: 'b', boardTopic: '网络安全' }] } ] }));
+    { code: '002396', name: '星网锐捷', finalBoardTopic: '算力', limitUpCount: 1, consensusTier: '', agreeCount: null, confidence: 0.975,
+      sourceEvidence: { selectedSource: 'review-auto-consensus', candidates: [
+        { source: 'review-auto-consensus', boardTopic: '数据中心', detailReason: 'CPO交换机+中报预增+数字人民币+机器人',
+          sourceSupport: { score: 1.2, groups: ['jiuyangongshe', 'tgb'], sources: ['jiuyangongshe-structured', 'tgb-structured'] } },
+        { source: 'kpl-zt-reason', boardTopic: '中报增长', detailReason: '中报增长+交换机', sourceSupport: null },
+        { source: 'limit-up-db-reason', boardTopic: '通信设备', detailReason: '通信设备', sourceSupport: null } ] } },
+    { code: '600002', name: '网安真龙', finalBoardTopic: '网络安全', limitUpCount: 1, consensusTier: '', agreeCount: null,
+      sourceEvidence: { selectedSource: 'ths-limitup-structured', candidates: [
+        { source: 'ths-limitup-structured', boardTopic: '网络安全', sourceSupport: null },
+        { source: 'jiuyangongshe-structured', boardTopic: '网络安全', sourceSupport: null } ] } } ] }));
   await fsp.writeFile(path.join(CLOSE, `${DAY_REVIEW}.json`), JSON.stringify({ day: DAY_REVIEW, stocks: [
     { code: '002396', name: '星网锐捷', close: 10 }, { code: '600002', name: '网安真龙', close: 10 } ] }));
 
@@ -217,13 +233,14 @@ async function waitHealth(port, ms = 20000) {
     const leadersOf = (mls, re) => mls.filter(m => re.test(themeBlob(m))).flatMap(m => (m.leaders || []).map(l => String(l.code)));
     const netMl = mls => mls.find(m => /网络安全/.test(themeBlob(m)));
 
-    // 盘中口径(live,不含当日盘后主因):星网仍被误记在网络安全,算力AI 缺席(冻结预测同样保留此结果)
+    // 盘中口径(live,不含当日盘后主因):星网被三个板块携带、误记在网络安全/数字货币,算力AI 缺席
     A(hasToday(liveMls, /网络安全/, '002396'), '复核 live:星网仍误记网络安全 todayCodes(盘中预测口径,不回写)');
+    A(hasToday(liveMls, /数字货币/, '002396'), '复核 live:星网同时被数字货币板块携带(count 语义未动)');
     A(!hasToday(liveMls, /算力/, '002396'), '复核 live:算力AI 未出现星网(盘中口径缺席,与冻结一致)');
     A(!rv.json.live.postCloseReview, '复核 live:不带 postCloseReview 标记(盘中预测零影响)');
 
-    // 盘后复核(review):星网归回算力AI、从网络安全彻底剔除,且不污染 600002
-    A(hasToday(reviewMls, /算力/, '002396'), '复核 review:星网进入算力AI todayCodes');
+    // 盘后复核(review):真实嵌套主因结构判 hard(二审阻断1)→ 星网归回算力AI、从三个错误主线彻底剔除
+    A(hasToday(reviewMls, /算力/, '002396'), '复核 review:星网进入算力AI todayCodes(真实 sourceEvidence 结构判 hard)');
     A(!hasToday(reviewMls, /网络安全/, '002396'), '复核 review:星网已从网络安全 todayCodes 剔除');
     A(leadersOf(reviewMls, /算力/).includes('002396'), '复核 review:星网成为算力AI 龙头(leaders 计入贡献)');
     A(!leadersOf(reviewMls, /网络安全/).includes('002396'), '复核 review:网络安全 leaders 不再含星网(贡献已移除)');
@@ -231,6 +248,13 @@ async function waitHealth(port, ms = 20000) {
     A(rvNet && (rvNet.todayCodes || []).map(String).includes('600002'), '复核 review:真属网络安全的 600002 保留在网络安全');
     A((rv.json.review.reviewAttribution && rv.json.review.reviewAttribution.hard || []).some(h => String(h.code) === '002396'),
       '复核 review:reviewAttribution.hard 记录星网 hard 改判');
+    // 二审阻断2:数字货币板块 ztCount=3 只由星网撑着(countFallback 重复累计),跨族删除后
+    // todayCodes=[] 且 count 必须为 0——不得回退 countFallback=3。count=0 且无其它信号的主线
+    // 会被 count>0||bigGain||nearLimit 过滤器整体移出榜单,两种形态都算通过,但绝不允许 count>0。
+    const wrongMls = reviewMls.filter(m => /数字货币|IPv6/.test(themeBlob(m)));
+    A(wrongMls.every(m => (m.todayCodes || []).length === 0 && Number(m.count) === 0),
+      '复核 review:数字货币/IPv6 主线 todayCodes=[] 且 count=0(不回退重复累计的 countFallback)');
+    A(!hasToday(reviewMls, /数字货币|IPv6/, '002396'), '复核 review:星网从数字货币/IPv6 todayCodes 全部剔除(三板块重复携带)');
 
     console.log(process.exitCode ? 'SOME ENDPOINT CHECKS FAILED' : 'ALL LEADER-DEBUG-ENDPOINT CHECKS PASSED');
   } finally {

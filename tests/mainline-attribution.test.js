@@ -59,6 +59,7 @@ eval(extractFn('strategyEnsureMainlineSeedShape'));
 eval(extractFn('strategyMainlineAddRisingStock'));
 eval(extractFn('strategyMainlineEnsureSeed'));
 eval(extractFn('strategyMainlineDetachCodeFromSeed'));
+eval(src.match(/const STRATEGY_MAINLINE_NON_REVIEW_FALLBACK_SOURCE = [^\n]+/)[0].replace('const ', 'var '));
 eval(extractFn('strategyMainlineReasonAttributionConfidence'));
 eval(extractFn('strategyMainlineApplyCurrentReasonAttribution'));
 
@@ -69,20 +70,54 @@ A(strategyMainlineFamilyInfo({ theme: '液冷' }).key === 'group:算力AI', '生
 A(strategyMainlineFamilyInfo({ theme: '网络安全' }).key !== 'group:算力AI', '生产:网络安全 ≠ 算力AI 家族(跨族)');
 A(canonicalTopicName('数据中心') === '算力', '生产:数据中心 → 算力(候选源同族证据成立)');
 
-// ---- 置信度门槛(Codex 第5点)----
+// ---- 置信度门槛(Codex 第5点;二审改为真实库嵌套结构)----
+// 真实库记录:候选在 sourceEvidence.candidates,聚合候选的底层真实来源在 sourceSupport.groups,
+// 顶层 consensusTier/agreeCount 为空、confidence 为数值(星网 7-08 实测 0.975)。
+const REAL_XINGWANG = () => ({
+  code: '002396', name: '星网锐捷', finalBoardTopic: '算力', limitUpCount: 1,
+  consensusTier: '', agreeCount: null, confidence: 0.975,
+  sourceEvidence: {
+    selectedSource: 'review-auto-consensus',
+    candidates: [
+      { source: 'review-auto-consensus', boardTopic: '数据中心', detailReason: 'CPO交换机+中报预增+数字人民币+机器人',
+        sourceSupport: { score: 1.2, groups: ['jiuyangongshe', 'tgb'], sources: ['jiuyangongshe-structured', 'tgb-structured'] } },
+      { source: 'kpl-zt-reason', boardTopic: '中报增长', detailReason: '中报增长+交换机', sourceSupport: null },
+      { source: 'limit-up-db-reason', boardTopic: '通信设备', detailReason: '通信设备', sourceSupport: null },
+    ],
+  },
+});
 (() => {
   const famCompute = strategyMainlineFamilyInfo({ theme: '算力' }).key;
-  // 多源共识:候选≥2 且至少一源板块题材同族 → hard
-  A(strategyMainlineReasonAttributionConfidence(
-    { candidates: [{ source: 'review-auto-consensus', boardTopic: '数据中心' }, { source: 'kpl-zt-reason', boardTopic: '中报增长' }, { source: 'limit-up-db-reason', boardTopic: '通信设备' }] },
-    famCompute) === 'hard', '多源+至少一源同族(数据中心)→ hard(星网真实记录口径)');
-  // consensusTier 已挂 strong/majority → hard
-  A(strategyMainlineReasonAttributionConfidence({ consensusTier: 'strong', candidates: [] }, famCompute) === 'hard', 'consensusTier=strong → hard');
+  // 真实星网记录(嵌套结构):groups 展开 jiuyangongshe+tgb=2 真实来源 + 数据中心同族 → hard。
+  // 这是二审抓到的回归:旧实现读顶层 record.candidates,真实星网会被误判 soft。
+  A(strategyMainlineReasonAttributionConfidence(REAL_XINGWANG(), famCompute) === 'hard',
+    '真实星网记录(sourceEvidence.candidates + sourceSupport.groups)→ hard(二审回归)');
+  // 顶层 candidates 为空数组之外的干扰:确认嵌套优先
+  A(strategyMainlineReasonAttributionConfidence({ ...REAL_XINGWANG(), candidates: [] }, famCompute) === 'hard',
+    '嵌套 sourceEvidence.candidates 优先于顶层空 candidates');
+  // consensusTier / agreeCount 已挂 → hard(与真实结构无关的快捷档)
+  A(strategyMainlineReasonAttributionConfidence({ consensusTier: 'strong' }, famCompute) === 'hard', 'consensusTier=strong → hard');
   A(strategyMainlineReasonAttributionConfidence({ consensusTier: 'majority' }, famCompute) === 'hard', 'consensusTier=majority → hard');
   A(strategyMainlineReasonAttributionConfidence({ agreeCount: 2 }, famCompute) === 'hard', 'agreeCount≥2 → hard');
-  // 孤源 / 来源不足 → soft
-  A(strategyMainlineReasonAttributionConfidence({ candidates: [{ source: 'a', boardTopic: '数据中心' }] }, famCompute) === 'soft', '单一来源 → soft(来源不足)');
-  A(strategyMainlineReasonAttributionConfidence({ candidates: [{ source: 'a', boardTopic: '网络安全' }, { source: 'b', boardTopic: '数字货币' }] }, famCompute) === 'soft', '多源但无一同族 → soft(低置信)');
+  // 兜底回落源不计入多源门槛:仅 kpl-zt-reason + limit-up-db-reason → soft(与主因评选口径一致)
+  A(strategyMainlineReasonAttributionConfidence({ sourceEvidence: { candidates: [
+    { source: 'kpl-zt-reason', boardTopic: '数据中心', sourceSupport: null },
+    { source: 'limit-up-db-reason', boardTopic: '数据中心', sourceSupport: null },
+  ] } }, famCompute) === 'soft', '仅兜底源(kpl-zt-reason/limit-up-db-reason)→ soft(不计入多源门槛)');
+  // 聚合候选只有 1 个底层 group → 孤源 soft
+  A(strategyMainlineReasonAttributionConfidence({ sourceEvidence: { candidates: [
+    { source: 'review-auto-consensus', boardTopic: '数据中心', sourceSupport: { groups: ['jiuyangongshe'], sources: ['jiuyangongshe-structured'] } },
+    { source: 'kpl-zt-reason', boardTopic: '中报增长', sourceSupport: null },
+  ] } }, famCompute) === 'soft', '聚合候选仅 1 个底层 group → soft(孤源)');
+  // 多真实来源但无一同族 → soft
+  A(strategyMainlineReasonAttributionConfidence({ sourceEvidence: { candidates: [
+    { source: 'ths-limitup-structured', boardTopic: '网络安全', sourceSupport: null },
+    { source: 'kaipanla-fupanla', boardTopic: '数字货币', sourceSupport: null },
+  ] } }, famCompute) === 'soft', '多真实来源但无一同族 → soft(低置信)');
+  // 证据导出包展平结构(顶层 candidates)兼容:离线回放同函数可用
+  A(strategyMainlineReasonAttributionConfidence({ candidates: [
+    { source: 'review-auto-consensus', boardTopic: '数据中心', sourceSupport: { groups: ['jiuyangongshe', 'tgb'] } },
+  ] }, famCompute) === 'hard', '导出包展平结构(顶层 candidates)兼容 → hard');
   A(strategyMainlineReasonAttributionConfidence({}, famCompute) === 'soft', '无任何证据 → soft');
 })();
 
@@ -101,9 +136,8 @@ function buildSeeds() {
   return seedByKey;
 }
 
-// 强候选(hard)记录:多源 + 数据中心同族
-const HARD = (code, name) => ({ code, name, finalBoardTopic: '算力', limitUpCount: 1,
-  candidates: [{ source: 'review-auto-consensus', boardTopic: '数据中心' }, { source: 'kpl-zt-reason', boardTopic: '中报增长' }, { source: 'limit-up-db-reason', boardTopic: '通信设备' }] });
+// 强候选(hard)记录:真实库嵌套结构,聚合候选 groups=2 真实来源 + 数据中心同族
+const HARD = (code, name) => ({ ...REAL_XINGWANG(), code, name });
 
 // 场景1:星网 hard 改判 → 并入算力、跨族剔除、同族保留;紫光未涨停不动。
 (() => {
@@ -144,7 +178,9 @@ const HARD = (code, name) => ({ code, name, finalBoardTopic: '算力', limitUpCo
   A(!net.nearLimitCodeSet.has('002396'), 'detach:nearLimitCodeSet 移除星网');
   A(!net.risingStockMap.has('002396'), 'detach:risingStockMap 移除星网(risingStocks 不再含)');
   A(!net.nearLimitStockMap.has('002396'), 'detach:nearLimitStockMap 移除星网');
-  A(net.countFallback === 1, 'detach:countFallback 从 2 减到 1(移走一个实时成分)');
+  // 二审:countFallback 按板块 zt/成分数重复累计,同一股可被多板块计多次,按股减 1 不成立——
+  // detach 不再动它;盘后复核的 count 直接取去重 todayCodes.length(构建级测试见 leader-debug-endpoint)。
+  A(net.countFallback === 2, 'detach:countFallback 保持不动(复核 count 由 todayCodes.length 决定,不回退兜底数)');
   A(net.codeSet.has('600002'), '真属网络安全的 600002 不受影响');
 })();
 
@@ -152,7 +188,8 @@ const HARD = (code, name) => ({ code, name, finalBoardTopic: '算力', limitUpCo
 (() => {
   const seedByKey = buildSeeds();
   const before = new Set(seedByKey.get(strategyMainlineTopicKey('网络安全')).codeSet);
-  const db = { stocks: [ { code: '002396', name: '星网锐捷', finalBoardTopic: '算力', candidates: [{ source: 'only-one', boardTopic: '数据中心' }] } ] };
+  const db = { stocks: [ { code: '002396', name: '星网锐捷', finalBoardTopic: '算力', consensusTier: '', agreeCount: null,
+    sourceEvidence: { candidates: [{ source: 'ths-limitup-structured', boardTopic: '数据中心', sourceSupport: null }] } } ] };
   const { hard, soft } = strategyMainlineApplyCurrentReasonAttribution(seedByKey, db, new Set(['002396']));
   A(hard.size === 0 && soft.has('002396'), 'soft:低置信记入 soft,不进 hard');
   A(seedByKey.get(strategyMainlineTopicKey('网络安全')).codeSet.has('002396'), 'soft:网络安全 seed 未被跨族删除(星网仍在)');

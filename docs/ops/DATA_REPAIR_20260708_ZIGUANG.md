@@ -108,6 +108,11 @@ Codex 用真实文件/API 指出九点,全部修复:
 - `tests/leader-debug-endpoint.test.js`(新增场景八,build-level):真实起服务 + fixtures,证明 `live` 仍把星网误记网络安全(盘中口径不回写)、`review` 把星网归回算力AI 且从网络安全的 todayCodes/leaders 剔除、600002 不受污染、`reviewAttribution.hard` 记录改判。
 - 既有 leader-pool-debug / inflow-gate / qi-mainline-states / scan-priority / scan-supplement / strategy-evidence-tools / metric-profile / star-l2-layers / predict-records / detail-evidence-index / review-source-health 全绿。
 
+## 二审修正(Codex PR #24 第二轮,两阻断项)
+
+1. **按真实库结构读置信度**:真实 kpl-limitup-main-reason-db 记录顶层无 `candidates`——候选在 `sourceEvidence.candidates`,聚合候选(review-auto-consensus)的真实底层来源在 `candidate.sourceSupport.groups`(星网实测 [jiuyangongshe, tgb],consensusTier/agreeCount 空、confidence=0.975)。旧实现读顶层 `record.candidates` 会把真实星网误判 soft、目标修复失效。修正:嵌套结构优先(导出包展平结构兼容);真实来源 = groups 展开 ∪ 非兜底候选源(kpl-zt-reason / limit-up-db-reason / multi-source-consensus 为兜底回落源,不计入多源门槛,与主因评选 `NON_REVIEW_FALLBACK` 口径一致)。测试夹具全部改为真实嵌套形态。
+2. **count 不回退 countFallback**:countFallback 按板块 zt 数/成分数逐板块累计,同一股被多板块/三套来源重复计多次,「按股减 1」不成立——detach 不再动它;盘后复核模式 count 直接取去重后的 `todayCodes.length`,跨族删除清空后 count=0(count=0 且无其它信号的错误主线被过滤器整体移出)。构建级测试:星网被网络安全/数字货币/IPv6 三板块重复携带、数字货币板块 ztCount=3 只由星网撑着 → review 中该主线 todayCodes=[] 且 count=0,600002 不受污染;live 口径两处均原样保留。
+
 ## 合并后(Codex)
 
 - 部署后可跑 `?day=2026-07-08&review=1` 核验盘后复核对照(星网→算力AI、移出网络安全)。
