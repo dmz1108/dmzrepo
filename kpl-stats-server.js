@@ -23302,11 +23302,14 @@ async function buildStrategyMainlineHistoryContext(endDay, themeKeys, days = 15,
 
 async function buildStrategyMainlinesLive(day, options = {}) {
   const requestedDay = isoFromCompactDate(day || chinaNowParts().day);
+  // 诊断历史日(三审修正1的板块榜侧):快照缺失也不得回退到"当前时刻"的实时板块榜——
+  // 宁可空结果,不混入今天的数据。此判定必须在板块加载之前完成。
+  const diagHistoricalBoards = !!options.leaderDebug && requestedDay !== isoFromCompactDate(chinaNowParts().day);
   // P1-B:boardPool 按补选配置放宽,补选通道才能看到主通道之外的实时候选;
   // 主通道仍锁定在原前 STRATEGY_MAINLINE_LIVE_BOARD_POOL 个(primaryPool),行为与补选前完全一致。
   const boardPayload = await getDayBoardsWithMembers(requestedDay, {
     allowFallback: false,
-    liveIfMissing: true,
+    liveIfMissing: !diagHistoricalBoards,
     boardPool: STRATEGY_MAINLINE_LIVE_BOARD_POOL + STRATEGY_MAINLINE_SUPPLEMENT_BOARDS,
     liveRankCount: 80,
   }).catch(() => ({ useDay: requestedDay, boards: [], source: 'none' }));

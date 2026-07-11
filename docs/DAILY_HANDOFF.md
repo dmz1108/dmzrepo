@@ -2880,6 +2880,7 @@ Notes for next agent:
 
 Changed:
 - 修正1(历史混入实时数据):getStrategyBoardRealtimeStocks 增 historicalOnly——历史诊断直接返回空,东财/同花顺/KPL 成分接口零调用(它们全是"当前时刻"数据且盘中行情无历史存档,getStrategyBoardStocks 兜底同样是实时接口,不能用);catalog 榜同理禁用;debugMeta.historicalOnly 明示 risingStocks 为空属预期,成分证据以冻结快照 ztList 为准。
+- 修正1补堵(自检发现):getDayBoardsWithMembers 的 liveIfMissing 回退在历史诊断下同样是实时数据入口(快照缺失时拉当前板块榜)——诊断历史日改为宁空勿混(liveIfMissing:false),判定在板块加载前完成。
 - 修正2(全局状态):enrich 增 recordState:false,诊断不覆盖 strategyMainlineSupplementState;配对照行为测试(正式请求照常记录)。
 - 修正3(超时半结果):诊断模式成分抓取 fullWait 完整等待、龙头池重构绕开 1.2s 超时直接 await;debugMeta.fullWait=true;行为测试用 5ms 超时+30ms 慢数据证明"正式路径截成空/诊断路径拿全量"。
 - 修正4(过滤前板块):allBoardsForTrace 在 scanChannel 过滤前快照,boardsWithCode 用它,不漏未进主通道的原始板块。

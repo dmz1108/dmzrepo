@@ -134,6 +134,7 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   A(src.includes('if (opts.historicalOnly) return [];'), '历史模式:实时成分接口直接返回空(不混入今天数据)');
   A(src.includes('const diagHistorical = diagMode && isoDay !== isoFromCompactDate(chinaNowParts().day)'), '历史诊断标志=诊断且非今天');
   A(src.includes('historicalOnly: diagHistorical') && src.includes('const catalogBoards = diagHistorical ? []'), '历史诊断:成分与 catalog 榜都禁实时数据');
+  A(src.includes('liveIfMissing: !diagHistoricalBoards'), '历史诊断:板块榜快照缺失也不回退实时榜(自检补堵,宁空勿混)');
   A(src.includes('recordState: !diagMode') && src.includes('if (options.recordState !== false) {'), '诊断模式 recordState:false — 不写全局补选状态');
   A(src.includes('fullWait: diagMode') && src.includes('options.fullWait'), 'fullWait 贯通 enrich(诊断完整等待成分抓取)');
   A(src.includes('const allBoardsForTrace = diagMode ? (boardPayload?.boards || []).slice()'), '保留过滤前全量板块供 boardsWithCode');
