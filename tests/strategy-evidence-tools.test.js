@@ -136,6 +136,8 @@ function isoDays(count) {
     evidence,
   });
   A(verifyEvidenceBundle(bundle).ok, 'fresh bundle integrity passes');
+  const recapturedAtAnotherTime = addIntegrity({ ...bundle, generatedAt: '2026-07-11T01:00:00.000Z', integrity: undefined });
+  A(recapturedAtAnotherTime.integrity.bundle === bundle.integrity.bundle, 'bundle hash stays stable when only capture timestamp changes');
   const tampered = JSON.parse(JSON.stringify(bundle));
   tampered.evidence.limitUpDays[0].stocks[0].name = 'tampered';
   A(!verifyEvidenceBundle(tampered).ok, 'tampered evidence detected');

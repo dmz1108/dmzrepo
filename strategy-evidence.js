@@ -49,7 +49,7 @@ function hashEvidence(value) {
 }
 
 function evidenceBundleHashInput(bundle) {
-  const { integrity, ...payload } = bundle && typeof bundle === 'object' ? bundle : {};
+  const { integrity, generatedAt, ...payload } = bundle && typeof bundle === 'object' ? bundle : {};
   return payload;
 }
 
