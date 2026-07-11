@@ -2924,3 +2924,25 @@ Deployment:
 
 Notes for next agent:
 - 诊断端点输出契约至此定型:live(leaderDebug+debugTrace.snapshotStats)+frozenSummary+debugMeta{complete,debugErrors,historicalOnly,fullWait,recordState}。
+
+## 2026-07-11 - Claude - 接口取证补课:7-08 根因预验 + todayGain 还原补强 + 只读接口清单(v6)
+
+Changed:
+- Owner 指出"云端真实数据你有接口可以看到"——属实且已验证:`/api/snapshot?day=&zs_type=` 公开接口即可读快照原文,前两轮所有被云端核验推翻的臆测本可自查。教训从"先要样本"升级为"先穷尽已有只读接口取证",清单落库 docs/ops/AI_READONLY_DATA_INTERFACES.md(仅公开/管理员接口,凭据类永不入库)。
+- 三套源快照(zs6/5/7)预验 7-08 根因:①星网 002396 涨停(ztList)仅被 网络安全/数字货币/IPv6 携带,无任何算力族板块——todayCodes 归属根因用公开数据坐实;②紫光 000938 在 10+ 个板块 cardData 三表齐全(todayGain=6.8 记录在案)但全部不在 ztList,不在任何算力族板块;③长源东谷 三套源 cardData 全缺席(Codex 核验一致);④实测行结构:zt10 行 totalCount/ztCount 双口径+todayGain+days,gain10/gain30 行 gain=区间涨幅、todayGain=当日涨幅。
+- 代码补强(真实结构暴露的缺口):getStrategyBoardSnapshotStocks 从"只取 ztList"改为四表合并去重——三表行的 todayGain 是当日合法证据(紫光型股不在 ztList 但 todayGain 在案),区间 gain 绝不混入;测试夹具同步为实测行结构(53→54 项)。
+
+Files:
+- `kpl-stats-server.js`(getStrategyBoardSnapshotStocks 四表还原)
+- `tests/leader-pool-debug.test.js`(夹具实测结构化,54 项)
+- `docs/ops/AI_READONLY_DATA_INTERFACES.md`(新增)
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;54 项全过;十三套全回归通过。
+
+Deployment:
+- GitHub only(PR #23)。预验报告已发 PR 供 Codex 对照;诊断端点上线后只需确认族门槛判定与池明细两项。
+
+Notes for next agent:
+- 紫光 7-06 主因归属(算力 or 云计算数据中心→canonical 后是否入族)是剩余的关键未知,以诊断端点 leaderDebug 为准。

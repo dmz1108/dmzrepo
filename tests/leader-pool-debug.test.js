@@ -194,14 +194,16 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
 
   // 8. 行为测试(四审阻断1):历史成分从快照 cardData 还原,todayGain 与三表携带证据保留
   {
+    // 夹具字段与线上快照实测结构一致(zt10 行:totalCount+ztCount+todayGain+days;ztList 行:gain/price;
+    // gain10/gain30 行:gain=区间涨幅 + todayGain=当日涨幅——两个 gain 语义不同,还原时绝不可混)
     const SNAP = {
       boards: [{ plateId: 'p1', name: '云计算' }],
       cardData: {
         p1: {
-          ztList: [{ code: '600801', name: 'XW', gain: 10.02 }],                       // 涨停股带当日涨幅
-          zt10: [{ code: '600802', name: 'ZG', ztCount: 2, totalCount: 2 }],           // 紫光型:只在三表,不在 ztList
-          gain10: [{ code: '600802', name: 'ZG', gain: 21.55 }],
-          gain30: [{ code: '600802', name: 'ZG', gain: 16.59 }],
+          ztList: [{ code: '600801', name: 'XW', price: 29.1, gain: 10.02, ztState: null }],
+          zt10: [{ code: '600802', name: 'ZG', totalCount: 2, ztCount: 1, todayGain: 6.8, days: ['20260630', '20260706'] }],   // 紫光型:只在三表,不在 ztList
+          gain10: [{ code: '600802', name: 'ZG', gain: 21.55, todayGain: 6.8 }],
+          gain30: [{ code: '600802', name: 'ZG', gain: 16.59, todayGain: 6.8 }],
         },
       },
     };
@@ -212,11 +214,14 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
     eval(extractFn('collectSnapshotCardStatsForCode'));
 
     const rows = await getStrategyBoardSnapshotStocks('p1', '2026-07-08', { zsType: 6 });
-    A(rows.length === 1 && rows[0].code === '600801' && rows[0].gainPct === 10.02, '历史成分=快照 ztList 还原,todayGain 保留(不伪造未记录的涨幅)');
+    const rXW = rows.find(r => r.code === '600801');
+    const rZG = rows.find(r => r.code === '600802');
+    A(rows.length === 2 && rXW?.gainPct === 10.02, '历史成分=快照四表合并还原,ztList 行当日涨幅保留');
+    A(rZG?.gainPct === 6.8, '紫光型(不在 ztList):三表行的 todayGain=6.8 还原为当日涨幅——真实快照核验后的补强,区间 gain 不混入');
 
     const statsZG = await collectSnapshotCardStatsForCode('2026-07-08', '600802', []);
     A(statsZG.length === 3 && statsZG.every(s => s.boardName === '云计算'), '紫光型:三套源快照均查(此处三次读到同板块)');
-    A(statsZG[0].zt10?.ztCount === 2 && statsZG[0].gain10?.gain === 21.55 && statsZG[0].gain30?.gain === 16.59 && !statsZG[0].ztList, 'cardData 三表原值带出,ztList 缺席如实(数据在库未进前三的直接证据)');
+    A(statsZG[0].zt10?.totalCount === 2 && statsZG[0].zt10?.ztCount === 1 && statsZG[0].gain10?.gain === 21.55 && !statsZG[0].ztList, 'cardData 三表原值带出(totalCount/ztCount 两口径原样),ztList 缺席如实');
     const statsNone = await collectSnapshotCardStatsForCode('2026-07-08', '999999', []);
     A(statsNone.length === 0, '不在任何表的股:snapshotStats 为空(不虚构)');
     const errs = [];

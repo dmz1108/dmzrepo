@@ -24403,21 +24403,30 @@ async function getStrategyBoardStocks(plateId, day, info) {
   } catch {}
   return [];
 }
-// 历史诊断成分还原(四审阻断1):冻结快照 cardData 是当日合法数据。ztList 行(含快照已记录的
-// 当日涨幅字段,有则保留为 todayGain,无不伪造)还原为成分行;zt10/gain10/gain30 三表的
-// 板块携带证据由 collectSnapshotCardStatsForCode 在 debugTrace 中原值带出。
+// 历史诊断成分还原(四审阻断1 + 真实快照核验后的补强):冻结快照 cardData 是当日合法数据。
+// 实测快照结构:ztList 行带 gain(当日涨幅),zt10/gain10/gain30 三表行带 todayGain——
+// 紫光 7-08 不在任何 ztList,但三表行上记着 todayGain=6.8,这正是"当日大涨在场"的合法证据,
+// 只取 ztList 会把它漏掉。四表合并去重还原,当日涨幅字段有则保留、无不伪造。
 async function getStrategyBoardSnapshotStocks(plateId, day, info) {
   try {
     const payload = JSON.parse(await fs.readFile(snapshotPath(isoFromCompactDate(day), String(Number(info?.zsType))), 'utf8'));
     const card = payload?.cardData?.[String(plateId)] || null;
     if (!card) return [];
-    return (Array.isArray(card.ztList) ? card.ztList : [])
-      .map(row => ({
-        code: String((row && typeof row === 'object' ? row.code : row) ?? ''),
-        name: String(row?.name || ''),
-        gainPct: numOrNull(row?.gainPct ?? row?.gain ?? row?.zf ?? row?.changePct),
-      }))
-      .filter(r => r.code);
+    const byCode = new Map();
+    const absorb = (row, gainField) => {
+      const code = String((row && typeof row === 'object' ? row.code : row) ?? '');
+      if (!code) return;
+      const cur = byCode.get(code) || { code, name: '', gainPct: null };
+      if (!cur.name && row?.name) cur.name = String(row.name);
+      if (cur.gainPct == null) cur.gainPct = numOrNull(row?.[gainField]);
+      byCode.set(code, cur);
+    };
+    for (const row of (Array.isArray(card.ztList) ? card.ztList : [])) absorb(row, 'gain');
+    for (const key of ['zt10', 'gain10', 'gain30']) {
+      // 注意 gainField 用 todayGain:这三表的 gain 字段是 10/30 日区间涨幅,不是当日涨幅,绝不可混用。
+      for (const row of (Array.isArray(card[key]) ? card[key] : [])) absorb(row, 'todayGain');
+    }
+    return [...byCode.values()];
   } catch { return []; }
 }
 
