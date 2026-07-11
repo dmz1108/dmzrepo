@@ -1722,12 +1722,27 @@ const MIME = {
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
 };
-function serveFile(res, filePath) {
+// 缓存策略与主服务 sendStatic 对齐:HTML 无论是否带 ?v= 一律 no-cache;
+// 一年 immutable 只给带版本参数的字体/CSS/JS/图片;未版本化资产 1 天短缓存。
+function fileCacheControl(ext, versioned) {
+  if (ext === '.html') return 'no-cache';
+  if (versioned && ['.ttf', '.woff', '.woff2', '.otf', '.css', '.js', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.ico'].includes(ext)) {
+    return 'public, max-age=31536000, immutable';
+  }
+  return 'public, max-age=86400';
+}
+function serveFile(req, res, filePath) {
   try {
     if (!fs.existsSync(filePath)) { res.writeHead(404); res.end('not found'); return; }
     const ext = path.extname(filePath).toLowerCase();
+    const versioned = /[?&]v=[^&]/.test(String(req?.url || ''));
+    const st = fs.statSync(filePath);
+    const etag = `"${st.size.toString(16)}-${Math.floor(st.mtimeMs).toString(16)}"`;
+    const headers = { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Cache-Control': fileCacheControl(ext, versioned), 'ETag': etag };
+    if (req?.headers?.['if-none-match'] === etag) { res.writeHead(304, headers); res.end(); return; }
+    if (req?.method === 'HEAD') { res.writeHead(200, headers); res.end(); return; }
     const buf = fs.readFileSync(filePath);
-    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Cache-Control': ext === '.html' ? 'no-store' : 'public, max-age=86400' });
+    res.writeHead(200, headers);
     res.end(buf);
   } catch (err) { res.writeHead(500); res.end('err'); }
 }
@@ -1811,13 +1826,13 @@ const server = http.createServer(async (req, res) => {
     // 频道页 + 站内详情页: 支持 stanning.dreamerqi.com 根路径,也保留 /yule 兼容入口。
     if (p === '/' || p === '/index.html' || p === '/yule' || p === '/yule/' || p === '/yule.html' ||
         p.startsWith('/item/') || p.startsWith('/yule/item/')) {
-      return serveFile(res, YULE_PAGE);
+      return serveFile(req, res, YULE_PAGE);
     }
     if (p === '/yule-admin' || p === '/yule-admin/' || p === '/yule-admin.html') {
-      return serveFile(res, YULE_ADMIN_PAGE);
+      return serveFile(req, res, YULE_ADMIN_PAGE);
     }
     const vendorFile = vendorFontPath(p);
-    if (vendorFile) return serveFile(res, vendorFile);
+    if (vendorFile) return serveFile(req, res, vendorFile);
     if (p === '/api/yule/admin/items') {
       const items = listItems('', { includeHidden: true }).map(adminItemOf);
       return sendJson(res, 200, { ok: true, items, categories: CONFIG.categories || [] });
@@ -1875,7 +1890,7 @@ const server = http.createServer(async (req, res) => {
     if (p.startsWith('/yule-img/')) {
       const rel = decodeURIComponent(p.slice('/yule-img/'.length));
       const safe = path.normalize(rel).replace(/^(\.\.[\/\\])+/, '');
-      return serveFile(res, path.join(IMAGES_DIR, safe));
+      return serveFile(req, res, path.join(IMAGES_DIR, safe));
     }
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: false, error: 'no route' }));

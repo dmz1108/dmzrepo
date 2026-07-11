@@ -37,7 +37,8 @@ const SHARED_AUTH_TOKEN_COOKIE = 'panda_admin_token';
 const SHARED_AUTH_SESSION_COOKIE = 'panda_account_session';
 const AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
 const SERVICE_EMAIL = 'service@dreamerqi.com';
-const CHAT_PREVIEW_IMAGE = 'assets/chatter-cute-preview.png';
+const CHAT_PREVIEW_IMAGE = 'assets/chatter-cute-preview.png?v=1';
+const CHAT_PREVIEW_IMAGE_WEBP = 'assets/chatter-cute-preview.webp?v=1';   // WebP 优先,PNG 回退;带版本号走一年强缓存
 const HOME_PAGES = new Set(['home', 'discover', 'stanning', 'chat', 'about', 'contact', 'privacy', 'terms']);
 
 function defaultHomePageForHost() {
@@ -709,6 +710,7 @@ function SpbShowcase() {
           href: CHAT_URL,
           kind: 'image',
           image: CHAT_PREVIEW_IMAGE,
+          imageWebp: CHAT_PREVIEW_IMAGE_WEBP,
           meta: '图片 · 碎碎念 · 日常',
           sub: '晒图、唠嗑、盖楼回复，每天都有新鲜事',
         },
@@ -720,7 +722,7 @@ function SpbShowcase() {
     { title: '今日大盘情绪', label: '行情', href: MARKET_URL, kind: 'market', value: '读取中', meta: '上涨 -- · 下跌 --', sub: '涨停 -- · 跌停 --' },
     { title: '娱乐热榜第一', label: '娱乐', href: STANNING_URL, kind: 'plain', value: 'trending now', meta: '读取中', sub: '正在加载娱乐热榜' },
     { title: '探索热榜第一', label: '探索', href: EXPLORE_URL, kind: 'plain', value: 'shop photo', meta: '读取中', sub: '正在加载探索热榜' },
-    { title: '瞎聊聊', label: '社区帖子流', href: CHAT_URL, kind: 'image', image: CHAT_PREVIEW_IMAGE, meta: '图片 · 碎碎念 · 日常', sub: '晒图、唠嗑、盖楼回复，每天都有新鲜事' },
+    { title: '瞎聊聊', label: '社区帖子流', href: CHAT_URL, kind: 'image', image: CHAT_PREVIEW_IMAGE, imageWebp: CHAT_PREVIEW_IMAGE_WEBP, meta: '图片 · 碎碎念 · 日常', sub: '晒图、唠嗑、盖楼回复，每天都有新鲜事' },
   ];
   const renderVisual = (card) => {
     if (card.kind === 'market') {
@@ -740,7 +742,10 @@ function SpbShowcase() {
     if (card.kind === 'image' && card.image) {
       return (
         <div style={{ position: 'relative', height: 144, background: spb.panel2, overflow: 'hidden' }}>
-          <img src={card.image} alt={card.title} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+          <picture>
+            {card.imageWebp ? <source srcSet={card.imageWebp} type="image/webp" /> : null}
+            <img src={card.image} alt={card.title} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+          </picture>
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(8,10,16,0.08), rgba(8,10,16,0.72))' }} />
           <div style={{ position: 'absolute', left: 14, right: 14, bottom: 13, color: spb.ink, fontSize: 13.5, fontWeight: 750, lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{card.title}</div>
         </div>
