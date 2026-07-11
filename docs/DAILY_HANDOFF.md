@@ -2727,3 +2727,30 @@ Deployment:
 Notes for next agent:
 - 字体如再更新内容:字体文件 URL bump ?v=,同时 CSS 引用版本必须继续上调(本次 v1→v2 即此原因)。
 - WOFF2 转换脚本一次性使用未入库;需要重转时用 fontTools(flavor='woff2')并校验 name/OS_2 元数据。
+
+## 2026-07-11 - Codex - 复审、合并并部署字体/WebP/yule 缓存优化
+
+Changed:
+- 逐项复审 Claude 分支 `claude/font-woff2-yule-cache`，未发现需要退回的代码问题；以 merge commit `560e97d` 合入并推送 `main`。
+- 将同一版本部署到 `C:\PandaDashboard`，主服务与 Panda Yule Server 均已重启。
+
+Files:
+- Git 代码文件沿用上一条 Claude 记录；本条只更新 `docs/DAILY_HANDOFF.md` 的审查与部署状态。
+- 云端运行目录已部署上一条列出的 27 个文件；未触碰业务数据库、账号库、密钥、Cookie 或运行时配置。
+
+Validated:
+- 独立执行 `node --check` 三个 JS 和仓库 12 套测试，全部通过；`node Qi/build-home.js` 后构建产物无差异。
+- 本地 Chromium 实测 13/13 字重成功加载 WOFF2；瞎聊聊卡片实际选择 WebP、尺寸保持正常，PNG 回退仍存在。
+- 云端回归测试 42 项全过；公网主页、行情、后台、娱乐、探索均为 200。
+- 公网 CSS/WOFF2/WebP 的 MIME 与一年 immutable 正确；娱乐 HTML ETag 协商返回 304，JSON 保持 no-store，未登录娱乐管理接口保持 403。
+- 云端 `kpl-stats-server.js` 与 `yule-server.js` SHA-256 和 `main` 完全一致。
+
+Deployment:
+- Production touched: yes；主服务新 PID 13164，娱乐服务新 PID 14676。
+- 最终回退备份：`C:\PandaDashboard\backups\deploy-font-woff2-yule-cache-20260711-120619`。
+- 前两次部署包装器分别因 Windows PowerShell 中文文件名编码和只读 `$HOME` 变量名冲突而触发自动回退；两次均确认旧服务恢复 200，未留下半部署状态。第三次部署完整成功。
+- 云端两份运维日志均已更新。
+
+Notes for next agent:
+- 生产现已运行 `560e97d` 对应代码；后续 agent 从最新 `main` 开始。
+- 以后 Windows PowerShell 5.1 部署脚本不要依赖无 BOM 的中文字符串，也不要使用 `$home` 这类与内置只读变量大小写冲突的变量名。
