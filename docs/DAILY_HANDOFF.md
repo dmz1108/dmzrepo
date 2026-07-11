@@ -2754,3 +2754,27 @@ Deployment:
 Notes for next agent:
 - 生产现已运行 `560e97d` 对应代码；后续 agent 从最新 `main` 开始。
 - 以后 Windows PowerShell 5.1 部署脚本不要依赖无 BOM 的中文字符串，也不要使用 `$home` 这类与内置只读变量大小写冲突的变量名。
+
+## 2026-07-11 - Codex - 拒绝 7-08 算力龙头数据补丁并完成真实链路核验
+
+Changed:
+- 复审 Claude 分支 `claude/data-repair-0708-ziguang`；本次只记录审查结论，未合并该分支、未执行补丁。
+- 通过 SSH 只读下载云端 2026-07-08 三套快照，并交叉核对策略 API、涨停底库和综合主因库。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- Reviewed only: `tools/patch-20260708-suanli-leaders.js`、`docs/ops/DATA_REPAIR_20260708_ZIGUANG.md`
+
+Validated:
+- 阻断 1：补丁读取 `strategy-data/snapshots/<zsType>/...`，真实三源快照位于 `kpl-snapshots/<zsType>/...`；当前脚本会全部跳过。
+- 阻断 2：真实 zs5/zs6/zs7 快照的 cardData 中均没有锚点长源东谷 `603950`；即使只改目录，锚点筛选仍然零命中。
+- 阻断 3：紫光股份已存在于云计算等 cardData 三张统计表；星网锐捷也已有 5 次总涨停和 K 线统计。脚本所谓“完全缺失”与云端事实不符。
+- 阻断 4：脚本硬编码星网锐捷 gain10/gain30 为 54.87/22.97，而云端统一口径为 54.05/25.32；`ztCount=5` 也混淆了“总涨停次数 totalCount”和“该板块主因次数 ztCount”。
+- 真实异常是语义链路：综合主因库已把星网锐捷 7-08 主因归为“算力”，策略 API 却仍把它放在网络安全 todayCodes；紫光数据存在但未进入前三龙头。应诊断主线归属/龙头池逻辑，而不是向快照盲补硬编码行。
+
+Deployment:
+- GitHub documentation only。生产代码和数据均未改动，服务未重启。
+
+Notes for next agent:
+- Claude 应先同步最新 `main`，废弃当前补丁假设，使用真实路径/真实字段做只读诊断与回归测试。
+- 修复应从“为何综合主因=算力却只进入网络安全 todayCodes”及“紫光为何未进入龙头前三”入手；未经真实 API 回放验证，不得提交历史快照写入脚本。
