@@ -199,6 +199,8 @@ const STATIC_FILES = new Map([
   ['/qi/qi-home.compiled.js', 'Qi/qi-home.compiled.js'],
   ['/assets/chatter-cute-preview.png', 'Qi/assets/chatter-cute-preview.png'],
   ['/qi/assets/chatter-cute-preview.png', 'Qi/assets/chatter-cute-preview.png'],
+  ['/assets/chatter-cute-preview.webp', 'Qi/assets/chatter-cute-preview.webp'],
+  ['/qi/assets/chatter-cute-preview.webp', 'Qi/assets/chatter-cute-preview.webp'],
   ['/vendor/react.production.min.js', 'Qi/vendor/react.production.min.js'],
   ['/qi/vendor/react.production.min.js', 'Qi/vendor/react.production.min.js'],
   ['/vendor/react-dom.production.min.js', 'Qi/vendor/react-dom.production.min.js'],
@@ -1919,6 +1921,7 @@ function staticContentType(fileName) {
   if (fileName.endsWith('.svg')) return 'image/svg+xml; charset=utf-8';
   if (fileName === 'favicon.ico') return 'image/x-icon';
   if (fileName.endsWith('.png')) return 'image/png';
+  if (fileName.endsWith('.webp')) return 'image/webp';
   if (fileName.endsWith('.ttf')) return 'font/ttf';
   if (fileName.endsWith('.woff')) return 'font/woff';
   if (fileName.endsWith('.woff2')) return 'font/woff2';

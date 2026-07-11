@@ -2700,3 +2700,30 @@ Deployment:
 Notes for next agent:
 - 下次 Owner 说“按之前一样手工复盘淘股吧”时，直接读 `docs/ops/TGB_HUNAN_DAILY_SOP.md`，不要重新猜图，也不要用同花顺图或炸板区。
 - 当前 Qwen 账户欠费不影响手工 SOP；不得用失败的自动结果覆盖本次人工正式库。
+
+## 2026-07-11 - Claude - 字体 WOFF2 化 + 预览图 WebP + yule-server 缓存对齐(整站优化 A/B 项)
+
+Changed:
+- A1 字体:13 个 TTF 全部转出同名 WOFF2(fontTools,元数据逐一校验:字体名/字重与源一致,wOF2 魔数)。总大小 1249KB→423KB(34%)。TTF 保留为后备;`dreamerqi-fonts.css` 每组 src 改为 WOFF2(?v=1)在前、TTF(?v=1)在后,font-family/font-weight/font-display: swap 不变。
+- A2 版本提升:CSS 内容变化,六个页面(Qi/index、logo、掼蛋、kpl 两页、yule)对该 CSS 的引用从 ?v=1 升到 ?v=2。
+- A4/A5 预览图:仅 `Qi/assets/chatter-cute-preview.png`(100KB)转出 WebP(23KB,quality 85,尺寸一致 1200×720),PNG 保留回退;qi-home.jsx 改 `<picture>`(WebP source + PNG img,均带 ?v=1),经 `node Qi/build-home.js` 重新生成 compiled(未手改);主服务 `staticContentType` 补 image/webp,STATIC_FILES 注册 .webp 路由。favicon/Logo/娱乐运行时图片未动。
+- B yule-server:`serveFile` 增加 ETag(size+mtime)、If-None-Match→304、HEAD 不读正文;HTML 一律 no-cache(原 no-store,带 ?v= 也绝不 immutable);一年 immutable 只给带版本号的字体/CSS/JS/图片;未版本化资产维持 1 天。4 个调用点补传 req。`sendJson`(全部 JSON API 含管理接口)保持 no-store 未动;采集/内容/权限/代理逻辑零改动。
+
+Files:
+- `Qi/vendor/fonts/*.woff2`(13 个新增)、`Qi/vendor/dreamerqi-fonts.css`
+- `Qi/assets/chatter-cute-preview.webp`(新增)、`Qi/qi-home.jsx`、`Qi/qi-home.compiled.js`(构建产物)
+- `Qi/index.html`、`Qi/logo.html`、`Qi/games/掼蛋.html`、`kpl-dashboard_17_apple.html`、`kpl-dashboard_17_apple_hierarchy.html`、`yule.html`(仅 ?v=2)
+- `kpl-stats-server.js`(webp MIME+路由)、`yule-server.js`(serveFile)
+- `tests/font-woff2-yule-cache.test.js`(新增,42 项)
+
+Validation:
+- 新测试 42 项全过;其余十一套回归全过;`node --check` 三个 JS 通过。
+- 浏览器实测(Chromium+playwright-core,本地静态服):首页真实加载走 WOFF2(4 请求全 200 font/woff2、0 TTF)、13 个字重逐一 document.fonts.load 成功、WebP 被 `<picture>` 选用(200 image/webp,1200×720,PNG 零请求)。
+- 上一轮部署验收结果一并归档:yule 管理接口未登录 403、/kpl 304 协商 0B、登录限流 20 连测第 17 次起 429、三主页 200。
+
+Deployment:
+- GitHub only(分支 claude/font-woff2-yule-cache)。未部署云端。合并后部署需分别重启并验证主服务与 Panda Yule Server 两个进程。
+
+Notes for next agent:
+- 字体如再更新内容:字体文件 URL bump ?v=,同时 CSS 引用版本必须继续上调(本次 v1→v2 即此原因)。
+- WOFF2 转换脚本一次性使用未入库;需要重转时用 fontTools(flavor='woff2')并校验 name/OS_2 元数据。
