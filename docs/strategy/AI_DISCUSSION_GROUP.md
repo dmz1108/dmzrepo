@@ -20,6 +20,7 @@ For small bug fixes, typos, or obvious one-line repairs, normal implementation c
 
 1. Same question, same evidence.
    Every agent must answer the same owner question, not a sliced subtask.
+   For production strategy cases, use `docs/AI_PRODUCTION_READ.md` to capture the same filtered evidence request and record its bundle SHA-256.
 
 2. Independent first pass.
    Each agent writes its own judgment before adopting another agent's answer. This avoids early anchoring.
@@ -143,6 +144,7 @@ Before implementation, the shared decision should answer:
 - Which examples might get worse?
 - What will we measure after deployment?
 - What is the rollback condition?
+- Which production evidence bundle, completeness state, and exact fields support the decision?
 
 ## Relationship To Other Docs
 
