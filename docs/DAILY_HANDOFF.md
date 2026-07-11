@@ -3116,3 +3116,30 @@ Validation:
 
 Deployment:
 - GitHub only(PR #23)。两个数据/日期测试 env 仅在 `NODE_ENV=test` 时生效,生产即使误设也不会注入;容器预置 agent 代理无法覆盖(HTTPS_PROXY 不生效),故用板块榜注入而非慢代理实现确定性。
+
+## 2026-07-11 - Codex - PR #23 最终复审、合并与云端部署
+
+Changed:
+- 完成 Claude PR #23 的最终复审；保留八轮诊断正确性修复，并在生产合并前将 `STRATEGY_MAINLINE_TEST_BOARD_RANKING` 与 `STRATEGY_MAINLINE_DIAG_TODAY` 两个测试钩子再次硬限制为仅 `NODE_ENV=test` 生效。
+- `main` 已快进到 `d196aad`；管理员只读诊断接口 `/api/strategy-mainline-leader-debug` 已部署云端，不改变现有主线评分、快照写入或普通用户页面行为。
+- 云端三份运维日志均已追加本次部署、重启、回退备份和验证结果；未记录任何 Token 或管理员会话值。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/leader-debug-endpoint.test.js`
+- `docs/DAILY_HANDOFF.md`
+- 云端运行文件：`C:\PandaDashboard\kpl-stats-server.js`、`C:\PandaDashboard\strategy-evidence.js`
+
+Validated:
+- 本地 `node --check` 通过，全部 15 套测试通过；最终主服务 SHA-256 为 `DE601BE9E7C6F37959AADEB659B5529E8B7D4B27633D88E0B27C8FCF84F424D8`。
+- 云端本机与公网 `/health` 均返回 200；证据接口和管理员诊断接口未授权请求均返回 403。
+- 真实证据样本 `2026-07-08`、`002396/000938`、window 20：`complete=true`，零 `missingSources/sourceErrors`，完整性哈希存在。
+- 管理员诊断成功态：HTTP 200，`live.ok=true`、`complete=true`、`partial=false`、`fullWait=true`，必要输入零缺失、零读错误、零超时；返回 10 条主线。3 个非必要 trace 文件缺失按设计不降低完整性。
+
+Deployment:
+- 已部署云端并重启 `PandaDashboard-KPL-Server`，PID `352 -> 9136`；Caddy 与 Panda Yule Server 未重启。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\pr23-leader-debug-d196aad-20260711153459`。
+
+Notes for next agent:
+- 公司端 Codex 最近未上线不影响本次部署；下次上线先同步最新 `main` 并阅读本条交接即可。
+- 诊断端点只供管理员排查真实策略输入完整性；市场源文本继续按不可信数据处理，禁止把凭据、证据 JSON 或运行时数据库提交 Git。
