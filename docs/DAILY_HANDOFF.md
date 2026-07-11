@@ -3143,3 +3143,28 @@ Deployment:
 Notes for next agent:
 - 公司端 Codex 最近未上线不影响本次部署；下次上线先同步最新 `main` 并阅读本条交接即可。
 - 诊断端点只供管理员排查真实策略输入完整性；市场源文本继续按不可信数据处理，禁止把凭据、证据 JSON 或运行时数据库提交 Git。
+
+## 2026-07-11 - Claude - 当日综合主因权威归属代码修复(claude/mainline-attribution-fix)
+
+Changed:
+- 落地 7-08 根因①的正式代码修复:涨停股按「当日多源综合主因(finalBoardTopic)」权威归属到主线,不再只靠板块共成分。新增纯函数 `strategyMainlineApplyCurrentReasonAttribution(seedByKey, currentReasonDb, todayLimitCodes)`,在 `buildStrategyMainlinesLiveImpl` 历史主因归属之后、板块附着之前调用:①把当日综合主因确有归类的涨停股并入其主因所属 seed.codeSet;②从家族不同的其它 seed.codeSet 剔除该股(家族判定复用生产 `strategyMainlineFamilyInfo`,零新造映射/零硬编码指标)。
+- 效果:星网锐捷(002396)7-08 综合主因=算力 → 进入算力AI 主线 todayCodes 并从网络安全/数字货币剔除;同族不同 key 的液冷/云计算 seed 保留(合并去重)。龙头池评分链路未改——星网因此拿到当日封板分评为第一,紫光(7-06 主因算力、当日未涨停)由既有近10日池子补全为第二。
+- 语义边界:只作用于当日综合主因库确有归类的涨停股;无当日主因(含盘中当天尚未生成盘后主因,ENOENT)完全走原板块成分归属,行为不变。综合主因库为持久化盘后文件,历史回放读取属证据复现,不涉实时行情。
+
+Files:
+- `kpl-stats-server.js`(新增纯函数 + 一处调用)
+- `tests/mainline-attribution.test.js`(新增,17 项)
+- `docs/ops/DATA_REPAIR_20260708_ZIGUANG.md`(追加「代码修复」段)
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check` 通过;`tests/mainline-attribution.test.js` 17 项全绿(用生产家族判定复现,不 stub 归属逻辑)。
+- 既有 leader-pool-debug / leader-debug-endpoint / inflow-gate / qi-mainline-states / scan-priority / scan-supplement / strategy-evidence-tools / metric-profile / star-l2-layers / predict-records 全部通过,无回归。
+- 根因用云端真实证据核对:星网 7-08 finalBoardTopic=算力(002396 涨停,gain 10.02);紫光 7-06 finalBoardTopic=算力、7-08 未涨停;冻结快照当前将星网记在网络安全 todayCodes、算力AI 为空——与修复方向一致。
+
+Deployment:
+- 仅 GitHub,未部署云端、未重启任何服务。
+
+Notes for next agent(Codex):
+- 合并后请部署,并跑 `?day=2026-07-08` 只读诊断端点核验 live 归属(星网→算力AI、移出网络安全);随后**重建 2026-07-08 主线冻结快照**(冻结旧账不会自动刷新),使历史页展示星网第一 / 紫光第二。
+- 本次不改龙头池评分与快照写入的既有行为;仅新增当日综合主因这一归属信号。禁止把凭据、证据 JSON 或运行时数据库提交 Git。

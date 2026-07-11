@@ -23222,6 +23222,37 @@ function strategyMainlineAddRealtimeBoardSeed(seedByKey, board) {
   return seed;
 }
 
+// 当日综合主因权威归属(调用处有完整语义注释)。抽成纯函数便于单测复现 7-08 归属修复:
+//   入参 currentReasonDb=当日综合主因库、todayLimitCodes=当日涨停集合;
+//   1) 把「当日综合主因确有归类」的涨停股并入其主因所属主线 seed.codeSet;
+//   2) 从族别不同的其它 seed.codeSet 剔除该股。返回 code→familyKey 供诊断/测试断言。
+function strategyMainlineApplyCurrentReasonAttribution(seedByKey, currentReasonDb, todayLimitCodes) {
+  const familyByCode = new Map();
+  const limitSet = todayLimitCodes instanceof Set ? todayLimitCodes : new Set(todayLimitCodes || []);
+  for (const s of (currentReasonDb?.stocks || [])) {
+    if (isExcludedFromReview(s?.code, s?.name)) continue;
+    const code = normalizeReasonSourceCode(s?.code);
+    if (!code || !limitSet.has(code)) continue;
+    const theme = String(s.finalBoardTopic || '').trim();
+    if (!theme || /其他/.test(theme) || isDroppedThemeWord(theme)) continue;
+    const key = strategyMainlineTopicKey(theme);
+    if (!key) continue;
+    const seed = strategyMainlineEnsureSeed(seedByKey, theme, key);
+    if (!seed) continue;
+    seed.codeSet.add(code);
+    familyByCode.set(code, strategyMainlineFamilyInfo({ theme, key }).key);
+  }
+  if (familyByCode.size) {
+    for (const seed of seedByKey.values()) {
+      const seedFamily = strategyMainlineFamilyInfo({ theme: seed.theme, key: seed.key }).key;
+      for (const [code, family] of familyByCode) {
+        if (family !== seedFamily) seed.codeSet.delete(code);
+      }
+    }
+  }
+  return familyByCode;
+}
+
 function strategyMainlineEnsureSeed(seedByKey, theme, key = '') {
   const cleanTheme = String(theme || '').trim();
   const cleanKey = String(key || strategyMainlineTopicKey(cleanTheme)).trim();
@@ -23574,6 +23605,16 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     }
     seed.priorCodeSet.add(prior.code);
   }
+  // ===== 当日综合主因权威归属(修复:真龙头因当日主因不参与归属而缺席本主线)=====
+  // 涨停股的当日多源综合主因(finalBoardTopic)是其单一真实驱动,优先级高于「板块共成分」
+  // 带来的噪声归属。此前 seeds 只走「实时板块 ztList 成分」+「近30日历史主因(不含当日)」,
+  // 当日综合主因完全不参与——星网锐捷 7-08 综合主因=算力,却因共成分被记进网络安全,算力AI 反而缺席。
+  //   1) 把涨停股并入其当日综合主因所属主线 seed(补齐缺席);
+  //   2) 从「族别不同」的其它 seed.codeSet 剔除该股,避免共成分把它误记成别的主线当日涨停贡献股。
+  // 只作用于当日综合主因库中确有归类的涨停股;无当日主因者(含盘中当天尚未生成盘后主因)仍走
+  // 原板块成分归属,行为不变。综合主因库是持久化盘后文件,历史回放读取它属证据复现,不涉实时行情。
+  const currentReasonDb = await readLimitUpMainReasonDbDay(isoDay).catch(() => null);
+  strategyMainlineApplyCurrentReasonAttribution(seedByKey, currentReasonDb, todayLimitCodes);
   for (const seed of seedByKey.values()) {
     const seedCodes = new Set([
       ...(seed.codeSet || []),
