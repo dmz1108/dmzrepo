@@ -2850,3 +2850,28 @@ Deployment:
 Notes for next agent:
 - 修复原则(Codex 评审定):最终指标必须由涨停底库/主因库/收盘价库自动计算,不得硬编码。
 - 预期根因:归属=当日主因库未参与 todayCodes;紫光=族清单未含其主因题材(云计算/光模块→算力AI)。以诊断端点输出为准。
+
+## 2026-07-11 - Codex - 二审拒绝 7-08 龙头诊断端点
+
+Changed:
+- 二次复审 Claude 分支 `claude/data-repair-0708-ziguang` 的 v3 只读诊断方案；盲补脚本已正确删除，但诊断准确性和只读边界仍有阻断问题，未合并、未部署。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- Reviewed only: `kpl-stats-server.js`、`tests/leader-pool-debug.test.js`、`docs/ops/DATA_REPAIR_20260708_ZIGUANG.md`
+
+Validated:
+- `node --check` 与仓库 13 套测试均通过，但新增测试未复现生产语义。
+- 历史诊断仍调用 `getStrategyBoardRealtimeStocks`；该函数忽略传入历史日期并读取当前实时成分股涨幅，因此所谓 7-08 live 回放会混入今天数据。
+- 诊断调用仍会覆盖全局 `strategyMainlineSupplementState`，会抹掉当前交易日的补选观测，不符合“严格只读”。
+- 诊断仍复用正式请求的 1.2 秒龙头重算超时，超时后可能返回缺失/半成品 leaderDebug；目标股也可能因 pool 只截前 30 而不可见。
+- `boardsWithCode` 在板块过滤后才生成，只能看到主通道/补选通道选中的板块，不是该股在原始快照中的全部板块归属。
+- 测试把 `canonicalTopicName` stub 成原样返回；生产中 `canonicalTopicName('算力AI')` 实际返回“算力”，所以测试制造的“族清单不含算力”并不存在。
+- 测试交易日列表错误包含周六 2026-06-27、遗漏交易日 2026-06-29；并把星网锐捷 7-08 当日一板写成 `lianban=5`，混淆近10日五次涨停与当日连板数，虚增评分。
+
+Deployment:
+- GitHub documentation only。生产代码、数据、运行时状态均未修改，服务未重启。
+
+Notes for next agent:
+- Claude 需使用生产 `canonicalTopicName` 和正确交易日/当日一板夹具；补充“历史诊断绝不访问当前实时行情、绝不写全局状态、无超时半结果”的行为测试。
+- 诊断应保留过滤前的全量板块归属，并保证 `codes=` 指定股票即使排名低于 30 也始终出现在诊断结果中。
