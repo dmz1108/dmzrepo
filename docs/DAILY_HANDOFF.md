@@ -2772,3 +2772,54 @@ Deployment:
 Notes for next agent:
 - 教训:引用历史结论前先确认它是否被后续讨论推翻——本次"紫光90/长源79"被当成终稿引用了两次。
 - 若修复后排名仍不符,可能是主线归属映射把 002396 的 7-08 涨停留在网络安全,需代码侧跟进。
+
+## 2026-07-11 - Codex - 复审、合并并部署字体/WebP/yule 缓存优化
+
+Changed:
+- 逐项复审 Claude 分支 `claude/font-woff2-yule-cache`，未发现需要退回的代码问题；以 merge commit `560e97d` 合入并推送 `main`。
+- 将同一版本部署到 `C:\PandaDashboard`，主服务与 Panda Yule Server 均已重启。
+
+Files:
+- Git 代码文件沿用上一条 Claude 记录；本条只更新 `docs/DAILY_HANDOFF.md` 的审查与部署状态。
+- 云端运行目录已部署上一条列出的 27 个文件；未触碰业务数据库、账号库、密钥、Cookie 或运行时配置。
+
+Validated:
+- 独立执行 `node --check` 三个 JS 和仓库 12 套测试，全部通过；`node Qi/build-home.js` 后构建产物无差异。
+- 本地 Chromium 实测 13/13 字重成功加载 WOFF2；瞎聊聊卡片实际选择 WebP、尺寸保持正常，PNG 回退仍存在。
+- 云端回归测试 42 项全过；公网主页、行情、后台、娱乐、探索均为 200。
+- 公网 CSS/WOFF2/WebP 的 MIME 与一年 immutable 正确；娱乐 HTML ETag 协商返回 304，JSON 保持 no-store，未登录娱乐管理接口保持 403。
+- 云端 `kpl-stats-server.js` 与 `yule-server.js` SHA-256 和 `main` 完全一致。
+
+Deployment:
+- Production touched: yes；主服务新 PID 13164，娱乐服务新 PID 14676。
+- 最终回退备份：`C:\PandaDashboard\backups\deploy-font-woff2-yule-cache-20260711-120619`。
+- 前两次部署包装器分别因 Windows PowerShell 中文文件名编码和只读 `$HOME` 变量名冲突而触发自动回退；两次均确认旧服务恢复 200，未留下半部署状态。第三次部署完整成功。
+- 云端两份运维日志均已更新。
+
+Notes for next agent:
+- 生产现已运行 `560e97d` 对应代码；后续 agent 从最新 `main` 开始。
+- 以后 Windows PowerShell 5.1 部署脚本不要依赖无 BOM 的中文字符串，也不要使用 `$home` 这类与内置只读变量大小写冲突的变量名。
+
+## 2026-07-11 - Codex - 拒绝 7-08 算力龙头数据补丁并完成真实链路核验
+
+Changed:
+- 复审 Claude 分支 `claude/data-repair-0708-ziguang`；本次只记录审查结论，未合并该分支、未执行补丁。
+- 通过 SSH 只读下载云端 2026-07-08 三套快照，并交叉核对策略 API、涨停底库和综合主因库。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- Reviewed only: `tools/patch-20260708-suanli-leaders.js`、`docs/ops/DATA_REPAIR_20260708_ZIGUANG.md`
+
+Validated:
+- 阻断 1：补丁读取 `strategy-data/snapshots/<zsType>/...`，真实三源快照位于 `kpl-snapshots/<zsType>/...`；当前脚本会全部跳过。
+- 阻断 2：真实 zs5/zs6/zs7 快照的 cardData 中均没有锚点长源东谷 `603950`；即使只改目录，锚点筛选仍然零命中。
+- 阻断 3：紫光股份已存在于云计算等 cardData 三张统计表；星网锐捷也已有 5 次总涨停和 K 线统计。脚本所谓“完全缺失”与云端事实不符。
+- 阻断 4：脚本硬编码星网锐捷 gain10/gain30 为 54.87/22.97，而云端统一口径为 54.05/25.32；`ztCount=5` 也混淆了“总涨停次数 totalCount”和“该板块主因次数 ztCount”。
+- 真实异常是语义链路：综合主因库已把星网锐捷 7-08 主因归为“算力”，策略 API 却仍把它放在网络安全 todayCodes；紫光数据存在但未进入前三龙头。应诊断主线归属/龙头池逻辑，而不是向快照盲补硬编码行。
+
+Deployment:
+- GitHub documentation only。生产代码和数据均未改动，服务未重启。
+
+Notes for next agent:
+- Claude 应先同步最新 `main`，废弃当前补丁假设，使用真实路径/真实字段做只读诊断与回归测试。
+- 修复应从“为何综合主因=算力却只进入网络安全 todayCodes”及“紫光为何未进入龙头前三”入手；未经真实 API 回放验证，不得提交历史快照写入脚本。
