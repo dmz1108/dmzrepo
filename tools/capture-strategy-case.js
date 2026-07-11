@@ -9,6 +9,10 @@ const {
   verifyEvidenceBundle,
 } = require('../strategy-evidence');
 
+const DEFAULT_MARKET_BASE = 'https://market.dreamerqi.com';
+const ALLOWED_MARKET_HOSTS = new Set(['market.dreamerqi.com']);
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
+
 function parseArgs(argv) {
   const args = {};
   for (const item of argv) {
@@ -20,14 +24,35 @@ function parseArgs(argv) {
   return args;
 }
 
-function requestJson(target, headers = {}, redirects = 0) {
+function validateEvidenceBase(base) {
+  const url = new URL(String(base || DEFAULT_MARKET_BASE));
+  const hostname = String(url.hostname || '').toLowerCase();
+  const isLoopback = LOOPBACK_HOSTS.has(hostname);
+  if (url.username || url.password) throw new Error('--base must not contain credentials');
+  if (!isLoopback && !ALLOWED_MARKET_HOSTS.has(hostname)) throw new Error(`--base host is not allowed: ${hostname || 'empty'}`);
+  if (!isLoopback && (url.protocol !== 'https:' || (url.port && url.port !== '443'))) {
+    throw new Error('--base must use https://market.dreamerqi.com');
+  }
+  if (isLoopback && !['http:', 'https:'].includes(url.protocol)) throw new Error('--base loopback URL must use http or https');
+  return url;
+}
+
+function requestJson(target, headers = {}, redirects = 0, allowedOrigin = '') {
   return new Promise((resolve, reject) => {
     const url = new URL(target);
+    const carriesAiToken = !!headers['x-ai-read-token'] || /^Bearer\s+/i.test(String(headers.authorization || ''));
+    const trustedOrigin = allowedOrigin || (carriesAiToken ? validateEvidenceBase(url.origin).origin : url.origin);
     const client = url.protocol === 'http:' ? http : https;
     const req = client.request(url, { method: 'GET', headers, timeout: 30000 }, res => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects < 3) {
+        const next = new URL(res.headers.location, url);
+        if (next.origin !== trustedOrigin) {
+          res.resume();
+          reject(new Error(`cross-origin redirect blocked: ${next.origin}`));
+          return;
+        }
         res.resume();
-        resolve(requestJson(new URL(res.headers.location, url).toString(), headers, redirects + 1));
+        resolve(requestJson(next.toString(), headers, redirects + 1, trustedOrigin));
         return;
       }
       const chunks = [];
@@ -51,7 +76,8 @@ function requestJson(target, headers = {}, redirects = 0) {
 }
 
 function buildEvidenceUrl(base, options) {
-  const url = new URL('/api/ai/strategy-evidence', String(base || 'https://market.dreamerqi.com'));
+  const trustedBase = validateEvidenceBase(base);
+  const url = new URL('/api/ai/strategy-evidence', trustedBase.origin);
   url.searchParams.set('day', options.day);
   url.searchParams.set('codes', options.codes.join(','));
   url.searchParams.set('window', String(options.windowDays));
@@ -64,8 +90,9 @@ async function captureStrategyCase(argv = process.argv.slice(2), env = process.e
   const day = String(args.day || '').trim();
   const codes = normalizeEvidenceCodes(args.codes || '', 20);
   const themes = normalizeEvidenceThemes(args.themes || '', 12);
-  const windowDays = Math.max(1, Math.min(30, Number(args.window || 30)));
-  const base = String(args.base || env.PANDA_MARKET_BASE_URL || 'https://market.dreamerqi.com').replace(/\/+$/, '');
+  const parsedWindow = Number(args.window || 30);
+  const windowDays = Number.isFinite(parsedWindow) ? Math.max(1, Math.min(30, Math.trunc(parsedWindow))) : 30;
+  const base = String(args.base || env.PANDA_MARKET_BASE_URL || DEFAULT_MARKET_BASE).replace(/\/+$/, '');
   const token = String(env.PANDA_AI_READONLY_TOKEN || env.PANDA_AI_STRATEGY_TOKEN || '').trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error('--day=YYYY-MM-DD is required');
   if (!codes.length) throw new Error('--codes=000001[,000002] is required');
@@ -100,4 +127,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { buildEvidenceUrl, captureStrategyCase, parseArgs, requestJson };
+module.exports = { buildEvidenceUrl, captureStrategyCase, parseArgs, requestJson, validateEvidenceBase };

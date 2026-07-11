@@ -7,6 +7,7 @@ const {
   EVIDENCE_SCHEMA_VERSION,
   addIntegrity,
   buildCodeAudits,
+  buildEvidenceCoverage,
   buildFilteredDayEvidence,
   buildSnapshotEvidence,
   normalizeEvidenceCodes,
@@ -16,7 +17,7 @@ const {
   sanitizeStrategyPayload,
   verifyEvidenceBundle,
 } = require('../strategy-evidence');
-const { captureStrategyCase } = require('../tools/capture-strategy-case');
+const { buildEvidenceUrl, captureStrategyCase, requestJson } = require('../tools/capture-strategy-case');
 const { replayStrategyCase } = require('../tools/replay-strategy-case');
 
 const A = (condition, message) => {
@@ -27,6 +28,15 @@ const A = (condition, message) => {
     console.log(`ok: ${message}`);
   }
 };
+
+async function rejects(promise, pattern) {
+  try {
+    await promise;
+    return false;
+  } catch (err) {
+    return pattern.test(String(err?.message || err));
+  }
+}
 
 function isoDays(count) {
   const rows = [];
@@ -76,16 +86,35 @@ function isoDays(count) {
     day,
     stocks: [{ code: '000938', name: 'ZG', close: 10 + index }, { code: '600000', close: 99 }],
   }, day, codes, sanitizeCloseStock));
+  const incompleteWindow = buildEvidenceCoverage({
+    day: closeDates[30],
+    dataDays: closeDates,
+    eventDays: closeDates.slice(1),
+    neededTradingDays: 31,
+    historicalOrClosed: true,
+    snapshots: [{ zsType: 5, available: true }, { zsType: 6, available: true }, { zsType: 7, available: true }],
+    limitUpDays: closeDates.slice(1).map(day => ({ day, available: day !== closeDates[10] })),
+    mainReasonDays: closeDates.slice(1).map(day => ({ day, available: true })),
+    closeDays: closeDates.map(day => ({ day, available: day !== closeDates[5] })),
+    strategySnapshotAvailable: true,
+  });
+  A(incompleteWindow.missingSources.includes(`limit-up:${closeDates[10]}`), 'missing historical limit-up day marks evidence incomplete');
+  A(incompleteWindow.missingSources.includes(`close:${closeDates[5]}`), 'missing intermediate close day marks 30-session evidence incomplete');
+  A(incompleteWindow.coverage.requiredCloseDays.length === 31, 'historical close coverage requires the full window plus baseline day');
   const strategySnapshot = sanitizeStrategyPayload({
     day: '2026-07-08',
     snapshot: true,
     mainlines: [{
       rank: 1,
       theme: 'Compute AI',
-      todayCodes: ['002396'],
-      leaders: [{ code: '002396', name: 'XW', leadScore: 120 }],
+      todayCodes: ['002396', '600000'],
+      mainLeader: { code: '600000', name: 'Other', leadScore: 130 },
+      leaders: [{ code: '002396', name: 'XW', leadScore: 120 }, { code: '600000', name: 'Other', leadScore: 130 }],
     }],
   }, codes);
+  A(JSON.stringify(strategySnapshot.mainlines[0].todayCodes) === JSON.stringify(['002396']), 'strategy todayCodes filtered to requested stocks');
+  A(strategySnapshot.mainlines[0].leaders.length === 1 && strategySnapshot.mainlines[0].leaders[0].code === '002396', 'strategy leader rows filtered to requested stocks');
+  A(strategySnapshot.mainlines[0].mainLeader === null, 'unrequested main leader detail removed while mainline context remains');
   const evidence = {
     snapshots: [snapshotEvidence],
     limitUpDays,
@@ -110,6 +139,10 @@ function isoDays(count) {
   const tampered = JSON.parse(JSON.stringify(bundle));
   tampered.evidence.limitUpDays[0].stocks[0].name = 'tampered';
   A(!verifyEvidenceBundle(tampered).ok, 'tampered evidence detected');
+  const tamperedCompleteness = JSON.parse(JSON.stringify(bundle));
+  tamperedCompleteness.complete = false;
+  tamperedCompleteness.missingSources = ['close:2026-07-01'];
+  A(!verifyEvidenceBundle(tamperedCompleteness).ok, 'tampered completeness metadata detected by whole-bundle hash');
 
   const audits = buildCodeAudits(bundle);
   const zg = audits.find(row => row.code === '000938');
@@ -122,6 +155,9 @@ function isoDays(count) {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'strategy-evidence-test-'));
   const output = path.join(tempDir, 'case.json');
   const token = ['unit', 'test', 'only'].join('-');
+  A(await rejects(Promise.resolve().then(() => buildEvidenceUrl('https://evil.example', {
+    day: '2026-07-08', codes, themes: [], windowDays: 30,
+  })), /host is not allowed/), 'capture URL rejects untrusted base host');
   let requestPath = '';
   const server = http.createServer((req, res) => {
     requestPath = req.url;
@@ -149,6 +185,32 @@ function isoDays(count) {
     const replayed = await replayStrategyCase([`--file=${output}`, '--require-complete']);
     A(replayed.ok && replayed.audits.length === 2, 'offline replay verifies captured case');
     A(replayed.audits.find(row => row.code === '000938').snapshotTodayGain === 6.8, 'capture and replay preserve the same evidence result');
+    const anchored = await replayStrategyCase([`--file=${output}`, `--expect-sha=${bundle.integrity.bundle}`]);
+    A(anchored.ok, 'offline replay accepts externally anchored bundle SHA-256');
+    A(await rejects(replayStrategyCase([`--file=${output}`, '--expect-sha=deadbeef']), /SHA-256 mismatch/), 'offline replay rejects wrong anchored SHA-256');
+
+    let redirectedTokenRequests = 0;
+    const redirectSink = http.createServer((req, res) => {
+      redirectedTokenRequests += 1;
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(bundle));
+    });
+    await new Promise(resolve => redirectSink.listen(0, '127.0.0.1', resolve));
+    const redirectServer = http.createServer((req, res) => {
+      res.writeHead(302, { location: `http://127.0.0.1:${redirectSink.address().port}/capture` });
+      res.end();
+    });
+    await new Promise(resolve => redirectServer.listen(0, '127.0.0.1', resolve));
+    try {
+      const blocked = await rejects(requestJson(
+        `http://127.0.0.1:${redirectServer.address().port}/redirect`,
+        { 'x-ai-read-token': token }
+      ), /cross-origin redirect blocked/);
+      A(blocked && redirectedTokenRequests === 0, 'capture blocks cross-origin redirects before forwarding AI token');
+    } finally {
+      await new Promise(resolve => redirectServer.close(resolve));
+      await new Promise(resolve => redirectSink.close(resolve));
+    }
   } finally {
     await new Promise(resolve => server.close(resolve));
     await fs.rm(tempDir, { recursive: true, force: true });
@@ -157,6 +219,7 @@ function isoDays(count) {
   const serverSource = await fs.readFile(path.join(__dirname, '..', 'kpl-stats-server.js'), 'utf8');
   A(serverSource.includes("url.pathname === '/api/ai/strategy-evidence'"), 'server route registered');
   A(serverSource.match(/async function aiStrategyEvidenceApi[\s\S]{0,500}validateAiReadOnlyRequest/), 'evidence route uses AI read-only token gate');
+  A(serverSource.includes("validateAiReadOnlyRequest(url, req, { allowQueryToken: false })"), 'evidence route rejects token query parameter and requires a header/bearer token');
   A(serverSource.includes("error: 'codes is required (1-20 stock codes)'"), 'evidence route requires bounded stock filter');
   A(serverSource.includes('sourceTextIsUntrusted: true'), 'evidence response marks source text as untrusted data');
 

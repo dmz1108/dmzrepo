@@ -10,6 +10,7 @@ const { execFile, spawn } = require('child_process');
 const {
   EVIDENCE_SCHEMA_VERSION,
   addIntegrity,
+  buildEvidenceCoverage,
   buildFilteredDayEvidence,
   buildSnapshotEvidence,
   normalizeEvidenceCodes,
@@ -23838,11 +23839,14 @@ async function readAiReadOnlyToken() {
   }
 }
 
-async function validateAiReadOnlyRequest(url, req) {
+async function validateAiReadOnlyRequest(url, req, options = {}) {
   const configured = await readAiReadOnlyToken();
   if (!configured) return { ok: false, status: 503, error: 'ai read-only token not configured' };
   const bearer = String(req?.headers?.authorization || '').replace(/^Bearer\s+/i, '').trim();
-  const provided = String(url.searchParams.get('token') || req?.headers?.['x-ai-read-token'] || bearer || '').trim();
+  const headerToken = req?.headers?.['x-ai-read-token'];
+  const provided = String(options.allowQueryToken === false
+    ? (headerToken || bearer || '')
+    : (url.searchParams.get('token') || headerToken || bearer || '')).trim();
   if (!secureEqualText(provided, configured)) return { ok: false, status: 403, error: 'invalid ai read-only token' };
   return { ok: true };
 }
@@ -24126,7 +24130,8 @@ async function buildAiStrategyEvidencePayload(url) {
   const day = isoFromCompactDate(url.searchParams.get('day') || chinaNowParts().day);
   const codes = normalizeEvidenceCodes(url.searchParams.get('codes') || '', 20);
   const themes = normalizeEvidenceThemes(url.searchParams.get('themes') || '', 12);
-  const windowDays = Math.max(1, Math.min(30, Number(url.searchParams.get('window') || 30)));
+  const parsedWindow = Number(url.searchParams.get('window') || 30);
+  const windowDays = Number.isFinite(parsedWindow) ? Math.max(1, Math.min(30, Math.trunc(parsedWindow))) : 30;
   const apiKey = await readSavedApiKey().catch(() => '');
   const sourceErrors = [];
   const neededTradingDays = Math.min(31, windowDays + 1);
@@ -24181,17 +24186,19 @@ async function buildAiStrategyEvidencePayload(url) {
     key: strategyMainlineTopicKey(String(topic)),
   }));
 
-  const targetLimitUp = limitUpDays.find(item => item.day === day);
-  const targetMainReason = mainReasonDays.find(item => item.day === day);
-  const targetClose = closeDays.find(item => item.day === day);
   const historicalOrClosed = day !== isoFromCompactDate(chinaNowParts().day) || isAfterMarketClose(day);
-  const missingSources = [
-    ...snapshots.filter(item => !item.available).map(item => `snapshot-zs${item.zsType}`),
-    ...((historicalOrClosed && !targetLimitUp?.available) ? ['limit-up'] : []),
-    ...((historicalOrClosed && !targetMainReason?.available) ? ['main-reason'] : []),
-    ...((historicalOrClosed && !targetClose?.available) ? ['close'] : []),
-    ...((historicalOrClosed && !strategy.snapshot) ? ['strategy-snapshot'] : []),
-  ];
+  const { missingSources, coverage } = buildEvidenceCoverage({
+    day,
+    dataDays,
+    eventDays,
+    neededTradingDays,
+    historicalOrClosed,
+    snapshots,
+    limitUpDays,
+    mainReasonDays,
+    closeDays,
+    strategySnapshotAvailable: !!strategy.snapshot,
+  });
   const evidence = {
     snapshots,
     limitUpDays,
@@ -24210,6 +24217,7 @@ async function buildAiStrategyEvidencePayload(url) {
     sourceErrors,
     missingSources,
     request: { day, codes, themes, windowDays, tradingDays: dataDays },
+    coverage,
     evidence,
     dataHandling: {
       sourceTextIsUntrusted: true,
@@ -24229,7 +24237,7 @@ async function aiStrategyLiveApi(url, req, res) {
 
 async function aiStrategyEvidenceApi(url, req, res) {
   if (req.method !== 'GET') return send(res, 405, { ok: false, error: 'method not allowed' });
-  const auth = await validateAiReadOnlyRequest(url, req);
+  const auth = await validateAiReadOnlyRequest(url, req, { allowQueryToken: false });
   if (!auth.ok) return send(res, auth.status, { ok: false, error: auth.error });
   const codes = normalizeEvidenceCodes(url.searchParams.get('codes') || '', 20);
   if (!codes.length) return send(res, 400, { ok: false, error: 'codes is required (1-20 stock codes)' });

@@ -44,6 +44,10 @@ async function replayStrategyCase(argv = process.argv.slice(2)) {
   const bundle = JSON.parse(await fs.readFile(file, 'utf8'));
   const verification = verifyEvidenceBundle(bundle);
   if (!verification.ok) throw new Error(`evidence integrity failed: ${verification.errors.join('; ')}`);
+  const expectedSha = String(args['expect-sha'] || '').trim().toLowerCase();
+  if (expectedSha && String(bundle?.integrity?.bundle || '').toLowerCase() !== expectedSha) {
+    throw new Error(`evidence bundle SHA-256 mismatch: expected ${expectedSha}`);
+  }
   if (args['require-complete'] && bundle.complete !== true) {
     throw new Error(`evidence bundle is incomplete: ${(bundle.missingSources || []).join(', ') || (bundle.sourceErrors || []).join('; ')}`);
   }
@@ -57,6 +61,7 @@ async function replayStrategyCase(argv = process.argv.slice(2)) {
     complete: bundle.complete === true,
     missingSources: bundle.missingSources || [],
     sourceErrors: bundle.sourceErrors || [],
+    coverage: bundle.coverage || null,
     request: bundle.request || {},
     audits: args.full ? audits : audits.map(compactAudit),
   };

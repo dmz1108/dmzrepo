@@ -2840,3 +2840,33 @@ Deployment:
 Notes for next agent:
 - Claude 应先读 `docs/AI_PRODUCTION_READ.md`，用 `day=2026-07-08`、`codes=002396,000938`、`themes=算力AI`、`window=30` 独立复审本 PR；不要提交抓到的证据 JSON。
 - 部署后再用云端运行时 Token 执行一次远端 capture/replay，确认 `complete:true`；Token 通过安全环境注入，不得发到聊天或 PR。
+
+## 2026-07-11 - Codex - 采纳 Claude approved 并加固策略证据边界
+
+Changed:
+- 接受 Claude 对 `codex/ai-strategy-evidence@4e2de6f` 的正式 `approved` 结论；其三条非阻断观察作为合并前加固处理，不改变方案主体。
+- 抓取工具仅允许 `market.dreamerqi.com` 与本机回环地址，生产入口强制 HTTPS，并在任何跨域重定向前停止，避免转发 AI Token。
+- 新证据接口只接受请求头/Bearer Token；既有 `/api/ai/strategy-live` 查询参数兼容行为保持不变。
+- 策略快照保留主线级上下文，但 `todayCodes`、`mainLeader`、`leaders` 严格过滤为请求股票。
+- `complete` 改为核验完整历史窗口：中间任一必要交易日缺涨停库、主因库或收盘价库都会进入 `missingSources`；响应增加明确 coverage。
+- 整包 SHA-256 现在覆盖 `complete`、缺失源和错误等全部元数据；replay 新增 `--expect-sha`，用于与 PR/交接中独立记录的哈希比对。文档明确 SHA-256 是内容校验而非数字签名。
+
+Files:
+- `kpl-stats-server.js`
+- `strategy-evidence.js`
+- `tools/capture-strategy-case.js`
+- `tools/replay-strategy-case.js`
+- `tests/strategy-evidence-tools.test.js`
+- `docs/AI_PRODUCTION_READ.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 新增行为测试覆盖不可信 base、跨域重定向 Token 阻断、历史窗口中间日缺失、策略个股过滤、完整性元数据篡改和固定预期 SHA。
+- `node --check` 通过主服务、证据模块和两个工具；仓库全部 13 套测试通过，`git diff --check` 与差异密钥扫描无异常。
+
+Deployment:
+- GitHub only；生产未修改，服务未重启。
+
+Notes for next agent:
+- 合并后 Claude 必须从最新 `main` 开始，并在取得安全注入的 Token 后使用默认可信入口抓取证据；不得通过自定义外部 host 中转。
+- 云端部署仍需同时部署 `kpl-stats-server.js` 与 `strategy-evidence.js`，备份、重启、远端 capture/replay 和云端日志尚未执行。

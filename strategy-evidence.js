@@ -48,6 +48,11 @@ function hashEvidence(value) {
   return crypto.createHash('sha256').update(JSON.stringify(stableValue(value))).digest('hex');
 }
 
+function evidenceBundleHashInput(bundle) {
+  const { integrity, ...payload } = bundle && typeof bundle === 'object' ? bundle : {};
+  return payload;
+}
+
 function cleanString(value, max = 500) {
   return String(value || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, max);
 }
@@ -200,6 +205,40 @@ function buildFilteredDayEvidence(payload, day, codes, sanitizer) {
   return { ...evidence, sha256: hashEvidence(evidence) };
 }
 
+function buildEvidenceCoverage(options = {}) {
+  const day = String(options.day || '');
+  const dataDays = Array.isArray(options.dataDays) ? options.dataDays.map(String) : [];
+  const eventDays = Array.isArray(options.eventDays) ? options.eventDays.map(String) : [];
+  const historicalOrClosed = options.historicalOrClosed === true;
+  const requiredEventDays = new Set(eventDays.filter(evidenceDay => historicalOrClosed || evidenceDay !== day));
+  const requiredCloseDays = new Set(dataDays.filter(evidenceDay => historicalOrClosed || evidenceDay !== day));
+  const limitUpDays = Array.isArray(options.limitUpDays) ? options.limitUpDays : [];
+  const mainReasonDays = Array.isArray(options.mainReasonDays) ? options.mainReasonDays : [];
+  const closeDays = Array.isArray(options.closeDays) ? options.closeDays : [];
+  const snapshots = Array.isArray(options.snapshots) ? options.snapshots : [];
+  const neededTradingDays = Math.max(0, Number(options.neededTradingDays) || 0);
+  const missingSources = [
+    ...((dataDays.length < neededTradingDays) ? [`trading-days:${dataDays.length}/${neededTradingDays}`] : []),
+    ...snapshots.filter(item => !item?.available).map(item => `snapshot-zs${item?.zsType}`),
+    ...limitUpDays.filter(item => requiredEventDays.has(String(item?.day || '')) && !item?.available).map(item => `limit-up:${item.day}`),
+    ...mainReasonDays.filter(item => requiredEventDays.has(String(item?.day || '')) && !item?.available).map(item => `main-reason:${item.day}`),
+    ...closeDays.filter(item => requiredCloseDays.has(String(item?.day || '')) && !item?.available).map(item => `close:${item.day}`),
+    ...((historicalOrClosed && !options.strategySnapshotAvailable) ? ['strategy-snapshot'] : []),
+  ];
+  return {
+    missingSources: [...new Set(missingSources)],
+    coverage: {
+      requestedTradingDays: neededTradingDays,
+      returnedTradingDays: dataDays.length,
+      requiredEventDays: [...requiredEventDays],
+      requiredCloseDays: [...requiredCloseDays],
+      availableLimitUpDays: limitUpDays.filter(item => item?.available).map(item => String(item.day || '')),
+      availableMainReasonDays: mainReasonDays.filter(item => item?.available).map(item => String(item.day || '')),
+      availableCloseDays: closeDays.filter(item => item?.available).map(item => String(item.day || '')),
+    },
+  };
+}
+
 function sanitizeStrategyStock(stock) {
   if (!stock) return null;
   const code = normalizeEvidenceCode(stock.code);
@@ -227,36 +266,50 @@ function sanitizeStrategyPayload(payload, codes) {
     snapshot: !!payload.snapshot,
     frozen: !!payload.frozen,
     mode: cleanString(payload.mode, 100),
-    mainlines: (Array.isArray(payload.mainlines) ? payload.mainlines : []).slice(0, 20).map(mainline => ({
-      rank: finiteNumber(mainline.rank),
-      theme: cleanString(mainline.theme, 160),
-      key: cleanString(mainline.familyKey ?? mainline.key, 160),
-      mergedThemes: (Array.isArray(mainline.mergedThemes) ? mainline.mergedThemes : []).map(item => cleanString(item, 160)).slice(0, 20),
-      score: finiteNumber(mainline.score),
-      predictScore: finiteNumber(mainline.predictScore),
-      count: finiteNumber(mainline.count),
-      netInflow: finiteNumber(mainline.netInflow),
-      boardGainPct: finiteNumber(mainline.boardGainPct),
-      todayCodes: (Array.isArray(mainline.todayCodes) ? mainline.todayCodes : []).map(normalizeEvidenceCode).filter(Boolean).slice(0, 200),
-      mainLeader: sanitizeStrategyStock(mainline.mainLeader),
-      leaders: (Array.isArray(mainline.leaders) ? mainline.leaders : []).map(sanitizeStrategyStock).filter(Boolean).slice(0, 8),
-      tracedCodes: [...codeSet].filter(code =>
-        (Array.isArray(mainline.todayCodes) ? mainline.todayCodes : []).map(normalizeEvidenceCode).includes(code) ||
-        (Array.isArray(mainline.leaders) ? mainline.leaders : []).some(stock => normalizeEvidenceCode(stock?.code) === code)
-      ),
-    })),
+    mainlines: (Array.isArray(payload.mainlines) ? payload.mainlines : []).slice(0, 20).map(mainline => {
+      const todayCodes = (Array.isArray(mainline.todayCodes) ? mainline.todayCodes : [])
+        .map(normalizeEvidenceCode)
+        .filter(code => code && codeSet.has(code))
+        .slice(0, 20);
+      const leaders = (Array.isArray(mainline.leaders) ? mainline.leaders : [])
+        .map(sanitizeStrategyStock)
+        .filter(stock => stock && codeSet.has(stock.code))
+        .slice(0, 20);
+      const mainLeader = sanitizeStrategyStock(mainline.mainLeader);
+      const filteredMainLeader = mainLeader && codeSet.has(mainLeader.code) ? mainLeader : null;
+      return {
+        rank: finiteNumber(mainline.rank),
+        theme: cleanString(mainline.theme, 160),
+        key: cleanString(mainline.familyKey ?? mainline.key, 160),
+        mergedThemes: (Array.isArray(mainline.mergedThemes) ? mainline.mergedThemes : []).map(item => cleanString(item, 160)).slice(0, 20),
+        score: finiteNumber(mainline.score),
+        predictScore: finiteNumber(mainline.predictScore),
+        count: finiteNumber(mainline.count),
+        netInflow: finiteNumber(mainline.netInflow),
+        boardGainPct: finiteNumber(mainline.boardGainPct),
+        todayCodes,
+        mainLeader: filteredMainLeader,
+        leaders,
+        tracedCodes: [...new Set([
+          ...todayCodes,
+          ...leaders.map(stock => stock.code),
+          ...(filteredMainLeader ? [filteredMainLeader.code] : []),
+        ])],
+      };
+    }),
   };
 }
 
 function addIntegrity(bundle) {
   const evidence = bundle?.evidence || {};
   const sections = Object.fromEntries(Object.entries(evidence).map(([key, value]) => [key, hashEvidence(value)]));
+  const payload = evidenceBundleHashInput(bundle);
   return {
     ...bundle,
     integrity: {
       algorithm: 'sha256-stable-json',
       sections,
-      bundle: hashEvidence({ schemaVersion: bundle.schemaVersion, request: bundle.request, evidence }),
+      bundle: hashEvidence(payload),
     },
   };
 }
@@ -269,7 +322,7 @@ function verifyEvidenceBundle(bundle) {
   for (const [key, value] of Object.entries(bundle.evidence || {})) {
     if (expectedSections[key] !== hashEvidence(value)) errors.push(`section hash mismatch: ${key}`);
   }
-  const expectedBundle = hashEvidence({ schemaVersion: bundle.schemaVersion, request: bundle.request, evidence: bundle.evidence || {} });
+  const expectedBundle = hashEvidence(evidenceBundleHashInput(bundle));
   if (bundle?.integrity?.bundle !== expectedBundle) errors.push('bundle hash mismatch');
   return { ok: errors.length === 0, errors };
 }
@@ -365,6 +418,7 @@ module.exports = {
   SNAPSHOT_TABLES,
   addIntegrity,
   buildCodeAudits,
+  buildEvidenceCoverage,
   buildFilteredDayEvidence,
   buildSnapshotEvidence,
   hashEvidence,
