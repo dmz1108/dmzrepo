@@ -9,8 +9,9 @@ You are joining the DreamerQi / PandaDashboard project. Start by understanding t
 3. Read `docs/DAILY_HANDOFF.md`.
 4. Read `docs/COLLABORATION_WORKFLOW.md`.
 5. Read `docs/strategy/AI_DISCUSSION_GROUP.md`.
-6. Read `docs/PROJECT_MAP.md` and `docs/SANITIZATION.md`.
-7. Optionally read the sanitized operation notes:
+6. Read `docs/AI_PRODUCTION_READ.md` before any market-data or strategy task.
+7. Read `docs/PROJECT_MAP.md` and `docs/SANITIZATION.md`.
+8. Optionally read the sanitized operation notes:
    - `docs/PROJECT_HANDOFF.sanitized.md`
    - `docs/panda-cloud-ops-2026-06-19.sanitized.md`
    - `docs/cloud-change-log-20260705.sanitized.md`
@@ -29,6 +30,8 @@ Then respond with a short summary of:
 
 - Do not commit API keys, cookies, SMTP passwords, sync tokens, admin passwords, private keys, user data, sessions, market databases, logs, backups, or production config files.
 - Do not copy the raw cloud server directory into GitHub.
+- For strategy attribution, leader scoring, star-stock, or historical repair work, capture and replay a filtered production evidence case before changing code. Synthetic tests alone are insufficient.
+- Never put the AI read-only token or captured evidence JSON in Git. Record only safe request parameters, evidence hashes, completeness, and conclusions.
 - Do not perform a broad rewrite of the frontend structure. Work inside the current files and patterns unless the user explicitly asks for a structural rebuild.
 - For homepage work, edit `Qi/qi-home.jsx`, then run `node Qi/build-home.js`.
 - Do not maintain `Qi/qi-home.compiled.js` manually.

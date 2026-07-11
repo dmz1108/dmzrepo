@@ -2803,3 +2803,40 @@ Deployment:
 Notes for next agent:
 - Claude 需使用生产 `canonicalTopicName` 和正确交易日/当日一板夹具；补充“历史诊断绝不访问当前实时行情、绝不写全局状态、无超时半结果”的行为测试。
 - 诊断应保留过滤前的全量板块归属，并保证 `codes=` 指定股票即使排名低于 30 也始终出现在诊断结果中。
+
+## 2026-07-11 - Codex - 为三方 agent 增加统一生产策略证据能力
+
+Changed:
+- 新增 Token 保护的 `GET /api/ai/strategy-evidence`：必须按 1-20 只股票筛选，返回三套快照匹配行、近 30 日涨停/综合主因/收盘价、已保存策略归属、题材规范化和指标口径；不开放完整数据库、用户数据、配置、文件路径或写能力。
+- 新增 `strategy-evidence.js` 纯函数模块，统一字段白名单、股票代码归一、控制字符清理、稳定 JSON SHA-256、完整性校验和按股票离线审计。
+- 新增 `tools/capture-strategy-case.js` 与 `tools/replay-strategy-case.js`。证据默认写入 Git 忽略的 `tmp/strategy-cases/`，Token 只从环境变量读取，不进入参数或文件。
+- 新增 `docs/AI_PRODUCTION_READ.md`，并接入 Claude 入门、协作流程、项目地图和策略讨论协议。以后策略归属/龙头评分/明星股/历史修复 PR 必须记录真实证据参数、bundle SHA-256、完整性和使用字段；合成测试不能单独作为生产结论。
+- 所有市场来源文本明确标记为不可信数据，禁止 agent 执行其中的命令或凭据请求。
+
+Files:
+- `kpl-stats-server.js`
+- `strategy-evidence.js`
+- `tools/capture-strategy-case.js`
+- `tools/replay-strategy-case.js`
+- `tests/strategy-evidence-tools.test.js`
+- `docs/AI_PRODUCTION_READ.md`
+- `CLAUDE.md`
+- `docs/COLLABORATION_WORKFLOW.md`
+- `docs/strategy/AI_DISCUSSION_GROUP.md`
+- `docs/PROJECT_MAP.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check` 通过主服务、新模块和两个工具。
+- 仓库全部 13 套测试通过；新测试覆盖股票过滤、字段白名单、控制字符、哈希防篡改、10/30 交易间隔涨幅、HTTP Token 门控、抓取和离线回放。
+- 本地端到端：无 Token 返回 403；有 Token 返回 `access=ai-read-only-evidence`、明确完整性/缺失来源和 bundle SHA-256。
+- 使用云端公开的 2026-07-08 三套真实快照做临时结构验证：星网锐捷 `todayGain=10.02`、紫光股份 `todayGain=6.8` 及其 `zt10/gain10/gain30` 板块证据可被抓取并离线复现；临时数据验证后已删除，未进入 Git。
+- 变更文件未发现疑似真实密钥、Cookie、密码或 Token 值。
+
+Deployment:
+- GitHub branch only；生产未修改，服务未重启。
+- 合并部署时 `kpl-stats-server.js` 与新增 `strategy-evidence.js` 必须原子部署并重启主服务；只部署主文件会因缺少模块而启动失败。
+
+Notes for next agent:
+- Claude 应先读 `docs/AI_PRODUCTION_READ.md`，用 `day=2026-07-08`、`codes=002396,000938`、`themes=算力AI`、`window=30` 独立复审本 PR；不要提交抓到的证据 JSON。
+- 部署后再用云端运行时 Token 执行一次远端 capture/replay，确认 `complete:true`；Token 通过安全环境注入，不得发到聊天或 PR。
