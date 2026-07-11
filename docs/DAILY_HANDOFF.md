@@ -2632,3 +2632,40 @@ Deployment:
 
 Notes for next agent:
 - 若未来在非回环地址部署反代,需把代理地址加进 TRUSTED_PROXY_IPS。
+
+## 2026-07-11 - Codex - 终审、合并并部署 PR #21 静态缓存与认证加固
+
+Changed:
+- 终审 Claude PR #21 三轮实现，确认娱乐管理/采集代理权限门、登录与验证码限流、限流 Map 上限、可信代理 IP 边界、版本化静态缓存和 ETag/304 行为正确。
+- 合并 `claude/static-cache-hardening` 到 `main`，merge commit `78e186e`。
+- 将主服务、主页/行情/娱乐静态引用和安全回归测试部署到云服务器；未修改数据库、L2 worker 或娱乐服务程序。
+
+Files:
+- `kpl-stats-server.js`
+- `Qi/index.html`
+- `Qi/logo.html`
+- `Qi/games/掼蛋.html`
+- `Qi/vendor/dreamerqi-fonts.css`
+- `kpl-dashboard_17_apple.html`
+- `kpl-dashboard_17_apple_hierarchy.html`
+- `yule.html`
+- `tests/static-cache-auth-hardening.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 本地 `node --check`、53 项 hardening 测试及仓库其余 10 组回归全部通过。
+- 云端暂存包 SHA-256 校验一致，Windows 暂存/生产 hardening 测试通过。
+- 公网主页、行情、后台、娱乐页和娱乐公开列表均返回 200；未登录娱乐管理列表与手动采集 POST 均返回 403。
+- `/kpl?v=1` 保持 `Cache-Control: no-cache`；版本化 React 返回一年 immutable；携带匹配 ETag 的行情页面请求返回 304。
+- 公网 `https://market.dreamerqi.com/health` 返回 200。
+
+Deployment:
+- Production touched: yes。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\pr21-static-auth-20260711-110758`。
+- 第一次替换因 Windows 解包损坏中文文件名而在完整性检查阶段自动回退，服务恢复正常；改用 ASCII 暂存名单独传输后重新部署成功，无半部署状态。
+- 重启计划任务 `Panda Dashboard Server`；最终 PID `3360 -> 14620`。
+- 云端两份运维日志已更新。
+
+Notes for next agent:
+- 字体、React 或其他带 `?v=` 的强缓存资源内容变化时必须同步提升引用版本号；HTML/JSX/manifest 始终保持 no-cache。
+- 当前只信任回环地址上的 Caddy 转发头；若以后反代不再通过回环连接，需要显式更新 `TRUSTED_PROXY_IPS` 并补测试。
