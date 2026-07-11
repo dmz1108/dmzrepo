@@ -2561,3 +2561,74 @@ Deployment:
 Notes for next agent:
 - 预期明星命中率从 7-13(周一)起开始积累;L2 回放/回测也从 7-13 的持久化数据起可用。
 - 第①项(公司端 L2 worker 五档升级)等待公司 Codex 实施,属于下一优先级;rowsWithPrice/rowsWithAllBuckets 实测数据可作为其实施前后的对照验收指标。
+
+## 2026-07-10 - Claude - 静态缓存 + 认证安全加固(整站优化第1、4项)
+
+Changed:
+- 静态缓存(第1项):`sendStatic` 从一律 no-cache 改为分层缓存 + ETag(size+mtime),If-None-Match 命中回 304 不读文件体。回头客加载量预计降 90%+(仅字体就 1.3MB 不再重复下载)。(缓存分层规则见下方二审修正条目,以二审后为准。)
+- 认证限流(第4项):新增纯内存滑动窗限流器(单机部署,重启清零;只记失败,成功清零)。接入六个入口:用户/管理登录(单 IP+账号 8 次/10分钟 + 单 IP 30 次/10分钟;刻意不做纯账号级锁定,避免第三者用错误密码恶意锁死他人账号)、注册/重置验证码邮件(单 IP 5 封/小时 + 单邮箱 3 封/小时,防轰炸)、注册/重置验证码确认(IP+邮箱 10 次/15分钟,封 6 位数字码穷举——原先可无限尝试)。超限回 429,登录事件记 rate-limited。
+- yule 管理接口漏洞修复(第4项核查发现,线上可复现):`/api/yule/admin/*`(列隐藏项/改/删)与 `/api/yule/collect`(POST 触发采集)经 stanning 域代理完全无鉴权,任何人可增删改娱乐内容。修复:主服务代理层强制 admin 会话(`requireAdmin`)。admin cookie 域为 .dreamerqi.com,owner 在市场页登录后 stanning 管理页照常可用。
+- 管理接口权限审计:主服务 14 个 admin handler 全部确认有服务端门控(requireAdmin/isAdminRequest),无需改动。
+- 密扫复核:docs/SECRET_SCAN_REVIEW_REQUIRED.txt 的命中全部为字段名(与 CLAUDE.md 预期一致);全仓库长字符串赋值扫描仅一处命中且为测试夹具,无真实密钥。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/static-cache-auth-hardening.test.js`(新增,22 项)
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;新测试 22 项全过(缓存分层、ETag/304 不读文件体、限流触发/清零/窗口过期、六入口接线、yule 门控);其余十套回归全过。
+- 线上漏洞在部署前仍存在:`stanning.dreamerqi.com/api/yule/admin/items` 当前无凭据返回 200,建议尽快合并部署。
+
+Deployment:
+- GitHub only(分支 claude/static-cache-hardening)。未部署云端,无服务重启。**本 PR 合并后需要 Codex 部署并重启主服务才能封住 yule 漏洞。**
+
+Notes for next agent:
+- 限流为纯内存,多实例部署时需改共享存储(当前单机,不适用)。
+- yule-server 自身仍无鉴权,依赖主服务代理层门控;若未来 8766 端口直接对外,需在 yule-server 内补鉴权。
+- 前端登录页 429 时会显示英文 error 文案,与现有 401 文案风格一致,未做本地化。
+
+## 2026-07-11 - Claude - PR #21 二审四点修复(Codex 复审前)
+
+Changed:
+- 限流 Map 硬上限(二审1):AUTH_RATE_MAX_KEYS=5000,写满先清过期键、仍满按插入序淘汰最老键(宁可放过一次,不允许内存无界);新增 authRatePrune 每 10 分钟定期清扫(setInterval.unref);注册/重置验证码确认新增 confirm-ip 单 IP 总闸(30 次/15分钟,两入口共用),封"换邮箱制造无限 key"。
+- 静态缓存改版本化(二审2):强缓存(一年 immutable)只给带 ?v= 参数的请求;无版本参数的字体/react 退回 no-cache + ETag 协商。引用方全部版本化:dreamerqi-fonts.css 内 13 个字体 URL、Qi/index.html 的 react/react-dom/字体CSS、两个 kpl 页/logo/掼蛋/yule 的字体CSS 均加 ?v=1(改文件时 bump 版本号即换 URL,天然无脏缓存)。
+- 登录限制表述修正(二审3):实际维度是"单 IP+账号 8 次/10分钟",非"单账号";两处代码注释注明刻意不做纯账号级锁定(否则任何人可用错误密码恶意锁死管理员账号),handoff 原条目已同步修正。
+- 真实行为测试(二审4):yule 门控抽成具名函数 yuleProxyNeedsAdmin 并接线;测试走真实 readAdminToken→adminSessionFromToken→isAdminRequest→requireAdmin 链(仅 stub 会话存储与磁盘 IO):未登录 403、管理员 cookie/头放行、普通用户 403、伪造 token 403;限流 Map 12000 个不同 key 压测有界(峰值=上限 5000);换邮箱穷举第 31 次被 IP 总闸拦截。
+
+Files:
+- `kpl-stats-server.js`
+- `Qi/vendor/dreamerqi-fonts.css`、`Qi/index.html`、`Qi/logo.html`、`Qi/games/掼蛋.html`、`kpl-dashboard_17_apple.html`、`kpl-dashboard_17_apple_hierarchy.html`、`yule.html`(仅引用 URL 加 ?v=1)
+- `tests/static-cache-auth-hardening.test.js`(22→40 项)
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;hardening 40 项全过;其余十套回归全过(含前端内联脚本编译检查)。
+
+Deployment:
+- GitHub only(PR #21 分支)。未部署云端。合并部署重启后 yule 漏洞才封住(线上仍可复现,建议尽快)。
+
+Notes for next agent:
+- 字体/react 文件若替换内容,必须同步 bump 引用处 ?v= 版本号,否则老访客最长一年不更新;不 bump 就别改文件内容。
+- 限流仍为单机内存版;多实例部署需换共享存储。
+
+## 2026-07-11 - Claude - PR #21 三审两阻塞项修复(Codex 终审前)
+
+Changed:
+- requestIp 信任边界(阻塞1):X-Forwarded-For 仅当 socket.remoteAddress 为回环(127.0.0.1/::1/::ffff:127.0.0.1,即 Caddy 本机转发)时才读取,取链尾(Caddy 追加的真实客户端,链首是客户端可自报的任意值)并经 net.isIP 校验;公网直连 8765 的请求一律用 socket IP。修复前公网直连可伪造 XFF 绕过全部限流。
+- staticCacheControl 收紧(阻塞2):HTML/JSX/manifest 无论是否带 ?v= 一律 no-cache(/kpl?v=1、/?v=1、/admin?v=1 不再可能被强缓存);一年 immutable 只给带版本参数的 JS/CSS/字体/图片。
+- HEAD 优化(建议项):sendStatic 对 HEAD 请求不再读取文件正文(仅 stat 出 ETag)。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/static-cache-auth-hardening.test.js`(40→53 项)
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- 新增测试:公网直连伪造 XFF 不生效/本机转发生效/伪造链首取链尾/net.isIP 拒非法值/IPv6 与 IPv4-mapped 各形态 8 项;HTML/JSX/manifest 带 ?v= 仍 no-cache 及 /kpl?v=1 行为验证 5 项;HEAD 不读正文。hardening 53 项全过,其余十套回归全过,`node --check` 通过。
+
+Deployment:
+- GitHub only(PR #21 分支)。待 Codex 终审合并部署(yule 漏洞线上仍可复现,建议尽快)。
+
+Notes for next agent:
+- 若未来在非回环地址部署反代,需把代理地址加进 TRUSTED_PROXY_IPS。
