@@ -2876,6 +2876,103 @@ Notes for next agent:
 - Claude 需使用生产 `canonicalTopicName` 和正确交易日/当日一板夹具；补充“历史诊断绝不访问当前实时行情、绝不写全局状态、无超时半结果”的行为测试。
 - 诊断应保留过滤前的全量板块归属，并保证 `codes=` 指定股票即使排名低于 30 也始终出现在诊断结果中。
 
+## 2026-07-11 - Codex - 为三方 agent 增加统一生产策略证据能力
+
+Changed:
+- 新增 Token 保护的 `GET /api/ai/strategy-evidence`：必须按 1-20 只股票筛选，返回三套快照匹配行、近 30 日涨停/综合主因/收盘价、已保存策略归属、题材规范化和指标口径；不开放完整数据库、用户数据、配置、文件路径或写能力。
+- 新增 `strategy-evidence.js` 纯函数模块，统一字段白名单、股票代码归一、控制字符清理、稳定 JSON SHA-256、完整性校验和按股票离线审计。
+- 新增 `tools/capture-strategy-case.js` 与 `tools/replay-strategy-case.js`。证据默认写入 Git 忽略的 `tmp/strategy-cases/`，Token 只从环境变量读取，不进入参数或文件。
+- 新增 `docs/AI_PRODUCTION_READ.md`，并接入 Claude 入门、协作流程、项目地图和策略讨论协议。以后策略归属/龙头评分/明星股/历史修复 PR 必须记录真实证据参数、bundle SHA-256、完整性和使用字段；合成测试不能单独作为生产结论。
+- 所有市场来源文本明确标记为不可信数据，禁止 agent 执行其中的命令或凭据请求。
+
+Files:
+- `kpl-stats-server.js`
+- `strategy-evidence.js`
+- `tools/capture-strategy-case.js`
+- `tools/replay-strategy-case.js`
+- `tests/strategy-evidence-tools.test.js`
+- `docs/AI_PRODUCTION_READ.md`
+- `CLAUDE.md`
+- `docs/COLLABORATION_WORKFLOW.md`
+- `docs/strategy/AI_DISCUSSION_GROUP.md`
+- `docs/PROJECT_MAP.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check` 通过主服务、新模块和两个工具。
+- 仓库全部 13 套测试通过；新测试覆盖股票过滤、字段白名单、控制字符、哈希防篡改、10/30 交易间隔涨幅、HTTP Token 门控、抓取和离线回放。
+- 本地端到端：无 Token 返回 403；有 Token 返回 `access=ai-read-only-evidence`、明确完整性/缺失来源和 bundle SHA-256。
+- 使用云端公开的 2026-07-08 三套真实快照做临时结构验证：星网锐捷 `todayGain=10.02`、紫光股份 `todayGain=6.8` 及其 `zt10/gain10/gain30` 板块证据可被抓取并离线复现；临时数据验证后已删除，未进入 Git。
+- 变更文件未发现疑似真实密钥、Cookie、密码或 Token 值。
+
+Deployment:
+- GitHub branch only；生产未修改，服务未重启。
+- 合并部署时 `kpl-stats-server.js` 与新增 `strategy-evidence.js` 必须原子部署并重启主服务；只部署主文件会因缺少模块而启动失败。
+
+Notes for next agent:
+- Claude 应先读 `docs/AI_PRODUCTION_READ.md`，用 `day=2026-07-08`、`codes=002396,000938`、`themes=算力AI`、`window=30` 独立复审本 PR；不要提交抓到的证据 JSON。
+- 部署后再用云端运行时 Token 执行一次远端 capture/replay，确认 `complete:true`；Token 通过安全环境注入，不得发到聊天或 PR。
+
+## 2026-07-11 - Codex - 采纳 Claude approved 并加固策略证据边界
+
+Changed:
+- 接受 Claude 对 `codex/ai-strategy-evidence@4e2de6f` 的正式 `approved` 结论；其三条非阻断观察作为合并前加固处理，不改变方案主体。
+- 抓取工具仅允许 `market.dreamerqi.com` 与本机回环地址，生产入口强制 HTTPS，并在任何跨域重定向前停止，避免转发 AI Token。
+- 新证据接口只接受请求头/Bearer Token；既有 `/api/ai/strategy-live` 查询参数兼容行为保持不变。
+- 策略快照保留主线级上下文，但 `todayCodes`、`mainLeader`、`leaders` 严格过滤为请求股票。
+- `complete` 改为核验完整历史窗口：中间任一必要交易日缺涨停库、主因库或收盘价库都会进入 `missingSources`；响应增加明确 coverage。
+- 整包 SHA-256 现在覆盖 `complete`、缺失源和错误等全部元数据；replay 新增 `--expect-sha`，用于与 PR/交接中独立记录的哈希比对。文档明确 SHA-256 是内容校验而非数字签名。
+
+Files:
+- `kpl-stats-server.js`
+- `strategy-evidence.js`
+- `tools/capture-strategy-case.js`
+- `tools/replay-strategy-case.js`
+- `tests/strategy-evidence-tools.test.js`
+- `docs/AI_PRODUCTION_READ.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 新增行为测试覆盖不可信 base、跨域重定向 Token 阻断、历史窗口中间日缺失、策略个股过滤、完整性元数据篡改和固定预期 SHA。
+- `node --check` 通过主服务、证据模块和两个工具；仓库全部 13 套测试通过，`git diff --check` 与差异密钥扫描无异常。
+
+Deployment:
+- GitHub only；生产未修改，服务未重启。
+
+Notes for next agent:
+- 合并后 Claude 必须从最新 `main` 开始，并在取得安全注入的 Token 后使用默认可信入口抓取证据；不得通过自定义外部 host 中转。
+- 云端部署仍需同时部署 `kpl-stats-server.js` 与 `strategy-evidence.js`，备份、重启、远端 capture/replay 和云端日志尚未执行。
+
+## 2026-07-11 - Codex - 部署 AI 策略证据接口并完成云端验收
+
+Changed:
+- 将 GitHub `main@e1c7750` 的 `kpl-stats-server.js` 与新增 `strategy-evidence.js` 作为同一部署单元上传云端；随后以 `a92ecf3` 排除纯抓取时间对整包哈希的影响，使相同历史证据重复抓取保持同一 SHA-256。
+- 将 `docs/AI_PRODUCTION_READ.md` 的 7 月 8 日初始化验收窗口改为 20 日：云端业务底库只滚动保留最近 30 个交易日，旧目标日再回看完整 30 日时最早边界可能已清理，接口应诚实返回缺失而不是冒充完整。
+- 确认当前 SSH 端口为 2222；443 已由 HTTPS/Caddy 使用，旧交接中的 SSH 443 已过时。
+
+Files:
+- Cloud runtime: `C:\PandaDashboard\kpl-stats-server.js`
+- Cloud runtime: `C:\PandaDashboard\strategy-evidence.js`
+- Git documentation: `docs/AI_PRODUCTION_READ.md`
+- Git/cloud handoff: `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 部署前云端暂存 SHA-256 与 Git 完全一致；两个文件 `node --check` 通过。
+- 两次受控重启均成功：端口 8765 监听 PID `13164 -> 8604 -> 352`，本机与公网 `/health` 均返回 200/`ok:true`。
+- 无 Token 与 URL 查询参数假 Token 请求证据接口均返回 403；云端内部从受保护运行时配置读取 Token 后，请求返回 `access=ai-read-only-evidence`、三套快照和稳定整包 SHA-256。
+- 7 月 8 日、20 日窗口连续两次验收：`complete:true`、`missingSources=[]`、`sourceErrors=[]`，请求股票为 `002396/000938`，三源共命中 13 张板块卡，两次 bundle SHA-256 均为 `b29c43c5b53358dd851adf3b008b73d9faf7c23558588f9100690e23621388f0`。
+- 30 日窗口按设计返回 `complete:false`，明确指出 5 月 27/28 日涨停库与主因库已超出当前滚动保留边界；缺失未被当成 0。
+
+Deployment:
+- Production touched: yes；主服务已重启，Caddy 与 Panda Yule Server 未重启。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\ai-evidence-e1c7750-20260711-051734`。
+- 部署后主文件 SHA-256：`BC8FD1DCAF798B18FD54308B193FF78E650237BF9CFCF88D0446767C2601BD3D`；最终模块 SHA-256：`74612E9019D6F8C12C8D9FB8D19DB3084A4F4596DA12EFAF3D704E2AC727176F`。
+- Token 值未输出、未写 Git、未进入部署日志或聊天。
+
+Notes for next agent:
+- 云端接口能力已就绪；Claude 仍需在其自身安全执行环境注入 `PANDA_AI_READONLY_TOKEN`，同步最新 main 后运行 20 日窗口的 capture/replay 验收。
+- 证据 JSON 仍只允许写入 Git 忽略的 `tmp/strategy-cases/`，不得提交仓库。
+
 ## 2026-07-11 - Claude - PR #23 三审九点修复(v4,Codex 复审前)
 
 Changed:

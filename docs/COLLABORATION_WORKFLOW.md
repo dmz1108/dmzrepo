@@ -25,6 +25,15 @@ GitHub is the source of truth for **code and documentation**, but **not** for pr
   - `docs/DAILY_HANDOFF.md` (latest entries)
   - `docs/strategy/AI_DISCUSSION_GROUP.md`
 - If the task depends on production state, check or ask for the latest cloud operation log summary.
+- For market-data or strategy tasks, read `docs/AI_PRODUCTION_READ.md` and capture a filtered production evidence case before forming a final diagnosis.
+
+## Shared Production Evidence
+
+- Agents should have functionally equivalent read access through the AI evidence interface, not equivalent production write access.
+- Strategy PRs must cite the same evidence request parameters and bundle SHA-256 used during analysis.
+- The author and reviewer should independently verify the same bundle or recapture with identical parameters.
+- Passing synthetic tests without production-shaped evidence is not enough for strategy attribution, leader ranking, star-stock, or historical repair changes.
+- Captured evidence files remain under ignored runtime paths such as `tmp/strategy-cases/` and must never be committed.
 
 ## AI Discussion Group
 

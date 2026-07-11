@@ -25,8 +25,12 @@ This GitHub seed is a sanitized code package exported from that layout. It is no
 - `kpl-dashboard_17_apple_hierarchy.html`: related market hierarchy view.
 - `kpl-stats-server.js`: main backend and API entry.
 - `strategy-backend.js`: strategy analysis support.
+- `strategy-evidence.js`: pure filtering, sanitization, hashing, and offline audit helpers for AI strategy evidence bundles.
 - `l2-focus-scanner.js`: Level2 / active-passive scan support.
 - `consistency-gate.js`: data consistency helper.
+- `tools/capture-strategy-case.js`: downloads a token-protected, stock-filtered production evidence case into ignored `tmp/` storage.
+- `tools/replay-strategy-case.js`: verifies and audits a captured evidence case without production access.
+- `docs/AI_PRODUCTION_READ.md`: required evidence workflow for Codex, Company Codex, and Claude.
 
 ### Admin
 
