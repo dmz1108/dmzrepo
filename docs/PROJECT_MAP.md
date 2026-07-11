@@ -27,7 +27,7 @@ This GitHub seed is a sanitized code package exported from that layout. It is no
 - `strategy-backend.js`: strategy analysis support.
 - `l2-focus-scanner.js`: Level2 / active-passive scan support.
 - `local-l2-task-queue.js`: cloud queue and persistence contract for the company-side L2 worker.
-- `docs/strategy/L2_COMPANY_WORKER_UPGRADE_SPEC.md`: company worker five-bucket implementation and acceptance baseline.
+- `docs/strategy/L2_COMPANY_WORKER_CONTRACT.md`: verification-first five-bucket contract; modify the company worker only if real output fails acceptance.
 - `tools/validate-l2-worker-output.js`: secret-free validator for worker claim/result samples.
 - `tests/l2-worker-contract.test.js`: aggregation, five-bucket, priority-order, and cloud-queue contract regression.
 - `consistency-gate.js`: data consistency helper.

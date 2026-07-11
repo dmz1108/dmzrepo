@@ -2361,7 +2361,7 @@ Notes for next agent:
 Changed:
 - 后端:`strategyMainlineCollectStars` 返回 `{byCode, scannedPlates}`;augment 推导独立字段 `l2VerificationStatus`(unscanned=待验证不惩罚 / qi=已扫且有预期明星或明星确认 / scanned-no-star=已扫无明星);已扫无明星时确定性封顶"中等"(定性降级,不造打分常量,只封顶不叠罚);P1-C 预测记录携带该状态。
 - 前端:主线卡新增三态徽章(QI 主线/L2 未见明星/L2 待验证),与 Owner 手动"当日主线"徽章并列独立;明星行只展示 明星确认/预期明星 至多 3 只(资金活跃不再占卡位);"潜力"行退役(Owner 定稿,focusStocks 后端数据保留供第③项调度用)。
-- 第①项 worker 升级包 Owner 指示暂缓:worker 现仅产出 50w/500w 两档,多数股最大档将走 dataMissing 保守路径,预期明星/QI 态实盘触发受限,主线多显示"L2 待验证"——属诚实状态,待①实施后自然激活(依赖关系已告知 Owner)。
+- 当时判断第①项 worker 升级包暂缓，并依据旧参考脚本推断 worker 仅产出 50w/500w 两档。**后续订正：该推断不能代表公司正式 worker；以 2026-07-10 后续“实盘验收”记录为准。**
 
 Files:
 - `kpl-stats-server.js`
@@ -2424,7 +2424,7 @@ Deployment:
 - Cloud operation logs updated; no secrets were recorded.
 
 Notes for next agent:
-- This deployment does not modify the company-side L2 worker. The cloud queue supports five thresholds, but the current worker still needs its separate five-bucket/price/version upgrade before all QI expected-star paths have complete data.
+- This deployment does not modify the company-side L2 worker. **Later correction:** the legacy two-bucket reference does not prove the production worker is incomplete; verify a persisted live result before deciding whether any worker change is needed.
 
 ## 2026-07-10 - Claude - PR#18 二审修复:判负只认 done 覆盖 + pending 门
 
@@ -2547,7 +2547,7 @@ Changed:
 - 删旧建新两个每日定时验收(周一至周五,自动触发到 Claude 会话):
   - 主线观察-14:59北京(新 ID trig_012D2BHTN4rqRBQmtwneFPA3):原有补选转化/keepWarm/新鲜度/质量检查之外,新增 inflowGate.excluded 名单核对(疑似误伤单独指出)、QI 三态分布与预期明星名单记录(供次日复盘)、maxBucket empty/dataMissing 比率趋势、扫描优先队列观察(priorityCodes 下发、firstResultAt、rowsWithPrice/rowsWithAllBuckets,接口未暴露则标"数据不可得")。
   - 索引验收-16:33北京(新 ID trig_01W3aUYs9gU7KP6Y6PCSe7k3):原有细分证据索引验收之外,新增 预期明星次日命中率复盘(对照前日14:59名单,维护滚动统计——"真主线必有1-2明星"规则的核心验证数据)、inflowGate 排除板块收盘复盘(反例详细记录)、L2 持久化验收(当日任务落盘 rows>0,非交易日/worker 未启标不适用)、maxBucket 当日汇总。
-- Shared Decision v1 四步计划状态:①公司端 L2 worker 五档升级,等待公司 Codex 实施,属于下一优先级 ②QI 三态(PR #18 已合并部署)③扫描优先队列(PR #19 已合并部署)④本项完成。
+- Shared Decision v1 四步计划状态（后续订正）：①公司端 L2 worker 五档**实盘验收**，失败才修改 ②QI 三态(PR #18 已合并部署)③扫描优先队列(PR #19 已合并部署)④本项完成。
 
 Files:
 - `docs/DAILY_HANDOFF.md`(仅此文件,Routine 为服务端配置,不在仓库内)
@@ -2560,18 +2560,18 @@ Deployment:
 
 Notes for next agent:
 - 预期明星命中率从 7-13(周一)起开始积累;L2 回放/回测也从 7-13 的持久化数据起可用。
-- 第①项(公司端 L2 worker 五档升级)等待公司 Codex 实施,属于下一优先级;rowsWithPrice/rowsWithAllBuckets 实测数据可作为其实施前后的对照验收指标。
+- 第①项改为公司端 L2 worker 五档实盘验收；`rowsWithPrice/rowsWithAllBuckets` 实测全量通过即关闭待办，只有失败才交由公司 Codex 修改。
 
-## 2026-07-10 - Codex - 公司端 L2 worker 五档升级规范与契约验收包
+## 2026-07-10 - Codex - 公司端 L2 worker 五档契约与验收包
 
 Changed:
-- 新增公司端 worker 正式实施规范：固定 50w/300w/500w/800w/1000w 五档、按委托号累计、人民币元单位、主动/被动四方向、现价/版本字段、累计结果上报、错误与回退口径。
+- 新增公司端 worker 验收优先规范：核对 50w/300w/500w/800w/1000w 五档、按委托号累计、人民币元单位、主动/被动四方向、现价/版本字段、累计结果上报、错误与回退口径。
 - 新增无密钥输出校验器，可对真实 claim/result 脱敏文件检查五档完整性、数值类型、档位单调性、任务覆盖、优先顺序、现价单位和 workerVersion。
 - 新增合成样例和契约回归：覆盖拆分成交先聚合再过档、零值与缺档区分、错误不能伪装成零值、云端结果整批替换、真实队列指标落盘。
 - AXTICK 下载基准工具统一为云端五档，并导出聚合/worker 档位转换函数供公司实现和测试复用。
 
 Files:
-- `docs/strategy/L2_COMPANY_WORKER_UPGRADE_SPEC.md`
+- `docs/strategy/L2_COMPANY_WORKER_CONTRACT.md`
 - `tools/validate-l2-worker-output.js`
 - `tools/axtick_down_benchmark.js`
 - `tests/l2-worker-contract.test.js`
@@ -2589,5 +2589,27 @@ Deployment:
 - GitHub only。未修改或部署公司电脑实际 worker，未改云端运行文件，未重启任何服务。
 
 Notes for next agent:
-- 公司电脑实际常驻 worker 的脚本路径和启动方式不在本仓库中；公司 Codex 必须先识别并备份真实运行文件，不能把旧本地项目或 `l2-focus-scanner.js` 直接覆盖云端。
-- 实施后先用脱敏真实 claim/result 跑校验器，再做单任务云端联调；只有 `resultRows == rowsWithPrice == rowsWithAllBuckets == total` 且原始逐笔抽查一致才能替换正式 worker。
+- 公司电脑实际常驻 worker 的脚本路径和启动方式不在本仓库中；`l2-focus-scanner.js` 只有两档不能证明正式 worker 只有两档。Owner 已看到正式页面五档存在真实数据，下一交易日先验收，不要先改或覆盖公司 worker。
+- 用脱敏真实 claim/result 跑校验器；若 `resultRows == rowsWithPrice == rowsWithAllBuckets == total` 且原始逐笔抽查一致，现有 worker 直接判定合格，无需修改。只有失败项才进入条件式兼容修改。
+
+## 2026-07-10 - Codex - 订正公司 L2 worker 待办为实盘验收
+
+Changed:
+- 订正此前依据仓库旧 `l2-focus-scanner.js` 推断正式公司 worker 只有 50w/500w 两档的过度结论。
+- 结合公司交接资料和 Owner 已看到五档真实数据的事实，将后续工作从“必须升级”改为“下一交易日先验收；验收失败才最小修改”。
+- 保留五档契约、脱敏输出校验器和回退标准，供真实任务验证使用。
+
+Files:
+- `docs/strategy/L2_COMPANY_WORKER_CONTRACT.md`
+- `docs/PROJECT_MAP.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 文档路径和仓库引用已更新；未改策略阈值、队列、云端接口或公司 worker。
+
+Deployment:
+- GitHub only。未修改生产环境，未重启服务。
+
+Notes for next agent:
+- 下一交易日保持现有公司 worker 在线，完成一个真实任务后检查 `resultRows`、`rowsWithPrice`、`rowsWithAllBuckets`、`priorityCodes`、`firstResultAt` 和持久化文件。
+- 五档与价格覆盖全部通过时关闭公司 worker 修改待办；随后进入预期明星、明星确认、`empty/dataMissing` 与 QI 状态的实盘回放和阈值观察。
