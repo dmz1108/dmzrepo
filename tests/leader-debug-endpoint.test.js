@@ -101,10 +101,10 @@ async function waitHealth(port, ms = 20000) {
   const ADMIN_PASS = 'Tt* ' + Math.random().toString(36).slice(2, 10);   // 满足复杂度,仅本进程内存
   const srv = spawn('node', ['kpl-stats-server.js'], {
     cwd: appDir,
-    env: { ...process.env, KPL_STATS_PORT: String(port), KPL_STATS_HOST: '127.0.0.1',
+    env: { ...process.env, NODE_ENV: 'test', KPL_STATS_PORT: String(port), KPL_STATS_HOST: '127.0.0.1',
       KPL_ADMIN_USERNAME: ADMIN_USER, KPL_ADMIN_PASSWORD: ADMIN_PASS,
       PANDA_AI_READONLY_TOKEN: '', PANDA_AI_STRATEGY_TOKEN: '',
-      // 仅本测试进程(生产不设置,行为零变化):
+      // 仅本测试进程(NODE_ENV=test 门控,生产行为零变化):
       // DIAG_TODAY 把 DAY_TIMEOUT 当作诊断"今日"(机器为非交易日周末);TEST_BOARD_RANKING 注入板块榜绕过外网;
       // HYDRATE_TIMEOUT=1 使 hydrate 自身网络被 race 掉 → 确定性 board-hydrate timeout;KPL_API_KEY 仅过实时回退 `if(apiKey)` 门槛。
       STRATEGY_MAINLINE_DIAG_TODAY: '2026-07-10',

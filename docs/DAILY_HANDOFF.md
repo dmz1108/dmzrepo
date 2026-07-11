@@ -3104,7 +3104,7 @@ Deployment:
 Changed:
 - 八审1:readEastmoneyCloseDbDay 空 catch → strategyMainlineDiagNoteRead(`close ${normalizedDay}`, err),ENOENT 进 missing、其它进 readErrors(龙头 gain10/gain30 依赖该库,不再吞损坏/权限/EISDIR)。
 - 八审2:requiredMissing 从"仅请求日快照/主因"扩为龙头评分实际输入——请求日全套快照 + 近10日涨停库/主因库 + 当前/10日/30日收盘价基准(离线交易日历同步算出,不依赖网络);盘中当天尚未生成的盘后主因/收盘价单列 traceMissing,不使 complete=false。complete 现同时要求 ok=true。
-- 八审3:leader-debug-endpoint.test.js 增真实 board-hydrate 超时场景——注入板块榜(绕过外网)+ HYDRATE_TIMEOUT=1 触发,断言 timeouts 含 board-hydrate、fullWait=false、partial=true、complete=false。为此加两个仅测试 env 种子(生产不设置,行为零变化):STRATEGY_MAINLINE_DIAG_TODAY(诊断"今日"覆盖,应对周末机器)、STRATEGY_MAINLINE_TEST_BOARD_RANKING(注入板块榜绕过受限外网);STRATEGY_MAINLINE_LIVE_HYDRATE_TIMEOUT_MS 已可 env 注入。
+- 八审3:leader-debug-endpoint.test.js 增真实 board-hydrate 超时场景——注入板块榜(绕过外网)+ HYDRATE_TIMEOUT=1 触发,断言 timeouts 含 board-hydrate、fullWait=false、partial=true、complete=false。为此加两个仅在 `NODE_ENV=test` 时生效的测试 env 种子:STRATEGY_MAINLINE_DIAG_TODAY(诊断"今日"覆盖,应对周末机器)、STRATEGY_MAINLINE_TEST_BOARD_RANKING(注入板块榜绕过受限外网);STRATEGY_MAINLINE_LIVE_HYDRATE_TIMEOUT_MS 已可 env 注入。
 - 八审4:并发干净请求补断言 complete===true / partial===false(不止检查未串入损坏错误)。干净日铺满 45 工作日的近日库+收盘价,确保必要输入齐全。
 
 Files:
@@ -3115,4 +3115,4 @@ Validation:
 - 端点测试实测:board-hydrate 超时确定性触发(注入板块榜避开容器代理 hang,hydrate 自身网络被 1ms race 掉);干净日 complete=true;损坏/缺失/主因错误 → complete=false/partial=true。
 
 Deployment:
-- GitHub only(PR #23)。三个测试 env 种子生产均不设置 → 行为零变化;容器预置 agent 代理无法覆盖(HTTPS_PROXY 不生效),故用板块榜注入而非慢代理实现确定性。
+- GitHub only(PR #23)。两个数据/日期测试 env 仅在 `NODE_ENV=test` 时生效,生产即使误设也不会注入;容器预置 agent 代理无法覆盖(HTTPS_PROXY 不生效),故用板块榜注入而非慢代理实现确定性。

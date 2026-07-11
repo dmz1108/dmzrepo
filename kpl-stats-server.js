@@ -19664,8 +19664,8 @@ function pickArray(obj, keys) {
 
 async function fetchBoardRankingForSnapshot(zsType, apiKey, options = {}) {
   // 仅测试用途:注入板块榜绕过外网,让端点测试能在受限网络下确定性触发"实时补水超时"路径。
-  // 生产环境该 env 不设置 → 完全走真实抓取,行为零变化。
-  if (process.env.STRATEGY_MAINLINE_TEST_BOARD_RANKING) {
+  // NODE_ENV !== test 时硬禁用,生产即使误设该 env 也完全走真实抓取。
+  if (process.env.NODE_ENV === 'test' && process.env.STRATEGY_MAINLINE_TEST_BOARD_RANKING) {
     try { return JSON.parse(process.env.STRATEGY_MAINLINE_TEST_BOARD_RANKING)[String(zsType)] || []; }
     catch { return []; }
   }
@@ -23403,9 +23403,9 @@ async function buildStrategyMainlinesLive(day, options = {}) {
 async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = null) {
   const requestedDay = isoFromCompactDate(day || chinaNowParts().day);
   const diagMode = !!options.leaderDebug;
-  // 仅测试用途:诊断"今天"判定的日期覆盖。生产环境该 env 不设置 → 与 chinaNowParts().day 完全一致,行为零变化。
+  // 仅测试用途:诊断"今天"判定的日期覆盖。NODE_ENV !== test 时硬禁用。
   // 存在的唯一目的:让端点测试能在非交易日的机器上确定性触发"今日实时补水超时"路径(八审第3点)。
-  const diagTodayIso = (diagMode && process.env.STRATEGY_MAINLINE_DIAG_TODAY)
+  const diagTodayIso = (diagMode && process.env.NODE_ENV === 'test' && process.env.STRATEGY_MAINLINE_DIAG_TODAY)
     ? isoFromCompactDate(process.env.STRATEGY_MAINLINE_DIAG_TODAY)
     : isoFromCompactDate(chinaNowParts().day);
   // 八审修正2:必要输入=龙头评分实际读取的输入——本请求日全套快照 + 近10日涨停库/主因库 +
