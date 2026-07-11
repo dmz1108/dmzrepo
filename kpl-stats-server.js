@@ -21660,15 +21660,18 @@ async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day, options
       supplements.push(b);
     }
   }
-  strategyMainlineSupplementState = {
-    day: String(day || ''),
-    at: new Date().toISOString(),
-    realtimeSource,
-    enabled: STRATEGY_MAINLINE_SUPPLEMENT_BOARDS > 0,
-    limit: STRATEGY_MAINLINE_SUPPLEMENT_BOARDS,
-    // picked 即"若无补选会漏掉的板块"清单(它们都不在主通道 top-5 里)
-    picked: supplements.map(b => ({ name: String(b?.name || ''), plateId: String(b?.plateId || ''), ...b.supplementBasis })),
-  };
+  // 三审修正2:诊断模式(recordState:false)不得覆盖全局补选观测状态——那是正式请求的运行态。
+  if (options.recordState !== false) {
+    strategyMainlineSupplementState = {
+      day: String(day || ''),
+      at: new Date().toISOString(),
+      realtimeSource,
+      enabled: STRATEGY_MAINLINE_SUPPLEMENT_BOARDS > 0,
+      limit: STRATEGY_MAINLINE_SUPPLEMENT_BOARDS,
+      // picked 即"若无补选会漏掉的板块"清单(它们都不在主通道 top-5 里)
+      picked: supplements.map(b => ({ name: String(b?.name || ''), plateId: String(b?.plateId || ''), ...b.supplementBasis })),
+    };
+  }
   const targets = [...primary, ...supplements];
   await mapLimit(targets, 6, async board => {
     const plateId = String(board?.plateId || '');
@@ -21676,11 +21679,11 @@ async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day, options
     const limitCodes = new Set((Array.isArray(board?.codes) ? board.codes : [])
       .map(normalizeReasonSourceCode)
       .filter(Boolean));
-    const rows = await strategyMainlineWithTimeout(
-      getStrategyBoardRealtimeStocks(plateId, day, board).catch(() => []),
-      STRATEGY_MAINLINE_RISING_FETCH_TIMEOUT_MS,
-      []
-    );
+    // 三审修正3:诊断模式完整等待,不允许 1.2 秒超时把半结果当完整结果。
+    const fetchRows = getStrategyBoardRealtimeStocks(plateId, day, board, { historicalOnly: options.historicalOnly === true }).catch(() => []);
+    const rows = options.fullWait
+      ? await fetchRows
+      : await strategyMainlineWithTimeout(fetchRows, STRATEGY_MAINLINE_RISING_FETCH_TIMEOUT_MS, []);
     const normalized = (rows || [])
       .map(strategyMainlineNormalizeRisingStock)
       .filter(Boolean)
@@ -22814,8 +22817,10 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay, options = {}) {
   }
   // 诊断基线:即使池子为空(族映射缺口的典型症状)也要暴露族清单——空池正是最需要诊断的场景。
   if (options.debug) {
+    const baseTraced = (Array.isArray(options.traceCodes) ? options.traceCodes : [])
+      .map(normalizeReasonSourceCode).filter(Boolean);
     for (const entry of poolByMainline) {
-      entry.m.leaderDebug = { familyTopics: entry.familyTopics || [], pool: [] };
+      entry.m.leaderDebug = { familyTopics: entry.familyTopics || [], tracedMissing: baseTraced, pool: [] };
     }
   }
   if (!allRows.length) return;
@@ -22900,12 +22905,22 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay, options = {}) {
     // 只读诊断(admin 端点专用):暴露龙头池全量打分明细与族清单,定位"该进未进/该赢未赢"。
     // 正常请求不带 options.debug,不产生该字段,行为零变化。
     if (options.debug) {
+      const sortedScored = scored.slice().sort((a, b) => b.leadScore - a.leadScore);
+      const traceCodes = (Array.isArray(options.traceCodes) ? options.traceCodes : [])
+        .map(normalizeReasonSourceCode).filter(Boolean);
+      // 三审修正5:codes= 指定的股票必须始终出现在明细里,即使排在池 30 名之外;
+      // 完全不在池内的,记入 tracedMissing——"没进池"本身就是关键诊断结论。
+      const picked = sortedScored.slice(0, 30);
+      for (const code of traceCodes) {
+        if (!picked.some(r => r.code === code)) {
+          const row = sortedScored.find(r => r.code === code);
+          if (row) picked.push(row);
+        }
+      }
       m.leaderDebug = {
         familyTopics: entry.familyTopics || [],
-        pool: scored   // 覆盖上方空池基线:全量打分明细(含未过门槛股)
-          .slice()
-          .sort((a, b) => b.leadScore - a.leadScore)
-          .slice(0, 30)
+        tracedMissing: traceCodes.filter(code => !sortedScored.some(r => r.code === code)),
+        pool: picked   // 覆盖上方空池基线:全量打分明细(含未过门槛股)
           .map(r => ({
             code: r.code, name: r.name, leadScore: r.leadScore, gated: r.gated,
             mainZt10Count: Number(r.mainZt10Count) || 0, zt10Count: Number(r.zt10Count) || 0,
@@ -23313,10 +23328,18 @@ async function buildStrategyMainlinesLive(day, options = {}) {
       mainlines: [],
     };
   }
+  // 诊断模式(三审):完整等待、不写全局状态;历史日回放只用冻结快照,禁实时成分接口。
+  const diagMode = !!options.leaderDebug;
+  const diagHistorical = diagMode && isoDay !== isoFromCompactDate(chinaNowParts().day);
   await strategyMainlineEnrichBoardsWithRisingStocks(boardPayload?.boards || [], isoDay, {
     realtimeSource: boardPayload?.source || '',
     primaryPool: STRATEGY_MAINLINE_LIVE_BOARD_POOL,
+    recordState: !diagMode,
+    fullWait: diagMode,
+    historicalOnly: diagHistorical,
   }).catch(() => []);
+  // 三审修正4:个股归属追踪要看"过滤前"的全量板块——没进主通道/补选的原始板块正是漏归属的常见去处。
+  const allBoardsForTrace = diagMode ? (boardPayload?.boards || []).slice() : null;
   // 只保留被主通道/补选通道选中的板块进入后续 seeds:
   // 放宽 boardPool 带来的未选中板块不得改变原有主线候选语义。
   if (Array.isArray(boardPayload?.boards)) {
@@ -23410,11 +23433,15 @@ async function buildStrategyMainlinesLive(day, options = {}) {
       strategyMainlineAttachRealtimeBoardToSeed(seed, board, matchedAllCodes);
     }
   }
-  const catalogBoards = await strategyMainlineWithTimeout(
-    getStrategyMainlineRealtimeCatalogBoards(isoDay).catch(() => []),
-    STRATEGY_MAINLINE_CATALOG_TIMEOUT_MS,
-    []
-  );
+  // 历史诊断:catalog 榜同样是"当前时刻"的东财/同花顺行情,回放历史日禁止混入;
+  // 诊断今天则完整等待(不吃超时截断)。
+  const catalogBoards = diagHistorical ? [] : (diagMode
+    ? await getStrategyMainlineRealtimeCatalogBoards(isoDay).catch(() => [])
+    : await strategyMainlineWithTimeout(
+        getStrategyMainlineRealtimeCatalogBoards(isoDay).catch(() => []),
+        STRATEGY_MAINLINE_CATALOG_TIMEOUT_MS,
+        []
+      ));
   for (const seed of seedByKey.values()) {
     strategyMainlineAttachBestCatalogBoard(seed, catalogBoards);
   }
@@ -23664,11 +23691,16 @@ async function buildStrategyMainlinesLive(day, options = {}) {
     )
     .slice(0, 10)
     .map((x, i) => ({ ...x, rank: i + 1 }));
-  await strategyMainlineWithTimeout(
-    strategyMainlineReworkLeaders(mainlines, isoDay, { debug: !!options.leaderDebug }).catch(() => {}),
-    STRATEGY_MAINLINE_REWORK_TIMEOUT_MS,
-    null
-  );
+  // 三审修正3:诊断模式完整等待龙头池重构,不吃正式请求的超时;正式请求行为不变。
+  const reworkTask = strategyMainlineReworkLeaders(mainlines, isoDay, {
+    debug: diagMode,
+    traceCodes: Array.isArray(options.traceCodes) ? options.traceCodes : [],
+  }).catch(() => {});
+  if (diagMode) {
+    await reworkTask;
+  } else {
+    await strategyMainlineWithTimeout(reworkTask, STRATEGY_MAINLINE_REWORK_TIMEOUT_MS, null);
+  }
   if (mainlineConfirm) {
     for (const m of mainlines) {
       m.isConfirmedMainline = (m.familyKey || m.key) === mainlineConfirm.key || m.theme === mainlineConfirm.theme;
@@ -23684,7 +23716,7 @@ async function buildStrategyMainlinesLive(day, options = {}) {
       .map(s => [normalizeReasonSourceCode(s?.code), s]).filter(([c]) => c));
     debugTrace = options.traceCodes.map(raw => {
       const code = normalizeReasonSourceCode(raw);
-      const boardsWithCode = (boardPayload?.boards || [])
+      const boardsWithCode = (allBoardsForTrace || boardPayload?.boards || [])
         .filter(b => (Array.isArray(b?.codes) && b.codes.map(normalizeReasonSourceCode).includes(code)) ||
                      (Array.isArray(b?.risingCodes) && b.risingCodes.map(normalizeReasonSourceCode).includes(code)))
         .map(b => ({
@@ -23714,6 +23746,16 @@ async function buildStrategyMainlinesLive(day, options = {}) {
   return {
     ok: true,
     ...(debugTrace ? { debugTrace } : {}),
+    ...(diagMode ? {
+      debugMeta: {
+        fullWait: true,             // 全链路完整等待,无超时半结果
+        recordState: false,         // 未写任何全局运行状态(补选观测/扫描调度)
+        historicalOnly: diagHistorical,
+        note: diagHistorical
+          ? '历史回放只用冻结快照与历史库;盘中成分行情无历史存档,risingStocks/memberRows 为空属预期,板块成分证据以 ztList 为准。'
+          : '诊断今天:实时接口完整等待。',
+      },
+    } : {}),
     mode: 'intraday-mainline',
     basis: 'realtime-board-gain-inflow-big-gainers-breadth-momentum-plus-prior-main-reason',
     sessionPhase: sessionPhaseNow,
@@ -24323,7 +24365,11 @@ async function getStrategyBoardStocks(plateId, day, info) {
   } catch {}
   return [];
 }
-async function getStrategyBoardRealtimeStocks(plateId, day, info) {
+async function getStrategyBoardRealtimeStocks(plateId, day, info, opts = {}) {
+  // 历史诊断(三审修正1):东财/同花顺/KPL 成分接口全是"当前时刻"数据,历史日回放绝不能混入;
+  // 且盘中成分行情没有历史存档(getStrategyBoardStocks 兜底同样是实时接口)——
+  // 诚实返回空,板块成分只用冻结快照里的 ztList,缺盘中大涨数据在 debugMeta 里明示。
+  if (opts.historicalOnly) return [];
   const zsType = Number(info?.zsType);
   try {
     if (zsType === 6) return strategyNormRealtimeStocks(await fetchEastmoneyConceptStocks(plateId));

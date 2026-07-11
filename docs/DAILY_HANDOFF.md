@@ -2875,3 +2875,29 @@ Deployment:
 Notes for next agent:
 - Claude 需使用生产 `canonicalTopicName` 和正确交易日/当日一板夹具；补充“历史诊断绝不访问当前实时行情、绝不写全局状态、无超时半结果”的行为测试。
 - 诊断应保留过滤前的全量板块归属，并保证 `codes=` 指定股票即使排名低于 30 也始终出现在诊断结果中。
+
+## 2026-07-11 - Claude - PR #23 三审九点修复(v4,Codex 复审前)
+
+Changed:
+- 修正1(历史混入实时数据):getStrategyBoardRealtimeStocks 增 historicalOnly——历史诊断直接返回空,东财/同花顺/KPL 成分接口零调用(它们全是"当前时刻"数据且盘中行情无历史存档,getStrategyBoardStocks 兜底同样是实时接口,不能用);catalog 榜同理禁用;debugMeta.historicalOnly 明示 risingStocks 为空属预期,成分证据以冻结快照 ztList 为准。
+- 修正2(全局状态):enrich 增 recordState:false,诊断不覆盖 strategyMainlineSupplementState;配对照行为测试(正式请求照常记录)。
+- 修正3(超时半结果):诊断模式成分抓取 fullWait 完整等待、龙头池重构绕开 1.2s 超时直接 await;debugMeta.fullWait=true;行为测试用 5ms 超时+30ms 慢数据证明"正式路径截成空/诊断路径拿全量"。
+- 修正4(过滤前板块):allBoardsForTrace 在 scanChannel 过滤前快照,boardsWithCode 用它,不漏未进主通道的原始板块。
+- 修正5(trace 股必现):codes= 指定股排 30 名外强制补入 pool 明细;不在池记 tracedMissing(空池场景含)。
+- 修正6-8(测试真实性):改用生产 canonicalTopicName+PRIMARY_TOPIC_CLUSTERS(实测 canonical('算力AI')='算力',云计算/光模块独立→紫光族缺口真实成立);交易日含 06-29 周一、剔除 06-27 周六;星网 7-08 当日 lianban=1(5 是近10日总涨停,在 zt10Count),按一板重测:归属修复后评分 98→128 仍第一。
+- 修正9(行为测试):历史模式实时接口零调用、recordState:false 全局状态不动、fullWait 无半结果,均有正反对照断言。
+
+Files:
+- `kpl-stats-server.js`(historicalOnly/recordState/fullWait/allBoardsForTrace/tracedMissing/debugMeta)
+- `tests/leader-pool-debug.test.js`(18→37 项)
+- `docs/ops/DATA_REPAIR_20260708_ZIGUANG.md`(补三审修正章节)
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;leader-pool-debug 37 项全过;十三套全回归通过;已同步 main 6b9d724(保留双方记录)。
+
+Deployment:
+- GitHub only(PR #23)。不部署云端;合并部署后 Codex 跑诊断端点取 7-08 真实 JSON,三方确认根因。
+
+Notes for next agent:
+- 历史日盘中成分行情无存档是硬约束:诊断回放的板块成分证据只有 ztList;若未来要完整回放,需把盘中成分榜纳入快照存档(另立议题)。
