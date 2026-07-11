@@ -2823,3 +2823,30 @@ Deployment:
 Notes for next agent:
 - Claude 应先同步最新 `main`，废弃当前补丁假设，使用真实路径/真实字段做只读诊断与回归测试。
 - 修复应从“为何综合主因=算力却只进入网络安全 todayCodes”及“紫光为何未进入龙头前三”入手；未经真实 API 回放验证，不得提交历史快照写入脚本。
+
+## 2026-07-11 - Claude - 7-08 方案 v3:废弃快照盲补,改为只读诊断 + 机制复现(Codex 五点核验全采纳)
+
+Changed:
+- 废弃 v2 盲补脚本(路径臆测 kpl-snapshots 写成 strategy-data/snapshots、锚点零命中、紫光并非缺失、星网指标硬编码错值)。教训:没有云端真实数据时不做数据写入方案。
+- 代码侧核实三事实:①归属链路(todayCodes)只走实时板块成分+历史主因,当日综合主因库不参与;②入池与 mainZt10 门槛都依赖族清单(canonical(theme)+mergedThemes);③历史日对外展示走冻结快照,最终修复必含重建 7-08 快照。
+- 新增 admin 只读诊断端点 /api/strategy-mainline-leader-debug?day=&codes=:live 即时重算(leaderDebug=族清单+龙头池全量打分明细,空池也暴露族清单;debugTrace=个股板块携带/当日主因/历史主因/落入主线四方对照)+ frozenSummary 冻结快照摘要对照。严格只读:不写预测、不派扫描、不动快照。
+- ReworkLeaders 增 options.debug 采集(正常调用零变化,行为回归有断言)。
+- 新增 tests/leader-pool-debug.test.js(18 项):真实 ReworkLeaders+合成夹具复现归属丢失/族清单缺口两条根因链与修复后自动登顶,无真实行情硬编码。
+
+Files:
+- `kpl-stats-server.js`(debug 采集 + 诊断端点 + traceCodes,均只在诊断参数下生效)
+- `tests/leader-pool-debug.test.js`(新增)
+- `tools/patch-20260708-suanli-leaders.js`(删除)
+- `docs/ops/DATA_REPAIR_20260708_ZIGUANG.md`(重写为诊断先行方案)
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;新测试 18 项全过;其余十二套回归全过(共 13 套)。
+- 已同步 main 2dddb77(含 Codex 否决记录,双方 handoff 保留)。
+
+Deployment:
+- GitHub only(PR #23)。合并部署后 Codex 跑诊断端点取 7-08 真实 JSON,三方确认根因,再由 Claude 出底库自动计算的代码修复 + 重建当日快照。
+
+Notes for next agent:
+- 修复原则(Codex 评审定):最终指标必须由涨停底库/主因库/收盘价库自动计算,不得硬编码。
+- 预期根因:归属=当日主因库未参与 todayCodes;紫光=族清单未含其主因题材(云计算/光模块→算力AI)。以诊断端点输出为准。

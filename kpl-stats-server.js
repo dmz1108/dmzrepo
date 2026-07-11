@@ -22739,7 +22739,7 @@ async function getDetailEvidenceIndexApi(url, req, res) {
 function strategyLeaderRankScore(rank, top, base, step) {
   return rank && rank <= top ? Math.max(0, base - step * (rank - 1)) : 0;
 }
-async function strategyMainlineReworkLeaders(mainlines, isoDay) {
+async function strategyMainlineReworkLeaders(mainlines, isoDay, options = {}) {
   const list = Array.isArray(mainlines) ? mainlines : [];
   if (!list.length) return;
   const apiKey = await readSavedApiKey().catch(() => '');
@@ -22797,6 +22797,7 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay) {
   for (const entry of poolByMainline) {
     const { m } = entry;
     const topics = [...new Set([m.theme, ...(m.mergedThemes || [])].map(t => canonicalTopicName(String(t || ''))).filter(Boolean))];
+    entry.familyTopics = topics;   // 诊断用:主因题材必须命中此族清单才可入池/过门槛
     entry.freshByCode = new Map();
     for (const topic of topics) {
       for (const [code, hit] of (themeDayHits.get(topic) || new Map())) {
@@ -22809,6 +22810,12 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay) {
           allRows.push(row);
         }
       }
+    }
+  }
+  // 诊断基线:即使池子为空(族映射缺口的典型症状)也要暴露族清单——空池正是最需要诊断的场景。
+  if (options.debug) {
+    for (const entry of poolByMainline) {
+      entry.m.leaderDebug = { familyTopics: entry.familyTopics || [], pool: [] };
     }
   }
   if (!allRows.length) return;
@@ -22890,6 +22897,27 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay) {
     const starTop = (m.starStocks || [])[0] || null;
     m.starSlot = starTop ? { ...starTop } : null;
     m.leaderIsStar = !!(starTop && m.mainLeader && normalizeReasonSourceCode(starTop.code) === normalizeReasonSourceCode(m.mainLeader.code));
+    // 只读诊断(admin 端点专用):暴露龙头池全量打分明细与族清单,定位"该进未进/该赢未赢"。
+    // 正常请求不带 options.debug,不产生该字段,行为零变化。
+    if (options.debug) {
+      m.leaderDebug = {
+        familyTopics: entry.familyTopics || [],
+        pool: scored   // 覆盖上方空池基线:全量打分明细(含未过门槛股)
+          .slice()
+          .sort((a, b) => b.leadScore - a.leadScore)
+          .slice(0, 30)
+          .map(r => ({
+            code: r.code, name: r.name, leadScore: r.leadScore, gated: r.gated,
+            mainZt10Count: Number(r.mainZt10Count) || 0, zt10Count: Number(r.zt10Count) || 0,
+            gain10: isFiniteNumeric(r.gain10) ? Number(r.gain10) : null,
+            gain30: isFiniteNumeric(r.gain30) ? Number(r.gain30) : null,
+            freshDist: freshByCode.has(r.code) ? freshByCode.get(r.code) : null,
+            todayLimit: !!r.todayLimit,
+            todayGain: isFiniteNumeric(r.gain) ? Number(r.gain) : null,
+            basis: r.basis,
+          })),
+      };
+    }
   }
 }
 
@@ -23618,7 +23646,10 @@ async function buildStrategyMainlinesLive(day, options = {}) {
   const chinaTodayIso = isoFromCompactDate(chinaNow.day);
   const isTodayQuery = isoDay === chinaTodayIso;
   const sessionPhaseNow = isTodayQuery ? strategyMainlineSessionPhase(chinaNow) : '';
-  strategyMainlineMaybeAutoScan(boardPayload?.boards || [], isoDay, isTodayQuery, sessionPhaseNow, priorReason?.byCode);
+  // 诊断模式严格只读:不派发扫描任务(也不写预测,见下方 writePredict 条件)。
+  if (!options.leaderDebug) {
+    strategyMainlineMaybeAutoScan(boardPayload?.boards || [], isoDay, isTodayQuery, sessionPhaseNow, priorReason?.byCode);
+  }
   const mainlineConfirm = await readMainlineConfirm(isoDay).catch(() => null);
   const inflowGate = strategyMainlineApplyInflowGate(
     strategyMergeMainlineFamilies(rawMainlines)
@@ -23634,7 +23665,7 @@ async function buildStrategyMainlinesLive(day, options = {}) {
     .slice(0, 10)
     .map((x, i) => ({ ...x, rank: i + 1 }));
   await strategyMainlineWithTimeout(
-    strategyMainlineReworkLeaders(mainlines, isoDay).catch(() => {}),
+    strategyMainlineReworkLeaders(mainlines, isoDay, { debug: !!options.leaderDebug }).catch(() => {}),
     STRATEGY_MAINLINE_REWORK_TIMEOUT_MS,
     null
   );
@@ -23644,8 +23675,45 @@ async function buildStrategyMainlinesLive(day, options = {}) {
     }
   }
   if (isTodayQuery && options.writePredict !== false) writeMainlinePredict(isoDay, sessionPhaseNow, mainlines, mainlineConfirm);
+  // 个股归属追踪(诊断端点专用):某只股当天到底被哪些板块携带、映射到哪个题材、
+  // 当日综合主因怎么说、最终落进了哪些主线的 todayCodes——用于定位"该进未进"。
+  let debugTrace = null;
+  if (Array.isArray(options.traceCodes) && options.traceCodes.length) {
+    const todayReasonDb = await readLimitUpMainReasonDbDay(isoDay).catch(() => null);
+    const todayReasonByCode = new Map((todayReasonDb?.stocks || [])
+      .map(s => [normalizeReasonSourceCode(s?.code), s]).filter(([c]) => c));
+    debugTrace = options.traceCodes.map(raw => {
+      const code = normalizeReasonSourceCode(raw);
+      const boardsWithCode = (boardPayload?.boards || [])
+        .filter(b => (Array.isArray(b?.codes) && b.codes.map(normalizeReasonSourceCode).includes(code)) ||
+                     (Array.isArray(b?.risingCodes) && b.risingCodes.map(normalizeReasonSourceCode).includes(code)))
+        .map(b => ({
+          name: String(b?.name || ''),
+          zsType: b?.zsType ?? null,
+          scanChannel: b?.scanChannel || '',
+          mappedTheme: strategyMainlineRealtimeThemeName(String(b?.name || '')),
+          viaZtList: Array.isArray(b?.codes) && b.codes.map(normalizeReasonSourceCode).includes(code),
+        }));
+      const todayReason = todayReasonByCode.get(code) || null;
+      const prior = priorReason?.byCode?.get(code) || null;
+      return {
+        code,
+        inTodayLimitUpDb: limitUpByCode.has(code),
+        todayReason: todayReason ? {
+          finalBoardTopic: String(todayReason.finalBoardTopic || ''),
+          finalDetailReason: String(todayReason.finalDetailReason || ''),
+        } : null,
+        priorReason: prior ? { theme: prior.theme, count: prior.count, latestDay: prior.latestDay } : null,
+        boardsWithCode,
+        mainlinesWithCode: mainlines
+          .filter(m => (m.todayCodes || []).includes(code))
+          .map(m => m.theme),
+      };
+    });
+  }
   return {
     ok: true,
+    ...(debugTrace ? { debugTrace } : {}),
     mode: 'intraday-mainline',
     basis: 'realtime-board-gain-inflow-big-gainers-breadth-momentum-plus-prior-main-reason',
     sessionPhase: sessionPhaseNow,
@@ -24430,6 +24498,28 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/strategy-mainline-review') {
       const reviewDays = Math.min(30, Math.max(1, Number(url.searchParams.get('days')) || 10));
       return send(res, 200, await getStrategyMainlineReview(reviewDays).catch(e => ({ ok: false, error: String(e && e.message || e) })));
+    }
+    if (url.pathname === '/api/strategy-mainline-leader-debug') {
+      // 只读诊断(admin):live=当前代码即时重算(带龙头池打分明细+个股归属追踪),
+      // frozen=对外展示的冻结快照摘要。不写预测、不派扫描、不改快照。
+      if (!requireAdmin(req, res)) return;
+      const dbgDay = isoFromCompactDate(url.searchParams.get('day') || chinaNowParts().day);
+      const traceCodes = String(url.searchParams.get('codes') || '')
+        .split(',').map(s => s.trim()).filter(Boolean).slice(0, 10);
+      const live = await buildStrategyMainlinesLive(dbgDay, { writePredict: false, leaderDebug: true, traceCodes })
+        .catch(e => ({ ok: false, error: String(e && e.message || e) }));
+      const frozen = await readStrategyMainlineSnapshot(dbgDay).catch(() => null);
+      return send(res, 200, {
+        ok: true,
+        day: dbgDay,
+        note: 'read-only diagnosis: live=当前代码即时重算,frozen=冻结快照摘要;历史日对外展示走 frozen,live 用于定位归属/龙头池问题。',
+        frozenSummary: frozen ? (frozen.mainlines || []).map(m => ({
+          theme: m.theme,
+          leaders: (m.leaders || []).map(r => ({ code: r.code, name: r.name, leadScore: r.leadScore ?? null })),
+          todayCodes: (m.todayCodes || []).slice(0, 16),
+        })) : null,
+        live,
+      });
     }
     if (url.pathname === '/api/strategy-mainline-confirm') {
       const confirmDay = isoFromCompactDate(url.searchParams.get('day') || chinaNowParts().day);
