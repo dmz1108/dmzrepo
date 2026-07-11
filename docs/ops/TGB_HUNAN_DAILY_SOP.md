@@ -27,7 +27,7 @@
 
 ```powershell
 cd C:\PandaDashboard
-node .\kpl-stats-server.js --tgb-vision-sync --day YYYY-MM-DD --days 1 --force
+node .\kpl-stats-server.js --tgb-vision-sync --day=YYYY-MM-DD --days=1 --force
 ```
 
 如果 Qwen/视觉服务可用且质量闸通过，该命令可能会自动写入正式库。即使自动失败，也会保存 raw evidence。
@@ -110,7 +110,7 @@ C:\PandaDashboard\backups\tgb-hunan-manual-YYYYMMDD-HHmmss\
 
 ```powershell
 cd C:\PandaDashboard
-node .\kpl-stats-server.js --main-reason-backfill --day YYYY-MM-DD --days 1 --force
+node .\kpl-stats-server.js --main-reason-backfill --day=YYYY-MM-DD --days=1 --force
 ```
 
 ### 9. 验证

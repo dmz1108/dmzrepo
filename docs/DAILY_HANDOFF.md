@@ -2669,3 +2669,34 @@ Deployment:
 Notes for next agent:
 - 字体、React 或其他带 `?v=` 的强缓存资源内容变化时必须同步提升引用版本号；HTML/JSX/manifest 始终保持 no-cache。
 - 当前只信任回环地址上的 Caddy 转发头；若以后反代不再通过回环连接，需要显式更新 `TRUSTED_PROXY_IPS` 并补测试。
+
+## 2026-07-11 - Codex - 手工补录 2026-07-10 TGB 湖南人复盘
+
+Changed:
+- 按固定 SOP 强制抓取 `2026-07-10` 淘股吧湖南人文章和 20 张原始图片，只采用官方白底 `@TGB湖南人` 表格 `image-01-06.png`。
+- 排除顶部重复的“市场连板股”摘要、后部“涨停炸板”区域、同花顺红色可视化图和其他作者/回帖图片。
+- 按源图原版题材块和个股细分原因手工录入 88 行正式 `review/tgb-hunan-structured`，随后重建综合主因库。
+- 修正 TGB 手工 SOP 命令参数为 `--day=... --days=1`；CLI 只识别等号形式，避免空格形式回退到默认近 10 日范围。
+
+Files:
+- `docs/ops/TGB_HUNAN_DAILY_SOP.md`
+- `docs/DAILY_HANDOFF.md`
+- Runtime only on cloud: `C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-07-10.json`
+
+Validated:
+- 官方文章：`https://www.tgb.cn/a/2tjSxizcIDW`，标题 `7.10湖南人涨停复盘+晚间消息汇总`。
+- 正式源文件：88 行、88 个唯一代码、missing 0、extra 0、duplicates 0、weak 0；SHA-256 `24b4a7d9b948753331a8458853ad0e14abc8b949bacee93e84047fe677783443`。
+- 题材块：商业航天 27、医药 11、业绩 10、半导体 9、机器人 8、算力 6、AI应用 3、玻璃基板封装 3、智能电网 3、猪肉 3、其他个股 5，合计 88。
+- 公网 source-view：综合归纳/复盘啦/选股宝/韭研/淘股吧均为 88；四个正式来源均 100% 覆盖，TGB 低置信 0。
+- after-close-status：主因库 88、四源各 88、sourceErrors 为空。
+
+Deployment:
+- Production data touched: yes；未部署应用代码，未重启服务。
+- 备份目录：`C:\PandaDashboard\backups\tgb-hunan-manual-20260710-20260711-112531`。
+- 自动 Qwen 路径因阿里云 `Arrearage` 被质量闸拒绝，未写入正式库；正式文件来自人工逐行核对。
+- 首次重建命令使用空格参数，CLI 回退默认近 10 日并安全重建 9 个已有交易日；各日均沿用现行 v12 来源数据且成功。SOP 已改为等号参数，后续只重建目标日。
+- 云端两份运维日志已更新。
+
+Notes for next agent:
+- 下次 Owner 说“按之前一样手工复盘淘股吧”时，直接读 `docs/ops/TGB_HUNAN_DAILY_SOP.md`，不要重新猜图，也不要用同花顺图或炸板区。
+- 当前 Qwen 账户欠费不影响手工 SOP；不得用失败的自动结果覆盖本次人工正式库。
