@@ -7484,7 +7484,9 @@ async function readEastmoneyCloseDbDay(day) {
     const payload = JSON.parse(await fs.readFile(eastmoneyCloseDbPath(normalizedDay), 'utf8'));
     closeDbDayCache.set(normalizedDay, payload);
     return payload;
-  } catch {
+  } catch (err) {
+    // 八审:龙头 gain10/gain30 直接依赖收盘价库,损坏/权限/EISDIR 不再空吞;ENOENT 进 missing、其它进 readErrors。
+    strategyMainlineDiagNoteRead(`close ${normalizedDay}`, err);
     return null;
   }
 }
@@ -19661,6 +19663,12 @@ function pickArray(obj, keys) {
 }
 
 async function fetchBoardRankingForSnapshot(zsType, apiKey, options = {}) {
+  // 仅测试用途:注入板块榜绕过外网,让端点测试能在受限网络下确定性触发"实时补水超时"路径。
+  // 生产环境该 env 不设置 → 完全走真实抓取,行为零变化。
+  if (process.env.STRATEGY_MAINLINE_TEST_BOARD_RANKING) {
+    try { return JSON.parse(process.env.STRATEGY_MAINLINE_TEST_BOARD_RANKING)[String(zsType)] || []; }
+    catch { return []; }
+  }
   const count = Math.max(BOARD_RANK_FETCH_STEP, Number(options.count || BOARD_RANK_FETCH_STEP));
   if (isDisabledZsType(zsType)) return [];
   if (isEastmoneyZsType(zsType)) {
@@ -23395,12 +23403,40 @@ async function buildStrategyMainlinesLive(day, options = {}) {
 async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = null) {
   const requestedDay = isoFromCompactDate(day || chinaNowParts().day);
   const diagMode = !!options.leaderDebug;
-  // 七审修正2:complete 仅当 ok=true 且无读错误/超时/必要输入缺失时才为 true;
-  // 必要输入=本请求日(requestedDay)的快照与当日主因(诊断归属/龙头的地基),缺任一即不完整。
-  // partial 如实反映"任何降级":读错误 / 超时 / 必要缺失 / ok=false。
+  // 仅测试用途:诊断"今天"判定的日期覆盖。生产环境该 env 不设置 → 与 chinaNowParts().day 完全一致,行为零变化。
+  // 存在的唯一目的:让端点测试能在非交易日的机器上确定性触发"今日实时补水超时"路径(八审第3点)。
+  const diagTodayIso = (diagMode && process.env.STRATEGY_MAINLINE_DIAG_TODAY)
+    ? isoFromCompactDate(process.env.STRATEGY_MAINLINE_DIAG_TODAY)
+    : isoFromCompactDate(chinaNowParts().day);
+  // 八审修正2:必要输入=龙头评分实际读取的输入——本请求日全套快照 + 近10日涨停库/主因库 +
+  // 当前/10日/30日收盘价基准。缺任一使 complete=false。离线交易日历(与 getRecentTradingDays
+  // 的兜底同款 isChinaMarketTradingDay/shiftDay)同步算出这些日子,不依赖网络。
+  const strategyMainlineOfflineTradingDays = (endDay, need) => {
+    const out = [];
+    for (let i = 0; i < 90 && out.length < need; i += 1) {
+      const d = shiftDay(endDay, -i);
+      if (isChinaMarketTradingDay(d)) out.unshift(d);
+    }
+    return out;   // 升序,末位=endDay
+  };
+  const isIntradayToday = requestedDay === diagTodayIso && !isAfterMarketClose(requestedDay);
+  const requiredLabelSet = (() => {
+    const set = new Set([5, 6, 7].map(z => `snapshot-zs${z} ${requestedDay}`));
+    const win31 = strategyMainlineOfflineTradingDays(requestedDay, 31);
+    const near10 = win31.slice(-10);
+    for (const d of near10) { set.add(`limit-up ${d}`); set.add(`main-reason ${d}`); }
+    // 收盘价基准:当前 / 10 交易日前 / 30 交易日前(gain10/gain30 直接依赖)
+    for (const d of [win31[win31.length - 1], win31[win31.length - 11], win31[win31.length - 31]]) {
+      if (d) set.add(`close ${d}`);
+    }
+    // 盘中当天:尚未生成的盘后主因/收盘价不算必要输入,单列 trace(不使 complete=false)
+    if (isIntradayToday) { set.delete(`main-reason ${requestedDay}`); set.delete(`close ${requestedDay}`); }
+    return set;
+  })();
+  // 七审修正2 + 八审:complete 仅当 ok=true 且无读错误/超时/必要输入缺失时才为 true。
   const diagBuildMeta = ({ ok = true, ...extra } = {}) => {
-    const requiredMissing = diagStore.missing.filter(m =>
-      m === `main-reason ${requestedDay}` || (m.startsWith('snapshot-zs') && m.endsWith(requestedDay)));
+    const requiredMissing = diagStore.missing.filter(m => requiredLabelSet.has(m));
+    const traceMissing = diagStore.missing.filter(m => !requiredLabelSet.has(m));   // 非必要缺失(含盘中当天盘后数据、窗口中间日)
     const degraded = ok === false
       || diagStore.readErrors.length > 0
       || diagStore.timeouts.length > 0
@@ -23414,12 +23450,13 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
       debugErrors: diagStore.readErrors.slice(),
       missing: diagStore.missing.slice(),
       requiredMissing,
+      traceMissing,
       ...extra,
     };
   };
   // 诊断历史日(三审修正1的板块榜侧):快照缺失也不得回退到"当前时刻"的实时板块榜——
   // 宁可空结果,不混入今天的数据。此判定必须在板块加载之前完成。
-  const diagHistoricalBoards = diagMode && requestedDay !== isoFromCompactDate(chinaNowParts().day);
+  const diagHistoricalBoards = diagMode && requestedDay !== diagTodayIso;
   // P1-B:boardPool 按补选配置放宽,补选通道才能看到主通道之外的实时候选;
   // 主通道仍锁定在原前 STRATEGY_MAINLINE_LIVE_BOARD_POOL 个(primaryPool),行为与补选前完全一致。
   const boardPayload = await strategyMainlineDiagAwait('board-payload', getDayBoardsWithMembers(requestedDay, {

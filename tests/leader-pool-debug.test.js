@@ -139,7 +139,7 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   A(src.includes("url.pathname === '/api/strategy-mainline-leader-debug'"), '诊断端点已注册');
   A(src.match(/strategy-mainline-leader-debug'[\s\S]{0,300}requireAdmin\(req, res\)/), '诊断端点 admin 门控');
   A(src.includes('if (opts.historicalOnly) return getStrategyBoardSnapshotStocks'), '历史模式:实时成分接口改走快照还原(四审阻断1,取代三审的一刀切返回空)');
-  A(src.includes('const diagHistoricalBoards = diagMode && requestedDay !== isoFromCompactDate(chinaNowParts().day)'), '历史诊断标志=诊断且非今天(板块加载前判定)');
+  A(src.includes('const diagHistoricalBoards = diagMode && requestedDay !== diagTodayIso'), '历史诊断标志=诊断且非今天(板块加载前判定,diagTodayIso 支持测试覆盖)');
   A(src.includes('historicalOnly: diagHistorical') && src.includes('const catalogBoards = diagHistorical ? []'), '历史诊断:成分与 catalog 榜都禁实时数据');
   A(src.includes('liveIfMissing: !diagHistoricalBoards'), '历史诊断:板块榜快照缺失也不回退实时榜(自检补堵,宁空勿混)');
   A(src.includes('recordState: !diagMode') && src.includes('if (options.recordState !== false) {'), '诊断模式 recordState:false — 不写全局补选状态');

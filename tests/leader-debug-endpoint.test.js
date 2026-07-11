@@ -50,20 +50,30 @@ async function waitHealth(port, ms = 20000) {
 
   const SNAP = z => path.join(appDir, 'kpl-snapshots', String(z));
   const MR = path.join(appDir, 'kpl-limitup-main-reason-db');
+  const LU = path.join(appDir, 'kpl-limitup-db');
+  const CLOSE = path.join(appDir, 'eastmoney-close-db');
+  const CONCEPT = path.join(appDir, 'eastmoney-concepts-db');
   for (const z of [5, 6, 7]) await fsp.mkdir(SNAP(z), { recursive: true });
-  await fsp.mkdir(MR, { recursive: true });
+  for (const d of [MR, LU, CLOSE, CONCEPT]) await fsp.mkdir(d, { recursive: true });
   const writeSnap = async (day, z, content) => fsp.writeFile(path.join(SNAP(z), `${day}.json`), content);
   const validSnap = day => JSON.stringify({
     day, boards: [{ plateId: 'p1', name: '算力', ztCount: 2, netInflow: 1e8, gainPct: 3 }],
     cardData: { p1: { ztList: [{ code: '600001', name: 'X', gain: 10 }], zt10: [], gain10: [], gain30: [] } },
   });
+  // 生成一段工作日(2026年7月无 A 股节假日),供必要输入(近10日库 + 收盘价基准)充足供给
+  const weekdaysBack = (endDay, count) => {
+    const out = []; const d = new Date(endDay + 'T00:00:00Z');
+    while (out.length < count) { const wd = d.getUTCDay(); if (wd !== 0 && wd !== 6) out.unshift(d.toISOString().slice(0, 10)); d.setUTCDate(d.getUTCDate() - 1); }
+    return out;
+  };
 
   // 各场景独立交易日,fixtures 互不干扰
   const DAY_CORRUPT_SNAP = '2026-07-08';   // 三套快照全损坏 → ok:false + readErrors
   const DAY_MISSING_SNAP = '2026-07-07';   // 无任何快照 → ok:false + requiredMissing
   const DAY_MR_CORRUPT   = '2026-07-06';   // 有效快照 + 主因文件损坏 → complete:false
   const DAY_MR_EISDIR    = '2026-07-03';   // 有效快照 + 主因路径是目录(EISDIR)→ complete:false
-  const DAY_CLEAN        = '2026-07-02';   // 有效快照 + 有效主因 → 无 readErrors
+  const DAY_CLEAN        = '2026-07-02';   // 必要输入齐全 → complete:true
+  const DAY_TIMEOUT      = '2026-07-10';   // 作为"今日"(env 覆盖)+ 无快照 → 走实时补水 → board-hydrate 超时
 
   for (const z of [5, 6, 7]) await writeSnap(DAY_CORRUPT_SNAP, z, '{not valid json');
   // DAY_MISSING_SNAP:不写任何快照
@@ -71,9 +81,19 @@ async function waitHealth(port, ms = 20000) {
   await fsp.writeFile(path.join(MR, `${DAY_MR_CORRUPT}.json`), '{broken');
   for (const z of [5, 6, 7]) await writeSnap(DAY_MR_EISDIR, z, validSnap(DAY_MR_EISDIR));
   await fsp.mkdir(path.join(MR, `${DAY_MR_EISDIR}.json`), { recursive: true });   // 目录占位 → readFile EISDIR
+
+  // DAY_CLEAN:必要输入全部齐全——快照(3)+ 覆盖窗口的近日涨停库/主因库/收盘价库(宽供给,45 工作日)
   for (const z of [5, 6, 7]) await writeSnap(DAY_CLEAN, z, validSnap(DAY_CLEAN));
-  await fsp.writeFile(path.join(MR, `${DAY_CLEAN}.json`),
-    JSON.stringify({ day: DAY_CLEAN, stocks: [{ code: '600001', name: 'X', finalBoardTopic: '算力' }] }));
+  for (const d of weekdaysBack(DAY_CLEAN, 45)) {
+    await fsp.writeFile(path.join(LU, `${d}.json`), JSON.stringify({ day: d, stocks: [] }));
+    await fsp.writeFile(path.join(MR, `${d}.json`),
+      JSON.stringify({ day: d, stocks: d === DAY_CLEAN ? [{ code: '600001', name: 'X', finalBoardTopic: '算力' }] : [] }));
+    await fsp.writeFile(path.join(CLOSE, `${d}.json`), JSON.stringify({ day: d, stocks: [{ code: '600001', name: 'X', close: 10 }] }));
+  }
+
+  // DAY_TIMEOUT:无快照 → 实时回退。测试注入板块榜(env,绕过外网),让 hydrate 被调用 →
+  // hydrate 自身网络被 1ms 超时兜底 race 掉 → 确定性触发 board-hydrate timeout,不依赖真实外网时序。
+  const TEST_BOARD_RANKING = JSON.stringify({ '6': [{ plateId: 'BK9999', name: '算力', gainPct: 3, gain: 3, netInflow: 1e8, memberCount: 5 }] });
 
   // 2) 起服务(临时 admin 凭据 + 隔离端口)
   const port = 18900 + (process.pid % 500);
@@ -83,7 +103,14 @@ async function waitHealth(port, ms = 20000) {
     cwd: appDir,
     env: { ...process.env, KPL_STATS_PORT: String(port), KPL_STATS_HOST: '127.0.0.1',
       KPL_ADMIN_USERNAME: ADMIN_USER, KPL_ADMIN_PASSWORD: ADMIN_PASS,
-      PANDA_AI_READONLY_TOKEN: '', PANDA_AI_STRATEGY_TOKEN: '' },
+      PANDA_AI_READONLY_TOKEN: '', PANDA_AI_STRATEGY_TOKEN: '',
+      // 仅本测试进程(生产不设置,行为零变化):
+      // DIAG_TODAY 把 DAY_TIMEOUT 当作诊断"今日"(机器为非交易日周末);TEST_BOARD_RANKING 注入板块榜绕过外网;
+      // HYDRATE_TIMEOUT=1 使 hydrate 自身网络被 race 掉 → 确定性 board-hydrate timeout;KPL_API_KEY 仅过实时回退 `if(apiKey)` 门槛。
+      STRATEGY_MAINLINE_DIAG_TODAY: '2026-07-10',
+      STRATEGY_MAINLINE_TEST_BOARD_RANKING: TEST_BOARD_RANKING,
+      STRATEGY_MAINLINE_LIVE_HYDRATE_TIMEOUT_MS: '1',
+      KPL_API_KEY: 'endpoint-test-dummy-key' },
     stdio: ['ignore', 'ignore', 'pipe'],
   });
   let srvErr = '';
@@ -134,12 +161,28 @@ async function waitHealth(port, ms = 20000) {
     A((m4.debugErrors || []).some(e => e.startsWith(`main-reason ${DAY_MR_EISDIR}`)),
       'EISDIR:main-reason 读错误进入 debugErrors(EACCES 同分支,函数级已注入覆盖)');
 
-    // 场景五:并发两个诊断请求 + 诊断后普通请求,run() 隔离互不串写
+    // 场景五:必要输入齐全 → complete=true(八审第2点:干净日不因窗口中间日缺失而误判)
+    const r5 = await diag(DAY_CLEAN);
+    const m5 = meta(r5);
+    A(r5.json.live.ok === true && m5.complete === true && m5.partial === false,
+      '干净日(必要输入齐全):complete=true / partial=false');
+    A((m5.debugErrors || []).length === 0 && (m5.requiredMissing || []).length === 0 && (m5.timeouts || []).length === 0,
+      '干净日:无 readErrors / 无 requiredMissing / 无 timeouts');
+
+    // 场景六:真实 board-hydrate 超时(八审第3点)——DAY_TIMEOUT 被当作今日,无快照 → 实时补水 → 1ms 超时兜底
+    const r6 = await diag(DAY_TIMEOUT);
+    const m6 = meta(r6);
+    A(m6 && (m6.timeouts || []).some(t => t.startsWith('board-hydrate')),
+      '实时补水超时:timeouts 记录 board-hydrate(实际使用 STRATEGY_MAINLINE_LIVE_HYDRATE_TIMEOUT_MS 触发)');
+    A(m6.fullWait === false && m6.partial === true && m6.complete === false,
+      '实时补水超时:fullWait=false / partial=true / complete=false');
+
+    // 场景七:并发两个诊断请求 + 诊断后普通请求,run() 隔离互不串写(八审第4点:干净日补断言 complete===true)
     const [cA, cB] = await Promise.all([diag(DAY_CORRUPT_SNAP), diag(DAY_CLEAN)]);
     const mA = meta(cA), mB = meta(cB);
-    A((mA.debugErrors || []).some(e => e.includes('invalid JSON')) && mA.complete === false, '并发A(损坏日):自身错误齐全');
-    A((mB.debugErrors || []).every(e => !e.includes('invalid JSON')),
-      '并发B(干净日):未串入并发A的损坏错误(run() 按异步上下文隔离)');
+    A((mA.debugErrors || []).some(e => e.includes('invalid JSON')) && mA.complete === false, '并发A(损坏日):自身错误齐全 + complete=false');
+    A((mB.debugErrors || []).every(e => !e.includes('invalid JSON')) && mB.complete === true && mB.partial === false,
+      '并发B(干净日):未串入并发A的损坏错误,且自身 complete=true / partial=false(run() 按异步上下文隔离)');
     const normal = await httpJson(port, `/api/strategy-mainlines?day=${DAY_CLEAN}`);
     A(normal.status === 200 && (!normal.json || normal.json.debugMeta === undefined),
       '诊断后普通请求:无 debugMeta 残留(store 不泄漏到非诊断路径)');
