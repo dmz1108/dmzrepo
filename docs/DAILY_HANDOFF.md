@@ -2870,3 +2870,33 @@ Deployment:
 Notes for next agent:
 - 合并后 Claude 必须从最新 `main` 开始，并在取得安全注入的 Token 后使用默认可信入口抓取证据；不得通过自定义外部 host 中转。
 - 云端部署仍需同时部署 `kpl-stats-server.js` 与 `strategy-evidence.js`，备份、重启、远端 capture/replay 和云端日志尚未执行。
+
+## 2026-07-11 - Codex - 部署 AI 策略证据接口并完成云端验收
+
+Changed:
+- 将 GitHub `main@e1c7750` 的 `kpl-stats-server.js` 与新增 `strategy-evidence.js` 作为同一部署单元上传云端；随后以 `a92ecf3` 排除纯抓取时间对整包哈希的影响，使相同历史证据重复抓取保持同一 SHA-256。
+- 将 `docs/AI_PRODUCTION_READ.md` 的 7 月 8 日初始化验收窗口改为 20 日：云端业务底库只滚动保留最近 30 个交易日，旧目标日再回看完整 30 日时最早边界可能已清理，接口应诚实返回缺失而不是冒充完整。
+- 确认当前 SSH 端口为 2222；443 已由 HTTPS/Caddy 使用，旧交接中的 SSH 443 已过时。
+
+Files:
+- Cloud runtime: `C:\PandaDashboard\kpl-stats-server.js`
+- Cloud runtime: `C:\PandaDashboard\strategy-evidence.js`
+- Git documentation: `docs/AI_PRODUCTION_READ.md`
+- Git/cloud handoff: `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 部署前云端暂存 SHA-256 与 Git 完全一致；两个文件 `node --check` 通过。
+- 两次受控重启均成功：端口 8765 监听 PID `13164 -> 8604 -> 352`，本机与公网 `/health` 均返回 200/`ok:true`。
+- 无 Token 与 URL 查询参数假 Token 请求证据接口均返回 403；云端内部从受保护运行时配置读取 Token 后，请求返回 `access=ai-read-only-evidence`、三套快照和稳定整包 SHA-256。
+- 7 月 8 日、20 日窗口连续两次验收：`complete:true`、`missingSources=[]`、`sourceErrors=[]`，请求股票为 `002396/000938`，三源共命中 13 张板块卡，两次 bundle SHA-256 均为 `b29c43c5b53358dd851adf3b008b73d9faf7c23558588f9100690e23621388f0`。
+- 30 日窗口按设计返回 `complete:false`，明确指出 5 月 27/28 日涨停库与主因库已超出当前滚动保留边界；缺失未被当成 0。
+
+Deployment:
+- Production touched: yes；主服务已重启，Caddy 与 Panda Yule Server 未重启。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\ai-evidence-e1c7750-20260711-051734`。
+- 部署后主文件 SHA-256：`BC8FD1DCAF798B18FD54308B193FF78E650237BF9CFCF88D0446767C2601BD3D`；最终模块 SHA-256：`74612E9019D6F8C12C8D9FB8D19DB3084A4F4596DA12EFAF3D704E2AC727176F`。
+- Token 值未输出、未写 Git、未进入部署日志或聊天。
+
+Notes for next agent:
+- 云端接口能力已就绪；Claude 仍需在其自身安全执行环境注入 `PANDA_AI_READONLY_TOKEN`，同步最新 main 后运行 20 日窗口的 capture/replay 验收。
+- 证据 JSON 仍只允许写入 Git 忽略的 `tmp/strategy-cases/`，不得提交仓库。
