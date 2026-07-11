@@ -30,6 +30,12 @@ Codex 用真实文件/API 指出九点,全部修复:
 8. **星网当日一板**:7-08 `lianban=1`(单板),5 是近10日总涨停(在 `zt10Count`),两者不混。
 9. **行为测试**:证明历史诊断不访问实时行情、不写全局状态、不因超时返回半结果(见测试 6 组静态+行为断言)。
 
+## 四审修正(三阻断项,本次)
+
+1. **历史成分改走快照还原**:`historicalOnly` 不再一刀切返回空——成分行从当日冻结快照 `cardData.ztList` 还原(快照已记录的当日涨幅保留为 todayGain,未记录不伪造);`zt10/gain10/gain30` 三表的板块携带证据由 `collectSnapshotCardStatsForCode` 在 `debugTrace.snapshotStats` 原值带出(紫光"数据在云计算 cardData 却没进前三"正需要这条证据通道)。
+2. **动能采样只读**:`strategyMainlineTrackTrend` 增 record 参数,诊断今天时 `recordTrend=false`——读既有采样算动能(评分口径不失真),但不写 `strategyMainlineTrendSamples`。
+3. **诊断不吞错**:`debugErrors` 贯通 enrich/单板成分抓取/catalog/rework/指标充实五个吞错点;`debugMeta.complete` 如实标注,出错时池明细照常输出(诚实的不完整结果),快照文件损坏也入账(缺文件才是正常缺省)。
+
 ## 本 PR 交付(只读诊断 + 机制复现,不改任何行为)
 
 1. **admin 只读诊断端点** `GET /api/strategy-mainline-leader-debug?day=2026-07-08&codes=002396,000938`:

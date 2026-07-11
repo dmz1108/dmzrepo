@@ -21680,7 +21680,12 @@ async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day, options
       .map(normalizeReasonSourceCode)
       .filter(Boolean));
     // 三审修正3:诊断模式完整等待,不允许 1.2 秒超时把半结果当完整结果。
-    const fetchRows = getStrategyBoardRealtimeStocks(plateId, day, board, { historicalOnly: options.historicalOnly === true }).catch(() => []);
+    // 四审阻断3:单板抓取失败在诊断模式下记入 debugErrors,不静默吞掉。
+    const fetchRows = getStrategyBoardRealtimeStocks(plateId, day, board, { historicalOnly: options.historicalOnly === true })
+      .catch(e => {
+        if (Array.isArray(options.debugErrors)) options.debugErrors.push(`board-members ${plateId}: ${String(e && e.message || e)}`);
+        return [];
+      });
     const rows = options.fullWait
       ? await fetchRows
       : await strategyMainlineWithTimeout(fetchRows, STRATEGY_MAINLINE_RISING_FETCH_TIMEOUT_MS, []);
@@ -21912,17 +21917,20 @@ function strategyMainlineSessionPhase(nowParts) {
 }
 
 // 盘中动能：进程内采样对比 ~5-45 分钟前的自己，识别正在加速的主线。重启后冷启动，属可接受降级。
-function strategyMainlineTrackTrend(key, snap) {
+function strategyMainlineTrackTrend(key, snap, record = true) {
   const cleanKey = String(key || '').trim();
   if (!cleanKey) return null;
   const now = Date.now();
   const list = (strategyMainlineTrendSamples.get(cleanKey) || [])
     .filter(sample => now - sample.ts <= STRATEGY_MAINLINE_TREND_WINDOW_MS);
   const last = list[list.length - 1];
-  if (!last || now - last.ts >= STRATEGY_MAINLINE_TREND_MIN_GAP_MS) {
-    list.push({ ts: now, ...snap });
+  if (record) {
+    // 诊断模式 record=false:只读既有采样算动能,不写入——诊断请求不得污染正式盘中采样序列。
+    if (!last || now - last.ts >= STRATEGY_MAINLINE_TREND_MIN_GAP_MS) {
+      list.push({ ts: now, ...snap });
+    }
+    strategyMainlineTrendSamples.set(cleanKey, list);
   }
-  strategyMainlineTrendSamples.set(cleanKey, list);
   const base = list.find(sample => now - sample.ts >= STRATEGY_MAINLINE_TREND_BASE_MIN_AGE_MS);
   if (!base || base.ts === now) return null;
   return {
@@ -22824,7 +22832,10 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay, options = {}) {
     }
   }
   if (!allRows.length) return;
-  await enrichReviewLeaderMetrics(allRows, isoDay, apiKey).catch(() => {});
+  // 四审阻断3:指标充实失败在诊断模式下不静默——池行会缺 zt10/gain10/gain30,必须让诊断者知道原因。
+  await enrichReviewLeaderMetrics(allRows, isoDay, apiKey).catch(e => {
+    if (Array.isArray(options.debugErrors)) options.debugErrors.push(`leader-metrics: ${String(e && e.message || e)}`);
+  });
   for (const entry of poolByMainline) {
     const { m, rows } = entry;
     const freshByCode = entry.freshByCode || new Map();
@@ -22989,7 +23000,7 @@ async function getStrategyMainlineReview(days = 10) {
 }
 
 // 最终输出前的预判增强：广度分、动能分、潜力个股、明星股、首日题材、确定性分级都在这一处挂载。
-function strategyMainlineAugmentPrediction(item, isToday, day) {
+function strategyMainlineAugmentPrediction(item, isToday, day, recordTrend = true) {
   const breadth = strategyMainlineBestBreadth(item?.resonanceBoards);
   const scoreParts = { ...(item?.scoreParts || {}) };
   const breadthScore = strategyMainlineBreadthScore(breadth);
@@ -23000,7 +23011,7 @@ function strategyMainlineAugmentPrediction(item, isToday, day) {
         bigGainCount: Number(item?.bigGainCount) || 0,
         nearLimitCount: Number(item?.nearLimitCount) || 0,
         count: Number(item?.count) || 0,
-      })
+      }, recordTrend)
     : null;
   const momentum = strategyMainlineMomentumScore(trend);
   if (momentum > 0) scoreParts.momentum = momentum;
@@ -23332,15 +23343,21 @@ async function buildStrategyMainlinesLive(day, options = {}) {
     };
   }
   // 诊断模式(三审):完整等待、不写全局状态;历史日回放只用冻结快照,禁实时成分接口。
+  // 四审阻断3:诊断不吞错——enrich/rework/catalog 的异常收进 debugErrors,complete 如实标注。
   const diagMode = !!options.leaderDebug;
   const diagHistorical = diagMode && isoDay !== isoFromCompactDate(chinaNowParts().day);
+  const debugErrors = diagMode ? [] : null;
   await strategyMainlineEnrichBoardsWithRisingStocks(boardPayload?.boards || [], isoDay, {
     realtimeSource: boardPayload?.source || '',
     primaryPool: STRATEGY_MAINLINE_LIVE_BOARD_POOL,
     recordState: !diagMode,
     fullWait: diagMode,
     historicalOnly: diagHistorical,
-  }).catch(() => []);
+    debugErrors,
+  }).catch(e => {
+    if (debugErrors) debugErrors.push(`enrich: ${String(e && e.message || e)}`);
+    return [];
+  });
   // 三审修正4:个股归属追踪要看"过滤前"的全量板块——没进主通道/补选的原始板块正是漏归属的常见去处。
   const allBoardsForTrace = diagMode ? (boardPayload?.boards || []).slice() : null;
   // 只保留被主通道/补选通道选中的板块进入后续 seeds:
@@ -23439,7 +23456,10 @@ async function buildStrategyMainlinesLive(day, options = {}) {
   // 历史诊断:catalog 榜同样是"当前时刻"的东财/同花顺行情,回放历史日禁止混入;
   // 诊断今天则完整等待(不吃超时截断)。
   const catalogBoards = diagHistorical ? [] : (diagMode
-    ? await getStrategyMainlineRealtimeCatalogBoards(isoDay).catch(() => [])
+    ? await getStrategyMainlineRealtimeCatalogBoards(isoDay).catch(e => {
+        debugErrors.push(`catalog: ${String(e && e.message || e)}`);
+        return [];
+      })
     : await strategyMainlineWithTimeout(
         getStrategyMainlineRealtimeCatalogBoards(isoDay).catch(() => []),
         STRATEGY_MAINLINE_CATALOG_TIMEOUT_MS,
@@ -23683,7 +23703,7 @@ async function buildStrategyMainlinesLive(day, options = {}) {
   const mainlineConfirm = await readMainlineConfirm(isoDay).catch(() => null);
   const inflowGate = strategyMainlineApplyInflowGate(
     strategyMergeMainlineFamilies(rawMainlines)
-      .map(item => strategyMainlineAugmentPrediction(item, isTodayQuery, isoDay)),
+      .map(item => strategyMainlineAugmentPrediction(item, isTodayQuery, isoDay, !diagMode)),
     mainlineConfirm
   );
   const mainlines = inflowGate.kept
@@ -23695,14 +23715,24 @@ async function buildStrategyMainlinesLive(day, options = {}) {
     .slice(0, 10)
     .map((x, i) => ({ ...x, rank: i + 1 }));
   // 三审修正3:诊断模式完整等待龙头池重构,不吃正式请求的超时;正式请求行为不变。
-  const reworkTask = strategyMainlineReworkLeaders(mainlines, isoDay, {
+  // 四审阻断3:诊断不吞 rework 异常——记入 debugErrors,complete 标 false。
+  const reworkOpts = {
     debug: diagMode,
     traceCodes: Array.isArray(options.traceCodes) ? options.traceCodes : [],
-  }).catch(() => {});
+    debugErrors,
+  };
   if (diagMode) {
-    await reworkTask;
+    try {
+      await strategyMainlineReworkLeaders(mainlines, isoDay, reworkOpts);
+    } catch (e) {
+      debugErrors.push(`rework: ${String(e && e.message || e)}`);
+    }
   } else {
-    await strategyMainlineWithTimeout(reworkTask, STRATEGY_MAINLINE_REWORK_TIMEOUT_MS, null);
+    await strategyMainlineWithTimeout(
+      strategyMainlineReworkLeaders(mainlines, isoDay, reworkOpts).catch(() => {}),
+      STRATEGY_MAINLINE_REWORK_TIMEOUT_MS,
+      null
+    );
   }
   if (mainlineConfirm) {
     for (const m of mainlines) {
@@ -23717,7 +23747,8 @@ async function buildStrategyMainlinesLive(day, options = {}) {
     const todayReasonDb = await readLimitUpMainReasonDbDay(isoDay).catch(() => null);
     const todayReasonByCode = new Map((todayReasonDb?.stocks || [])
       .map(s => [normalizeReasonSourceCode(s?.code), s]).filter(([c]) => c));
-    debugTrace = options.traceCodes.map(raw => {
+    debugTrace = [];
+    for (const raw of options.traceCodes) {
       const code = normalizeReasonSourceCode(raw);
       const boardsWithCode = (allBoardsForTrace || boardPayload?.boards || [])
         .filter(b => (Array.isArray(b?.codes) && b.codes.map(normalizeReasonSourceCode).includes(code)) ||
@@ -23731,7 +23762,7 @@ async function buildStrategyMainlinesLive(day, options = {}) {
         }));
       const todayReason = todayReasonByCode.get(code) || null;
       const prior = priorReason?.byCode?.get(code) || null;
-      return {
+      debugTrace.push({
         code,
         inTodayLimitUpDb: limitUpByCode.has(code),
         todayReason: todayReason ? {
@@ -23740,11 +23771,13 @@ async function buildStrategyMainlinesLive(day, options = {}) {
         } : null,
         priorReason: prior ? { theme: prior.theme, count: prior.count, latestDay: prior.latestDay } : null,
         boardsWithCode,
+        // 四审阻断1:当日快照 cardData 三表+ztList 的板块携带证据(原值,含快照记录的当日涨幅)
+        snapshotStats: await collectSnapshotCardStatsForCode(isoDay, code, debugErrors),
         mainlinesWithCode: mainlines
           .filter(m => (m.todayCodes || []).includes(code))
           .map(m => m.theme),
-      };
-    });
+      });
+    }
   }
   return {
     ok: true,
@@ -23752,11 +23785,13 @@ async function buildStrategyMainlinesLive(day, options = {}) {
     ...(diagMode ? {
       debugMeta: {
         fullWait: true,             // 全链路完整等待,无超时半结果
-        recordState: false,         // 未写任何全局运行状态(补选观测/扫描调度)
+        recordState: false,         // 未写任何全局运行状态(补选观测/扫描调度/动能采样)
         historicalOnly: diagHistorical,
+        complete: debugErrors.length === 0,   // 四审阻断3:有吞不掉的异常就如实标不完整
+        debugErrors,
         note: diagHistorical
-          ? '历史回放只用冻结快照与历史库;盘中成分行情无历史存档,risingStocks/memberRows 为空属预期,板块成分证据以 ztList 为准。'
-          : '诊断今天:实时接口完整等待。',
+          ? '历史回放只用冻结快照与历史库;成分行来自快照 ztList(含已记录当日涨幅),三表携带证据见 debugTrace.snapshotStats。'
+          : '诊断今天:实时接口完整等待,动能采样只读不写。',
       },
     } : {}),
     mode: 'intraday-mainline',
@@ -24368,11 +24403,57 @@ async function getStrategyBoardStocks(plateId, day, info) {
   } catch {}
   return [];
 }
+// 历史诊断成分还原(四审阻断1):冻结快照 cardData 是当日合法数据。ztList 行(含快照已记录的
+// 当日涨幅字段,有则保留为 todayGain,无不伪造)还原为成分行;zt10/gain10/gain30 三表的
+// 板块携带证据由 collectSnapshotCardStatsForCode 在 debugTrace 中原值带出。
+async function getStrategyBoardSnapshotStocks(plateId, day, info) {
+  try {
+    const payload = JSON.parse(await fs.readFile(snapshotPath(isoFromCompactDate(day), String(Number(info?.zsType))), 'utf8'));
+    const card = payload?.cardData?.[String(plateId)] || null;
+    if (!card) return [];
+    return (Array.isArray(card.ztList) ? card.ztList : [])
+      .map(row => ({
+        code: String((row && typeof row === 'object' ? row.code : row) ?? ''),
+        name: String(row?.name || ''),
+        gainPct: numOrNull(row?.gainPct ?? row?.gain ?? row?.zf ?? row?.changePct),
+      }))
+      .filter(r => r.code);
+  } catch { return []; }
+}
+
+// 四审阻断1:某股在当日快照 cardData 的哪些板块/哪些表(zt10/gain10/gain30/ztList)中,原值原样带出。
+// 这正是"紫光数据在云计算 cardData 里却没进龙头前三"这类问题的直接证据通道。
+async function collectSnapshotCardStatsForCode(day, code, debugErrors) {
+  const isoDay = isoFromCompactDate(day);
+  const out = [];
+  for (const zsType of [6, 5, 7]) {
+    let payload = null;
+    try {
+      payload = JSON.parse(await fs.readFile(snapshotPath(isoDay, String(zsType)), 'utf8'));
+    } catch (e) {
+      if (Array.isArray(debugErrors) && e && e.code !== 'ENOENT') debugErrors.push(`snapshot zs${zsType}: ${String(e.message || e)}`);
+      continue;   // 无该源快照属正常缺省
+    }
+    const boards = Array.isArray(payload?.boards) ? payload.boards : [];
+    const nameOf = new Map(boards.map(b => [String(b?.plateId ?? b?.id ?? ''), String(b?.name || b?.plateName || '')]));
+    for (const [plateId, card] of Object.entries(payload?.cardData || {})) {
+      if (!card) continue;
+      const hit = {};
+      for (const key of ['zt10', 'gain10', 'gain30', 'ztList']) {
+        const row = (Array.isArray(card[key]) ? card[key] : [])
+          .find(r => String((r && typeof r === 'object' ? r.code : r) ?? '') === code);
+        if (row !== undefined) hit[key] = (row && typeof row === 'object') ? row : { code };
+      }
+      if (Object.keys(hit).length) out.push({ zsType, plateId: String(plateId), boardName: nameOf.get(String(plateId)) || '', ...hit });
+    }
+  }
+  return out;
+}
+
 async function getStrategyBoardRealtimeStocks(plateId, day, info, opts = {}) {
-  // 历史诊断(三审修正1):东财/同花顺/KPL 成分接口全是"当前时刻"数据,历史日回放绝不能混入;
-  // 且盘中成分行情没有历史存档(getStrategyBoardStocks 兜底同样是实时接口)——
-  // 诚实返回空,板块成分只用冻结快照里的 ztList,缺盘中大涨数据在 debugMeta 里明示。
-  if (opts.historicalOnly) return [];
+  // 历史诊断(三审修正1+四审阻断1):东财/同花顺/KPL 成分接口全是"当前时刻"数据,历史日绝不混入;
+  // 成分行从当日冻结快照 ztList 还原(含快照记录的当日涨幅),实时接口零调用。
+  if (opts.historicalOnly) return getStrategyBoardSnapshotStocks(plateId, day, info);
   const zsType = Number(info?.zsType);
   try {
     if (zsType === 6) return strategyNormRealtimeStocks(await fetchEastmoneyConceptStocks(plateId));

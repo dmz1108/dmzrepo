@@ -131,7 +131,7 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   // 6. 接线静态断言:端点/只读/历史隔离/超时/全量板块/全局状态
   A(src.includes("url.pathname === '/api/strategy-mainline-leader-debug'"), '诊断端点已注册');
   A(src.match(/strategy-mainline-leader-debug'[\s\S]{0,300}requireAdmin\(req, res\)/), '诊断端点 admin 门控');
-  A(src.includes('if (opts.historicalOnly) return [];'), '历史模式:实时成分接口直接返回空(不混入今天数据)');
+  A(src.includes('if (opts.historicalOnly) return getStrategyBoardSnapshotStocks'), '历史模式:实时成分接口改走快照还原(四审阻断1,取代三审的一刀切返回空)');
   A(src.includes('const diagHistorical = diagMode && isoDay !== isoFromCompactDate(chinaNowParts().day)'), '历史诊断标志=诊断且非今天');
   A(src.includes('historicalOnly: diagHistorical') && src.includes('const catalogBoards = diagHistorical ? []'), '历史诊断:成分与 catalog 榜都禁实时数据');
   A(src.includes('liveIfMissing: !diagHistoricalBoards'), '历史诊断:板块榜快照缺失也不回退实时榜(自检补堵,宁空勿混)');
@@ -139,7 +139,7 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   A(src.includes('fullWait: diagMode') && src.includes('options.fullWait'), 'fullWait 贯通 enrich(诊断完整等待成分抓取)');
   A(src.includes('const allBoardsForTrace = diagMode ? (boardPayload?.boards || []).slice()'), '保留过滤前全量板块供 boardsWithCode');
   A(src.includes('(allBoardsForTrace || boardPayload?.boards || [])'), 'boardsWithCode 用过滤前全量板块(不漏未进主通道的原始板块)');
-  A(src.includes('if (diagMode) {\n    await reworkTask;') , '诊断模式完整等待龙头池重构(不吃 1.2s 超时)');
+  A(src.match(/if \(diagMode\) \{\s*\n\s*try \{\s*\n\s*await strategyMainlineReworkLeaders\(mainlines, isoDay, reworkOpts\);/), '诊断模式完整等待龙头池重构(不吃 1.2s 超时,且不吞异常)');
   A(src.includes('debugMeta') && src.includes('fullWait: true') && src.includes('recordState: false'), 'debugMeta 明示完整等待/未写全局状态/历史只读');
   A(src.includes("'历史日期不再临时重算'") || src.includes('历史日期不再临时重算'), '事实:历史日展示走冻结快照,修复须重建当日快照');
   A(!fsReal.existsSync(pathReal.join(__dirname, '..', 'tools', 'patch-20260708-suanli-leaders.js')), '快照盲补脚本已废弃删除');
@@ -153,10 +153,11 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
     const fetchRealtimePlateStocks = async () => { liveCalls.push('kpl'); return { List: [['3', 'x', 0, 0, 0, 0, 1]] }; };
     const strategyNormRealtimeStocks = r => r;
     const getStrategyBoardStocks = async () => [{ code: 'HIST' }];
+    const getStrategyBoardSnapshotStocks = async () => [{ code: 'SNAP-ZT', name: '快照涨停股', gainPct: 10.02 }];
     eval(extractFn('getStrategyBoardRealtimeStocks'));
     for (const z of [6, 5, 7]) {
       const rows = await getStrategyBoardRealtimeStocks('p1', '2026-07-08', { zsType: z }, { historicalOnly: true });
-      A(Array.isArray(rows) && rows.length === 0, `历史诊断 zsType=${z}:返回空(不伪造成分),不触实时接口`);
+      A(Array.isArray(rows) && rows.length === 1 && rows[0].code === 'SNAP-ZT', `历史诊断 zsType=${z}:成分来自冻结快照还原,不触实时接口`);
     }
     A(liveCalls.length === 0, '行为验证:历史模式下东财/同花顺/KPL 实时接口零调用');
     await getStrategyBoardRealtimeStocks('p1', '2026-07-08', { zsType: 6 }, {});
@@ -190,6 +191,91 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
     A(strategyMainlineSupplementState !== null && strategyMainlineSupplementState.day === '2026-07-08', '对照:正式请求照常记录补选状态(行为未被误伤)');
     A(Array.isArray(b2[0].memberRows) && b2[0].memberRows.length === 0, '对照:正式请求超时兜底成空——正是诊断模式必须绕开的半结果路径');
   }
+
+  // 8. 行为测试(四审阻断1):历史成分从快照 cardData 还原,todayGain 与三表携带证据保留
+  {
+    const SNAP = {
+      boards: [{ plateId: 'p1', name: '云计算' }],
+      cardData: {
+        p1: {
+          ztList: [{ code: '600801', name: 'XW', gain: 10.02 }],                       // 涨停股带当日涨幅
+          zt10: [{ code: '600802', name: 'ZG', ztCount: 2, totalCount: 2 }],           // 紫光型:只在三表,不在 ztList
+          gain10: [{ code: '600802', name: 'ZG', gain: 21.55 }],
+          gain30: [{ code: '600802', name: 'ZG', gain: 16.59 }],
+        },
+      },
+    };
+    const fs = { readFile: async () => JSON.stringify(SNAP) };
+    const snapshotPath = () => '/snap/6/2026-07-08.json';
+    const isoFromCompactDate = d => String(d);
+    eval(extractFn('getStrategyBoardSnapshotStocks'));
+    eval(extractFn('collectSnapshotCardStatsForCode'));
+
+    const rows = await getStrategyBoardSnapshotStocks('p1', '2026-07-08', { zsType: 6 });
+    A(rows.length === 1 && rows[0].code === '600801' && rows[0].gainPct === 10.02, '历史成分=快照 ztList 还原,todayGain 保留(不伪造未记录的涨幅)');
+
+    const statsZG = await collectSnapshotCardStatsForCode('2026-07-08', '600802', []);
+    A(statsZG.length === 3 && statsZG.every(s => s.boardName === '云计算'), '紫光型:三套源快照均查(此处三次读到同板块)');
+    A(statsZG[0].zt10?.ztCount === 2 && statsZG[0].gain10?.gain === 21.55 && statsZG[0].gain30?.gain === 16.59 && !statsZG[0].ztList, 'cardData 三表原值带出,ztList 缺席如实(数据在库未进前三的直接证据)');
+    const statsNone = await collectSnapshotCardStatsForCode('2026-07-08', '999999', []);
+    A(statsNone.length === 0, '不在任何表的股:snapshotStats 为空(不虚构)');
+    const errs = [];
+    const fsBad = { readFile: async () => '{broken' };
+    eval(extractFn('collectSnapshotCardStatsForCode').replace(/fs\.readFile/g, 'fsBad.readFile'));
+    await collectSnapshotCardStatsForCode('2026-07-08', '600802', errs);
+    A(errs.length === 3 && errs[0].startsWith('snapshot zs'), '快照损坏不静默:记入 debugErrors(缺文件才是正常缺省)');
+  }
+
+  // 9. 行为测试(四审阻断2):动能采样 record=false 只读不写
+  {
+    const strategyMainlineTrendSamples = new Map();
+    const STRATEGY_MAINLINE_TREND_WINDOW_MS = 60 * 60 * 1000;
+    const STRATEGY_MAINLINE_TREND_MIN_GAP_MS = 1;
+    const STRATEGY_MAINLINE_TREND_BASE_MIN_AGE_MS = 0;
+    const isFiniteNumeric = v => Number.isFinite(Number(v)) && v !== null && v !== '';
+    eval(extractFn('strategyMainlineTrackTrend'));
+    strategyMainlineTrackTrend('k1', { netInflow: 1e8 }, false);
+    A(strategyMainlineTrendSamples.size === 0, '行为验证:record=false — 诊断不写动能采样序列');
+    strategyMainlineTrackTrend('k1', { netInflow: 1e8 });
+    A(strategyMainlineTrendSamples.get('k1')?.length === 1, '对照:正式请求照常采样(行为未被误伤)');
+    strategyMainlineTrendSamples.get('k1')[0].ts = Date.now() - 60000;   // 老化既有样本
+    const ro = strategyMainlineTrackTrend('k1', { netInflow: 3e8 }, false);
+    A(strategyMainlineTrendSamples.get('k1').length === 1 && ro && ro.inflowDelta === 2e8, 'record=false 仍可读既有样本算动能(只读,评分口径不失真)');
+  }
+
+  // 10. 行为测试(四审阻断3):rework 内部指标充实失败不静默,记入 debugErrors
+  {
+    const errs = [];
+    const savedMetricsFn = enrichReviewLeaderMetrics;
+    const throwingEnrich = async () => { throw new Error('close-db unavailable'); };
+    // 用抛错版指标充实重新 eval rework(独立作用域,避免污染前面的用例)
+    const normalizeReasonSourceCode2 = c => String(c || '').trim();
+    await (async () => {
+      const normalizeReasonSourceCode = normalizeReasonSourceCode2;
+      const numOrNull = v => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+      const isFiniteNumeric = v => Number.isFinite(Number(v)) && v !== null && v !== '';
+      const isExcludedFromReview = () => false;
+      const readSavedApiKey = async () => 'k';
+      const strategyParseSealMinutes = () => 30;
+      const getRecentTradingDays = async () => TD10;
+      const readLimitUpMainReasonDbDay = async d => REASON_DB[d] || null;
+      const enrichReviewLeaderMetrics = throwingEnrich;
+      eval(extractFn('strategyLeaderRankScore'));
+      eval(extractFn('strategyMainlineReworkLeaders'));
+      const m = mkMainline();
+      await strategyMainlineReworkLeaders([m], '2026-07-08', { debug: true, debugErrors: errs });
+      A(errs.length === 1 && errs[0].startsWith('leader-metrics:') && errs[0].includes('close-db unavailable'), '行为验证:指标充实失败记入 debugErrors(诊断者可见缺数原因)');
+      A(Array.isArray(m.leaderDebug?.pool), '出错时池明细仍输出(诚实的不完整结果,配合 complete:false)');
+    })();
+    void savedMetricsFn;
+  }
+
+  // 11. 接线静态断言(四审)
+  A(src.includes('if (opts.historicalOnly) return getStrategyBoardSnapshotStocks(plateId, day, info);'), '历史成分改走快照还原(不再一刀切返回空)');
+  A(src.includes('snapshotStats: await collectSnapshotCardStatsForCode(isoDay, code, debugErrors)'), 'debugTrace 带快照 cardData 三表携带证据');
+  A(src.includes('strategyMainlineAugmentPrediction(item, isTodayQuery, isoDay, !diagMode)') && src.includes('}, recordTrend)'), '诊断今天不写 strategyMainlineTrendSamples(recordTrend 贯通)');
+  A(src.includes('const debugErrors = diagMode ? [] : null;') && src.includes('complete: debugErrors.length === 0'), 'debugMeta.complete/debugErrors 如实标注');
+  A(src.includes("debugErrors.push(`rework: ") && src.includes("debugErrors.push(`enrich: ") && src.includes('`board-members ${plateId}:') && src.includes('`leader-metrics:'), 'enrich/rework/单板/指标四类异常全部进 debugErrors,不吞');
 
   console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL LEADER-POOL-DEBUG CHECKS PASSED');
 })();

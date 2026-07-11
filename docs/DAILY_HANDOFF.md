@@ -2902,3 +2902,25 @@ Deployment:
 
 Notes for next agent:
 - 历史日盘中成分行情无存档是硬约束:诊断回放的板块成分证据只有 ztList;若未来要完整回放,需把盘中成分榜纳入快照存档(另立议题)。
+
+## 2026-07-11 - Claude - PR #23 四审三阻断项修复(v5,Codex 复审前)
+
+Changed:
+- 阻断1(快照证据不可丢):historicalOnly 从"返回空"改为快照还原——成分行取自当日冻结快照 cardData.ztList(已记录的当日涨幅保留,未记录不伪造);新增 collectSnapshotCardStatsForCode,debugTrace.snapshotStats 原值带出某股在三套源快照 zt10/gain10/gain30/ztList 的板块携带证据(紫光案的直接证据通道)。
+- 阻断2(动能采样全局):strategyMainlineTrackTrend 增 record 参数,AugmentPrediction 贯通 recordTrend;诊断今天只读既有采样算动能,不写 strategyMainlineTrendSamples。
+- 阻断3(不吞错):debugErrors 贯通五个吞错点(enrich 整体/单板成分/catalog/rework/rework 内指标充实);debugMeta 增 complete + debugErrors,出错时明细照常输出但如实标不完整;快照损坏(非缺失)也入账。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/leader-pool-debug.test.js`(38→53 项:快照还原/三表证据/损坏入账、record=false 只读采样、指标失败入 debugErrors 三组行为测试)
+- `docs/ops/DATA_REPAIR_20260708_ZIGUANG.md`(四审修正章节)
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;leader-pool-debug 53 项全过;十三套全回归通过。
+
+Deployment:
+- GitHub only(PR #23)。不部署云端。
+
+Notes for next agent:
+- 诊断端点输出契约至此定型:live(leaderDebug+debugTrace.snapshotStats)+frozenSummary+debugMeta{complete,debugErrors,historicalOnly,fullWait,recordState}。
