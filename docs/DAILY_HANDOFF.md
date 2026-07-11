@@ -2727,3 +2727,25 @@ Deployment:
 Notes for next agent:
 - 字体如再更新内容:字体文件 URL bump ?v=,同时 CSS 引用版本必须继续上调(本次 v1→v2 即此原因)。
 - WOFF2 转换脚本一次性使用未入库;需要重转时用 fontTools(flavor='woff2')并校验 name/OS_2 元数据。
+
+## 2026-07-11 - Claude - 7-08 算力AI 龙头数据修复方案(方案2,待 Codex 审)
+
+Changed:
+- 背景:7-08 快照采集不完整,紫光股份(000938)缺席 cardData zt10/gain10/gain30,龙头评分池无它;v2(PR #9)已核定 紫光 90 第一/长源东谷 79 第二,但历史日重算补不出缺失源数据。Owner 决定方案2:修数据本身,统计按真实龙头计(非策略错误,是采集设计疏漏;尚未到对外公信力阶段)。
+- 新增修复脚本 `tools/patch-20260708-suanli-leaders.js`:锚点(603950 所在统计表)定位算力板块,三表补入紫光(双源核验值),不动 ztList(不伪造涨停);默认 dry-run,--apply 先备份再原子替换,幂等。已在合成快照上测试(预览/写入/幂等/不污染无关板块)。
+- 新增方案文档 `docs/ops/DATA_REPAIR_20260708_ZIGUANG.md`(执行步骤/验证/回滚/统计口径)。
+
+Files:
+- `tools/patch-20260708-suanli-leaders.js`(新增)
+- `docs/ops/DATA_REPAIR_20260708_ZIGUANG.md`(新增)
+- `docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;合成快照全流程测试通过。未动服务端代码,现有测试不受影响。
+
+Deployment:
+- GitHub only。合并后由 Codex 在云端 dry-run → --apply → API 验证(无需重启服务);结果记云端操作日志。
+
+Notes for next agent:
+- 若补数后紫光仍未上榜,说明历史日龙头池另有入口未吃 cardData,Claude 跟进代码侧。
+- 预判回看版块(Owner 已同意方向)设计中,修正档机制因走方案2暂不需要,回看统计将自然吃修复后数据。
