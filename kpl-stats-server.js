@@ -1118,6 +1118,14 @@ function requireAdmin(req, res) {
   return false;
 }
 
+// yule-server 自身无会话体系,管理/采集接口必须在代理层用主服务的 admin 会话把关,
+// 否则任何人可经 stanning 域直接增删改娱乐内容(2026-07 安全核查发现的线上漏洞)。
+function yuleProxyNeedsAdmin(pathname, method) {
+  const p = String(pathname || '');
+  return p.startsWith('/api/yule/admin/') ||
+    (p === '/api/yule/collect' && String(method || '').toUpperCase() !== 'GET');
+}
+
 function accountSessionFromRequest(req) {
   return adminSessionFromToken(readAdminToken(req));
 }
@@ -1132,6 +1140,16 @@ function requireAccount(req, res) {
 // 认证接口频率限制:纯内存滑动窗(单机部署,重启清零)。只记失败,成功清零,
 // 上限设置为正常用户不可能触碰的水平——目的是挡暴力穷举(密码、6位验证码)与验证码邮件轰炸。
 const AUTH_RATE_WINDOWS = new Map();
+const AUTH_RATE_LOGIN_WINDOW_MS = 10 * 60 * 1000;
+const AUTH_RATE_CODE_WINDOW_MS = 15 * 60 * 1000;
+const AUTH_RATE_MAIL_WINDOW_MS = 60 * 60 * 1000;
+// 硬上限:键数封顶,写满先清过期、仍满按插入序淘汰最老键——宁可放过攻击者一次,不允许内存无界。
+const AUTH_RATE_MAX_KEYS = 5000;
+function authRatePrune(now = Date.now()) {
+  for (const [k, hits] of AUTH_RATE_WINDOWS) {
+    if (!hits.length || now - hits[hits.length - 1] > AUTH_RATE_MAIL_WINDOW_MS) AUTH_RATE_WINDOWS.delete(k);
+  }
+}
 function authRateExceeded(key, limit, windowMs) {
   const now = Date.now();
   const hits = (AUTH_RATE_WINDOWS.get(key) || []).filter(t => now - t < windowMs);
@@ -1139,9 +1157,12 @@ function authRateExceeded(key, limit, windowMs) {
   return hits.length >= limit;
 }
 function authRateRecord(key) {
-  if (AUTH_RATE_WINDOWS.size > 10000 && !AUTH_RATE_WINDOWS.has(key)) {
-    for (const [k, hits] of AUTH_RATE_WINDOWS) {
-      if (!hits.length || Date.now() - hits[hits.length - 1] > 3600000) AUTH_RATE_WINDOWS.delete(k);
+  if (!AUTH_RATE_WINDOWS.has(key) && AUTH_RATE_WINDOWS.size >= AUTH_RATE_MAX_KEYS) {
+    authRatePrune();
+    while (AUTH_RATE_WINDOWS.size >= AUTH_RATE_MAX_KEYS) {
+      const oldest = AUTH_RATE_WINDOWS.keys().next().value;
+      if (oldest === undefined) break;
+      AUTH_RATE_WINDOWS.delete(oldest);
     }
   }
   const hits = AUTH_RATE_WINDOWS.get(key) || [];
@@ -1149,15 +1170,14 @@ function authRateRecord(key) {
   AUTH_RATE_WINDOWS.set(key, hits);
 }
 function authRateClear(key) { AUTH_RATE_WINDOWS.delete(key); }
-const AUTH_RATE_LOGIN_WINDOW_MS = 10 * 60 * 1000;
-const AUTH_RATE_CODE_WINDOW_MS = 15 * 60 * 1000;
-const AUTH_RATE_MAIL_WINDOW_MS = 60 * 60 * 1000;
+setInterval(() => authRatePrune(), 10 * 60 * 1000).unref();
 
 async function adminLogin(url, req, res) {
   if (req.method !== 'POST') return send(res, 405, { error: 'method not allowed' });
   const body = await readJsonBody(req);
   const username = String(body.username || '').trim();
   const password = String(body.password || '').trim();
+  // 维度为 IP+账号(非纯账号级):故意不做全局账号锁定,否则任何人可用错误密码恶意锁死管理员。
   const rateIp = requestIp(req);
   const rateKeys = [`login-ip:${rateIp}`, `login:${rateIp}:${username.toLowerCase()}`];
   if (authRateExceeded(rateKeys[0], 30, AUTH_RATE_LOGIN_WINDOW_MS) || authRateExceeded(rateKeys[1], 8, AUTH_RATE_LOGIN_WINDOW_MS)) {
@@ -1223,8 +1243,10 @@ async function authRegister(url, req, res) {
   const passwordError = validateNewPassword(password);
   if (passwordError) return send(res, 400, { error: passwordError });
   if (!/^\d{6}$/.test(emailCode)) return send(res, 400, { error: 'email verification code required' });
+  // IP+邮箱限次封单码穷举;confirm-ip 总闸封"换邮箱制造无限 key"(注册/重置两入口共用)。
   const codeKey = `register-confirm:${requestIp(req)}:${email}`;
-  if (authRateExceeded(codeKey, 10, AUTH_RATE_CODE_WINDOW_MS)) {
+  const codeIpKey = `confirm-ip:${requestIp(req)}`;
+  if (authRateExceeded(codeKey, 10, AUTH_RATE_CODE_WINDOW_MS) || authRateExceeded(codeIpKey, 30, AUTH_RATE_CODE_WINDOW_MS)) {
     return send(res, 429, { error: 'too many attempts, try again later' });
   }
   const db = await readAuthDb();
@@ -1249,6 +1271,7 @@ async function authRegister(url, req, res) {
     digest: verification.digest,
   })) {
     authRateRecord(codeKey);
+    authRateRecord(codeIpKey);
     await recordLoginEvent(req, {
       type: 'register',
       username,
@@ -1393,6 +1416,7 @@ async function authLogin(url, req, res) {
   const body = await readJsonBody(req);
   const login = normalizeLoginName(body.username || body.login);
   const password = String(body.password || '');
+  // 维度为 IP+账号(非纯账号级):故意不做全局账号锁定,否则任何人可用错误密码恶意锁死他人账号。
   const rateIp = requestIp(req);
   const rateKeys = [`login-ip:${rateIp}`, `login:${rateIp}:${login.toLowerCase()}`];
   if (authRateExceeded(rateKeys[0], 30, AUTH_RATE_LOGIN_WINDOW_MS) || authRateExceeded(rateKeys[1], 8, AUTH_RATE_LOGIN_WINDOW_MS)) {
@@ -1825,14 +1849,17 @@ async function authPasswordResetConfirm(url, req, res) {
   const passwordError = validateNewPassword(newPassword);
   if (passwordError) return send(res, 400, { error: passwordError });
   // 6位数字码 + 无限次尝试 = 可穷举;按 IP+邮箱限 10 次/15分钟,窗口内穷举期望命中率 <0.01%。
+  // confirm-ip 总闸(与注册确认共用)封"换邮箱制造无限 key"。
   const codeKey = `reset-confirm:${requestIp(req)}:${email}`;
-  if (authRateExceeded(codeKey, 10, AUTH_RATE_CODE_WINDOW_MS)) {
+  const codeIpKey = `confirm-ip:${requestIp(req)}`;
+  if (authRateExceeded(codeKey, 10, AUTH_RATE_CODE_WINDOW_MS) || authRateExceeded(codeIpKey, 30, AUTH_RATE_CODE_WINDOW_MS)) {
     return send(res, 429, { error: 'too many attempts, try again later' });
   }
   const db = await readAuthDb();
   const user = db.users.find(item => String(item.email || '').toLowerCase() === email && !item.disabled);
   if (!user) {
     authRateRecord(codeKey);
+    authRateRecord(codeIpKey);
     return send(res, 400, { error: 'invalid reset code' });
   }
   const now = Date.now();
@@ -1846,6 +1873,7 @@ async function authPasswordResetConfirm(url, req, res) {
     digest: reset.digest,
   })) {
     authRateRecord(codeKey);
+    authRateRecord(codeIpKey);
     await recordLoginEvent(req, {
       type: 'password-reset',
       userId: user.id,
@@ -1897,20 +1925,20 @@ function resolveVendorFontStatic(pathname) {
   return `Qi/vendor/fonts/${fileName}`;
 }
 
-// 缓存策略分层:字体永不改名(30天)、react vendor 冻结版本(7天);
-// HTML/qi-home.compiled.js/manifest 会随发布变化,必须每次协商(no-cache + ETag → 304 只省传输不省新鲜度)。
-function staticCacheControl(fileName) {
-  if (/\.(ttf|woff2?|otf)$/i.test(fileName)) return 'public, max-age=2592000';
-  if (/vendor\/react(-dom)?\.production\.min\.js$/.test(fileName)) return 'public, max-age=604800';
+// 缓存策略(二审修正):强缓存只给带版本参数(?v=)的请求——引用方换版本号即换 URL,天然无脏缓存;
+// 无版本参数一律 no-cache + ETag 协商(304 只省传输不省新鲜度)。图片/CSS 维持 1 天短缓存(未版本化,可容忍短暂过期)。
+function staticCacheControl(fileName, versioned) {
+  if (versioned) return 'public, max-age=31536000, immutable';
   if (/\.(png|svg|ico)$/i.test(fileName) || fileName.endsWith('.css')) return 'public, max-age=86400';
   return 'no-cache';
 }
 
 async function sendStatic(req, res, fileName) {
   const filePath = path.join(__dirname, fileName);
+  const versioned = /[?&]v=[^&]/.test(String(req?.url || ''));
   const headers = {
     'Content-Type': staticContentType(fileName),
-    'Cache-Control': staticCacheControl(fileName),
+    'Cache-Control': staticCacheControl(fileName, versioned),
     'Access-Control-Allow-Origin': '*',
   };
   try {
@@ -24292,11 +24320,7 @@ const server = http.createServer(async (req, res) => {
         url.pathname === '/yule' || url.pathname.startsWith('/yule/') ||
         url.pathname === '/yule-admin' || url.pathname.startsWith('/yule-admin/') ||
         url.pathname.startsWith('/api/yule/') || url.pathname.startsWith('/yule-img/')) {
-      // yule-server 自身无会话体系,管理/采集接口必须在代理层用主服务的 admin 会话把关,
-      // 否则任何人可经 stanning 域直接增删改娱乐内容(安全核查发现的线上漏洞)。
-      const yuleNeedsAdmin = url.pathname.startsWith('/api/yule/admin/') ||
-        (url.pathname === '/api/yule/collect' && req.method !== 'GET');
-      if (yuleNeedsAdmin && !requireAdmin(req, res)) return;
+      if (yuleProxyNeedsAdmin(url.pathname, req.method) && !requireAdmin(req, res)) return;
       return proxyToYule(req, res);
     }
     if (url.pathname.startsWith('/api/strategy/')) {

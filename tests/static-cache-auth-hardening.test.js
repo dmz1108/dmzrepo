@@ -1,5 +1,5 @@
 // 静态缓存 + 认证加固测试(node tests/static-cache-auth-hardening.test.js)。
-// 覆盖:缓存分层/ETag 304、认证限流(登录/验证码/邮件)、yule 管理代理门控静态断言。
+// 覆盖:版本化 URL 长缓存/无版本 ETag 协商、认证限流(含硬上限与单 IP 总闸)、yule 管理代理门控真实行为。
 const fsReal = require('fs');
 const pathReal = require('path');
 const src = fsReal.readFileSync(pathReal.join(__dirname, '..', 'kpl-stats-server.js'), 'utf8');
@@ -18,18 +18,25 @@ function extractFn(name) {
 }
 const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.exitCode = 1; } else console.log('ok: ' + msg); };
 
-// 1. 缓存分层:字体30天、react vendor 7天、图片/css 1天;HTML 与 qi-home.compiled.js 必须 no-cache(随发布变化)
+// 1. 缓存分层(二审):强缓存只给带版本参数的请求;无版本的字体/react 退回 no-cache 协商
 eval(extractFn('staticCacheControl'));
-A(staticCacheControl('Qi/vendor/fonts/space-grotesk-400.ttf') === 'public, max-age=2592000', '字体 30 天缓存');
-A(staticCacheControl('Qi/vendor/react.production.min.js') === 'public, max-age=604800', 'react vendor 7 天缓存');
-A(staticCacheControl('Qi/vendor/react-dom.production.min.js') === 'public, max-age=604800', 'react-dom vendor 7 天缓存');
-A(staticCacheControl('favicon.ico') === 'public, max-age=86400' && staticCacheControl('Qi/vendor/dreamerqi-fonts.css') === 'public, max-age=86400', '图标/CSS 1 天缓存');
-A(staticCacheControl('kpl-dashboard_17_apple.html') === 'no-cache', 'HTML 保持 no-cache(每次协商,靠 304 省传输)');
-A(staticCacheControl('Qi/qi-home.compiled.js') === 'no-cache', 'qi-home.compiled.js 随首页构建变化,必须 no-cache');
-A(staticCacheControl('site.webmanifest') === 'no-cache', 'manifest 保持 no-cache');
+A(staticCacheControl('Qi/vendor/fonts/space-grotesk-400.ttf', true) === 'public, max-age=31536000, immutable', '版本化字体:一年 immutable');
+A(staticCacheControl('Qi/vendor/react.production.min.js', true) === 'public, max-age=31536000, immutable', '版本化 react vendor:一年 immutable');
+A(staticCacheControl('Qi/vendor/fonts/space-grotesk-400.ttf', false) === 'no-cache', '无版本参数的字体:no-cache + ETag 协商(不敢强缓存)');
+A(staticCacheControl('Qi/vendor/react.production.min.js', false) === 'no-cache', '无版本参数的 react:no-cache + ETag 协商');
+A(staticCacheControl('favicon.ico', false) === 'public, max-age=86400' && staticCacheControl('Qi/vendor/dreamerqi-fonts.css', false) === 'public, max-age=86400', '图标/CSS 保持 1 天短缓存');
+A(staticCacheControl('kpl-dashboard_17_apple.html', false) === 'no-cache', 'HTML no-cache(每次协商,靠 304 省传输)');
+A(staticCacheControl('Qi/qi-home.compiled.js', false) === 'no-cache', 'qi-home.compiled.js 随首页构建变化,no-cache');
 
-// 2. sendStatic:ETag 生成与 If-None-Match 304(304 时不读文件体)
+// 1b. 引用方已带版本参数(否则强缓存永远不生效)
+const fontsCss = fsReal.readFileSync(pathReal.join(__dirname, '..', 'Qi/vendor/dreamerqi-fonts.css'), 'utf8');
+A((fontsCss.match(/\.ttf\?v=\d/g) || []).length === 13, '13 个字体 URL 全部版本化(?v=)');
+const qiIndex = fsReal.readFileSync(pathReal.join(__dirname, '..', 'Qi/index.html'), 'utf8');
+A(qiIndex.includes('react.production.min.js?v=') && qiIndex.includes('react-dom.production.min.js?v='), 'react vendor 引用版本化');
+A(qiIndex.includes('dreamerqi-fonts.css?v='), '首页字体 CSS 引用版本化');
+
 (async () => {
+  // 2. sendStatic:ETag/304 + 版本参数识别
   const FAKE_ST = { size: 0x1234, mtimeMs: 1720000000123.7 };
   let readFileCalls = 0;
   const fs = {
@@ -49,34 +56,44 @@ A(staticCacheControl('site.webmanifest') === 'no-cache', 'manifest 保持 no-cac
   eval(fnSrc);
 
   const res1 = mkRes();
-  await sendStatic({ method: 'GET', headers: {} }, res1, 'kpl-dashboard_17_apple.html');
+  await sendStatic({ method: 'GET', headers: {}, url: '/kpl' }, res1, 'kpl-dashboard_17_apple.html');
   const expectEtag = `"${FAKE_ST.size.toString(16)}-${Math.floor(FAKE_ST.mtimeMs).toString(16)}"`;
   A(res1.status === 200 && res1.headers.ETag === expectEtag && String(res1.body) === 'BODY', '首次请求:200 + ETag + 正文');
   A(res1.headers['Cache-Control'] === 'no-cache', 'HTML 响应头 no-cache');
 
   const res2 = mkRes();
   const before = readFileCalls;
-  await sendStatic({ method: 'GET', headers: { 'if-none-match': expectEtag } }, res2, 'kpl-dashboard_17_apple.html');
+  await sendStatic({ method: 'GET', headers: { 'if-none-match': expectEtag }, url: '/kpl' }, res2, 'kpl-dashboard_17_apple.html');
   A(res2.status === 304 && res2.body === undefined && readFileCalls === before, 'If-None-Match 命中:304 且不读文件体');
 
   const res3 = mkRes();
-  await sendStatic({ method: 'GET', headers: { 'if-none-match': '"stale"' } }, res3, 'kpl-dashboard_17_apple.html');
-  A(res3.status === 200 && String(res3.body) === 'BODY', 'ETag 不匹配:正常回 200 全量');
+  await sendStatic({ method: 'GET', headers: {}, url: '/vendor/fonts/a.ttf?v=1' }, res3, 'Qi/vendor/fonts/a.ttf');
+  A(res3.headers['Cache-Control'] === 'public, max-age=31536000, immutable', '带 ?v= 的请求:一年 immutable');
+  const res3b = mkRes();
+  await sendStatic({ method: 'GET', headers: {}, url: '/vendor/fonts/a.ttf' }, res3b, 'Qi/vendor/fonts/a.ttf');
+  A(res3b.headers['Cache-Control'] === 'no-cache', '同一文件不带 ?v=:退回 no-cache 协商');
 
   const res4 = mkRes();
-  await sendStatic({ method: 'HEAD', headers: {} }, res4, 'kpl-dashboard_17_apple.html');
+  await sendStatic({ method: 'HEAD', headers: {}, url: '/kpl' }, res4, 'kpl-dashboard_17_apple.html');
   A(res4.status === 200 && res4.body === undefined, 'HEAD:200 无正文');
 
-  // 3. 认证限流:失败计数、达到上限拒绝、成功清零、窗口过期自动放行
+  // 3. 认证限流:失败计数/上限拒绝/成功清零/窗口过期,以及硬上限与定期清理(二审)
   const AUTH_RATE_WINDOWS = new Map();
+  const AUTH_RATE_MAIL_WINDOW_MS = 60 * 60 * 1000;
+  const AUTH_RATE_MAX_KEYS = Number((src.match(/AUTH_RATE_MAX_KEYS = (\d+)/) || [])[1]);
+  A(Number.isFinite(AUTH_RATE_MAX_KEYS) && AUTH_RATE_MAX_KEYS > 0, `源码声明键数硬上限(AUTH_RATE_MAX_KEYS=${AUTH_RATE_MAX_KEYS})`);
+  eval(extractFn('authRatePrune'));
   eval(extractFn('authRateExceeded'));
   eval(extractFn('authRateRecord'));
   eval(extractFn('authRateClear'));
+
   const K = 'login:1.2.3.4:panda';
+  let prematureBlock = false;
   for (let i = 0; i < 8; i++) {
-    A2 : { if (authRateExceeded(K, 8, 60000)) { A(false, `第${i + 1}次失败前不应触发限流`); break A2; } }
+    if (authRateExceeded(K, 8, 60000)) prematureBlock = true;
     authRateRecord(K);
   }
+  A(!prematureBlock, '8 次失败之前不触发限流');
   A(authRateExceeded(K, 8, 60000) === true, '8 次失败后第 9 次尝试被拒(429)');
   authRateClear(K);
   A(authRateExceeded(K, 8, 60000) === false, '成功登录清零后恢复放行');
@@ -84,14 +101,75 @@ A(staticCacheControl('site.webmanifest') === 'no-cache', 'manifest 保持 no-cac
   await new Promise(r => setTimeout(r, 15));
   A(authRateExceeded(K, 1, 10) === false, '窗口过期的失败记录不再计数(自动解锁)');
 
-  // 4. 接线静态断言:六个认证入口都有限流;yule 管理/采集代理必须过 admin 会话
-  A((src.match(/authRateExceeded\(/g) || []).length >= 7, '限流检查接入登录/验证码/邮件全部入口');
-  A(src.includes("reason: 'rate-limited'") && src.includes('too many attempts, try again later'), '登录限流:429 + 登录事件记录 rate-limited');
+  // 3b. 硬上限回归:12000 个不同 key 灌入,Map 始终有界(评审要求 10000+ 规模)
+  AUTH_RATE_WINDOWS.clear();
+  let maxSeen = 0;
+  for (let i = 0; i < 12000; i++) {
+    authRateRecord(`attack:${i}`);
+    if (AUTH_RATE_WINDOWS.size > maxSeen) maxSeen = AUTH_RATE_WINDOWS.size;
+  }
+  A(AUTH_RATE_WINDOWS.size <= AUTH_RATE_MAX_KEYS && maxSeen <= AUTH_RATE_MAX_KEYS, `12000 个不同 key 后 Map 有界(峰值 ${maxSeen} <= ${AUTH_RATE_MAX_KEYS})`);
+  A(AUTH_RATE_WINDOWS.has('attack:11999') && !AUTH_RATE_WINDOWS.has('attack:0'), '写满按插入序淘汰最老键,最新键保留');
+
+  // 3c. 定期清理:超过最大窗口(1小时)无新命中的键被清除
+  AUTH_RATE_WINDOWS.clear();
+  AUTH_RATE_WINDOWS.set('stale-key', [Date.now() - AUTH_RATE_MAIL_WINDOW_MS - 1000]);
+  AUTH_RATE_WINDOWS.set('fresh-key', [Date.now()]);
+  authRatePrune();
+  A(!AUTH_RATE_WINDOWS.has('stale-key') && AUTH_RATE_WINDOWS.has('fresh-key'), 'authRatePrune 清过期键、留活跃键');
+  A(src.includes('setInterval(() => authRatePrune(), 10 * 60 * 1000).unref()'), '服务内每 10 分钟定期清理(unref 不阻退出)');
+
+  // 3d. 单 IP 总闸(二审):换邮箱刷 key 被 confirm-ip 拦住
+  AUTH_RATE_WINDOWS.clear();
+  const ipKey = 'confirm-ip:9.9.9.9';
+  let blockedAt = -1;
+  for (let i = 0; i < 40; i++) {
+    const emailKey = `reset-confirm:9.9.9.9:mail${i}@x.com`;   // 每次换邮箱,单邮箱 key 永远不满
+    if (authRateExceeded(emailKey, 10, 900000) || authRateExceeded(ipKey, 30, 900000)) { blockedAt = i; break; }
+    authRateRecord(emailKey);
+    authRateRecord(ipKey);
+  }
+  A(blockedAt === 30, `换邮箱穷举在第 ${blockedAt + 1} 次被单 IP 总闸拦截(30 次上限)`);
+  A(src.includes('`confirm-ip:${requestIp(req)}`') && (src.match(/confirm-ip:\$\{requestIp\(req\)\}/g) || []).length >= 2, '注册/重置确认双入口共用 confirm-ip 总闸');
+
+  // 4. yule 管理代理门控:真实行为(未登录 403 / 管理员放行 / 普通用户 403)
+  const adminSessions = new Map();
+  const cleanupAdminSessions = () => {};
+  const persistAuthSessionsToDisk = () => {};
+  const authNowIso = () => new Date().toISOString();
+  const ADMIN_SESSION_TTL_MS = 3600000;
+  const ADMIN_SESSION_RENEW_WINDOW_MS = 0;
+  let sent = null;
+  const send = (res, code, body) => { sent = { code, body }; };
+  eval(extractFn('readAdminToken'));
+  eval(extractFn('adminSessionFromToken'));
+  eval(extractFn('isAdminRequest'));
+  eval(extractFn('requireAdmin'));
+  eval(extractFn('yuleProxyNeedsAdmin'));
+
+  A(yuleProxyNeedsAdmin('/api/yule/admin/items', 'GET') && yuleProxyNeedsAdmin('/api/yule/admin/item/x', 'DELETE'), '管理路径全方法需要 admin');
+  A(yuleProxyNeedsAdmin('/api/yule/collect', 'POST') && !yuleProxyNeedsAdmin('/api/yule/collect', 'GET'), '采集触发 POST 需 admin,GET 探活不拦');
+  A(!yuleProxyNeedsAdmin('/api/yule/list', 'GET') && !yuleProxyNeedsAdmin('/api/yule/item/1', 'GET'), '公开读接口不受影响');
+
+  sent = null;
+  A(requireAdmin({ headers: {} }, {}) === false && sent?.code === 403, '未登录访问:403 admin required');
+  adminSessions.set('good-token', { role: 'admin', username: 'panda', expiresAtMs: Date.now() + 3600000 });
+  adminSessions.set('user-token', { role: 'user', username: 'guest', expiresAtMs: Date.now() + 3600000 });
+  sent = null;
+  A(requireAdmin({ headers: { cookie: 'panda_admin_token=good-token' } }, {}) === true && sent === null, '管理员会话 cookie:放行且不发 403');
+  sent = null;
+  A(requireAdmin({ headers: { 'x-admin-token': 'good-token' } }, {}) === true && sent === null, '管理员 x-admin-token 头:放行');
+  sent = null;
+  A(requireAdmin({ headers: { cookie: 'panda_admin_token=user-token' } }, {}) === false && sent?.code === 403, '普通用户会话:403(role 必须 admin)');
+  sent = null;
+  A(requireAdmin({ headers: { cookie: 'panda_admin_token=no-such' } }, {}) === false && sent?.code === 403, '伪造 token:403');
+  A(src.includes('yuleProxyNeedsAdmin(url.pathname, req.method) && !requireAdmin(req, res)'), '代理入口已接线门控函数');
+
+  // 5. 登录限流接线与维度说明(二审:IP+账号,非纯账号级)
+  A((src.match(/authRateExceeded\(/g) || []).length >= 9, '限流检查接入登录/验证码/邮件全部入口(含 IP 总闸)');
+  A(src.includes("reason: 'rate-limited'") && src.includes('too many attempts, try again later'), '登录限流:429 + 登录事件记 rate-limited');
   A(src.includes('too many code requests, try again later'), '验证码邮件限流(防轰炸):注册与重置双入口');
-  A(src.includes("`reset-confirm:${requestIp(req)}:${email}`"), '重置确认按 IP+邮箱限次(封 6 位码穷举)');
-  A(src.includes("`register-confirm:${requestIp(req)}:${email}`"), '注册确认按 IP+邮箱限次');
-  A(src.includes("url.pathname.startsWith('/api/yule/admin/')") && src.includes('yuleNeedsAdmin && !requireAdmin(req, res)'), 'yule 管理接口代理层强制 admin 会话');
-  A(src.includes("url.pathname === '/api/yule/collect' && req.method !== 'GET'"), 'yule 手动采集触发同样要求 admin');
+  A((src.match(/维度为 IP\+账号/g) || []).length === 2, '两处登录入口注明维度为 IP+账号(拒绝纯账号锁定防锁死攻击)');
 
   console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL STATIC-CACHE-AUTH-HARDENING CHECKS PASSED');
 })();
