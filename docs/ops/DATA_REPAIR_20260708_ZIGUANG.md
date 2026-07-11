@@ -45,7 +45,14 @@ Codex 用真实文件/API 指出九点,全部修复:
 
 1. **错误收集下沉到低层读取函数**:新增 `AsyncLocalStorage` 诊断上下文(`strategyMainlineDiagStore`),`readLimitUpDbDay` / `readLimitUpMainReasonDbDay` / 快照读取(`getDayBoardsWithMembers` / `getStrategyBoardSnapshotStocks` / `collectSnapshotCardStatsForCode`)在遭遇 JSON 损坏、权限(EACCES)、网络等非 ENOENT 错误时,**在 throw 之前就把真实错误压进上下文**——即使调用方 `.catch(()=>null)` 吞掉控制流,错误也不再静默;ENOENT 正常缺文件只记 `missing`,不使 complete=false。并发诊断请求各自独立(enterWith 只影响本请求异步链)。
 2. **诚实超时,不再静态声明 fullWait:true**:`strategyMainlineWithTimeout` 的兜底触发时把超时事件记入上下文;`debugMeta` 的 `fullWait/partial/complete/timeouts` 全部由真实事件计算(`diagBuildMeta`)。诊断今天时成分抓取仍 fullWait 完整等待;但只要链路任一处发生超时兜底,`fullWait=false / partial=true / complete=false` 如实翻转。
-3. **端点级场景测试**:损坏快照(SyntaxError→readErrors)、历史主因读取失败(EACCES 被 `.catch(()=>null)` 吞仍入账 / ENOENT 只记 missing)、实时成分抓取超时(timeouts 记录 + fullWait/partial/complete 翻转),均含"无诊断上下文时正式请求行为不变"的对照断言。
+3. **函数级场景测试**(tests/leader-pool-debug.test.js):损坏快照(SyntaxError→readErrors)、历史主因读取失败(注入 EACCES 被 `.catch(()=>null)` 吞仍入账 / ENOENT 只记 missing)、成分抓取超时(timeouts 记录 + fullWait/partial/complete 翻转),均含"无诊断上下文时正式请求行为不变"的对照断言——用真实读取函数与真实 store,注入真实 error/timeout 对象。
+
+## 七审修正(complete 正确性 + 吞错补齐 + run() + 真实 HTTP 端点测试,本次)
+
+1. **complete/partial 正确性**:`complete` 仅当 `ok=true` 且无 readErrors、无 timeouts、无必要缺失(本请求日快照/主因)时才为 true;任一降级则 `partial=true`。修复 Codex 复现的 bug(三套快照全缺时 `live.ok=false` 却 `complete=true`)。
+2. **补齐仍被吞的错误/超时**:`getDayBoardsWithMembers` 实时回退空 catch、`getStrategyBoardRealtimeStocks` 空 catch、`hydrateStrategyLiveBoardsForMembers` 内部 Promise.race 超时,均写入诊断上下文并带稳定 label(`board-rank-live` / `board-members-live` / `board-hydrate`)。
+3. **run() 取代 enterWith**:`strategyMainlineDiagStore.run()` 严格包住单次 `buildStrategyMainlinesLiveImpl` 执行;并发两个诊断请求 + 诊断后普通请求互不串写(真实 HTTP 并发测试验证)。
+4. **真实 HTTP 端点测试**(tests/leader-debug-endpoint.test.js,新增):仓库拷入隔离临时目录 + 临时 `KPL_ADMIN_USERNAME/PASSWORD` 起本地服务 + 真实 admin 登录,覆盖损坏快照 / 必要文件缺失 / 主因损坏 / 主因非 ENOENT(EISDIR)/ 并发隔离 / 诊断后普通请求无残留;无需生产管理员 Token。root 环境 chmod 不产生 EACCES,故 HTTP 层用 EISDIR 走同一"非 ENOENT→readErrors"分支,纯 EACCES 由函数级注入覆盖。
 
 ## 本 PR 交付(只读诊断 + 机制复现,不改任何行为)
 

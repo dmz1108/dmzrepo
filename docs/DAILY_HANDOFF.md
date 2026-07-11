@@ -3065,7 +3065,7 @@ Changed:
 - 新增 AsyncLocalStorage 诊断上下文 strategyMainlineDiagStore + note 函数(scrub 路径、区分 ENOENT=missing / 其它=readErrors)。低层读取函数 readLimitUpDbDay / readLimitUpMainReasonDbDay / 三处快照读取在 throw 前把真实错误压进上下文——调用方 .catch(()=>null) 吞掉控制流也不再静默。
 - strategyMainlineWithTimeout 增 label + 超时事件记录;debugMeta 改由 diagBuildMeta 按真实事件计算 fullWait/partial/complete/timeouts/missing,删除所有静态 fullWait:true。
 - collectSnapshotCardStatsForCode 去掉 debugErrors 参数(改用上下文);统一 buildStrategyMainlinesLive 的 debugErrors 到 diagStore.readErrors。
-- 端点级场景测试三例(损坏快照 / 历史主因 EACCES+ENOENT / 成分抓取超时),均带"无上下文时正式请求行为不变"对照。
+- 函数级场景测试三例(损坏快照 / 历史主因 EACCES+ENOENT / 成分抓取超时),均带"无上下文时正式请求行为不变"对照(真实读取函数+真实 store+注入真实 error/timeout)。真正的 HTTP 端点测试见七审新增文件。
 
 Files:
 - kpl-stats-server.js、tests/leader-pool-debug.test.js(65→79 项)、docs/ops/DATA_REPAIR_20260708_ZIGUANG.md、docs/DAILY_HANDOFF.md
@@ -3079,3 +3079,22 @@ Deployment:
 
 Notes for next agent:
 - enterWith 选型:整函数体包 run() 回调 diff 过大,enterWith 是官方支持的"设置到当前执行剩余部分"用法;admin-only + 每请求独立异步上下文,并发安全。
+
+## 2026-07-11 - Claude - PR #23 七审修复(v9,合并最新 main + complete 正确性 + run() + 真实 HTTP 端点测试)
+
+Changed:
+- 合并 origin/main(落后 5 提交,含 AI 证据接口 4e2de6f..89bd594)。冲突两处均保留双方:kpl-stats-server.js 顶部(AsyncLocalStorage + strategy-evidence require 并存)、DAILY_HANDOFF.md(AI 证据部署记录 + 六审记录都留)。
+- 七审1:diagBuildMeta 增 ok 入参 + requiredMissing(本请求日快照/主因缺失)。complete=!(ok=false || readErrors || timeouts || requiredMissing);partial 同源。修复 Codex 复现:三套快照全缺 ok=false 时 complete 曾误为 true。
+- 七审2:补齐三处空吞——getDayBoardsWithMembers 实时回退 catch、getStrategyBoardRealtimeStocks catch、hydrateStrategyLiveBoardsForMembers 的 Promise.race 超时,均 note 进上下文,label 稳定(board-rank-live/board-members-live/board-hydrate)。
+- 七审3:buildStrategyMainlinesLive 拆为薄壳(run 包裹)+ buildStrategyMainlinesLiveImpl;去掉 enterWith,改 strategyMainlineDiagStore.run() 严格包单次诊断执行。STRATEGY_MAINLINE_LIVE_HYDRATE_TIMEOUT_MS 改为可用 env 注入(仅测试)。
+- 七审4:新增 tests/leader-debug-endpoint.test.js——拷仓库到临时目录起真实服务,临时 KPL_ADMIN_USERNAME/PASSWORD 真实登录,覆盖损坏快照/缺文件/主因损坏/主因 EISDIR/并发隔离/诊断后普通请求无残留(16 项)。文档"端点级测试"表述改为区分函数级与真实 HTTP 级。
+
+Files:
+- kpl-stats-server.js、tests/leader-pool-debug.test.js、tests/leader-debug-endpoint.test.js(新增)、docs/ops/DATA_REPAIR_20260708_ZIGUANG.md、docs/DAILY_HANDOFF.md
+
+Validation:
+- node --check 通过;全部 15 套测试通过(14 原有 + 新增 leader-debug-endpoint;leader-pool-debug 与 endpoint 双层覆盖诊断路径)。
+- 与 origin/main 合并干净(a99bbb2),AI 证据接口功能与日志均保留。
+
+Deployment:
+- GitHub only(PR #23)。root 环境 chmod 不产生 EACCES,HTTP 层用 EISDIR 走同一非 ENOENT 分支,纯 EACCES 由函数级注入覆盖;实时超时:函数级用真实 store+真实 withTimeout 覆盖,hydrate 超时已 note 接线(端点真超时需外网,不可离线确定性复现,已在 PR 说明)。

@@ -147,7 +147,7 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   A(src.includes('const allBoardsForTrace = diagMode ? (boardPayload?.boards || []).slice()'), '保留过滤前全量板块供 boardsWithCode');
   A(src.includes('(allBoardsForTrace || boardPayload?.boards || [])'), 'boardsWithCode 用过滤前全量板块(不漏未进主通道的原始板块)');
   A(src.match(/if \(diagMode\) \{\s*\n\s*try \{\s*\n\s*await strategyMainlineReworkLeaders\(mainlines, isoDay, reworkOpts\);/), '诊断模式完整等待龙头池重构(不吃 1.2s 超时,且不吞异常)');
-  A(src.includes('debugMeta: diagBuildMeta(') && src.includes('fullWait: diagStore.timeouts.length === 0') && src.includes('partial: diagStore.timeouts.length > 0'), 'debugMeta 由真实事件计算(fullWait/partial/complete),不再静态声明 true');
+  A(src.includes('debugMeta: diagBuildMeta(') && src.includes('const degraded = ok === false') && src.includes('complete: !degraded'), 'debugMeta 由真实事件计算(complete 需 ok=true 且无读错误/超时/必要缺失),不再静态声明 true');
   A(src.includes("'历史日期不再临时重算'") || src.includes('历史日期不再临时重算'), '事实:历史日展示走冻结快照,修复须重建当日快照');
   A(!fsReal.existsSync(pathReal.join(__dirname, '..', 'tools', 'patch-20260708-suanli-leaders.js')), '快照盲补脚本已废弃删除');
 
@@ -287,7 +287,10 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   A(src.includes('if (opts.historicalOnly) return getStrategyBoardSnapshotStocks(plateId, day, info);'), '历史成分改走快照还原(不再一刀切返回空)');
   A(src.includes('snapshotStats: await collectSnapshotCardStatsForCode(isoDay, code)'), 'debugTrace 带快照 cardData 三表携带证据');
   A(src.includes('strategyMainlineAugmentPrediction(item, isTodayQuery, isoDay, !diagMode)') && src.includes('}, recordTrend)'), '诊断今天不写 strategyMainlineTrendSamples(recordTrend 贯通)');
-  A(src.includes('const debugErrors = diagStore ? diagStore.readErrors : null;') && src.includes('complete: diagStore.readErrors.length === 0 && diagStore.timeouts.length === 0'), 'debugMeta.complete 由读错误+超时共同决定,debugErrors 统一到诊断上下文');
+  A(src.includes('const debugErrors = diagStore ? diagStore.readErrors : null;') && src.includes('|| requiredMissing.length > 0'), 'debugMeta.complete 由 ok + 读错误 + 超时 + 必要缺失共同决定');
+  A(src.includes('return strategyMainlineDiagStore.run(diagStore, () => buildStrategyMainlinesLiveImpl'), '诊断构建用 run() 严格包住单次执行(七审:不用 enterWith)');
+  A(!src.includes('strategyMainlineDiagStore.enterWith'), 'enterWith 已移除');
+  A(src.includes("strategyMainlineDiagNoteRead(`board-rank-live") && src.includes("strategyMainlineDiagNoteRead(`board-members-live") && src.includes("strategyMainlineDiagNoteTimeout(`board-hydrate"), '三处此前空吞的错误/超时已接入诊断上下文(带稳定 label)');
   A(src.includes("debugErrors.push(`rework: ") && src.includes("debugErrors.push(`enrich: ") && src.includes('`board-members ${plateId}:') && src.includes('`leader-metrics:'), 'enrich/rework/单板/指标四类异常全部进 debugErrors,不吞');
 
   // 12. 五审阻断1:历史 breadth 必须 null(涨停名单≠完整成分),todayGain 个股信号照常参与

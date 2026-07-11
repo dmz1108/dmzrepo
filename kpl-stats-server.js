@@ -20728,10 +20728,16 @@ async function hydrateStrategyLiveBoardsForMembers(boards, apiKey, zsType, day) 
     const plateId = String(raw?.plateId ?? raw?.id ?? raw?.code ?? '');
     if (!plateId) return raw;
     const board = { ...raw, plateId };
+    let hydrateTimedOut = false;
     const hydrated = await Promise.race([
-      hydrateBoardForSnapshot({ ...board }, apiKey, String(zsType), day).catch(() => null),
-      new Promise(resolve => setTimeout(() => resolve(null), STRATEGY_MAINLINE_LIVE_HYDRATE_TIMEOUT_MS)),
+      hydrateBoardForSnapshot({ ...board }, apiKey, String(zsType), day).catch(err => {
+        strategyMainlineDiagNoteRead(`board-hydrate ${plateId} zs${zsType}`, err);   // 七审:成分补水失败不再空吞
+        return null;
+      }),
+      new Promise(resolve => setTimeout(() => { hydrateTimedOut = true; resolve(null); }, STRATEGY_MAINLINE_LIVE_HYDRATE_TIMEOUT_MS)),
     ]);
+    // 七审:补水超时兜底如实记入诊断上下文(稳定 label),不把半结果当完整。
+    if (hydrateTimedOut) strategyMainlineDiagNoteTimeout(`board-hydrate ${plateId} zs${zsType}`);
     if (!hydrated?.board) return board;
     if (hydrated.cardData) cardData[plateId] = hydrated.cardData;
     return { ...board, ...hydrated.board };
@@ -20785,7 +20791,7 @@ async function getDayBoardsWithMembers(day, options = {}) {
             .slice(0, Number(options.boardPool || 0) || STRATEGY_MAINLINE_RISING_BOARD_LIMIT);
           const hydrated = await hydrateStrategyLiveBoardsForMembers(boards, apiKey, z, requestedDay);
           await absorbPayload(hydrated, z);
-        } catch {}
+        } catch (err) { strategyMainlineDiagNoteRead(`board-rank-live zs${z} ${requestedDay}`, err); }   // 七审:实时回退失败不再空吞
       });
       if (bmap.size) source = 'live';
     }
@@ -20859,7 +20865,9 @@ const STRATEGY_MAINLINE_RISING_BOARD_LIMIT = 5;
 const STRATEGY_MAINLINE_SUPPLEMENT_BOARDS = Math.max(0, Number(process.env.STRATEGY_MAINLINE_SUPPLEMENT_BOARDS ?? 3) || 0);
 let strategyMainlineSupplementState = null;  // 最近一次补选观测(scanSupplement 字段随响应输出)
 const STRATEGY_MAINLINE_LIVE_BOARD_POOL = 5;
-const STRATEGY_MAINLINE_LIVE_HYDRATE_TIMEOUT_MS = 1200;
+const STRATEGY_MAINLINE_LIVE_HYDRATE_TIMEOUT_MS = Number(process.env.STRATEGY_MAINLINE_LIVE_HYDRATE_TIMEOUT_MS) > 0
+  ? Number(process.env.STRATEGY_MAINLINE_LIVE_HYDRATE_TIMEOUT_MS)   // 仅供端点测试注入极短超时,生产默认 1200ms
+  : 1200;
 const STRATEGY_MAINLINE_RISING_FETCH_TIMEOUT_MS = 1500;
 const STRATEGY_MAINLINE_CATALOG_TIMEOUT_MS = 800;
 const STRATEGY_MAINLINE_TOP_GAIN_TIMEOUT_MS = 1800;
@@ -23376,25 +23384,39 @@ async function buildStrategyMainlineHistoryContext(endDay, themeKeys, days = 15,
   return { byTheme, tradingDays, endDay: historyEndDay, recentWindow: tradingDays.length };
 }
 
+// 七审:诊断构建用 strategyMainlineDiagStore.run() 严格包住单次执行(不用 enterWith),
+// run() 天然按异步上下文隔离——并发诊断请求各自的 store 不串写,诊断结束后普通请求无残留。
 async function buildStrategyMainlinesLive(day, options = {}) {
+  if (!options.leaderDebug) return buildStrategyMainlinesLiveImpl(day, options, null);
+  const diagStore = { readErrors: [], timeouts: [], missing: [] };
+  return strategyMainlineDiagStore.run(diagStore, () => buildStrategyMainlinesLiveImpl(day, options, diagStore));
+}
+
+async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = null) {
   const requestedDay = isoFromCompactDate(day || chinaNowParts().day);
   const diagMode = !!options.leaderDebug;
-  // 六审:诊断请求全程绑定一个 AsyncLocalStorage 上下文——低层读取的损坏/权限/网络错误、
-  // 以及任何超时兜底,无论被哪层调用方 .catch 吞掉,都汇入这里。enterWith 只影响本请求的
-  // 异步链,并发诊断互不串写。在任何读取之前建立。
-  const diagStore = diagMode ? { readErrors: [], timeouts: [], missing: [] } : null;
-  if (diagStore) strategyMainlineDiagStore.enterWith(diagStore);
-  const diagBuildMeta = (extra = {}) => ({
-    // fullWait/complete 由真实事件计算,不再静态声明 true。
-    fullWait: diagStore.timeouts.length === 0,
-    partial: diagStore.timeouts.length > 0,
-    timeouts: diagStore.timeouts.slice(),
-    recordState: false,
-    complete: diagStore.readErrors.length === 0 && diagStore.timeouts.length === 0,
-    debugErrors: diagStore.readErrors.slice(),
-    missing: diagStore.missing.slice(),
-    ...extra,
-  });
+  // 七审修正2:complete 仅当 ok=true 且无读错误/超时/必要输入缺失时才为 true;
+  // 必要输入=本请求日(requestedDay)的快照与当日主因(诊断归属/龙头的地基),缺任一即不完整。
+  // partial 如实反映"任何降级":读错误 / 超时 / 必要缺失 / ok=false。
+  const diagBuildMeta = ({ ok = true, ...extra } = {}) => {
+    const requiredMissing = diagStore.missing.filter(m =>
+      m === `main-reason ${requestedDay}` || (m.startsWith('snapshot-zs') && m.endsWith(requestedDay)));
+    const degraded = ok === false
+      || diagStore.readErrors.length > 0
+      || diagStore.timeouts.length > 0
+      || requiredMissing.length > 0;
+    return {
+      fullWait: diagStore.timeouts.length === 0,
+      partial: degraded,
+      complete: !degraded,
+      recordState: false,
+      timeouts: diagStore.timeouts.slice(),
+      debugErrors: diagStore.readErrors.slice(),
+      missing: diagStore.missing.slice(),
+      requiredMissing,
+      ...extra,
+    };
+  };
   // 诊断历史日(三审修正1的板块榜侧):快照缺失也不得回退到"当前时刻"的实时板块榜——
   // 宁可空结果,不混入今天的数据。此判定必须在板块加载之前完成。
   const diagHistoricalBoards = diagMode && requestedDay !== isoFromCompactDate(chinaNowParts().day);
@@ -23422,7 +23444,8 @@ async function buildStrategyMainlinesLive(day, options = {}) {
       count: 0,
       stockCount: 0,
       // 五审阻断2:板块榜读取失败导致的早退,诊断模式必须把失败亮出来,不得伪装成"数据未准备"。
-      ...(diagMode ? { debugMeta: diagBuildMeta({ historicalOnly: !!diagHistoricalBoards }) } : {}),
+      // 七审:板块全缺(ok:false)的早退,complete 必须为 false / partial 为 true。
+      ...(diagMode ? { debugMeta: diagBuildMeta({ ok: false, historicalOnly: !!diagHistoricalBoards }) } : {}),
       mainlines: [],
     };
   }
@@ -24703,7 +24726,7 @@ async function getStrategyBoardRealtimeStocks(plateId, day, info, opts = {}) {
         gainPct: numOrNull(row?.[6]),
       })).filter(s => s.code);
     }
-  } catch {}
+  } catch (err) { strategyMainlineDiagNoteRead(`board-members-live ${plateId} zs${zsType}`, err); }   // 七审:实时成分抓取失败不再空吞
   return getStrategyBoardStocks(plateId, day, info);
 }
 const l2FocusScanner = createL2FocusScanner({ baseDir: __dirname });
