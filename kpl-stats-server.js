@@ -23222,12 +23222,58 @@ function strategyMainlineAddRealtimeBoardSeed(seedByKey, board) {
   return seed;
 }
 
-// 当日综合主因权威归属(调用处有完整语义注释)。抽成纯函数便于单测复现 7-08 归属修复:
-//   入参 currentReasonDb=当日综合主因库、todayLimitCodes=当日涨停集合;
-//   1) 把「当日综合主因确有归类」的涨停股并入其主因所属主线 seed.codeSet;
-//   2) 从族别不同的其它 seed.codeSet 剔除该股。返回 code→familyKey 供诊断/测试断言。
+// 从一个 seed 里彻底移除某股的全部在场痕迹(跨族剔除专用)——Codex 复审第4点:
+// 只删 codeSet 会让 realtimeCodeSet/risingCodeSet/nearLimitCodeSet/risingStockMap/nearLimitStockMap
+// 及 countFallback 仍把该股算进错误主线的 count/bigGainCount/risingStocks/leaders。此处一并清理。
+function strategyMainlineDetachCodeFromSeed(seed, code) {
+  if (!seed || !code) return false;
+  strategyEnsureMainlineSeedShape(seed);
+  const wasRealtime = seed.realtimeCodeSet.has(code);
+  const present = seed.codeSet.has(code) || wasRealtime ||
+    seed.risingCodeSet.has(code) || seed.nearLimitCodeSet.has(code) ||
+    seed.risingStockMap.has(code) || seed.nearLimitStockMap.has(code);
+  seed.codeSet.delete(code);
+  seed.realtimeCodeSet.delete(code);
+  seed.risingCodeSet.delete(code);
+  seed.nearLimitCodeSet.delete(code);
+  seed.risingStockMap.delete(code);
+  seed.nearLimitStockMap.delete(code);
+  // countFallback 是「板块 zt/成分数」的兜底计数(仅实时板块成分贡献,见 AddRealtimeBoardSeed);
+  // 移走一个实时成分应同步减 1,避免错误主线在 todayCodes 清空后仍用兜底数虚报 count。
+  if (wasRealtime && Number(seed.countFallback) > 0) seed.countFallback -= 1;
+  return present;
+}
+
+// 当日综合主因的归属置信度(Codex 复审第5点):
+// 只有多源共识(strong/majority 档,或候选源≥2 且至少一源板块题材与最终题材同族)才允许「硬」跨族改判;
+// 孤源/来源不足只能作为软证据,不得执行跨族删除。存储记录常未挂 consensusTier/agreeCount,
+// 故回退用已持久化的 candidates 做保守判定(纯读记录,不触外网)。
+function strategyMainlineReasonAttributionConfidence(record, finalFamilyKey) {
+  const tier = String(record?.consensusTier || '').trim();
+  if (tier === 'strong' || tier === 'majority') return 'hard';
+  const agree = Number(record?.agreeCount);
+  if (Number.isFinite(agree) && agree >= 2) return 'hard';
+  const cands = Array.isArray(record?.candidates) ? record.candidates : [];
+  const realSources = new Set(cands.map(c => String(c?.source || '').trim()).filter(Boolean));
+  if (realSources.size < 2) return 'soft';   // 来源不足 → 软证据
+  const familyAgree = cands.some(c => {
+    const bt = String(c?.boardTopic || '').trim();
+    if (!bt) return false;
+    return strategyMainlineFamilyInfo({ theme: canonicalTopicName(bt) }).key === finalFamilyKey;
+  });
+  return familyAgree ? 'hard' : 'soft';
+}
+
+// 当日综合主因权威归属——【仅盘后复核 postCloseReview 模式调用,严禁进入盘中预测/冻结快照】。
+// Codex 复审:盘后当日综合主因是收盘后才生成的答案,不得回写盘中预测。此件只在 leader-debug
+// 的 review 重算里跑,产出「盘后归属复核」对照结果,与冻结的盘中预测并列展示,不改写快照。
+//   1) 对「当日涨停 + 当日综合主因确有归类 + 置信度=hard」的股:并入其主因所属主线 seed,
+//      并从族别不同的其它 seed 彻底剔除(六个集合 + countFallback,见 DetachCodeFromSeed);
+//   2) 置信度=soft(孤源/来源不足)只记软证据,不做任何 seed 改写。
+// 返回 { hard: Map(code→familyKey), soft: Map(code→{theme,reason}) } 供诊断/测试断言。
 function strategyMainlineApplyCurrentReasonAttribution(seedByKey, currentReasonDb, todayLimitCodes) {
-  const familyByCode = new Map();
+  const hard = new Map();
+  const soft = new Map();
   const limitSet = todayLimitCodes instanceof Set ? todayLimitCodes : new Set(todayLimitCodes || []);
   for (const s of (currentReasonDb?.stocks || [])) {
     if (isExcludedFromReview(s?.code, s?.name)) continue;
@@ -23237,20 +23283,26 @@ function strategyMainlineApplyCurrentReasonAttribution(seedByKey, currentReasonD
     if (!theme || /其他/.test(theme) || isDroppedThemeWord(theme)) continue;
     const key = strategyMainlineTopicKey(theme);
     if (!key) continue;
+    const familyKey = strategyMainlineFamilyInfo({ theme, key }).key;
+    if (strategyMainlineReasonAttributionConfidence(s, familyKey) !== 'hard') {
+      soft.set(code, { theme, reason: 'low-confidence' });   // 软证据:不改写 seeds
+      continue;
+    }
     const seed = strategyMainlineEnsureSeed(seedByKey, theme, key);
     if (!seed) continue;
+    strategyEnsureMainlineSeedShape(seed);
     seed.codeSet.add(code);
-    familyByCode.set(code, strategyMainlineFamilyInfo({ theme, key }).key);
+    hard.set(code, familyKey);
   }
-  if (familyByCode.size) {
+  if (hard.size) {
     for (const seed of seedByKey.values()) {
       const seedFamily = strategyMainlineFamilyInfo({ theme: seed.theme, key: seed.key }).key;
-      for (const [code, family] of familyByCode) {
-        if (family !== seedFamily) seed.codeSet.delete(code);
+      for (const [code, familyKey] of hard) {
+        if (familyKey !== seedFamily) strategyMainlineDetachCodeFromSeed(seed, code);
       }
     }
   }
-  return familyByCode;
+  return { hard, soft };
 }
 
 function strategyMainlineEnsureSeed(seedByKey, theme, key = '') {
@@ -23605,16 +23657,16 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     }
     seed.priorCodeSet.add(prior.code);
   }
-  // ===== 当日综合主因权威归属(修复:真龙头因当日主因不参与归属而缺席本主线)=====
-  // 涨停股的当日多源综合主因(finalBoardTopic)是其单一真实驱动,优先级高于「板块共成分」
-  // 带来的噪声归属。此前 seeds 只走「实时板块 ztList 成分」+「近30日历史主因(不含当日)」,
-  // 当日综合主因完全不参与——星网锐捷 7-08 综合主因=算力,却因共成分被记进网络安全,算力AI 反而缺席。
-  //   1) 把涨停股并入其当日综合主因所属主线 seed(补齐缺席);
-  //   2) 从「族别不同」的其它 seed.codeSet 剔除该股,避免共成分把它误记成别的主线当日涨停贡献股。
-  // 只作用于当日综合主因库中确有归类的涨停股;无当日主因者(含盘中当天尚未生成盘后主因)仍走
-  // 原板块成分归属,行为不变。综合主因库是持久化盘后文件,历史回放读取它属证据复现,不涉实时行情。
-  const currentReasonDb = await readLimitUpMainReasonDbDay(isoDay).catch(() => null);
-  strategyMainlineApplyCurrentReasonAttribution(seedByKey, currentReasonDb, todayLimitCodes);
+  // ===== 盘后归属复核(仅 postCloseReview 模式)=====
+  // Codex 复审:盘后当日综合主因是收盘后才生成的答案,严禁回写盘中主线预测/冻结快照(会造成
+  // 未来函数用当日结果预测当日,数据穿越)。默认路径(盘中预测 + 写冻结快照)不进入本分支,行为零变化。
+  // 仅 leader-debug 的 review 重算传 postCloseReview:true,产出与冻结的盘中预测并列的「盘后归属复核」对照:
+  // 把当日综合主因(多源共识 hard 档)确指的涨停股并入其主因主线、从族别不同的错误主线彻底剔除。
+  let postCloseAttribution = null;
+  if (options.postCloseReview) {
+    const currentReasonDb = await readLimitUpMainReasonDbDay(isoDay).catch(() => null);
+    postCloseAttribution = strategyMainlineApplyCurrentReasonAttribution(seedByKey, currentReasonDb, todayLimitCodes);
+  }
   for (const seed of seedByKey.values()) {
     const seedCodes = new Set([
       ...(seed.codeSet || []),
@@ -23975,6 +24027,15 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
   return {
     ok: true,
     ...(debugTrace ? { debugTrace } : {}),
+    ...(options.postCloseReview ? {
+      // 盘后归属复核标记:本结果用当日综合主因(收盘后答案)重算,是与冻结盘中预测并列的对照,
+      // 不写快照。hard=多源共识执行了跨族改判的股;soft=孤源/来源不足只作软证据未改写。
+      postCloseReview: true,
+      reviewAttribution: postCloseAttribution ? {
+        hard: [...postCloseAttribution.hard.entries()].map(([code, familyKey]) => ({ code, familyKey })),
+        soft: [...postCloseAttribution.soft.entries()].map(([code, info]) => ({ code, theme: info.theme, reason: info.reason })),
+      } : { hard: [], soft: [] },
+    } : {}),
     ...(diagMode ? {
       // 六审:fullWait/complete/partial 全部由真实事件计算(diagBuildMeta),不再静态声明 true。
       // 低层读取错误(损坏/权限/网络)与任何超时兜底都已汇入诊断上下文,无论哪层 .catch 吞掉。
@@ -24973,19 +25034,27 @@ const server = http.createServer(async (req, res) => {
       const dbgDay = isoFromCompactDate(url.searchParams.get('day') || chinaNowParts().day);
       const traceCodes = String(url.searchParams.get('codes') || '')
         .split(',').map(s => s.trim()).filter(Boolean).slice(0, 10);
+      const wantReview = url.searchParams.get('review') === '1' || url.searchParams.get('review') === 'true';
       const live = await buildStrategyMainlinesLive(dbgDay, { writePredict: false, leaderDebug: true, traceCodes })
         .catch(e => ({ ok: false, error: String(e && e.message || e) }));
       const frozen = await readStrategyMainlineSnapshot(dbgDay).catch(() => null);
+      // review=1:额外跑一次「盘后归属复核」重算(postCloseReview:true)——用当日综合主因把真龙头
+      // 归回其主因主线、从错误主线剔除。这是与冻结盘中预测并列的对照结果,只读、不写快照。
+      const review = wantReview
+        ? await buildStrategyMainlinesLive(dbgDay, { writePredict: false, leaderDebug: true, postCloseReview: true, traceCodes })
+            .catch(e => ({ ok: false, error: String(e && e.message || e) }))
+        : null;
       return send(res, 200, {
         ok: true,
         day: dbgDay,
-        note: 'read-only diagnosis: live=当前代码即时重算,frozen=冻结快照摘要;历史日对外展示走 frozen,live 用于定位归属/龙头池问题。',
+        note: 'read-only diagnosis: live=当前盘中预测口径即时重算(不含当日盘后主因),frozen=冻结盘中预测摘要,review=盘后归属复核对照(review=1 时,用当日综合主因重算,仅对照不写快照)。',
         frozenSummary: frozen ? (frozen.mainlines || []).map(m => ({
           theme: m.theme,
           leaders: (m.leaders || []).map(r => ({ code: r.code, name: r.name, leadScore: r.leadScore ?? null })),
           todayCodes: (m.todayCodes || []).slice(0, 16),
         })) : null,
         live,
+        ...(wantReview ? { review } : {}),
       });
     }
     if (url.pathname === '/api/strategy-mainline-confirm') {

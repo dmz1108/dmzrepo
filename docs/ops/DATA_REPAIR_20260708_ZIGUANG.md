@@ -77,29 +77,43 @@ Codex 用真实文件/API 指出九点,全部修复:
 
 ---
 
-# 代码修复:当日综合主因权威归属(后续 PR,claude/mainline-attribution-fix)
+# 代码修复:盘后归属复核 ≠ 盘中主线预测(后续 PR,claude/mainline-attribution-fix)
 
-诊断已三方确认根因①「归属链路不看当日主因库」。本次实施代码修复,零硬编码,由综合主因库自动计算。
+诊断已三方确认根因①「归属链路不看当日主因库」。**Codex 复审(PR #24)否决了"直接把当日综合主因写进 build"的初版——那会用收盘后才生成的当日答案回写盘中预测/冻结快照,造成数据穿越。** 本版严格分离两条链路。
 
-## 改动
+## 设计:盘中预测 vs 盘后复核
 
-`kpl-stats-server.js` 新增纯函数 `strategyMainlineApplyCurrentReasonAttribution(seedByKey, currentReasonDb, todayLimitCodes)`,在 `buildStrategyMainlinesLiveImpl` 的历史主因归属之后、板块附着之前调用:
+| | 盘中主线预测(默认) | 盘后归属复核(review) |
+|---|---|---|
+| 触发 | 正式请求 / 写冻结快照 | 仅 `?review=1` 的 admin 诊断端点 |
+| 当日综合主因 | **完全不读**(收盘后才有,严禁穿越) | 读,用于把真龙头归回其主因主线 |
+| 用到的证据 | ≤ 上一交易日历史主因 + 实时行情 + 板块成分(原有行为) | 当日四源综合主因(多源共识) |
+| 写快照 | 是(冻结盘中预测) | **否**,只作对照 |
 
-1. **补齐缺席**:读当日综合主因库(`readLimitUpMainReasonDbDay(isoDay)`),对「当日涨停 + 综合主因 `finalBoardTopic` 有效」的股,按 `strategyMainlineTopicKey(theme)` 并入其主因所属主线 seed.codeSet(→ todayCodes)。星网锐捷 7-08 主因=算力 → 进入算力(算力AI 家族)。
-2. **权威剔除**:再遍历所有 seed,凡「家族 ≠ 该股综合主因家族」的 seed.codeSet 剔除该股。星网从网络安全/数字货币/IPv6 剔除;同族不同 key 的液冷/云计算 seed 保留(合并时去重)。家族判定复用生产 `strategyMainlineFamilyInfo`(group:算力AI 等),非新造映射。
+**冻结的 7-08 盘中预测保留当时已知结果,不重建。** 盘后复核只作为并列对照产出,`reviewAttribution` 明示哪些股被 hard 改判。
 
-## 语义边界(与 PR #23 诊断规则一致)
+## 改动(`kpl-stats-server.js`)
 
-- **只作用于当日综合主因库确有归类的涨停股**;无当日主因者(含盘中当天尚未生成盘后主因,ENOENT)完全走原板块成分归属,**行为不变**。
-- 综合主因库是**持久化盘后文件**,历史回放读取它属证据复现,**不涉实时行情**(不违反「历史诊断禁实时接口」)。
-- 龙头池评分链路(`strategyMainlineReworkLeaders` / `enrichReviewLeaderMetrics`)**未改**:它本就用近10日综合主因(含当日)自补全池子。修复让星网进入算力AI 的 todayCodes 后,①算力AI 主线得以浮现,②星网 `todayLimit=true` 拿到当日封板/连板分 → 评分第一;紫光(7-06 主因=算力,当日未涨停)由池子历史补全为第二。三方口径一致。
+1. `buildStrategyMainlinesLiveImpl` 新增 `options.postCloseReview` 门;**默认不进该分支,盘中预测/冻结快照行为零变化**(修正初版的数据穿越)。
+2. `strategyMainlineApplyCurrentReasonAttribution(seedByKey, currentReasonDb, todayLimitCodes)` 只在 review 模式调用:对「当日涨停 + 综合主因有效 + 置信度=hard」的股并入其主因主线,并从**族别不同**的其它 seed 彻底剔除。
+3. **置信度门槛**(Codex 第5点)`strategyMainlineReasonAttributionConfidence`:strong/majority 档、或 `agreeCount≥2`、或候选源≥2 且至少一源板块题材与最终题材同族 → `hard`(可跨族改判);孤源/来源不足 → `soft`,只记软证据、**不执行跨族删除**。
+4. **彻底剔除**(Codex 第4点)`strategyMainlineDetachCodeFromSeed`:同步清理 `codeSet / realtimeCodeSet / risingCodeSet / nearLimitCodeSet / risingStockMap / nearLimitStockMap`,并对移走的实时成分把 `countFallback` 减 1——错误主线的 `todayCodes/count/bigGainCount/risingStocks/leaders` 不再受该股贡献。
+5. `/api/strategy-mainline-leader-debug` 增 `review=1`:额外跑一次 `postCloseReview:true` 重算,返回 `review`(盘后复核)与 `live`(盘中口径)、`frozenSummary`(冻结)三方对照。
+
+家族判定复用生产 `strategyMainlineFamilyInfo`(`group:算力AI` 等),零新造映射、零硬编码指标。星网 7-08 综合主因=算力(候选源含"数据中心"同族,多源 → hard)→ 复核里归回算力AI、移出网络安全;紫光(当日未涨停)由既有近10日龙头池历史补全。
 
 ## 验证
 
-- `tests/mainline-attribution.test.js`(新增,17 项):用生产家族判定复现——星网并入算力、移出网络安全/数字货币、保留同族液冷;紫光未涨停不被并入;null/空涨停/无主因均行为不变(不误删)。
-- 既有 `leader-pool-debug` / `leader-debug-endpoint` / inflow-gate / qi-mainline-states / scan-priority / scan-supplement / strategy-evidence-tools / metric-profile / star-l2-layers / predict-records 全绿。
-- 合并部署后由 Codex 跑 `?day=2026-07-08` 只读诊断端点核验 live 归属,再**重建 2026-07-08 主线冻结快照**(冻结旧账不会自动刷新),使历史页展示星网第一 / 紫光第二。
+- `tests/mainline-attribution.test.js`(重写,36 项):置信度门槛(hard/soft 各档)、六集合+countFallback 彻底剔除、soft 绝不改写 seeds、null/空涨停行为不变——全用生产家族判定复现。
+- `tests/leader-debug-endpoint.test.js`(新增场景八,build-level):真实起服务 + fixtures,证明 `live` 仍把星网误记网络安全(盘中口径不回写)、`review` 把星网归回算力AI 且从网络安全的 todayCodes/leaders 剔除、600002 不受污染、`reviewAttribution.hard` 记录改判。
+- 既有 leader-pool-debug / inflow-gate / qi-mainline-states / scan-priority / scan-supplement / strategy-evidence-tools / metric-profile / star-l2-layers / predict-records / detail-evidence-index / review-source-health 全绿。
+
+## 合并后(Codex)
+
+- 部署后可跑 `?day=2026-07-08&review=1` 核验盘后复核对照(星网→算力AI、移出网络安全)。
+- **不重建 2026-07-08 冻结盘中预测快照**;如需留档,另存盘后复核结果作对照即可。
+- 后续若要让盘中预测本身更准,方向是用「≤上一交易日主因库 + 细分证据索引 + 今日实时行情」增强归属,仍不得使用当日盘后答案。
 
 ## 回滚
 
-单一纯函数 + 一处调用,revert 该 commit 即恢复原归属。
+review 分支纯读、不写快照,默认路径未改;revert 该 commit 即可,无行为回退风险。

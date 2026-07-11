@@ -74,6 +74,7 @@ async function waitHealth(port, ms = 20000) {
   const DAY_MR_EISDIR    = '2026-07-03';   // 有效快照 + 主因路径是目录(EISDIR)→ complete:false
   const DAY_CLEAN        = '2026-07-02';   // 必要输入齐全 → complete:true
   const DAY_TIMEOUT      = '2026-07-10';   // 作为"今日"(env 覆盖)+ 无快照 → 走实时补水 → board-hydrate 超时
+  const DAY_REVIEW       = '2026-07-09';   // 盘后归属复核:星网(002396)被网络安全板块携带,当日综合主因=算力(多源hard)
 
   for (const z of [5, 6, 7]) await writeSnap(DAY_CORRUPT_SNAP, z, '{not valid json');
   // DAY_MISSING_SNAP:不写任何快照
@@ -90,6 +91,25 @@ async function waitHealth(port, ms = 20000) {
       JSON.stringify({ day: d, stocks: d === DAY_CLEAN ? [{ code: '600001', name: 'X', finalBoardTopic: '算力' }] : [] }));
     await fsp.writeFile(path.join(CLOSE, `${d}.json`), JSON.stringify({ day: d, stocks: [{ code: '600001', name: 'X', close: 10 }] }));
   }
+
+  // DAY_REVIEW:星网(002396)+ 真网络安全龙头(600002)都被"网络安全"板块携带且当日涨停;
+  // 当日综合主因把 002396 归为"算力"(多源:数据中心/中报增长/通信设备,含同族数据中心 → hard),600002 归"网络安全"。
+  // 无"算力"板块 → 盘中口径下算力AI 缺席、星网误记网络安全;盘后复核(review=1)应把星网归回算力AI 并从网络安全剔除。
+  const reviewSnap = JSON.stringify({
+    day: DAY_REVIEW,
+    boards: [{ plateId: 'net', name: '网络安全', ztCount: 2, netInflow: 1e8, gainPct: 3 }],
+    cardData: { net: { ztList: [{ code: '002396', name: '星网锐捷', gain: 10 }, { code: '600002', name: '网安真龙', gain: 10 }], zt10: [], gain10: [], gain30: [] } },
+  });
+  for (const z of [5, 6, 7]) await writeSnap(DAY_REVIEW, z, reviewSnap);
+  await fsp.writeFile(path.join(LU, `${DAY_REVIEW}.json`), JSON.stringify({ day: DAY_REVIEW, stocks: [
+    { code: '002396', name: '星网锐捷', gain: 10 }, { code: '600002', name: '网安真龙', gain: 10 } ] }));
+  await fsp.writeFile(path.join(MR, `${DAY_REVIEW}.json`), JSON.stringify({ day: DAY_REVIEW, stocks: [
+    { code: '002396', name: '星网锐捷', finalBoardTopic: '算力', limitUpCount: 1,
+      candidates: [{ source: 'review-auto-consensus', boardTopic: '数据中心' }, { source: 'kpl-zt-reason', boardTopic: '中报增长' }, { source: 'limit-up-db-reason', boardTopic: '通信设备' }] },
+    { code: '600002', name: '网安真龙', finalBoardTopic: '网络安全', limitUpCount: 1,
+      candidates: [{ source: 'a', boardTopic: '网络安全' }, { source: 'b', boardTopic: '网络安全' }] } ] }));
+  await fsp.writeFile(path.join(CLOSE, `${DAY_REVIEW}.json`), JSON.stringify({ day: DAY_REVIEW, stocks: [
+    { code: '002396', name: '星网锐捷', close: 10 }, { code: '600002', name: '网安真龙', close: 10 } ] }));
 
   // DAY_TIMEOUT:无快照 → 实时回退。测试注入板块榜(env,绕过外网),让 hydrate 被调用 →
   // hydrate 自身网络被 1ms 超时兜底 race 掉 → 确定性触发 board-hydrate timeout,不依赖真实外网时序。
@@ -186,6 +206,31 @@ async function waitHealth(port, ms = 20000) {
     const normal = await httpJson(port, `/api/strategy-mainlines?day=${DAY_CLEAN}`);
     A(normal.status === 200 && (!normal.json || normal.json.debugMeta === undefined),
       '诊断后普通请求:无 debugMeta 残留(store 不泄漏到非诊断路径)');
+
+    // 场景八:盘后归属复核(build-level,Codex 复审第1/2/6点)——review=1 才用当日综合主因重算。
+    const rv = await httpJson(port, `/api/strategy-mainline-leader-debug?day=${DAY_REVIEW}&codes=002396,600002&review=1`, { headers: { 'x-admin-token': token } });
+    A(rv.status === 200 && rv.json && rv.json.live && rv.json.review, '复核:review=1 同时返回 live(盘中口径)与 review(盘后复核)');
+    const liveMls = (rv.json.live && rv.json.live.mainlines) || [];
+    const reviewMls = (rv.json.review && rv.json.review.mainlines) || [];
+    const themeBlob = m => String(m.theme || '') + (Array.isArray(m.mergedThemes) ? m.mergedThemes.join() : '');
+    const hasToday = (mls, re, code) => mls.some(m => re.test(themeBlob(m)) && (m.todayCodes || []).map(String).includes(code));
+    const leadersOf = (mls, re) => mls.filter(m => re.test(themeBlob(m))).flatMap(m => (m.leaders || []).map(l => String(l.code)));
+    const netMl = mls => mls.find(m => /网络安全/.test(themeBlob(m)));
+
+    // 盘中口径(live,不含当日盘后主因):星网仍被误记在网络安全,算力AI 缺席(冻结预测同样保留此结果)
+    A(hasToday(liveMls, /网络安全/, '002396'), '复核 live:星网仍误记网络安全 todayCodes(盘中预测口径,不回写)');
+    A(!hasToday(liveMls, /算力/, '002396'), '复核 live:算力AI 未出现星网(盘中口径缺席,与冻结一致)');
+    A(!rv.json.live.postCloseReview, '复核 live:不带 postCloseReview 标记(盘中预测零影响)');
+
+    // 盘后复核(review):星网归回算力AI、从网络安全彻底剔除,且不污染 600002
+    A(hasToday(reviewMls, /算力/, '002396'), '复核 review:星网进入算力AI todayCodes');
+    A(!hasToday(reviewMls, /网络安全/, '002396'), '复核 review:星网已从网络安全 todayCodes 剔除');
+    A(leadersOf(reviewMls, /算力/).includes('002396'), '复核 review:星网成为算力AI 龙头(leaders 计入贡献)');
+    A(!leadersOf(reviewMls, /网络安全/).includes('002396'), '复核 review:网络安全 leaders 不再含星网(贡献已移除)');
+    const rvNet = netMl(reviewMls);
+    A(rvNet && (rvNet.todayCodes || []).map(String).includes('600002'), '复核 review:真属网络安全的 600002 保留在网络安全');
+    A((rv.json.review.reviewAttribution && rv.json.review.reviewAttribution.hard || []).some(h => String(h.code) === '002396'),
+      '复核 review:reviewAttribution.hard 记录星网 hard 改判');
 
     console.log(process.exitCode ? 'SOME ENDPOINT CHECKS FAILED' : 'ALL LEADER-DEBUG-ENDPOINT CHECKS PASSED');
   } finally {

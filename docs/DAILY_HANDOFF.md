@@ -3168,3 +3168,29 @@ Deployment:
 Notes for next agent(Codex):
 - 合并后请部署,并跑 `?day=2026-07-08` 只读诊断端点核验 live 归属(星网→算力AI、移出网络安全);随后**重建 2026-07-08 主线冻结快照**(冻结旧账不会自动刷新),使历史页展示星网第一 / 紫光第二。
 - 本次不改龙头池评分与快照写入的既有行为;仅新增当日综合主因这一归属信号。禁止把凭据、证据 JSON 或运行时数据库提交 Git。
+
+## 2026-07-11 - Claude - PR #24 按 Codex 复审重构:盘后归属复核 ≠ 盘中预测
+
+Changed(承接上一条,Codex 复审否决初版"直接把当日综合主因写进 build"——数据穿越):
+- **严格分离两条链路**。`buildStrategyMainlinesLiveImpl` 新增 `options.postCloseReview` 门,默认不进,盘中预测/写冻结快照行为零变化(修正初版穿越)。当日综合主因(收盘后答案)只在 review 模式读。
+- 归属函数 `strategyMainlineApplyCurrentReasonAttribution` 仅 review 调用,加两道 Codex 要求的护栏:
+  - **置信度门槛** `strategyMainlineReasonAttributionConfidence`:strong/majority 档 或 agreeCount≥2 或(候选源≥2 且至少一源板块题材同族)→ hard 可跨族改判;孤源/来源不足 → soft 只记软证据、不删。
+  - **彻底剔除** `strategyMainlineDetachCodeFromSeed`:codeSet/realtimeCodeSet/risingCodeSet/nearLimitCodeSet/risingStockMap/nearLimitStockMap 六集合 + countFallback(实时成分-1)全部同步,错误主线的 todayCodes/count/bigGainCount/risingStocks/leaders 不再受该股贡献。
+- `/api/strategy-mainline-leader-debug` 增 `review=1`:额外 postCloseReview 重算,返回 review(盘后复核)/live(盘中口径)/frozenSummary(冻结)三方对照,`reviewAttribution` 明示 hard/soft。
+- **不重建 7-08 冻结盘中预测快照**(Codex 第7点);盘后复核只作并列对照。
+
+Files:
+- `kpl-stats-server.js`(postCloseReview 门 + 三个纯函数 + 端点 review 参数)
+- `tests/mainline-attribution.test.js`(重写,36 项:置信度门槛/六集合彻底剔除/soft 不改写/行为不变)
+- `tests/leader-debug-endpoint.test.js`(新增场景八 build-level:live 保留误记、review 归回算力AI 并剔除、reviewAttribution)
+- `docs/ops/DATA_REPAIR_20260708_ZIGUANG.md`、`docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check` 通过;mainline-attribution(36)+ leader-debug-endpoint(含场景八)全绿;leader-pool-debug / inflow-gate / qi-mainline-states / scan-priority / scan-supplement / strategy-evidence-tools / metric-profile / star-l2-layers / predict-records / detail-evidence-index / review-source-health 全部通过,无回归。
+
+Deployment:
+- 仅 GitHub,未部署、未重启服务。
+
+Notes for next agent(Codex):
+- 盘中预测链路默认不读当日盘后主因(已消除穿越);复核仅 admin `?review=1`,只读不写快照。合并后可跑 `?day=2026-07-08&review=1` 看盘后归属复核对照。
+- 不要重建 7-08 冻结预测快照。后续若增强盘中归属,只能用「≤上一交易日主因库 + 细分证据索引 + 今日实时行情」,严禁当日盘后答案。
