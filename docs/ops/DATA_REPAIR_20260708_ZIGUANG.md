@@ -36,6 +36,11 @@ Codex 用真实文件/API 指出九点,全部修复:
 2. **动能采样只读**:`strategyMainlineTrackTrend` 增 record 参数,诊断今天时 `recordTrend=false`——读既有采样算动能(评分口径不失真),但不写 `strategyMainlineTrendSamples`。
 3. **诊断不吞错**:`debugErrors` 贯通 enrich/单板成分抓取/catalog/rework/指标充实五个吞错点;`debugMeta.complete` 如实标注,出错时池明细照常输出(诚实的不完整结果),快照文件损坏也入账(缺文件才是正常缺省)。
 
+## 五审修正(两阻断项,本次)
+
+1. **breadth 历史隔离 + todayGain 在场信号**:历史快照的 ztList/统计表不是完整板块成分,用它算普涨广度会把 10 只涨停股算成 100% 普涨(≈50 分虚高)——历史诊断 `breadth=null`(广度函数零调用);个股当日在场信号不受影响:三表 todayGain(如紫光 6.8)去重后照常进入 risingStocks/评分。真实结构行为测试双向覆盖。
+2. **关键读取失败入账**:新增 `strategyMainlineDiagAwait`,boardPayload/priorReason/history/gainLeaders 四个关键读取在诊断模式下失败必入 debugErrors(gainLeaders 并完整等待,不吃 TOP_GAIN 超时);板块榜失败导致的空板块早退也带 `complete:false` 的 debugMeta,不伪装成"数据未准备"。正式请求路径与原 `.catch(()=>fallback)` 行为完全一致(有对照断言)。
+
 ## 本 PR 交付(只读诊断 + 机制复现,不改任何行为)
 
 1. **admin 只读诊断端点** `GET /api/strategy-mainline-leader-debug?day=2026-07-08&codes=002396,000938`:

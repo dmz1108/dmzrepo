@@ -279,8 +279,58 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   A(src.includes('if (opts.historicalOnly) return getStrategyBoardSnapshotStocks(plateId, day, info);'), '历史成分改走快照还原(不再一刀切返回空)');
   A(src.includes('snapshotStats: await collectSnapshotCardStatsForCode(isoDay, code, debugErrors)'), 'debugTrace 带快照 cardData 三表携带证据');
   A(src.includes('strategyMainlineAugmentPrediction(item, isTodayQuery, isoDay, !diagMode)') && src.includes('}, recordTrend)'), '诊断今天不写 strategyMainlineTrendSamples(recordTrend 贯通)');
-  A(src.includes('const debugErrors = diagMode ? [] : null;') && src.includes('complete: debugErrors.length === 0'), 'debugMeta.complete/debugErrors 如实标注');
+  A(src.includes('const debugErrors = diagMode ? [...(diagEarlyErrors || [])] : null;') && src.includes('complete: debugErrors.length === 0'), 'debugMeta.complete/debugErrors 如实标注(含板块榜早期错误并入)');
   A(src.includes("debugErrors.push(`rework: ") && src.includes("debugErrors.push(`enrich: ") && src.includes('`board-members ${plateId}:') && src.includes('`leader-metrics:'), 'enrich/rework/单板/指标四类异常全部进 debugErrors,不吞');
+
+  // 12. 五审阻断1:历史 breadth 必须 null(涨停名单≠完整成分),todayGain 个股信号照常参与
+  {
+    let strategyMainlineSupplementState = null;
+    const STRATEGY_MAINLINE_RISING_BOARD_LIMIT = 5;
+    const STRATEGY_MAINLINE_SUPPLEMENT_BOARDS = 0;
+    const STRATEGY_MAINLINE_RISING_FETCH_TIMEOUT_MS = 1000;
+    const STRATEGY_MAINLINE_BIG_GAIN_PCT = 5;
+    const mapLimit = async (arr, n, f) => { for (const x of arr) await f(x); };
+    const strategyMainlineNormalizeRisingStock = s => s && s.code ? { code: s.code, name: s.name || '', gain: Number(s.gainPct) || 0 } : null;
+    const strategyMainlineIsNearLimitStock = () => false;
+    let breadthCalls = 0;
+    const strategyMainlineBoardBreadth = () => { breadthCalls++; return { pct: 100, score: 50 }; };
+    // 历史快照还原:10 只涨停股(全 +10%)+ 紫光型 todayGain=6.8(不在 ztList,来自三表)
+    const snapRows = [];
+    for (let i = 0; i < 10; i++) snapRows.push({ code: '60' + (100 + i), name: 'Z' + i, gainPct: 10.0 });
+    snapRows.push({ code: '000938', name: '紫光股份', gainPct: 6.8 });
+    const getStrategyBoardRealtimeStocks = async (pid, day, b, o) => (o && o.historicalOnly ? snapRows : snapRows);
+    eval(extractFn('strategyMainlineWithTimeout'));
+    eval(extractFn('strategyMainlineEnrichBoardsWithRisingStocks'));
+
+    const bh = [{ plateId: 'p1', name: '云计算', zt: 10, gainPct: 5, netInflow: 1e8, codes: [] }];
+    await strategyMainlineEnrichBoardsWithRisingStocks(bh, '2026-07-08', { realtimeSource: 'snapshot', recordState: false, fullWait: true, historicalOnly: true });
+    A(bh[0].breadth === null && breadthCalls === 0, '历史诊断:breadth=null 且广度函数零调用——10 只涨停股不产生虚高普涨分');
+    A(bh[0].risingStocks.some(s => s.code === '000938' && s.gain === 6.8), '紫光 todayGain=6.8 照常进入 risingStocks(个股在场信号不受 breadth 隔离影响)');
+    A(bh[0].memberRows.length === 11, '四表合并的 11 行全部保留为成分证据');
+
+    const bl = [{ plateId: 'p1', name: '云计算', zt: 10, gainPct: 5, netInflow: 1e8, codes: [] }];
+    await strategyMainlineEnrichBoardsWithRisingStocks(bl, '2026-07-11', { realtimeSource: 'live', recordState: false, fullWait: true });
+    A(bl[0].breadth !== null && breadthCalls === 1, '对照:非历史模式广度照常计算(行为未被误伤)');
+  }
+
+  // 13. 五审阻断2:关键读取失败入账(diagAwait),正式路径行为不变
+  {
+    eval(extractFn('strategyMainlineDiagAwait'));
+    const errs = [];
+    const fb = { byCode: new Map() };
+    const failing = Promise.reject(new Error('reason-db io error'));
+    const got = await strategyMainlineDiagAwait('prior-reason', failing, errs, fb);
+    A(got === fb && errs.length === 1 && errs[0] === 'prior-reason: reason-db io error', '行为验证:读取失败 → 兜底值返回 + debugErrors 入账(不再静默)');
+    const ok2 = await strategyMainlineDiagAwait('history-context', Promise.resolve({ x: 1 }), errs, fb);
+    A(ok2.x === 1 && errs.length === 1, '成功路径原样透传,不误记');
+    const silent = await strategyMainlineDiagAwait('board-payload', Promise.reject(new Error('boom')), null, fb);
+    A(silent === fb, '正式请求(debugErrors=null):与原 .catch(()=>fallback) 行为完全一致');
+    // 接线:四个关键读取全部走 diagAwait;gainLeaders 诊断模式完整等待;板块榜早退带 debugMeta
+    A(src.includes("strategyMainlineDiagAwait('board-payload'") && src.includes("strategyMainlineDiagAwait('prior-reason'") && src.includes("strategyMainlineDiagAwait('history-context'") && src.includes("strategyMainlineDiagAwait('gain-leaders'"), 'boardPayload/priorReason/history/gainLeaders 四读取全部入账');
+    A(src.match(/const gainLeaders = diagMode\s*\n?\s*\? await strategyMainlineDiagAwait/), 'gainLeaders:诊断完整等待(不吃 TOP_GAIN 超时),正式请求保持原超时兜底');
+    A(src.match(/伪装成"数据未准备"[\s\S]{0,400}complete: !\(diagEarlyErrors \|\| \[\]\)\.length/), '板块榜失败导致的早退:诊断模式带 complete:false 的 debugMeta');
+    A(src.includes('board.breadth = options.historicalOnly ? null : strategyMainlineBoardBreadth(normalized);'), 'breadth 历史隔离接线');
+  }
 
   console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL LEADER-POOL-DEBUG CHECKS PASSED');
 })();

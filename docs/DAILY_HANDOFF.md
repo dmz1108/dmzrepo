@@ -2946,3 +2946,18 @@ Deployment:
 
 Notes for next agent:
 - 紫光 7-06 主因归属(算力 or 云计算数据中心→canonical 后是否入族)是剩余的关键未知,以诊断端点 leaderDebug 为准。
+
+## 2026-07-11 - Claude - PR #23 五审两阻断项修复(v7,Codex 复审前)
+
+Changed:
+- 阻断1:历史诊断 breadth=null(涨停名单≠完整成分,不产生虚高普涨分,广度函数零调用);三表 todayGain 在场信号照常参与 risingStocks/评分(紫光 6.8 实测结构行为测试)。
+- 阻断2:新增 strategyMainlineDiagAwait——boardPayload/priorReason/history/gainLeaders 四关键读取诊断失败必入 debugErrors;gainLeaders 诊断完整等待;板块榜失败早退带 complete:false 的 debugMeta。正式路径与原兜底行为一致(对照断言)。
+
+Files:
+- `kpl-stats-server.js`、`tests/leader-pool-debug.test.js`(54→65 项)、`docs/ops/DATA_REPAIR_20260708_ZIGUANG.md`、`docs/DAILY_HANDOFF.md`
+
+Validation:
+- `node --check` 通过;65 项全过;十三套全回归通过。
+
+Deployment:
+- GitHub only(PR #23)。

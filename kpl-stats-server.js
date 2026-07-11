@@ -21053,6 +21053,17 @@ function strategyMainlineAbsorbRisingStocks(seed, risingStocks = [], nearLimitSt
     strategyMainlineAddRisingStock(seed.nearLimitStockMap, stock);
   }
 }
+// 五审阻断2:诊断模式的关键读取失败必须入账,不得以兜底值冒充完整结果。
+// debugErrors 为 null(正式请求)时与原 .catch(()=>fallback) 行为完全一致。
+async function strategyMainlineDiagAwait(label, promise, debugErrors, fallback) {
+  try {
+    return await promise;
+  } catch (e) {
+    if (Array.isArray(debugErrors)) debugErrors.push(`${label}: ${String(e && e.message || e)}`);
+    return fallback;
+  }
+}
+
 function strategyMainlineWithTimeout(promise, ms, fallback) {
   let timer = null;
   return Promise.race([
@@ -21703,7 +21714,10 @@ async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day, options
     board.risingCodes = risingStocks.map(stock => stock.code);
     board.nearLimitStocks = nearLimitStocks;
     board.nearLimitCodes = nearLimitStocks.map(stock => stock.code);
-    board.breadth = strategyMainlineBoardBreadth(normalized);
+    // 五审阻断1:历史快照的 ztList/统计表不是完整板块成分(只有涨停/上榜股),
+    // 用它算"板块普涨广度"会把 10 只涨停股算成 100% 普涨(≈50 分虚高)——历史诊断 breadth 一律 null。
+    // 个股当日在场信号(todayGain)不受影响,照常进入 risingStocks/评分。
+    board.breadth = options.historicalOnly ? null : strategyMainlineBoardBreadth(normalized);
     board.memberRows = normalized.slice(0, 120);
   });
   return list;
@@ -23318,12 +23332,13 @@ async function buildStrategyMainlinesLive(day, options = {}) {
   const diagHistoricalBoards = !!options.leaderDebug && requestedDay !== isoFromCompactDate(chinaNowParts().day);
   // P1-B:boardPool 按补选配置放宽,补选通道才能看到主通道之外的实时候选;
   // 主通道仍锁定在原前 STRATEGY_MAINLINE_LIVE_BOARD_POOL 个(primaryPool),行为与补选前完全一致。
-  const boardPayload = await getDayBoardsWithMembers(requestedDay, {
+  const diagEarlyErrors = options.leaderDebug ? [] : null;   // 板块榜读取早于 debugErrors 声明,先收后并
+  const boardPayload = await strategyMainlineDiagAwait('board-payload', getDayBoardsWithMembers(requestedDay, {
     allowFallback: false,
     liveIfMissing: !diagHistoricalBoards,
     boardPool: STRATEGY_MAINLINE_LIVE_BOARD_POOL + STRATEGY_MAINLINE_SUPPLEMENT_BOARDS,
     liveRankCount: 80,
-  }).catch(() => ({ useDay: requestedDay, boards: [], source: 'none' }));
+  }), diagEarlyErrors, { useDay: requestedDay, boards: [], source: 'none' });
   const isoDay = requestedDay;
   if (!Array.isArray(boardPayload?.boards) || !boardPayload.boards.length) {
     return {
@@ -23339,6 +23354,16 @@ async function buildStrategyMainlinesLive(day, options = {}) {
         : '今日非交易日，今日主线榜不生成盘中预测。',
       count: 0,
       stockCount: 0,
+      // 五审阻断2:板块榜读取失败导致的早退,诊断模式必须把失败亮出来,不得伪装成"数据未准备"。
+      ...(options.leaderDebug ? {
+        debugMeta: {
+          fullWait: true,
+          recordState: false,
+          historicalOnly: !!diagHistoricalBoards,
+          complete: !(diagEarlyErrors || []).length,
+          debugErrors: diagEarlyErrors || [],
+        },
+      } : {}),
       mainlines: [],
     };
   }
@@ -23346,7 +23371,7 @@ async function buildStrategyMainlinesLive(day, options = {}) {
   // 四审阻断3:诊断不吞错——enrich/rework/catalog 的异常收进 debugErrors,complete 如实标注。
   const diagMode = !!options.leaderDebug;
   const diagHistorical = diagMode && isoDay !== isoFromCompactDate(chinaNowParts().day);
-  const debugErrors = diagMode ? [] : null;
+  const debugErrors = diagMode ? [...(diagEarlyErrors || [])] : null;
   await strategyMainlineEnrichBoardsWithRisingStocks(boardPayload?.boards || [], isoDay, {
     realtimeSource: boardPayload?.source || '',
     primaryPool: STRATEGY_MAINLINE_LIVE_BOARD_POOL,
@@ -23417,8 +23442,10 @@ async function buildStrategyMainlinesLive(day, options = {}) {
     todayLimitCodes = new Set([...seedByKey.values()].flatMap(seed => [...(seed.codeSet || [])]));
   }
   const intradaySignalCodes = new Set([...todayLimitCodes, ...risingStockByCode.keys()]);
-  const priorReason = await buildStrategyMainlinePriorReasonContext(isoDay, intradaySignalCodes, 30)
-    .catch(() => ({ byCode: new Map(), byTheme: new Map(), tradingDays: [], endDay: '' }));
+  const priorReason = await strategyMainlineDiagAwait('prior-reason',
+    buildStrategyMainlinePriorReasonContext(isoDay, intradaySignalCodes, 30),
+    debugErrors,
+    { byCode: new Map(), byTheme: new Map(), tradingDays: [], endDay: '' });
   for (const prior of priorReason.byCode.values()) {
     const seed = strategyMainlineEnsureSeed(seedByKey, prior.theme, prior.key);
     if (!seed) continue;
@@ -23468,7 +23495,10 @@ async function buildStrategyMainlinesLive(day, options = {}) {
   for (const seed of seedByKey.values()) {
     strategyMainlineAttachBestCatalogBoard(seed, catalogBoards);
   }
-  const history = await buildStrategyMainlineHistoryContext(isoDay, seedByKey.keys(), 15, 4).catch(() => ({ byTheme: new Map(), tradingDays: [], endDay: '', recentWindow: 0 }));
+  const history = await strategyMainlineDiagAwait('history-context',
+    buildStrategyMainlineHistoryContext(isoDay, seedByKey.keys(), 15, 4),
+    debugErrors,
+    { byTheme: new Map(), tradingDays: [], endDay: '', recentWindow: 0 });
   const seeds = [...seedByKey.values()].map(seed => {
     const todayCodes = [...seed.codeSet];
     const realtimeCodes = [...(seed.realtimeCodeSet || [])];
@@ -23533,12 +23563,16 @@ async function buildStrategyMainlinesLive(day, options = {}) {
       resonanceStockCount: realtimeCodes.length || (seed.boards.length ? count : 0),
     };
   });
-  const gainLeaders = await strategyMainlineWithTimeout(
-    buildMainlineTopGainStocks(isoDay, seeds.map(t => t.theme), 30, 5)
-      .catch(() => ({ byTheme: new Map(), tradingDays: [], baseDay: null })),
-    STRATEGY_MAINLINE_TOP_GAIN_TIMEOUT_MS,
-    { byTheme: new Map(), tradingDays: [], baseDay: null }
-  );
+  // 五审阻断2:诊断模式 gainLeaders 完整等待且失败入账;正式请求保持原超时兜底。
+  const gainLeadersFallback = { byTheme: new Map(), tradingDays: [], baseDay: null };
+  const gainLeadersTask = buildMainlineTopGainStocks(isoDay, seeds.map(t => t.theme), 30, 5);
+  const gainLeaders = diagMode
+    ? await strategyMainlineDiagAwait('gain-leaders', gainLeadersTask, debugErrors, gainLeadersFallback)
+    : await strategyMainlineWithTimeout(
+        gainLeadersTask.catch(() => gainLeadersFallback),
+        STRATEGY_MAINLINE_TOP_GAIN_TIMEOUT_MS,
+        gainLeadersFallback
+      );
   const rawMainlines = seeds.map((t) => {
     const theme = String(t.theme || '');
     const key = t.key || strategyMainlineTopicKey(theme);
