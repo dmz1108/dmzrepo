@@ -3530,3 +3530,23 @@ Deployment:
 
 Notes for next agent:
 - 后续互评必须以“每日事件互斥取最高等级”作为共同前提,不再讨论同日明星分+普通涨停分叠加。
+
+## 2026-07-12 - Codex - 记录 Owner 每日事件分与盘后共振口径
+
+Changed:
+- Owner 定值普通涨停15分、明星股涨停20分;同日互斥取最高事件,多日重复按完整事件分累计,不采用次数递减。
+- 新增大于5%但未涨停的日事件等级,具体分值待讨论但必须低于15分。
+- 主线共振改为盘后确认并落历史记录,从下一交易日起参与历史龙头分析;盘中不得使用当天尚未生成的盘后共振答案。
+
+Files:
+- docs/strategy/discussions/2026-07-12-leader-scoring-v3.md
+- docs/DAILY_HANDOFF.md
+
+Validated:
+- Owner 补充已贴入议题 B、C、D、E;git diff --check 通过。
+
+Deployment:
+- Discussion docs only;未改代码、未部署、未重启服务。
+
+Notes for next agent:
+- 互评不再讨论重复涨停递减或同日明星+普通涨停叠加;剩余待决是大涨未板具体分值、盘后主线确认标准和历史/实时分的组合方式。
