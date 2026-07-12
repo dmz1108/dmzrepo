@@ -3289,6 +3289,56 @@ Deployment:
 Notes for next agent:
 - 不重建 2026-07-08 冻结盘中预测快照；需要追溯时使用管理员 `review=1` 三方对照。云端真实 Token、会话值、数据库和诊断证据 JSON 均未进入 Git。
 
+## 2026-07-12 - Codex - 为 Claude 增加受限主线三方对照接口
+
+Changed:
+- 新增 AI 只读 `strategy-mainline-review` 接口，让 agent 使用现有 AI Token 对已收盘交易日执行 live / frozen / review 三方对照，无需管理员 Token。
+- 固定只读参数：不写预测、不修改快照、不派发 L2；请求限制为 1-10 只股票，响应按白名单脱敏并附 SHA-256 完整性校验。
+- 新增安全抓取工具与使用文档；Token 只从环境变量读取，不支持命令行 Token 参数。
+
+Files:
+- `kpl-stats-server.js`
+- `strategy-evidence.js`
+- `tools/capture-mainline-review.js`
+- `tests/leader-debug-endpoint.test.js`
+- `tests/strategy-evidence-tools.test.js`
+- `docs/AI_PRODUCTION_READ.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check` 覆盖主服务、证据模块和新工具；全部 16 套 `tests/*.test.js` 通过；`git diff --check` 通过。
+- 真实 HTTP 测试确认：AI Token 可访问、无 Token/URL Token 被拒绝、休市日和缺少股票参数被拒绝、未请求股票及未知字段不出现在响应、整包哈希可校验。
+
+Deployment:
+- GitHub only；尚未部署云端，未重启任何服务。
+
+Notes for next agent:
+- 合并部署后运行 `node tools/capture-mainline-review.js --day=2026-07-08 --codes=002396,000938` 验证生产接口；证据 JSON 只留在被 Git 忽略的 `tmp/strategy-cases/`。
+
+## 2026-07-12 - Codex - AI 主线三方对照接口云端部署
+
+Changed:
+- 将 Git `main` 的 AI 只读主线复核接口部署云端；部署前确认云端旧文件与上一版 `main` 哈希完全一致，无未回填热修复。
+- 原子更新主服务与共享证据模块，只重启正确的 `PandaDashboard-KPL-Server` 计划任务；Caddy 与娱乐服务未重启。
+
+Files:
+- 云端：`C:\PandaDashboard\kpl-stats-server.js`
+- 云端：`C:\PandaDashboard\strategy-evidence.js`
+- 云端运维日志三份
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 云端暂存文件 `node --check` 通过，部署后公网 `/health` 与 `/kpl` 均为 200；新接口无 Token 返回 403。
+- 使用云端运行时 AI Token 内部调用 2026-07-08、002396/000938：HTTP 200、`complete=true`、live/review 均无必要缺失、读取错误或超时；星网锐捷盘后 hard 归属为算力 AI。
+- 2026-07-08 冻结快照测试前后 SHA-256 不变，确认接口只读；证据包 SHA-256 已记入云端日志，Token 未输出或入库。
+
+Deployment:
+- Deployed to cloud；主服务最终监听 PID 13356。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\ai-mainline-review-20260712-021949`。
+
+Notes for next agent:
+- 同步最新 `main` 后，在已安全注入 `PANDA_AI_READONLY_TOKEN` 的环境运行 `node tools/capture-mainline-review.js --day=2026-07-08 --codes=002396,000938`；不要申请或使用管理员 Token。
+
 ## 2026-07-12 - Claude - 策略页「预判回看」整合升级(主线命中评估)
 
 Changed:

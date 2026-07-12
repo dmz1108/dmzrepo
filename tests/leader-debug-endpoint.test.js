@@ -11,6 +11,7 @@ const os = require('os');
 const path = require('path');
 const http = require('http');
 const { spawnSync, spawn } = require('child_process');
+const { verifyEvidenceBundle } = require('../strategy-evidence');
 
 const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.exitCode = 1; } else console.log('ok: ' + msg); };
 const REPO = path.join(__dirname, '..');
@@ -53,8 +54,9 @@ async function waitHealth(port, ms = 20000) {
   const LU = path.join(appDir, 'kpl-limitup-db');
   const CLOSE = path.join(appDir, 'eastmoney-close-db');
   const CONCEPT = path.join(appDir, 'eastmoney-concepts-db');
+  const STRATEGY_DATA = path.join(appDir, 'strategy-data');
   for (const z of [5, 6, 7]) await fsp.mkdir(SNAP(z), { recursive: true });
-  for (const d of [MR, LU, CLOSE, CONCEPT]) await fsp.mkdir(d, { recursive: true });
+  for (const d of [MR, LU, CLOSE, CONCEPT, STRATEGY_DATA]) await fsp.mkdir(d, { recursive: true });
   const writeSnap = async (day, z, content) => fsp.writeFile(path.join(SNAP(z), `${day}.json`), content);
   const validSnap = day => JSON.stringify({
     day, boards: [{ plateId: 'p1', name: '算力', ztCount: 2, netInflow: 1e8, gainPct: 3 }],
@@ -131,6 +133,20 @@ async function waitHealth(port, ms = 20000) {
         { source: 'xuangubao-limitup', boardTopic: '网络安全', sourceSupport: null } ] } } ] }));
   await fsp.writeFile(path.join(CLOSE, `${DAY_REVIEW}.json`), JSON.stringify({ day: DAY_REVIEW, stocks: [
     { code: '002396', name: '星网锐捷', close: 10 }, { code: '600002', name: '网安真龙', close: 10 } ] }));
+  await fsp.writeFile(path.join(STRATEGY_DATA, `strategy-mainline-snapshot-${DAY_REVIEW}.json`), JSON.stringify({
+    ok: true,
+    day: DAY_REVIEW,
+    snapshot: true,
+    mainlines: [{
+      rank: 1,
+      theme: '网络安全',
+      todayCodes: ['002396', '600002'],
+      leaders: [
+        { code: '002396', name: '星网锐捷', leadScore: 100, password: 'must-not-leak' },
+        { code: '600002', name: '网安真龙', leadScore: 90 },
+      ],
+    }],
+  }));
 
   // DAY_TIMEOUT:无快照 → 实时回退。测试注入板块榜(env,绕过外网),让 hydrate 被调用 →
   // hydrate 自身网络被 1ms 超时兜底 race 掉 → 确定性触发 board-hydrate timeout,不依赖真实外网时序。
@@ -140,11 +156,12 @@ async function waitHealth(port, ms = 20000) {
   const port = 18900 + (process.pid % 500);
   const ADMIN_USER = 'testadmin';
   const ADMIN_PASS = 'Tt* ' + Math.random().toString(36).slice(2, 10);   // 满足复杂度,仅本进程内存
+  const AI_TOKEN = 'ai-test-' + Math.random().toString(36).slice(2, 14);
   const srv = spawn('node', ['kpl-stats-server.js'], {
     cwd: appDir,
     env: { ...process.env, NODE_ENV: 'test', KPL_STATS_PORT: String(port), KPL_STATS_HOST: '127.0.0.1',
       KPL_ADMIN_USERNAME: ADMIN_USER, KPL_ADMIN_PASSWORD: ADMIN_PASS,
-      PANDA_AI_READONLY_TOKEN: '', PANDA_AI_STRATEGY_TOKEN: '',
+      PANDA_AI_READONLY_TOKEN: AI_TOKEN, PANDA_AI_STRATEGY_TOKEN: '',
       // 仅本测试进程(NODE_ENV=test 门控,生产行为零变化):
       // DIAG_TODAY 把 DAY_TIMEOUT 当作诊断"今日"(机器为非交易日周末);TEST_BOARD_RANKING 注入板块榜绕过外网;
       // HYDRATE_TIMEOUT=1 使 hydrate 自身网络被 race 掉 → 确定性 board-hydrate timeout;KPL_API_KEY 仅过实时回退 `if(apiKey)` 门槛。
@@ -260,6 +277,25 @@ async function waitHealth(port, ms = 20000) {
     A(wrongMls.every(m => (m.todayCodes || []).length === 0 && Number(m.count) === 0),
       '复核 review:数字货币/IPv6 主线 todayCodes=[] 且 count=0(不回退重复累计的 countFallback)');
     A(!hasToday(reviewMls, /数字货币|IPv6/, '002396'), '复核 review:星网从数字货币/IPv6 todayCodes 全部剔除(三板块重复携带)');
+
+    // 场景九:Claude/其他 agent 使用 AI 只读 Token 做同一 live/frozen/review 对照,不需要 admin Token。
+    const aiPath = `/api/ai/strategy-mainline-review?day=${DAY_REVIEW}&codes=002396`;
+    A((await httpJson(port, aiPath)).status === 403, 'AI 复核:无 AI Token 返回 403');
+    A((await httpJson(port, `${aiPath}&token=${encodeURIComponent(AI_TOKEN)}`)).status === 403, 'AI 复核:查询参数 Token 被拒绝');
+    A((await httpJson(port, `/api/ai/strategy-mainline-review?day=${DAY_REVIEW}`, { headers: { 'x-ai-read-token': AI_TOKEN } })).status === 400,
+      'AI 复核:必须提供 1-10 只股票代码');
+    A((await httpJson(port, '/api/ai/strategy-mainline-review?day=2026-07-11&codes=002396', { headers: { 'x-ai-read-token': AI_TOKEN } })).status === 400,
+      'AI 复核:休市日被拒绝');
+    const ai = await httpJson(port, aiPath, { headers: { 'x-ai-read-token': AI_TOKEN } });
+    const aiBlob = JSON.stringify(ai.json || {});
+    A(ai.status === 200 && ai.json?.access === 'ai-read-only-mainline-review', 'AI 复核:AI Token 可读取受限对照包');
+    A(verifyEvidenceBundle(ai.json).ok, 'AI 复核:整包及三个证据区段 SHA-256 校验通过');
+    A(ai.json?.evidence?.live && ai.json?.evidence?.frozen && ai.json?.evidence?.review, 'AI 复核:返回 live/frozen/review 三方对照');
+    A((ai.json?.evidence?.review?.reviewAttribution?.hard || []).some(item => item.code === '002396'), 'AI 复核:保留请求股票的盘后 hard 改判');
+    A((ai.json?.evidence?.review?.debugTrace || []).every(item => item.code === '002396'), 'AI 复核:debugTrace 仅含请求股票');
+    A(!aiBlob.includes('"code":"600002"') && !aiBlob.includes('must-not-leak') && !aiBlob.includes('password'),
+      'AI 复核:未请求股票及未知敏感字段不进入响应');
+    A(ai.json?.dataHandling?.sourceTextIsUntrusted === true, 'AI 复核:来源文字明确标记为不可信数据');
 
     console.log(process.exitCode ? 'SOME ENDPOINT CHECKS FAILED' : 'ALL LEADER-DEBUG-ENDPOINT CHECKS PASSED');
   } finally {

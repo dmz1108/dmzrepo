@@ -300,6 +300,111 @@ function sanitizeStrategyPayload(payload, codes) {
   };
 }
 
+function sanitizeDiagnosticSnapshotStat(item, codeSet) {
+  if (!item || typeof item !== 'object') return null;
+  const output = {
+    zsType: finiteNumber(item.zsType),
+    plateId: cleanString(item.plateId, 80),
+    boardName: cleanString(item.boardName, 120),
+  };
+  let matched = false;
+  for (const table of SNAPSHOT_TABLES) {
+    const row = sanitizeSnapshotRow(item[table]);
+    if (!row || !codeSet.has(row.code)) continue;
+    output[table] = row;
+    matched = true;
+  }
+  return matched ? output : null;
+}
+
+function sanitizeStrategyDiagnosticPayload(payload, codes) {
+  if (!payload) return null;
+  const normalizedCodes = normalizeEvidenceCodes(codes, 10);
+  const codeSet = new Set(normalizedCodes);
+  const base = sanitizeStrategyPayload(payload, normalizedCodes);
+  const debugMeta = payload.debugMeta && typeof payload.debugMeta === 'object'
+    ? {
+        fullWait: payload.debugMeta.fullWait === true,
+        partial: payload.debugMeta.partial === true,
+        complete: payload.debugMeta.complete === true,
+        recordState: payload.debugMeta.recordState === true,
+        historicalOnly: payload.debugMeta.historicalOnly === true,
+        timeouts: (Array.isArray(payload.debugMeta.timeouts) ? payload.debugMeta.timeouts : []).map(item => cleanString(item, 240)).slice(0, 80),
+        debugErrors: (Array.isArray(payload.debugMeta.debugErrors) ? payload.debugMeta.debugErrors : []).map(item => cleanString(item, 240)).slice(0, 80),
+        missing: (Array.isArray(payload.debugMeta.missing) ? payload.debugMeta.missing : []).map(item => cleanString(item, 240)).slice(0, 160),
+        requiredMissing: (Array.isArray(payload.debugMeta.requiredMissing) ? payload.debugMeta.requiredMissing : []).map(item => cleanString(item, 240)).slice(0, 80),
+        traceMissing: (Array.isArray(payload.debugMeta.traceMissing) ? payload.debugMeta.traceMissing : []).map(item => cleanString(item, 240)).slice(0, 160),
+        note: cleanString(payload.debugMeta.note, 500),
+      }
+    : null;
+  const reviewAttribution = payload.reviewAttribution && typeof payload.reviewAttribution === 'object'
+    ? {
+        hard: (Array.isArray(payload.reviewAttribution.hard) ? payload.reviewAttribution.hard : [])
+          .map(item => ({
+            code: normalizeEvidenceCode(item?.code),
+            familyKey: cleanString(item?.familyKey, 160),
+          }))
+          .filter(item => item.code && codeSet.has(item.code))
+          .slice(0, 10),
+        soft: (Array.isArray(payload.reviewAttribution.soft) ? payload.reviewAttribution.soft : [])
+          .map(item => ({
+            code: normalizeEvidenceCode(item?.code),
+            theme: cleanString(item?.theme, 160),
+            reason: cleanString(item?.reason, 240),
+          }))
+          .filter(item => item.code && codeSet.has(item.code))
+          .slice(0, 10),
+      }
+    : null;
+  const debugTrace = (Array.isArray(payload.debugTrace) ? payload.debugTrace : [])
+    .map(item => {
+      const code = normalizeEvidenceCode(item?.code);
+      if (!code || !codeSet.has(code)) return null;
+      return {
+        code,
+        inTodayLimitUpDb: item?.inTodayLimitUpDb === true,
+        todayReason: item?.todayReason ? {
+          finalBoardTopic: cleanString(item.todayReason.finalBoardTopic, 160),
+          finalDetailReason: cleanString(item.todayReason.finalDetailReason, 800),
+        } : null,
+        priorReason: item?.priorReason ? {
+          theme: cleanString(item.priorReason.theme, 160),
+          count: finiteNumber(item.priorReason.count),
+          latestDay: cleanString(item.priorReason.latestDay, 16),
+        } : null,
+        boardsWithCode: (Array.isArray(item?.boardsWithCode) ? item.boardsWithCode : []).map(board => ({
+          name: cleanString(board?.name, 120),
+          zsType: finiteNumber(board?.zsType),
+          scanChannel: cleanString(board?.scanChannel, 80),
+          mappedTheme: cleanString(board?.mappedTheme, 160),
+          viaZtList: board?.viaZtList === true,
+        })).slice(0, 40),
+        snapshotStats: (Array.isArray(item?.snapshotStats) ? item.snapshotStats : [])
+          .map(stat => sanitizeDiagnosticSnapshotStat(stat, codeSet))
+          .filter(Boolean)
+          .slice(0, 80),
+        mainlinesWithCode: (Array.isArray(item?.mainlinesWithCode) ? item.mainlinesWithCode : [])
+          .map(theme => cleanString(theme, 160))
+          .filter(Boolean)
+          .slice(0, 20),
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 10);
+  return {
+    ...base,
+    error: payload.error ? cleanString(payload.error, 240) : '',
+    basis: cleanString(payload.basis, 240),
+    sessionPhase: cleanString(payload.sessionPhase, 80),
+    count: finiteNumber(payload.count),
+    stockCount: finiteNumber(payload.stockCount),
+    postCloseReview: payload.postCloseReview === true,
+    ...(debugMeta ? { debugMeta } : {}),
+    ...(reviewAttribution ? { reviewAttribution } : {}),
+    ...(debugTrace.length ? { debugTrace } : {}),
+  };
+}
+
 function addIntegrity(bundle) {
   const evidence = bundle?.evidence || {};
   const sections = Object.fromEntries(Object.entries(evidence).map(([key, value]) => [key, hashEvidence(value)]));
@@ -428,6 +533,7 @@ module.exports = {
   sanitizeCloseStock,
   sanitizeLimitUpStock,
   sanitizeMainReasonStock,
+  sanitizeStrategyDiagnosticPayload,
   sanitizeStrategyPayload,
   verifyEvidenceBundle,
 };
