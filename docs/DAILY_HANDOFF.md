@@ -3904,3 +3904,29 @@ node tools/capture-mainline-review.js --day=2026-07-08 --codes=<batch10>
 
 - 能力边界:现有AI只读接口可独立抽查涨停、主因、收盘价、10/30日涨幅及v2池行,但当前不返回`strategy-daily-events`档案或v3评分结果。Claude可用这些原始字段逐项复核上表,却不能仅靠现有接口重新下载服务器上的同一锁定v3输入文件。复核时必须同时核对三组SHA与本表,不得声称已执行同文件完整重放。复核通过前不为此扩接口、不启动PR4。
 - 只读连通性实测样本`002396,301251,000938,002965,600405,603067`:evidence `window=10`为HTTP200/complete=true/零缺失,hash=`61664387d20c499c313f198c6452af3b463f9570fa186fb3e45a3a2a6697a51c`;`window=30`为HTTP200/complete=false,仅缺已超滚动保留边界的05-27/05-28涨停与主因,hash=`0060ec60df86b4cf68176b07285965c9826e022733d7fe7d98d5bddec45cbdbe`;mainline-review为HTTP200/complete=true/零缺失,hash=`f8d325105d799438821b0f8c747996842d5d0fe29db6d88b7ac97fcfcea4c2fa`。测试只输出状态/哈希,未输出Token或证据正文。
+
+## 2026-07-13 - Codex - 回填2026-07-09每日事件档案
+
+Changed:
+- 使用锁定main `7e028ea6fc73ca6384fc37e0e3af7e36ea41eedc`和正式`leader-scoring-v3-events-v1`生成器,只读生产来源回填07-09档案。
+- 目标此前不存在;校验日期、规则版本和SHA后以add-only方式原子新增,未覆盖档案、预测或冻结快照。
+- 三份云端运维日志已追加同一运行时变更记录。
+
+Files:
+- Git:`docs/DAILY_HANDOFF.md`
+- 云端新增:`C:\PandaDashboard\strategy-data\strategy-daily-events-2026-07-09.json`
+- 离线原件:`C:\PandaDashboard\_offline\main-7e028ea\tmp\pr36-v3-event-backfill-2026-07-09\events\strategy-daily-events-2026-07-09.json`
+
+Validated:
+- limit-up/main-reason/close三源质量均complete,主因缺码为空;管理员只读review为ok=true/complete=true/partial=false,10条主线且无requiredMissing。
+- 家族归因覆盖率89.19%(66/74):ordinary15=66、dataMissing=8、star20=0、bigGain8=0;8只未归属代码为001395/002274/002414/300469/600418/603137/603329/603813。
+- 盘后状态`no-qualified-mainline`;12个家族的L2均为`unscanned`,未倒推明星或大涨事件。档案SHA-256=`fd1b99111ba8575bfbbc1395d029dd2c559c2c3ce8e342bd8d55ec1d0c11ca64`。
+- 07-09冻结快照和07-10既有事件档案SHA未变;主服务PID仍为13772,公网health=200。
+
+Deployment:
+- 仅新增07-09生产运行时事件档案并追加云端日志;未部署代码、未重启服务、未改v2榜或PR4。
+- 云端日志备份:`C:\PandaDashboard\_deploy-backups\v3-event-0709-logs-20260713-0641`。
+
+Notes for next agent:
+- 该档案补齐后续目标日的历史窗口,但07-09晚于07-08,不会改变已锁定的07-08双跑;07-02缺快照阻断仍存在。
+- 历史L2 `unscanned`如何影响普通15分仍按PR #36独立复核议题处理,本次没有自行修改评分规则。
