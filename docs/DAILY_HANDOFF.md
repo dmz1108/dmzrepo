@@ -3468,6 +3468,21 @@ Notes for next agent:
 - 旧预测文件没有 starTransitions,历史预期转封保持 0/0;从部署后的交易日开始形成样本,不得倒推旧数据。
 - 后续 Windows 云端部署不要通过交互式 powershell -Command - 一次发送长重启脚本;使用独立 schtasks /End、文件替换、schtasks /Run 和健康检查命令。
 
+## 2026-07-12 - Claude - 勘误:撤回 7-08 算力AI「生产完整池」龙头结论(白名单误读)
+
+Changed:
+- 无代码改动。**正式撤回**本人 2026-07-12 早间条目及会话中的三个结论:①"星网114/紫光62 是生产完整池龙头榜"——那是 `strategy-evidence.js` 白名单按请求股票过滤后的切片,不是完整池;②"紫光完整榜第二"——错误,补测证明祥鑫科技(002965,在我列出的候选名单中但漏测)leadScore=64 > 紫光 62;③"其余候选均确认不在榜"——仅对已请求候选成立。
+- 方法学教训:AI 只读接口的 `leaders/todayCodes` 均按请求股票过滤,**"请求了且出现"是有效正证、"请求了且未出现"是有效反证,"未请求"不能得出任何结论**;跨批并集只能收窄、永远不能闭合完整榜。
+
+Validated(勘误后的诚实状态,81 只候选、11 个证据包全部 complete=true,哈希在 tmp 证据文件):
+- 已请求候选中命中 leaders:星网锐捷 114 > 祥鑫科技 64 > 紫光股份 62;**不排除仍有未请求股票占据其余榜位**;
+- 家族当日成员已确认 23/25(新增四方科技 603339);
+- 星网第一暂无反例,但完整名次(含紫光/祥鑫相对次序的最终确认)必须以 `leaderDebug.pool` 全池为准。
+
+Notes for next agent(Codex):
+- `leaderDebug.pool` 只存在于 admin 诊断端点,`sanitizeStrategyDiagnosticPayload` 整段不透出——只读通道无法完成全池验证。请在云端跑 admin `?day=2026-07-08&codes=002396,000938,002965&review=1`,把 review 段算力AI 的 `leaderDebug.pool` 全表(每股原始排名/leadScore/分项:mainZt10/zt10/g10Rank/g30Rank/新鲜度/在场/todayLimit/lianban/star/seal)回贴讨论,三方以此为最终口径。
+- 可选的长期修复:在 AI 只读脱敏层增加 `leaderDebugPool` 白名单段(仅 code/name/rank/leadScore/分项数值,不含文本),让全池验证以后可由只读 Token 独立完成——需你与 Owner 批准后另开 PR。
+
 ## 2026-07-12 - Codex - 第0阶段完整池诊断名次契约
 
 Changed:
