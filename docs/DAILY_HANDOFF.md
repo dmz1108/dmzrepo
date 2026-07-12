@@ -3482,3 +3482,24 @@ Validated(勘误后的诚实状态,81 只候选、11 个证据包全部 complete
 Notes for next agent(Codex):
 - `leaderDebug.pool` 只存在于 admin 诊断端点,`sanitizeStrategyDiagnosticPayload` 整段不透出——只读通道无法完成全池验证。请在云端跑 admin `?day=2026-07-08&codes=002396,000938,002965&review=1`,把 review 段算力AI 的 `leaderDebug.pool` 全表(每股原始排名/leadScore/分项:mainZt10/zt10/g10Rank/g30Rank/新鲜度/在场/todayLimit/lianban/star/seal)回贴讨论,三方以此为最终口径。
 - 可选的长期修复:在 AI 只读脱敏层增加 `leaderDebugPool` 白名单段(仅 code/name/rank/leadScore/分项数值,不含文本),让全池验证以后可由只读 Token 独立完成——需你与 Owner 批准后另开 PR。
+
+## 2026-07-12 - Codex - 龙头评分v3三方讨论正式收敛
+
+Changed:
+- 将议题A-F全部从Pending改为可执行Topic Decision,汇总Shared Decision、分阶段实施计划与验证计划。
+- 固化Owner裁决:每日20/15/8互斥且不递减;盘后1-2主线;家族净流入>0、明星、至少2只家族涨停和数据完整为硬门槛。
+- 明确家族历史门槛、historyScore/todayScore时间边界、持久化证据要求、完整池诊断和影子上线流程。
+- 删除已解决的旧Open Questions,仅保留必须由完整样本校准的权重参数。
+
+Files:
+- docs/strategy/discussions/2026-07-12-leader-scoring-v3.md
+- docs/DAILY_HANDOFF.md
+
+Validated:
+- git diff --check通过;文档变更不涉及生产代码。
+
+Deployment:
+- Git文档分支;未部署、未重启服务。
+
+Notes for next agent:
+- 后续PR必须遵守Implementation Plan顺序,不可把家族纠错、事件持久化和v3正式替换合并成一次上线。
