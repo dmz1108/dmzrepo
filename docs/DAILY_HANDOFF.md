@@ -3558,3 +3558,33 @@ Deployment:
 
 Notes for next agent:
 - 本改动只修家族归属和历史计数,不改任何评分常数、实时板块、涨停复盘底库或前端展示。
+
+## 2026-07-12 - Codex - 30交易日策略事件与盘后主线持久化
+
+Changed:
+- 新增独立 `strategy-daily-events.js`,按日保存盘中观察、首次共振/明星时间、盘后家族硬门槛和互斥20/15/8股票事件。
+- 盘中记录接入现有150秒主线保温刷新;16:00后自动盘后定稿,数据未齐每10分钟重试,盘后证据仅允许下一交易日起使用。
+- 盘后最多确认两个不同家族;每个家族独立要求净流入>0、至少1明星、至少2家族涨停及主因/涨停数据完整。
+- 新增管理员查询/重建接口;`strategy-data`纳入数据库同步,新模块及既有证据模块纳入后端程序同步。
+- 运行文件沿用 `strategy-data` 最近30交易日清理,不改四源复盘底库和正式v2排序。
+
+Files:
+- strategy-daily-events.js
+- kpl-stats-server.js
+- tests/strategy-daily-events.test.js
+- docs/strategy/STRATEGY_DAILY_EVENTS.md
+- docs/strategy/discussions/2026-07-12-leader-scoring-v3.md
+- docs/DAILY_HANDOFF.md
+- .gitignore
+
+Validated:
+- `node --check kpl-stats-server.js`和`strategy-daily-events.js`通过。
+- strategy-daily-events纯函数测试覆盖多时点观察、两主线、净流出否决、20/15/8互斥、缺数据和同步接线。
+- `tests/*.test.js`全套19个测试文件通过;`git diff --check`通过。
+
+Deployment:
+- Git分支实现中;未合并main、未部署云端、未重启服务。
+
+Notes for next agent:
+- 这是v3证据层PR2,尚未实现historyScore/todayScore或替换正式排序。后续只能先做离线双跑与影子字段,不得直接改用户榜单。
+- 云端部署必须原子包含`kpl-stats-server.js`与`strategy-daily-events.js`;缺模块时主服务会快速失败。

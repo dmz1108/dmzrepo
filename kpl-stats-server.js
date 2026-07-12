@@ -22,6 +22,12 @@ const {
   sanitizeStrategyDiagnosticPayload,
   sanitizeStrategyPayload,
 } = require('./strategy-evidence');
+const {
+  STRATEGY_DAILY_EVENT_SCHEMA_VERSION,
+  STRATEGY_DAILY_EVENT_RULE_VERSION,
+  mergeIntradayObservation,
+  buildPostCloseRecord,
+} = require('./strategy-daily-events');
 
 // 只读诊断的环境级错误/超时收集器(六审):低层读取函数在遭遇 JSON 损坏/权限/网络错误时,
 // 无论调用方是否 .catch 吞掉,都把真实错误写进当前诊断上下文;正常缺文件(ENOENT)只记 missing。
@@ -348,12 +354,15 @@ const SITE_SYNC_DATABASE_ENTRIES = [
   'ths-concepts-db',
   'ths-manual-boards',
   'kpl-snapshots',
+  'strategy-data',
   'kpl-permanent-hidden-boards.json',
   'panda-docs-cards.json',
   'panda-discovery-db.json',
 ];
 const SITE_SYNC_BACKEND_ENTRIES = [
   'kpl-stats-server.js',
+  'strategy-evidence.js',
+  'strategy-daily-events.js',
   'wind-close-db-sync.py',
   'winrt-ocr.ps1',
   'package.json',
@@ -417,6 +426,8 @@ const SITE_SYNC_FRONTEND_AUTO_DIR_NAMES = new Set([
 ]);
 const SITE_SYNC_FRONTEND_AUTO_EXCLUDED_FILES = new Set([
   'kpl-stats-server.js',
+  'strategy-evidence.js',
+  'strategy-daily-events.js',
   'wind-close-db-sync.py',
 ]);
 const SITE_SYNC_DATABASE_AUTO_FILE_EXTS = new Set([
@@ -22293,6 +22304,57 @@ function strategyMainlineConfirmPath(day) { return path.join(STRATEGY_MAINLINE_D
 function strategyMainlinePredictPath(day) { return path.join(STRATEGY_MAINLINE_DATA_DIR, `mainline-predict-${day}.json`); }
 function strategyMainlineSnapshotPath(day) { return path.join(STRATEGY_MAINLINE_DATA_DIR, `strategy-mainline-snapshot-${day}.json`); }
 function strategyMainlineLiveCachePath(day) { return path.join(STRATEGY_MAINLINE_DATA_DIR, `mainline-live-cache-${day}.json`); }
+function strategyDailyEventsPath(day) { return path.join(STRATEGY_MAINLINE_DATA_DIR, `strategy-daily-events-${day}.json`); }
+const strategyDailyEventsUpdateJobs = new Map();
+async function readStrategyDailyEvents(day) {
+  try {
+    return JSON.parse(await fs.readFile(strategyDailyEventsPath(day), 'utf8'));
+  } catch (err) {
+    if (err.code === 'ENOENT') return null;
+    throw err;
+  }
+}
+async function updateStrategyDailyEvents(day, updater) {
+  const isoDay = isoFromCompactDate(day);
+  const previous = strategyDailyEventsUpdateJobs.get(isoDay) || Promise.resolve();
+  const job = previous.catch(() => null).then(async () => {
+    const existing = await readStrategyDailyEvents(isoDay);
+    const next = await updater(existing);
+    if (!next) return existing;
+    await fs.mkdir(STRATEGY_MAINLINE_DATA_DIR, { recursive: true });
+    const file = strategyDailyEventsPath(isoDay);
+    const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+    await fs.writeFile(tmp, JSON.stringify(next, null, 2), 'utf8');
+    try {
+      await fs.rename(tmp, file);
+    } catch (err) {
+      await fs.rm(tmp, { force: true }).catch(() => {});
+      throw err;
+    }
+    return next;
+  });
+  strategyDailyEventsUpdateJobs.set(isoDay, job);
+  try {
+    return await job;
+  } finally {
+    if (strategyDailyEventsUpdateJobs.get(isoDay) === job) strategyDailyEventsUpdateJobs.delete(isoDay);
+  }
+}
+function strategyDailyFamilyInfo(theme) {
+  const raw = String(theme || '').trim();
+  if (!raw || /其他/.test(raw) || isDroppedThemeWord(raw)) return null;
+  const family = strategyMainlineFamilyInfo({ theme: raw });
+  return family?.key ? { key: family.key, label: family.label || raw } : null;
+}
+async function recordStrategyDailyIntradayObservation(day, sessionPhase, mainlines, observedAt = new Date().toISOString()) {
+  return updateStrategyDailyEvents(day, existing => mergeIntradayObservation(existing, {
+    day: isoFromCompactDate(day),
+    observedAt,
+    sessionPhase,
+    mainlines,
+    familyInfo: strategyDailyFamilyInfo,
+  }));
+}
 function strategyMainlineSavedAt(payload) {
   return String(payload?.generatedAt || payload?.liveCacheSavedAt || payload?.snapshotSavedAt || payload?.savedAt || '').trim();
 }
@@ -22674,6 +22736,7 @@ async function writeMainlinePredict(day, sessionPhase, mainlines, confirm) {
       confirmedKey: confirm?.key || '', top,
       schemaVersion: 2, candidates, starTransitions,
     }, null, 2), 'utf8');
+    await recordStrategyDailyIntradayObservation(day, sessionPhase, mainlines, savedAt);
   } catch {}
 }
 
@@ -24255,7 +24318,9 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
       m.isConfirmedMainline = (m.familyKey || m.key) === mainlineConfirm.key || m.theme === mainlineConfirm.theme;
     }
   }
-  if (isTodayQuery && options.writePredict !== false) writeMainlinePredict(isoDay, sessionPhaseNow, mainlines, mainlineConfirm);
+  if (isTodayQuery && options.writePredict !== false) {
+    await writeMainlinePredict(isoDay, sessionPhaseNow, mainlines, mainlineConfirm);
+  }
   // 个股归属追踪(诊断端点专用):某只股当天到底被哪些板块携带、映射到哪个题材、
   // 当日综合主因怎么说、最终落进了哪些主线的 todayCodes——用于定位"该进未进"。
   let debugTrace = null;
@@ -24363,6 +24428,102 @@ function strategyMainlineApplyInflowGate(items, mainlineConfirm) {
   return { kept, excluded };
 }
 
+function strategyDailySourceQuality(day, limitDb, mainReasonDb, closeDb) {
+  const expectedCodes = new Set((limitDb?.stocks || [])
+    .filter(stock => !isExcludedFromReview(stock?.code, stock?.name))
+    .map(stock => normalizeReasonSourceCode(stock?.code))
+    .filter(Boolean));
+  const coveredCodes = new Set((mainReasonDb?.stocks || [])
+    .map(stock => normalizeReasonSourceCode(stock?.code))
+    .filter(Boolean));
+  const missingMainReasonCodes = [...expectedCodes].filter(code => !coveredCodes.has(code)).sort();
+  const limitUpComplete = !!(expectedCodes.size
+    && isReliableLimitUpDbPayload(limitDb)
+    && isSavedAfterMarketClose(limitDb, day));
+  const mainReasonComplete = !!(limitUpComplete
+    && isCompatibleMainReasonDb(mainReasonDb)
+    && missingMainReasonCodes.length === 0);
+  const closeComplete = !!(isCompleteCloseDbPayload(closeDb) && isSavedAfterMarketClose(closeDb, day));
+  return { limitUpComplete, mainReasonComplete, closeComplete, missingMainReasonCodes };
+}
+
+async function finalizeStrategyDailyEvents(day, snapshotOverride = null) {
+  const isoDay = isoFromCompactDate(day);
+  if (!isChinaMarketTradingDay(isoDay) || !isAfterMarketClose(isoDay)) {
+    return { skipped: true, reason: 'not-after-close-trading-day', day: isoDay };
+  }
+  const [snapshot, predict, limitDb, mainReasonDb, closeDb] = await Promise.all([
+    snapshotOverride ? Promise.resolve(snapshotOverride) : readStrategyMainlineSnapshot(isoDay),
+    readMainlinePredict(isoDay),
+    readLimitUpDbDay(isoDay).catch(() => null),
+    readLimitUpMainReasonDbDay(isoDay).catch(() => null),
+    readEastmoneyCloseDbDay(isoDay).catch(() => null),
+  ]);
+  const quality = strategyDailySourceQuality(isoDay, limitDb, mainReasonDb, closeDb);
+  const payload = await updateStrategyDailyEvents(isoDay, existing => buildPostCloseRecord(existing, {
+    day: isoDay,
+    generatedAt: new Date().toISOString(),
+    snapshot,
+    predict,
+    limitDb,
+    mainReasonDb,
+    closeDb,
+    quality,
+    familyInfo: strategyDailyFamilyInfo,
+    isExcluded: stock => isExcludedFromReview(stock?.code, stock?.name),
+  }));
+  return { ok: !!payload, day: isoDay, complete: !!payload?.complete, payload };
+}
+
+let autoStrategyDailyEventsDay = '';
+let autoStrategyDailyEventsLastTryMs = 0;
+async function runAutoStrategyDailyEventsIfDue() {
+  const now = chinaNowParts();
+  if (now.hour < 16) return;
+  if (autoStrategyDailyEventsDay === now.day) return;
+  if (!isChinaMarketTradingDay(now.day)) {
+    autoStrategyDailyEventsDay = now.day;
+    return;
+  }
+  if (Date.now() - autoStrategyDailyEventsLastTryMs < 10 * 60 * 1000) return;
+  autoStrategyDailyEventsLastTryMs = Date.now();
+  let snapshot = await readStrategyMainlineSnapshot(now.day).catch(() => null);
+  if (!snapshot) {
+    const saved = await ensureStrategyMainlineSnapshot(now.day, 'daily-events-after-16:00').catch(() => null);
+    snapshot = saved?.snapshot || null;
+  }
+  const result = await finalizeStrategyDailyEvents(now.day, snapshot);
+  if (result?.complete) {
+    autoStrategyDailyEventsDay = now.day;
+    console.log(`strategy daily events ${now.day}: complete`);
+  } else {
+    const source = result?.payload?.postCloseConfirmed?.sourceStatus || {};
+    console.error(`strategy daily events ${now.day} pending: ${JSON.stringify(source)}`);
+  }
+}
+
+async function getStrategyDailyEventsApi(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  const day = isoFromCompactDate(url.searchParams.get('day') || chinaNowParts().day);
+  const rebuild = url.searchParams.get('rebuild') === '1';
+  let payload;
+  if (rebuild) {
+    const result = await finalizeStrategyDailyEvents(day)
+      .catch(error => ({ ok: false, error: String(error?.message || error), day }));
+    payload = result?.payload || result || null;
+  } else {
+    payload = await readStrategyDailyEvents(day)
+      .catch(error => ({ ok: false, error: String(error?.message || error), day }));
+  }
+  return send(res, 200, payload || {
+    ok: false,
+    day,
+    schemaVersion: STRATEGY_DAILY_EVENT_SCHEMA_VERSION,
+    ruleVersion: STRATEGY_DAILY_EVENT_RULE_VERSION,
+    reason: 'not-found',
+  });
+}
+
 async function ensureStrategyMainlineSnapshot(day, reason = '') {
   const isoDay = isoFromCompactDate(day);
   if (!isChinaMarketTradingDay(isoDay)) return { skipped: true, reason: 'market-closed', day: isoDay };
@@ -24373,6 +24534,9 @@ async function ensureStrategyMainlineSnapshot(day, reason = '') {
     return { skipped: true, reason: live?.reason || 'not-ready', day: isoDay, payload: live };
   }
   const snapshot = await writeStrategyMainlineSnapshot(isoDay, live, reason || 'after-close');
+  if (snapshot) finalizeStrategyDailyEvents(isoDay, snapshot).catch(err => {
+    console.error('strategy daily events finalize failed:', err.message);
+  });
   return { ok: !!snapshot, day: isoDay, snapshot };
 }
 
@@ -25370,6 +25534,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/limit-up-main-reason-db/pending') return await getLimitUpMainReasonPending(url, req, res);
     if (url.pathname === '/api/limit-up-main-reason-db/hot-themes') return await getLimitUpMainReasonHotThemes(url, req, res);
     if (url.pathname === '/api/strategy-mainlines') return send(res, 200, await getStrategyMainlines(url.searchParams.get('day') || chinaNowParts().day).catch(e => ({ ok: false, error: String(e && e.message || e) })));
+    if (url.pathname === '/api/admin/strategy-daily-events') return await getStrategyDailyEventsApi(url, req, res);
     if (url.pathname === '/api/detail-evidence-index') return await getDetailEvidenceIndexApi(url, req, res);
     if (url.pathname === '/api/strategy-mainline-review') {
       const reviewDays = Math.min(30, Math.max(1, Number(url.searchParams.get('days')) || 10));
@@ -25727,6 +25892,9 @@ if (process.argv.includes('--refresh-zt10')) {
     runAutoDetailEvidenceIndexIfDue().catch(err => {
       console.error('detail evidence index auto build failed:', err.message);
     });
+    runAutoStrategyDailyEventsIfDue().catch(err => {
+      console.error('strategy daily events auto build failed:', err.message);
+    });
   }, 60 * 1000);
 
   setTimeout(() => {
@@ -25753,6 +25921,9 @@ if (process.argv.includes('--refresh-zt10')) {
     });
     runAutoDetailEvidenceIndexIfDue().catch(err => {
       console.error('detail evidence index auto build failed:', err.message);
+    });
+    runAutoStrategyDailyEventsIfDue().catch(err => {
+      console.error('strategy daily events auto build failed:', err.message);
     });
   }, 3000);
 }
