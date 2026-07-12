@@ -6453,14 +6453,10 @@ async function enrichReviewLeaderMetrics(rows, isoDay, apiKey) {
       .filter(([c, v]) => c && codes.has(c) && Number.isFinite(v) && v > 0));
   };
   const [c0, c10, c30] = await Promise.all([closeMapOf(isoDay), closeMapOf(dayBack(10)), closeMapOf(dayBack(30))]);
-  // 每行「当前综合归纳主因」的归一主题，用于统计「因本主因的近10日主次数」(QI 归属口径)
-  const curTopicByCode = new Map();
-  for (const r of rows) {
-    const c = normalizeReasonSourceCode(r.code);
-    if (c) curTopicByCode.set(c, canonicalTopicName(String(r.finalBoardTopic || r.boardTopic || r.primaryRawTopic || r.primaryTopic || '')));
-  }
   const ztByCode = new Map();
-  const mainZtByCode = new Map();
+  // 同一只股票可能同时出现在多个主线卡片。历史主因按「股票 + 主线家族」累计，
+  // 不能只按股票保存一个当前主题，否则后出现的卡片会覆盖前一张卡片的归属。
+  const mainZtByCodeFamily = new Map();
   for (const d of td.slice(Math.max(0, td.length - 10))) {
     const ldb = await readLimitUpDbDay(d).catch(() => null);
     for (const s of (ldb?.stocks || [])) {
@@ -6471,19 +6467,24 @@ async function enrichReviewLeaderMetrics(rows, isoDay, apiKey) {
     for (const s of (mdb?.stocks || [])) {
       const c = normalizeReasonSourceCode(s.code);
       if (!codes.has(c)) continue;
-      const cur = curTopicByCode.get(c);
-      if (cur && canonicalTopicName(String(s.finalBoardTopic || '')) === cur) {
-        mainZtByCode.set(c, (mainZtByCode.get(c) || 0) + 1);
-      }
+      const theme = String(s.finalBoardTopic || '').trim();
+      if (!theme) continue;
+      const familyKey = strategyMainlineFamilyInfo({ theme }).key;
+      if (!familyKey) continue;
+      if (!mainZtByCodeFamily.has(c)) mainZtByCodeFamily.set(c, new Map());
+      const byFamily = mainZtByCodeFamily.get(c);
+      byFamily.set(familyKey, (byFamily.get(familyKey) || 0) + 1);
     }
   }
   for (const r of rows) {
     const c = normalizeReasonSourceCode(r.code);
+    const rowTheme = String(r.finalBoardTopic || r.boardTopic || r.primaryRawTopic || r.primaryTopic || '').trim();
+    const familyKey = rowTheme ? strategyMainlineFamilyInfo({ theme: rowTheme }).key : '';
     const p0 = c0.get(c), p10 = c10.get(c), p30 = c30.get(c);
     r.gain10 = (Number.isFinite(p0) && Number.isFinite(p10)) ? Number(((p0 / p10 - 1) * 100).toFixed(2)) : null;
     r.gain30 = (Number.isFinite(p0) && Number.isFinite(p30)) ? Number(((p0 / p30 - 1) * 100).toFixed(2)) : null;
     r.zt10Count = ztByCode.get(c) || 0;
-    r.mainZt10Count = mainZtByCode.get(c) || 0;
+    r.mainZt10Count = familyKey ? (mainZtByCodeFamily.get(c)?.get(familyKey) || 0) : 0;
   }
 }
 
@@ -22932,28 +22933,35 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay, options = {}) {
   if (!poolByMainline.length) return;
   // 池子补全:近10日凡因本主线主因涨停过的股全部入池(当天休息也保留参选资格),同时记录“最近一次本主线主因涨停”距今几个交易日(主因新鲜度)。
   const td10 = await getRecentTradingDays(isoDay, apiKey, 10).catch(() => []);
-  const themeDayHits = new Map(); // themeKey -> Map(code -> {name, lastIdx})
+  const familyDayHits = new Map(); // familyKey -> Map(code -> {name, lastIdx})
   for (let di = 0; di < td10.length; di += 1) {
     const db = await readLimitUpMainReasonDbDay(td10[di]).catch(() => null);
     for (const s of (db?.stocks || [])) {
       const code = normalizeReasonSourceCode(s?.code);
       if (!code || isExcludedFromReview(s?.code, s?.name)) continue;
-      const topic = canonicalTopicName(String(s.finalBoardTopic || ''));
-      if (!topic) continue;
-      if (!themeDayHits.has(topic)) themeDayHits.set(topic, new Map());
-      const cur = themeDayHits.get(topic).get(code) || { name: String(s.name || ''), lastIdx: -1 };
+      const theme = String(s.finalBoardTopic || '').trim();
+      if (!theme) continue;
+      const familyKey = strategyMainlineFamilyInfo({ theme }).key;
+      if (!familyKey) continue;
+      if (!familyDayHits.has(familyKey)) familyDayHits.set(familyKey, new Map());
+      const cur = familyDayHits.get(familyKey).get(code) || { name: String(s.name || ''), lastIdx: -1 };
       cur.lastIdx = Math.max(cur.lastIdx, di);
-      themeDayHits.get(topic).set(code, cur);
+      familyDayHits.get(familyKey).set(code, cur);
     }
   }
   const lastN = td10.length - 1;
   for (const entry of poolByMainline) {
     const { m } = entry;
-    const topics = [...new Set([m.theme, ...(m.mergedThemes || [])].map(t => canonicalTopicName(String(t || ''))).filter(Boolean))];
-    entry.familyTopics = topics;   // 诊断用:主因题材必须命中此族清单才可入池/过门槛
+    const familyInfo = [...new Map([m.theme, ...(m.mergedThemes || [])]
+      .map(theme => strategyMainlineFamilyInfo({ theme: String(theme || '').trim() }))
+      .filter(info => info?.key)
+      .map(info => [info.key, info])).values()];
+    const familyKeys = familyInfo.map(info => info.key);
+    entry.familyKeys = familyKeys;
+    entry.familyTopics = familyInfo.map(info => info.label).filter(Boolean);
     entry.freshByCode = new Map();
-    for (const topic of topics) {
-      for (const [code, hit] of (themeDayHits.get(topic) || new Map())) {
+    for (const familyKey of familyKeys) {
+      for (const [code, hit] of (familyDayHits.get(familyKey) || new Map())) {
         const dist = lastN - hit.lastIdx; // 0=今天,1=昨天...
         const prev = entry.freshByCode.get(code);
         if (prev == null || dist < prev) entry.freshByCode.set(code, dist);
@@ -22977,6 +22985,7 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay, options = {}) {
         fullPoolCount: 0,
         returnedRowCount: 0,
         familyTopics: entry.familyTopics || [],
+        familyKeys: entry.familyKeys || [],
         tracedMissing: baseTraced,
         pool: [],
       };
@@ -23089,6 +23098,7 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay, options = {}) {
         fullPoolCount: sortedScored.length,
         returnedRowCount: picked.length,
         familyTopics: entry.familyTopics || [],
+        familyKeys: entry.familyKeys || [],
         tracedMissing: traceCodes.filter(code => !sortedScored.some(r => r.code === code)),
         pool: picked
           .map(r => ({
