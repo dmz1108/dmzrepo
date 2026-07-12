@@ -268,6 +268,13 @@ async function waitHealth(port, ms = 20000) {
     A(!leadersOf(reviewMls, /网络安全/).includes('002396'), '复核 review:网络安全 leaders 不再含星网(贡献已移除)');
     const rvNet = netMl(reviewMls);
     A(rvNet && (rvNet.todayCodes || []).map(String).includes('600002'), '复核 review:真属网络安全的 600002 保留在网络安全');
+    const reviewCompute = reviewMls.find(m => /算力/.test(themeBlob(m)));
+    const reviewComputeDebug = reviewCompute && reviewCompute.leaderDebug;
+    const reviewXwDebug = (reviewComputeDebug?.pool || []).find(row => String(row.code) === '002396');
+    A(reviewComputeDebug?.resultScope === 'top30-plus-traced' && reviewComputeDebug?.rankScope === 'full-gated-leader-pool',
+      '复核 admin:leaderDebug 明示返回范围与完整正式池排名口径');
+    A(Number.isInteger(reviewComputeDebug?.fullLeaderCount) && reviewComputeDebug.fullLeaderCount >= 1 && reviewXwDebug?.originalRank === 1,
+      '复核 admin:算力AI 返回完整池总人数及星网真实 originalRank=1');
     A((rv.json.review.reviewAttribution && rv.json.review.reviewAttribution.hard || []).some(h => String(h.code) === '002396'),
       '复核 review:reviewAttribution.hard 记录星网 hard 改判');
     // 二审阻断2:数字货币板块 ztCount=3 只由星网撑着(countFallback 重复累计),跨族删除后
@@ -293,6 +300,13 @@ async function waitHealth(port, ms = 20000) {
     A(ai.json?.evidence?.live && ai.json?.evidence?.frozen && ai.json?.evidence?.review, 'AI 复核:返回 live/frozen/review 三方对照');
     A((ai.json?.evidence?.review?.reviewAttribution?.hard || []).some(item => item.code === '002396'), 'AI 复核:保留请求股票的盘后 hard 改判');
     A((ai.json?.evidence?.review?.debugTrace || []).every(item => item.code === '002396'), 'AI 复核:debugTrace 仅含请求股票');
+    const aiReviewCompute = (ai.json?.evidence?.review?.mainlines || []).find(m => /算力/.test(String(m.theme || '') + (m.mergedThemes || []).join('')));
+    const aiLeaderDebug = aiReviewCompute?.leaderDebug;
+    A(ai.json?.evidence?.review?.resultScope === 'requested-codes' && aiLeaderDebug?.resultScope === 'requested-codes',
+      'AI 复核:顶层与主线诊断均明示 requested-codes 切片');
+    A(Number.isInteger(aiLeaderDebug?.fullLeaderCount) && aiLeaderDebug.fullLeaderCount >= 1
+      && aiLeaderDebug.pool?.length === 1 && aiLeaderDebug.pool[0].code === '002396' && aiLeaderDebug.pool[0].originalRank === 1,
+      'AI 复核:只返回请求股,但保留完整池总人数与星网 originalRank=1');
     A(!aiBlob.includes('"code":"600002"') && !aiBlob.includes('must-not-leak') && !aiBlob.includes('password'),
       'AI 复核:未请求股票及未知敏感字段不进入响应');
     A(ai.json?.dataHandling?.sourceTextIsUntrusted === true, 'AI 复核:来源文字明确标记为不可信数据');

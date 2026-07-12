@@ -133,11 +133,37 @@ function isoDays(count) {
       },
       { code: '600000', todayReason: { finalBoardTopic: 'Other' } },
     ],
-    mainlines: [{ theme: 'Compute AI', todayCodes: ['002396', '600000'], leaders: [{ code: '002396' }, { code: '600000' }] }],
+    mainlines: [{
+      theme: 'Compute AI',
+      todayCodes: ['002396', '600000'],
+      leaders: [{ code: '002396' }, { code: '600000' }],
+      leaderDebug: {
+        resultScope: 'top30-plus-traced',
+        rankScope: 'full-gated-leader-pool',
+        fullLeaderCount: 5,
+        fullPoolCount: 8,
+        returnedRowCount: 3,
+        tracedMissing: ['600888'],
+        pool: [
+          { code: '002396', name: 'XW', originalRank: 1, poolRank: 1, leadScore: 114, gated: true, mainZt10Count: 1, zt10Count: 5, gain10: 54.05, gain30: 25.32, basis: ['10日5板'], password: 'secret' },
+          { code: '000938', name: 'ZG', originalRank: null, poolRank: 6, leadScore: 62, gated: false, mainZt10Count: 0, zt10Count: 2, gain10: 21.55, gain30: 16.59, basis: ['10日2板'] },
+          { code: '600000', name: 'Other', originalRank: 2, poolRank: 2, leadScore: 90, gated: true, password: 'must-not-leak' },
+        ],
+      },
+    }],
   }, codes);
   A(diagnostic.reviewAttribution.hard.length === 1 && diagnostic.reviewAttribution.hard[0].code === '002396', 'diagnostic attribution restricted to requested stocks');
   A(diagnostic.debugTrace.length === 1 && diagnostic.debugTrace[0].code === '002396', 'diagnostic trace restricted to requested stocks');
   A(diagnostic.debugTrace[0].snapshotStats[0].ztList.cookie === undefined, 'diagnostic snapshot rows use a field allowlist');
+  const diagnosticLeaderDebug = diagnostic.mainlines[0].leaderDebug;
+  A(diagnostic.resultScope === 'requested-codes' && JSON.stringify(diagnostic.requestedCodes) === JSON.stringify(codes),
+    'diagnostic response explicitly identifies requested-codes result scope');
+  A(diagnosticLeaderDebug.fullLeaderCount === 5 && diagnosticLeaderDebug.fullPoolCount === 8 && diagnosticLeaderDebug.returnedRowCount === 2,
+    'diagnostic preserves complete-pool counts while reporting only two requested rows');
+  A(JSON.stringify(diagnosticLeaderDebug.pool.map(row => [row.code, row.originalRank, row.poolRank])) === JSON.stringify([['002396', 1, 1], ['000938', null, 6]]),
+    'diagnostic preserves requested stock ranks;未过主因门槛的股票 originalRank=null 但仍保留 poolRank');
+  A(!JSON.stringify(diagnosticLeaderDebug).includes('600000') && !JSON.stringify(diagnosticLeaderDebug).includes('must-not-leak'),
+    'diagnostic leader pool allowlist does not expose unrequested rows or unknown fields');
   A(!/[\u0000-\u001f\u007f]/.test(JSON.stringify(diagnostic)), 'diagnostic source text control characters stripped');
   const evidence = {
     snapshots: [snapshotEvidence],

@@ -57,7 +57,7 @@ Codex 用真实文件/API 指出九点,全部修复:
 ## 本 PR 交付(只读诊断 + 机制复现,不改任何行为)
 
 1. **admin 只读诊断端点** `GET /api/strategy-mainline-leader-debug?day=2026-07-08&codes=002396,000938`:
-   - `live`:当前代码即时重算,含每条主线 `leaderDebug`(族清单 + 龙头池全量打分明细:mainZt10/zt10/gain10/gain30/主因新鲜度/今日在场/门槛判定,空池也暴露族清单)和 `debugTrace`(每只股:哪些板块携带→映射题材、当日综合主因、历史主因、落入了哪些主线 todayCodes、是否在涨停底库);
+   - `live`:当前代码即时重算,含每条主线 `leaderDebug`(族清单 + 完整正式池/候选池人数 + 前30名与指定股打分明细；每个返回行带完整池 `originalRank/poolRank`,空池也暴露 scope/count)和 `debugTrace`(每只股:哪些板块携带→映射题材、当日综合主因、历史主因、落入了哪些主线 todayCodes、是否在涨停底库);
    - `frozenSummary`:冻结快照的龙头/todayCodes 摘要,与 live 对照即可看出"冻结旧账"与"现行代码缺陷"各占多少;
    - 严格只读:不写预测(writePredict:false)、不派发扫描、不动快照;admin 门控。
 2. **机制复现回归**(tests/leader-pool-debug.test.js,18 项):真实 ReworkLeaders + 合成夹具(模拟值,不含真实行情硬编码)复现:归属丢失→池子补全兜底但今日加分全失;归属修复→底库数据自动算出第一龙头;族清单缺口→真龙头彻底进不了池(空池基线诊断);debug 开关不影响线上行为。
