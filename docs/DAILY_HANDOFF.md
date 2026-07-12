@@ -3714,3 +3714,25 @@ Deployment:
 
 Notes for next agent:
 - 本改动只调整预判回看视觉层;不得据此解释或修改命中率、明星转封和次日胜率口径。
+
+## 2026-07-12 - Codex - PR34预判回看云端部署
+
+Changed:
+- 无代码变更;记录PR #34合并后的云端静态前端部署、备份及公网验收结果。
+- 云端两份运维日志已同步追加同一部署记录。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 云端与公网`/kpl`文件SHA-256均为`C49A15E6C89C76975992978282FFAAA0BC4DC15B05BE03EC5DE5A0D885FE9FAB`,与Git main一致。
+- 公网策略回看接口HTTP 200、`ok=true`;响应包含3个交易日记录和2个有效主线样本。
+- 主服务仍由PID 13772监听8765,部署前后未重启。
+
+Deployment:
+- 已部署`C:\PandaDashboard\kpl-dashboard_17_apple.html`。
+- 回退备份:`C:\PandaDashboard\_deploy-backups\pr34-20260712-232721\kpl-dashboard_17_apple.html`。
+- 已更新`panda-cloud-ops-2026-06-19.md`和`_cloud-change-log-20260705.md`。
+
+Notes for next agent:
+- 本次只替换静态行情HTML;v3评分模块虽已合并main,仍未接入或部署,云端正式龙头榜继续使用v2。
