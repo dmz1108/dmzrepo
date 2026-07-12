@@ -3510,3 +3510,23 @@ Deployment:
 Notes for next agent:
 - 下一步由 Owner 先阅读双方观点并补充评论,再进入 Codex/Claude 互相质疑;不得直接实施。
 - Claude 的 retract-708-leader-overclaim 分支基于旧 main 且覆盖了后续部署 handoff,不能直接合并;勘误内容应从最新 main 追加迁移。
+
+## 2026-07-12 - Codex - 记录 Owner 对明星事件计分的澄清
+
+Changed:
+- Owner 明确：明星是当日事件的更高等级,不是普通涨停分之外再叠加的重合奖；同一天明星分替代普通涨停分,后续未达明星标准的涨停按普通涨停事件计。
+- Owner 明确：真正的当日主升板块至少包含一只明星股；预期明星用于盘中判断,正式明星由事件轨迹确认。
+- Owner 否决“主因支撑系数再乘涨幅分”的复杂交叉公式,要求主因归属与涨幅强度分别清楚计分。
+
+Files:
+- docs/strategy/discussions/2026-07-12-leader-scoring-v3.md
+- docs/DAILY_HANDOFF.md
+
+Validated:
+- Owner 补充已分别贴入议题 B、D、E;git diff --check 通过。
+
+Deployment:
+- Discussion docs only;未改代码、未部署、未重启服务。
+
+Notes for next agent:
+- 后续互评必须以“每日事件互斥取最高等级”作为共同前提,不再讨论同日明星分+普通涨停分叠加。
