@@ -169,6 +169,10 @@ Codex 第一轮回应:
 Owner 裁决与 Codex 确认:
 - 大涨未板固定8分,不再测试随涨幅6-14的事件分方案。Codex 接受裁决并撤回该异议:不同收盘涨幅已经通过10日/30日涨幅分形成差异,事件分保持固定更简单且避免重复表达强度。
 
+
+Claude 第二轮(收敛确认):
+1. 感谢 Owner 采纳固定 8 分;Codex 撤回随涨幅方案后本议题无分歧。
+2. 起草 Shared Decision 前需钉死一个边界:**三级事件的记录条件是否对称**。我的理解——涨停 15 / 明星 20 事件的记录条件 = 该日该股主因属于本主线家族(不要求该族当日被确认为主线,历史辨识度=因本主线涨停过);而大涨未板 8 分事件**仅在该族当日为盘后已确认主线时记录**(否则任意 5% 波动都会进历史)。这个不对称是有意设计,请在 Shared Decision 写明,避免实现时两种理解。
 Owner Comments: Pending
 
 Topic Decision: Pending
@@ -216,6 +220,11 @@ Codex 第一轮回应:
 Owner 裁决与双方收敛:
 - 盘后最多确认2条真实主线。第一方向按完整证据确认;第二方向不要求与第一名并列,但必须独立过绝对条件,不够强则不生成。Claude 的“只取第一名次层级”降为基线候选来源,不再作为唯一确认规则。
 
+
+Claude 第二轮(收敛确认):
+1. **接受 Owner 裁决与 Codex 的批评**——"仅第一名次层级"确实会系统性漏掉不并列的第二真实主线,我的方案降为基线候选来源是正确处置;"真正主线必须含至少一只明星股"是防凑数第二条的硬条件,比我的并列判据更好。
+2. 为让"独立过绝对条件"可实现,提第二主线的**初始阈值提案**(全部影子期可校准):家族涨停数 ≥3,或 ≥2 且含明星股;含至少一只明星股(Owner 已定);家族板块资金净流入非负;与第一主线家族不同族。不满足任一条即不生成第二条。
+3. Codex 的 `intradayObservation` vs `postCloseConfirmed` 区分完全同意,应写入 Shared Decision 作为共振记录的字段级约束。
 Owner Comments: Pending
 
 Topic Decision: Pending
@@ -260,6 +269,8 @@ Codex 第一轮回应:
 2. 同意拆成 `historyScore + todayScore`。historyScore 的锚日固定为上一已可靠收盘日;todayScore 只表达实时观察和临时状态,不得写回历史。收盘后以明星20/普通涨停15/大涨未板/无事件四选一形成正式日记录,下一交易日才进入 historyScore。
 3. todayScore 内也要防重复:expected、实时共振和事件临时投影必须分别显示来源;同一状态升级时应替换旧状态而非叠加多份同源分。active=0,L2未扫描=null/dataMissing,双方一致。
 
+
+Claude 第二轮(收敛确认):Codex 撤回共振加分、historyScore+todayScore 锚日与防重复规则均同意,本议题可定案。todayScore 的"状态升级替换非叠加"建议在实现时复用 starTransitions 事件轨迹(已上线)作为唯一状态源。
 Owner Comments: Pending
 
 Topic Decision: Pending
@@ -303,6 +314,8 @@ Codex 第一轮回应:
 2. 同意“每一分都能指向持久化证据”。盘中内存信号若要进入 todayScore,必须先形成带时间戳、来源和完整性状态的可回放采样;否则只能展示,不能正式计分。
 3. Topic Decision 应直接使用 Owner 的“同日事件互斥取最高、多日完整累积不递减”表述,不再保留已撤回的凹曲线描述。
 
+
+Claude 第二轮(收敛确认):三点全部同意,本议题可按 Codex 第 3 点直接起草 Topic Decision(用 Owner 表述)。
 Owner Comments: Pending
 
 Topic Decision: Pending
@@ -352,6 +365,8 @@ Codex 第一轮回应:
 3. 回测必须同时比较固定8分与随涨幅6-14分、otherZt的0/4/6消融,并检验“只取第一主线”与“允许满足绝对条件的第二主线”两种确认口径。Owner 随机指定日继续保留。
 4. Owner 后续已裁决固定8分和允许1-2条主线,因此验证计划不再把这两项当作待选公式;回放改为验证固定口径是否正确执行、是否出现误认第二主线。otherZt的0/4/6仍是独立待测项。
 
+
+Claude 第二轮(收敛确认):同意全部四点,包括把 Owner 已裁决项从"待选公式"改为"固定口径执行验证"。验证计划成型后,建议第 0 号 PR(只读证据输出 originalRank/fullLeaderCount/resultScope)可以先行启动——它不依赖任何评分决策,且是三方后续所有完整池验证的公共前提。
 Owner Comments: Pending
 
 Topic Decision: Pending
