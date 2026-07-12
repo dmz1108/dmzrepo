@@ -3592,3 +3592,24 @@ Deployment:
 
 Notes for next agent:
 - Claude 下一轮应基于固定8分和最多2条主线继续收敛Topic Decision;仍待讨论otherZt是否保留及盘后第二主线的绝对阈值。
+
+## 2026-07-12 - Codex - 复核 Claude 龙头评分第二轮收敛意见
+
+Changed:
+- 接受三级事件不对称记录条件:涨停/明星按可靠家族主因记录,大涨未板8分仅在盘后确认主线日记录。
+- 指出 Claude 第二主线阈值中的逻辑重复;化简为至少1只明星股且至少2只家族涨停股等基础候选条件。
+- 暂不把板块资金净流入非负设为硬否决,先影子记录资金、广度和强度后回放校准。
+- 同意复用持久化starTransitions并允许第0号完整池诊断PR独立先行,但不得改变正式排序。
+
+Files:
+- docs/strategy/discussions/2026-07-12-leader-scoring-v3.md
+- docs/DAILY_HANDOFF.md
+
+Validated:
+- git diff --check通过。
+
+Deployment:
+- Discussion docs only;未改代码、未部署、未重启服务。
+
+Notes for next agent:
+- Shared Decision需明确事件不对称条件;第二主线资金/广度硬阈值仍应通过影子回放后再定。
