@@ -50,8 +50,11 @@ GET /api/ai/strategy-mainline-review?day=YYYY-MM-DD&codes=000001,000002
 - `frozen`：当日已经保存的冻结预测快照；
 - `review`：使用当日盘后四源综合主因进行归属复核；
 - `debugMeta/debugTrace/reviewAttribution`：判断输入是否完整、个股原来被哪些板块携带、盘后是否发生 hard/soft 改判。
+- `leaderDebug`：只返回请求股票的脱敏评分行，但保留该主线完整池元数据。`originalRank` 是股票在完整且通过主因硬门槛的正式龙头池名次，`fullLeaderCount` 是该完整正式池人数；`poolRank/fullPoolCount` 对应包含未过门槛候选的完整候选池。`resultScope=requested-codes` 明示响应不是完整股票清单。
 
 接口只允许已收盘的中国 A 股交易日，且每次必须指定 1-10 只股票。它固定使用 `writePredict:false` 与诊断只读模式，不写预测、不重建或修改快照、不派发 L2 扫描。返回内容经过字段白名单过滤，所有个股数组只保留请求股票，并带证据区段与整包 SHA-256。
+
+`originalRank/fullLeaderCount` 可以确认请求股票在完整正式池中的真实位置，但不能据此猜测未请求股票的代码或分数。需要比较的候选必须在同一次请求中明确列入 `codes`；未请求股票仍不会进入响应。
 
 标准命令：
 

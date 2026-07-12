@@ -22970,7 +22970,16 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay, options = {}) {
     const baseTraced = (Array.isArray(options.traceCodes) ? options.traceCodes : [])
       .map(normalizeReasonSourceCode).filter(Boolean);
     for (const entry of poolByMainline) {
-      entry.m.leaderDebug = { familyTopics: entry.familyTopics || [], tracedMissing: baseTraced, pool: [] };
+      entry.m.leaderDebug = {
+        resultScope: 'empty',
+        rankScope: 'full-gated-leader-pool',
+        fullLeaderCount: 0,
+        fullPoolCount: 0,
+        returnedRowCount: 0,
+        familyTopics: entry.familyTopics || [],
+        tracedMissing: baseTraced,
+        pool: [],
+      };
     }
   }
   if (!allRows.length) return;
@@ -23032,11 +23041,12 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay, options = {}) {
     });
     // 龙头是「历史挣出来的」：三榜排名+主因门槛。没人过门槛就是没有龙头——不用今日强势股冒充。
     // （首日新题材天然无复盘数据 → 无龙头，只看明星；次日它进了主因库，龙头才开始产生。）
-    const gated = scored.filter(r => r.gated).sort((a, b) =>
+    const leaderOrder = (a, b) =>
       b.leadScore - a.leadScore ||
       ((freshByCode.get(a.code) ?? 99) - (freshByCode.get(b.code) ?? 99)) ||
       ((Number(b.gain) || -999) - (Number(a.gain) || -999)) ||
-      String(a.code).localeCompare(String(b.code)));
+      String(a.code).localeCompare(String(b.code));
+    const gated = scored.filter(r => r.gated).sort(leaderOrder);
     if (gated.length) {
       // 综合打分选出 1-3 个最佳可能龙头,第一个为主龙头(用于预判记录/回看)。
       m.leaders = gated.slice(0, 3)
@@ -23055,10 +23065,12 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay, options = {}) {
     const starTop = (m.starStocks || [])[0] || null;
     m.starSlot = starTop ? { ...starTop } : null;
     m.leaderIsStar = !!(starTop && m.mainLeader && normalizeReasonSourceCode(starTop.code) === normalizeReasonSourceCode(m.mainLeader.code));
-    // 只读诊断(admin 端点专用):暴露龙头池全量打分明细与族清单,定位"该进未进/该赢未赢"。
+    // 只读诊断(admin 端点专用):暴露完整池计数/原始名次与前30+指定股明细,定位"该进未进/该赢未赢"。
     // 正常请求不带 options.debug,不产生该字段,行为零变化。
     if (options.debug) {
-      const sortedScored = scored.slice().sort((a, b) => b.leadScore - a.leadScore);
+      const sortedScored = scored.slice().sort(leaderOrder);
+      const originalRankByCode = new Map(gated.map((r, i) => [r.code, i + 1]));
+      const poolRankByCode = new Map(sortedScored.map((r, i) => [r.code, i + 1]));
       const traceCodes = (Array.isArray(options.traceCodes) ? options.traceCodes : [])
         .map(normalizeReasonSourceCode).filter(Boolean);
       // 三审修正5:codes= 指定的股票必须始终出现在明细里,即使排在池 30 名之外;
@@ -23071,11 +23083,19 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay, options = {}) {
         }
       }
       m.leaderDebug = {
+        resultScope: 'top30-plus-traced',
+        rankScope: 'full-gated-leader-pool',
+        fullLeaderCount: gated.length,
+        fullPoolCount: sortedScored.length,
+        returnedRowCount: picked.length,
         familyTopics: entry.familyTopics || [],
         tracedMissing: traceCodes.filter(code => !sortedScored.some(r => r.code === code)),
-        pool: picked   // 覆盖上方空池基线:全量打分明细(含未过门槛股)
+        pool: picked
           .map(r => ({
-            code: r.code, name: r.name, leadScore: r.leadScore, gated: r.gated,
+            code: r.code, name: r.name,
+            originalRank: originalRankByCode.get(r.code) ?? null,
+            poolRank: poolRankByCode.get(r.code) ?? null,
+            leadScore: r.leadScore, gated: r.gated,
             mainZt10Count: Number(r.mainZt10Count) || 0, zt10Count: Number(r.zt10Count) || 0,
             gain10: isFiniteNumeric(r.gain10) ? Number(r.gain10) : null,
             gain30: isFiniteNumeric(r.gain30) ? Number(r.gain30) : null,

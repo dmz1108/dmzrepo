@@ -3467,3 +3467,34 @@ Deployment:
 Notes for next agent:
 - 旧预测文件没有 starTransitions,历史预期转封保持 0/0;从部署后的交易日开始形成样本,不得倒推旧数据。
 - 后续 Windows 云端部署不要通过交互式 powershell -Command - 一次发送长重启脚本;使用独立 schtasks /End、文件替换、schtasks /Run 和健康检查命令。
+
+## 2026-07-12 - Codex - 第0阶段完整池诊断名次契约
+
+Changed:
+- 管理员 leaderDebug 增加 resultScope/rankScope/fullLeaderCount/fullPoolCount/returnedRowCount;每个返回行增加完整正式池 originalRank 和完整候选池 poolRank。
+- AI 主线复核接口继续只返回请求股票,但现在保留完整池人数和请求股真实原始名次;顶层与主线均明示 resultScope=requested-codes。
+- 未请求股票及未知字段继续由白名单剔除;正常策略请求、候选池、正式排序和用户页面完全未改。
+- 修正文档中把“前30+指定股”误称为全量池的旧表述,补充 originalRank/fullLeaderCount 的准确语义。
+
+Files:
+- kpl-stats-server.js
+- strategy-evidence.js
+- tests/leader-pool-debug.test.js
+- tests/leader-debug-endpoint.test.js
+- tests/strategy-evidence-tools.test.js
+- docs/AI_PRODUCTION_READ.md
+- docs/ops/AI_READONLY_DATA_INTERFACES.md
+- docs/ops/DATA_REPAIR_20260708_ZIGUANG.md
+- docs/DAILY_HANDOFF.md
+
+Validated:
+- node --check kpl-stats-server.js / strategy-evidence.js通过。
+- leader-pool-debug、strategy-evidence-tools、leader-debug-endpoint定向测试通过。
+- tests/*.test.js全套17个测试文件通过,未发现正式策略、L2、复盘健康、权限或静态页面回归。
+- git diff --check通过。
+
+Deployment:
+- Git分支实现中;未合并main、未部署云端、未重启服务。
+
+Notes for next agent:
+- 请重点复审 originalRank 仅对 gated 正式龙头池编号、未过门槛行为 null,以及 AI 白名单不泄露未请求股票。合并部署后用7月8日算力AI请求002396/002965/000938核对完整池真实名次。

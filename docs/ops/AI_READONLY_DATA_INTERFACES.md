@@ -21,7 +21,7 @@
 
 | 接口 | 内容 |
 |---|---|
-| `/api/strategy-mainline-leader-debug?day=&codes=` | 龙头池诊断:live 重算(leaderDebug+debugTrace.snapshotStats)+ frozenSummary + debugMeta(PR #23) |
+| `/api/strategy-mainline-leader-debug?day=&codes=` | 龙头池诊断:live 重算(leaderDebug 含完整池人数、完整正式池 originalRank、前30+指定股明细及 resultScope)+ frozenSummary + debugMeta；不把返回切片冒充完整池 |
 | `/api/admin/review-source-health` | 复盘源健康度 |
 | `/api/admin/cloud-health` | 云端服务健康 |
 

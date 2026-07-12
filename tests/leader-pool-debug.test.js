@@ -111,6 +111,8 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   A(!(familyGap.leaders || []).length, "族清单只含'算力':紫光的云计算/光模块主因 canonical 后不在族,进不了池(复现族映射缺口)");
   A(JSON.stringify(familyGap.leaderDebug?.familyTopics) === JSON.stringify(['算力']), "leaderDebug 暴露族清单=['算力'],缺口在映射而非评分");
   A(Array.isArray(familyGap.leaderDebug?.tracedMissing) && familyGap.leaderDebug.tracedMissing.includes('000938'), 'tracedMissing 明示紫光根本没进池(空池场景也追踪到)');
+  A(familyGap.leaderDebug?.resultScope === 'empty' && familyGap.leaderDebug?.fullLeaderCount === 0 && familyGap.leaderDebug?.fullPoolCount === 0,
+    '空池诊断:scope/count 明示完整池确实为空,不是过滤后切片为空');
   Object.assign(REASON_DB, savedDb);
 
   // 4. Codex 第5点:codes= 指定股必须始终出现在明细,即使不在 pool 前30
@@ -126,6 +128,13 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   const inPool = (many.leaderDebug?.pool || []).some(r => r.code === '002396');
   A(inPool, '被 trace 的星网即使评分排 30 名外,也强制出现在明细 pool 中');
   A((many.leaderDebug?.pool || []).length > 30, 'pool 因 trace 注入而超过 30(证明 trace 股是被额外补入的)');
+  const tracedXw = (many.leaderDebug?.pool || []).find(r => r.code === '002396');
+  A(many.leaderDebug?.resultScope === 'top30-plus-traced' && many.leaderDebug?.rankScope === 'full-gated-leader-pool',
+    '诊断明确返回切片范围与原始名次所依据的完整正式龙头池');
+  A(many.leaderDebug?.fullLeaderCount === 41 && many.leaderDebug?.fullPoolCount === 41 && many.leaderDebug?.returnedRowCount === 31,
+    '完整池计数=41、实际返回=前30+指定股,不再把返回行数冒充完整池人数');
+  A(tracedXw?.originalRank === 41 && tracedXw?.poolRank === 41,
+    '指定股即使排在返回切片外,仍携带完整正式池 originalRank=41');
   METRICS_TABLE = savedTable;
   for (const k of Object.keys(REASON_DB)) delete REASON_DB[k];
   Object.assign(REASON_DB, savedDb);

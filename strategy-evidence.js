@@ -317,11 +317,54 @@ function sanitizeDiagnosticSnapshotStat(item, codeSet) {
   return matched ? output : null;
 }
 
+function sanitizeLeaderDebug(debug, codeSet) {
+  if (!debug || typeof debug !== 'object') return null;
+  const pool = (Array.isArray(debug.pool) ? debug.pool : [])
+    .map(row => {
+      const code = normalizeEvidenceCode(row?.code);
+      if (!code || !codeSet.has(code)) return null;
+      return {
+        code,
+        name: cleanString(row?.name, 120),
+        originalRank: finiteNumber(row?.originalRank),
+        poolRank: finiteNumber(row?.poolRank),
+        leadScore: finiteNumber(row?.leadScore),
+        gated: row?.gated === true,
+        mainZt10Count: finiteNumber(row?.mainZt10Count),
+        zt10Count: finiteNumber(row?.zt10Count),
+        gain10: finiteNumber(row?.gain10),
+        gain30: finiteNumber(row?.gain30),
+        freshDist: finiteNumber(row?.freshDist),
+        todayLimit: row?.todayLimit === true,
+        todayGain: finiteNumber(row?.todayGain),
+        basis: (Array.isArray(row?.basis) ? row.basis : []).map(item => cleanString(item, 200)).slice(0, 12),
+      };
+    })
+    .filter(Boolean);
+  return {
+    resultScope: 'requested-codes',
+    rankScope: cleanString(debug.rankScope, 80) || 'full-gated-leader-pool',
+    fullLeaderCount: finiteNumber(debug.fullLeaderCount),
+    fullPoolCount: finiteNumber(debug.fullPoolCount),
+    returnedRowCount: pool.length,
+    tracedMissing: (Array.isArray(debug.tracedMissing) ? debug.tracedMissing : [])
+      .map(normalizeEvidenceCode)
+      .filter(code => code && codeSet.has(code))
+      .slice(0, 10),
+    pool,
+  };
+}
+
 function sanitizeStrategyDiagnosticPayload(payload, codes) {
   if (!payload) return null;
   const normalizedCodes = normalizeEvidenceCodes(codes, 10);
   const codeSet = new Set(normalizedCodes);
   const base = sanitizeStrategyPayload(payload, normalizedCodes);
+  const rawMainlines = Array.isArray(payload.mainlines) ? payload.mainlines : [];
+  const mainlines = (Array.isArray(base?.mainlines) ? base.mainlines : []).map((mainline, index) => {
+    const leaderDebug = sanitizeLeaderDebug(rawMainlines[index]?.leaderDebug, codeSet);
+    return leaderDebug ? { ...mainline, leaderDebug } : mainline;
+  });
   const debugMeta = payload.debugMeta && typeof payload.debugMeta === 'object'
     ? {
         fullWait: payload.debugMeta.fullWait === true,
@@ -393,6 +436,9 @@ function sanitizeStrategyDiagnosticPayload(payload, codes) {
     .slice(0, 10);
   return {
     ...base,
+    resultScope: 'requested-codes',
+    requestedCodes: normalizedCodes,
+    mainlines,
     error: payload.error ? cleanString(payload.error, 240) : '',
     basis: cleanString(payload.basis, 240),
     sessionPhase: cleanString(payload.sessionPhase, 80),
