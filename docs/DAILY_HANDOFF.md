@@ -3264,3 +3264,27 @@ Deployment:
 
 Notes for next agent:
 - 云端部署后用管理员只读端点 `strategy-mainline-leader-debug?day=2026-07-08&codes=002396,000938&review=1` 验证 live/frozen/review 三方对照；不重建 2026-07-08 冻结盘中预测快照。
+
+## 2026-07-12 - Codex - PR #24 云端部署与真实盘后复核验证
+
+Changed:
+- 将 `main` 5450ea8 的 `kpl-stats-server.js` 部署到 `C:\PandaDashboard`，仅重启主服务；Caddy 与 Panda Yule Server 未重启。
+- 创建回退备份 `C:\PandaDashboard\_deploy-backups\pr24-mainline-attribution-20260712-094921`，记录部署前后哈希、最终 PID 与验证状态。
+- 首次使用一次性 `Start-Process` 启动的进程随 SSH 启动会话结束，造成 Caddy 短暂 502；已立即改用既有 Windows 计划任务 `PandaDashboard-KPL-Server` 启动并恢复，最终监听 PID 12940，SSH 断开后持续运行，未触发文件回滚。
+
+Files:
+- 云端运行文件：`C:\PandaDashboard\kpl-stats-server.js`
+- 云端日志：`panda-cloud-ops-2026-06-19.md`、`_cloud-change-log-20260705.md`、`_cloud-change-log.md`
+- Git 交接：`docs/DAILY_HANDOFF.md`
+
+Validated:
+- 部署前云端文件与 Git d196aad/40e840d 完全同哈希，无未回填代码差异；上传文件通过云端 `node --check`，最终 SHA-256 为 `0158A67E7A06ECA7C866A7680485F799A5AF8EA67D6505082C8328FFC0A03C31`。
+- `dreamerqi.com`、`market.dreamerqi.com`、`/kpl`、`/admin`、`/health` 均返回 200；未授权的管理员诊断请求返回 403。
+- 管理员只读诊断 `day=2026-07-08&codes=002396,000938&review=1`：live/review 均 `ok=true`、`complete=true`、`partial=false`。星网锐捷在 live 属 `IPv6`、冻结快照属 `网络安全`、盘后 review 正确归入 `算力AI`；复核龙头依次为星网锐捷、祥鑫科技、紫光股份。
+- 诊断前后 2026-07-08 冻结快照 SHA-256 均为 `9958E897504FFCF8CBE3647506A55F91208760653D6470019DAEB2DF51A7BB0A`，确认盘后复核链路只读。
+
+Deployment:
+- 已部署云端并重启 `PandaDashboard-KPL-Server`；最终公网和本机健康检查均通过。
+
+Notes for next agent:
+- 不重建 2026-07-08 冻结盘中预测快照；需要追溯时使用管理员 `review=1` 三方对照。云端真实 Token、会话值、数据库和诊断证据 JSON 均未进入 Git。
