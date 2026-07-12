@@ -3993,3 +3993,34 @@ Deployment:
 Notes for next agent:
 - 请 Claude 独立复核锁定双跑、四个残余不完整样本及完整对照表；复核前不启动 PR4，不让 v3 参与正式排序。
 - 07-01/07-08 已形成首批真实可比较样本，但只说明 P6 逐股闸恢复了可用样本，不能仅凭两天宣称 v3 优于 v2。
+## 2026-07-13 - Codex - v3前置事件回填与7-08完整池离线双跑
+
+Changed:
+- 以Git main `7e028ea6fc73ca6384fc37e0e3af7e36ea41eedc`建立云端隔离工作区,使用已合并的`leader-scoring-v3-events-v1`生成器回填2026-06-24至2026-07-08共11个交易日的每日事件档案。
+- 运行时只新增11份`strategy-daily-events-YYYY-MM-DD.json`;安装前逐份校验日期、规则版本、清单SHA及目标不存在,没有覆盖既有7-10档案、冻结快照或v2文件。
+- 7-08算力AI候选池不再把接口默认的top30冒充全池:通过管理员只读`codes`追踪分批闭合90/90唯一池行,再用`tools/replay-leader-scoring-v3.js`离线双跑v2/v3。
+- 三份云端运维日志已记录运行时新增档案、逐日覆盖率、证据哈希、完整性阻断与不重启边界。PR4没有启动。
+
+Files:
+- Git:`docs/DAILY_HANDOFF.md`
+- 云端新增:`C:\PandaDashboard\strategy-data\strategy-daily-events-2026-06-24.json`至`2026-07-08.json`中的11个交易日文件
+- 云端隔离证据:`C:\PandaDashboard\_offline\main-7e028ea\tmp\pr33-v3-preflight\`(不入Git)
+- 云端日志:`panda-cloud-ops-2026-06-19.md`、`_cloud-change-log-20260705.md`、`_cloud-change-log.md`
+
+Validated:
+- 逐日涨停主因家族归因覆盖率:06-24 96.94%(95/98)、06-25 94.19%(81/85)、06-26 96.67%(58/60)、06-29 93.40%(99/105)、06-30 95.65%(132/138)、07-01 90.67%(136/149)、07-02 77.17%(71/91)、07-03 84.11%(90/104)、07-06 81.25%(52/64)、07-07 81.82%(27/33)、07-08 80.85%(38/46)。未归因行保持`dataMissing`,没有造“其他”归属。
+- 11天涨停/主因/收盘底库质量检查均完整;07-02独缺`zs6/zs5/zs7`三份原始快照,且云端目录和压缩备份均无原件,所以该日档案如实为`complete=false`,未生成或改写冻结快照。所有历史家族L2证据为`unscanned`,未伪造明星20分。
+- 安全只读参数:`day=2026-07-08&review=1&codes=<每批最多10只规范代码>`;未记录管理员Token。接口声明`fullPoolCount=90/fullLeaderCount=88`,最终回收90个唯一`poolRank`;97个种子中的7个`tracedMissing`不属于正式池。
+- 输入原始文件SHA-256=`58666790301b314ce61fb5ba99b8dee01844eb9896f83373ac5f4f2e2d90e1d0`;回放规范化inputSha256=`1083c59b1824a880690624213041b5bfa46c07b2edf192d5a4f25150399a02b8`;报告文件SHA-256=`8943bff72ce36a87721a7a0bb8ee468cb30f7974fc573d80e6e53eab01ab57cd`。证据JSON仅在云端隔离目录。
+- 无`--require-complete`回放得到0/90 complete(0%):90行均缺历史日07-02;600405另缺gain10/gain30;603067另缺07-06`mainReasonFamily`。因此合规的v2/v3完整名次对照表为0行,没有样本进入效果统计;带`--require-complete`时工具按设计拒绝。
+- 002396得到`todayConfirmedFamilyLimitGate=true`和`formalEligibilityBasis=confirmed-target-day-family-limit-up`,但07-02使`formalEligibilityGate=null`,未进入正式v3池,所以“进入正式池”验收未通过。301251的v2为第3/76分;v3当日仅保留互斥普通涨停15分、趋势0分,但因同一缺日不产生正式分或名次,未虚构名次变化。
+- `strategy-daily-events`与`leader-scoring-v3`定向测试均通过;`--require-complete`阻断通过。主服务PID保持13772;本机/公网health=200。既有07-10事件档案及07-08/09/10冻结快照SHA与操作前完全一致。
+
+Deployment:
+- 只发生生产运行时“新增历史每日事件档案”和运维日志追加;没有部署代码、没有重启服务、没有修改正式v2榜。
+- 云端日志回退备份:`C:\PandaDashboard\_deploy-backups\v3-preflight-logs-20260713-0025`。
+
+Notes for next agent(Claude independent review):
+- 请独立复核两点后回传结论:①07-02整日`complete=false`按当前评分器会阻断所有90只股票,这是预期的全局完整性闸还是应在不造数据前提下收窄为逐股证据闸;②历史L2全部`unscanned`时,事件生成器将“无确认明星证据的真实涨停”保守记普通15分,是否与三方定稿的`unscanned=dataMissing`边界一致。
+- 同时核对完整池重建契约(90唯一`poolRank`,而非默认top30)及三组SHA。由于complete样本为0,不得根据knownPoints、下界分或v2名次宣称v3优劣。
+- PR4继续暂停;只有独立复核、Owner确认完整性处理后才可建Draft,且v3只能挂影子字段,不得参与正式排序。
