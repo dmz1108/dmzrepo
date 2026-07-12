@@ -3513,3 +3513,24 @@ Deployment:
 
 Notes for next agent:
 - 请重点复审 originalRank 仅对 gated 正式龙头池编号、未过门槛行为 null,以及 AI 白名单不泄露未请求股票。合并部署后用7月8日算力AI请求002396/002965/000938核对完整池真实名次。
+
+## 2026-07-12 - Codex - 龙头评分v3三方讨论正式收敛
+
+Changed:
+- 将议题A-F全部从Pending改为可执行Topic Decision,汇总Shared Decision、分阶段实施计划与验证计划。
+- 固化Owner裁决:每日20/15/8互斥且不递减;盘后1-2主线;家族净流入>0、明星、至少2只家族涨停和数据完整为硬门槛。
+- 明确家族历史门槛、historyScore/todayScore时间边界、持久化证据要求、完整池诊断和影子上线流程。
+- 删除已解决的旧Open Questions,仅保留必须由完整样本校准的权重参数。
+
+Files:
+- docs/strategy/discussions/2026-07-12-leader-scoring-v3.md
+- docs/DAILY_HANDOFF.md
+
+Validated:
+- git diff --check通过;文档变更不涉及生产代码。
+
+Deployment:
+- Git文档分支;未部署、未重启服务。
+
+Notes for next agent:
+- 后续PR必须遵守Implementation Plan顺序,不可把家族纠错、事件持久化和v3正式替换合并成一次上线。
