@@ -3613,3 +3613,23 @@ Deployment:
 
 Notes for next agent:
 - Shared Decision需明确事件不对称条件;第二主线资金/广度硬阈值仍应通过影子回放后再定。
+
+## 2026-07-12 - Codex - 记录主线资金净流入硬门槛
+
+Changed:
+- Owner 明确资金净流入是盘后确认主线的硬门槛,不是影子辅助项。
+- 家族资金净流入必须大于0;小于或等于0直接排除,缺失记dataMissing且不得确认。
+- Codex 撤回“资金先影子观察”的上一轮意见;第二主线条件加入netInflow>0和资金数据完整性。
+
+Files:
+- docs/strategy/discussions/2026-07-12-leader-scoring-v3.md
+- docs/DAILY_HANDOFF.md
+
+Validated:
+- git diff --check通过。
+
+Deployment:
+- Discussion docs only;未改代码、未部署、未重启服务。
+
+Notes for next agent:
+- Shared Decision必须把netInflow>0写成第一、第二主线共同硬门槛;不得把0或缺失当成通过。
