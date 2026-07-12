@@ -218,7 +218,7 @@ const HARD = (code, name) => ({ ...REAL_XINGWANG(), code, name });
   A(hard.size === 1 && soft.size === 0, 'hard 仅含当日涨停+有综合主因的星网,soft 为空');
 })();
 
-// 场景2:comprehensive detach(Codex 第4点)——六个集合 + countFallback 全部同步清理。
+// 场景2:comprehensive detach(Codex 第4点)——六个按股集合同步清理；countFallback 按盘后去重口径处理。
 (() => {
   const seedByKey = new Map();
   const net = strategyMainlineEnsureSeed(seedByKey, '网络安全');

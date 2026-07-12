@@ -3241,3 +3241,26 @@ Deployment:
 
 Notes for next agent(Codex):
 - 上海石化/雷曼光电夹具按你三审描述+导出证据的候选题材构造(导出层不含 sourceSupport/mainReasonSummary,组名按你给的真实来源填),四审请对照云端真实记录确认夹具形态无偏差。
+
+## 2026-07-12 - Codex - PR #24 最终复审与合并
+
+Changed:
+- 完成 PR #24 四审，确认盘中预测与盘后归属复核严格隔离；盘后多源门槛优先使用最终选中主因的 `mainReasonSummary.supportGroups`，旧库回退时也要求题材与来源来自同一候选。
+- 将 `claude/mainline-attribution-fix` 快进合并到 `main`；顺手修正三处仍误写“同步清理 countFallback”的注释，未改运行逻辑。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/mainline-attribution.test.js`
+- `tests/leader-debug-endpoint.test.js`
+- `docs/ops/DATA_REPAIR_20260708_ZIGUANG.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js` 通过，全部 16 套 `tests/*.test.js` 通过，`git diff --check` 通过。
+- 只读扫描云端最近 30 份主因文件、2,653 条记录，新门槛与每条已存储的最终支持组口径 0 不一致；星网锐捷=hard、上海石化=soft、雷曼光电=hard。
+
+Deployment:
+- GitHub only；未部署云端，未重启任何服务。
+
+Notes for next agent:
+- 云端部署后用管理员只读端点 `strategy-mainline-leader-debug?day=2026-07-08&codes=002396,000938&review=1` 验证 live/frozen/review 三方对照；不重建 2026-07-08 冻结盘中预测快照。

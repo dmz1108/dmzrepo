@@ -23224,7 +23224,7 @@ function strategyMainlineAddRealtimeBoardSeed(seedByKey, board) {
 
 // 从一个 seed 里彻底移除某股的全部在场痕迹(跨族剔除专用)——Codex 复审第4点:
 // 只删 codeSet 会让 realtimeCodeSet/risingCodeSet/nearLimitCodeSet/risingStockMap/nearLimitStockMap
-// 及 countFallback 仍把该股算进错误主线的 count/bigGainCount/risingStocks/leaders。此处一并清理。
+// 仍把该股算进错误主线的 bigGainCount/risingStocks/leaders。此处一并清理这些按股集合。
 function strategyMainlineDetachCodeFromSeed(seed, code) {
   if (!seed || !code) return false;
   strategyEnsureMainlineSeedShape(seed);
@@ -23299,7 +23299,7 @@ function strategyMainlineReasonAttributionConfidence(record, finalFamilyKey) {
 // Codex 复审:盘后当日综合主因是收盘后才生成的答案,不得回写盘中预测。此件只在 leader-debug
 // 的 review 重算里跑,产出「盘后归属复核」对照结果,与冻结的盘中预测并列展示,不改写快照。
 //   1) 对「当日涨停 + 当日综合主因确有归类 + 置信度=hard」的股:并入其主因所属主线 seed,
-//      并从族别不同的其它 seed 彻底剔除(六个集合 + countFallback,见 DetachCodeFromSeed);
+//      并从族别不同的其它 seed 彻底剔除(六个按股集合,见 DetachCodeFromSeed);
 //   2) 置信度=soft(孤源/来源不足)只记软证据,不做任何 seed 改写。
 // 返回 { hard: Map(code→familyKey), soft: Map(code→{theme,reason}) } 供诊断/测试断言。
 function strategyMainlineApplyCurrentReasonAttribution(seedByKey, currentReasonDb, todayLimitCodes) {
