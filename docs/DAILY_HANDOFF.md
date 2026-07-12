@@ -3617,3 +3617,78 @@ Deployment:
 Notes for next agent:
 - 顶层`complete`表示必要来源库完整;历史计分仍必须逐行检查`historyEligible`。`eventCoverageComplete=false`时不得把未归属行按0计分。
 - 2026-07-10的9个dataMissing来自有效源记录但无法映射到主线家族(如其他/事件类),不是底库缺文件。
+
+## 2026-07-12 - Codex - 龙头评分v3互斥影子评分
+
+Changed:
+- 新增独立v3影子评分纯函数:历史窗口严格排除目标日,每日明星涨停20/普通涨停15/大涨未板8/无事件0互斥取最高,不再叠加v2的当日在场、今日涨停、连板、早封、明星奖金和主因新鲜度。
+- 新增绝对趋势影子层:10日正涨幅1倍、30日正涨幅0.25倍;锚日必须早于目标日,防止目标日涨幅与当天事件重复计分。
+- 新增完整池排名和离线v2/v3双跑工具,输出scoreVersion、锚日、完整分项、dataMissing、原始名次/百分位及稳定输入SHA-256。
+- 规则版本不兼容、未知事件、缺交易日、缺趋势值均保持null/dataMissing;威尔高7月8日机制夹具验证两连板只按两个交易日各15分。
+
+Files:
+- `strategy-leader-scoring-v3.js`
+- `tools/replay-leader-scoring-v3.js`
+- `tests/leader-scoring-v3.test.js`
+- `docs/strategy/LEADER_SCORING_V3_SHADOW.md`
+- `docs/strategy/discussions/2026-07-12-leader-scoring-v3.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 新增测试覆盖同日20/15互斥、8分大涨未板、目标日不进历史、无上限累积、旧重复信号不计分、规则/事件/交易日缺失、锚日穿越阻断、单家族完整池排名和证据SHA校验。
+- `tests/*.test.js`全套20个测试文件通过;两个新增运行文件`node --check`与`git diff --check`通过。
+
+Deployment:
+- 仅Git分支;未合并main、未部署云端、未重启服务。正式用户榜仍使用v2。
+
+Notes for next agent:
+- 本次是实施计划PR3,只提供纯函数与离线双跑。PR4才能把影子分接入管理员诊断/冻结记录;替换正式榜仍需至少10个新交易日影子观察和Owner再次批准。
+- 10/30日趋势系数与负涨幅处理仍是影子校准参数;本版明确标记规则版本,不得把影子分解释成概率或正式生产结论。
+
+## 2026-07-12 - Codex - 龙头评分v3复审阻断修复
+
+Changed:
+- 按Claude独立复审修复PR #33的两项阻断:趋势锚必须等于历史窗口最后一个交易日;删除事件生产器从不产出的`big-gain-not-limit-up`别名。
+- 修复完整池候选静默继承池顶层个股涨幅的问题;池级只共享日期、家族和每日事件记录,每只候选必须提供自己的趋势字段。
+- 新增陈旧趋势锚、幽灵事件别名和候选趋势字段缺失三组回归测试,同步收紧影子规则文档。
+
+Files:
+- `strategy-leader-scoring-v3.js`
+- `tests/leader-scoring-v3.test.js`
+- `docs/strategy/LEADER_SCORING_V3_SHADOW.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check strategy-leader-scoring-v3.js`和`tests/leader-scoring-v3.test.js`通过。
+- 龙头评分v3定向测试28项通过;陈旧锚、未定义事件和池级趋势串值均明确进入`dataMissing`。
+- `tests/*.test.js`全套20个测试文件通过;`tools/replay-leader-scoring-v3.js`语法检查与`git diff --check`通过。
+
+Deployment:
+- 仅Git分支;未合并main、未部署云端、未重启服务。正式用户榜仍使用v2。
+
+Notes for next agent:
+- 请复审PR #33最新提交;重点确认三项评审意见均被回归测试覆盖,不要据此提前启用正式v3排名。
+
+## 2026-07-12 - Codex - v3目标日盘后家族资格修正
+
+Changed:
+- 按Owner澄清拆分历史积分与正式资格:目标日继续排除出历史10日积分,但盘后完整事件已确认同家族且当天普通/明星涨停时,可零加分通过正式龙头资格。
+- 新增`priorFamilyLimitGate`、`todayConfirmedFamilyLimitGate`、`formalEligibilityGate`及资格来源诊断;排名改用正式资格门。
+- 盘中投影仍只能作为候补;首日仅大涨未板不能单独过家族涨停资格。7月8日星网锐捷类场景不再因历史窗口为0被排除。
+
+Files:
+- `strategy-leader-scoring-v3.js`
+- `tests/leader-scoring-v3.test.js`
+- `docs/strategy/LEADER_SCORING_V3_SHADOW.md`
+- `docs/strategy/discussions/2026-07-12-leader-scoring-v3.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 龙头评分v3定向测试31项通过,覆盖目标日盘后涨停过门、盘中投影不得过门、仅大涨未板不得过门。
+- `tests/*.test.js`全套20个测试文件通过;评分器和回放工具语法检查、`git diff --check`通过。
+
+Deployment:
+- 仅PR #33分支;未合并main、未部署云端、未重启服务。正式用户榜仍使用v2。
+
+Notes for next agent:
+- Claude复审时需确认目标日事件只作一次20/15计分且资格门零加分,并确认`persisted-intraday-projection`不能误过正式资格。
