@@ -81,7 +81,9 @@ A(scored.components.today.points === 15, '当天普通涨停只记互斥事件15
 A(scored.components.trend.points === 15, '趋势层按10日10分+30日5分独立计分');
 A(scored.leadScoreV3Raw === 65, '总分=历史35+当天15+趋势15,不重复叠加旧信号');
 A(scored.ignoredLegacyScoreSignals.length === 7, '旧在场/涨停/连板/早封/明星/新鲜度字段明确只作忽略诊断');
-A(scored.components.history.familyLimitEventCount === 2 && scored.historyGate === true, '正式龙头门槛来自历史家族涨停事件');
+A(scored.components.history.familyLimitEventCount === 2 && scored.priorFamilyLimitGate === true &&
+  scored.formalEligibilityGate === true && scored.formalEligibilityBasis === 'prior-family-limit-up',
+  '此前家族涨停事件可以满足正式龙头资格');
 
 const duplicateToday = dailyRecord('2026-07-08', [
   event('000001', familyKey, 'ordinary-limit-up'),
@@ -94,6 +96,37 @@ A(starScored.components.today.points === 20 && starScored.components.today.dupli
 const bigGainToday = dailyRecord('2026-07-08', [event('000001', familyKey, 'confirmed-mainline-big-gain')]);
 const bigGainScored = scoreLeaderV3({ ...base, todayRecord: bigGainToday });
 A(bigGainScored.components.today.points === 8, '大涨未板固定8分且不叠加在场分');
+
+const noPriorHistory = DAYS.map(day => dailyRecord(day));
+const firstDayConfirmed = scoreLeaderV3({
+  ...base,
+  dailyRecords: noPriorHistory,
+  todayRecord: todayOrdinary,
+});
+A(firstDayConfirmed.components.history.familyLimitEventCount === 0 && firstDayConfirmed.priorFamilyLimitGate === false &&
+  firstDayConfirmed.todayConfirmedFamilyLimitGate === true && firstDayConfirmed.formalEligibilityGate === true &&
+  firstDayConfirmed.formalEligibilityBasis === 'confirmed-target-day-family-limit-up' && firstDayConfirmed.formalScore === 30,
+  '盘后确认的目标日家族涨停可零加分通过正式资格,当天15分只计算一次');
+
+const firstDayIntraday = scoreLeaderV3({
+  ...base,
+  dailyRecords: noPriorHistory,
+  todayRecord: null,
+  todayProjection: { persisted: true, status: 'provisional', event: 'ordinary-limit-up', observedAt: '2026-07-08T10:00:00+08:00' },
+});
+A(firstDayIntraday.complete === true && firstDayIntraday.leadScoreV3Raw === 30 &&
+  firstDayIntraday.todayConfirmedFamilyLimitGate === false && firstDayIntraday.formalEligibilityGate === false &&
+  firstDayIntraday.formalScore === null,
+  '盘中投影不能把首日家族候选提前升级为正式龙头');
+
+const firstDayBigGain = scoreLeaderV3({
+  ...base,
+  dailyRecords: noPriorHistory,
+  todayRecord: bigGainToday,
+});
+A(firstDayBigGain.todayConfirmedFamilyLimitGate === false && firstDayBigGain.formalEligibilityGate === false &&
+  firstDayBigGain.formalScore === null,
+  '首日仅大涨未板不能独立满足正式龙头的家族涨停资格');
 
 const wrongRule = { ...todayOrdinary, ruleVersion: 'unknown-events-v9' };
 const wrongRuleScored = scoreLeaderV3({ ...base, todayRecord: wrongRule });

@@ -259,7 +259,15 @@ function scoreLeaderV3(input = {}) {
     ...today.dataMissing.map(item => `today:${item}`),
     ...trend.dataMissing.map(item => `trend:${item}`),
   ];
-  const historyGate = history.complete ? history.familyLimitEventCount >= 1 : null;
+  const priorFamilyLimitGate = history.complete ? history.familyLimitEventCount >= 1 : null;
+  const todayConfirmedFamilyLimitGate = today.complete
+    ? today.source === 'persisted-post-close-daily-event'
+      && today.evidence?.sourceStatus === 'confirmed'
+      && (today.event === 'star-limit-up' || today.event === 'ordinary-limit-up')
+    : null;
+  const formalEligibilityGate = history.complete && today.complete
+    ? !!(priorFamilyLimitGate || todayConfirmedFamilyLimitGate)
+    : null;
   const raw = complete ? round2(history.points + today.points + trend.points) : null;
   const legacySignals = input.legacySignals && typeof input.legacySignals === 'object'
     ? Object.keys(input.legacySignals).sort() : [];
@@ -272,9 +280,17 @@ function scoreLeaderV3(input = {}) {
     familyKey,
     complete,
     dataMissing: [...new Set(dataMissing)],
-    historyGate,
+    historyGate: priorFamilyLimitGate,
+    priorFamilyLimitGate,
+    todayConfirmedFamilyLimitGate,
+    formalEligibilityGate,
+    formalEligibilityBasis: priorFamilyLimitGate
+      ? 'prior-family-limit-up'
+      : todayConfirmedFamilyLimitGate
+        ? 'confirmed-target-day-family-limit-up'
+        : null,
     leadScoreV3Raw: raw,
-    formalScore: complete && historyGate ? raw : null,
+    formalScore: complete && formalEligibilityGate ? raw : null,
     components: { history, today, trend },
     tieBreakers: {
       freshDist: finiteNumber(input?.tieBreakers?.freshDist),
@@ -306,7 +322,7 @@ function rankLeaderPoolV3(input = {}) {
   if (familyKeys.length > 1) throw new Error('rankLeaderPoolV3 requires one mainline family per full-pool replay');
   const codes = candidates.map(row => row.code).filter(Boolean);
   if (new Set(codes).size !== codes.length) throw new Error('rankLeaderPoolV3 requires unique candidate codes');
-  const eligible = candidates.filter(row => row.complete && row.historyGate && row.formalScore !== null)
+  const eligible = candidates.filter(row => row.complete && row.formalEligibilityGate && row.formalScore !== null)
     .sort((a, b) =>
       b.formalScore - a.formalScore ||
       (b.components.history.familyLimitEventCount - a.components.history.familyLimitEventCount) ||

@@ -3668,3 +3668,27 @@ Deployment:
 
 Notes for next agent:
 - 请复审PR #33最新提交;重点确认三项评审意见均被回归测试覆盖,不要据此提前启用正式v3排名。
+
+## 2026-07-12 - Codex - v3目标日盘后家族资格修正
+
+Changed:
+- 按Owner澄清拆分历史积分与正式资格:目标日继续排除出历史10日积分,但盘后完整事件已确认同家族且当天普通/明星涨停时,可零加分通过正式龙头资格。
+- 新增`priorFamilyLimitGate`、`todayConfirmedFamilyLimitGate`、`formalEligibilityGate`及资格来源诊断;排名改用正式资格门。
+- 盘中投影仍只能作为候补;首日仅大涨未板不能单独过家族涨停资格。7月8日星网锐捷类场景不再因历史窗口为0被排除。
+
+Files:
+- `strategy-leader-scoring-v3.js`
+- `tests/leader-scoring-v3.test.js`
+- `docs/strategy/LEADER_SCORING_V3_SHADOW.md`
+- `docs/strategy/discussions/2026-07-12-leader-scoring-v3.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 龙头评分v3定向测试31项通过,覆盖目标日盘后涨停过门、盘中投影不得过门、仅大涨未板不得过门。
+- `tests/*.test.js`全套20个测试文件通过;评分器和回放工具语法检查、`git diff --check`通过。
+
+Deployment:
+- 仅PR #33分支;未合并main、未部署云端、未重启服务。正式用户榜仍使用v2。
+
+Notes for next agent:
+- Claude复审时需确认目标日事件只作一次20/15计分且资格门零加分,并确认`persisted-intraday-projection`不能误过正式资格。

@@ -11,7 +11,7 @@
 - A higher event replaces a lower event on the same day. It never stacks with it.
 - Legacy v2 signals such as `present`, `todayLimit`, board height, early seal, star bonus, and reason freshness do not add event points. They may be retained as diagnostics or tie-break evidence only.
 - The gain trend layer is separate from event history. Shadow v1 uses positive 10-day gain at `1x` plus positive 30-day gain at `0.25x`; its anchor must equal the last trading day in the complete history window, so stale or target-day prices cannot silently enter the score.
-- A formal leader still needs at least one prior family limit-up event. A first-day theme remains provisional.
+- Formal eligibility is satisfied by either a prior family limit-up event or a persisted post-close target-day star/ordinary limit-up event in the same family. The gate adds no points. An intraday first-day theme remains provisional until post-close attribution is confirmed; a big-gain event without a limit-up does not satisfy this gate by itself.
 
 ## Missing data
 
