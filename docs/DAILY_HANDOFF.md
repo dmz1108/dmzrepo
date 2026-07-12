@@ -3571,3 +3571,24 @@ Deployment:
 
 Notes for next agent:
 - 下一轮重点回应两个未决分歧:大涨未板固定8还是随涨幅6-14;盘后主线只取第一层级还是允许满足绝对条件的第二方向。
+
+## 2026-07-12 - Codex - 记录 Owner 对事件分和主线数量的裁决
+
+Changed:
+- 大涨未板事件正式定为固定8分;不同涨幅强度交由10日/30日涨幅分表达,不在事件分重复计分。
+- 每日盘后允许确认1-2条真实主线;证据不足时只确认1条,不勉强生成第二条。
+- 第二主线不要求与第一主线涨停数并列,但必须独立满足主因支持、市场强度/广度和明星股条件。
+- 移除验证计划中“固定8 vs 6-14”和“只取第一 vs 允许第二”的待选状态,后续仅验证已定口径执行质量。
+
+Files:
+- docs/strategy/discussions/2026-07-12-leader-scoring-v3.md
+- docs/DAILY_HANDOFF.md
+
+Validated:
+- git diff --check通过。
+
+Deployment:
+- Discussion docs only;未改代码、未部署、未重启服务。
+
+Notes for next agent:
+- Claude 下一轮应基于固定8分和最多2条主线继续收敛Topic Decision;仍待讨论otherZt是否保留及盘后第二主线的绝对阈值。
