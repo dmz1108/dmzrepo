@@ -7316,6 +7316,13 @@
   body.view-strategy .mlr-phase { font-style: normal; color: rgba(174,190,214,0.55); font-size: 10px; margin-left: 4px; }
   body.view-strategy .mlr-seal { font-style: normal; font-size: 10px; padding: 0 4px; border-radius: 4px; color: rgba(174,190,214,0.6); border: 1px solid rgba(174,190,214,0.25); }
   body.view-strategy .mlr-seal.on { color: #ff8f8f; border-color: rgba(255,143,143,0.4); }
+  body.view-strategy .mlr-seal.wait { color: rgba(174,190,214,0.45); border-style: dashed; }
+  body.view-strategy .mlr-hit.wait { color: rgba(174,190,214,0.55); border: 1px dashed rgba(174,190,214,0.3); }
+  body.view-strategy .mlr-lvl { font-style: normal; font-size: 10px; padding: 0 4px; border-radius: 4px; color: rgba(174,190,214,0.55); border: 1px solid rgba(174,190,214,0.2); }
+  body.view-strategy .mlr-lvl.exp { color: #ffd78a; border-color: rgba(255,215,138,0.35); }
+  body.view-strategy .mlr-tied { font-style: normal; font-size: 10px; padding: 0 5px; border-radius: 999px; color: #ffd78a; border: 1px solid rgba(255,215,138,0.35); }
+  body.view-strategy .mlr-invalid { font-style: normal; font-size: 10px; padding: 0 5px; border-radius: 4px; color: rgba(174,190,214,0.5); border: 1px dashed rgba(174,190,214,0.3); }
+  body.view-strategy .mlr-row.invalid { opacity: 0.55; }
   body.view-strategy .ml-trend {
     display: inline-flex;
     align-items: center;
@@ -11452,33 +11459,66 @@ function renderMainlineReviewHTML(d) {
   const rows = (d && d.days) || [];
   if (!rows.length) return '';
   const stats = d.stats || {};
-  const gainCell = (s, withSeal) => {
-    if (!s) return '<span class="mlr-na">—</span>';
-    const seal = withSeal && s.sealedSameDay != null
-      ? (s.sealedSameDay ? '<i class="mlr-seal on" title="预判后当日封板确认">封✓</i>' : '<i class="mlr-seal" title="预判后当日未封板">未封</i>')
-      : '';
-    const g = s.nextCloseGain;
-    if (g == null) return `<span class="mlr-name">${escapeHTML(s.name || s.code || '')}</span>${seal}<span class="mlr-na">—</span>`;
-    const cls = g > 0 ? 'up' : (g < 0 ? 'down' : 'flat');
-    return `<span class="mlr-name">${escapeHTML(s.name || s.code || '')}</span>${seal}<span class="mlr-gain ${cls}">${g > 0 ? '+' : ''}${g}%</span><span class="mlr-win">${s.win ? '✓' : '✗'}</span>`;
+  // 明星等级标签:expected=预期明星(进入封板验证);confirmed=预测时已封板(当时已确认,不算预判);
+  // active=仅资金活跃(不进统计);无 level 的旧记录=等级未知(不进统计)。
+  const starLevelChip = (s) => {
+    if (!s) return '';
+    if (s.predictLevel === 'expected') return '<i class="mlr-lvl exp" title="预测时为预期明星(尚未封板)">预期</i>';
+    if (s.predictLevel === 'confirmed') return '<i class="mlr-lvl" title="预测时已封板,只作展示,不算预判成功">当时已确认</i>';
+    if (s.predictLevel === 'active') return '<i class="mlr-lvl" title="预测时仅资金活跃,未达预期明星门槛,不进封板统计">活跃</i>';
+    if (s.predictLevel === undefined) return '';
+    return '<i class="mlr-lvl" title="旧记录未保存预测时等级,不进封板统计">等级未知</i>';
   };
-  // 主线命中徽标:✓=预判即当日实际第一家族;△=实际第一家族在预判前三;✗=脱靶;—=盘后主因库未生成(当日盘中)
+  // 封板状态:仅预期明星展示验证结果;pending=待验证(当日未收盘)/noData=终盘涨停库缺失或不完整
+  const sealChip = (s) => {
+    if (!s || s.predictLevel !== 'expected') return '';
+    if (s.sealStatus === 'sealed') return '<i class="mlr-seal on" title="预期明星当日最终封板确认">封✓</i>';
+    if (s.sealStatus === 'notSealed') return '<i class="mlr-seal" title="预期明星当日最终未封板">未封</i>';
+    if (s.sealStatus === 'pending') return '<i class="mlr-seal wait" title="当日尚未收盘,待盘后验证">待验证</i>';
+    return '<i class="mlr-seal wait" title="终盘涨停库缺失或不完整,无法判断">数据不足</i>';
+  };
+  const gainCell = (s, isStar) => {
+    if (!s) return '<span class="mlr-na">—</span>';
+    const extra = isStar ? starLevelChip(s) + sealChip(s) : '';
+    const g = s.nextCloseGain;
+    if (g == null) return `<span class="mlr-name">${escapeHTML(s.name || s.code || '')}</span>${extra}<span class="mlr-na">—</span>`;
+    const cls = g > 0 ? 'up' : (g < 0 ? 'down' : 'flat');
+    return `<span class="mlr-name">${escapeHTML(s.name || s.code || '')}</span>${extra}<span class="mlr-gain ${cls}">${g > 0 ? '+' : ''}${g}%</span><span class="mlr-win">${s.win ? '✓' : '✗'}</span>`;
+  };
+  // 主线命中徽标(口径:盘后涨停主因家族格局,非"整个市场实际主线"):
+  // ✓=预判命中(并列)第一家族;△=第一家族在预判前三;✗=脱靶;待盘后验证=当日盘中;—=盘后数据不完整
   const hitCell = (r) => {
-    if (r.mainlineHitTop1 == null) return '<span class="mlr-hit na" title="盘后主因库尚未生成,暂无法评判">—</span>';
-    if (r.mainlineHitTop1) return '<span class="mlr-hit ok" title="预判主线 = 当日实际第一家族">✓命中</span>';
-    if (r.mainlineHitTop3) return '<span class="mlr-hit near" title="实际第一家族在预判前三内">△前三</span>';
-    return '<span class="mlr-hit miss" title="实际第一家族不在预判前三">✗脱靶</span>';
+    if (r.pendingReview) return '<span class="mlr-hit wait" title="当日尚未收盘,待盘后验证,不计命中率">待盘后验证</span>';
+    if (r.mainlineHitTop1 == null) {
+      const miss = Number(r.mainReasonMissingCount);
+      const why = Number.isFinite(miss) && miss > 0 ? `盘后主因库缺 ${miss} 只涨停股` : '盘后主因库未生成或不完整';
+      return `<span class="mlr-hit na" title="${why},不计命中率">—</span>`;
+    }
+    if (r.mainlineHitTop1) return `<span class="mlr-hit ok" title="预判主线命中盘后涨停主因${r.actualFirstTied ? '并列' : ''}第一家族">✓命中</span>`;
+    if (r.mainlineHitTop3) return '<span class="mlr-hit near" title="盘后第一家族在预判前三内">△前三</span>';
+    return '<span class="mlr-hit miss" title="盘后第一家族不在预判前三">✗脱靶</span>';
   };
   const actualCell = (r) => {
     const top = Array.isArray(r.actualTop) ? r.actualTop : [];
     if (!top.length) return '';
-    const first = top[0];
-    const rest = top.slice(1).map(t => `${escapeHTML(t.theme)}${t.count}`).join(' · ');
-    return `<span class="mlr-actual" title="当日盘后主因库家族涨停数前三${rest ? ':' + escapeHTML(first.theme) + first.count + ' · ' + rest : ''}">实际 ${escapeHTML(first.theme)}<i>${first.count}涨停</i></span>`;
+    const firsts = top.filter(t => t.rankTier === 1 || t.rankTier == null);
+    const shown = firsts.length ? firsts : [top[0]];
+    const tied = r.actualFirstTied ? '<i class="mlr-tied" title="最大涨停数相同的家族并列第一">并列第一</i>' : '';
+    const detail = top.map(t => `${escapeHTML(t.theme)}${t.count}`).join(' · ');
+    const label = shown.map(t => escapeHTML(t.theme)).join('/');
+    return `<span class="mlr-actual" title="盘后涨停主因家族格局(前三层级):${detail}">盘后 ${label}<i>${shown[0].count}涨停</i></span>${tied}`;
   };
-  const body = rows.map(r => `<div class="mlr-row">
+  const sampleTag = (r) => {
+    if (r.sampleValid === false) {
+      const why = String(r.sampleInvalidReason || '').replace('phase:', '');
+      return `<i class="mlr-invalid" title="该记录生成于「${escapeHTML(why || '未知')}」阶段,不是真实盘中预测,不计任何命中率">不计样本·${escapeHTML(why || '未知')}</i>`;
+    }
+    return '';
+  };
+  const body = rows.map(r => `<div class="mlr-row${r.sampleValid === false ? ' invalid' : ''}">
     <span class="mlr-day">${escapeHTML(String(r.day || '').slice(5))}</span>
     <span class="mlr-theme">${escapeHTML(r.theme || '')}${r.confirmed ? '<i title="管理员确认的当日主线">✔</i>' : ''}${r.phase ? `<em class="mlr-phase" title="预判冻结时点">${escapeHTML(r.phase)}</em>` : ''}</span>
+    ${sampleTag(r)}
     ${hitCell(r)}
     ${actualCell(r)}
     <span class="mlr-slot">明星 ${gainCell(r.star, true)}</span>
@@ -11488,11 +11528,14 @@ function renderMainlineReviewHTML(d) {
   const mlChips = stats.mainlineTotal
     ? `<b class="mlr-chip">主线命中 ${rate(stats.mainlineTop1Hits, stats.mainlineTotal, stats.mainlineTop1Rate)}</b><b class="mlr-chip near">前三 ${rate(stats.mainlineTop3Hits, stats.mainlineTotal, stats.mainlineTop3Rate)}</b>`
     : '';
+  const sealChipStat = stats.expectedSealTotal
+    ? `<b class="mlr-chip near">预期明星封板 ${rate(stats.expectedSealWins, stats.expectedSealTotal, stats.expectedSealRate)}</b>`
+    : '';
   return `<section class="ml-review">
     <div class="mlr-head">
       <span>📋 预判回看</span>
-      ${mlChips}
-      <small>明星次日胜率 ${rate(stats.starWins, stats.starTotal, stats.starWinRate)} · 龙头次日胜率 ${rate(stats.leaderWins, stats.leaderTotal, stats.leaderWinRate)} · 主线按当日盘后主因库家族格局评判,个股按次日收盘涨幅</small>
+      ${mlChips}${sealChipStat}
+      <small>明星次日胜率 ${rate(stats.starWins, stats.starTotal, stats.starWinRate)} · 龙头次日胜率 ${rate(stats.leaderWins, stats.leaderTotal, stats.leaderWinRate)} · 主线按盘后涨停主因家族格局评判(主因库完整覆盖终盘涨停才计分),盘前/集合竞价/已收盘记录不计样本</small>
     </div>
     ${body}
   </section>`;

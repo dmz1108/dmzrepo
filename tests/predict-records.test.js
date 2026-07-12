@@ -76,11 +76,22 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
   const c1 = out.candidates[1];
   A(c1.theme === '示例主线B' && c1.leaders.length === 0 && c1.stars.length === 0, '最小主线不报错、空数组');
 
+  // 1b. 预测时点的明星等级随记录落盘(PR#25 复审:回看封板验证只统计 expected)
+  A(out.top[0].star.level === 'confirmed', '明星 level 落盘(预测时点等级)');
+  await writeMainlinePredict('2026-07-12', '午后', [{ key: 'k-c', theme: '旧式', rank: 1,
+    mainLeader: { code: '600001', name: 'L' }, starStocks: [{ code: '600009', name: '无级星' }] }], null);
+  A(written['/fake/mainline-predict-2026-07-12.json'].top[0].star.level === null, '明星无 level 的旧形态 → level=null(等级未知)');
+
   // 2. 收盘后已有记录不覆盖
   existingPredict = out;
   delete written['/fake/mainline-predict-2026-07-10.json'];
   await writeMainlinePredict('2026-07-10', '已收盘', manyMainlines, null);
   A(!written['/fake/mainline-predict-2026-07-10.json'], '收盘后不覆盖既有预判');
+
+  // 2b. 收盘后无既有记录也不首次创建(PR#25 复审:盘后答案不得冒充盘中预测——7-08 已收盘文件的成因)
+  existingPredict = null;
+  await writeMainlinePredict('2026-07-13', '已收盘', manyMainlines, null);
+  A(!written['/fake/mainline-predict-2026-07-13.json'], '收盘后不首次创建预测文件(不只是不覆盖)');
 
   // 3. 无主线不写
   existingPredict = null;

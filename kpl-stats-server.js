@@ -22595,14 +22595,19 @@ function strategyPredictCandidateRecord(m) {
 }
 async function writeMainlinePredict(day, sessionPhase, mainlines, confirm) {
   try {
-    const existing = await readMainlinePredict(day);
-    if (existing && sessionPhase === '已收盘') return;
+    // 已收盘阶段既不覆盖也不首次创建(Codex 复审 PR#25:旧逻辑只挡覆盖,盘后首次生成会把
+    // 收盘后答案写成"盘中预测",污染回看命中率——7-08 的 sessionPhase=已收盘 文件即此来源)。
+    if (sessionPhase === '已收盘') return;
     const pick = m => m ? {
       key: m.familyKey || m.key || '', theme: m.theme || '', rank: m.rank || 0,
       score: m.score ?? null, predictScore: m.predictScore ?? null,
       stage: m.stage?.label || '', certainty: m.certainty?.label || '',
       leader: m.mainLeader ? { code: m.mainLeader.code, name: m.mainLeader.name } : null,
-      star: (m.starStocks || [])[0] ? { code: m.starStocks[0].code, name: m.starStocks[0].name } : null,
+      // level=预测时点的明星等级(expected=预期明星未封/confirmed=当时已封/active=仅资金活跃),
+      // 回看的"预期明星→当日封板"验证只统计 expected;旧记录无此字段 → 等级未知,不进统计。
+      star: (m.starStocks || [])[0]
+        ? { code: m.starStocks[0].code, name: m.starStocks[0].name, level: String(m.starStocks[0].level || '') || null }
+        : null,
     } : null;
     const top = (mainlines || []).slice(0, 3).map(pick).filter(Boolean);
     if (!top.length) return;
@@ -23049,11 +23054,14 @@ function strategyMainlineActualFamilyRanking(mainReasonDb) {
   return [...byFamily.values()].sort((a, b) =>
     b.count - a.count || String(a.label).localeCompare(String(b.label), 'zh-Hans-CN'));
 }
+// 只有真实盘中阶段生成的预测才是"预判"(Codex 复审 PR#25 二审):
+// 盘前/集合竞价没有盘面信号、已收盘是答案不是预测——这三类记录展示但不计任何命中率分母。
+const STRATEGY_MAINLINE_INTRADAY_PHASES = new Set(['早盘', '上午盘', '午间休市', '午后', '尾盘']);
 async function getStrategyMainlineReview(days = 10) {
   const apiKey = await readSavedApiKey().catch(() => '');
   const todayIso = isoFromCompactDate(chinaNowParts().day);
   const tradingDays = await getRecentTradingDays(todayIso, apiKey, Math.min(30, Math.max(3, days) + 2)).catch(() => []);
-  if (tradingDays.length < 2) return { ok: true, days: [], stats: null };
+  if (!tradingDays.length) return { ok: true, days: [], stats: null };
   const closeMapOf = async d => {
     const cdb = await readEastmoneyCloseDbDay(d).catch(() => null);
     return new Map((cdb?.stocks || [])
@@ -23063,13 +23071,20 @@ async function getStrategyMainlineReview(days = 10) {
   const rows = [];
   let starWins = 0, starTotal = 0, leaderWins = 0, leaderTotal = 0;
   let mainlineTop1Hits = 0, mainlineTop3Hits = 0, mainlineTotal = 0;
-  for (let i = tradingDays.length - 2; i >= 0 && rows.length < days; i -= 1) {
+  let expectedSealWins = 0, expectedSealTotal = 0;
+  // 从最新交易日开始(修复:旧循环从 length-2 起,最新收盘日因无次日收盘价被整行丢弃,
+  // 连当日主线命中与封板结果也不展示;现在无次日数据只置 nextCloseGain=null)。
+  for (let i = tradingDays.length - 1; i >= 0 && rows.length < days; i -= 1) {
     const day = tradingDays[i];
-    const nextDay = tradingDays[i + 1];
+    const nextDay = i + 1 < tradingDays.length ? tradingDays[i + 1] : null;
     const predict = await readMainlinePredict(day);
     if (!predict || !Array.isArray(predict.top) || !predict.top.length) continue;
+    const phase = String(predict.sessionPhase || '');
+    const sampleValid = STRATEGY_MAINLINE_INTRADAY_PHASES.has(phase);
+    const sampleInvalidReason = sampleValid ? '' : (phase ? `phase:${phase}` : 'phase:unknown');
+    const pendingReview = day === todayIso && !isAfterMarketClose(day);   // 当前盘中:待盘后验证
     const main = predict.top.find(t => predict.confirmedKey && t.key === predict.confirmedKey) || predict.top[0];
-    const [c0, c1] = await Promise.all([closeMapOf(day), closeMapOf(nextDay)]);
+    const [c0, c1] = await Promise.all([closeMapOf(day), nextDay ? closeMapOf(nextDay) : Promise.resolve(new Map())]);
     const evalStock = (stock) => {
       if (!stock?.code) return null;
       const code = normalizeReasonSourceCode(stock.code);
@@ -23080,37 +23095,83 @@ async function getStrategyMainlineReview(days = 10) {
     };
     const star = evalStock(main.star);
     const leader = evalStock(main.leader);
-    if (star?.win != null) { starTotal += 1; if (star.win) starWins += 1; }
-    if (leader?.win != null) { leaderTotal += 1; if (leader.win) leaderWins += 1; }
-    // 主线命中:当日盘后主因库的实际家族格局 vs 盘中预判家族(缺库 → null,不装有数据)
+    if (sampleValid && star?.win != null) { starTotal += 1; if (star.win) starWins += 1; }
+    if (sampleValid && leader?.win != null) { leaderTotal += 1; if (leader.win) leaderWins += 1; }
+    // 当日终盘涨停库:封板验证与主因覆盖检查共用。"完整" = 有行 + 收盘后保存 + 可靠性校验通过。
+    const limitDb = await readLimitUpDbDay(day).catch(() => null);
+    const limitDbFinal = !!(limitDb?.stocks?.length
+      && isSavedAfterMarketClose(limitDb, day)
+      && isReliableLimitUpDbPayload(limitDb));
+    // 预期明星封板验证(按预测时点的真实等级):
+    //   expected=预期明星、盘中未封 → 进入"后来是否封板"统计;confirmed=预测时已封,只展示"当时已确认",
+    //   不算预判成功;active=仅资金活跃,不达预期明星门槛,不进统计;旧记录无 level → 等级未知,不进统计。
+    // sealedSameDay:当日未收盘 → null(待验证);终盘涨停库缺失/不完整 → null(数据不足,绝不冒充 false);
+    //   库完整且在 → true;库完整且不在 → false。
+    if (star) {
+      star.predictLevel = (main.star && typeof main.star.level === 'string' && main.star.level) ? main.star.level : null;
+      if (pendingReview) { star.sealedSameDay = null; star.sealStatus = 'pending'; }
+      else if (!limitDbFinal) { star.sealedSameDay = null; star.sealStatus = 'noData'; }
+      else {
+        const sealed = (limitDb.stocks || []).some(s => normalizeReasonSourceCode(s?.code) === star.code);
+        star.sealedSameDay = sealed;
+        star.sealStatus = sealed ? 'sealed' : 'notSealed';
+      }
+      if (sampleValid && star.predictLevel === 'expected'
+        && (star.sealStatus === 'sealed' || star.sealStatus === 'notSealed')) {
+        expectedSealTotal += 1;
+        if (star.sealStatus === 'sealed') expectedSealWins += 1;
+      }
+    }
+    // 主线命中前置:盘后主因库必须"兼容版本 + 完整覆盖当日终盘涨停 universe(剔除 ST/北交所/新股)",
+    // 否则家族格局是残缺样本,命中记 null、不计分母(复用 afterCloseStatus 的完整性口径)。
     const mainReasonDb = await readLimitUpMainReasonDbDay(day).catch(() => null);
-    const actualRanking = strategyMainlineActualFamilyRanking(mainReasonDb);
-    const actualTop = actualRanking.slice(0, 3).map(f => ({ theme: f.label, count: f.count }));
+    let mainReasonMissingCount = null;
+    let reasonComplete = false;
+    if (limitDbFinal && isCompatibleMainReasonDb(mainReasonDb)) {
+      const expected = new Set((limitDb.stocks || [])
+        .filter(s => !isExcludedFromReview(s?.code, s?.name))
+        .map(s => normalizeReasonSourceCode(s?.code))
+        .filter(Boolean));
+      const covered = new Set((mainReasonDb.stocks || [])
+        .map(s => normalizeReasonSourceCode(s?.code))
+        .filter(Boolean));
+      mainReasonMissingCount = [...expected].filter(c => !covered.has(c)).length;
+      reasonComplete = expected.size > 0 && mainReasonMissingCount === 0;
+    }
+    const actualRanking = reasonComplete ? strategyMainlineActualFamilyRanking(mainReasonDb) : [];
+    // 密集分层名次:最大涨停数相同的家族全部并列第一;Top3 取前三个"名次层级"而非数组前三。
+    let lastCount = null, tier = 0;
+    for (const f of actualRanking) {
+      if (f.count !== lastCount) { tier += 1; lastCount = f.count; }
+      f.rankTier = tier;
+    }
+    const tier1 = actualRanking.filter(f => f.rankTier === 1);
+    const tier23 = actualRanking.filter(f => f.rankTier > 1 && f.rankTier <= 3);
+    const actualTop = [...tier1, ...tier23.slice(0, Math.max(0, 8 - tier1.length))]
+      .map(f => ({ theme: f.label, count: f.count, rankTier: f.rankTier }));
+    const actualFirstTied = tier1.length > 1;
     let mainlineHitTop1 = null, mainlineHitTop3 = null;
     if (actualRanking.length) {
-      const actualFirstFamily = actualRanking[0].familyKey;
+      const tiedFirstFamilies = tier1.map(f => f.familyKey);
       const predictedFamilies = predict.top.slice(0, 3)
         .map(t => strategyMainlineFamilyInfo({ theme: t?.theme || '', key: t?.key || '' }).key)
         .filter(Boolean);
       const mainFamily = strategyMainlineFamilyInfo({ theme: main.theme || '', key: main.key || '' }).key;
-      mainlineHitTop1 = mainFamily === actualFirstFamily;
-      mainlineHitTop3 = predictedFamilies.includes(actualFirstFamily);
-      mainlineTotal += 1;
-      if (mainlineHitTop1) mainlineTop1Hits += 1;
-      if (mainlineHitTop3) mainlineTop3Hits += 1;
-    }
-    // 预判明星当日封板确认:预判时点(盘中)选的明星,最终是否进了当日涨停底库
-    if (star?.code) {
-      const limitDb = await readLimitUpDbDay(day).catch(() => null);
-      star.sealedSameDay = (limitDb?.stocks || [])
-        .some(s => normalizeReasonSourceCode(s?.code) === star.code);
+      mainlineHitTop1 = tiedFirstFamilies.includes(mainFamily);            // 命中任意并列第一都算 top1
+      mainlineHitTop3 = tiedFirstFamilies.some(f => predictedFamilies.includes(f));
+      // 当日盘中(pendingReview)即使数据凑巧齐全也只算"待盘后验证",不计最终命中率
+      if (sampleValid && !pendingReview) {
+        mainlineTotal += 1;
+        if (mainlineHitTop1) mainlineTop1Hits += 1;
+        if (mainlineHitTop3) mainlineTop3Hits += 1;
+      }
     }
     rows.push({
       day, nextDay,
       theme: main.theme, confirmed: !!(predict.confirmedKey && main.key === predict.confirmedKey),
       stage: main.stage || '', certainty: main.certainty || '',
-      phase: predict.sessionPhase || '',
-      actualTop, mainlineHitTop1, mainlineHitTop3,
+      phase, sampleValid, sampleInvalidReason, pendingReview,
+      actualTop, actualFirstTied, mainlineHitTop1, mainlineHitTop3, mainReasonMissingCount,
       star, leader,
     });
   }
@@ -23123,8 +23184,10 @@ async function getStrategyMainlineReview(days = 10) {
       mainlineTop1Hits, mainlineTop3Hits, mainlineTotal,
       mainlineTop1Rate: mainlineTotal ? Number((mainlineTop1Hits / mainlineTotal * 100).toFixed(1)) : null,
       mainlineTop3Rate: mainlineTotal ? Number((mainlineTop3Hits / mainlineTotal * 100).toFixed(1)) : null,
+      expectedSealWins, expectedSealTotal,
+      expectedSealRate: expectedSealTotal ? Number((expectedSealWins / expectedSealTotal * 100).toFixed(1)) : null,
     },
-    note: '收盘涨幅按收盘价库计算；主线命中按当日盘后主因库家族格局;最高涨幅字段待接入日内高点数据后启用。',
+    note: '收盘涨幅按收盘价库计算；主线命中按当日盘后涨停主因家族格局(主因库须完整覆盖终盘涨停)评判,盘前/集合竞价/已收盘生成的记录不计分母;最高涨幅字段待接入日内高点数据后启用。',
   };
 }
 

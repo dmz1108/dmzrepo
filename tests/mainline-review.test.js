@@ -1,7 +1,8 @@
-// 预判回看扩展测试(node tests/mainline-review.test.js)。
-// 覆盖:主线命中评估(当日盘后主因库家族格局 vs 盘中预判家族,top1/top3)、
-// 预判明星当日封板确认、盘后主因库缺失不装有数据、旧字段/旧胜率完全兼容。
-// 家族判定走生产 strategyMainlineFamilyInfo 全链(不 stub),只 stub 数据库 IO。
+// 预判回看统计口径测试(node tests/mainline-review.test.js)——Codex 复审 PR#25 六项修复的回归。
+// 覆盖:①最新收盘日无次日仍入回看/当日盘中待验证;②仅真实盘中阶段计分母(已收盘剔除);
+// ③预期明星四种等级(expected/confirmed/active/旧记录无level);④涨停库缺失→null 不冒充 false;
+// ⑤并列第一;⑥主因库不完整覆盖不计分母;⑦真实镜像:7-08已收盘剔除/7-09命中/7-10脱靶=1/2。
+// 家族判定走生产 strategyMainlineFamilyInfo 全链(不 stub),只 stub 数据库 IO 与时钟。
 const fsReal = require('fs');
 const pathReal = require('path');
 const ROOT = pathReal.join(__dirname, '..');
@@ -53,117 +54,156 @@ eval(extractFn('strategyMainlineFamilyInfo'));
 eval(extractFn('normalizeReasonSourceCode'));
 const isExcludedFromReview = (code) => String(code || '').startsWith('8');  // 夹具:8 开头视作北交所剔除
 function isDroppedThemeWord(raw) { return /测试剔除词/.test(String(raw || '')); }
+const STRATEGY_MAINLINE_INTRADAY_PHASES = extractSet('STRATEGY_MAINLINE_INTRADAY_PHASES');
 
-// ---- 待测函数 + 可控 IO stub ----
+// ---- 待测函数 + 可控 IO/时钟 stub ----
 eval(extractFn('strategyMainlineActualFamilyRanking'));
 
-// stub 环境:交易日 07-06(周一)~07-09;当前"今天"=07-09
-const TRADING_DAYS = ['2026-07-06', '2026-07-07', '2026-07-08', '2026-07-09'];
+let TODAY = '2026-07-12';           // 周六:全部历史日都算已收盘
+let TODAY_CLOSED = true;            // 仅当 day===TODAY 时用
 const readSavedApiKey = async () => 'k';
-const chinaNowParts = () => ({ day: '2026-07-09', hour: 16, minute: 0 });
+const chinaNowParts = () => ({ day: TODAY, hour: 16, minute: 0 });
 const isoFromCompactDate = d => String(d);
+const isAfterMarketClose = (day) => day < TODAY ? true : (day > TODAY ? false : TODAY_CLOSED);
+let TRADING_DAYS = ['2026-07-02', '2026-07-03', '2026-07-04', '2026-07-07', '2026-07-08', '2026-07-09', '2026-07-10'];
 const getRecentTradingDays = async () => TRADING_DAYS.slice();
-const CLOSE = {   // day -> { code -> close }
-  '2026-07-06': { '002396': 10, '000938': 20, '600588': 30 },
-  '2026-07-07': { '002396': 11, '000938': 19, '600588': 30 },
-  '2026-07-08': { '002396': 11, '000938': 19, '600588': 30 },
-  '2026-07-09': { '002396': 12.1, '000938': 19 },
-};
+const CLOSE = {};
 const readEastmoneyCloseDbDay = async d => CLOSE[d]
   ? { stocks: Object.entries(CLOSE[d]).map(([code, close]) => ({ code, name: 'N' + code, close })) }
   : null;
-const PREDICTS = {};  // day -> predict payload
+const PREDICTS = {};
 const readMainlinePredict = async d => PREDICTS[d] || null;
-const MAIN_REASON = {};  // day -> mainReasonDb
+const MAIN_REASON = {};
 const readLimitUpMainReasonDbDay = async d => MAIN_REASON[d] || null;
-const LIMIT_UP = {};  // day -> {stocks:[{code}]}
+const LIMIT_UP = {};
 const readLimitUpDbDay = async d => LIMIT_UP[d] || null;
+// 完整性检查 stub(语义保真:收盘后保存 + 可靠 + ruleVersion 兼容)
+const isSavedAfterMarketClose = (payload) => payload?.savedAtOK === true;
+const isReliableLimitUpDbPayload = (payload) => Array.isArray(payload?.stocks) && payload.stocks.length > 0 && payload.reliable !== false;
+const isCompatibleMainReasonDb = (payload) => !!payload?.stocks?.length && String(payload?.ruleVersion || '') === 'vOK';
 
 eval(extractFn('getStrategyMainlineReview'));
 
-// ---- 纯函数:实际家族格局 ----
-(() => {
-  const db = { stocks: [
-    { code: '000001', name: 'A', finalBoardTopic: '算力' },
-    { code: '000002', name: 'B', finalBoardTopic: '云计算' },     // 与算力同族(group:算力AI)
-    { code: '000003', name: 'C', finalBoardTopic: '液冷' },       // 同族不同 key
-    { code: '000004', name: 'D', finalBoardTopic: '网络安全' },
-    { code: '000005', name: 'E', finalBoardTopic: '其他' },       // 过滤
-    { code: '000006', name: 'F', finalBoardTopic: '测试剔除词' }, // dropped 过滤
-    { code: '830001', name: 'G', finalBoardTopic: '算力' },       // 排除股过滤
-  ] };
-  const ranking = strategyMainlineActualFamilyRanking(db);
-  A(ranking.length === 2, '实际格局:其他/dropped/排除股全过滤,只剩两个家族');
-  A(ranking[0].familyKey === 'group:算力AI' && ranking[0].count === 3, '算力+云计算+液冷合并进算力AI 家族,count=3');
-  A(ranking[1].count === 1 && /网络安全/.test(ranking[1].label), '网络安全家族 count=1 列第二');
-  A(strategyMainlineActualFamilyRanking(null).length === 0, 'null 库 → 空格局');
-})();
+const finalLimitDb = (codes) => ({ savedAtOK: true, reliable: true, stocks: codes.map(code => ({ code, name: 'N' + code })) });
+const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
 
-// ---- 场景:三天预判,分别命中/前三/脱靶+无库 ----
 (async () => {
-  // 07-06:预判主线=云计算(算力AI 族);实际第一=算力AI 族 → top1 命中(同族即命中,不要求字面同词)。
-  PREDICTS['2026-07-06'] = {
-    sessionPhase: '午后', confirmedKey: '',
-    top: [
-      { key: '算力', theme: '云计算', star: { code: '002396', name: '星网锐捷' }, leader: { code: '000938', name: '紫光股份' } },
-    ],
-  };
-  MAIN_REASON['2026-07-06'] = { stocks: [
-    { code: '000001', finalBoardTopic: '算力' }, { code: '000002', finalBoardTopic: '液冷' },
-    { code: '000004', finalBoardTopic: '网络安全' },
-  ] };
-  LIMIT_UP['2026-07-06'] = { stocks: [{ code: '002396' }] };   // 预判明星当日封板 ✓
+  // ---------- 夹具时间线(TODAY=07-12 周六,全部为已收盘历史日) ----------
+  // 07-02(午后,有效):明星 expected,终盘涨停库【缺失】→ sealStatus=noData、sealedSameDay=null(④);
+  //                   主因覆盖也因涨停库缺失无法验证 → 命中 null 不计分母。
+  PREDICTS['2026-07-02'] = { sessionPhase: '午后', confirmedKey: '', top: [
+    { key: '算力', theme: '算力', star: { code: '002396', name: '星网', level: 'expected' }, leader: null }] };
 
-  // 07-07:预判主线=网络安全,top3 含算力;实际第一=算力AI → top1 ✗ / top3 ✓;明星未封板。
-  PREDICTS['2026-07-07'] = {
-    sessionPhase: '尾盘', confirmedKey: '',
-    top: [
-      { key: '网络安全', theme: '网络安全', star: { code: '002396', name: '星网锐捷' }, leader: { code: '600588', name: 'X' } },
-      { key: '算力', theme: '算力' },
-      { key: '数字货币', theme: '数字货币' },
-    ],
-  };
-  MAIN_REASON['2026-07-07'] = { stocks: [
-    { code: '000001', finalBoardTopic: '算力' }, { code: '000002', finalBoardTopic: '算力' },
-    { code: '000004', finalBoardTopic: '网络安全' },
-  ] };
-  LIMIT_UP['2026-07-07'] = { stocks: [{ code: '999999' }] };   // 明星不在 → 未封
+  // 07-03(早盘,有效):涨停库完整=[600001,600002,830001];主因库只覆盖 600001 →
+  //                   缺 600002(830001 剔除后不算)→ mainReasonMissingCount=1、命中 null 不计分母(⑥);
+  //                   明星 expected 且不在涨停库 → notSealed,计入封板统计为败(③)。
+  PREDICTS['2026-07-03'] = { sessionPhase: '早盘', confirmedKey: '', top: [
+    { key: '算力', theme: '算力', star: { code: '002396', name: '星网', level: 'expected' }, leader: null }] };
+  LIMIT_UP['2026-07-03'] = finalLimitDb(['600001', '600002', '830001']);
+  MAIN_REASON['2026-07-03'] = reasonDb([{ code: '600001', name: 'A', finalBoardTopic: '算力' }]);
 
-  // 07-08:预判主线=数字货币;盘后主因库缺失 → 命中记 null、不计分母。
-  PREDICTS['2026-07-08'] = {
-    sessionPhase: '上午盘', confirmedKey: '',
-    top: [{ key: '数字货币', theme: '数字货币', star: null, leader: { code: '002396', name: '星网锐捷' } }],
-  };
-  // MAIN_REASON['2026-07-08'] 故意缺失;LIMIT_UP 也缺失
+  // 07-04(尾盘,有效):旧记录明星【无 level】→ 等级未知,不进封板统计(③);
+  //                   数据完整、预判算力、实际第一=算力AI → top1 命中。
+  PREDICTS['2026-07-04'] = { sessionPhase: '尾盘', confirmedKey: '', top: [
+    { key: '算力', theme: '算力', star: { code: '600001', name: '老股' }, leader: null }] };
+  LIMIT_UP['2026-07-04'] = finalLimitDb(['600001', '600003']);
+  MAIN_REASON['2026-07-04'] = reasonDb([
+    { code: '600001', name: 'A', finalBoardTopic: '算力' },
+    { code: '600003', name: 'C', finalBoardTopic: '算力' }]);
+
+  // 07-07(上午盘,有效):并列第一(⑤)——网络安全2 vs 数字货币2 vs 半导体1;预判数字货币 →
+  //                     命中任意并列第一 = top1 命中;明星 active → 不进封板统计(③)。
+  PREDICTS['2026-07-07'] = { sessionPhase: '上午盘', confirmedKey: '', top: [
+    { key: '数字货币', theme: '数字货币', star: { code: '600004', name: '活跃股', level: 'active' }, leader: null }] };
+  LIMIT_UP['2026-07-07'] = finalLimitDb(['600004', '600005', '600006', '600007', '600008']);
+  MAIN_REASON['2026-07-07'] = reasonDb([
+    { code: '600004', name: 'D', finalBoardTopic: '网络安全' },
+    { code: '600005', name: 'E', finalBoardTopic: '网络安全' },
+    { code: '600006', name: 'F', finalBoardTopic: '数字货币' },
+    { code: '600007', name: 'G', finalBoardTopic: '数字货币' },
+    { code: '600008', name: 'H', finalBoardTopic: '半导体' }]);
+
+  // 07-08(已收盘,②真实镜像):预判算力且"命中",但 sessionPhase=已收盘 → sampleValid=false,
+  //                          展示不计任何分母。
+  PREDICTS['2026-07-08'] = { sessionPhase: '已收盘', confirmedKey: '', top: [
+    { key: '算力', theme: '算力', star: { code: '002396', name: '星网', level: 'confirmed' }, leader: { code: '000938', name: '紫光' } }] };
+  LIMIT_UP['2026-07-08'] = finalLimitDb(['002396']);
+  MAIN_REASON['2026-07-08'] = reasonDb([{ code: '002396', name: '星网', finalBoardTopic: '算力' }]);
+
+  // 07-09(尾盘,⑦真实镜像·命中):预判算力,实际第一=算力AI;明星 expected 且封板 → 封板统计胜。
+  PREDICTS['2026-07-09'] = { sessionPhase: '尾盘', confirmedKey: '', top: [
+    { key: '算力', theme: '算力', star: { code: '002396', name: '星网', level: 'expected' }, leader: { code: '000938', name: '紫光' } }] };
+  LIMIT_UP['2026-07-09'] = finalLimitDb(['002396', '600009']);
+  MAIN_REASON['2026-07-09'] = reasonDb([
+    { code: '002396', name: '星网', finalBoardTopic: '算力' },
+    { code: '600009', name: 'I', finalBoardTopic: '算力' }]);
+  CLOSE['2026-07-09'] = { '002396': 10, '000938': 20 };
+  CLOSE['2026-07-10'] = { '002396': 11, '000938': 19 };
+
+  // 07-10(尾盘,⑦真实镜像·脱靶 + ①最新收盘日无次日):预判医药,实际第一=商业航天 →
+  //        top1/top3 都脱靶;无次日收盘价 → nextCloseGain=null 但主线命中与封板照常;
+  //        明星 confirmed → 只展示"当时已确认",不进封板统计(③)。
+  PREDICTS['2026-07-10'] = { sessionPhase: '尾盘', confirmedKey: '', top: [
+    { key: '医药', theme: '医药', star: { code: '600010', name: '已封星', level: 'confirmed' }, leader: { code: '600011', name: '医药龙' } }] };
+  LIMIT_UP['2026-07-10'] = finalLimitDb(['600010', '600012', '600013']);
+  MAIN_REASON['2026-07-10'] = reasonDb([
+    { code: '600010', name: 'J', finalBoardTopic: '商业航天' },
+    { code: '600012', name: 'K', finalBoardTopic: '商业航天' },
+    { code: '600013', name: 'L', finalBoardTopic: '医药' }]);
 
   const out = await getStrategyMainlineReview(10);
-  A(out.ok === true && out.days.length === 3, '三天预判全部入列');
   const byDay = new Map(out.days.map(r => [r.day, r]));
-  const d6 = byDay.get('2026-07-06'), d7 = byDay.get('2026-07-07'), d8 = byDay.get('2026-07-08');
+  A(out.ok === true && out.days.length === 7, '七天预判记录全部入列(含最新收盘日与无效样本日)');
 
-  // 07-06:同族命中
-  A(d6.mainlineHitTop1 === true && d6.mainlineHitTop3 === true, '07-06:预判云计算 vs 实际算力AI → 同族 top1 命中');
-  A(d6.actualTop[0] && d6.actualTop[0].count === 2, '07-06:actualTop 第一家族 count=2(算力+液冷)');
-  A(d6.phase === '午后', '07-06:带预判冻结时点 phase');
-  A(d6.star && d6.star.sealedSameDay === true, '07-06:预判明星当日封板确认 sealedSameDay=true');
-  // 旧字段兼容:次日收盘涨幅照旧(10→11 = +10%)
-  A(d6.star.nextCloseGain === 10 && d6.star.win === true, '07-06:明星次日涨幅/胜负旧口径不变');
-  A(d6.leader.nextCloseGain === -5 && d6.leader.win === false, '07-06:龙头次日涨幅旧口径不变');
+  const d2 = byDay.get('2026-07-02'), d3 = byDay.get('2026-07-03'), d4 = byDay.get('2026-07-04');
+  const d7 = byDay.get('2026-07-07'), d8 = byDay.get('2026-07-08'), d9 = byDay.get('2026-07-09'), d10 = byDay.get('2026-07-10');
 
-  // 07-07:top1 脱靶 / top3 命中
-  A(d7.mainlineHitTop1 === false && d7.mainlineHitTop3 === true, '07-07:主预判网络安全脱靶,但前三含算力 → top3 命中');
-  A(d7.star.sealedSameDay === false, '07-07:预判明星当日未封板 sealedSameDay=false');
+  // ① 最新收盘日无次日
+  A(!!d10 && d10.nextDay === null, '①最新收盘日(07-10)无次日仍入回看,nextDay=null');
+  A(d10.leader && d10.leader.nextCloseGain === null && d10.leader.win === null, '①无次日数据 → nextCloseGain=null 不装有数据');
+  A(d10.mainlineHitTop1 === false && d10.mainlineHitTop3 === false, '①无次日不影响当日主线命中评判(照常=脱靶)');
 
-  // 07-08:无盘后主因库 → null,不装有数据
-  A(d8.mainlineHitTop1 === null && d8.mainlineHitTop3 === null, '07-08:盘后主因库缺失 → 命中记 null');
-  A(Array.isArray(d8.actualTop) && d8.actualTop.length === 0, '07-08:actualTop 为空');
+  // ② 已收盘不计样本(7-08 真实镜像)
+  A(d8.sampleValid === false && d8.sampleInvalidReason === 'phase:已收盘', '②07-08 已收盘 → sampleValid=false + 明确原因');
+  A(d8.mainlineHitTop1 === true, '②07-08 命中照常展示(只是不计分母)');
 
-  // stats:主线分母只算有实际格局的两天
+  // ③ 四种明星等级
+  A(d9.star.predictLevel === 'expected' && d9.star.sealStatus === 'sealed' && d9.star.sealedSameDay === true, '③expected+封板 → sealed 计胜');
+  A(d3.star.predictLevel === 'expected' && d3.star.sealStatus === 'notSealed' && d3.star.sealedSameDay === false, '③expected+未封 → notSealed 计败');
+  A(d10.star.predictLevel === 'confirmed', '③confirmed → 只展示"当时已确认"');
+  A(d7.star.predictLevel === 'active', '③active → 不进封板统计');
+  A(d4.star.predictLevel === null, '③旧记录无 level → predictLevel=null(等级未知)');
+
+  // ④ 涨停库缺失 → null 不冒充 false
+  A(d2.star.sealedSameDay === null && d2.star.sealStatus === 'noData', '④终盘涨停库缺失 → sealedSameDay=null(数据不足,不是 false)');
+
+  // ⑤ 并列第一
+  A(d7.actualFirstTied === true, '⑤网络安全2=数字货币2 → 并列第一标记');
+  A(d7.mainlineHitTop1 === true, '⑤预判命中任意并列第一家族 → top1 命中');
+  A(d7.actualTop.filter(t => t.rankTier === 1).length === 2, '⑤actualTop 完整包含两个并列第一家族');
+  A(d7.actualTop.some(t => t.rankTier === 2), '⑤Top3 按名次层级(半导体进第二层级),非数组截断');
+
+  // ⑥ 主因库不完整覆盖
+  A(d3.mainlineHitTop1 === null && d3.mainReasonMissingCount === 1, '⑥主因库缺 1 只涨停股 → 命中 null + 返回缺失数(830001 剔除后不计缺)');
+  A(d2.mainlineHitTop1 === null && d2.mainReasonMissingCount === null, '⑥涨停库缺失无法验证覆盖 → 命中 null');
+
+  // ⑦ 真实镜像统计:有效分母 = 07-04(命中)+07-07(命中)+07-09(命中)+07-10(脱靶)=4;
+  //    07-08(已收盘)/07-02/07-03(数据不完整)不计。
   const s = out.stats;
-  A(s.mainlineTotal === 2 && s.mainlineTop1Hits === 1 && s.mainlineTop3Hits === 2, 'stats:分母=2(缺库日不计),top1=1,top3=2');
-  A(s.mainlineTop1Rate === 50 && s.mainlineTop3Rate === 100, 'stats:top1=50% / top3=100%');
-  // 旧胜率字段仍在且口径不变
-  A(typeof s.starWins === 'number' && typeof s.leaderWinRate !== 'undefined', 'stats:旧明星/龙头胜率字段保留');
+  A(s.mainlineTotal === 4 && s.mainlineTop1Hits === 3, '⑦分母只含有效盘中样本:4 天,top1=3(已收盘/不完整均剔除)');
+  A(s.expectedSealTotal === 2 && s.expectedSealWins === 1 && s.expectedSealRate === 50, '⑦预期明星封板统计:仅 expected 计入 = 1/2(confirmed/active/无level 不计)');
+  // 明星/龙头次日胜率也只计有效样本:d9 star +10% 胜、d9 leader -5% 败;d8(已收盘)有次日数据但不计
+  A(s.starTotal === 1 && s.starWins === 1, '⑦明星次日胜率分母剔除已收盘样本');
+  A(s.leaderTotal === 1 && s.leaderWins === 0, '⑦龙头次日胜率分母剔除已收盘样本');
+
+  // ---------- 当日盘中:待盘后验证 ----------
+  TODAY = '2026-07-10'; TODAY_CLOSED = false;
+  TRADING_DAYS = ['2026-07-08', '2026-07-09', '2026-07-10'];
+  const out2 = await getStrategyMainlineReview(10);
+  const t10 = out2.days.find(r => r.day === '2026-07-10');
+  A(!!t10 && t10.pendingReview === true, '①当日盘中 → pendingReview=true(待盘后验证)');
+  A(t10.star.sealStatus === 'pending' && t10.star.sealedSameDay === null, '①当日盘中明星封板 → pending/null');
+  A(out2.stats.mainlineTotal === 1, '①当日盘中不计命中分母(仅 07-09 计入)');
 
   if (process.exitCode) console.error('\nSOME MAINLINE-REVIEW CHECKS FAILED');
   else console.log('\nALL MAINLINE-REVIEW CHECKS PASSED');

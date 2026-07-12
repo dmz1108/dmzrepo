@@ -3382,3 +3382,29 @@ Deployment:
 
 Notes for next agent:
 - 追溯任何历史日的三方对照用同一工具:`capture-mainline-review.js --day=YYYY-MM-DD --codes=...`(1-10 只,已收盘交易日)。
+
+## 2026-07-12 - Claude - PR #25 二审六项统计口径修复
+
+Changed(Codex 复审发现的口径问题全部修复,PR 保持 Draft):
+- **①回看窗口**:循环改从最新交易日起——最新收盘日无次日收盘价时 `nextCloseGain=null`,但当日主线命中与封板结果照常;当日盘中标 `pendingReview`(待盘后验证),即使数据凑巧齐全也不计命中率分母。
+- **②只计真实盘中预测**:命中率分母仅接受 早盘/上午盘/午间休市/午后/尾盘;盘前/集合竞价/已收盘记录展示但带 `sampleValid=false + sampleInvalidReason`,不计任何分母(明星/龙头次日胜率同样受此门控)。`writeMainlinePredict` 在已收盘阶段**既不覆盖也不首次创建**(7-08 已收盘文件的成因已堵死);7-08 历史文件不删不改,统计时诚实排除。
+- **③预期明星封板验证**:预测记录落盘 `star.level`(预测时点等级);回看按等级分流——expected 进"后来是否封板"统计,confirmed 只展示"当时已确认"不算预判成功,active 与旧记录无 level(等级未知)不进统计。`sealedSameDay`:当日未收盘→null(待验证);终盘涨停库缺失/不完整(isSavedAfterMarketClose+isReliableLimitUpDbPayload)→null(数据不足,绝不冒充 false);库完整→true/false。新增 `expectedSealWins/Total/Rate` 统计。
+- **④并列第一**:实际家族格局按密集名次分层,最大涨停数相同的家族全部并列第一;预判命中任意并列第一即 top1 命中;Top3 取前三个名次层级(actualTop 完整含全部并列第一,带 rankTier);前端显示"并列第一"。
+- **⑤盘后主因库完整性**:命中评判前置校验——`isCompatibleMainReasonDb`(兼容版本)+ 主因库完整覆盖当日终盘涨停 universe(剔除 ST/北交所/新股,复用 afterCloseStatus 口径);不完整 → 命中 null、不计分母、返回 `mainReasonMissingCount`。前端口径文案统一为"盘后涨停主因家族格局",不再可能被读作"整个市场实际主线"。
+
+Files:
+- `kpl-stats-server.js`(writeMainlinePredict 已收盘禁创建 + star.level 落盘 + getStrategyMainlineReview 重写)
+- `kpl-dashboard_17_apple.html`(等级/封板状态/并列第一/不计样本/待盘后验证渲染 + 样式)
+- `tests/mainline-review.test.js`(重写 28 项:六项修复回归 + 真实镜像——07-08 已收盘剔除/07-09 尾盘命中/07-10 尾盘预判医药 vs 实际商业航天脱靶/当日盘中 pending)
+- `tests/predict-records.test.js`(+3:已收盘不首次创建、star.level 落盘、旧形态 level=null)
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 全部 15 套相关测试通过;dashboard 内联脚本 node --check 通过;渲染函数夹具覆盖全部新状态(脱靶/命中/当时已确认/预期封✓/活跃/等级未知/数据不足/待验证/待盘后验证/并列第一/不计样本/缺 N 只)与旧后端字段兼容分支。
+
+Deployment:
+- 仅 GitHub;PR #25 保持 Draft,未合并未部署。等 Codex 复审。
+
+Notes for next agent(Codex):
+- 有效样本口径:sampleValid 同时门控主线命中与明星/龙头次日胜率(已收盘记录不是任何意义上的预测);若你认为次日胜率应保留旧口径,请复审时明示。
+- 真实镜像按你给的三天构造(7-08 已收盘/7-09 命中/7-10 医药 vs 商业航天脱靶);测试还含额外有效样本日,故断言分别验证三天各自行为而非全局 1/2。
