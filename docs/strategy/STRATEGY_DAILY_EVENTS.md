@@ -17,6 +17,7 @@
 - Stock events are mutually exclusive per day: star limit-up `20`, ordinary limit-up `15`, confirmed-mainline close gain above 5% without limit-up `8`, otherwise no event.
 - A 20/15 event needs reliable final limit-up and main-reason family evidence. An 8 event additionally needs a confirmed post-close family, family evidence for the stock, and a complete final close row.
 - Missing inputs are stored as `dataMissing`/`provisional`, never converted to zero.
+- Top-level `complete` means the required source databases are final and compatible. `eventCoverageComplete` separately means every final limit-up stock has a valid mainline-family attribution. A source-complete day can still contain individual `dataMissing` rows such as faithful `其他`/event-only reasons; future scoring must use each row's `historyEligible` flag.
 
 ## Operations
 
