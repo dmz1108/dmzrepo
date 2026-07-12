@@ -3617,3 +3617,30 @@ Deployment:
 Notes for next agent:
 - 顶层`complete`表示必要来源库完整;历史计分仍必须逐行检查`historyEligible`。`eventCoverageComplete=false`时不得把未归属行按0计分。
 - 2026-07-10的9个dataMissing来自有效源记录但无法映射到主线家族(如其他/事件类),不是底库缺文件。
+
+## 2026-07-12 - Codex - 龙头评分v3互斥影子评分
+
+Changed:
+- 新增独立v3影子评分纯函数:历史窗口严格排除目标日,每日明星涨停20/普通涨停15/大涨未板8/无事件0互斥取最高,不再叠加v2的当日在场、今日涨停、连板、早封、明星奖金和主因新鲜度。
+- 新增绝对趋势影子层:10日正涨幅1倍、30日正涨幅0.25倍;锚日必须早于目标日,防止目标日涨幅与当天事件重复计分。
+- 新增完整池排名和离线v2/v3双跑工具,输出scoreVersion、锚日、完整分项、dataMissing、原始名次/百分位及稳定输入SHA-256。
+- 规则版本不兼容、未知事件、缺交易日、缺趋势值均保持null/dataMissing;威尔高7月8日机制夹具验证两连板只按两个交易日各15分。
+
+Files:
+- `strategy-leader-scoring-v3.js`
+- `tools/replay-leader-scoring-v3.js`
+- `tests/leader-scoring-v3.test.js`
+- `docs/strategy/LEADER_SCORING_V3_SHADOW.md`
+- `docs/strategy/discussions/2026-07-12-leader-scoring-v3.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 新增测试覆盖同日20/15互斥、8分大涨未板、目标日不进历史、无上限累积、旧重复信号不计分、规则/事件/交易日缺失、锚日穿越阻断、单家族完整池排名和证据SHA校验。
+- `tests/*.test.js`全套20个测试文件通过;两个新增运行文件`node --check`与`git diff --check`通过。
+
+Deployment:
+- 仅Git分支;未合并main、未部署云端、未重启服务。正式用户榜仍使用v2。
+
+Notes for next agent:
+- 本次是实施计划PR3,只提供纯函数与离线双跑。PR4才能把影子分接入管理员诊断/冻结记录;替换正式榜仍需至少10个新交易日影子观察和Owner再次批准。
+- 10/30日趋势系数与负涨幅处理仍是影子校准参数;本版明确标记规则版本,不得把影子分解释成概率或正式生产结论。

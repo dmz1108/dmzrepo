@@ -1,6 +1,6 @@
 # Discussion: 龙头评分 v3——如何同时体现历史地位、盘中共振与明星证据
 
-Status: Proposed
+Status: Shared Decision approved; staged implementation in progress
 
 Discussion branch: discussion/3party-leader-scoring-v3-20260712
 
@@ -443,7 +443,7 @@ Topic Decision:
 5. PR4:将v3影子结果写入管理员诊断/冻结记录,观察至少10个新交易日。
 6. Owner基于影子结果批准后,另开灰度PR;任何阶段不得直接覆盖旧历史文件或倒推不存在的盘中事件。
 
-实施状态(2026-07-12):PR0 已由 #27 完成,PR1 已由 #29 完成,PR2 进入实现与验证;PR3 以后仍未启动,正式榜继续使用 v2。
+实施状态(2026-07-12):PR0 已由 #27 完成,PR1 已由 #29 完成,PR2 已由 #30/#31 完成并部署;PR3 已在 `codex/leader-scoring-v3-shadow` 实现互斥纯函数与离线双跑,待复审合并。PR4 尚未启动,正式榜继续使用 v2。
 
 ## Validation Plan
 
