@@ -23243,43 +23243,56 @@ function strategyMainlineDetachCodeFromSeed(seed, code) {
   return present;
 }
 
-// 当日综合主因的归属置信度(Codex 复审第5点;二审修正:按真实库结构读取)。
-// 真实 kpl-limitup-main-reason-db 记录的候选在 sourceEvidence.candidates(顶层无 candidates,
-// consensusTier/agreeCount 常为空);review-auto-consensus 等聚合候选的真实底层来源在
-// candidate.sourceSupport.groups(如 [jiuyangongshe, tgb])。证据导出包(strategy-evidence)
-// 是展平的顶层 candidates,离线回放兼容其次序。
-// 判定:只有多源共识才允许「硬」跨族改判——
-//   hard = strong/majority 档 或 agreeCount≥2 或(真实来源≥2 且至少一候选题材与最终题材同族);
-//   真实来源 = 聚合候选的 sourceSupport.groups 展开 ∪ 非兜底候选源(kpl-zt-reason/
-//   limit-up-db-reason/multi-source-consensus 为兜底回落源,不计入多源门槛,与主因评选口径一致);
-//   soft = 其余(孤源/来源不足),只作软证据,不执行跨族删除。纯读记录,不触外网。
-const STRATEGY_MAINLINE_NON_REVIEW_FALLBACK_SOURCE = /^(kpl-zt-reason|limit-up-db-reason|multi-source-consensus)$/;
+// 当日综合主因的归属置信度(Codex 复审第5点;三审修正:禁止跨候选拼接来源与题材)。
+// 三审复现的反例:上海石化 2026-06-04 final=碳纤维——多源支持的聚合候选题材是「其他」,
+// 而碳纤维题材候选全是兜底源;二审实现把「其他候选的多源」和「兜底候选的同族题材」拼成 hard,错。
+// 判定规则(hard 才允许跨族改判,soft 只作软证据、不删):
+//   1) strong/majority 档 或 agreeCount≥2 → hard(生产共识档,与源视图口径一致);
+//   2) 首选 mainReasonSummary.supportGroups:它是「被选中候选自身」的支持组(写库时随记录落盘,
+//      见 mainReasonSummary 构建处 supportGroups 字段),支持与最终题材天然同一候选,无拼接空间;
+//      只统计 REQUIRED_REVIEW_SOURCE_GROUPS 四个真实复盘源(kaipanla/jiuyangongshe/xuangubao/tgb),
+//      去重后 ≥2 → hard,否则 soft(该字段存在即权威,不再回退候选);
+//   3) 仅当记录无 mainReasonSummary.supportGroups(旧库)才回退候选:逐候选独立判定,
+//      「≥2 真实源」与「题材与最终题材同族」必须出自同一候选;候选题材看其自身
+//      boardTopic/primaryRawTopic/primaryTopic(雷曼光电 2026-06-05:boardTopic=芯片(玻璃基板)
+//      映射偏了,但 primaryTopic=玻璃基板封装与最终主题一致 → 应 hard),「其他/待定」不算题材。
+// 纯读记录,不触外网。候选取 sourceEvidence.candidates(真实库),导出包展平顶层 candidates 兼容。
+const STRATEGY_MAINLINE_REQUIRED_REVIEW_GROUP_SET = new Set(REQUIRED_REVIEW_SOURCE_GROUPS.map(s => String(s.group).toLowerCase()));
+function strategyMainlineRequiredReviewGroups(groups, extraSource = '') {
+  const out = new Set();
+  for (const g of (Array.isArray(groups) ? groups : [])) {
+    const clean = String(g || '').trim().toLowerCase();
+    if (STRATEGY_MAINLINE_REQUIRED_REVIEW_GROUP_SET.has(clean)) out.add(clean);
+  }
+  if (extraSource) {
+    const g = String(reviewSourceGroup(extraSource) || '').toLowerCase();
+    if (STRATEGY_MAINLINE_REQUIRED_REVIEW_GROUP_SET.has(g)) out.add(g);
+  }
+  return out;
+}
 function strategyMainlineReasonAttributionConfidence(record, finalFamilyKey) {
   const tier = String(record?.consensusTier || '').trim();
   if (tier === 'strong' || tier === 'majority') return 'hard';
   const agree = Number(record?.agreeCount);
   if (Number.isFinite(agree) && agree >= 2) return 'hard';
+  const summaryGroups = record?.mainReasonSummary?.supportGroups;
+  if (Array.isArray(summaryGroups)) {
+    return strategyMainlineRequiredReviewGroups(summaryGroups).size >= 2 ? 'hard' : 'soft';
+  }
   const nested = record?.sourceEvidence?.candidates;
   const flat = record?.candidates;
   const cands = Array.isArray(nested) && nested.length ? nested : (Array.isArray(flat) ? flat : []);
-  const realSources = new Set();
   for (const c of cands) {
+    const ownTopics = [c?.boardTopic, c?.primaryRawTopic, c?.primaryTopic]
+      .map(t => String(t || '').trim())
+      .filter(t => t && !/其他|待定/.test(t));
+    const sameFamily = ownTopics.some(t =>
+      strategyMainlineFamilyInfo({ theme: canonicalTopicName(t) }).key === finalFamilyKey);
+    if (!sameFamily) continue;
     const support = c?.sourceSupport || c?.evidence?.sourceSupport || null;
-    const groups = Array.isArray(support?.groups) ? support.groups.map(g => String(g || '').trim()).filter(Boolean) : [];
-    if (groups.length) {
-      for (const g of groups) realSources.add(g);
-      continue;
-    }
-    const source = String(c?.source || '').trim();
-    if (source && !STRATEGY_MAINLINE_NON_REVIEW_FALLBACK_SOURCE.test(source)) realSources.add(source);
+    if (strategyMainlineRequiredReviewGroups(support?.groups, c?.source).size >= 2) return 'hard';
   }
-  if (realSources.size < 2) return 'soft';   // 来源不足 → 软证据
-  const familyAgree = cands.some(c => {
-    const bt = String(c?.boardTopic || c?.primaryRawTopic || c?.primaryTopic || '').trim();
-    if (!bt) return false;
-    return strategyMainlineFamilyInfo({ theme: canonicalTopicName(bt) }).key === finalFamilyKey;
-  });
-  return familyAgree ? 'hard' : 'soft';
+  return 'soft';
 }
 
 // 当日综合主因权威归属——【仅盘后复核 postCloseReview 模式调用,严禁进入盘中预测/冻结快照】。

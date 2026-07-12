@@ -115,15 +115,20 @@ async function waitHealth(port, ms = 20000) {
     { code: '002396', name: '星网锐捷', gain: 10 }, { code: '600002', name: '网安真龙', gain: 10 } ] }));
   await fsp.writeFile(path.join(MR, `${DAY_REVIEW}.json`), JSON.stringify({ day: DAY_REVIEW, stocks: [
     { code: '002396', name: '星网锐捷', finalBoardTopic: '算力', limitUpCount: 1, consensusTier: '', agreeCount: null, confidence: 0.975,
+      mainReasonSummary: { boardTopic: '算力', selectedSource: 'review-auto-consensus',
+        supportSources: ['jiuyangongshe-structured', 'tgb-structured', 'review-auto-consensus'],
+        supportGroups: ['jiuyangongshe', 'tgb'] },
       sourceEvidence: { selectedSource: 'review-auto-consensus', candidates: [
-        { source: 'review-auto-consensus', boardTopic: '数据中心', detailReason: 'CPO交换机+中报预增+数字人民币+机器人',
+        { source: 'review-auto-consensus', boardTopic: '数据中心', primaryTopic: '算力', detailReason: 'CPO交换机+中报预增+数字人民币+机器人',
           sourceSupport: { score: 1.2, groups: ['jiuyangongshe', 'tgb'], sources: ['jiuyangongshe-structured', 'tgb-structured'] } },
         { source: 'kpl-zt-reason', boardTopic: '中报增长', detailReason: '中报增长+交换机', sourceSupport: null },
         { source: 'limit-up-db-reason', boardTopic: '通信设备', detailReason: '通信设备', sourceSupport: null } ] } },
     { code: '600002', name: '网安真龙', finalBoardTopic: '网络安全', limitUpCount: 1, consensusTier: '', agreeCount: null,
-      sourceEvidence: { selectedSource: 'ths-limitup-structured', candidates: [
-        { source: 'ths-limitup-structured', boardTopic: '网络安全', sourceSupport: null },
-        { source: 'jiuyangongshe-structured', boardTopic: '网络安全', sourceSupport: null } ] } } ] }));
+      mainReasonSummary: { boardTopic: '网络安全', selectedSource: 'review-auto-consensus',
+        supportSources: ['kaipanla-fupanla', 'xuangubao-limitup'], supportGroups: ['kaipanla', 'xuangubao'] },
+      sourceEvidence: { selectedSource: 'review-auto-consensus', candidates: [
+        { source: 'kaipanla-fupanla', boardTopic: '网络安全', sourceSupport: null },
+        { source: 'xuangubao-limitup', boardTopic: '网络安全', sourceSupport: null } ] } } ] }));
   await fsp.writeFile(path.join(CLOSE, `${DAY_REVIEW}.json`), JSON.stringify({ day: DAY_REVIEW, stocks: [
     { code: '002396', name: '星网锐捷', close: 10 }, { code: '600002', name: '网安真龙', close: 10 } ] }));
 

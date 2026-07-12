@@ -59,7 +59,10 @@ eval(extractFn('strategyEnsureMainlineSeedShape'));
 eval(extractFn('strategyMainlineAddRisingStock'));
 eval(extractFn('strategyMainlineEnsureSeed'));
 eval(extractFn('strategyMainlineDetachCodeFromSeed'));
-eval(src.match(/const STRATEGY_MAINLINE_NON_REVIEW_FALLBACK_SOURCE = [^\n]+/)[0].replace('const ', 'var '));
+eval(extractArr('REQUIRED_REVIEW_SOURCE_GROUPS'));
+eval(extractFn('reviewSourceGroup'));
+eval(src.match(/const STRATEGY_MAINLINE_REQUIRED_REVIEW_GROUP_SET = [^\n]+/)[0].replace('const ', 'var '));
+eval(extractFn('strategyMainlineRequiredReviewGroups'));
 eval(extractFn('strategyMainlineReasonAttributionConfidence'));
 eval(extractFn('strategyMainlineApplyCurrentReasonAttribution'));
 
@@ -70,51 +73,109 @@ A(strategyMainlineFamilyInfo({ theme: '液冷' }).key === 'group:算力AI', '生
 A(strategyMainlineFamilyInfo({ theme: '网络安全' }).key !== 'group:算力AI', '生产:网络安全 ≠ 算力AI 家族(跨族)');
 A(canonicalTopicName('数据中心') === '算力', '生产:数据中心 → 算力(候选源同族证据成立)');
 
-// ---- 置信度门槛(Codex 第5点;二审改为真实库嵌套结构)----
-// 真实库记录:候选在 sourceEvidence.candidates,聚合候选的底层真实来源在 sourceSupport.groups,
+// ---- 置信度门槛(Codex 第5点;二审真实嵌套结构;三审禁止跨候选拼接)----
+// 真实库记录:候选在 sourceEvidence.candidates,聚合候选底层真实来源在 sourceSupport.groups,
+// 选中候选自身的支持组随记录落盘在 mainReasonSummary.supportGroups;
 // 顶层 consensusTier/agreeCount 为空、confidence 为数值(星网 7-08 实测 0.975)。
 const REAL_XINGWANG = () => ({
   code: '002396', name: '星网锐捷', finalBoardTopic: '算力', limitUpCount: 1,
   consensusTier: '', agreeCount: null, confidence: 0.975,
+  mainReasonSummary: {
+    boardTopic: '算力', detailReason: 'CPO交换机+中报预增+数字人民币+机器人',
+    selectedSource: 'review-auto-consensus',
+    supportSources: ['jiuyangongshe-structured', 'tgb-structured', 'review-auto-consensus'],
+    supportGroups: ['jiuyangongshe', 'tgb'],
+  },
   sourceEvidence: {
     selectedSource: 'review-auto-consensus',
     candidates: [
-      { source: 'review-auto-consensus', boardTopic: '数据中心', detailReason: 'CPO交换机+中报预增+数字人民币+机器人',
+      { source: 'review-auto-consensus', boardTopic: '数据中心', primaryTopic: '算力', detailReason: 'CPO交换机+中报预增+数字人民币+机器人',
         sourceSupport: { score: 1.2, groups: ['jiuyangongshe', 'tgb'], sources: ['jiuyangongshe-structured', 'tgb-structured'] } },
       { source: 'kpl-zt-reason', boardTopic: '中报增长', detailReason: '中报增长+交换机', sourceSupport: null },
       { source: 'limit-up-db-reason', boardTopic: '通信设备', detailReason: '通信设备', sourceSupport: null },
     ],
   },
 });
+// 真实回归2:上海石化 2026-06-04,final=碳纤维(canonical→新材料族)。多源支持的聚合候选题材是「其他」,
+// 碳纤维题材候选(multi-source-consensus/kpl-zt-reason/limit-up-db-reason)全是兜底源、无复盘组支持。
+// 二审实现会把「其他候选的 2 组」拼上「兜底候选的同族题材」误判 hard——三审要求 soft(候选结构取自云端真实记录,
+// 见 tmp 证据 bundleSha256=5cded9ff…;旧库记录无 mainReasonSummary,走候选回退路径)。
+const REAL_SHANGHAI_SHIHUA = () => ({
+  code: '600688', name: '上海石化', finalBoardTopic: '碳纤维', limitUpCount: '2',
+  consensusTier: '', agreeCount: null, primaryTopic: '新材料',
+  sourceEvidence: {
+    selectedSource: 'kaipanla-fupanla',
+    candidates: [
+      { source: 'multi-source-consensus', boardTopic: '碳纤维', primaryTopic: '新材料', detailReason: '', sourceSupport: null },
+      { source: 'review-auto-consensus', boardTopic: '其他', primaryTopic: '其他', detailReason: '碳纤维',
+        sourceSupport: { score: 0.6, groups: ['kaipanla', 'jiuyangongshe'], sources: ['kaipanla-fupanla', 'jiuyangongshe-structured'] } },
+      { source: 'kpl-zt-reason', boardTopic: '碳纤维', detailReason: '碳纤维', sourceSupport: null },
+      { source: 'limit-up-db-reason', boardTopic: '中国石化上海石化联合上海石油化工研究院成功攻克湿法T1000级高性能碳纤维关键技术', detailReason: '…', sourceSupport: null },
+    ],
+  },
+});
+// 真实回归3:雷曼光电 2026-06-05,final=玻璃基板封装。聚合候选 boardTopic=芯片(玻璃基板)
+// (canonical 命中半导体簇、映射偏族),但其 primaryTopic=玻璃基板封装与最终主题一致,
+// 且 ≥2 复盘组支持在同一候选 → hard(同候选耦合下 primaryTopic 也算自身题材)。
+const REAL_LEIMAN = () => ({
+  code: '300162', name: '雷曼光电', finalBoardTopic: '玻璃基板封装', limitUpCount: '1',
+  consensusTier: '', agreeCount: null, primaryTopic: '玻璃基板封装',
+  sourceEvidence: {
+    selectedSource: 'review-auto-consensus',
+    candidates: [
+      { source: 'review-auto-consensus', boardTopic: '芯片(玻璃基板)', primaryTopic: '玻璃基板封装', detailReason: '玻璃基板+Mini/Micro',
+        sourceSupport: { score: 0.9, groups: ['kaipanla', 'jiuyangongshe'], sources: ['kaipanla-fupanla', 'jiuyangongshe-structured'] } },
+      { source: 'kpl-zt-reason', boardTopic: '芯片(玻璃基板)', detailReason: '芯片(玻璃基板)', sourceSupport: null },
+      { source: 'limit-up-db-reason', boardTopic: '中国领先的LED高科技产品及解决方案提供商', detailReason: '…', sourceSupport: null },
+    ],
+  },
+});
 (() => {
-  const famCompute = strategyMainlineFamilyInfo({ theme: '算力' }).key;
-  // 真实星网记录(嵌套结构):groups 展开 jiuyangongshe+tgb=2 真实来源 + 数据中心同族 → hard。
-  // 这是二审抓到的回归:旧实现读顶层 record.candidates,真实星网会被误判 soft。
+  const famOf = t => strategyMainlineFamilyInfo({ theme: t }).key;
+  const famCompute = famOf('算力');
+  // 首选路径:mainReasonSummary.supportGroups(选中候选自身支持组)≥2 真实复盘源 → hard
   A(strategyMainlineReasonAttributionConfidence(REAL_XINGWANG(), famCompute) === 'hard',
-    '真实星网记录(sourceEvidence.candidates + sourceSupport.groups)→ hard(二审回归)');
-  // 顶层 candidates 为空数组之外的干扰:确认嵌套优先
-  A(strategyMainlineReasonAttributionConfidence({ ...REAL_XINGWANG(), candidates: [] }, famCompute) === 'hard',
+    '真实回归1 星网 7-08:mainReasonSummary.supportGroups=[jiuyangongshe,tgb] → hard');
+  // 该字段存在即权威:仅 1 个真实组 → soft,即使候选回退路径能凑出 hard 也不回退
+  A(strategyMainlineReasonAttributionConfidence({ ...REAL_XINGWANG(),
+    mainReasonSummary: { supportGroups: ['jiuyangongshe'] } }, famCompute) === 'soft',
+    'supportGroups 存在即权威:仅 1 真实组 → soft(不再回退候选拼 hard)');
+  // 非四大复盘源组不计入:ths/eastmoney(禁用组)+1 真实组 → soft
+  A(strategyMainlineReasonAttributionConfidence({ ...REAL_XINGWANG(),
+    mainReasonSummary: { supportGroups: ['ths', 'eastmoney', 'jiuyangongshe'] } }, famCompute) === 'soft',
+    'supportGroups 只统计 REQUIRED 四组:ths/eastmoney 不计 → soft');
+  // 回退路径(旧库无 mainReasonSummary):同一候选同时给出 2 真实组 + 同族题材 → hard
+  A(strategyMainlineReasonAttributionConfidence({ ...REAL_XINGWANG(), mainReasonSummary: undefined }, famCompute) === 'hard',
+    '旧库无 mainReasonSummary:候选回退,同一候选(数据中心+2组)→ hard');
+  // 嵌套优先于顶层展平(回退路径内)
+  A(strategyMainlineReasonAttributionConfidence({ ...REAL_XINGWANG(), mainReasonSummary: undefined, candidates: [] }, famCompute) === 'hard',
     '嵌套 sourceEvidence.candidates 优先于顶层空 candidates');
-  // consensusTier / agreeCount 已挂 → hard(与真实结构无关的快捷档)
+  // 真实回归2:上海石化——多源在「其他」候选、同族题材在兜底候选,禁止跨候选拼接 → soft
+  A(strategyMainlineReasonAttributionConfidence(REAL_SHANGHAI_SHIHUA(), famOf('碳纤维')) === 'soft',
+    '真实回归2 上海石化 6-04:不得借用「其他」候选的多源 → soft(三审反例)');
+  // 真实回归3:雷曼光电——同一候选 primaryTopic 与最终主题一致 + 2 真实组 → hard
+  A(strategyMainlineReasonAttributionConfidence(REAL_LEIMAN(), famOf('玻璃基板封装')) === 'hard',
+    '真实回归3 雷曼光电 6-05:primaryTopic 与最终主题一致(同候选 2 组)→ hard');
+  // consensusTier / agreeCount 快捷档
   A(strategyMainlineReasonAttributionConfidence({ consensusTier: 'strong' }, famCompute) === 'hard', 'consensusTier=strong → hard');
   A(strategyMainlineReasonAttributionConfidence({ consensusTier: 'majority' }, famCompute) === 'hard', 'consensusTier=majority → hard');
   A(strategyMainlineReasonAttributionConfidence({ agreeCount: 2 }, famCompute) === 'hard', 'agreeCount≥2 → hard');
-  // 兜底回落源不计入多源门槛:仅 kpl-zt-reason + limit-up-db-reason → soft(与主因评选口径一致)
+  // 回退路径:兜底源自身不构成真实组(reviewSourceGroup 不在四组)→ soft
   A(strategyMainlineReasonAttributionConfidence({ sourceEvidence: { candidates: [
     { source: 'kpl-zt-reason', boardTopic: '数据中心', sourceSupport: null },
     { source: 'limit-up-db-reason', boardTopic: '数据中心', sourceSupport: null },
-  ] } }, famCompute) === 'soft', '仅兜底源(kpl-zt-reason/limit-up-db-reason)→ soft(不计入多源门槛)');
-  // 聚合候选只有 1 个底层 group → 孤源 soft
+  ] } }, famCompute) === 'soft', '仅兜底源(kpl-zt-reason/limit-up-db-reason)→ soft');
+  // 回退路径:同族候选只有 1 个真实组 → soft(孤源)
   A(strategyMainlineReasonAttributionConfidence({ sourceEvidence: { candidates: [
     { source: 'review-auto-consensus', boardTopic: '数据中心', sourceSupport: { groups: ['jiuyangongshe'], sources: ['jiuyangongshe-structured'] } },
     { source: 'kpl-zt-reason', boardTopic: '中报增长', sourceSupport: null },
-  ] } }, famCompute) === 'soft', '聚合候选仅 1 个底层 group → soft(孤源)');
-  // 多真实来源但无一同族 → soft
+  ] } }, famCompute) === 'soft', '同族候选仅 1 个真实组 → soft(孤源)');
+  // 回退路径:多真实来源但候选题材无一同族 → soft
   A(strategyMainlineReasonAttributionConfidence({ sourceEvidence: { candidates: [
-    { source: 'ths-limitup-structured', boardTopic: '网络安全', sourceSupport: null },
+    { source: 'xuangubao-limitup', boardTopic: '网络安全', sourceSupport: null },
     { source: 'kaipanla-fupanla', boardTopic: '数字货币', sourceSupport: null },
   ] } }, famCompute) === 'soft', '多真实来源但无一同族 → soft(低置信)');
-  // 证据导出包展平结构(顶层 candidates)兼容:离线回放同函数可用
+  // 证据导出包展平结构(顶层 candidates)兼容
   A(strategyMainlineReasonAttributionConfidence({ candidates: [
     { source: 'review-auto-consensus', boardTopic: '数据中心', sourceSupport: { groups: ['jiuyangongshe', 'tgb'] } },
   ] }, famCompute) === 'hard', '导出包展平结构(顶层 candidates)兼容 → hard');

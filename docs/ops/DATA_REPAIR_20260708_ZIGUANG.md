@@ -97,7 +97,7 @@ Codex 用真实文件/API 指出九点,全部修复:
 1. `buildStrategyMainlinesLiveImpl` 新增 `options.postCloseReview` 门;**默认不进该分支,盘中预测/冻结快照行为零变化**(修正初版的数据穿越)。
 2. `strategyMainlineApplyCurrentReasonAttribution(seedByKey, currentReasonDb, todayLimitCodes)` 只在 review 模式调用:对「当日涨停 + 综合主因有效 + 置信度=hard」的股并入其主因主线,并从**族别不同**的其它 seed 彻底剔除。
 3. **置信度门槛**(Codex 第5点)`strategyMainlineReasonAttributionConfidence`:strong/majority 档、或 `agreeCount≥2`、或候选源≥2 且至少一源板块题材与最终题材同族 → `hard`(可跨族改判);孤源/来源不足 → `soft`,只记软证据、**不执行跨族删除**。
-4. **彻底剔除**(Codex 第4点)`strategyMainlineDetachCodeFromSeed`:同步清理 `codeSet / realtimeCodeSet / risingCodeSet / nearLimitCodeSet / risingStockMap / nearLimitStockMap`,并对移走的实时成分把 `countFallback` 减 1——错误主线的 `todayCodes/count/bigGainCount/risingStocks/leaders` 不再受该股贡献。
+4. **彻底剔除**(Codex 第4点)`strategyMainlineDetachCodeFromSeed`:同步清理 `codeSet / realtimeCodeSet / risingCodeSet / nearLimitCodeSet / risingStockMap / nearLimitStockMap` 六集合;**不动 `countFallback`**(二审修正:它按板块 zt/成分数逐板块重复累计,按股减 1 不成立——盘后复核的 count 直接取去重 `todayCodes.length`,见二审段)。错误主线的 `todayCodes/count/bigGainCount/risingStocks/leaders` 不再受该股贡献。
 5. `/api/strategy-mainline-leader-debug` 增 `review=1`:额外跑一次 `postCloseReview:true` 重算,返回 `review`(盘后复核)与 `live`(盘中口径)、`frozenSummary`(冻结)三方对照。
 
 家族判定复用生产 `strategyMainlineFamilyInfo`(`group:算力AI` 等),零新造映射、零硬编码指标。星网 7-08 综合主因=算力(候选源含"数据中心"同族,多源 → hard)→ 复核里归回算力AI、移出网络安全;紫光(当日未涨停)由既有近10日龙头池历史补全。
@@ -112,6 +112,15 @@ Codex 用真实文件/API 指出九点,全部修复:
 
 1. **按真实库结构读置信度**:真实 kpl-limitup-main-reason-db 记录顶层无 `candidates`——候选在 `sourceEvidence.candidates`,聚合候选(review-auto-consensus)的真实底层来源在 `candidate.sourceSupport.groups`(星网实测 [jiuyangongshe, tgb],consensusTier/agreeCount 空、confidence=0.975)。旧实现读顶层 `record.candidates` 会把真实星网误判 soft、目标修复失效。修正:嵌套结构优先(导出包展平结构兼容);真实来源 = groups 展开 ∪ 非兜底候选源(kpl-zt-reason / limit-up-db-reason / multi-source-consensus 为兜底回落源,不计入多源门槛,与主因评选 `NON_REVIEW_FALLBACK` 口径一致)。测试夹具全部改为真实嵌套形态。
 2. **count 不回退 countFallback**:countFallback 按板块 zt 数/成分数逐板块累计,同一股被多板块/三套来源重复计多次,「按股减 1」不成立——detach 不再动它;盘后复核模式 count 直接取去重后的 `todayCodes.length`,跨族删除清空后 count=0(count=0 且无其它信号的错误主线被过滤器整体移出)。构建级测试:星网被网络安全/数字货币/IPv6 三板块重复携带、数字货币板块 ztCount=3 只由星网撑着 → review 中该主线 todayCodes=[] 且 count=0,600002 不受污染;live 口径两处均原样保留。
+
+## 三审修正(Codex PR #24 第三轮:禁止跨候选拼接来源与题材)
+
+三审反例(云端真实记录):上海石化 2026-06-04 final=碳纤维——多源支持的聚合候选题材是「其他」,碳纤维题材候选全是兜底源;二审实现把「其他候选的多源」+「兜底候选的同族题材」跨候选拼成 hard,错。修正后的置信度规则:
+
+1. **首选 `mainReasonSummary.supportGroups`**(选中候选自身的支持组,随记录落盘,与最终题材天然同一候选):只统计 `REQUIRED_REVIEW_SOURCE_GROUPS` 四个真实复盘源(kaipanla/jiuyangongshe/xuangubao/tgb),去重 ≥2 → hard;该字段存在即权威,不足 2 组即 soft,**不再回退候选**。
+2. **仅旧库无该字段时回退候选**:逐候选独立判定,「≥2 真实源」与「题材与最终题材同族」必须**出自同一候选**;候选题材看其自身 boardTopic/primaryRawTopic/primaryTopic(「其他/待定」不算),真实源 = 该候选 sourceSupport.groups ∪ reviewSourceGroup(候选源),同样只认四组。
+3. 真实结构回归三例(镜像云端记录构造,evidence bundle sha256 见 handoff):星网锐捷 2026-07-08 → hard;上海石化 2026-06-04 → soft(不得借用「其他」候选的多源);雷曼光电 2026-06-05 → hard(boardTopic=芯片(玻璃基板) 映射偏族,但同一候选 primaryTopic=玻璃基板封装与最终主题一致)。
+4. 同时清掉了仍声称「countFallback 减 1」的旧注释与文档段落(该做法二审已废除)。
 
 ## 合并后(Codex)
 
