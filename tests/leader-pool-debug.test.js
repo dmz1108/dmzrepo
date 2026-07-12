@@ -4,7 +4,8 @@
 // (修复必须由底库自动计算——Codex 评审要求)。
 const fsReal = require('fs');
 const pathReal = require('path');
-const src = fsReal.readFileSync(pathReal.join(__dirname, '..', 'kpl-stats-server.js'), 'utf8');
+const ROOT = pathReal.join(__dirname, '..');
+const src = fsReal.readFileSync(pathReal.join(ROOT, 'kpl-stats-server.js'), 'utf8');
 
 function extractFn(name) {
   const sig = new RegExp(`(?:async )?function ${name}\\(`);
@@ -25,6 +26,11 @@ function extractArr(name) {
   for (; j < src.length; j++) { if (src[j] === '[') d++; else if (src[j] === ']') { d--; if (d === 0) break; } }
   return src.slice(i, j + 2).replace('const ', 'var ');
 }
+function extractSet(name) {
+  const m = src.match(new RegExp(`const ${name} = new Set\\(\\[([\\s\\S]*?)\\]\\)`));
+  if (!m) throw new Error('not found set: ' + name);
+  return new Set(eval('[' + m[1] + ']'));
+}
 const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.exitCode = 1; } else console.log('ok: ' + msg); };
 
 (async () => {
@@ -35,12 +41,27 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   eval(extractFn('strategyMainlineDiagErrorText'));
   eval(extractFn('strategyMainlineDiagNoteRead'));
   eval(extractFn('strategyMainlineDiagNoteTimeout'));
-  // ---- 生产工具(不 stub):canonicalTopicName 及其依赖的题材簇 ----
+  // ---- 生产工具(不 stub):canonicalTopicName + taxonomy 主线家族 ----
+  const THEME_TAXONOMY = JSON.parse(fsReal.readFileSync(pathReal.join(ROOT, 'theme-taxonomy.json'), 'utf8'));
+  const THEME_NONBROAD = (THEME_TAXONOMY.taxonomy || []).filter(t => !t.broad);
+  const THEME_BROAD = (THEME_TAXONOMY.taxonomy || []).filter(t => t.broad);
   eval(extractArr('PRIMARY_TOPIC_CLUSTERS'));
+  eval(extractFn('themeDisplayName'));
+  eval(extractFn('themeKeywordMatches'));
+  eval(extractFn('standardTheme'));
+  eval(extractFn('topicAliasSet'));
   eval(extractFn('canonicalTopicName'));
-  // 前置事实校验(Codex 第6点):生产 canonical('算力AI')='算力',云计算/光模块各自独立 → 族缺口成立
-  A(canonicalTopicName('算力AI') === '算力', "生产 canonicalTopicName('算力AI')='算力'(测试建立在真实行为上)");
-  A(canonicalTopicName('云计算') === '云计算' && canonicalTopicName('光模块') === '光模块', '云计算/光模块不并入算力 → 族缺口真实');
+  eval(extractFn('consensusKey'));
+  eval(extractFn('strategyResonanceTopicKey'));
+  eval(extractFn('strategyThemeTaxonomyInfo'));
+  eval(extractFn('strategyMainlineTopicKey'));
+  const STRATEGY_MAINLINE_MERGE_GROUPS = extractSet('STRATEGY_MAINLINE_MERGE_GROUPS');
+  const STRATEGY_MAINLINE_KEEP_FINE_THEMES = extractSet('STRATEGY_MAINLINE_KEEP_FINE_THEMES');
+  eval(extractFn('strategyMainlineFamilyInfo'));
+  A(strategyMainlineFamilyInfo({ theme: '算力AI' }).key === 'group:算力AI', '算力AI 使用生产家族 group:算力AI');
+  A(strategyMainlineFamilyInfo({ theme: '云计算' }).key === 'group:算力AI', '云计算与算力归入同一生产家族');
+  A(strategyMainlineFamilyInfo({ theme: '光模块' }).key === 'group:光通信', '光模块按生产口径保持独立的光通信家族');
+  A(strategyMainlineFamilyInfo({ theme: '网络安全' }).key !== 'group:算力AI', '网络安全保持不同家族');
 
   // ---- stub 依赖(仅 IO 与工具,评分/入池/门槛全走真实代码) ----
   const normalizeReasonSourceCode = c => String(c || '').trim();
@@ -85,7 +106,7 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   const buggyXW = (buggy.leaders || []).find(r => r.code === '002396');
   A(!!buggyXW, '归属丢失时:主因库池子补全仍把星网拉进龙头池(不至彻底缺席)');
   A(buggyXW && !buggyXW.basis.some(b => b.startsWith('今日')), '但星网拿不到今日涨停/连板/封速加分(归属错误的真实代价)');
-  A(!(buggy.leaders || []).some(r => r.code === '000938'), '紫光:近10日主因是云计算/光模块,canonical 后不在算力族 → 不进池(数据在库却过不了族门槛,场景3详证)');
+  A((buggy.leaders || []).some(r => r.code === '000938'), '紫光:云计算历史主因按生产家族并入算力龙头池,光模块记录仍归光通信');
 
   // 2. 机制复现A'(归属修复):todayCodes 含星网 + 盘中一板(lianban=1,非近10日总数5),评分抬升且登顶
   const fixed = mkMainline({
@@ -99,8 +120,8 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   A(fixedXW && fixedXW.leadScore > buggyXW.leadScore + 15, `归属修复后星网评分抬升(${buggyXW?.leadScore} → ${fixedXW?.leadScore}):今日涨停+在场+封速生效`);
   A(fixed.leaders[0]?.code === '002396', '修复后由底库数据自动算出星网第一龙头,无硬编码干预');
 
-  // 3. 机制复现B(族清单缺口):族清单只含 canonical('算力AI')='算力';紫光近10日主因是云计算/光模块,
-  //    canonical 后都不在族 → 彻底进不了池(空池基线也暴露族清单)。
+  // 3. 家族回归:主线显示为算力AI,历史记录写云计算时仍应按同一生产家族补入紫光;
+  //    光模块按现行 taxonomy 保持独立的光通信家族,不跨族计数。
   const onlyZG = { '2026-07-06': { stocks: [{ code: '000938', name: '紫光股份', finalBoardTopic: '云计算' }] },
                    '2026-06-30': { stocks: [{ code: '000938', name: '紫光股份', finalBoardTopic: '光模块' }] } };
   const savedDb = { ...REASON_DB };
@@ -108,11 +129,12 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   Object.assign(REASON_DB, onlyZG);
   const familyGap = mkMainline();
   await strategyMainlineReworkLeaders([familyGap], '2026-07-08', { debug: true, traceCodes: ['000938'] });
-  A(!(familyGap.leaders || []).length, "族清单只含'算力':紫光的云计算/光模块主因 canonical 后不在族,进不了池(复现族映射缺口)");
-  A(JSON.stringify(familyGap.leaderDebug?.familyTopics) === JSON.stringify(['算力']), "leaderDebug 暴露族清单=['算力'],缺口在映射而非评分");
-  A(Array.isArray(familyGap.leaderDebug?.tracedMissing) && familyGap.leaderDebug.tracedMissing.includes('000938'), 'tracedMissing 明示紫光根本没进池(空池场景也追踪到)');
-  A(familyGap.leaderDebug?.resultScope === 'empty' && familyGap.leaderDebug?.fullLeaderCount === 0 && familyGap.leaderDebug?.fullPoolCount === 0,
-    '空池诊断:scope/count 明示完整池确实为空,不是过滤后切片为空');
+  A(familyGap.leaders?.[0]?.code === '000938', '紫光依靠云计算历史主因进入算力AI龙头池并通过主因门槛');
+  A(JSON.stringify(familyGap.leaderDebug?.familyTopics) === JSON.stringify(['算力AI']), "leaderDebug 显示家族标签=['算力AI']");
+  A(JSON.stringify(familyGap.leaderDebug?.familyKeys) === JSON.stringify(['group:算力AI']), "leaderDebug 显示稳定家族键=['group:算力AI']");
+  A(Array.isArray(familyGap.leaderDebug?.tracedMissing) && !familyGap.leaderDebug.tracedMissing.includes('000938'), '紫光已在完整池,不再被列为 tracedMissing');
+  A(familyGap.leaderDebug?.fullLeaderCount === 1 && familyGap.leaderDebug?.fullPoolCount === 1,
+    '完整正式龙头池和候选池都包含紫光');
   Object.assign(REASON_DB, savedDb);
 
   // 4. Codex 第5点:codes= 指定股必须始终出现在明细,即使不在 pool 前30

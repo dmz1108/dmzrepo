@@ -3534,3 +3534,27 @@ Deployment:
 
 Notes for next agent:
 - 后续PR必须遵守Implementation Plan顺序,不可把家族纠错、事件持久化和v3正式替换合并成一次上线。
+
+## 2026-07-12 - Codex - 龙头历史主因按生产家族归属
+
+Changed:
+- `mainZt10Count` 从按股票单一主题改为按「股票 + 主线家族」独立累计,同一股票出现在多张主线卡片时不再互相覆盖。
+- 近10日历史主因补池改用 `strategyMainlineFamilyInfo` 的稳定家族键;云计算等同族证据可进入算力AI池,网络安全和光通信等不同族保持隔离。
+- 管理员龙头诊断增加 `familyKeys`,同时保留可读的 `familyTopics` 标签。
+
+Files:
+- kpl-stats-server.js
+- tests/leader-pool-debug.test.js
+- tests/leader-family-metrics.test.js
+- docs/DAILY_HANDOFF.md
+
+Validated:
+- `node --check kpl-stats-server.js`通过。
+- leader-family-metrics、leader-pool-debug、mainline-attribution定向回归通过。
+- 同一股票的算力AI/网络安全行分别只累计本家族主因;总涨停次数和10/30日涨幅口径不变。
+
+Deployment:
+- Git分支实现中;未合并main、未部署云端、未重启服务。
+
+Notes for next agent:
+- 本改动只修家族归属和历史计数,不改任何评分常数、实时板块、涨停复盘底库或前端展示。
