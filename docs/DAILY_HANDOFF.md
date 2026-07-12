@@ -3467,3 +3467,25 @@ Deployment:
 Notes for next agent:
 - 旧预测文件没有 starTransitions,历史预期转封保持 0/0;从部署后的交易日开始形成样本,不得倒推旧数据。
 - 后续 Windows 云端部署不要通过交互式 powershell -Command - 一次发送长重启脚本;使用独立 schtasks /End、文件替换、schtasks /Run 和健康检查命令。
+
+## 2026-07-12 - Codex - 建立龙头评分 v3 三方讨论
+
+Changed:
+- 从最新 main 建立中立讨论分支 discussion/3party-leader-scoring-v3-20260712。
+- 新增龙头评分 v3 讨论文件,记录 Owner 对紫光/祥鑫案例、10日涨停与涨幅权重、主线共振、明星与龙头重合加分、取消过早上限的要求。
+- 固化当前生产 v2 公式、AI 白名单过滤榜不能冒充完整榜的证据边界,并拆分 A-F 六个待讨论议题。
+- 当前只建立问题和事实卡,所有 agent 独立观点保持 Pending;未形成共识前不改评分代码。
+
+Files:
+- docs/strategy/discussions/2026-07-12-leader-scoring-v3.md
+- docs/DAILY_HANDOFF.md
+
+Validated:
+- 议题顺序 A-F、Owner 原意、现行公式、证据约束、独立观点/互评/结论占位均已人工核对;git diff --check 通过。
+
+Deployment:
+- GitHub discussion branch only;未改生产、未部署、未重启服务。
+
+Notes for next agent:
+- Claude 和 Codex 首次观点必须独立撰写;不得把过滤后的 requested-codes 榜当完整排名。
+- 双方独立观点提交后再进入互相质疑,Owner 评论可在任意轮次追加,未收敛可继续多轮。
