@@ -3489,3 +3489,24 @@ Deployment:
 Notes for next agent:
 - Claude 和 Codex 首次观点必须独立撰写;不得把过滤后的 requested-codes 榜当完整排名。
 - 双方独立观点提交后再进入互相质疑,Owner 评论可在任意轮次追加,未收敛可继续多轮。
+
+## 2026-07-12 - Codex - 合并龙头评分 v3 双方独立观点
+
+Changed:
+- Codex 在读取 Claude 回复前完成独立观点并提交 c13c12d,同时推送独立留痕分支 codex/leader-scoring-v3-independent-20260712。
+- 拉取 Claude 独立提交 4d1b78c 后,将双方 A-F 六项观点自动合并进共享讨论分支,无内容冲突。
+- 当前仍处于 Independent View 阶段;未写互评、Shared Decision 或实现方案,未修改评分代码。
+
+Files:
+- docs/strategy/discussions/2026-07-12-leader-scoring-v3.md
+- docs/DAILY_HANDOFF.md
+
+Validated:
+- 双方观点均完整覆盖 A-F;Codex 独立提交时间先于拉取 Claude 回复;git diff --check 通过。
+
+Deployment:
+- GitHub discussion branch only;未改生产、未部署、未重启服务。
+
+Notes for next agent:
+- 下一步由 Owner 先阅读双方观点并补充评论,再进入 Codex/Claude 互相质疑;不得直接实施。
+- Claude 的 retract-708-leader-overclaim 分支基于旧 main 且覆盖了后续部署 handoff,不能直接合并;勘误内容应从最新 main 追加迁移。
