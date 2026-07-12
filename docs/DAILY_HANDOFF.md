@@ -3436,3 +3436,34 @@ Deployment:
 Notes for next agent:
 - 旧预测文件没有事件轨迹,无法事后还原盘中曾出现过的全部 `expected`;部署后开始形成可靠样本。
 - 请独立复审事件去重、跨快照迁移、旧数据兼容和回看分母口径,批准后再合并部署。
+
+## 2026-07-12 - Codex - PR #25 合并与云端部署
+
+Changed:
+- Owner 转达 Claude 复审结论 approved;将 codex/pr25-final-fix 快进合并到 main 3941f2a 并推送。
+- 部署 kpl-stats-server.js 与 kpl-dashboard_17_apple.html,启用主线命中回看、完整性门控、并列第一、有效盘中样本门控和预期明星事件轨迹。
+- 云端三份运维日志已同步记录本次备份、部署、验证和短暂故障经过。
+
+Files:
+- kpl-stats-server.js
+- kpl-dashboard_17_apple.html
+- tests/mainline-review.test.js
+- tests/predict-records.test.js
+- docs/DAILY_HANDOFF.md
+- 云端运行文件与三份云端运维日志
+
+Validated:
+- 合并后 tests/*.test.js 全套 17 个测试文件通过;后端 node --check、行情页内联脚本编译和 git diff --check 通过。
+- 部署前云端运行文件与旧 main 1c290c0 哈希完全一致,无未回填热修复;云端临时主文件通过 node --check。
+- 部署后 dreamerqi.com、行情、后台和健康检查均为 HTTP 200;主服务最终 PID 11248。
+- 生产回看接口返回 ok:true、有效主线命中 1/2=50%,并包含 expectedStars 与预期转封统计字段。
+- 最终 SHA-256:主服务 CD89614B9A61A48B9E660FDEAE4ED25A39F36AD0B37E25943376E37B2FD5A15E;行情页 2E39C30435238B5DD13458D8740710439625F8580D17C09C2083BFFA1A96C8F4。
+
+Deployment:
+- 已部署云端并重启计划任务 \PandaDashboard-KPL-Server;Caddy 与 Panda Yule Server 未重启。
+- 回退备份:C:\PandaDashboard\_deploy-backups\pr25-lookback-20260712-124720。
+- 首次交互式重启脚本在 schtasks /Run 输入处被 Windows 终端截断,服务短暂 502;当时文件尚未替换,已立即恢复旧服务。随后改用独立非交互命令完成实际替换和重启,最终验证全部通过,未修改运行时数据库。
+
+Notes for next agent:
+- 旧预测文件没有 starTransitions,历史预期转封保持 0/0;从部署后的交易日开始形成样本,不得倒推旧数据。
+- 后续 Windows 云端部署不要通过交互式 powershell -Command - 一次发送长重启脚本;使用独立 schtasks /End、文件替换、schtasks /Run 和健康检查命令。
