@@ -22,6 +22,7 @@ const written = {};
 let existingPredict = null;
 const stubs = `
 const isFiniteNumeric = v => Number.isFinite(Number(v)) && v !== null && v !== '' && v !== undefined;
+const normalizeReasonSourceCode = v => String(v || '').replace(/\\D/g, '').trim();
 const STRATEGY_MAINLINE_DATA_DIR = '/fake';
 const strategyMainlinePredictPath = d => '/fake/mainline-predict-' + d + '.json';
 const fs = {
@@ -30,7 +31,8 @@ const fs = {
 };
 async function readMainlinePredict(day) { return existingPredict; }
 `;
-const code = stubs + extractFn('strategyPredictCandidateRecord') + '\n' + extractFn('writeMainlinePredict');
+const code = stubs + extractFn('strategyPredictCandidateRecord') + '\n' +
+  extractFn('strategyPredictStarTransitions') + '\n' + extractFn('writeMainlinePredict');
 eval(code);
 
 const fullMainline = {
@@ -63,6 +65,7 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
   A(out.top[0].leader.code === '600001' && out.top[0].star.code === '600003', 'top 龙头/明星取值不变');
   A(out.confirmedKey === 'fam-a', 'confirmedKey 不变');
   A(out.schemaVersion === 2, 'schemaVersion=2');
+  A(Array.isArray(out.starTransitions) && out.starTransitions.length === 0, 'confirmed-from-start 不冒充 expected 事件');
   A(Array.isArray(out.candidates) && out.candidates.length === 12, 'candidates 上限 12(输入17条)');
   const c0 = out.candidates[0];
   A(c0.familyKey === 'fam-a' && c0.theme === '示例主线A', 'candidate 基本字段');
@@ -81,6 +84,28 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
   await writeMainlinePredict('2026-07-12', '午后', [{ key: 'k-c', theme: '旧式', rank: 1,
     mainLeader: { code: '600001', name: 'L' }, starStocks: [{ code: '600009', name: '无级星' }] }], null);
   A(written['/fake/mainline-predict-2026-07-12.json'].top[0].star.level === null, '明星无 level 的旧形态 → level=null(等级未知)');
+
+  // 1c. 预期明星事件跨盘中覆盖保留：同主线里 confirmed 排第一时，也不能漏掉后面的 expected。
+  existingPredict = null;
+  const transitionDay = '2026-07-14';
+  const firstSnapshot = [{ familyKey: 'fam-t', key: 'k-t', theme: '事件主线', rank: 1,
+    starStocks: [
+      { code: '600010', name: '已确认星', level: 'confirmed' },
+      { code: '600011', name: '预期星', level: 'expected' },
+    ] }];
+  await writeMainlinePredict(transitionDay, '早盘', firstSnapshot, null);
+  const firstWritten = written['/fake/mainline-predict-' + transitionDay + '.json'];
+  A(firstWritten.starTransitions.length === 1 && firstWritten.starTransitions[0].code === '600011', '记录非首位 expected 明星事件');
+  A(firstWritten.starTransitions[0].firstExpectedAt && !firstWritten.starTransitions[0].confirmedAt, '首次 expected 保存时间且尚未确认');
+  const firstExpectedAt = firstWritten.starTransitions[0].firstExpectedAt;
+
+  existingPredict = firstWritten;
+  await writeMainlinePredict(transitionDay, '午后', [{ familyKey: 'fam-t', key: 'k-t', theme: '事件主线', rank: 1,
+    starStocks: [{ code: '600011', name: '预期星', level: 'confirmed' }] }], null);
+  const confirmedWritten = written['/fake/mainline-predict-' + transitionDay + '.json'];
+  const transition = confirmedWritten.starTransitions[0];
+  A(transition.firstExpectedAt === firstExpectedAt, '后续覆盖保留 firstExpectedAt');
+  A(transition.lastLevel === 'confirmed' && !!transition.confirmedAt, 'expected→confirmed 写入确认轨迹');
 
   // 2. 收盘后已有记录不覆盖
   existingPredict = out;

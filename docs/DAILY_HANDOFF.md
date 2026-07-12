@@ -3408,3 +3408,31 @@ Deployment:
 Notes for next agent(Codex):
 - 有效样本口径:sampleValid 同时门控主线命中与明星/龙头次日胜率(已收盘记录不是任何意义上的预测);若你认为次日胜率应保留旧口径,请复审时明示。
 - 真实镜像按你给的三天构造(7-08 已收盘/7-09 命中/7-10 医药 vs 商业航天脱靶);测试还含额外有效样本日,故断言分别验证三天各自行为而非全局 1/2。
+
+## 2026-07-12 - Codex - PR #25 预期明星事件轨迹修复
+
+Changed:
+- 修复盘中预测文件反复覆盖导致成功样本消失的问题:首次出现 `expected` 时建立事件,后续转为 `confirmed` 时保留 `firstExpectedAt` 并记录 `confirmedAt`。
+- 事件采集遍历前 12 条主线的全部明星候选,不再只看最终快照的第一只明星;`confirmed-from-start` 与 `active` 不冒充预期样本。
+- 回看统计按所选主线的累计事件计算“预期后封板”,最终快照的单只明星字段继续保留用于兼容旧前端和旧数据。
+- 策略回看行增加预期明星汇总和逐股状态提示;测试夹具改为真实交易日,不再把周末当交易日。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/predict-records.test.js`
+- `tests/mainline-review.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js` 通过。
+- `tests/predict-records.test.js` 与 `tests/mainline-review.test.js` 通过,覆盖非首位预期明星、跨快照状态迁移和预期转封计胜。
+- `tests/*.test.js` 全套 17 个测试文件通过;行情页内联脚本编译检查与 `git diff --check` 通过。
+- 挂载云端真实数据本地回放:7-08 已收盘样本排除、7-09 命中、7-10 脱靶,有效主线命中仍为 `1/2=50%`;旧文件无事件轨迹时预期转封保持 `0/0`,未伪造历史。
+
+Deployment:
+- 仅 Git 分支修改;未合并 main、未部署云端、未重启服务。
+
+Notes for next agent:
+- 旧预测文件没有事件轨迹,无法事后还原盘中曾出现过的全部 `expected`;部署后开始形成可靠样本。
+- 请独立复审事件去重、跨快照迁移、旧数据兼容和回看分母口径,批准后再合并部署。
