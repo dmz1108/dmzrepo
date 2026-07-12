@@ -422,8 +422,19 @@ function buildStockEvents(input, confirmedFamilies, reasonByCode, limitCodes, st
 
   const order = { 'star-limit-up': 0, 'ordinary-limit-up': 1, 'confirmed-mainline-big-gain': 2, 'data-missing': 3 };
   events.sort((a, b) => (order[a.event] ?? 9) - (order[b.event] ?? 9) || a.code.localeCompare(b.code));
+  const unresolvedFamilyCount = events.filter(row => row.event === 'data-missing').length;
+  const attributedLimitUpCount = events.filter(row =>
+    row.event === 'star-limit-up' || row.event === 'ordinary-limit-up').length;
   return {
+    // complete=必需来源库完整;coverageComplete=每只涨停股都能归到有效主线家族。
+    // 两者故意分开:来源完整日仍可能有「其他/事件类」个股,这些行保持 dataMissing。
     complete: !!(input.quality?.limitUpComplete && input.quality?.mainReasonComplete && input.quality?.closeComplete),
+    coverageComplete: unresolvedFamilyCount === 0,
+    attributedLimitUpCount,
+    unresolvedFamilyCount,
+    familyCoveragePct: limitRows.length
+      ? Number((attributedLimitUpCount / limitRows.length * 100).toFixed(2))
+      : null,
     counts: {
       starLimitUp: events.filter(row => row.event === 'star-limit-up').length,
       ordinaryLimitUp: events.filter(row => row.event === 'ordinary-limit-up').length,
@@ -503,6 +514,7 @@ function buildPostCloseRecord(existing, input = {}) {
   };
   base.stockEvents = buildStockEvents(input, confirmedFamilies, reasonByCode, limitCodes, starEvidence);
   base.complete = !!(base.postCloseConfirmed.complete && base.stockEvents.complete);
+  base.eventCoverageComplete = !!base.stockEvents.coverageComplete;
   return base;
 }
 

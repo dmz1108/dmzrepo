@@ -3588,3 +3588,30 @@ Deployment:
 Notes for next agent:
 - 这是v3证据层PR2,尚未实现historyScore/todayScore或替换正式排序。后续只能先做离线双跑与影子字段,不得直接改用户榜单。
 - 云端部署必须原子包含`kpl-stats-server.js`与`strategy-daily-events.js`;缺模块时主服务会快速失败。
+
+## 2026-07-12 - Codex - PR29/PR30云端部署与真实日回放
+
+Changed:
+- PR #29家族归属修复和PR #30每日策略事件已合并main并原子部署到`C:\PandaDashboard`。
+- 云端历史日2026-07-10通过管理员接口完成真实重建;底库、主因库、收盘库和策略快照均为完整状态。
+- 补充`eventCoverageComplete`、归属覆盖率和未归属数量,区分“必需来源完整”与“每只涨停股都有有效主线家族”。
+
+Files:
+- strategy-daily-events.js
+- tests/strategy-daily-events.test.js
+- docs/strategy/STRATEGY_DAILY_EVENTS.md
+- docs/DAILY_HANDOFF.md
+
+Validated:
+- 云端主服务PID 8512监听8765;主页、行情、后台和health均HTTP 200;管理员接口无会话返回403。
+- 云端正式文件SHA-256:`kpl-stats-server.js`=`C7F2FACA...A63983`,`strategy-daily-events.js`=`B39AE6B0...580218`。
+- 2026-07-10回放生成schema 1/rule `leader-scoring-v3-events-v1`;来源完整,确认1条过硬门槛主线,股票事件为明星涨停2、普通涨停77、大涨未板1、不可归属9。
+- 历史日`intradayObservation=not-recorded`符合预期:盘中采样功能在该日尚未上线,系统未倒推伪造旧样本。
+
+Deployment:
+- 已部署并重启主服务。备份:`C:\PandaDashboard\_deploy-backups\pr29-pr30-20260712-204833`。
+- 运行时生成:`C:\PandaDashboard\strategy-data\strategy-daily-events-2026-07-10.json`。
+
+Notes for next agent:
+- 顶层`complete`表示必要来源库完整;历史计分仍必须逐行检查`historyEligible`。`eventCoverageComplete=false`时不得把未归属行按0计分。
+- 2026-07-10的9个dataMissing来自有效源记录但无法映射到主线家族(如其他/事件类),不是底库缺文件。

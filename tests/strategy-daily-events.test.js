@@ -123,6 +123,7 @@ A(byCode.get('000001')?.event === 'star-limit-up' && byCode.get('000001')?.point
 A(byCode.get('000002')?.event === 'ordinary-limit-up' && byCode.get('000002')?.points === 15, '同族普通涨停记15分且不叠加明星分');
 A(byCode.get('000007')?.event === 'confirmed-mainline-big-gain' && byCode.get('000007')?.points === 8, '已确认主线证据股收盘大于5%未板记8分');
 A(record.stockEvents.events.filter(row => row.code === '000001').length === 1, '同一股票同日事件互斥,只保留最高等级');
+A(record.eventCoverageComplete === true && record.stockEvents.familyCoveragePct === 100, '来源完整与逐股家族覆盖分别可诊断');
 A(record.historyUsableFrom === 'next-trading-day', '盘后答案明确只能从下一交易日起使用');
 
 const missing = buildPostCloseRecord(null, {
@@ -134,6 +135,7 @@ const missing = buildPostCloseRecord(null, {
 A(missing.complete === false && missing.postCloseConfirmed.status === 'dataMissing', '主因库不完整时明确dataMissing,不生成伪完整记录');
 A(missing.postCloseConfirmed.confirmedMainlines.length === 0, '缺主因时不勉强确认主线');
 A(missing.stockEvents.events.every(row => row.points === null), '缺主因家族时不把未知事件写成0或15');
+A(missing.stockEvents.complete === false && missing.eventCoverageComplete === false, '来源缺失和逐股归属缺失分别保持false');
 
 A(serverSource.includes("require('./strategy-daily-events')"), '主服务原子依赖每日事件模块');
 A(serverSource.includes('await recordStrategyDailyIntradayObservation(day, sessionPhase, mainlines, savedAt)'), '盘中预测写盘后同步记录观察样本');
