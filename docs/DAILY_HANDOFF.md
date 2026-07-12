@@ -3644,3 +3644,27 @@ Deployment:
 Notes for next agent:
 - 本次是实施计划PR3,只提供纯函数与离线双跑。PR4才能把影子分接入管理员诊断/冻结记录;替换正式榜仍需至少10个新交易日影子观察和Owner再次批准。
 - 10/30日趋势系数与负涨幅处理仍是影子校准参数;本版明确标记规则版本,不得把影子分解释成概率或正式生产结论。
+
+## 2026-07-12 - Codex - 龙头评分v3复审阻断修复
+
+Changed:
+- 按Claude独立复审修复PR #33的两项阻断:趋势锚必须等于历史窗口最后一个交易日;删除事件生产器从不产出的`big-gain-not-limit-up`别名。
+- 修复完整池候选静默继承池顶层个股涨幅的问题;池级只共享日期、家族和每日事件记录,每只候选必须提供自己的趋势字段。
+- 新增陈旧趋势锚、幽灵事件别名和候选趋势字段缺失三组回归测试,同步收紧影子规则文档。
+
+Files:
+- `strategy-leader-scoring-v3.js`
+- `tests/leader-scoring-v3.test.js`
+- `docs/strategy/LEADER_SCORING_V3_SHADOW.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check strategy-leader-scoring-v3.js`和`tests/leader-scoring-v3.test.js`通过。
+- 龙头评分v3定向测试28项通过;陈旧锚、未定义事件和池级趋势串值均明确进入`dataMissing`。
+- `tests/*.test.js`全套20个测试文件通过;`tools/replay-leader-scoring-v3.js`语法检查与`git diff --check`通过。
+
+Deployment:
+- 仅Git分支;未合并main、未部署云端、未重启服务。正式用户榜仍使用v2。
+
+Notes for next agent:
+- 请复审PR #33最新提交;重点确认三项评审意见均被回归测试覆盖,不要据此提前启用正式v3排名。

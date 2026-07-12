@@ -10,12 +10,12 @@
 - Each stock can receive only one persisted event per family per day: star limit-up `20`, ordinary limit-up `15`, confirmed-mainline gain above 5% without a limit-up `8`, or no event `0`.
 - A higher event replaces a lower event on the same day. It never stacks with it.
 - Legacy v2 signals such as `present`, `todayLimit`, board height, early seal, star bonus, and reason freshness do not add event points. They may be retained as diagnostics or tie-break evidence only.
-- The gain trend layer is separate from event history. Shadow v1 uses positive 10-day gain at `1x` plus positive 30-day gain at `0.25x`; it uses an anchor strictly before the target day so the target-day move is not counted again.
+- The gain trend layer is separate from event history. Shadow v1 uses positive 10-day gain at `1x` plus positive 30-day gain at `0.25x`; its anchor must equal the last trading day in the complete history window, so stale or target-day prices cannot silently enter the score.
 - A formal leader still needs at least one prior family limit-up event. A first-day theme remains provisional.
 
 ## Missing data
 
-The scorer requires all 10 expected history records, a persisted target-day event or intraday projection, and both gain values with a valid previous-close anchor. Missing evidence produces `leadScoreV3Raw: null` and explicit `dataMissing`; known partial points remain diagnostic only.
+The scorer requires all 10 expected history records, a persisted target-day event or intraday projection, and per-candidate gain values whose anchor equals the target day's previous trading day. Pool-level gain fields are never inherited by candidates. Missing evidence produces `leadScoreV3Raw: null` and explicit `dataMissing`; known partial points remain diagnostic only.
 
 ## Offline replay
 

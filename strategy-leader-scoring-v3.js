@@ -10,7 +10,6 @@ const DAILY_EVENT_POINTS = Object.freeze({
   'star-limit-up': 20,
   'ordinary-limit-up': 15,
   'confirmed-mainline-big-gain': 8,
-  'big-gain-not-limit-up': 8,
   none: 0,
 });
 
@@ -214,11 +213,13 @@ function scoreToday(input) {
 function scoreTrend(input) {
   const targetDay = validDay(input?.targetDay);
   const anchorDay = validDay(input?.gainAnchorDay);
+  const expectedAnchorDay = validDay(input?.expectedAnchorDay);
   const gain10 = finiteNumber(input?.gain10);
   const gain30 = finiteNumber(input?.gain30);
   const dataMissing = [];
   if (!anchorDay) dataMissing.push('gainAnchorDay');
   else if (targetDay && anchorDay >= targetDay) dataMissing.push('gainAnchorIncludesTargetDay');
+  else if (expectedAnchorDay && anchorDay !== expectedAnchorDay) dataMissing.push('gainAnchorNotPrevTradingDay');
   if (gain10 === null) dataMissing.push('gain10');
   if (gain30 === null) dataMissing.push('gain30');
   const complete = dataMissing.length === 0;
@@ -228,6 +229,7 @@ function scoreTrend(input) {
     complete,
     rule: LEADER_SCORING_V3_TREND_RULE,
     anchorDay: anchorDay || null,
+    expectedAnchorDay: expectedAnchorDay || null,
     gain10,
     gain30,
     gain10Points,
@@ -243,7 +245,10 @@ function scoreLeaderV3(input = {}) {
   const targetDay = validDay(input.targetDay);
   const history = scoreHistoryWindow({ ...input, code, familyKey, targetDay });
   const today = scoreToday({ ...input, code, familyKey, targetDay });
-  const trend = scoreTrend({ ...input, targetDay });
+  const expectedAnchorDay = history.complete
+    ? history.tradingDays[history.tradingDays.length - 1]
+    : '';
+  const trend = scoreTrend({ ...input, targetDay, expectedAnchorDay });
   const complete = !!(code && familyKey && targetDay && history.complete && today.complete && trend.complete);
   const dataMissing = [
     ...(!code ? ['code'] : []),
@@ -282,13 +287,20 @@ function scoreLeaderV3(input = {}) {
 }
 
 function rankLeaderPoolV3(input = {}) {
+  const sharedDefaults = {
+    targetDay: input.targetDay,
+    familyKey: input.familyKey,
+    tradingDays: input.tradingDays,
+    dailyRecords: input.dailyRecords,
+    todayRecord: input.todayRecord,
+  };
   const candidates = (Array.isArray(input.candidates) ? input.candidates : [])
     .map(candidate => scoreLeaderV3({
-      ...input,
+      ...sharedDefaults,
       ...candidate,
-      dailyRecords: candidate.dailyRecords || input.dailyRecords,
-      tradingDays: candidate.tradingDays || input.tradingDays,
-      todayRecord: candidate.todayRecord || input.todayRecord,
+      dailyRecords: candidate.dailyRecords || sharedDefaults.dailyRecords,
+      tradingDays: candidate.tradingDays || sharedDefaults.tradingDays,
+      todayRecord: candidate.todayRecord || sharedDefaults.todayRecord,
     }));
   const familyKeys = [...new Set(candidates.map(row => row.familyKey).filter(Boolean))];
   if (familyKeys.length > 1) throw new Error('rankLeaderPoolV3 requires one mainline family per full-pool replay');

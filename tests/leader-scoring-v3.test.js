@@ -107,6 +107,13 @@ const unknownEventScored = scoreLeaderV3({ ...base, todayRecord: unknownEvent })
 A(unknownEventScored.complete === false && unknownEventScored.components.today.dataMissing.includes('unknownDailyEvent'),
   '未知事件类型明确dataMissing,不接受文件里的任意分值');
 
+const unproducedAlias = dailyRecord('2026-07-08', [event('000001', familyKey, 'ordinary-limit-up', {
+  event: 'big-gain-not-limit-up', points: 8,
+})]);
+const unproducedAliasScored = scoreLeaderV3({ ...base, todayRecord: unproducedAlias });
+A(unproducedAliasScored.complete === false && unproducedAliasScored.components.today.dataMissing.includes('unknownDailyEvent'),
+  '事件生产器未定义的旧别名不得绕过事件白名单');
+
 // 7月8日威尔高机制样本:7月7日历史普通涨停15,7月8日当天普通涨停15。
 // lianban=2、早封、当日在场等旧字段不得把同一两连板重复加成。
 const weierHistory = DAYS.map(day => dailyRecord(day,
@@ -138,12 +145,16 @@ A(incomplete.components.history.missingDays.includes('2026-07-07'), '缺失记�
 const leakedAnchor = scoreLeaderV3({ ...base, gainAnchorDay: '2026-07-08' });
 A(leakedAnchor.complete === false && leakedAnchor.components.trend.dataMissing.includes('gainAnchorIncludesTargetDay'),
   '趋势锚日包含目标日时阻断,避免当日涨幅与当天事件重复计分');
+const staleAnchor = scoreLeaderV3({ ...base, gainAnchorDay: '2026-06-01' });
+A(staleAnchor.complete === false && staleAnchor.components.trend.dataMissing.includes('gainAnchorNotPrevTradingDay') &&
+  staleAnchor.components.trend.expectedAnchorDay === '2026-07-07',
+  '趋势锚必须等于目标日前一交易日,陈旧锚不得静默取得趋势分');
 
 const poolInput = {
   ...base,
   candidates: [
-    { code: '000001', name: '样本一', gain10: 10, gain30: 20 },
-    { code: '000002', name: '样本二', gain10: 80, gain30: 80,
+    { code: '000001', name: '样本一', gainAnchorDay: '2026-07-07', gain10: 10, gain30: 20 },
+    { code: '000002', name: '样本二', gainAnchorDay: '2026-07-07', gain10: 80, gain30: 80,
       dailyRecords: DAYS.map((day, i) => dailyRecord(day, i === 0 ? [event('000002', familyKey, 'ordinary-limit-up')] : [])),
       todayRecord: dailyRecord('2026-07-08') },
   ],
@@ -156,6 +167,21 @@ A(pool.resultScope === 'full-input-pool' && pool.poolSize === 2 && pool.fullLead
 A(two.originalRank === 1 && one.originalRank === 2, 'v3按绝对分排序,不是候选池名次分');
 A(one.leadScoreV3Raw === 65, '增加其他候选不会改变同一股票自身绝对分');
 A(pool.familyKey === familyKey, '一次完整池回放明确绑定一个主线家族');
+
+const noTrendCandidate = rankLeaderPoolV3({
+  ...base,
+  candidates: [{
+    code: '000003',
+    name: '缺趋势样本',
+    dailyRecords: DAYS.map((day, i) => dailyRecord(day,
+      i === 0 ? [event('000003', familyKey, 'ordinary-limit-up')] : [])),
+    todayRecord: dailyRecord('2026-07-08'),
+  }],
+}).results[0];
+A(noTrendCandidate.complete === false && noTrendCandidate.components.trend.gain10 === null &&
+  noTrendCandidate.components.trend.gain30 === null && noTrendCandidate.dataMissing.includes('trend:gain10') &&
+  noTrendCandidate.dataMissing.includes('trend:gain30'),
+  '候选缺少个股趋势字段时明确dataMissing,不得继承池顶层其他股票的涨幅');
 
 let mixedFamilyRejected = false;
 try {
