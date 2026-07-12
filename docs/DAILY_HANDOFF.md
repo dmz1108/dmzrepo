@@ -3692,3 +3692,25 @@ Deployment:
 
 Notes for next agent:
 - Claude复审时需确认目标日事件只作一次20/15计分且资格门零加分,并确认`persisted-intraday-projection`不能误过正式资格。
+
+## 2026-07-12 - Claude/Codex - 预判回看卡片视觉重构
+
+Changed:
+- 将策略页“预判回看”改为紧凑的两行日卡片:首行串联预判主线、命中状态和盘后家族,次行独立展示明星、龙头及预期转封结果。
+- 使用左侧状态线区分命中、前三、脱靶、待验证和无效样本;头部集中展示主线命中率、前三率及预期明星封板率。
+- Codex复审补齐静态标签语义、项目圆角和字距约束;数据字段、统计口径、转义与接口调用均未改变。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 使用云端真实`/api/strategy-mainline-review?days=10`响应,在1440x1000与390x844视口运行实际`renderMainlineReviewHTML`;均无页面错误、横向滚动、元素越界或文字重叠。
+- 补充模拟命中/前三/脱靶/待验证/无效及长题材名状态,1440/900/390三档视口均通过布局检查。
+- `tests/*.test.js`全套20个测试文件通过;最终三档Playwright复验零页面错误、零越界且静态表单`label`为0;`git diff --check`通过。
+
+Deployment:
+- PR #34分支验证中;未合并main、未部署云端、未重启服务。
+
+Notes for next agent:
+- 本改动只调整预判回看视觉层;不得据此解释或修改命中率、明星转封和次日胜率口径。

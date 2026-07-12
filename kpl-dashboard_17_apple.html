@@ -7275,56 +7275,98 @@
   }
   body.view-strategy .ml-review {
     margin-top: 12px;
-    padding: 11px 13px;
-    border: 1px solid rgba(174,190,214,0.12);
-    border-radius: 9px;
-    background: rgba(0,0,0,0.14);
+    padding: 13px 15px 14px;
+    border: 1px solid rgba(174,190,214,0.14);
+    border-radius: 8px;
+    background:
+      radial-gradient(120% 140% at 0% 0%, rgba(255,215,138,0.06), transparent 42%),
+      linear-gradient(180deg, rgba(255,255,255,0.028), rgba(0,0,0,0.16));
+    box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 6px 20px -14px rgba(0,0,0,0.6);
   }
-  body.view-strategy .mlr-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
-  body.view-strategy .mlr-head span { color: #eaf2ff; font-size: 13px; font-weight: 780; }
-  body.view-strategy .mlr-head small { color: rgba(174,190,214,0.6); font-size: 11px; }
+  body.view-strategy .mlr-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  body.view-strategy .mlr-title {
+    display: inline-flex; align-items: center; gap: 7px;
+    color: #f2f7ff; font-size: 14px; font-weight: 850; letter-spacing: 0;
+  }
+  body.view-strategy .mlr-title .mlr-ic {
+    font-size: 13px; filter: saturate(1.1);
+    display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 7px;
+    background: rgba(255,215,138,0.12); border: 1px solid rgba(255,215,138,0.22);
+  }
+  body.view-strategy .mlr-stats { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+  body.view-strategy .mlr-sub { margin: 6px 0 10px; }
+  body.view-strategy .mlr-sub small { color: rgba(174,190,214,0.62); font-size: 11px; line-height: 1.5; }
+  body.view-strategy .mlr-list { display: flex; flex-direction: column; gap: 6px; }
   body.view-strategy .mlr-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    padding: 5px 0;
-    border-top: 1px solid rgba(174,190,214,0.07);
+    position: relative;
+    padding: 8px 11px 8px 12px;
+    border-radius: 7px;
+    border: 1px solid rgba(174,190,214,0.09);
+    border-left: 3px solid rgba(174,190,214,0.22);
+    background: rgba(255,255,255,0.018);
     font-size: 12px;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
   }
-  body.view-strategy .mlr-day { color: rgba(174,190,214,0.75); font-family: "IBM Plex Mono", monospace; }
-  body.view-strategy .mlr-theme { color: #eaf2ff; font-weight: 740; min-width: 76px; }
+  body.view-strategy .mlr-row:hover { background: rgba(255,255,255,0.045); border-color: rgba(174,190,214,0.18); }
+  body.view-strategy .mlr-row.hit-ok { border-left-color: #ffcf72; background: linear-gradient(90deg, rgba(255,207,114,0.08), rgba(255,255,255,0.014) 38%); }
+  body.view-strategy .mlr-row.hit-near { border-left-color: rgba(174,201,240,0.7); }
+  body.view-strategy .mlr-row.hit-miss { border-left-color: rgba(174,190,214,0.28); }
+  body.view-strategy .mlr-row.hit-wait { border-left-color: rgba(174,190,214,0.3); border-left-style: dashed; }
+  body.view-strategy .mlr-row.hit-na, body.view-strategy .mlr-row.hit-invalid { border-left-color: rgba(174,190,214,0.16); }
+  body.view-strategy .mlr-row.invalid { opacity: 0.5; }
+  body.view-strategy .mlr-l1 { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+  body.view-strategy .mlr-l2 {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(174,190,214,0.08);
+    font-size: 11.5px;
+  }
+  body.view-strategy .mlr-day {
+    color: #cdd9ec; font-weight: 760; font-size: 12.5px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; letter-spacing: 0;
+    min-width: 38px;
+  }
+  body.view-strategy .mlr-pred { display: inline-flex; align-items: baseline; gap: 5px; }
+  body.view-strategy .mlr-theme { color: #eaf2ff; font-weight: 780; }
   body.view-strategy .mlr-theme i { font-style: normal; color: #ffd78a; margin-left: 3px; }
-  body.view-strategy .mlr-slot { color: rgba(174,190,214,0.7); display: inline-flex; gap: 5px; align-items: center; }
+  body.view-strategy .mlr-arrow { color: rgba(174,190,214,0.4); font-size: 12px; margin: 0 -2px; }
+  body.view-strategy .mlr-result { display: inline-flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  body.view-strategy .mlr-slot { color: rgba(174,190,214,0.72); display: inline-flex; gap: 5px; align-items: center; }
+  body.view-strategy .mlr-label { color: rgba(174,190,214,0.5); font-size: 10px; font-weight: 700; letter-spacing: 0; }
   body.view-strategy .mlr-name { color: #cfe0f5; }
-  body.view-strategy .mlr-gain.up { color: #ff6d6d; }
-  body.view-strategy .mlr-gain.down { color: #0bd06a; }
-  body.view-strategy .mlr-gain.flat, body.view-strategy .mlr-na { color: #aebed6; }
-  body.view-strategy .mlr-win { font-weight: 800; }
+  body.view-strategy .mlr-gain { font-weight: 760; font-variant-numeric: tabular-nums; }
+  body.view-strategy .mlr-gain.up { color: #ff7a7a; }
+  body.view-strategy .mlr-gain.down { color: #2bd583; }
+  body.view-strategy .mlr-gain.flat, body.view-strategy .mlr-na { color: #8f9fb6; }
+  body.view-strategy .mlr-win { font-weight: 850; }
   body.view-strategy .mlr-chip {
-    font-weight: 780; font-size: 11px; padding: 2px 8px; border-radius: 999px;
-    border: 1px solid rgba(255,215,138,0.35); color: #ffd78a; background: rgba(255,215,138,0.08);
+    font-weight: 800; font-size: 11px; padding: 3px 10px; border-radius: 999px;
+    border: 1px solid rgba(255,215,138,0.34); color: #ffd78a; background: rgba(255,215,138,0.1);
+    font-variant-numeric: tabular-nums;
   }
-  body.view-strategy .mlr-chip.near { border-color: rgba(174,190,214,0.3); color: #cfe0f5; background: rgba(174,190,214,0.07); }
-  body.view-strategy .mlr-hit { font-weight: 780; font-size: 11px; padding: 1px 7px; border-radius: 999px; }
-  body.view-strategy .mlr-hit.ok { color: #ffd78a; border: 1px solid rgba(255,215,138,0.4); }
-  body.view-strategy .mlr-hit.near { color: #cfe0f5; border: 1px solid rgba(174,190,214,0.35); }
-  body.view-strategy .mlr-hit.miss { color: rgba(174,190,214,0.65); border: 1px solid rgba(174,190,214,0.2); }
-  body.view-strategy .mlr-hit.na { color: rgba(174,190,214,0.45); }
-  body.view-strategy .mlr-actual { color: rgba(174,190,214,0.85); }
-  body.view-strategy .mlr-actual i { font-style: normal; color: rgba(174,190,214,0.6); font-size: 11px; margin-left: 3px; }
-  body.view-strategy .mlr-phase { font-style: normal; color: rgba(174,190,214,0.55); font-size: 10px; margin-left: 4px; }
-  body.view-strategy .mlr-seal { font-style: normal; font-size: 10px; padding: 0 4px; border-radius: 4px; color: rgba(174,190,214,0.6); border: 1px solid rgba(174,190,214,0.25); }
-  body.view-strategy .mlr-seal.on { color: #ff8f8f; border-color: rgba(255,143,143,0.4); }
-  body.view-strategy .mlr-seal.wait { color: rgba(174,190,214,0.45); border-style: dashed; }
-  body.view-strategy .mlr-hit.wait { color: rgba(174,190,214,0.55); border: 1px dashed rgba(174,190,214,0.3); }
-  body.view-strategy .mlr-lvl { font-style: normal; font-size: 10px; padding: 0 4px; border-radius: 4px; color: rgba(174,190,214,0.55); border: 1px solid rgba(174,190,214,0.2); }
-  body.view-strategy .mlr-lvl.exp { color: #ffd78a; border-color: rgba(255,215,138,0.35); }
-  body.view-strategy .mlr-tied { font-style: normal; font-size: 10px; padding: 0 5px; border-radius: 999px; color: #ffd78a; border: 1px solid rgba(255,215,138,0.35); }
-  body.view-strategy .mlr-invalid { font-style: normal; font-size: 10px; padding: 0 5px; border-radius: 4px; color: rgba(174,190,214,0.5); border: 1px dashed rgba(174,190,214,0.3); }
-  body.view-strategy .mlr-expected { color: #cfe0f5; font-size: 10px; padding: 1px 6px; border: 1px solid rgba(174,190,214,0.24); border-radius: 5px; }
-  body.view-strategy .mlr-expected.on { color: #ffd78a; border-color: rgba(255,215,138,0.35); }
-  body.view-strategy .mlr-row.invalid { opacity: 0.55; }
+  body.view-strategy .mlr-chip.near { border-color: rgba(174,190,214,0.28); color: #cfe0f5; background: rgba(174,190,214,0.08); }
+  body.view-strategy .mlr-hit {
+    font-weight: 800; font-size: 11px; padding: 2px 9px; border-radius: 999px; white-space: nowrap;
+  }
+  body.view-strategy .mlr-hit.ok { color: #1a1205; background: linear-gradient(180deg, #ffdd93, #f4bd57); border: 1px solid rgba(255,215,138,0.5); }
+  body.view-strategy .mlr-hit.near { color: #dce8fb; border: 1px solid rgba(174,201,240,0.5); background: rgba(174,201,240,0.1); }
+  body.view-strategy .mlr-hit.miss { color: rgba(200,211,228,0.72); border: 1px solid rgba(174,190,214,0.22); }
+  body.view-strategy .mlr-hit.na { color: rgba(174,190,214,0.5); border: 1px solid rgba(174,190,214,0.16); }
+  body.view-strategy .mlr-hit.wait { color: rgba(200,211,228,0.7); border: 1px dashed rgba(174,190,214,0.32); }
+  body.view-strategy .mlr-actual { color: rgba(198,210,230,0.9); font-weight: 640; }
+  body.view-strategy .mlr-actual i { font-style: normal; color: rgba(174,190,214,0.55); font-size: 10.5px; margin-left: 3px; font-weight: 400; }
+  body.view-strategy .mlr-phase {
+    font-style: normal; color: rgba(174,190,214,0.62); font-size: 10px;
+    padding: 1px 6px; border-radius: 5px; background: rgba(174,190,214,0.08);
+  }
+  body.view-strategy .mlr-seal { font-style: normal; font-size: 10px; padding: 1px 6px; border-radius: 999px; color: rgba(174,190,214,0.62); border: 1px solid rgba(174,190,214,0.25); }
+  body.view-strategy .mlr-seal.on { color: #ff9b9b; border-color: rgba(255,143,143,0.45); background: rgba(255,143,143,0.08); }
+  body.view-strategy .mlr-seal.wait { color: rgba(174,190,214,0.48); border-style: dashed; }
+  body.view-strategy .mlr-lvl { font-style: normal; font-size: 10px; padding: 1px 6px; border-radius: 999px; color: rgba(174,190,214,0.58); border: 1px solid rgba(174,190,214,0.2); }
+  body.view-strategy .mlr-lvl.exp { color: #ffd78a; border-color: rgba(255,215,138,0.35); background: rgba(255,215,138,0.07); }
+  body.view-strategy .mlr-tied { font-style: normal; font-size: 10px; padding: 1px 7px; border-radius: 999px; color: #ffd78a; border: 1px solid rgba(255,215,138,0.35); background: rgba(255,215,138,0.07); }
+  body.view-strategy .mlr-invalid { font-style: normal; font-size: 10px; padding: 1px 7px; border-radius: 999px; color: rgba(174,190,214,0.5); border: 1px dashed rgba(174,190,214,0.3); }
+  body.view-strategy .mlr-expected { color: #cfe0f5; font-size: 10.5px; padding: 2px 8px; border: 1px solid rgba(174,190,214,0.22); border-radius: 999px; }
+  body.view-strategy .mlr-expected.on { color: #ffd78a; border-color: rgba(255,215,138,0.38); background: rgba(255,215,138,0.08); }
   body.view-strategy .ml-trend {
     display: inline-flex;
     align-items: center;
@@ -11530,15 +11572,28 @@ function renderMainlineReviewHTML(d) {
         : `预期明星 ${list.length}只·${noData ? '数据不足' : '待验证'}`;
     return `<span class="mlr-expected${wins ? ' on' : ''}" title="${escapeHTML(names)}">${label}</span>`;
   };
-  const body = rows.map(r => `<div class="mlr-row${r.sampleValid === false ? ' invalid' : ''}">
-    <span class="mlr-day">${escapeHTML(String(r.day || '').slice(5))}</span>
-    <span class="mlr-theme">${escapeHTML(r.theme || '')}${r.confirmed ? '<i title="管理员确认的当日主线">✔</i>' : ''}${r.phase ? `<em class="mlr-phase" title="预判冻结时点">${escapeHTML(r.phase)}</em>` : ''}</span>
-    ${sampleTag(r)}
-    ${hitCell(r)}
-    ${actualCell(r)}
-    ${expectedCell(r)}
-    <span class="mlr-slot">明星 ${gainCell(r.star, true)}</span>
-    <span class="mlr-slot">龙头 ${gainCell(r.leader, false)}</span>
+  // 行级结果配色(与 hitCell 同口径):驱动左侧强调条颜色,一眼可扫命中/前三/脱靶/待验证
+  const rowHitClass = (r) => {
+    if (r.sampleValid === false) return 'hit-invalid';
+    if (r.pendingReview) return 'hit-wait';
+    if (r.mainlineHitTop1 == null) return 'hit-na';
+    if (r.mainlineHitTop1) return 'hit-ok';
+    if (r.mainlineHitTop3) return 'hit-near';
+    return 'hit-miss';
+  };
+  const body = rows.map(r => `<div class="mlr-row ${rowHitClass(r)}${r.sampleValid === false ? ' invalid' : ''}">
+    <div class="mlr-l1">
+      <span class="mlr-day">${escapeHTML(String(r.day || '').slice(5))}</span>
+      <span class="mlr-pred"><span class="mlr-theme">${escapeHTML(r.theme || '')}${r.confirmed ? '<i title="管理员确认的当日主线">✔</i>' : ''}</span>${r.phase ? `<em class="mlr-phase" title="预判冻结时点">${escapeHTML(r.phase)}</em>` : ''}</span>
+      <span class="mlr-arrow" aria-hidden="true">→</span>
+      <span class="mlr-result">${hitCell(r)}${actualCell(r)}</span>
+      ${sampleTag(r)}
+    </div>
+    <div class="mlr-l2">
+      <span class="mlr-slot"><span class="mlr-label">明星</span> ${gainCell(r.star, true)}</span>
+      <span class="mlr-slot"><span class="mlr-label">龙头</span> ${gainCell(r.leader, false)}</span>
+      ${expectedCell(r)}
+    </div>
   </div>`).join('');
   const rate = (wins, total, pct) => total ? `${wins}/${total}${pct != null ? `(${pct}%)` : ''}` : '--';
   const mlChips = stats.mainlineTotal
@@ -11549,11 +11604,11 @@ function renderMainlineReviewHTML(d) {
     : '';
   return `<section class="ml-review">
     <div class="mlr-head">
-      <span>📋 预判回看</span>
-      ${mlChips}${sealChipStat}
-      <small>明星次日胜率 ${rate(stats.starWins, stats.starTotal, stats.starWinRate)} · 龙头次日胜率 ${rate(stats.leaderWins, stats.leaderTotal, stats.leaderWinRate)} · 主线按盘后涨停主因家族格局评判(主因库完整覆盖终盘涨停才计分),盘前/集合竞价/已收盘记录不计样本</small>
+      <div class="mlr-title"><span class="mlr-ic">📋</span>预判回看</div>
+      <div class="mlr-stats">${mlChips}${sealChipStat}</div>
     </div>
-    ${body}
+    <div class="mlr-sub"><small>明星次日胜率 ${rate(stats.starWins, stats.starTotal, stats.starWinRate)} · 龙头次日胜率 ${rate(stats.leaderWins, stats.leaderTotal, stats.leaderWinRate)} · 主线按盘后涨停主因家族格局评判(主因库完整覆盖终盘涨停才计分),盘前/集合竞价/已收盘记录不计样本</small></div>
+    <div class="mlr-list">${body}</div>
   </section>`;
 }
 async function loadStrategyHotThemes(day) {
