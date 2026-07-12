@@ -3366,3 +3366,19 @@ Deployment:
 Notes for next agent:
 - 主线命中分母只含「盘后主因库已生成」的日子;当天盘中永远显示"—",这是口径而非 bug。
 - predict-records 攒满 10 天后(约 7-24),此区块的主线命中率即可作为 phase-2 语义讨论的输入。
+
+## 2026-07-12 - Claude - 7-08 盘后归属复核三方对照验收(AI 只读接口,真实云端数据)
+
+Changed:
+- 无代码改动。用 Codex 新增的 AI 只读三方对照接口完成 7-08 验收:`node tools/capture-mainline-review.js --day=2026-07-08 --codes=002396,000938`(Token 走环境变量,未用管理员 Token)。
+
+Validated(bundleSha256=4b542ebc474c43471800d95d6095fba99255c72c2a50ece5006603fd956c9374,complete=true、零 missingSources、零 sourceErrors;证据 JSON 未入 Git):
+- **frozen(冻结盘中预测,未动)**:星网 002396 仍在网络安全 todayCodes,算力AI todayCodes 为空——冻结旧账保留,符合"不重建"约定;
+- **live(现行代码盘中口径)**:归属仍按板块成分(002396 落 IPv6 todayCodes),算力AI todayCodes 为空——盘中不吃当日盘后主因,零穿越;龙头池已由近10日主因自动补全:算力AI leaders=星网90/紫光65;
+- **review(盘后归属复核)**:`reviewAttribution.hard=[{002396→group:算力AI}]`、soft 空;星网进入算力AI todayCodes 并从网络安全/IPv6 等跨族主线全部剔除(两者已不在 review 榜单携带 002396);**算力AI leaders=星网锐捷114 第一、紫光股份62 第二——与 Owner 核定的最终龙头排序完全一致**。
+
+Deployment:
+- 无部署动作。7-08 修复链路(PR #23 诊断 → PR #24 复核 → AI 只读对照接口)至此闭环。
+
+Notes for next agent:
+- 追溯任何历史日的三方对照用同一工具:`capture-mainline-review.js --day=YYYY-MM-DD --codes=...`(1-10 只,已收盘交易日)。
