@@ -7277,7 +7277,7 @@
     margin-top: 12px;
     padding: 13px 15px 14px;
     border: 1px solid rgba(174,190,214,0.14);
-    border-radius: 13px;
+    border-radius: 8px;
     background:
       radial-gradient(120% 140% at 0% 0%, rgba(255,215,138,0.06), transparent 42%),
       linear-gradient(180deg, rgba(255,255,255,0.028), rgba(0,0,0,0.16));
@@ -7286,7 +7286,7 @@
   body.view-strategy .mlr-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
   body.view-strategy .mlr-title {
     display: inline-flex; align-items: center; gap: 7px;
-    color: #f2f7ff; font-size: 14px; font-weight: 850; letter-spacing: 0.4px;
+    color: #f2f7ff; font-size: 14px; font-weight: 850; letter-spacing: 0;
   }
   body.view-strategy .mlr-title .mlr-ic {
     font-size: 13px; filter: saturate(1.1);
@@ -7300,7 +7300,7 @@
   body.view-strategy .mlr-row {
     position: relative;
     padding: 8px 11px 8px 12px;
-    border-radius: 9px;
+    border-radius: 7px;
     border: 1px solid rgba(174,190,214,0.09);
     border-left: 3px solid rgba(174,190,214,0.22);
     background: rgba(255,255,255,0.018);
@@ -7322,7 +7322,7 @@
   }
   body.view-strategy .mlr-day {
     color: #cdd9ec; font-weight: 760; font-size: 12.5px;
-    font-family: "IBM Plex Mono", ui-monospace, monospace; letter-spacing: 0.4px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; letter-spacing: 0;
     min-width: 38px;
   }
   body.view-strategy .mlr-pred { display: inline-flex; align-items: baseline; gap: 5px; }
@@ -7331,7 +7331,7 @@
   body.view-strategy .mlr-arrow { color: rgba(174,190,214,0.4); font-size: 12px; margin: 0 -2px; }
   body.view-strategy .mlr-result { display: inline-flex; align-items: center; gap: 7px; flex-wrap: wrap; }
   body.view-strategy .mlr-slot { color: rgba(174,190,214,0.72); display: inline-flex; gap: 5px; align-items: center; }
-  body.view-strategy .mlr-slot label { color: rgba(174,190,214,0.5); font-size: 10px; font-weight: 700; letter-spacing: 0.5px; }
+  body.view-strategy .mlr-label { color: rgba(174,190,214,0.5); font-size: 10px; font-weight: 700; letter-spacing: 0; }
   body.view-strategy .mlr-name { color: #cfe0f5; }
   body.view-strategy .mlr-gain { font-weight: 760; font-variant-numeric: tabular-nums; }
   body.view-strategy .mlr-gain.up { color: #ff7a7a; }
@@ -11590,8 +11590,8 @@ function renderMainlineReviewHTML(d) {
       ${sampleTag(r)}
     </div>
     <div class="mlr-l2">
-      <span class="mlr-slot"><label>明星</label> ${gainCell(r.star, true)}</span>
-      <span class="mlr-slot"><label>龙头</label> ${gainCell(r.leader, false)}</span>
+      <span class="mlr-slot"><span class="mlr-label">明星</span> ${gainCell(r.star, true)}</span>
+      <span class="mlr-slot"><span class="mlr-label">龙头</span> ${gainCell(r.leader, false)}</span>
       ${expectedCell(r)}
     </div>
   </div>`).join('');
