@@ -14,10 +14,12 @@ const {
   sanitizeCloseStock,
   sanitizeLimitUpStock,
   sanitizeMainReasonStock,
+  sanitizeStrategyDiagnosticPayload,
   sanitizeStrategyPayload,
   verifyEvidenceBundle,
 } = require('../strategy-evidence');
 const { buildEvidenceUrl, captureStrategyCase, requestJson } = require('../tools/capture-strategy-case');
+const { buildMainlineReviewUrl } = require('../tools/capture-mainline-review');
 const { replayStrategyCase } = require('../tools/replay-strategy-case');
 
 const A = (condition, message) => {
@@ -115,6 +117,28 @@ function isoDays(count) {
   A(JSON.stringify(strategySnapshot.mainlines[0].todayCodes) === JSON.stringify(['002396']), 'strategy todayCodes filtered to requested stocks');
   A(strategySnapshot.mainlines[0].leaders.length === 1 && strategySnapshot.mainlines[0].leaders[0].code === '002396', 'strategy leader rows filtered to requested stocks');
   A(strategySnapshot.mainlines[0].mainLeader === null, 'unrequested main leader detail removed while mainline context remains');
+  const diagnostic = sanitizeStrategyDiagnosticPayload({
+    ok: true,
+    day: '2026-07-08',
+    debugMeta: { complete: true, fullWait: true, note: 'safe', debugErrors: ['bad\u0000text'] },
+    reviewAttribution: {
+      hard: [{ code: '002396', familyKey: 'compute' }, { code: '600000', familyKey: 'other' }],
+      soft: [],
+    },
+    debugTrace: [
+      {
+        code: '002396',
+        todayReason: { finalBoardTopic: 'Compute', finalDetailReason: 'reason\u0000text' },
+        snapshotStats: [{ zsType: 6, plateId: 'p1', boardName: 'Cloud', ztList: { code: '002396', name: 'XW', gain: 10, cookie: 'secret' } }],
+      },
+      { code: '600000', todayReason: { finalBoardTopic: 'Other' } },
+    ],
+    mainlines: [{ theme: 'Compute AI', todayCodes: ['002396', '600000'], leaders: [{ code: '002396' }, { code: '600000' }] }],
+  }, codes);
+  A(diagnostic.reviewAttribution.hard.length === 1 && diagnostic.reviewAttribution.hard[0].code === '002396', 'diagnostic attribution restricted to requested stocks');
+  A(diagnostic.debugTrace.length === 1 && diagnostic.debugTrace[0].code === '002396', 'diagnostic trace restricted to requested stocks');
+  A(diagnostic.debugTrace[0].snapshotStats[0].ztList.cookie === undefined, 'diagnostic snapshot rows use a field allowlist');
+  A(!/[\u0000-\u001f\u007f]/.test(JSON.stringify(diagnostic)), 'diagnostic source text control characters stripped');
   const evidence = {
     snapshots: [snapshotEvidence],
     limitUpDays,
@@ -160,6 +184,10 @@ function isoDays(count) {
   A(await rejects(Promise.resolve().then(() => buildEvidenceUrl('https://evil.example', {
     day: '2026-07-08', codes, themes: [], windowDays: 30,
   })), /host is not allowed/), 'capture URL rejects untrusted base host');
+  A(await rejects(Promise.resolve().then(() => buildMainlineReviewUrl('https://evil.example', {
+    day: '2026-07-08', codes,
+  })), /host is not allowed/), 'mainline review URL rejects untrusted base host');
+  A(buildMainlineReviewUrl('https://market.dreamerqi.com', { day: '2026-07-08', codes }).includes('/api/ai/strategy-mainline-review'), 'mainline review URL uses the constrained AI route');
   let requestPath = '';
   const server = http.createServer((req, res) => {
     requestPath = req.url;
@@ -220,6 +248,7 @@ function isoDays(count) {
 
   const serverSource = await fs.readFile(path.join(__dirname, '..', 'kpl-stats-server.js'), 'utf8');
   A(serverSource.includes("url.pathname === '/api/ai/strategy-evidence'"), 'server route registered');
+  A(serverSource.includes("url.pathname === '/api/ai/strategy-mainline-review'"), 'AI mainline review route registered');
   A(serverSource.match(/async function aiStrategyEvidenceApi[\s\S]{0,500}validateAiReadOnlyRequest/), 'evidence route uses AI read-only token gate');
   A(serverSource.includes("validateAiReadOnlyRequest(url, req, { allowQueryToken: false })"), 'evidence route rejects token query parameter and requires a header/bearer token');
   A(serverSource.includes("error: 'codes is required (1-20 stock codes)'"), 'evidence route requires bounded stock filter');

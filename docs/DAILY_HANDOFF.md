@@ -3288,3 +3288,29 @@ Deployment:
 
 Notes for next agent:
 - 不重建 2026-07-08 冻结盘中预测快照；需要追溯时使用管理员 `review=1` 三方对照。云端真实 Token、会话值、数据库和诊断证据 JSON 均未进入 Git。
+
+## 2026-07-12 - Codex - 为 Claude 增加受限主线三方对照接口
+
+Changed:
+- 新增 AI 只读 `strategy-mainline-review` 接口，让 agent 使用现有 AI Token 对已收盘交易日执行 live / frozen / review 三方对照，无需管理员 Token。
+- 固定只读参数：不写预测、不修改快照、不派发 L2；请求限制为 1-10 只股票，响应按白名单脱敏并附 SHA-256 完整性校验。
+- 新增安全抓取工具与使用文档；Token 只从环境变量读取，不支持命令行 Token 参数。
+
+Files:
+- `kpl-stats-server.js`
+- `strategy-evidence.js`
+- `tools/capture-mainline-review.js`
+- `tests/leader-debug-endpoint.test.js`
+- `tests/strategy-evidence-tools.test.js`
+- `docs/AI_PRODUCTION_READ.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check` 覆盖主服务、证据模块和新工具；全部 16 套 `tests/*.test.js` 通过；`git diff --check` 通过。
+- 真实 HTTP 测试确认：AI Token 可访问、无 Token/URL Token 被拒绝、休市日和缺少股票参数被拒绝、未请求股票及未知字段不出现在响应、整包哈希可校验。
+
+Deployment:
+- GitHub only；尚未部署云端，未重启任何服务。
+
+Notes for next agent:
+- 合并部署后运行 `node tools/capture-mainline-review.js --day=2026-07-08 --codes=002396,000938` 验证生产接口；证据 JSON 只留在被 Git 忽略的 `tmp/strategy-cases/`。
