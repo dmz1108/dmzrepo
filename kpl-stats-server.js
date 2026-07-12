@@ -23028,8 +23028,26 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay, options = {}) {
   }
 }
 
-// ===== 预判回看：昨日预判的明星/龙头，次日实际表现如何（胜率统计） =====
+// ===== 预判回看：盘中预判的主线/明星/龙头,盘后与次日实际表现如何(命中率+胜率统计) =====
 // 收盘涨幅用收盘价库（可靠）；最高涨幅需确认 K 线 bar 的 high 字段索引后再补，先输出 null 不装有数据。
+// 主线命中口径:当日盘后主因库按「主线家族」(strategyMainlineFamilyInfo,与主线榜合并口径一致)
+// 统计涨停数排名 = 当日实际格局;预判主线家族 == 实际第一家族 → top1 命中;实际第一家族落在
+// 预判前三家族内 → top3 命中。盘后主因库缺失(含当日盘中)→ 命中记 null,不计入分母(不装有数据)。
+function strategyMainlineActualFamilyRanking(mainReasonDb) {
+  const byFamily = new Map();
+  for (const s of (mainReasonDb?.stocks || [])) {
+    if (isExcludedFromReview(s?.code, s?.name)) continue;
+    const theme = String(s.finalBoardTopic || '').trim();
+    if (!theme || /其他/.test(theme) || isDroppedThemeWord(theme)) continue;
+    const fam = strategyMainlineFamilyInfo({ theme });
+    if (!fam?.key) continue;
+    const cur = byFamily.get(fam.key) || { familyKey: fam.key, label: fam.label || theme, count: 0 };
+    cur.count += 1;
+    byFamily.set(fam.key, cur);
+  }
+  return [...byFamily.values()].sort((a, b) =>
+    b.count - a.count || String(a.label).localeCompare(String(b.label), 'zh-Hans-CN'));
+}
 async function getStrategyMainlineReview(days = 10) {
   const apiKey = await readSavedApiKey().catch(() => '');
   const todayIso = isoFromCompactDate(chinaNowParts().day);
@@ -23043,6 +23061,7 @@ async function getStrategyMainlineReview(days = 10) {
   };
   const rows = [];
   let starWins = 0, starTotal = 0, leaderWins = 0, leaderTotal = 0;
+  let mainlineTop1Hits = 0, mainlineTop3Hits = 0, mainlineTotal = 0;
   for (let i = tradingDays.length - 2; i >= 0 && rows.length < days; i -= 1) {
     const day = tradingDays[i];
     const nextDay = tradingDays[i + 1];
@@ -23062,10 +23081,35 @@ async function getStrategyMainlineReview(days = 10) {
     const leader = evalStock(main.leader);
     if (star?.win != null) { starTotal += 1; if (star.win) starWins += 1; }
     if (leader?.win != null) { leaderTotal += 1; if (leader.win) leaderWins += 1; }
+    // 主线命中:当日盘后主因库的实际家族格局 vs 盘中预判家族(缺库 → null,不装有数据)
+    const mainReasonDb = await readLimitUpMainReasonDbDay(day).catch(() => null);
+    const actualRanking = strategyMainlineActualFamilyRanking(mainReasonDb);
+    const actualTop = actualRanking.slice(0, 3).map(f => ({ theme: f.label, count: f.count }));
+    let mainlineHitTop1 = null, mainlineHitTop3 = null;
+    if (actualRanking.length) {
+      const actualFirstFamily = actualRanking[0].familyKey;
+      const predictedFamilies = predict.top.slice(0, 3)
+        .map(t => strategyMainlineFamilyInfo({ theme: t?.theme || '', key: t?.key || '' }).key)
+        .filter(Boolean);
+      const mainFamily = strategyMainlineFamilyInfo({ theme: main.theme || '', key: main.key || '' }).key;
+      mainlineHitTop1 = mainFamily === actualFirstFamily;
+      mainlineHitTop3 = predictedFamilies.includes(actualFirstFamily);
+      mainlineTotal += 1;
+      if (mainlineHitTop1) mainlineTop1Hits += 1;
+      if (mainlineHitTop3) mainlineTop3Hits += 1;
+    }
+    // 预判明星当日封板确认:预判时点(盘中)选的明星,最终是否进了当日涨停底库
+    if (star?.code) {
+      const limitDb = await readLimitUpDbDay(day).catch(() => null);
+      star.sealedSameDay = (limitDb?.stocks || [])
+        .some(s => normalizeReasonSourceCode(s?.code) === star.code);
+    }
     rows.push({
       day, nextDay,
       theme: main.theme, confirmed: !!(predict.confirmedKey && main.key === predict.confirmedKey),
       stage: main.stage || '', certainty: main.certainty || '',
+      phase: predict.sessionPhase || '',
+      actualTop, mainlineHitTop1, mainlineHitTop3,
       star, leader,
     });
   }
@@ -23075,8 +23119,11 @@ async function getStrategyMainlineReview(days = 10) {
     stats: {
       starWins, starTotal, starWinRate: starTotal ? Number((starWins / starTotal * 100).toFixed(1)) : null,
       leaderWins, leaderTotal, leaderWinRate: leaderTotal ? Number((leaderWins / leaderTotal * 100).toFixed(1)) : null,
+      mainlineTop1Hits, mainlineTop3Hits, mainlineTotal,
+      mainlineTop1Rate: mainlineTotal ? Number((mainlineTop1Hits / mainlineTotal * 100).toFixed(1)) : null,
+      mainlineTop3Rate: mainlineTotal ? Number((mainlineTop3Hits / mainlineTotal * 100).toFixed(1)) : null,
     },
-    note: '收盘涨幅按收盘价库计算；最高涨幅字段待接入日内高点数据后启用。',
+    note: '收盘涨幅按收盘价库计算；主线命中按当日盘后主因库家族格局;最高涨幅字段待接入日内高点数据后启用。',
   };
 }
 

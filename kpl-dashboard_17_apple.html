@@ -7301,6 +7301,21 @@
   body.view-strategy .mlr-gain.down { color: #0bd06a; }
   body.view-strategy .mlr-gain.flat, body.view-strategy .mlr-na { color: #aebed6; }
   body.view-strategy .mlr-win { font-weight: 800; }
+  body.view-strategy .mlr-chip {
+    font-weight: 780; font-size: 11px; padding: 2px 8px; border-radius: 999px;
+    border: 1px solid rgba(255,215,138,0.35); color: #ffd78a; background: rgba(255,215,138,0.08);
+  }
+  body.view-strategy .mlr-chip.near { border-color: rgba(174,190,214,0.3); color: #cfe0f5; background: rgba(174,190,214,0.07); }
+  body.view-strategy .mlr-hit { font-weight: 780; font-size: 11px; padding: 1px 7px; border-radius: 999px; }
+  body.view-strategy .mlr-hit.ok { color: #ffd78a; border: 1px solid rgba(255,215,138,0.4); }
+  body.view-strategy .mlr-hit.near { color: #cfe0f5; border: 1px solid rgba(174,190,214,0.35); }
+  body.view-strategy .mlr-hit.miss { color: rgba(174,190,214,0.65); border: 1px solid rgba(174,190,214,0.2); }
+  body.view-strategy .mlr-hit.na { color: rgba(174,190,214,0.45); }
+  body.view-strategy .mlr-actual { color: rgba(174,190,214,0.85); }
+  body.view-strategy .mlr-actual i { font-style: normal; color: rgba(174,190,214,0.6); font-size: 11px; margin-left: 3px; }
+  body.view-strategy .mlr-phase { font-style: normal; color: rgba(174,190,214,0.55); font-size: 10px; margin-left: 4px; }
+  body.view-strategy .mlr-seal { font-style: normal; font-size: 10px; padding: 0 4px; border-radius: 4px; color: rgba(174,190,214,0.6); border: 1px solid rgba(174,190,214,0.25); }
+  body.view-strategy .mlr-seal.on { color: #ff8f8f; border-color: rgba(255,143,143,0.4); }
   body.view-strategy .ml-trend {
     display: inline-flex;
     align-items: center;
@@ -11437,24 +11452,47 @@ function renderMainlineReviewHTML(d) {
   const rows = (d && d.days) || [];
   if (!rows.length) return '';
   const stats = d.stats || {};
-  const gainCell = (s) => {
+  const gainCell = (s, withSeal) => {
     if (!s) return '<span class="mlr-na">—</span>';
+    const seal = withSeal && s.sealedSameDay != null
+      ? (s.sealedSameDay ? '<i class="mlr-seal on" title="预判后当日封板确认">封✓</i>' : '<i class="mlr-seal" title="预判后当日未封板">未封</i>')
+      : '';
     const g = s.nextCloseGain;
-    if (g == null) return `<span class="mlr-name">${escapeHTML(s.name || s.code || '')}</span><span class="mlr-na">—</span>`;
+    if (g == null) return `<span class="mlr-name">${escapeHTML(s.name || s.code || '')}</span>${seal}<span class="mlr-na">—</span>`;
     const cls = g > 0 ? 'up' : (g < 0 ? 'down' : 'flat');
-    return `<span class="mlr-name">${escapeHTML(s.name || s.code || '')}</span><span class="mlr-gain ${cls}">${g > 0 ? '+' : ''}${g}%</span><span class="mlr-win">${s.win ? '✓' : '✗'}</span>`;
+    return `<span class="mlr-name">${escapeHTML(s.name || s.code || '')}</span>${seal}<span class="mlr-gain ${cls}">${g > 0 ? '+' : ''}${g}%</span><span class="mlr-win">${s.win ? '✓' : '✗'}</span>`;
+  };
+  // 主线命中徽标:✓=预判即当日实际第一家族;△=实际第一家族在预判前三;✗=脱靶;—=盘后主因库未生成(当日盘中)
+  const hitCell = (r) => {
+    if (r.mainlineHitTop1 == null) return '<span class="mlr-hit na" title="盘后主因库尚未生成,暂无法评判">—</span>';
+    if (r.mainlineHitTop1) return '<span class="mlr-hit ok" title="预判主线 = 当日实际第一家族">✓命中</span>';
+    if (r.mainlineHitTop3) return '<span class="mlr-hit near" title="实际第一家族在预判前三内">△前三</span>';
+    return '<span class="mlr-hit miss" title="实际第一家族不在预判前三">✗脱靶</span>';
+  };
+  const actualCell = (r) => {
+    const top = Array.isArray(r.actualTop) ? r.actualTop : [];
+    if (!top.length) return '';
+    const first = top[0];
+    const rest = top.slice(1).map(t => `${escapeHTML(t.theme)}${t.count}`).join(' · ');
+    return `<span class="mlr-actual" title="当日盘后主因库家族涨停数前三${rest ? ':' + escapeHTML(first.theme) + first.count + ' · ' + rest : ''}">实际 ${escapeHTML(first.theme)}<i>${first.count}涨停</i></span>`;
   };
   const body = rows.map(r => `<div class="mlr-row">
     <span class="mlr-day">${escapeHTML(String(r.day || '').slice(5))}</span>
-    <span class="mlr-theme">${escapeHTML(r.theme || '')}${r.confirmed ? '<i title="管理员确认的当日主线">✔</i>' : ''}</span>
-    <span class="mlr-slot">明星 ${gainCell(r.star)}</span>
-    <span class="mlr-slot">龙头 ${gainCell(r.leader)}</span>
+    <span class="mlr-theme">${escapeHTML(r.theme || '')}${r.confirmed ? '<i title="管理员确认的当日主线">✔</i>' : ''}${r.phase ? `<em class="mlr-phase" title="预判冻结时点">${escapeHTML(r.phase)}</em>` : ''}</span>
+    ${hitCell(r)}
+    ${actualCell(r)}
+    <span class="mlr-slot">明星 ${gainCell(r.star, true)}</span>
+    <span class="mlr-slot">龙头 ${gainCell(r.leader, false)}</span>
   </div>`).join('');
   const rate = (wins, total, pct) => total ? `${wins}/${total}${pct != null ? `(${pct}%)` : ''}` : '--';
+  const mlChips = stats.mainlineTotal
+    ? `<b class="mlr-chip">主线命中 ${rate(stats.mainlineTop1Hits, stats.mainlineTotal, stats.mainlineTop1Rate)}</b><b class="mlr-chip near">前三 ${rate(stats.mainlineTop3Hits, stats.mainlineTotal, stats.mainlineTop3Rate)}</b>`
+    : '';
   return `<section class="ml-review">
     <div class="mlr-head">
-      <span>预判回看</span>
-      <small>明星次日胜率 ${rate(stats.starWins, stats.starTotal, stats.starWinRate)} · 龙头次日胜率 ${rate(stats.leaderWins, stats.leaderTotal, stats.leaderWinRate)} · 按次日收盘涨幅统计</small>
+      <span>📋 预判回看</span>
+      ${mlChips}
+      <small>明星次日胜率 ${rate(stats.starWins, stats.starTotal, stats.starWinRate)} · 龙头次日胜率 ${rate(stats.leaderWins, stats.leaderTotal, stats.leaderWinRate)} · 主线按当日盘后主因库家族格局评判,个股按次日收盘涨幅</small>
     </div>
     ${body}
   </section>`;

@@ -3288,3 +3288,31 @@ Deployment:
 
 Notes for next agent:
 - 不重建 2026-07-08 冻结盘中预测快照；需要追溯时使用管理员 `review=1` 三方对照。云端真实 Token、会话值、数据库和诊断证据 JSON 均未进入 Git。
+
+## 2026-07-12 - Claude - 策略页「预判回看」整合升级(主线命中评估)
+
+Changed:
+- Owner 7-11 需求"在策略页单独设计一个内容,把预判回看也一起整合进去"落地。原区块只回看「明星/龙头次日涨幅」,从不评判**主线预判本身**是否命中(7-08 问题正是主线归属错了)。本次在既有 `/api/strategy-mainline-review` 上做加法:
+  - 新增纯函数 `strategyMainlineActualFamilyRanking`:当日盘后主因库按主线家族(strategyMainlineFamilyInfo,与主线榜合并口径一致)统计涨停数排名 = 当日实际格局;
+  - 每行新增 `phase`(预判冻结时点)、`actualTop`(实际前三家族+涨停数)、`mainlineHitTop1/Top3`(预判主线家族==实际第一家族 / 实际第一家族∈预判前三家族);盘后主因库缺失(含当日盘中)→ 命中记 null、不计分母,不装有数据;
+  - 预判明星补 `star.sealedSameDay`(盘中预判的明星最终是否进当日涨停底库 = 预期明星→明星确认);
+  - stats 新增主线命中 top1/top3 次数与百分比;**旧字段与旧胜率口径原样保留**。
+- 前端(kpl-dashboard_17_apple.html)预判回看区块升级:头部加「主线命中/前三命中」徽章,每行显示 预判主线(冻结时点)→ 实际第一家族(✓命中/△前三/✗脱靶/—无数据)+ 明星当日封板(封✓/未封)+ 原次日涨幅;新增 mlr-chip/mlr-hit/mlr-actual/mlr-phase/mlr-seal 样式,沿用现有设计语言,无结构重排。
+
+Files:
+- `kpl-stats-server.js`(strategyMainlineActualFamilyRanking + getStrategyMainlineReview 扩展)
+- `kpl-dashboard_17_apple.html`(renderMainlineReviewHTML + CSS)
+- `tests/mainline-review.test.js`(新增 18 项:家族格局过滤/同族命中/top3 命中/缺库 null/封板确认/旧字段旧胜率兼容,家族链走生产实现)
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check` 服务端通过;dashboard 内联脚本抽出后 `node --check` 通过;渲染函数用夹具跑通(含空数据、旧后端无主线统计字段时不渲染新徽章的兼容分支)。
+- 全部 14 套相关测试通过(mainline-review 18 项新增,其余无回归)。
+- 接口向后兼容:旧字段不动,前端对 null/缺字段全部容错——server 与 html 同仓同部署,无版本错配窗口。
+
+Deployment:
+- 仅 GitHub,未部署、未重启。合并后 Codex 正常部署即可,无需数据迁移;预判文件(mainline-predict-*.json)与主因库为既有产物,端点纯读。
+
+Notes for next agent:
+- 主线命中分母只含「盘后主因库已生成」的日子;当天盘中永远显示"—",这是口径而非 bug。
+- predict-records 攒满 10 天后(约 7-24),此区块的主线命中率即可作为 phase-2 语义讨论的输入。
