@@ -59,30 +59,47 @@ async function scanBoardSnapshotContamination(options = {}) {
   const suspected = [];
   const suppressed = [];
   const inspected = [];
+
+  // 逐文件读取解析(缓存),避免任一文件损坏/缺失影响其它文件的判定
+  const parsed = new Map();
+  for (const d of days) {
+    try {
+      const raw = fs.readFileSync(path.join(snapshotDir, `${d}.json`), 'utf8');
+      parsed.set(d, { raw, json: JSON.parse(raw) });
+    } catch { parsed.set(d, null); }
+  }
+
+  // 第一遍:识别写入器显式状态(boardsStale / 非完全可信),不依赖前一文件。
+  // 新写入器产物:板块事实已被抑制/本日不可用 → 属「已抑制」,绝不能标 contaminated。
+  const suppressedDays = new Set();
+  for (const d of days) {
+    const entry = parsed.get(d);
+    if (!entry) continue;
+    const cur = entry.json;
+    const writerSuppressed = cur && (cur.boardsStale === true ||
+      cur.boardsFullyTrusted === false ||
+      (typeof cur.boardsUnavailableReason === 'string' && cur.boardsUnavailableReason));
+    if (writerSuppressed) {
+      suppressedDays.add(d);
+      suppressed.push({
+        targetDay: d, state: 'suppressed',
+        boardsSourceDay: cur.boardsSourceDay || null,
+        path: `strategy-data/snapshots/${d}.json`,
+        reason: cur.boardsUnavailableReason || 'writer-suppressed-no-board-facts',
+      });
+    }
+  }
+
+  // 第二遍:对未被显式抑制的文件做前日指标比较(检测旧写入器留下的真跨日复制值)
   for (let i = 1; i < days.length; i++) {
     const prevDay = days[i - 1];
     const curDay = days[i];
-    const curFile = path.join(snapshotDir, `${curDay}.json`);
-    let curRaw, prevRaw;
-    try { curRaw = fs.readFileSync(curFile, 'utf8'); prevRaw = fs.readFileSync(path.join(snapshotDir, `${prevDay}.json`), 'utf8'); }
-    catch { continue; }
-    let cur, prev;
-    try { cur = JSON.parse(curRaw); prev = JSON.parse(prevRaw); } catch { continue; }
-
-    // 新写入器产物:boardsStale=true 表示跨日回退已被拒绝、boards 已清空,
-    // 文件不含昨日板块值 → 属「已抑制/本日事实缺失」,绝不能标 contaminated(那会污染 P6 判别联合)。
-    if (cur && cur.boardsStale === true) {
-      suppressed.push({
-        targetDay: curDay, state: 'suppressed',
-        boardsSourceDay: cur.boardsSourceDay || null,
-        path: `strategy-data/snapshots/${curDay}.json`,
-        reason: 'writer-suppressed-cross-day-fallback (no board facts persisted)',
-      });
-      continue;
-    }
-
-    const curM = boardMetrics(cur);
-    const prevM = boardMetrics(prev);
+    if (suppressedDays.has(curDay)) continue;
+    const curEntry = parsed.get(curDay);
+    const prevEntry = parsed.get(prevDay);
+    if (!curEntry || !prevEntry) continue;
+    const curM = boardMetrics(curEntry.json);
+    const prevM = boardMetrics(prevEntry.json);
     const commonKeys = [...curM.keys()].filter(k => prevM.has(k) && meaningful(curM.get(k)) && meaningful(prevM.get(k)));
     if (!commonKeys.length) { inspected.push({ curDay, prevDay, compared: 0, equal: 0 }); continue; }
     const equal = commonKeys.filter(k => sameBoard(curM.get(k), prevM.get(k))).length;
@@ -92,7 +109,7 @@ async function scanBoardSnapshotContamination(options = {}) {
       suspected.push({
         targetDay: curDay, state: 'contaminated',
         observedSourceDay: prevDay,
-        observedSha256: crypto.createHash('sha256').update(curRaw).digest('hex'),
+        observedSha256: crypto.createHash('sha256').update(curEntry.raw).digest('hex'),
         path: `strategy-data/snapshots/${curDay}.json`,
         reason: `board-metrics-identical-to-prev-day (${equal}/${commonKeys.length} boards)`,
         equalBoards: equal, comparedBoards: commonKeys.length,
@@ -102,7 +119,18 @@ async function scanBoardSnapshotContamination(options = {}) {
   return { snapshotDir, dayCount: days.length, minEqualBoards, minRatio, suspected, suppressed, inspected };
 }
 
-module.exports = { scanBoardSnapshotContamination };
+// 把扫描报告转成 data-quality 判别联合清单条目(CLI 与测试共用,保证 emit 路径一致)
+function manifestEntriesFromReport(report) {
+  return [
+    ...(report.suspected || []).map(({ equalBoards, comparedBoards, ...e }) => e),
+    ...(report.suppressed || []).map(s => ({
+      expectedPath: s.path, state: 'missing', targetDay: s.targetDay,
+      reason: s.reason, sha256: null,
+    })),
+  ];
+}
+
+module.exports = { scanBoardSnapshotContamination, manifestEntriesFromReport };
 
 if (require.main === module) {
   const args = process.argv.slice(2);
@@ -114,7 +142,10 @@ if (require.main === module) {
     minRatio: opt('ratio') !== undefined ? Number(opt('ratio')) : undefined,
   }).then(report => {
     if (emit) {
-      console.log(JSON.stringify({ entries: report.suspected.map(({ equalBoards, comparedBoards, ...e }) => e) }, null, 2));
+      // 判别联合:contaminated(文件含跨日复制值,带 observedSha256/observedSourceDay);
+      // suppressed → missing 形状(文件已抑制、本日板块事实不可用,expectedPath + sha256:null),
+      // 使现有 loadStrategySnapshotForDailyEvents 直接判为不可用,而不是只在控制台展示。
+      console.log(JSON.stringify({ entries: manifestEntriesFromReport(report) }, null, 2));
     } else {
       console.log(`扫描 ${report.dayCount} 天,阈值 equal>=${report.minEqualBoards} 且 ratio>=${report.minRatio}`);
       console.log(`可疑跨日污染日(contaminated):${report.suspected.length}`);
