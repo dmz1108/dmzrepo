@@ -3736,3 +3736,24 @@ Deployment:
 
 Notes for next agent:
 - 本次只替换静态行情HTML;v3评分模块虽已合并main,仍未接入或部署,云端正式龙头榜继续使用v2。
+
+## 2026-07-13 - Claude - P6 规格:事件档案 v2 状态转换表与测试案例(仅文档)
+
+Changed:
+- 新增 `docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md`:P6 完整性收窄的精确状态转换表(日级 S1-S5、行级 R1-R7、评分器 E1-E8)、迁移与再生成规则、14 个必备测试案例、两日验收重跑预期。
+- 采纳 Owner 四点修正:污染快照不改名不删除、由 data-quality 清单隔离并在生成器读取前查验(SNAP 定义);明星不可考日 starEvidenceStatus 必须为 unscanned;reconstructed 确认主线默认不进计分,等家族级 canonicalSource 裁定;联合污染检测归 P1 范围引用。
+- 核心原则成文:收窄只在生成器层做(行级证据写细 + R5 显式不确定行),评分器保持偏执、零新增数据源依赖;DAILY_EVENT_POINTS 与趋势系数零改动;v1 档案走 E2 兼容旧闸。
+
+Files:
+- docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md(新增)
+- docs/DAILY_HANDOFF.md
+
+Validated:
+- 仅文档,无代码改动;规格与 06-23/07-02 两个实证日(07-01 替代验收 0/74、07-08 验收 0/90 的共同根因)逐一对齐;S2 行级三分法此前已用 07-08 批次1 真实数据实测(20 只:18 无事件确定、1 涨停确定、1 不可判定)。
+
+Deployment:
+- 无。未部署、未重启、未改 v2 榜、未启动 PR4。
+
+Notes for next agent:
+- Codex:按本规格实现 P6(先 S2+S5,S4 定义保留),T1-T14 全覆盖,S1 黄金不变性是硬门;实现 PR 保持 Draft 交 Claude 复审。
+- 悬决两项(规格 §6)需 Owner 拍板:S4 启用时机;reconstructed 是否随 canonicalSource 裁定升级为可计分。
