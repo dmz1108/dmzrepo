@@ -22,12 +22,18 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
 const STRATEGY_MAINLINE_BIG_GAIN_PCT = 5;
 const limitUpThreshold = (code) => /^(30|68)/.test(String(code || '')) ? 20 : 10;
 const normalizeReasonSourceCode = c => String(c || '').trim();
+const numOrNull = value => {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+};
 // 二审修正1:第三键只计与当前板块同题材的历史命中。题材匹配走真实 strategyMainlineBoardThemeRelated,
 // 仅 stub 其依赖(topicKey 归一化、分类学查询返回空)。
 const strategyMainlineTopicKey = t => String(t || '').trim().toLowerCase();
 const strategyThemeTaxonomyInfo = () => null;
 eval(extractFn('strategyMainlineBoardThemeRelated'));
 eval(extractFn('strategyMainlineScanPriorityCodes'));
+eval(extractFn('strategyNormRealtimeStocks'));
 
 (async () => {
   // 1. 真实数据链路(评审修正2):主因命中次数从 buildStrategyMainlinePriorReasonContext 的 byCode 来,
@@ -109,30 +115,38 @@ eval(extractFn('strategyMainlineScanPriorityCodes'));
     plateId: 'p2', boardName: '板二', day: '2026-07-11',
     stocks: [
       { code: '600010', name: 'A', gainPct: 9 },
-      { code: '600011', name: 'B', gainPct: 8 },
-      { code: '600012', name: 'C', gainPct: 7 },
+      { code: '600011', name: 'B', gainPct: 8, price: 12.5, priceSource: 'eastmoney-board-realtime' },
+      { code: '600012', name: 'C', gainPct: 7, price: 9.9, priceSource: 'eastmoney-board-realtime' },
       { code: '600013', name: 'D', gainPct: 6 },
     ],
     priorityCodes: ['600012', '600011'],
   });
   const claimed2 = q.claim({ token: 'x'.repeat(24), workerId: 'w1', version: 'p1w-test' });
   A(JSON.stringify(claimed2.job.stocks.map(s => s.code)) === JSON.stringify(['600011', '600012', '600010', '600013']), '优先组 B8>C7 在前,普通组 A9>D6 在后');
+  A(claimed2.job.stocks[0].price === 12.5 && !!claimed2.job.stocks[0].priceAsOf, '任务向 worker 保留实时现价及快照时间');
 
   // 5. job 指标(评审修正4):五档齐全=每档四项金额均为有限数值,0 合法,空对象不算
   const fullBucket = (v = 0) => ({ activeBuy: v, activeSell: v, passiveBuy: v, passiveSell: v });
   const fiveFull = { '500000': fullBucket(1e6), '3000000': fullBucket(0), '5000000': fullBucket(2e6), '8000000': fullBucket(0), '10000000': fullBucket(0) };
   const fiveWithEmptyObj = { ...fiveFull, '10000000': {} };
   q.update({ token: 'x'.repeat(24), jobId: job2.jobId, results: [
-    { code: '600011', name: 'B', price: 12.5, thresholds: fiveFull },          // 齐全(含全零档,0 合法)
+    { code: '600011', name: 'B', thresholds: fiveFull },          // worker 缺价,从任务快照补 12.5
     { code: '600012', name: 'C', lastPrice: 8.8, thresholds: fiveWithEmptyObj },  // 只回传 lastPrice 也算有价格(二审修正2);空对象档 → 不齐全
     { code: '600010', name: 'A', thresholds: { '500000': fullBucket(1) } },    // 缺档 → 不齐全,且无任何价格字段
   ] });
   const after = q.get(job2.jobId);
   A(after.metrics.resultRows === 3 && after.metrics.rowsWithPrice === 2, 'job 指标:价格覆盖统一策略口径(price ?? close ?? lastPrice),lastPrice-only 行计入');
+  const resultByCode = new Map(after.results.map(row => [row.code, row]));
+  A(resultByCode.get('600011').price === 12.5 && resultByCode.get('600011').priceSource === 'eastmoney-board-realtime', 'worker 缺价时按 code 回填任务实时价及来源');
+  A(resultByCode.get('600012').price === 8.8 && resultByCode.get('600012').priceSource === 'worker-result', 'worker 自带价格优先于任务快照价');
   A(after.metrics.rowsWithAllBuckets === 1, '五档齐全只认四项金额均有限数值(全零档合法,空对象与缺档不算)');
   A(!!after.firstResultAt && q.get(job2.jobId).workerVersion === 'p1w-test', '首批时间与版本盖章');
   q.update({ token: 'x'.repeat(24), jobId: job2.jobId, version: 'p1w-test2', results: [] });
   A(q.get(job2.jobId).workerVersion === 'p1w-test2', 'update 可更新 worker 版本');
+
+  const normalizedPrice = strategyNormRealtimeStocks([{ code: '600100', name: '现价股', close: 18.6, gain: 3.2 }], 'eastmoney-board-realtime')[0];
+  A(normalizedPrice.price === 18.6 && normalizedPrice.priceSource === 'eastmoney-board-realtime', '实时成分标准化保留现价与来源');
+  A(src.includes("price: numOrNull(row?.[5])") && src.includes("priceSource: 'kpl-board-realtime'"), 'KPL 实时成分映射保留 row[5] 现价');
 
   console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL SCAN-PRIORITY CHECKS PASSED');
 })();
