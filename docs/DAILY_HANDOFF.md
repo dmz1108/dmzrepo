@@ -3816,3 +3816,17 @@ Files: docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md(rev5)、docs/DAILY_HAND
 Validated: 仅文档;rev4 派生标志(mainlineKnowable/noneDeterminable/逐股三分)对 S4/S5 本已推导出与 Owner 裁定一致的行为,本轮为范围放开+状态表补行+测试补三条,无机制重设计。
 
 Deployment: 无。等 Codex 复核 rev5;§7 仅余 reconstructed 一项待裁;不实现、不部署、不启动 PR4。
+
+## 2026-07-13 - Claude - P6 规格 rev6:按 Codex 五审两项阻断修订
+
+Changed:
+- 新增 §2.1 逐股事件决策树为唯一真值(LU→逐股涨停→逐股家族证据→CL→主线可知性);S1-S5 降为诊断标签不作互斥控制流;五审反例(mainlineKnowable∧¬CL 把成分股误判 0)以 R5b 显式行修复,E7 原因改为 ['closePrice','confirmedMainlineUnknown']。
+- 新增 familyEvidenceForStock(X) ∈ {reliable, missing} 显式判定(missingMainReasonCodes 优先;provenance 落 sourceReason;多家族分别发行);T15 改用该状态。
+- 一处精化待 Codex 复核:mainlineKnowable∧¬CL 下非成分股判 none 0(8 分因非成分即被排除,不依赖涨幅),成分股按建议阻断;若 Codex 不接受可整支退回保守口径。
+- T16 修正、新增 T16b(五审反例夹具)、T17 收紧为「同窗含已确认事件+缺失事件」双条件断言。
+
+Files: docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md(rev6)、docs/DAILY_HANDOFF.md
+
+Validated: 仅文档;两项阻断逐条修订;noneDeterminable 布尔保留但仅在 R5b 如约发射前提下与决策树等价(已注明)。
+
+Deployment: 无。等 Codex 复核 rev6;不实现、不部署、不启动 PR4。

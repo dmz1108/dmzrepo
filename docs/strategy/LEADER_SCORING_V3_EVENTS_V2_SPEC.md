@@ -1,7 +1,7 @@
-# P6 规格:每日事件档案 v2 完整性收窄 — 状态转换表与测试案例(rev5)
+# P6 规格:每日事件档案 v2 完整性收窄 — 状态转换表与测试案例(rev6)
 
-状态:语义经 Codex 四轮评审通过后,按 Owner 2026-07-13 口径修正扩展 S4/S5;待 Codex 复核、Owner 定稿。本文档只定义规则,不是实现。
-作者:Claude(2026-07-13,rev5)。依据:Owner 对 P6 提前实施的确认与四点修正;06-23 / 07-02 两个缺原始快照日分别导致 07-01 替代验收 0/74、07-08 验收 0/90 的实证。
+状态:按 Codex 五审两项阻断修订(逐股决策树为唯一真值;逐股家族归属状态显式化);待 Codex 复核、Owner 定稿。本文档只定义规则,不是实现。
+作者:Claude(2026-07-13,rev6)。依据:Owner 对 P6 提前实施的确认与四点修正;06-23 / 07-02 两个缺原始快照日分别导致 07-01 替代验收 0/74、07-08 验收 0/90 的实证。
 
 ## 0. 范围与非目标
 
@@ -49,10 +49,35 @@
 | CL | 收盘库完整 | `closeComplete` |
 | SNAP | 冻结主线快照可用(**含全链 provenance**,Codex 三审 #2) | 由加载层判定后以 `quality.snapshotStatus='ok'` 传入。`ok` 的充要条件:冻结主线快照存在 ∧ **构建依赖链三层全部干净**——冻结层、综合层、当日必需的原始板块快照 `kpl-snapshots/{5,6,7}` 均无 missing/contaminated 清单条目且原始层文件齐全。任一必需原始 zs5/zs6/zs7 缺失或污染,或综合/冻结层污染 → `snapshotStatus ≠ ok`(missing/quarantined + snapshotEvidence 落档)。若某层确实不属于当日冻结快照的构建依赖,必须由显式 provenance 元数据证明后方可豁免,禁止默认忽略 |
 
-派生:
+派生(仅作实现便利,**语义以 §2.1 逐股决策树为唯一真值**):
 - `mainlineKnowable = LU ∧ MR ∧ SNAP`
 - `rowsAuthoritative = LU`
-- `noneDeterminable = LU ∧ (mainlineKnowable ∨ CL)`
+- `noneDeterminable = LU ∧ (mainlineKnowable ∨ CL)`(该布尔只在 R5b 行如约发射的前提下才与决策树等价,见 §2.1 注)
+
+**逐股家族归属状态**(Codex 五审 #2):`familyEvidenceForStock(X) ∈ {reliable, missing}`:
+
+| 值 | 判定(优先级从上到下) |
+|---|---|
+| `missing` | X ∈ `missingMainReasonCodes`;或 X 无四源综合主因记录;或记录的 `finalBoardTopic` 经 `familyForTheme` 无法映射到任何主线家族 |
+| `reliable` | 以上皆否:X 有四源综合主因记录 ∧ 主题可映射家族。provenance 落行内 `sourceReason.finalBoardTopic/finalDetailReason` |
+
+现行管线一码一记录一家族;若未来同股出现多家族证据,按家族分别发事件行(评分器本就按 familyKey 过滤,非对称记录规则兼容),不合并不去重。
+
+### 2.1 逐股事件决策树(唯一真值;S1-S5 仅为输入组合的诊断标签,不构成互斥控制流)
+
+对家族 G 评分时,股票 X 在日 D 的事件判定:
+
+1. ¬LU → 全局 `dataMissing:['limitUpDbUnreliable']`(唯一全日闸)。
+2. X 在可信涨停库:
+   - `familyEvidenceForStock(X)=reliable` → 15/20(明星按逐股三分 `starEvidenceStatusForStock`);
+   - `=missing` → `dataMissing:['mainReasonFamily']`(只阻断 X)。
+3. X 不在涨停库(未板):
+   - **mainlineKnowable ∧ CL** → X 属确认主线成分且 gain>5% → 8;否则 none 0;
+   - **mainlineKnowable ∧ ¬CL** → X 属确认主线成分 → `dataMissing:['closePrice']`(8 分依赖涨幅,不可判);X **不属任何确认主线成分** → none 0(8 分因非成分即被排除,不依赖涨幅——见下注);
+   - **¬mainlineKnowable ∧ CL** → gain>5% → `dataMissing:['confirmedMainlineUnknown']`;gain≤5% → none 0;
+   - **¬mainlineKnowable ∧ ¬CL** → `dataMissing:['closePrice','confirmedMainlineUnknown']`(0/8 均不可判)。
+
+**注(对 Codex 五审 #1 决策树的一处精化,请复核)**:五审建议「CL 缺失 → 一律 closePrice dataMissing」。本规格在 mainlineKnowable∧¬CL 分支细分:确认主线**成分股**按建议阻断;**非成分股**判 none 0——因为 8 分要求「成分 ∧ >5%」两条件,非成分单条即被排除,none 0 的确定性不依赖收盘涨幅,符合「缺什么只阻断依赖它的分数」。为使评分器可判定,该分支要求生成器发射 R5b 显式行(§3),行缺席才能安全解释为「非成分 → none 0」。若 Codex 认为此精化引入不可接受的复杂度,可整支退回「¬CL 一律 closePrice」的保守口径,只需删 R5b 与该子分支。
 
 **明星证据按股票逐只三分,不留空洞**(Codex 三审 #1;二审 #1 的家族级判定升级为逐股判定)。对每只涨停股 X,`starEvidenceStatusForStock(X)` 三值,判定全部显式、禁止日期条件、空数组不算证据:
 
@@ -85,9 +110,10 @@
 | R2b | X 涨停 ∧ 归属 G ∧ 状态 = unscanned | `ordinary-limit-up` 15,starEvidenceStatus=**unscanned**(下界 15,Owner 已裁定) |
 | R3 | X 涨停 ∧ 无法归属 | `data-missing`,`['mainReasonFamily']`(不变) |
 | R4 | X 未涨停 ∧ mainlineKnowable ∧ 确认主线成分 ∧ 收盘涨幅>5% | `confirmed-mainline-big-gain` 8(不变) |
-| R5 | X 未涨停 ∧ ¬mainlineKnowable ∧ CL ∧ 收盘涨幅>5% | **新增显式行**:`data-missing`,`['confirmedMainlineUnknown']`,附 closeGainPct;发射范围=当日全部「>5% 未涨停」股(有界) |
-| R6 | X 未涨停 ∧ noneDeterminable ∧ 非 R5 | 不发射(缺席=none 0,评分器判定) |
-| R7 | X 未涨停 ∧ ¬noneDeterminable | 不发射;由日级 noneDeterminable=false 兜底 |
+| R5 | X 未涨停 ∧ ¬mainlineKnowable ∧ CL ∧ 收盘涨幅>5% | **显式行**:`data-missing`,`['confirmedMainlineUnknown']`,附 closeGainPct;发射范围=当日全部「>5% 未涨停」股(有界) |
+| R5b | X 未涨停 ∧ mainlineKnowable ∧ ¬CL ∧ X 属确认主线成分(familyEvidenceCodes) | **显式行**:`data-missing`,`['closePrice']`;发射范围=确认主线成分中未涨停股(有界)。本行是 §2.1 精化分支的前提:发射后行缺席才可安全解释为「非成分 → none 0」 |
+| R6 | X 未涨停 ∧ 按 §2.1 决策树判 none 0 ∧ 非 R5/R5b | 不发射(缺席=none 0,评分器判定) |
+| R7 | X 未涨停 ∧ ¬mainlineKnowable ∧ ¬CL | 不发射;由日级 noneDeterminable=false 兜底(E7 输出 `['closePrice','confirmedMainlineUnknown']`) |
 
 R1/R2a/R2b 与 `starEvidenceStatusForStock` 三值一一对应,**任何涨停且可归属的股票必落入其一,不存在漏行空洞**(Codex 三审 #1 的 B 股案例:同族 A=positive→20,B 无自身证据且无覆盖证据→unscanned→15,行不丢失)。
 
@@ -102,8 +128,8 @@ v2 档案日级新增:`stockEvents.rowsAuthoritative`、`stockEvents.noneDetermi
 | E3 | v2 ∧ rowsAuthoritative≠true | `['limitUpDbUnreliable']` |
 | E4 | X 任一行 dataMissing / historyEligible=false | dataMissing 透传行内原因(不变) |
 | E5 | 有同族有效行 | 互斥取最高(不变) |
-| E6 | 无同族行 ∧ noneDeterminable=true | none 0,complete |
-| E7 | 无同族行 ∧ noneDeterminable≠true | `['noneUndeterminable']` |
+| E6 | 无同族行 ∧ noneDeterminable=true | none 0,complete(前提:R5/R5b 已如约发射,行缺席=确定无事件) |
+| E7 | 无同族行 ∧ noneDeterminable≠true | dataMissing `['closePrice','confirmedMainlineUnknown']`(0/8 均不可判,替代旧笼统标签 noneUndeterminable) |
 | E8 | event rule ∉ {v1,v2} | `['dailyEventRuleVersion']`(不变) |
 
 **scoreVersion 升级**(Codex 阻断 #4):评分器以 v2 闸运行时输出 `LEADER_SCORING_V3_SCORE_VERSION = 'leader-scoring-v3-shadow-v2'`,新旧报告可审计区分;event rule v1/v2 同时接受。`scoreToday`、资格门、趋势锚、互斥、tieBreakers:全部不变。日级顶层 `complete` 含义不变,v2 模式评分器不再读它。
@@ -137,9 +163,10 @@ v2 档案日级新增:`stockEvents.rowsAuthoritative`、`stockEvents.noneDetermi
 | T12 | 未知 event rule | `dailyEventRuleVersion`(不变) |
 | T13 | 端到端:07-08 星网形状(07-02 换 v2 档案) | 整窗 complete,formalScore 非空,basis=confirmed-target-day-family-limit-up |
 | T14 | 端到端:600405 形状 | 仍 incomplete(`trend:gain10/gain30`),收窄不外溢趋势层 |
-| T15 | S4 日:同日 A 涨停且归属可靠,B 涨停但缺归属 | A 正常 15(或凭自身正证据 20);**仅 B** `dataMissing:['mainReasonFamily']`;MR 全局不完整不阻断 A |
-| T16 | S5 日(¬CL):涨停归属股 + 未板股 | 涨停股正常 15/20;未板股 E7 → `noneUndeterminable`;**断言涨停行未被反向清除** |
-| T17 | 总分 incomplete 审计不变量:窗口含缺失日/趋势缺失,但窗口内有已确认事件 | formalScore=null 的同时,`history.knownPoints` 与 `history.evidence` 中已确认事件分及 provenance 完整保留、可审计 |
+| T15 | S4 日:同日 A `familyEvidenceForStock=reliable`,B `=missing`(B ∈ missingMainReasonCodes) | A 正常 15(或凭自身正证据 20);**仅 B** `dataMissing:['mainReasonFamily']`;判定必须走显式逐股状态,不用日级 MR |
+| T16 | ¬mainlineKnowable ∧ ¬CL 日:涨停归属股 + 未板股 | 涨停股正常 15/20;未板股 E7 → `['closePrice','confirmedMainlineUnknown']`;**断言涨停行未被反向清除** |
+| T16b | **Codex 五审反例**:mainlineKnowable ∧ ¬CL,确认主线成分未板股 M + 非成分未板股 N | M 收到 R5b 行 → `dataMissing:['closePrice']`(**绝不判 0**);N 无行 → none 0(非成分排除 8 分,不依赖涨幅) |
+| T17 | 总分 incomplete 审计不变量:同一窗口**同时含**≥1 个已确认 15/20 事件与 ≥1 个缺失事件/趋势缺失 | 断言 formalScore=null,且该已确认事件分与 provenance 在 `history.knownPoints` / `history.evidence` 中完整保留、可审计 |
 
 **验收重跑测算预期(非验收承诺,最终以锁定输入与三组 SHA 为准)**:07-08 约 87/90、07-01 约 60/74;两日各出首份合规 v2/v3 正式名次对照表。实现后由 Codex 执行、Claude 复核,不得据测算预期预先宣布 v3 优劣。
 
