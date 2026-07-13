@@ -20779,6 +20779,8 @@ async function getStrategyBoardsForDay(day, options = {}) {
           netInflow: Number(b?.netInflow ?? b?.mainInflow ?? b?.inflow ?? NaN),
           zsType,
           qiLeaders: computeBoardQiLeaders(cardData[plateId]),
+          sourceDay: useDay,       // P1 防跨日污染:板块数据真实来源日,回退时 ≠ requestedDay
+          sourceKind: 'snapshot',
         });
       }
     } catch {}
@@ -20814,6 +20816,8 @@ async function getStrategyBoardsForDay(day, options = {}) {
               netInflow: Number(board?.netInflow ?? board?.mainInflow ?? board?.inflow ?? NaN),
               zsType,
               qiLeaders: null,
+              sourceDay: requestedDay,   // P1:实时行情属于请求日本身,非回退
+              sourceKind: 'live',
             };
             const existing = liveOutByKey.get(liveKey);
             if (existing) {

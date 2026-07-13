@@ -260,8 +260,14 @@ function createStrategyBackend(opts = {}) {
       liveRankCount: 500,
       includeBoards: focusRaw.map((b) => ({ plateId: b.plateId, zsType: b.zsType })),
     } : {};
-    const boards = (await getBoards(day, boardOptions).catch(() => []))
+    const rawBoards = (await getBoards(day, boardOptions).catch(() => []))
       .filter((b) => !isHiddenBoard(b, hidden));
+    // P1 防跨日污染:板块数据真实来源日 ≠ 目标日(getBoards 回退到最近有快照的交易日)时,
+    // 绝不把昨日板块资金当作本日事实落盘。改为如实产出「本日无自有板块数据」,并显式标注来源日。
+    const boardSourceDays = [...new Set(rawBoards.map((b) => String(b?.sourceDay || '')).filter(Boolean))];
+    const boardsSourceDay = boardSourceDays.length === 1 ? boardSourceDays[0] : (boardSourceDays[0] || '');
+    const boardsStale = !!(boardsSourceDay && boardsSourceDay !== day);
+    const boards = boardsStale ? [] : rawBoards;
     const map = new Map(boards.map((b) => [scopedBoardKey(b.plateId, b.zsType), b]));
     const focusIds = new Set(focusRaw.map((b) => scopedBoardKey(b.plateId, b.zsType)));
 
@@ -278,9 +284,20 @@ function createStrategyBackend(opts = {}) {
     });
     const strong = pickStrong(boards).filter((b) => !focusIds.has(scopedBoardKey(b.plateId, b.zsType)));  // 与重点关注按来源去重
     const boardsMap = listToBoardMap(boards);
+    // 板块数据陈旧时不调用 QI 聚合——getQiAggregate 收到空 boards 会再次以 allowFallback 回退取数,污染会从这里绕回来。
     let qiBoard = null;
-    if (getQiAggregate) { try { qiBoard = await getQiAggregate(day, boards); } catch (e) { qiBoard = null; } }
-    return { date: day, savedAt: new Date().toISOString(), focus, strong, boards: boardsMap, qiBoard: filterQiBoard(qiBoard, hidden) };
+    if (getQiAggregate && !boardsStale) { try { qiBoard = await getQiAggregate(day, boards); } catch (e) { qiBoard = null; } }
+    return {
+      date: day,
+      savedAt: new Date().toISOString(),
+      focus,
+      strong,
+      boards: boardsMap,
+      qiBoard: filterQiBoard(qiBoard, hidden),
+      boardsSourceDay: boardsSourceDay || null,
+      boardsStale,
+      boardsUnavailableReason: boardsStale ? 'cross-day-fallback-suppressed' : '',
+    };
   }
 
   // ---------- 快照存储 + 清理 ----------
