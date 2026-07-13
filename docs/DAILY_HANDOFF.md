@@ -3881,6 +3881,59 @@ Notes for next agent:
 - 修复后复测 `rowsWithPrice == resultRows`,并给结果保留价格来源/任务时间,避免历史任务混入当前价。
 - 在现价覆盖完成前,明星最大档会按最高非零档倒推。高档字段存在但为零时可能被错误绕过,因此预期明星/明星确认结果只能视为待复核,不能据此校准阈值。
 
+## 2026-07-13 - Codex - P6 每日事件档案 v2 实现草案
+
+Changed:
+- 按 PR #37 定稿规格实现 `leader-scoring-v3-events-v2`:S2/S4/S5 改为逐股、逐字段闸;唯一全日闸仍是涨停底库不可信。
+- 可独立确认的涨停事件不再因快照、全局主因覆盖或收盘库缺失被清除:可靠归属普通涨停记15,自身 expected/confirmed 明星正证据记20;逐股扫描状态严格区分 confirmed/not-confirmed/unscanned。
+- 实现 R5/R5b:主线不可知时大涨未板显式记录 `confirmedMainlineUnknown`;主线可知但收盘库缺失时仅阻断确认主线成员的 `closePrice`,非成员仍可确定 none 0。
+- 新增独立快照质量加载模块。加载器先读 data-quality 清单,再检查冻结/综合/zs5-zs6-zs7 全链 provenance;命中 missing/contaminated 时不读取任何快照内容。
+- v3 评分器同时接受 v1/v2 档案;v1 保持旧闸,v2 只信 rowsAuthoritative/noneDeterminable/行级状态;评分版本升为 `leader-scoring-v3-shadow-v2`。
+- 新增 T1-T17 自动化覆盖,包括污染隔离、逐股明星反证、S4/S5、R5b、v1兼容、重复行互斥与 incomplete 时 knownPoints/provenance 保留。
+
+Files:
+- `kpl-stats-server.js`
+- `strategy-daily-events.js`
+- `strategy-daily-event-quality.js`
+- `strategy-leader-scoring-v3.js`
+- `tests/strategy-daily-events.test.js`
+- `tests/strategy-daily-events-v2.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 四个运行文件 `node --check` 通过。
+- `tests/*.test.js` 全仓21套测试全部通过;`git diff --check` 通过。
+- 只读核对云端目录: `strategy-data/snapshots`、`kpl-snapshots/{5,6,7}` 和冻结主线快照层均真实存在,不是文档中的虚拟路径。
+
+Deployment:
+- 未部署云端、未重启服务、未生成或改写任何生产事件档案/快照/清单。
+- 实现保持 Draft 交 Claude 复审;生产部署必须与 data-quality 清单原子完成,随后只备份并重生成 2026-06-23、2026-07-02 两日,不得重写其他 v1 档案。
+
+Notes for next agent:
+- 重点复审逐股明星证据是否足够保守、R5/R5b 发射边界、v1 eventForCode 是否逐字段保持旧行为,以及 snapshot manifest 的路径匹配/先查后读约束。
+- `reconstructed` 只展示/审计,不进入8分;代码保留显式 `snapshotReconstructed` 支持,但本 PR 不创建任何重建数据。
+- PR4 仍未启动;本实现通过复审、生产两日重生成和离线双跑前不得切正式榜。
+
+## 2026-07-13 - Codex - P6 Draft 按 Claude 首轮复审修正
+
+Changed:
+- 修复跨家族明星降级:expected/confirmed 正证据恢复为按股票代码携带,不再绑定盘中家族;盘后主因改归其他家族时仍按股票自身明星证据记20。
+- 恢复 `stockEvents.complete` 的 v1 运维语义:三库来源完整即 true;不可归属个股只令 coverageComplete=false并保留行级 dataMissing,不再污染日级来源完整状态。
+- R4/R5b 主线成员循环补 `isExcluded` 过滤,避免排除股票生成8分或 closePrice 阻断行。
+- 新增跨家族明星和「完整日+不可归属股」两条回归探针。
+
+Files:
+- `strategy-daily-events.js`
+- `tests/strategy-daily-events-v2.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Claude 两个阻断项均用对应探针复现后修复。
+- 定向每日事件 v1/v2 与 v3 评分测试通过;待推送前再跑全仓21套。
+
+Deployment:
+- 未部署、未重启、未改生产档案。推送后继续等待 Claude 复审 PR #40。
+
 ## 2026-07-13 - Codex - L2 任务现价补全实现
 
 Changed:

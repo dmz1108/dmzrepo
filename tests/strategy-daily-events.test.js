@@ -113,7 +113,10 @@ record = buildPostCloseRecord(record, {
   day: '2026-07-13', generatedAt: '2026-07-13T08:10:00.000Z',
   snapshot, predict, limitDb, mainReasonDb, closeDb, familyInfo,
   isExcluded: () => false,
-  quality: { limitUpComplete: true, mainReasonComplete: true, closeComplete: true, missingMainReasonCodes: [] },
+  quality: {
+    limitUpComplete: true, mainReasonComplete: true, closeComplete: true, missingMainReasonCodes: [],
+    snapshotStatus: 'ok', snapshotUsable: true, snapshotEvidence: [],
+  },
 });
 A(record.complete === true && record.postCloseConfirmed.complete === true, '完整底库生成可用于历史的盘后记录');
 A(record.postCloseConfirmed.confirmedMainlines.length === 2, '最多确认两条且两条均独立过硬门槛');
@@ -130,7 +133,11 @@ const missing = buildPostCloseRecord(null, {
   day: '2026-07-14', generatedAt: '2026-07-14T08:10:00.000Z',
   snapshot, predict, limitDb, mainReasonDb: { stocks: [] }, closeDb, familyInfo,
   isExcluded: () => false,
-  quality: { limitUpComplete: true, mainReasonComplete: false, closeComplete: true, missingMainReasonCodes: ['000001'] },
+  quality: {
+    limitUpComplete: true, mainReasonComplete: false, closeComplete: true,
+    missingMainReasonCodes: limitDb.stocks.map(row => row.code),
+    snapshotStatus: 'ok', snapshotUsable: true, snapshotEvidence: [],
+  },
 });
 A(missing.complete === false && missing.postCloseConfirmed.status === 'dataMissing', '主因库不完整时明确dataMissing,不生成伪完整记录');
 A(missing.postCloseConfirmed.confirmedMainlines.length === 0, '缺主因时不勉强确认主线');

@@ -28,6 +28,9 @@ const {
   mergeIntradayObservation,
   buildPostCloseRecord,
 } = require('./strategy-daily-events');
+const {
+  loadStrategySnapshotForDailyEvents,
+} = require('./strategy-daily-event-quality');
 
 // 只读诊断的环境级错误/超时收集器(六审):低层读取函数在遭遇 JSON 损坏/权限/网络错误时,
 // 无论调用方是否 .catch 吞掉,都把真实错误写进当前诊断上下文;正常缺文件(ENOENT)只记 missing。
@@ -363,6 +366,8 @@ const SITE_SYNC_BACKEND_ENTRIES = [
   'kpl-stats-server.js',
   'strategy-evidence.js',
   'strategy-daily-events.js',
+  'strategy-daily-event-quality.js',
+  'strategy-leader-scoring-v3.js',
   'wind-close-db-sync.py',
   'winrt-ocr.ps1',
   'package.json',
@@ -428,6 +433,8 @@ const SITE_SYNC_FRONTEND_AUTO_EXCLUDED_FILES = new Set([
   'kpl-stats-server.js',
   'strategy-evidence.js',
   'strategy-daily-events.js',
+  'strategy-daily-event-quality.js',
+  'strategy-leader-scoring-v3.js',
   'wind-close-db-sync.py',
 ]);
 const SITE_SYNC_DATABASE_AUTO_FILE_EXTS = new Set([
@@ -24452,18 +24459,27 @@ async function finalizeStrategyDailyEvents(day, snapshotOverride = null) {
   if (!isChinaMarketTradingDay(isoDay) || !isAfterMarketClose(isoDay)) {
     return { skipped: true, reason: 'not-after-close-trading-day', day: isoDay };
   }
-  const [snapshot, predict, limitDb, mainReasonDb, closeDb] = await Promise.all([
-    snapshotOverride ? Promise.resolve(snapshotOverride) : readStrategyMainlineSnapshot(isoDay),
+  const [snapshotInput, predict, limitDb, mainReasonDb, closeDb] = await Promise.all([
+    loadStrategySnapshotForDailyEvents({
+      day: isoDay,
+      rootDir: __dirname,
+      snapshotOverride,
+    }),
     readMainlinePredict(isoDay),
     readLimitUpDbDay(isoDay).catch(() => null),
     readLimitUpMainReasonDbDay(isoDay).catch(() => null),
     readEastmoneyCloseDbDay(isoDay).catch(() => null),
   ]);
-  const quality = strategyDailySourceQuality(isoDay, limitDb, mainReasonDb, closeDb);
+  const quality = {
+    ...strategyDailySourceQuality(isoDay, limitDb, mainReasonDb, closeDb),
+    snapshotStatus: snapshotInput.snapshotStatus,
+    snapshotUsable: snapshotInput.snapshotUsable,
+    snapshotEvidence: snapshotInput.snapshotEvidence,
+  };
   const payload = await updateStrategyDailyEvents(isoDay, existing => buildPostCloseRecord(existing, {
     day: isoDay,
     generatedAt: new Date().toISOString(),
-    snapshot,
+    snapshot: snapshotInput.snapshot,
     predict,
     limitDb,
     mainReasonDb,
