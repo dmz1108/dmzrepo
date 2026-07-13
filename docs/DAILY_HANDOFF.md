@@ -3981,7 +3981,7 @@ Validated:
 - 07-01：74股中62股 complete/formal；剩余12股缺10/30日趋势，碧兴物联另有06-23主线归属不可知。输入文件SHA=`9f067b85278d64ad0c9f73117ad01b48c8ed9bcc885440d6d559c048fdc6c830`，规范输入SHA=`a5a90f5d968090c6ba465ff41bb73630e368262f7f024e60e10e6906d2282d90`，报告SHA=`b0044ac665bc822e4dc8a831d44de7889e8c963124281cbb8c48fd92e7ee25e3`。
 - 07-08：90股中86股 complete、84股 formal；东方锆业/鸿合科技保留07-02主线归属不可知，动力源缺趋势，振华股份缺07-06主因归属。输入文件SHA=`218ba6028bb1f44b1e85006301842c2cd84f1246afafc3a283508ba6022665a5`，规范输入SHA=`000856e734d4fe7fa472bacd45aa8c88fe98395fead85265922405d3ed0b02f4`，报告SHA=`408f70d9791951b7d31793f7a3cbd50e9318f4ec003b483f03151f38b650fb04`。
 - 星网锐捷002396：v2第1/114分 → v3第3/56.22分（历史0+当日15+趋势41.22），资格依据为`confirmed-target-day-family-limit-up`；威尔高301251：v2第3/76分 → v3第68/15分（历史0+当日15+趋势0）。
-- 两个全池的 `--require-complete` 均因残余真实缺失按设计退出1；没有放宽闸门。完整对照文档 SHA=`ac316dc76dedafed4a3af4856a99cbdff23616a753f9e532443a9d32ef8e33f9`。
+- 两个全池的 `--require-complete` 均因残余真实缺失按设计退出1；没有放宽闸门。Git 归档对照文档 SHA=`679bddfdde07118cc6bde9f4b40c2aefaeb4ea35e6cb67a010e15201dc183f8c`；云端生成原件 SHA=`ac316dc76dedafed4a3af4856a99cbdff23616a753f9e532443a9d32ef8e33f9`，两者内容相同，仅 Git 归档规范化了末尾空行。
 - L2任务`0287a6eebde1aa4d`：worker `0.1.0`，resultRows=3、rowsWithPrice=3、rowsWithAllBuckets=3，价格来源均为`eastmoney-board-realtime`；抽查价格15.98/74.30/102.03，五档各5档。
 
 Deployment:
