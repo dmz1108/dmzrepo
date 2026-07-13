@@ -8555,28 +8555,20 @@
 
   body.view-strategy .ml-l2-buckets {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
     padding: 0 14px 10px 80px;
   }
 
-  body.view-strategy .ml-l2-buckets > span {
-    display: grid;
-    gap: 2px;
+  body.view-strategy .ml-l2-buckets .sc-pick-detail-group {
     min-width: 0;
-    padding: 6px;
-    border-radius: 6px;
-    background: var(--bg-subtle);
   }
 
-  body.view-strategy .ml-l2-buckets b,
-  body.view-strategy .ml-l2-buckets i {
-    overflow: hidden;
-    color: var(--text-muted);
+  body.view-strategy .ml-l2-detail-note {
+    grid-column: 1 / -1;
+    color: var(--text-faint);
     font-size: 10px;
-    font-style: normal;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.45;
   }
 
   body.view-strategy .ml-l2-empty {
@@ -8643,7 +8635,7 @@
       grid-column: 2 / -1;
     }
     body.view-strategy .ml-l2-buckets {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: 1fr;
       padding-left: 14px;
     }
   }
@@ -11212,7 +11204,21 @@ function strategyL2HistoryRatio(buy, sell) {
 }
 function strategyL2HistoryBucket(label, bucket) {
   const b = bucket || {};
-  return `<span><b>${escapeHTML(label)}</b><i>主 ${strategyL2HistoryRatio(b.activeBuy, b.activeSell)}</i><i>被 ${strategyL2HistoryRatio(b.passiveBuy, b.passiveSell)}</i></span>`;
+  const activeRatio = strategyL2HistoryRatio(b.activeBuy, b.activeSell);
+  const passiveRatio = strategyL2HistoryRatio(b.passiveBuy, b.passiveSell);
+  const moneyPair = (name, buy, sell, ratio, cls) => `<div class="sc-pick-pair ${cls}">
+    <span>${name}<b>${ratio}</b></span>
+    <em>买 ${fmtMoneyWan(buy)}</em>
+    <em>卖 ${fmtMoneyWan(sell)}</em>
+  </div>`;
+  return `<div class="sc-pick-detail-group">
+    <div class="sc-pick-detail-title">
+      <span>${escapeHTML(label)}</span>
+      <em>主动比 ${activeRatio} · 被动比 ${passiveRatio}</em>
+    </div>
+    ${moneyPair('主动', b.activeBuy, b.activeSell, activeRatio, 'active')}
+    ${moneyPair('被动', b.passiveBuy, b.passiveSell, passiveRatio, 'passive')}
+  </div>`;
 }
 function renderStrategyL2History(data) {
   if (!canUseL2AdminTools()) return '';
@@ -11250,6 +11256,7 @@ function renderStrategyL2History(data) {
           ${strategyL2HistoryBucket('≥500万', thresholds['5000000'])}
           ${strategyL2HistoryBucket('≥800万', thresholds['8000000'])}
           ${strategyL2HistoryBucket('≥1000万', thresholds['10000000'])}
+          <span class="ml-l2-detail-note">主动按单笔成交统计；被动按同一挂单订单号累计统计</span>
         </div>
       </details>`;
     }).join('');
