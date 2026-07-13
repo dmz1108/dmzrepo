@@ -174,7 +174,7 @@ function mergeIntradayObservation(existing, input = {}) {
 }
 
 function collectStarEvidence(predict, snapshot) {
-  const positiveByStockFamily = new Map();
+  const positiveByCode = new Map();
   const familyStatus = new Map();
   const noteFamily = (familyKey, status) => {
     const key = text(familyKey);
@@ -190,7 +190,8 @@ function collectStarEvidence(predict, snapshot) {
     const code = codeOf(rawCode);
     const key = text(familyKey);
     if (!code) return;
-    positiveByStockFamily.set(`${key}:${code}`, { status: 'positive', source });
+    // 明星等级取自股票自身盘中证据,盘后家族归属可变化;不能把正证据锁死在盘中家族。
+    positiveByCode.set(code, { status: 'positive', source, observedFamilyKey: key || null });
     noteFamily(key, 'qi');
     const family = familyStatus.get(key);
     if (family) family.positiveCodes.add(code);
@@ -243,7 +244,7 @@ function collectStarEvidence(predict, snapshot) {
 
   const statusForStock = (rawCode, familyKey) => {
     const code = codeOf(rawCode);
-    const positive = positiveByStockFamily.get(`${text(familyKey)}:${code}`);
+    const positive = positiveByCode.get(code);
     if (positive?.status === 'positive') return positive;
     const family = familyStatus.get(text(familyKey));
     const l2Status = text(family?.l2VerificationStatus);
@@ -253,7 +254,7 @@ function collectStarEvidence(predict, snapshot) {
     }
     return { status: 'unscanned', source: 'no-explicit-stock-coverage' };
   };
-  return { positiveByStockFamily, familyStatus, statusForStock };
+  return { positiveByCode, familyStatus, statusForStock };
 }
 
 function buildFamilyEvidence(input, reasonByCode, limitCodes, starEvidence) {
@@ -456,6 +457,7 @@ function buildStockEvents(input, confirmedFamilies, reasonByCode, limitCodes, st
       for (const code of (familyMembers.get(family.familyKey) || [])) {
         if (limitCodes.has(code)) continue;
         const closeRow = closeByCode.get(code);
+        if (input.isExcluded?.(closeRow || reasonByCode.get(code) || { code })) continue;
         const gain = num(closeRow?.gain);
         if (gain == null || gain <= 5) continue;
         events.push({
@@ -478,6 +480,7 @@ function buildStockEvents(input, confirmedFamilies, reasonByCode, limitCodes, st
     for (const family of confirmedFamilies) {
       for (const code of (familyMembers.get(family.familyKey) || [])) {
         if (limitCodes.has(code)) continue;
+        if (input.isExcluded?.(closeByCode.get(code) || reasonByCode.get(code) || { code })) continue;
         events.push({
           code,
           name: text(reasonByCode.get(code)?.name),
@@ -528,7 +531,8 @@ function buildStockEvents(input, confirmedFamilies, reasonByCode, limitCodes, st
   }
   const noneDeterminable = rowsAuthoritative && (mainlineKnowable || closeComplete);
   return {
-    complete: rowsAuthoritative && noneDeterminable && events.every(row => row.status !== 'dataMissing'),
+    // 保持 v1 既有语义:complete 只表示三库来源完整;逐股归属缺口由 coverageComplete/dataMissing 表达。
+    complete: !!(input.quality?.limitUpComplete && input.quality?.mainReasonComplete && input.quality?.closeComplete),
     rowsAuthoritative,
     noneDeterminable,
     mainlineKnowable,

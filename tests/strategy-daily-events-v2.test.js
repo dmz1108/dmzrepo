@@ -168,6 +168,16 @@ function scoredEvent(code, type, points, over = {}) {
   A(starA.points === 20 && starA.starEvidenceStatus === 'confirmed', 'T8 自身expected正证据记20');
   A(starB.points === 15 && starB.starEvidenceStatus === 'unscanned',
     'T8b 同族另一只明星不能证明本股已扫描');
+  const crossFamilyStar = build({ predict: { candidates: [{
+    familyKey: 'group:网络安全', l2VerificationStatus: 'qi',
+    stars: [{ code: '000001', level: 'confirmed' }],
+  }], starTransitions: [{
+    mainlineKey: 'group:网络安全', code: '000001', firstExpectedAt: '2026-07-02T02:00:00.000Z',
+  }] } });
+  const crossFamilyRow = crossFamilyStar.stockEvents.events.find(row => row.code === '000001');
+  A(crossFamilyRow?.points === 20 && crossFamilyRow?.starEvidenceStatus === 'confirmed' &&
+    crossFamilyRow?.familyKey === FAMILY,
+  'T8c 明星档次跟随股票自身盘中证据,盘后跨家族归属仍记20');
   const covered = build({ predict: { candidates: [{
     familyKey: FAMILY, l2VerificationStatus: 'scanned-no-star', stars: [],
     scanCoverage: { coversAllCandidates: true },
@@ -226,6 +236,15 @@ function scoredEvent(code, type, points, over = {}) {
   A(eventForCode(s4, '000001', FAMILY).points === 15 &&
     eventForCode(s4, '000002', FAMILY).dataMissing.includes('mainReasonFamily'),
   'T15 主因库局部缺失时A计15且只阻断B');
+  const fullSourcesWithCoverageGap = build({
+    limitDb: { stocks: [{ code: '000009', name: '事件股' }] },
+    mainReasonDb: { stocks: [{ code: '000009', name: '事件股', finalBoardTopic: '其他事件' }] },
+    quality: { ...completeQuality, missingMainReasonCodes: [] },
+  });
+  A(fullSourcesWithCoverageGap.stockEvents.complete === true &&
+    fullSourcesWithCoverageGap.stockEvents.coverageComplete === false &&
+    fullSourcesWithCoverageGap.complete === true,
+  'T15b 三库完整日即使个股不可归属,complete仍为true且coverageComplete单独为false');
 
   // T16/T16b:S5 不清除涨停分,R5b只阻断确认主线成员。
   const s45 = build({

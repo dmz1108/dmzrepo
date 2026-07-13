@@ -3913,3 +3913,23 @@ Notes for next agent:
 - 重点复审逐股明星证据是否足够保守、R5/R5b 发射边界、v1 eventForCode 是否逐字段保持旧行为,以及 snapshot manifest 的路径匹配/先查后读约束。
 - `reconstructed` 只展示/审计,不进入8分;代码保留显式 `snapshotReconstructed` 支持,但本 PR 不创建任何重建数据。
 - PR4 仍未启动;本实现通过复审、生产两日重生成和离线双跑前不得切正式榜。
+
+## 2026-07-13 - Codex - P6 Draft 按 Claude 首轮复审修正
+
+Changed:
+- 修复跨家族明星降级:expected/confirmed 正证据恢复为按股票代码携带,不再绑定盘中家族;盘后主因改归其他家族时仍按股票自身明星证据记20。
+- 恢复 `stockEvents.complete` 的 v1 运维语义:三库来源完整即 true;不可归属个股只令 coverageComplete=false并保留行级 dataMissing,不再污染日级来源完整状态。
+- R4/R5b 主线成员循环补 `isExcluded` 过滤,避免排除股票生成8分或 closePrice 阻断行。
+- 新增跨家族明星和「完整日+不可归属股」两条回归探针。
+
+Files:
+- `strategy-daily-events.js`
+- `tests/strategy-daily-events-v2.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Claude 两个阻断项均用对应探针复现后修复。
+- 定向每日事件 v1/v2 与 v3 评分测试通过;待推送前再跑全仓21套。
+
+Deployment:
+- 未部署、未重启、未改生产档案。推送后继续等待 Claude 复审 PR #40。
