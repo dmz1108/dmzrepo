@@ -4236,6 +4236,82 @@ Changed:
 Deployment:
 - 仅整理 Git 交接；未再次修改云端、未重启服务、未发起新的 L2 任务。PR4 仍暂停，等待 Claude 独立复核 P6 v2 锁定双跑。
 
+## 2026-07-13 - Codex - 修正v2目标日价格与日期口径
+
+Changed:
+- 保留正确的10/30交易日累计收益基准:窗口包含目标日,但收益基准是窗口首日前一交易日收盘;未误改成首日收盘。
+- v2盘中使用目标日实时价/实时涨幅,盘后只使用日期匹配、完整且收盘后保存的目标日收盘库;历史缺失不再退回残留`gain`冒充。
+- 评分、排序、诊断和说明统一读取显式`targetDayGain`;修复紫光7月8日已有`todayGain=6.8%`却漏掉6分在场分的问题。
+- 更新前端和响应元数据,明确10/30日涨幅盘中含目标日实时、盘后含目标日最终收盘。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/leader-family-metrics.test.js`
+- `tests/leader-pool-debug.test.js`
+- `tests/metric-profile.test.js`
+- `docs/strategy/validation/2026-07-13-v2-target-day-inclusive.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 锁定证据参数:`day=2026-07-08`,`familyKey=group:算力AI`,`code=000938`;90股原始证据SHA-256=`0511d6e7ff2ce3fbe95217612f7a6cc6273037ff83551fcbb29de1c3d6e5bcd8`,规范输入SHA-256=`fa8e31b6fda6057694c743faf2ec2d3382f7764ec077203ed93c31fa4874b3c2`。
+- 只读核对云端收盘库:紫光06-24=`27.66`,06-25=`28.39`,07-08=`33.62/+6.8%`;10交易日累计涨幅必须为`33.62/27.66-1=21.55%`,不能错用06-25收盘得到18.42%。
+- 锁定v2行由59分补回在场6分为65分,预期由第6升至第5;权重、硬门槛、涨停次数和家族规则均未修改。
+- `node --check kpl-stats-server.js`、三个针对性测试及指标口径测试通过;全部21个`tests/*.test.js`文件通过。
+
+Deployment:
+- 未部署云端,未修改生产文件/运行时数据库/冻结快照,未重启服务;仅通过SSH只读核验证据。
+
+Notes for next agent:
+- 请独立复核“10个交易日事件窗口”与“10日累计收益基准收盘”两个概念,不要把06-25首日收盘误当收益基准。
+- 合并和部署前应使用相同证据参数复核紫光目标日涨幅、v2在场分和历史缺失不回退行为。
+
+## 2026-07-13 - Codex - 去除v2同一涨停重复积分
+
+Changed:
+- 按 Owner 裁定,目标日涨停只通过`zt10Count`计分一次;涨停股不再叠加“当日在场+6”“当日涨停+10”“连板每板+8”和“早封+6”。
+- `present +6`仅用于目标日未涨停但上涨≥3%的股票;连板和封板时间继续展示,不参与龙头总分。
+- L2明星信号暂保留为独立资金证据,本次未改变主因硬门槛、家族归属和10日涨停事实。
+- 用同一份7月8日算力AI 90股锁定池重算,前五变为:星网锐捷84、紫光股份65、恒林股份62、祥鑫科技61、长源东谷55。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/leader-pool-debug.test.js`
+- `docs/strategy/validation/2026-07-13-v2-target-day-inclusive.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 新增回归证明:同一股票从当日一板改为二板、保留09:30封板时间,总分不变;今日涨停/二板文字仍正常展示。
+- 锁定证据 SHA-256=`0511d6e7ff2ce3fbe95217612f7a6cc6273037ff83551fcbb29de1c3d6e5bcd8`;未更换候选池或行情证据。
+- `git diff --check`、`node --check kpl-stats-server.js`通过;全部21个`tests/*.test.js`文件通过。
+
+Deployment:
+- 未部署云端,未修改生产文件/运行时数据库/冻结快照,未重启服务;PR #43 需重新独立复核。
+
+## 2026-07-13 - Codex - v2涨停分取消封顶并收紧在场阈值
+
+Changed:
+- 按 Owner 最新裁定,`zt10Count`改为每次涨停14分且不封顶;仍保证同一目标日涨停只计一次。
+- 未涨停股票的目标日在场奖励由涨幅≥3%收紧为≥5%加6分;涨停股票即使涨幅超过5%也不重复取得该奖励。
+- 连板与早封继续仅展示;L2明星信号、主因硬门槛、家族归属不变。
+- 同一90股锁定池重算前五:星网锐捷114、紫光股份65、恒林股份62、祥鑫科技61、威派格56。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/leader-pool-debug.test.js`
+- `docs/strategy/validation/2026-07-13-v2-target-day-inclusive.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 新增回归证明近10日5次涨停按`5×14=70`计分,不再封顶40。
+- 新增4.99%/5.00%阈值边界测试;只有未涨停且达到5.00%才增加6分。
+- 锁定证据 SHA-256=`0511d6e7ff2ce3fbe95217612f7a6cc6273037ff83551fcbb29de1c3d6e5bcd8`,候选池与行情证据未改变。
+- `git diff --check`、`node --check kpl-stats-server.js`通过;全部21个`tests/*.test.js`文件通过。
+
+Deployment:
+- 未部署云端,未改生产数据库或冻结快照,未重启服务;PR #43 必须按最新提交重新复核。
 ## 2026-07-13 - Codex - 修复 L2 扫描完成但策略页不可见
 
 Changed:

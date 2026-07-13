@@ -46,14 +46,14 @@ let attach;
 }
 const out = attach({ day: '2026-07-10', mainlines: [] });
 A(!!out.metricProfile, '响应元数据带 metricProfile');
-A(out.metricProfile.leaderGain?.basis === 'close', '龙头涨幅声明为收盘口径');
+A(out.metricProfile.leaderGain?.basis === 'target-day-inclusive', '龙头涨幅声明为目标日内含口径');
 A(out.metricProfile.cardKlineGain?.basis === 'intraday-kline', '实时卡/QI涨幅声明为K线口径');
 A(out.metricProfile.realtimeBoard?.basis === 'intraday-live', '实时板块指标声明为盘中口径');
 A(Array.isArray(out.metricProfile.leaderGain.fields) && out.metricProfile.leaderGain.fields.includes('gain10'), '声明含字段清单');
 
 // 2. 前端口径标注(同名数值必须让用户看得出口径差异)
-A(html.includes('10/30日涨幅为收盘口径(不含今日盘中)'), '龙头候选列表标注收盘口径');
-A(html.includes(';10/30日涨幅为收盘口径(不含今日盘中)">龙头</span>'), '主线卡龙头行 tooltip 标注收盘口径');
+A(html.includes('盘中含当日实时，盘后含当日收盘'), '龙头候选列表标注目标日实时/终盘口径');
+A(html.includes(';10/30日窗口盘中含当日实时、盘后含当日收盘">龙头</span>'), '主线卡龙头行 tooltip 标注目标日内含口径');
 A(html.includes('涨幅为K线口径(含快照日盘中)'), 'QI 徽章 tooltip 标注K线口径');
 A(html.includes('涨幅为K线口径(含当日盘中)'), '热门题材搜索结果标注K线口径');
 
