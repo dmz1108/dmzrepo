@@ -3760,5 +3760,6 @@ Deployment:
 
 Notes for next agent:
 - 公司 worker 的五档汇总已经完成,无需重做五档计算。
-- 仍需让公司 worker 每行回传有效 `price` 或 `lastPrice`,并提升 `workerVersion`;随后复测 `rowsWithPrice == resultRows`。
+- 进一步代码核对确认:东财、同花顺、KPL 的实时成分接口本身已有现价,但 `strategyNormRealtimeStocks`、KPL 实时映射和 `local-l2-task-queue.normalizeStock` 当前会丢弃该字段。优先修法应是云端保留任务股票的 `price`,worker 结果缺价时再按 code 从任务快照补回;让公司 worker 直接回传 `price/lastPrice` 可作为兼容路径,但不再是唯一方案。
+- 修复后复测 `rowsWithPrice == resultRows`,并给结果保留价格来源/任务时间,避免历史任务混入当前价。
 - 在现价覆盖完成前,明星最大档会按最高非零档倒推。高档字段存在但为零时可能被错误绕过,因此预期明星/明星确认结果只能视为待复核,不能据此校准阈值。
