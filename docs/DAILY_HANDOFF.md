@@ -4312,3 +4312,58 @@ Validated:
 
 Deployment:
 - 未部署云端,未改生产数据库或冻结快照,未重启服务;PR #43 必须按最新提交重新复核。
+## 2026-07-13 - Codex - 修复 L2 扫描完成但策略页不可见
+
+Changed:
+- 为管理员策略页新增“今日 L2 扫描记录”，展示当日自动/手动任务、状态、扫描与入选数量，并可展开查看入选股票的五档主动/被动比值。
+- 扫描队列新增按日历史读取与“最近一次有效结果”查询；后发的空任务不再遮蔽同板块较早的有效任务。
+- 主线明星回接同时支持精确板块 ID 和标准主线家族，解决 KPL、东财、同花顺板块 ID 不同导致任务已完成却无法挂回主线卡片的问题；最终仍用本主线股票集合做交集，防止跨题材错挂。
+- 自动任务开始记录 trigger、familyKey、scanChannel 和 zsType，历史旧任务按 legacy 兼容读取。
+- L2 日历史接口只允许管理员访问，返回前继续移除任务原始成分股和 worker 标识。
+
+Files:
+- `local-l2-task-queue.js`
+- `strategy-backend.js`
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/local-l2-persistence.test.js`
+- `tests/star-l2-layers.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- `node --check local-l2-task-queue.js`
+- `node --check strategy-backend.js`
+- 全部 21 套 `tests/*.test.js` 通过。
+- 新增回归覆盖：空重试不遮蔽有效结果、重启后历史恢复、跨来源同家族挂载、无关家族隔离、管理员接口与前端权限门控、HTML 内联脚本编译。
+
+Deployment:
+- PR #44 已合并至 `main@c4a5f3c`，四个运行文件已原子部署到 `C:\PandaDashboard`；回退备份为 `C:\PandaDashboard\_deploy-backups\pr44-l2-visible-20260713-2058`。
+- 仅重启计划任务 `Panda Dashboard Server`，主服务 PID `2836 -> 8188`；Caddy、娱乐服务和公司端 L2 worker 均未重启。
+- 本机/公网 health、`/kpl`、`/admin` 均为 HTTP 200；未登录请求 L2 日历史接口返回 403。使用服务器内有效管理员会话仅在本机验收接口：07-13 共 6 个任务、5 个有结果，创新药有效任务 41 条结果/20 条入选，后续空任务仍同时保留但不再遮蔽有效结果。
+- 三份云端运维日志已追加部署、备份、重启和验收结果；未记录 Token 或管理员会话值。
+
+Notes for next agent:
+- 2026-07-13 生产上已有一份创新药自动任务完成 41/41，后续另有同板块空手动任务；它是本修复“有效任务不得被空任务遮蔽”的真实验收样本。
+- 07-13 已收盘主线榜继续读取既有冻结快照，因此不改写当日历史主线卡片；管理员扫描记录已立即可见，跨来源主线回接从下一次实时构建起生效。
+- 本次只修结果可见性和回接，不改变 L2 阈值、明星判定、主线评分或 worker 计算逻辑。
+
+## 2026-07-13 - Codex - 补全 L2 扫描记录五档金额明细
+
+Changed:
+- 将管理员“今日 L2 扫描记录”的五档展开内容由仅显示主动/被动比值，补全为与“重点关注”一致的主动买、主动卖、被动买、被动卖具体金额及对应比值。
+- 增加主动按单笔成交、被动按同一挂单订单号累计的口径说明；不改变任务结果、筛选阈值或明星判定。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `tests/star-l2-layers.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node tests/star-l2-layers.test.js` 通过。
+- 全部 21 套 `tests/*.test.js` 通过；HTML 内联脚本编译检查通过，`git diff --check` 无误。
+
+Deployment:
+- PR #46 已合并至 `main@6a26602`；`kpl-dashboard_17_apple.html` 已部署到 `C:\PandaDashboard`，回退备份为 `C:\PandaDashboard\_deploy-backups\pr46-l2-history-details-20260713-2255`。
+- 部署后文件 SHA-256 为 `CBCCBE1BDDEE4AD4FC53B9D78AB47E0A652FF08225571D77046890597DB34746`；公网 `/kpl` 已包含金额明细，`/health` 返回正常。
+- 仅静态页面更新，未重启主服务、Caddy、娱乐服务或公司端 L2 worker；三份云端运维日志均已追加本次备份、部署和验收记录。
