@@ -3960,3 +3960,36 @@ Deployment:
 Notes for next agent:
 - 部署后用公司 worker 重跑至少一个板块,验收 `rowsWithPrice == resultRows`、`rowsWithAllBuckets == resultRows`,并抽查低价主板/创业板/高价股的最大档映射。
 - 价格来自任务创建时实时成分快照,用于最大可统计档映射;不得用历史任务补当前价格。
+
+## 2026-07-13 - Codex - PR39/PR40 云端部署与 P6 v2 双跑验收
+
+Changed:
+- 将已合并并经 Claude 复审的 PR #39/#40 从 `main@b8699ae940cac872b8094b405f84c09b3f4427fd` 原子部署到云端；事件规则升级为 `leader-scoring-v3-events-v2`，正式 v2 榜未切换。
+- 先安装生产数据质量清单，再部署代码；清单按真实生产实况隔离 06-23 缺失链和 07-02 污染链，不改写或删除任何快照原件。
+- 只备份并重建 2026-06-23、2026-07-02 两份事件档案；其他 17 份档案 SHA-256 全部保持不变。
+- 使用原锁定的 07-01/07-08 算力AI完整候选池，仅替换对应历史日为 v2 逐股投影后重新离线双跑；完整逐行 v2/v3 对照见独立验证文档，证据 JSON 仍只保存在云端隔离目录。
+- 完成 PR #39 真实公司 Worker 小样本验收：先进封装 3 股现价和五档均 3/3 完整。
+
+Files:
+- `docs/strategy/validation/2026-07-13-p6-events-v2-replay.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 云端部署文件哈希与 Git main 一致；本机和公网 `/health` 均为 `{"ok":true}`，新主服务 PID=2836。
+- 质量清单 SHA-256=`1edd7ebd05cb288449c9ed91e648755d1c4fe94a4c833eef3afc38f2787fe2a7`；加载结果严格为 06-23 `missing`、07-02 `quarantined`。
+- 06-23 v2 档案 SHA=`400003120d761e0368b95e2a9a476b1354ddbc7b87d8f9e6cff14fb4a1a5a704`：三库来源完整，283 行，可靠普通涨停15分事件85行；07-02 SHA=`c113c2fb460928cd980b908ead220d59188d504d7f1bb8204c7f0d42c0f85d1e`：三库来源完整，215行，可靠普通涨停15分事件71行。历史无明星正证据，star20 均为0，未造分。
+- 07-01：74股中62股 complete/formal；剩余12股缺10/30日趋势，碧兴物联另有06-23主线归属不可知。输入文件SHA=`9f067b85278d64ad0c9f73117ad01b48c8ed9bcc885440d6d559c048fdc6c830`，规范输入SHA=`a5a90f5d968090c6ba465ff41bb73630e368262f7f024e60e10e6906d2282d90`，报告SHA=`b0044ac665bc822e4dc8a831d44de7889e8c963124281cbb8c48fd92e7ee25e3`。
+- 07-08：90股中86股 complete、84股 formal；东方锆业/鸿合科技保留07-02主线归属不可知，动力源缺趋势，振华股份缺07-06主因归属。输入文件SHA=`218ba6028bb1f44b1e85006301842c2cd84f1246afafc3a283508ba6022665a5`，规范输入SHA=`000856e734d4fe7fa472bacd45aa8c88fe98395fead85265922405d3ed0b02f4`，报告SHA=`408f70d9791951b7d31793f7a3cbd50e9318f4ec003b483f03151f38b650fb04`。
+- 星网锐捷002396：v2第1/114分 → v3第3/56.22分（历史0+当日15+趋势41.22），资格依据为`confirmed-target-day-family-limit-up`；威尔高301251：v2第3/76分 → v3第68/15分（历史0+当日15+趋势0）。
+- 两个全池的 `--require-complete` 均因残余真实缺失按设计退出1；没有放宽闸门。完整对照文档 SHA=`ac316dc76dedafed4a3af4856a99cbdff23616a753f9e532443a9d32ef8e33f9`。
+- L2任务`0287a6eebde1aa4d`：worker `0.1.0`，resultRows=3、rowsWithPrice=3、rowsWithAllBuckets=3，价格来源均为`eastmoney-board-realtime`；抽查价格15.98/74.30/102.03，五档各5档。
+
+Deployment:
+- 已部署并重启计划任务 `Panda Dashboard Server`；回退备份：`C:\PandaDashboard\_deploy-backups\pr39-pr40-20260713-121701`。
+- 云端离线证据：`C:\PandaDashboard\_offline\main-b8699ae\tmp\p6-v2-validation-20260713`，不入 Git。
+- 三份云端运维日志均已更新；日志回退备份：`C:\PandaDashboard\_deploy-backups\pr39-pr40-logs-20260713-1300CST`。
+- 受控重建最初的 PowerShell 汇总器因 Windows 默认编码无法解析大型无 BOM UTF-8 JSON；立即停止后改用 Node 原生 UTF-8 验证，确认生成档案 JSON 完整有效。此后所有摘要、哈希和对照均由 Node 读取。
+
+Notes for next agent:
+- 请 Claude 独立复核锁定双跑、四个残余不完整样本及完整对照表；复核前不启动 PR4，不让 v3 参与正式排序。
+- 07-01/07-08 已形成首批真实可比较样本，但只说明 P6 逐股闸恢复了可用样本，不能仅凭两天宣称 v3 优于 v2。
