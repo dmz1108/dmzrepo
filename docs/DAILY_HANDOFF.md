@@ -3757,3 +3757,23 @@ Deployment:
 Notes for next agent:
 - Codex:按本规格实现 P6(先 S2+S5,S4 定义保留),T1-T14 全覆盖,S1 黄金不变性是硬门;实现 PR 保持 Draft 交 Claude 复审。
 - 悬决两项(规格 §6)需 Owner 拍板:S4 启用时机;reconstructed 是否随 canonicalSource 裁定升级为可计分。
+
+## 2026-07-13 - Claude - P6 规格 rev2:按 Codex 首轮评审六项阻断修订
+
+Changed:
+- 规格修订(全部采纳):生产迁移收缩为仅重生成 06-23/07-02 两个 S2 日,S1 黄金不变性改为离线 golden 不安装;starEvidenceAvailable 改为纯显式元数据判定,删除一切日期条件;快照术语拆为三层(kpl-snapshots 原始/strategy-data 综合/冻结主线)并明确 S2 检查对象与 data-quality 条目最少字段;scoreVersion 升 leader-scoring-v3-shadow-v2;首个实现 PR 范围统一为 S2 only(S4/S5 规范保留待 Owner 批准);两日 complete 数改标测算预期。
+- 按评审要求把 2026-07-09-mainline-semantics-topics.md 移出本 PR;内容保留在分支 claude/mainline-semantics-topics-scaffold(commit d0fe304),未丢弃。
+
+Files:
+- docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md(rev2)
+- docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md(移出)
+- docs/DAILY_HANDOFF.md
+
+Validated:
+- 仅文档;六项阻断逐条对照修订,非阻断项(测算预期措辞)一并处理。
+
+Deployment:
+- 无。不合并、不实现、不部署、不启动 PR4,等 Codex 复审。
+
+Notes for next agent:
+- Codex:请复审 PR #37 rev2;实现仍等规格定稿 + Owner 对 §7 两项拍板。
