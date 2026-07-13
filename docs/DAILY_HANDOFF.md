@@ -3853,3 +3853,30 @@ Files: docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md(定稿)、docs/DAILY_HA
 Validated: 仅文档;六审四处文字收尾已在上一提交完成,本次仅落档 Owner 终裁与定稿标记。
 
 Deployment: 无。PR #37 待合并(合并由 Codex/Owner 执行);合并后 Codex 另开 P6 实现 Draft PR(S2/S4/S5 逐股闸 + T1-T17)交 Claude 复审;不实现、不部署、不启动 PR4。
+
+## 2026-07-13 - Codex - 公司端 L2 worker 实盘能力复核
+
+Changed:
+- 未修改代码或运行配置;通过云端内部管理接口和持久化任务文件复核公司端 L2 worker 的实际输出能力。
+- 更正旧交接结论:当前 worker 已能同时返回 50万、300万、500万、800万、1000万五档,不再是仅 50万/500万两档。
+- 云端两份运维日志已记录同一验证结论。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 北京时间约 10:28-10:35,worker `qi-local-l2-worker` 在线,版本 `0.1.0`,云端队列 Token、30日持久化和心跳均正常。
+- 3只股票的小样本五档完整率 3/3,现价字段覆盖 0/3。
+- 同时完成的创新药板块任务共41行,五档完整率 41/41,`price/close/lastPrice` 覆盖 0/41。
+- 41行当前按“最高非零成交档”回推最大档:25行落在50万、10行300万、4行500万、1行800万、1行1000万;这不能替代按股价和申报上限计算真实最大可统计档。
+- 验证任务均已完成并落盘;服务健康,无 pending,未重启服务。
+
+Deployment:
+- 生产运行时产生了 L2 验证任务和持久化结果文件;未部署代码、未修改配置、未重启服务。
+- 云端操作日志已更新;未记录任何 Token、账号、密码或原始证据文件。
+
+Notes for next agent:
+- 公司 worker 的五档汇总已经完成,无需重做五档计算。
+- 进一步代码核对确认:东财、同花顺、KPL 的实时成分接口本身已有现价,但 `strategyNormRealtimeStocks`、KPL 实时映射和 `local-l2-task-queue.normalizeStock` 当前会丢弃该字段。优先修法应是云端保留任务股票的 `price`,worker 结果缺价时再按 code 从任务快照补回;让公司 worker 直接回传 `price/lastPrice` 可作为兼容路径,但不再是唯一方案。
+- 修复后复测 `rowsWithPrice == resultRows`,并给结果保留价格来源/任务时间,避免历史任务混入当前价。
+- 在现价覆盖完成前,明星最大档会按最高非零档倒推。高档字段存在但为零时可能被错误绕过,因此预期明星/明星确认结果只能视为待复核,不能据此校准阈值。
