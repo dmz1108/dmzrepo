@@ -1,6 +1,6 @@
 // P1-C 预测记录扩展测试(node tests/predict-records.test.js)
 // P1-C 功能测试:从源文件抽出 strategyPredictCandidateRecord + writeMainlinePredict,
-// 用假数据验证:top 结构不变、candidates 全量记录、收盘后不覆盖、上限 12。
+// 用假数据验证:top 兼容旧 leader 并新增前两名 leaders、candidates 全量记录、收盘后不覆盖、上限 12。
 const fsReal = require('fs');
 const src = fsReal.readFileSync(require('path').join(__dirname, '..', 'kpl-stats-server.js'), 'utf8');
 
@@ -57,12 +57,14 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
 (async () => {
   const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.exitCode = 1; } else console.log('ok: ' + msg); };
 
-  // 1. 盘中写入:top 结构不变 + candidates 全量
+  // 1. 盘中写入:top 保留旧字段并新增前两名龙头 + candidates 全量
   await writeMainlinePredict('2026-07-10', '早盘', manyMainlines, { key: 'fam-a' });
   const out = written['/fake/mainline-predict-2026-07-10.json'];
   A(out && Array.isArray(out.top) && out.top.length === 3, 'top 仍为前3');
-  A(JSON.stringify(Object.keys(out.top[0]).sort()) === JSON.stringify(['certainty','key','leader','predictScore','rank','score','stage','star','theme'].sort()), 'top 元素字段与旧版完全一致');
+  A(JSON.stringify(Object.keys(out.top[0]).sort()) === JSON.stringify(['certainty','key','leader','leaders','predictScore','rank','score','stage','star','theme'].sort()), 'top 元素保留旧字段并新增 leaders');
   A(out.top[0].leader.code === '600001' && out.top[0].star.code === '600003', 'top 龙头/明星取值不变');
+  A(out.top[0].leaders.length === 2 && out.top[0].leaders[0].code === '600001'
+    && out.top[0].leaders[1].code === '600002' && out.top[0].leaders[1].leadScore === 71, 'top 保存前两名龙头及 leadScore');
   A(out.confirmedKey === 'fam-a', 'confirmedKey 不变');
   A(out.schemaVersion === 2, 'schemaVersion=2');
   A(Array.isArray(out.starTransitions) && out.starTransitions.length === 0, 'confirmed-from-start 不冒充 expected 事件');
@@ -84,6 +86,8 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
   await writeMainlinePredict('2026-07-12', '午后', [{ key: 'k-c', theme: '旧式', rank: 1,
     mainLeader: { code: '600001', name: 'L' }, starStocks: [{ code: '600009', name: '无级星' }] }], null);
   A(written['/fake/mainline-predict-2026-07-12.json'].top[0].star.level === null, '明星无 level 的旧形态 → level=null(等级未知)');
+  A(written['/fake/mainline-predict-2026-07-12.json'].top[0].leaders.length === 1
+    && written['/fake/mainline-predict-2026-07-12.json'].top[0].leaders[0].code === '600001', '旧式 mainLeader 自动兼容为单元素 leaders');
 
   // 1c. 预期明星事件跨盘中覆盖保留：同主线里 confirmed 排第一时，也不能漏掉后面的 expected。
   existingPredict = null;
