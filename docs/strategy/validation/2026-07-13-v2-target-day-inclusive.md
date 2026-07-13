@@ -9,7 +9,8 @@ This change corrects the official v2 leader metric date/price path and removes r
 - The same rule applies to the 30-session return.
 - A historical day without a complete, correctly dated, after-close close-price payload remains missing. It must not fall back to a stale `gain` value.
 - A target-day limit-up is scored only through `zt10Count`. It no longer also earns the legacy present, target-day limit-up, streak or early-seal bonuses.
-- The `present` bonus remains only for a non-limit-up stock whose target-day gain is at least 3%. Streak and seal time remain display-only facts.
+- Each limit-up event earns 14 points without the previous 40-point cap.
+- The `present` bonus remains only for a non-limit-up stock whose target-day gain is at least 5%. Streak and seal time remain display-only facts.
 
 ## Locked evidence
 
@@ -56,11 +57,11 @@ After the Owner additionally removed duplicate target-day limit-up scoring, the 
 
 | Rank | Code | Name | Score |
 |---:|---|---|---:|
-| 1 | 002396 | 星网锐捷 | 84 |
+| 1 | 002396 | 星网锐捷 | 114 |
 | 2 | 000938 | 紫光股份 | 65 |
 | 3 | 603661 | 恒林股份 | 62 |
 | 4 | 002965 | 祥鑫科技 | 61 |
-| 5 | 603950 | 长源东谷 | 55 |
+| 5 | 603956 | 威派格 | 56 |
 
 紫光股份 still receives the 6-point non-limit-up presence signal because it closed up 6.8%, but a target-day limit-up receives no second present bonus. Hard gates, limit-up facts and family rules remain unchanged.
 

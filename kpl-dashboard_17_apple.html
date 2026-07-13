@@ -11145,7 +11145,7 @@ function strategyMainlineLeadersHTML(m) {
   const leaders = Array.isArray(m?.leaders) ? m.leaders.slice(0, 3) : [];
   if (!leaders.length) return '';
   return `<div class="ml-leader-list">
-    <div class="ml-leader-list-title">龙头候选 <small>按10日涨停次数 × 10/30日涨幅综合排序 · 盘中含当日实时，盘后含当日收盘；每次涨停只计一次，连板与早封仅展示</small></div>
+    <div class="ml-leader-list-title">龙头候选 <small>按10日涨停次数 × 10/30日涨幅综合排序 · 盘中含当日实时，盘后含当日收盘；每次涨停14分不封顶，未板涨幅≥5%加6分</small></div>
     ${leaders.map((leader, idx) => {
       const meta = [
         Number(leader.lianban) >= 2 ? `${Number(leader.lianban)}板` : '',
@@ -11375,7 +11375,7 @@ function renderStrategyMainlinesHTML(d) {
       return `<span class="ml-stock ml-leaderstock${idx === 0 ? ' top' : ''}" title="${escapeHTML((l.basis || []).join(' · '))}">${marks}${escapeHTML(l.name || l.code || '')}<i>${escapeHTML(lb)}</i></span>`;
     }).join('');
     const leaderRow = leaderChips
-      ? `<div class="ml-proof-row"><span class="ml-proof-lbl" title="按10日涨停次数/10日30日涨幅池内排名+主因门槛综合打分,最多3个可能龙头;每次涨停只计一次,连板与早封仅展示;⭐=同时是明星;10/30日窗口盘中含当日实时、盘后含当日收盘">龙头</span>${leaderChips}</div>`
+      ? `<div class="ml-proof-row"><span class="ml-proof-lbl" title="按10日涨停次数/10日30日涨幅池内排名+主因门槛综合打分,最多3个可能龙头;每次涨停14分不封顶,未板涨幅≥5%加6分,连板与早封仅展示;⭐=同时是明星;10/30日窗口盘中含当日实时、盘后含当日收盘">龙头</span>${leaderChips}</div>`
       : (m.leaderNote ? `<div class="ml-proof-row"><span class="ml-proof-lbl">龙头</span><span class="ml-leader-none">${escapeHTML(m.leaderNote)}</span></div>` : '');
     const starChips = (m.starStocks || []).filter(s => s.level === 'confirmed' || s.level === 'expected').slice(0, 3)
       .map(s => `<span class="ml-stock ml-starstock${s.level === 'confirmed' ? ' confirmed' : ''}" title="${escapeHTML(`L2:主动比${s.ratios?.activeRatio ?? '-'} 被动比${s.ratios?.passiveRatio ?? '-'} 合计比${s.ratios?.supportRatio ?? '-'}` + starMaxBucketAdminInfo(s))}">⭐${leaderCodeSet.has(String(s.code || '')) ? '👑' : ''}${escapeHTML(s.name || s.code || '')}<i>${escapeHTML(s.label || '')} 主${s.ratios?.activeRatio ?? '-'}/被${s.ratios?.passiveRatio ?? '-'}</i></span>`)

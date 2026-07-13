@@ -106,6 +106,7 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   await strategyMainlineReworkLeaders([buggy], '2026-07-08', { debug: true, traceCodes: ['002396', '000938'] });
   const buggyXW = (buggy.leaders || []).find(r => r.code === '002396');
   A(!!buggyXW, '归属丢失时:主因库池子补全仍把星网拉进龙头池(不至彻底缺席)');
+  A(buggyXW?.leadScore === 128, '星网近10日5次涨停按5×14=70计分,不再封顶40');
   A(buggyXW && !buggyXW.basis.some(b => b.startsWith('今日')), '但星网拿不到今日涨停/连板展示标识');
   const buggyZG = (buggy.leaders || []).find(r => r.code === '000938');
   A(!!buggyZG, '紫光:云计算历史主因按生产家族并入算力龙头池,光模块记录仍归光通信');
@@ -135,6 +136,19 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   const fixedTwoBoardXW = (fixedTwoBoard.leaders || []).find(r => r.code === '002396');
   A(fixedTwoBoardXW?.leadScore === fixedXW?.leadScore && fixedTwoBoardXW?.basis.includes('今日2板'),
     '二板和早封保留展示但不产生额外奖励分');
+
+  const thresholdTable = METRICS_TABLE;
+  METRICS_TABLE = code => ({ ...thresholdTable(code), ...(code === '000938' ? { targetDayGain: 4.99 } : {}) });
+  const belowFive = mkMainline();
+  await strategyMainlineReworkLeaders([belowFive], '2026-07-08', { debug: true });
+  const belowFiveZG = (belowFive.leaders || []).find(r => r.code === '000938');
+  METRICS_TABLE = code => ({ ...thresholdTable(code), ...(code === '000938' ? { targetDayGain: 5 } : {}) });
+  const atFive = mkMainline();
+  await strategyMainlineReworkLeaders([atFive], '2026-07-08', { debug: true });
+  const atFiveZG = (atFive.leaders || []).find(r => r.code === '000938');
+  A(atFiveZG?.leadScore === belowFiveZG?.leadScore + 6,
+    '未涨停目标日涨幅4.99%不加分,达到5.00%才加在场6分');
+  METRICS_TABLE = thresholdTable;
 
   // 3. 家族回归:主线显示为算力AI,历史记录写云计算时仍应按同一生产家族补入紫光;
   //    光模块按现行 taxonomy 保持独立的光通信家族,不跨族计数。

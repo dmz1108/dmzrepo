@@ -4288,3 +4288,27 @@ Validated:
 
 Deployment:
 - 未部署云端,未修改生产文件/运行时数据库/冻结快照,未重启服务;PR #43 需重新独立复核。
+
+## 2026-07-13 - Codex - v2涨停分取消封顶并收紧在场阈值
+
+Changed:
+- 按 Owner 最新裁定,`zt10Count`改为每次涨停14分且不封顶;仍保证同一目标日涨停只计一次。
+- 未涨停股票的目标日在场奖励由涨幅≥3%收紧为≥5%加6分;涨停股票即使涨幅超过5%也不重复取得该奖励。
+- 连板与早封继续仅展示;L2明星信号、主因硬门槛、家族归属不变。
+- 同一90股锁定池重算前五:星网锐捷114、紫光股份65、恒林股份62、祥鑫科技61、威派格56。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/leader-pool-debug.test.js`
+- `docs/strategy/validation/2026-07-13-v2-target-day-inclusive.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 新增回归证明近10日5次涨停按`5×14=70`计分,不再封顶40。
+- 新增4.99%/5.00%阈值边界测试;只有未涨停且达到5.00%才增加6分。
+- 锁定证据 SHA-256=`0511d6e7ff2ce3fbe95217612f7a6cc6273037ff83551fcbb29de1c3d6e5bcd8`,候选池与行情证据未改变。
+- `git diff --check`、`node --check kpl-stats-server.js`通过;全部21个`tests/*.test.js`文件通过。
+
+Deployment:
+- 未部署云端,未改生产数据库或冻结快照,未重启服务;PR #43 必须按最新提交重新复核。
