@@ -70,6 +70,7 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   const isExcludedFromReview = () => false;
   const readSavedApiKey = async () => 'k';
   const strategyParseSealMinutes = (t) => { const s = String(t || ''); if (!/^\d{5,6}$/.test(s)) return null; const p = s.padStart(6, '0'); return (Number(p.slice(0, 2)) - 9) * 60 + Number(p.slice(2, 4)); };
+  eval(extractFn('strategyLeaderTargetDayGain'));
   eval(extractFn('strategyLeaderRankScore'));
 
   // 近10个交易日(Codex 第7点):含周一 2026-06-29,排除周六 2026-06-27;末位=诊断日 07-08
@@ -88,7 +89,7 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   // zt10Count=近10日总涨停(星网5),lianban 由主线当日数据带入(见下),两者不可混。
   let METRICS_TABLE = code => ({
     '002396': { zt10Count: 5, gain10: 54.05, gain30: 25.32, mainZt10Count: 1 },
-    '000938': { zt10Count: 2, gain10: 21.55, gain30: 16.59, mainZt10Count: 1 },
+    '000938': { zt10Count: 2, gain10: 21.55, gain30: 16.59, mainZt10Count: 1, targetDayGain: 6.8, targetPriceState: 'post-close-final' },
     '603950': { zt10Count: 2, gain10: 16.25, gain30: 25.37, mainZt10Count: 2 },
   }[code] || { zt10Count: 0, mainZt10Count: 0 });
   const enrichReviewLeaderMetrics = async rows => { for (const r of rows) Object.assign(r, METRICS_TABLE(r.code)); };
@@ -106,7 +107,10 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   const buggyXW = (buggy.leaders || []).find(r => r.code === '002396');
   A(!!buggyXW, '归属丢失时:主因库池子补全仍把星网拉进龙头池(不至彻底缺席)');
   A(buggyXW && !buggyXW.basis.some(b => b.startsWith('今日')), '但星网拿不到今日涨停/连板/封速加分(归属错误的真实代价)');
-  A((buggy.leaders || []).some(r => r.code === '000938'), '紫光:云计算历史主因按生产家族并入算力龙头池,光模块记录仍归光通信');
+  const buggyZG = (buggy.leaders || []).find(r => r.code === '000938');
+  A(!!buggyZG, '紫光:云计算历史主因按生产家族并入算力龙头池,光模块记录仍归光通信');
+  A(buggyZG?.gain === 6.8 && buggyZG?.basis.includes('今日+6.8%'),
+    '紫光目标日+6.8%统一进入v2在场分和说明,不再因字段名不同漏6分');
 
   // 2. 机制复现A'(归属修复):todayCodes 含星网 + 盘中一板(lianban=1,非近10日总数5),评分抬升且登顶
   const fixed = mkMainline({

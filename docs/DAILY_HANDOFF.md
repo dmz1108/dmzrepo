@@ -4235,3 +4235,33 @@ Changed:
 
 Deployment:
 - 仅整理 Git 交接；未再次修改云端、未重启服务、未发起新的 L2 任务。PR4 仍暂停，等待 Claude 独立复核 P6 v2 锁定双跑。
+
+## 2026-07-13 - Codex - 修正v2目标日价格与日期口径
+
+Changed:
+- 保留正确的10/30交易日累计收益基准:窗口包含目标日,但收益基准是窗口首日前一交易日收盘;未误改成首日收盘。
+- v2盘中使用目标日实时价/实时涨幅,盘后只使用日期匹配、完整且收盘后保存的目标日收盘库;历史缺失不再退回残留`gain`冒充。
+- 评分、排序、诊断和说明统一读取显式`targetDayGain`;修复紫光7月8日已有`todayGain=6.8%`却漏掉6分在场分的问题。
+- 更新前端和响应元数据,明确10/30日涨幅盘中含目标日实时、盘后含目标日最终收盘。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/leader-family-metrics.test.js`
+- `tests/leader-pool-debug.test.js`
+- `tests/metric-profile.test.js`
+- `docs/strategy/validation/2026-07-13-v2-target-day-inclusive.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 锁定证据参数:`day=2026-07-08`,`familyKey=group:算力AI`,`code=000938`;90股原始证据SHA-256=`0511d6e7ff2ce3fbe95217612f7a6cc6273037ff83551fcbb29de1c3d6e5bcd8`,规范输入SHA-256=`fa8e31b6fda6057694c743faf2ec2d3382f7764ec077203ed93c31fa4874b3c2`。
+- 只读核对云端收盘库:紫光06-24=`27.66`,06-25=`28.39`,07-08=`33.62/+6.8%`;10交易日累计涨幅必须为`33.62/27.66-1=21.55%`,不能错用06-25收盘得到18.42%。
+- 锁定v2行由59分补回在场6分为65分,预期由第6升至第5;权重、硬门槛、涨停次数和家族规则均未修改。
+- `node --check kpl-stats-server.js`、三个针对性测试及指标口径测试通过;全部21个`tests/*.test.js`文件通过。
+
+Deployment:
+- 未部署云端,未修改生产文件/运行时数据库/冻结快照,未重启服务;仅通过SSH只读核验证据。
+
+Notes for next agent:
+- 请独立复核“10个交易日事件窗口”与“10日累计收益基准收盘”两个概念,不要把06-25首日收盘误当收益基准。
+- 合并和部署前应使用相同证据参数复核紫光目标日涨幅、v2在场分和历史缺失不回退行为。
