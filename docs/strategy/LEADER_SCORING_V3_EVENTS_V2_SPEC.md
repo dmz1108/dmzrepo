@@ -1,7 +1,7 @@
-# P6 规格:每日事件档案 v2 完整性收窄 — 状态转换表与测试案例(rev6)
+# P6 规格:每日事件档案 v2 完整性收窄 — 状态转换表与测试案例(定稿)
 
-状态:按 Codex 五审两项阻断修订(逐股决策树为唯一真值;逐股家族归属状态显式化);待 Codex 复核、Owner 定稿。本文档只定义规则,不是实现。
-作者:Claude(2026-07-13,rev6)。依据:Owner 对 P6 提前实施的确认与四点修正;06-23 / 07-02 两个缺原始快照日分别导致 07-01 替代验收 0/74、07-08 验收 0/90 的实证。
+状态:**已定稿(2026-07-13)**——六轮 Codex 评审通过(共 13 项阻断修订 + R5b 精化接受),Owner §7 两项全部拍板。本文档只定义规则,实现另开 Draft PR。
+作者:Claude(2026-07-13)。依据:Owner 对 P6 提前实施的确认与四点修正;06-23 / 07-02 两个缺原始快照日分别导致 07-01 替代验收 0/74、07-08 验收 0/90 的实证。
 
 ## 0. 范围与非目标
 
@@ -97,7 +97,7 @@
 | S4 | LU∧¬MR | 尚未出现 | 全日阻断 | **按股票收窄**:归属可靠的涨停股正常 15/20(明星按逐股三分);仅缺归属股 R3 → `mainReasonFamily`;¬MR ⇒ ¬mainlineKnowable,8 分不确定按 R5/R7 处理(CL 在则 >5% 显式行,CL 缺则 noneUndeterminable)。MR 全局不完整**不得**阻断归属已确定股票 |
 | S5 | LU∧¬CL(可与 S4 重叠,仅为诊断标签,不构成互斥控制流) | 尚未出现 | 全日阻断 | **按字段收窄**:涨停+可靠归属不依赖 CL/SNAP,正常 15/20;依赖收盘涨幅或确认主线的判定(8 分、none 0)按 §2.1 决策树逐股阻断;**不得反向清除已确认涨停事件** |
 
-`reconstructed`:重建确认主线 `postCloseConfirmed.status='reconstructed'`,计分上视同 ¬mainlineKnowable(只进展示与审计),家族级 canonicalSource 裁定前不变。
+`reconstructed`(**Owner 2026-07-13 终裁**):重建确认主线 `postCloseConfirmed.status='reconstructed'` 只用于展示、解释与审计,**不得直接产生 `confirmed-mainline-big-gain` 8 分**,计分上视同 ¬mainlineKnowable。该限制不影响可独立确认的事件:可靠涨停+可靠归属 → 15,叠加自身明星正证据 → 20,照常进入后续 10 日历史窗口;窗口有未决字段时 formalScore 可保持 null,但已确认 15/20 必须保留在 `history.knownPoints/evidence`。将来只有在 canonicalSource、sourceDay/asOf、防跨日污染与重建可信标准**全部定稿**后,才另开讨论决定 reconstructed 是否升级计分——不得在 P6 中暗中放开。
 
 ## 3. 行级发射规则(生成器,event rule `leader-scoring-v3-events-v2`)
 
@@ -170,7 +170,7 @@ v2 档案日级新增:`stockEvents.rowsAuthoritative`、`stockEvents.noneDetermi
 
 **验收重跑测算预期(非验收承诺,最终以锁定输入与三组 SHA 为准)**:07-08 约 87/90、07-01 约 60/74;两日各出首份合规 v2/v3 正式名次对照表。实现后由 Codex 执行、Claude 复核,不得据测算预期预先宣布 v3 优劣。
 
-## 7. 悬而未决(需 Owner 拍板)
+## 7. Owner 决策记录(全部完成,无悬决项)
 
-1. ~~S4 / S5 的启用时机~~ **已裁定**(Owner 2026-07-13 口径修正):S4/S5 与 S2 同批实现,按股票/按字段闸,见 §0 与 §2。
-2. 家族级 canonicalSource 裁定后,`reconstructed` 确认主线是否升级为可计分(本规格默认不可)。
+1. **S4 / S5 启用时机——已裁定**(Owner 2026-07-13 口径修正):与 S2 同批实现,按股票/按字段闸,见 §0 与 §2。
+2. **reconstructed 计分资格——已终裁**(Owner 2026-07-13):默认只展示/审计,不产生主线 8 分;可靠 15/20 事件不受影响照常累计;升级计分须待 canonicalSource、sourceDay/asOf、防污染与重建可信标准全部定稿后**另开讨论**,不得在 P6 中放开。详见 §2 reconstructed 条目。

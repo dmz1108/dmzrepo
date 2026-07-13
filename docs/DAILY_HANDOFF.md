@@ -3841,3 +3841,15 @@ Files: docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md、docs/DAILY_HANDOFF.md
 Validated: 仅文字,语义零改动(Codex 六审已确认语义通过、R5b 精化接受)。
 
 Deployment: 无。规格只待 Owner 确认最后一项默认值(reconstructed 主线只展示/审计、不参与评分)即可定稿合并;不实现、不部署、不启动 PR4。
+
+## 2026-07-13 - Claude - P6 规格定稿:Owner §7 终裁落档
+
+Changed:
+- reconstructed 终裁写入 §2/§7:重建主线只展示/审计,不产生主线8分;可靠15/20事件不受影响照常进历史窗口;formalScore 可 incomplete 但已确认事件分必须保留于 knownPoints/evidence;升级计分须待 canonicalSource/sourceDay/防污染/重建可信标准全部定稿后另开讨论。
+- 规格标记定稿:六轮 Codex 评审(13项阻断+R5b精化接受)+ Owner §7 两项拍板全部完成;§7 改为决策记录,无悬决项。
+
+Files: docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md(定稿)、docs/DAILY_HANDOFF.md
+
+Validated: 仅文档;六审四处文字收尾已在上一提交完成,本次仅落档 Owner 终裁与定稿标记。
+
+Deployment: 无。PR #37 待合并(合并由 Codex/Owner 执行);合并后 Codex 另开 P6 实现 Draft PR(S2/S4/S5 逐股闸 + T1-T17)交 Claude 复审;不实现、不部署、不启动 PR4。
