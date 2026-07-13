@@ -130,11 +130,47 @@ const preMissingMax = { ...sealedMissingMax, gainPct: 7 };
 const sPreMissing = strategyMainlineStarStatus(preMissingMax);
 A(sPreMissing?.level === 'active' && sPreMissing.maxBucket.dataMissing === true, '涨停前:字段缺失→可判资金活跃但不可能预期明星,带标');
 
-// 10. 前端管理员证据(静态断言 + 内联脚本编译)
+// 10. 跨来源任务挂载:KPL 创新药扫描可挂回东财医药卡片,后一次空任务不遮蔽有效结果。
+const normalizeReasonSourceCode = value => String(value || '').replace(/\D/g, '').slice(0, 6);
+const strategyMainlineFamilyInfo = item => ({
+  key: /医药|创新药|中药/.test(String(item?.theme || '')) ? 'group:医药' : `theme:${String(item?.theme || '')}`,
+});
+const successfulCrossSourceJob = {
+  jobId: 'auto-good', plateId: '308014', boardName: '创新药', familyKey: 'group:医药',
+  day: '2026-07-13', status: 'done', createdAt: '2026-07-13T02:35:10.000Z',
+  results: [{ ...rowExpected, code: '600001', name: '跨源明星' }],
+};
+const emptyNewerJob = {
+  jobId: 'manual-empty', plateId: '308014', boardName: '创新药', familyKey: '',
+  day: '2026-07-13', status: 'done', createdAt: '2026-07-13T04:42:29.000Z', results: [],
+};
+const unrelatedJob = {
+  jobId: 'unrelated', plateId: 'BK_OTHER', boardName: '机器人', familyKey: 'group:机器人',
+  day: '2026-07-13', status: 'done', createdAt: '2026-07-13T03:00:00.000Z',
+  results: [{ ...rowExpected, code: '600002', name: '无关明星' }],
+};
+const localL2TaskQueue = {
+  listDay: () => [emptyNewerJob, unrelatedJob, successfulCrossSourceJob],
+};
+eval(extractFn('strategyMainlineCollectStars'));
+const crossSourceStars = strategyMainlineCollectStars(
+  [{ plateId: 'BK0615', name: '中药概念' }],
+  '2026-07-13',
+  { familyKey: 'group:医药' }
+);
+A(crossSourceStars.byCode.get('600001')?.level === 'expected', '同一主线家族跨板块ID仍消费有效L2结果');
+A(!crossSourceStars.byCode.has('600002'), '不同主线家族的扫描结果不会错挂');
+A(crossSourceStars.completedPlates.has('308014'), '后一次空任务不遮蔽同板块较早的有效完成任务');
+
+// 11. 前端管理员证据(静态断言 + 内联脚本编译)
 const html = fsReal.readFileSync(pathReal.join(__dirname, '..', 'kpl-dashboard_17_apple.html'), 'utf8');
 A(html.includes('function starMaxBucketAdminInfo(s)') && html.includes("if (!state.adminLoggedIn || !s || !s.maxBucket) return ''"), '管理员证据函数存在且非管理员返回空串');
 A((html.match(/starMaxBucketAdminInfo\(s\)/g) || []).length >= 2, '两处明星 tooltip 均拼接管理员证据');
 A(html.includes('最大档字段在但无大单:非明星') && html.includes('最大档字段缺失:需检查worker采集'), 'empty/dataMissing 两种状态文案齐备');
+A(html.includes('id="strategy-l2-history"') && html.includes('function loadStrategyL2History(day)'), '管理员策略页包含每日L2扫描记录入口');
+A(html.includes("if (!canUseL2AdminTools()) return ''") && html.includes('管理员可见 · 同板块优先展示最近一次有效结果'), 'L2任务明细只在管理员工具权限下渲染');
+const backend = fsReal.readFileSync(pathReal.join(__dirname, '..', 'strategy-backend.js'), 'utf8');
+A(backend.includes("url.searchParams.get('history') === '1'") && backend.includes("if (!adminViewer) { sendJson(res, 403, { error: 'admin required' })"), 'L2历史接口有管理员门控');
 let htmlCompiled = true;
 for (const m2 of html.matchAll(/<script(?![^>]*src=)[^>]*>([\s\S]*?)<\/script>/g)) {
   try { new Function(m2[1]); } catch (e) { htmlCompiled = false; console.error('inline compile failed:', e.message); }

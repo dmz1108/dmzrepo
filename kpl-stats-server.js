@@ -22172,19 +22172,62 @@ function strategyMainlineStarStatus(row) {
 }
 
 // 读取主线相关板块当日已有的 L2 扫描结果（只消费，不在这里触发扫描），产出 code -> 明星判定。
-function strategyMainlineCollectStars(boards, day) {
+function strategyMainlineCollectStars(boards, day, options = {}) {
   const byCode = new Map();
   const scannedPlates = new Set();         // 当日有 L2 扫描结果的板块(含运行中分批回传)
   const completedPlates = new Set();       // 扫描已完成(job done)的板块
   const pendingPlates = new Set();         // 仍在排队/运行的板块——存在即不允许判负(结论未定)
   const coveredCodes = new Set();          // 全部结果行覆盖到的股票(含 running 分批,仅供观测)
   const completedCoveredCodes = new Set(); // 仅 done 任务结果覆盖的股票——判负只认这份(评审二修)
-  for (const board of (Array.isArray(boards) ? boards : [])) {
-    const plateId = String(board?.plateId || '');
-    if (!plateId) continue;
-    let job = null;
-    try { job = localL2TaskQueue.latest(plateId, day); } catch { continue; }
-    if (!job) continue;
+  const boardRows = Array.isArray(boards) ? boards : [];
+  const boardByPlate = new Map(boardRows.map(board => [String(board?.plateId || ''), board]).filter(([plateId]) => plateId));
+  const familyKey = String(options?.familyKey || '');
+  const selectedJobs = [];
+  const seenJobs = new Set();
+  const addJob = (job) => {
+    const id = String(job?.jobId || '');
+    if (!job || (id && seenJobs.has(id))) return;
+    if (id) seenJobs.add(id);
+    selectedJobs.push(job);
+  };
+  let dayJobs = [];
+  try {
+    dayJobs = typeof localL2TaskQueue?.listDay === 'function' ? localL2TaskQueue.listDay(day) : [];
+  } catch {}
+  if (dayJobs.length) {
+    const grouped = new Map();
+    for (const job of dayJobs) {
+      const plateId = String(job?.plateId || '');
+      if (!plateId) continue;
+      const jobFamilyKey = String(job?.familyKey || strategyMainlineFamilyInfo({ theme: job?.boardName }).key || '');
+      const exactBoard = boardByPlate.has(plateId);
+      const sameFamily = !!(familyKey && jobFamilyKey && familyKey === jobFamilyKey);
+      if (!exactBoard && !sameFamily) continue;
+      if (!grouped.has(plateId)) grouped.set(plateId, []);
+      grouped.get(plateId).push(job);
+    }
+    for (const jobs of grouped.values()) {
+      const latest = jobs[0] || null;
+      const latestSuccessful = jobs.find(job =>
+        String(job?.status || '') === 'done' && Array.isArray(job?.results) && job.results.length > 0
+      ) || null;
+      if (latest && ['queued', 'running'].includes(String(latest.status || ''))) addJob(latest);
+      addJob(latestSuccessful || latest);
+    }
+  } else {
+    // 兼容尚未升级 listDay 的队列实现。
+    for (const plateId of boardByPlate.keys()) {
+      let job = null;
+      try {
+        job = typeof localL2TaskQueue?.latestSuccessful === 'function'
+          ? (localL2TaskQueue.latestSuccessful(plateId, day) || localL2TaskQueue.latest(plateId, day))
+          : localL2TaskQueue.latest(plateId, day);
+      } catch { continue; }
+      addJob(job);
+    }
+  }
+  for (const job of selectedJobs) {
+    const plateId = String(job?.plateId || '');
     const jobStatus = String(job.status || '');
     if (jobStatus === 'queued' || jobStatus === 'running') pendingPlates.add(plateId);
     if (!Array.isArray(job.results) || !job.results.length) continue;
@@ -22198,7 +22241,12 @@ function strategyMainlineCollectStars(boards, day) {
       if (jobDone) completedCoveredCodes.add(code);
       if (byCode.has(code)) continue;
       const star = strategyMainlineStarStatus(row);
-      if (star) byCode.set(code, { ...star, code, name: String(row?.name || ''), boardName: String(board?.name || job.boardName || '') });
+      if (star) byCode.set(code, {
+        ...star,
+        code,
+        name: String(row?.name || ''),
+        boardName: String(boardByPlate.get(plateId)?.name || job.boardName || ''),
+      });
     }
   }
   return { byCode, scannedPlates, completedPlates, pendingPlates, coveredCodes, completedCoveredCodes };
@@ -22294,6 +22342,10 @@ function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase, prior
         plateId: String(board.plateId),
         boardName: String(board.name || ''),
         day,
+        trigger: 'strategy-auto',
+        familyKey: strategyMainlineFamilyInfo({ theme: board.name }).key,
+        scanChannel: String(board?.scanChannel || ''),
+        zsType: board?.zsType ?? null,
         stocks: board.memberRows,
         priorityCodes: strategyMainlineScanPriorityCodes(board, priorByCode),   // 猎场股优先扫(主因命中来自真实上下文)
         limitStocks: STRATEGY_MAINLINE_AUTO_SCAN_LIMIT_STOCKS,
@@ -23403,14 +23455,17 @@ function strategyMainlineAugmentPrediction(item, isToday, day, recordTrend = tru
   const momentum = strategyMainlineMomentumScore(trend);
   if (momentum > 0) scoreParts.momentum = momentum;
   const focusStocks = strategyMainlineFocusStocks(item);
-  // 明星股：只匹配本主线相关的股票（今日涨停/大涨/潜力股），避免把邻板块扫描结果错挂进来。
-  const l2Stars = strategyMainlineCollectStars(item?.resonanceBoards, day);
-  const starByCode = l2Stars.byCode;
   const themeCodes = new Set([
     ...(Array.isArray(item?.todayCodes) ? item.todayCodes : []),
     ...(Array.isArray(item?.risingStocks) ? item.risingStocks.map(s => normalizeReasonSourceCode(s?.code)) : []),
     ...focusStocks.map(s => s.code),
   ].filter(Boolean));
+  // 明星股：精确板块 ID 之外也消费同一标准主线家族的扫描，解决 KPL/东财/同花顺
+  // 跨来源板块 ID 不同导致任务已完成却无法挂回卡片的问题；最终仍以 themeCodes 交集防止错挂。
+  const l2Stars = strategyMainlineCollectStars(item?.resonanceBoards, day, {
+    familyKey: item?.familyKey || item?.key || '',
+  });
+  const starByCode = l2Stars.byCode;
   const starStocks = [...starByCode.values()]
     .filter(star => themeCodes.has(star.code) && star.level !== 'sealedWeak')
     .sort((a, b) => (STRATEGY_MAINLINE_STAR_LEVEL_ORDER[a.level] ?? 9) - (STRATEGY_MAINLINE_STAR_LEVEL_ORDER[b.level] ?? 9) || (Number(b.gain) || 0) - (Number(a.gain) || 0))

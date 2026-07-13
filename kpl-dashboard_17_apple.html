@@ -8420,6 +8420,172 @@
     border-radius: 8px !important;
   }
 
+  body.view-strategy .ml-l2-history {
+    margin: 18px 0 0 !important;
+    padding: 0 !important;
+  }
+
+  body.view-strategy .ml-l2-history .strategy-section-head {
+    margin-bottom: 10px !important;
+  }
+
+  body.view-strategy .ml-l2-job-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  body.view-strategy .ml-l2-job {
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-card);
+    overflow: hidden;
+  }
+
+  body.view-strategy .ml-l2-job-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px 8px;
+  }
+
+  body.view-strategy .ml-l2-job-head > div {
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+  }
+
+  body.view-strategy .ml-l2-job-head b {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.view-strategy .ml-l2-job-head small,
+  body.view-strategy .ml-l2-job-head time,
+  body.view-strategy .ml-l2-job-meta {
+    color: var(--text-faint);
+    font-size: 11px;
+  }
+
+  body.view-strategy .ml-l2-trigger,
+  body.view-strategy .ml-l2-status {
+    padding: 2px 6px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text-muted);
+    font-size: 10px;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+
+  body.view-strategy .ml-l2-trigger.auto {
+    border-color: rgba(74,155,255,.28);
+    color: #4a9bff;
+    background: rgba(74,155,255,.08);
+  }
+
+  body.view-strategy .ml-l2-status.done {
+    border-color: rgba(11,208,106,.24);
+    color: #36dd96;
+  }
+
+  body.view-strategy .ml-l2-status.error {
+    border-color: rgba(255,85,102,.24);
+    color: #ff6b78;
+  }
+
+  body.view-strategy .ml-l2-job-meta {
+    padding: 0 14px 10px;
+  }
+
+  body.view-strategy .ml-l2-stock-list {
+    max-height: 360px;
+    overflow: auto;
+    border-top: 1px solid var(--border);
+  }
+
+  body.view-strategy .ml-l2-stock {
+    border-bottom: 1px solid var(--border);
+  }
+
+  body.view-strategy .ml-l2-stock:last-child {
+    border-bottom: 0;
+  }
+
+  body.view-strategy .ml-l2-stock summary {
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  body.view-strategy .ml-l2-stock summary::-webkit-details-marker {
+    display: none;
+  }
+
+  body.view-strategy .ml-l2-stock summary b {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+  }
+
+  body.view-strategy .ml-l2-stock summary i,
+  body.view-strategy .ml-l2-stock summary em,
+  body.view-strategy .ml-l2-code {
+    color: var(--text-faint);
+    font-size: 11px;
+    font-style: normal;
+    white-space: nowrap;
+  }
+
+  body.view-strategy .ml-l2-stock summary i.up { color: var(--up); }
+  body.view-strategy .ml-l2-stock summary i.down { color: var(--down); }
+
+  body.view-strategy .ml-l2-buckets {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+    padding: 0 14px 10px 80px;
+  }
+
+  body.view-strategy .ml-l2-buckets > span {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    padding: 6px;
+    border-radius: 6px;
+    background: var(--bg-subtle);
+  }
+
+  body.view-strategy .ml-l2-buckets b,
+  body.view-strategy .ml-l2-buckets i {
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: 10px;
+    font-style: normal;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.view-strategy .ml-l2-empty {
+    padding: 12px 14px;
+    border-top: 1px solid var(--border);
+    color: var(--text-faint);
+    font-size: 12px;
+  }
+
   @media (max-width: 860px) {
     .logo .qi-logo {
       width: 70px !important;
@@ -8460,6 +8626,25 @@
     }
     body.view-strategy .sc-pick-pair {
       grid-template-columns: 48px minmax(0, 1fr) minmax(0, 1fr) !important;
+    }
+    body.view-strategy .ml-l2-job-grid {
+      grid-template-columns: 1fr;
+    }
+    body.view-strategy .ml-l2-job-head {
+      grid-template-columns: minmax(0, 1fr) auto auto;
+    }
+    body.view-strategy .ml-l2-job-head time {
+      display: none;
+    }
+    body.view-strategy .ml-l2-stock summary {
+      grid-template-columns: 54px minmax(0, 1fr) auto;
+    }
+    body.view-strategy .ml-l2-stock summary em {
+      grid-column: 2 / -1;
+    }
+    body.view-strategy .ml-l2-buckets {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      padding-left: 14px;
     }
   }
 </style>
@@ -11008,6 +11193,101 @@ async function loadStrategyMainlines(day) {
     if (cur) cur.innerHTML = renderStrategyMainlinesHTML(d);
   } catch (e) {
     const cur = document.getElementById('strategy-mainlines');
+    if (cur) cur.innerHTML = '';
+  }
+}
+function strategyL2HistoryTime(value) {
+  if (!value) return '';
+  try {
+    return new Date(value).toLocaleTimeString('zh-CN', {
+      timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', hour12: false,
+    });
+  } catch (_) { return ''; }
+}
+function strategyL2HistoryRatio(buy, sell) {
+  const b = Number(buy) || 0;
+  const s = Number(sell) || 0;
+  if (s > 0) return (b / s).toFixed(2);
+  return b > 0 ? '∞' : '0.00';
+}
+function strategyL2HistoryBucket(label, bucket) {
+  const b = bucket || {};
+  return `<span><b>${escapeHTML(label)}</b><i>主 ${strategyL2HistoryRatio(b.activeBuy, b.activeSell)}</i><i>被 ${strategyL2HistoryRatio(b.passiveBuy, b.passiveSell)}</i></span>`;
+}
+function renderStrategyL2History(data) {
+  if (!canUseL2AdminTools()) return '';
+  const allJobs = Array.isArray(data?.jobs) ? data.jobs : [];
+  const byPlate = new Map();
+  for (const job of allJobs) {
+    const key = `${job?.zsType ?? ''}:${String(job?.plateId || '')}`;
+    if (!String(job?.plateId || '')) continue;
+    const useful = Array.isArray(job?.results) && job.results.length > 0;
+    const current = byPlate.get(key);
+    if (!current || (!current.useful && useful)) byPlate.set(key, { job, useful });
+  }
+  const jobs = [...byPlate.values()].map(row => row.job)
+    .sort((a, b) => String(b?.createdAt || '').localeCompare(String(a?.createdAt || '')));
+  if (!jobs.length) return '';
+  const cards = jobs.map(job => {
+    const picked = Array.isArray(job?.picked) ? job.picked : [];
+    const resultCount = Array.isArray(job?.results) ? job.results.length : 0;
+    const trigger = job?.trigger === 'strategy-auto' ? '自动' : (job?.trigger === 'manual' ? '手动' : '扫描');
+    const status = String(job?.status || '');
+    const statusText = status === 'done' ? '完成' : (status === 'running' ? '计算中' : (status === 'queued' ? '排队中' : '失败'));
+    const rows = picked.map(row => {
+      const gain = Number(row?.gainPct);
+      const thresholds = row?.thresholds || {};
+      return `<details class="ml-l2-stock">
+        <summary>
+          <span class="ml-l2-code">${escapeHTML(String(row?.code || ''))}</span>
+          <b>${escapeHTML(String(row?.name || ''))}</b>
+          <i class="${Number.isFinite(gain) && gain >= 0 ? 'up' : 'down'}">${Number.isFinite(gain) ? `${gain >= 0 ? '+' : ''}${gain.toFixed(2)}%` : '--'}</i>
+          <em>主${row?.activeRatio ?? '--'} · 被${row?.passiveRatio ?? '--'}</em>
+        </summary>
+        <div class="ml-l2-buckets">
+          ${strategyL2HistoryBucket('≥50万', thresholds['500000'] || row)}
+          ${strategyL2HistoryBucket('≥300万', thresholds['3000000'])}
+          ${strategyL2HistoryBucket('≥500万', thresholds['5000000'])}
+          ${strategyL2HistoryBucket('≥800万', thresholds['8000000'])}
+          ${strategyL2HistoryBucket('≥1000万', thresholds['10000000'])}
+        </div>
+      </details>`;
+    }).join('');
+    const empty = status === 'done' && resultCount > 0 && !picked.length
+      ? '<div class="ml-l2-empty">扫描完成，没有达到当前筛选阈值的股票。</div>'
+      : (status === 'done' && !resultCount ? '<div class="ml-l2-empty">任务未取得可用成分股结果。</div>' : '');
+    return `<article class="ml-l2-job">
+      <div class="ml-l2-job-head">
+        <div><b>${escapeHTML(String(job?.boardName || job?.plateId || 'L2任务'))}</b><small>${escapeHTML(String(job?.plateId || ''))}</small></div>
+        <span class="ml-l2-trigger ${job?.trigger === 'strategy-auto' ? 'auto' : ''}">${trigger}</span>
+        <span class="ml-l2-status ${escapeHTML(status)}">${statusText}</span>
+        <time>${escapeHTML(strategyL2HistoryTime(job?.createdAt))}</time>
+      </div>
+      <div class="ml-l2-job-meta">扫描 ${Number(job?.scanned || 0)}/${Number(job?.total || 0)} · 结果 ${resultCount} · 入选 ${picked.length}</div>
+      ${rows ? `<div class="ml-l2-stock-list">${rows}</div>` : empty}
+    </article>`;
+  }).join('');
+  return `<section class="strategy-section ml-l2-history">
+    <div class="strategy-section-head">
+      <span class="strategy-section-title">今日 L2 扫描记录</span>
+      <span class="strategy-section-sub">管理员可见 · 同板块优先展示最近一次有效结果</span>
+    </div>
+    <div class="ml-l2-job-grid">${cards}</div>
+  </section>`;
+}
+async function loadStrategyL2History(day) {
+  const el = document.getElementById('strategy-l2-history');
+  if (!el || !canUseL2AdminTools()) return;
+  el.innerHTML = '<div class="rht-loading">正在读取今日 L2 扫描记录…</div>';
+  try {
+    const res = await fetch(`${KPL_STATS_BASE}/api/strategy/focus-l2-scan?history=1&day=${encodeURIComponent(day)}&_=${Date.now()}`, {
+      cache: 'no-store', headers: typeof adminHeaders === 'function' ? adminHeaders() : {},
+    });
+    const data = await res.json().catch(() => null);
+    const cur = document.getElementById('strategy-l2-history');
+    if (cur) cur.innerHTML = res.ok ? renderStrategyL2History(data) : '';
+  } catch (_) {
+    const cur = document.getElementById('strategy-l2-history');
     if (cur) cur.innerHTML = '';
   }
 }
@@ -13953,6 +14233,7 @@ function renderStrategyPage() {
     </div>
     ${canUseL2AdminTools() ? renderStrategyBoardSearchResultsHTML() : ''}
     <div id="strategy-mainlines" class="strategy-mainlines"></div>
+    ${canUseL2AdminTools() ? '<div id="strategy-l2-history"></div>' : ''}
     <div id="strategy-mainline-review"></div>
     <div class="strategy-signal-grid" aria-hidden="true">
       <div id="strategy-hot-themes" class="strategy-hot-themes"></div>
@@ -13970,6 +14251,7 @@ function renderStrategyPage() {
     </section>` : ''}
   `;
   loadStrategyMainlines(state.date);
+  if (canUseL2AdminTools()) loadStrategyL2History(state.date);
   loadStrategyMainlineReview();
   loadPublicSmartPicks(focus.map(it => it && it.board).filter(Boolean));
   if (state.adminLoggedIn && state.themeCalibOpen) loadThemeCalibration();
