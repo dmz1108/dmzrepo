@@ -4235,3 +4235,35 @@ Changed:
 
 Deployment:
 - 仅整理 Git 交接；未再次修改云端、未重启服务、未发起新的 L2 任务。PR4 仍暂停，等待 Claude 独立复核 P6 v2 锁定双跑。
+
+## 2026-07-13 - Codex - 修复 L2 扫描完成但策略页不可见
+
+Changed:
+- 为管理员策略页新增“今日 L2 扫描记录”，展示当日自动/手动任务、状态、扫描与入选数量，并可展开查看入选股票的五档主动/被动比值。
+- 扫描队列新增按日历史读取与“最近一次有效结果”查询；后发的空任务不再遮蔽同板块较早的有效任务。
+- 主线明星回接同时支持精确板块 ID 和标准主线家族，解决 KPL、东财、同花顺板块 ID 不同导致任务已完成却无法挂回主线卡片的问题；最终仍用本主线股票集合做交集，防止跨题材错挂。
+- 自动任务开始记录 trigger、familyKey、scanChannel 和 zsType，历史旧任务按 legacy 兼容读取。
+- L2 日历史接口只允许管理员访问，返回前继续移除任务原始成分股和 worker 标识。
+
+Files:
+- `local-l2-task-queue.js`
+- `strategy-backend.js`
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/local-l2-persistence.test.js`
+- `tests/star-l2-layers.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- `node --check local-l2-task-queue.js`
+- `node --check strategy-backend.js`
+- 全部 21 套 `tests/*.test.js` 通过。
+- 新增回归覆盖：空重试不遮蔽有效结果、重启后历史恢复、跨来源同家族挂载、无关家族隔离、管理员接口与前端权限门控、HTML 内联脚本编译。
+
+Deployment:
+- 当前仅 Git 分支变更；尚未部署生产、尚未重启服务。合并确认后需原子部署四个运行文件并重启主服务，再用 2026-07-13 已落盘任务验证网页回显。
+
+Notes for next agent:
+- 2026-07-13 生产上已有一份创新药自动任务完成 41/41，后续另有同板块空手动任务；它是本修复“有效任务不得被空任务遮蔽”的真实验收样本。
+- 本次只修结果可见性和回接，不改变 L2 阈值、明星判定、主线评分或 worker 计算逻辑。

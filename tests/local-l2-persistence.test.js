@@ -40,6 +40,8 @@ try {
     plateId: 'BK_TEST',
     boardName: '测试板块',
     day: '2026-07-10',
+    trigger: 'strategy-auto',
+    familyKey: 'group:测试',
     stocks: [
       { code: '600001', name: '测试一', gainPct: 6.8, price: 10.1, priceSource: 'board-realtime' },
       { code: '000002', name: '测试二', gainPct: 4.2, price: 4.8, priceSource: 'board-realtime' },
@@ -97,6 +99,20 @@ try {
   assert.equal(latestPayload.job.results[1].priceSource, 'board-realtime', '任务快照补价应保留来源');
   assert.ok(latestPayload.job.results[0].thresholds['10000000'], '1000w 档应落盘');
   assert.equal(latestPayload.job.claimedBy, '', '落盘文件不保存 worker 标识');
+  assert.equal(latestPayload.job.trigger, 'strategy-auto', '自动扫描来源应落盘');
+  assert.equal(latestPayload.job.familyKey, 'group:测试', '主线家族键应落盘');
+
+  const emptyRetry = queue.start({
+    plateId: 'BK_TEST',
+    boardName: '测试板块',
+    day: '2026-07-10',
+    trigger: 'manual',
+    stocks: [],
+  });
+  assert.equal(emptyRetry.status, 'done', '后一次空任务应正常结束');
+  assert.equal(queue.latest('BK_TEST', '2026-07-10').jobId, emptyRetry.jobId, 'latest 仍表示最后一次尝试');
+  assert.equal(queue.latestSuccessful('BK_TEST', '2026-07-10').jobId, job.jobId, '空任务不得遮蔽前一次有效结果');
+  assert.equal(queue.listDay('2026-07-10').length, 2, '按日任务列表应保留自动和手动历史');
 
   const restored = createLocalL2TaskQueue({
     token,
@@ -105,14 +121,16 @@ try {
     persistDays: 30,
   });
   const status = restored.status();
-  assert.equal(status.totalJobs, 1, '重启后应恢复一个任务');
+  assert.equal(status.totalJobs, 2, '重启后应恢复两个任务');
   assert.equal(status.pending, 0, '恢复任务只用于读回放,不重新排队');
-  assert.equal(status.persistence.restoredJobs, 1, '恢复计数应正确');
+  assert.equal(status.persistence.restoredJobs, 2, '恢复计数应正确');
 
   const restoredLatest = restored.latest('BK_TEST', '2026-07-10');
   assert.equal(restoredLatest.status, 'done', '恢复后的最新任务状态应保留');
-  assert.equal(restoredLatest.results[0].thresholds['10000000'].activeBuy, 350000000, '恢复后五档资金应完整');
-  assert.equal(restoredLatest.results[0].price, 10.2, '恢复后现价应完整');
+  assert.equal(restoredLatest.jobId, emptyRetry.jobId, '恢复后 latest 仍指向最后一次空任务');
+  const restoredSuccessful = restored.latestSuccessful('BK_TEST', '2026-07-10');
+  assert.equal(restoredSuccessful.results[0].thresholds['10000000'].activeBuy, 350000000, '恢复后有效任务五档资金应完整');
+  assert.equal(restoredSuccessful.results[0].price, 10.2, '恢复后有效任务现价应完整');
 
   console.log('ALL LOCAL-L2-PERSISTENCE CHECKS PASSED');
 } finally {

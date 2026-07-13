@@ -136,6 +136,9 @@ function normalizeRestoredJob(job) {
   copy.pickedCount = Number(copy.pickedCount || copy.picked.length || 0);
   copy.available = copy.available !== false;
   copy.mode = copy.mode || 'local-worker';
+  copy.trigger = String(copy.trigger || 'legacy');
+  copy.familyKey = String(copy.familyKey || '');
+  copy.scanChannel = String(copy.scanChannel || '');
   copy.claimedBy = '';
   return copy;
 }
@@ -226,6 +229,26 @@ class LocalL2TaskQueue {
         lastPersistError: this.persistence.lastPersistError,
       },
     };
+  }
+
+  listDay(day) {
+    const targetDay = String(day || '').trim();
+    return [...this.jobs.values()]
+      .filter(job => !targetDay || String(job?.day || '') === targetDay)
+      .sort((a, b) =>
+        String(b?.createdAt || b?.updatedAt || '').localeCompare(String(a?.createdAt || a?.updatedAt || '')) ||
+        String(b?.jobId || '').localeCompare(String(a?.jobId || ''))
+      )
+      .map(publicJob);
+  }
+
+  latestSuccessful(plateId, day) {
+    const targetPlate = String(plateId || '');
+    return this.listDay(day).find(job =>
+      String(job?.plateId || '') === targetPlate &&
+      String(job?.status || '') === 'done' &&
+      Array.isArray(job?.results) && job.results.length > 0
+    ) || null;
   }
 
   persistJob(job, options = {}) {
@@ -352,6 +375,10 @@ class LocalL2TaskQueue {
       plateId: String(payload.plateId || ''),
       boardName: String(payload.boardName || ''),
       day: String(payload.day || ''),
+      trigger: String(payload.trigger || 'manual'),
+      familyKey: String(payload.familyKey || ''),
+      scanChannel: String(payload.scanChannel || ''),
+      zsType: payload.zsType ?? null,
       status: this.configured() ? 'queued' : 'done',
       available: this.configured(),
       mode: 'local-worker',
