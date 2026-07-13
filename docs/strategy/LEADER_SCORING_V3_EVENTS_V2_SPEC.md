@@ -1,7 +1,7 @@
-# P6 规格:每日事件档案 v2 完整性收窄 — 状态转换表与测试案例(rev3)
+# P6 规格:每日事件档案 v2 完整性收窄 — 状态转换表与测试案例(rev4)
 
-状态:按 Codex 二审三项阻断修订;待 Codex 复审、Owner 拍板。本文档只定义规则,不是实现。
-作者:Claude(2026-07-13,rev3)。依据:Owner 对 P6 提前实施的确认与四点修正;06-23 / 07-02 两个缺原始快照日分别导致 07-01 替代验收 0/74、07-08 验收 0/90 的实证。
+状态:按 Codex 三审两项状态机闭合问题修订;待 Codex 复审、Owner 拍板。本文档只定义规则,不是实现。
+作者:Claude(2026-07-13,rev4)。依据:Owner 对 P6 提前实施的确认与四点修正;06-23 / 07-02 两个缺原始快照日分别导致 07-01 替代验收 0/74、07-08 验收 0/90 的实证。
 
 ## 0. 范围与非目标
 
@@ -43,20 +43,22 @@
 | LU | 涨停底库可信 | `limitUpComplete` |
 | MR | 主因库覆盖完整 | `mainReasonComplete`(missingMainReasonCodes 可枚举) |
 | CL | 收盘库完整 | `closeComplete` |
-| SNAP | 冻结主线快照可用 | 由加载层判定后以 `quality.snapshotStatus='ok'` 传入(冻结主线快照存在 ∧ 该文件与其上游综合策略快照均未命中清单)。`missing`/`quarantined` → SNAP=false,连同 snapshotEvidence 落档 |
+| SNAP | 冻结主线快照可用(**含全链 provenance**,Codex 三审 #2) | 由加载层判定后以 `quality.snapshotStatus='ok'` 传入。`ok` 的充要条件:冻结主线快照存在 ∧ **构建依赖链三层全部干净**——冻结层、综合层、当日必需的原始板块快照 `kpl-snapshots/{5,6,7}` 均无 missing/contaminated 清单条目且原始层文件齐全。任一必需原始 zs5/zs6/zs7 缺失或污染,或综合/冻结层污染 → `snapshotStatus ≠ ok`(missing/quarantined + snapshotEvidence 落档)。若某层确实不属于当日冻结快照的构建依赖,必须由显式 provenance 元数据证明后方可豁免,禁止默认忽略 |
 
 派生:
 - `mainlineKnowable = LU ∧ MR ∧ SNAP`
 - `rowsAuthoritative = LU`
 - `noneDeterminable = LU ∧ (mainlineKnowable ∨ CL)`
 
-**明星证据按家族判定,不设日级布尔**(Codex 二审 #1)。`starEvidenceStatusByFamily[G]` 三值:
+**明星证据按股票逐只三分,不留空洞**(Codex 三审 #1;二审 #1 的家族级判定升级为逐股判定)。对每只涨停股 X,`starEvidenceStatusForStock(X)` 三值,判定全部显式、禁止日期条件、空数组不算证据:
 
-| 值 | 判定(全部显式,禁止日期条件,空数组不算证据) |
+| 值 | 判定 |
 |---|---|
-| `positive` | 家族 G 内存在 level ∈ {expected, confirmed} 的明星正证据(持久化 predict candidates[].stars / starTransitions 含 firstExpectedAt / 冻结快照 starStocks) |
-| `scanned-no-star` | 无正证据,但 G 有显式扫描元数据:`l2VerificationStatus ∈ {qi, scanned-no-star}` 或 worker 扫描记录 |
-| `unscanned` | 其余一切情况。**`stars: []`、`starTransitions: []` 等空结构只证明字段存在,不提升状态** |
+| `positive` | X **自身**有 level ∈ {expected, confirmed} 正证据(持久化 predict candidates[].stars / starTransitions 含 firstExpectedAt / 冻结快照 starStocks) |
+| `scanned-no-star` | X 无正证据,且存在**显式覆盖 X 的扫描证据**:X 的逐股扫描记录,或家族级扫描元数据(`l2VerificationStatus ∈ {qi, scanned-no-star}` / worker 记录)**且该元数据明确声明覆盖家族全部候选** |
+| `unscanned` | 其余一切情况 |
+
+两条反证禁令:**空 `stars:[]` / `starTransitions:[]` 只证明字段存在,不提升状态;「家族里出现了另一只明星」不能证明 X 被扫描过**(A 是 expected 明星 ≠ B 被扫过没星)。`starEvidenceStatusByFamily` 可保留为诊断字段,但行级发射一律以逐股状态为准。
 
 | 状态 | 条件 | 实例 | v1 现行为 | v2 行为 |
 |---|---|---|---|---|
@@ -74,16 +76,18 @@
 
 | 行规则 | 条件 | 发射 |
 |---|---|---|
-| R1 | X 涨停 ∧ 归属 G ∧ X 自身有 expected/confirmed 正证据 | `star-limit-up` 20,starEvidenceStatus=confirmed |
-| R2a | X 涨停 ∧ 归属 G ∧ X 无正证据 ∧ `starEvidenceStatusByFamily[G] = scanned-no-star` | `ordinary-limit-up` 15,starEvidenceStatus=not-confirmed(该家族确实扫过没星,真 15) |
-| R2b | X 涨停 ∧ 归属 G ∧ X 无正证据 ∧ `starEvidenceStatusByFamily[G] = unscanned` | `ordinary-limit-up` 15,starEvidenceStatus=**unscanned**(下界 15,Owner 已裁定) |
+| R1 | X 涨停 ∧ 归属 G ∧ `starEvidenceStatusForStock(X) = positive` | `star-limit-up` 20,starEvidenceStatus=confirmed |
+| R2a | X 涨停 ∧ 归属 G ∧ 状态 = scanned-no-star | `ordinary-limit-up` 15,starEvidenceStatus=not-confirmed(X 确实被扫过没星,真 15) |
+| R2b | X 涨停 ∧ 归属 G ∧ 状态 = unscanned | `ordinary-limit-up` 15,starEvidenceStatus=**unscanned**(下界 15,Owner 已裁定) |
+
+R1/R2a/R2b 与 `starEvidenceStatusForStock` 三值一一对应,**任何涨停且可归属的股票必落入其一,不存在漏行空洞**(Codex 三审 #1 的 B 股案例:同族 A=positive→20,B 无自身证据且无覆盖证据→unscanned→15,行不丢失)。
 | R3 | X 涨停 ∧ 无法归属 | `data-missing`,`['mainReasonFamily']`(不变) |
 | R4 | X 未涨停 ∧ mainlineKnowable ∧ 确认主线成分 ∧ 收盘涨幅>5% | `confirmed-mainline-big-gain` 8(不变) |
 | R5 | X 未涨停 ∧ ¬mainlineKnowable ∧ CL ∧ 收盘涨幅>5% | **新增显式行**:`data-missing`,`['confirmedMainlineUnknown']`,附 closeGainPct;发射范围=当日全部「>5% 未涨停」股(有界) |
 | R6 | X 未涨停 ∧ noneDeterminable ∧ 非 R5 | 不发射(缺席=none 0,评分器判定) |
 | R7 | X 未涨停 ∧ ¬noneDeterminable | 不发射;由日级 noneDeterminable=false 兜底 |
 
-v2 档案日级新增:`stockEvents.rowsAuthoritative`、`stockEvents.noneDeterminable`、`stockEvents.snapshotStatus`(含 snapshotEvidence 引用)、`stockEvents.starEvidenceStatusByFamily`(按家族映射,替代任何日级明星布尔)。既有字段语义不变。
+v2 档案日级新增:`stockEvents.rowsAuthoritative`、`stockEvents.noneDeterminable`、`stockEvents.snapshotStatus`(含 snapshotEvidence 引用,ok 蕴含全链 provenance 干净)、`stockEvents.starEvidenceStatusByFamily`(诊断用;行级发射以每行 starEvidenceStatus 为准)。既有字段语义不变。
 
 ## 4. 评分器状态转换(v2 模式)
 
@@ -117,12 +121,13 @@ v2 档案日级新增:`stockEvents.rowsAuthoritative`、`stockEvents.noneDetermi
 | T3 | S2 日 + 未板 ≤5% | 无行;E6 → none 0 |
 | T4 | S2 日 + 未板 +7.29%(东方锆业形状) | R5 行 → `confirmedMainlineUnknown`,整窗 incomplete |
 | T5 | S2 日 + 涨停不可归属 | `mainReasonFamily`(与 v1 相同) |
-| T6 | 快照文件存在但在清单(07-02 综合快照形状,state=contaminated 含 observedSha256/observedSourceDay) | **加载层**:查清单命中,未读文件内容(断言无该文件读取);**生成器**:收到 snapshotStatus=quarantined + snapshotEvidence,按 S2 处理 |
-| T6b | 快照缺失(06-23 形状,state=missing,sha256=null) | 加载层传 snapshotStatus=missing;按 S2;清单条目无伪 SHA |
+| T6 | 综合快照在清单(07-02 形状,state=contaminated 含 observedSha256/observedSourceDay),冻结文件本身存在 | **加载层**:查清单命中,未读污染文件内容(断言无该文件读取);**生成器**:收到 snapshotStatus=quarantined + snapshotEvidence,按 S2;**依赖链断言:冻结文件存在不足以 ok** |
+| T6b | 原始板块快照缺失(06-23 形状,state=missing,sha256=null),综合/冻结层即使存在 | 加载层沿依赖链判 snapshotStatus=missing;按 S2;清单条目无伪 SHA;**断言:原始 zs 层缺失即阻断 ok,无 provenance 豁免时不得默认忽略** |
 | T7 | S3(¬LU) | 全员 `limitUpDbUnreliable` |
-| T8 | 家族 G 有 expected 明星正证据 | 该股 20,confirmed;G 状态=positive |
-| T9 | 家族 G 无正证据但有显式 `l2VerificationStatus=scanned-no-star` | 15,starEvidenceStatus=**not-confirmed** |
-| T9b | predict 文件存在但 `stars:[]`、`starTransitions:[]` 全空且 G 无扫描元数据 | 15,starEvidenceStatus=**unscanned**(空数组不得提升状态;判定全程无日期比较) |
+| T8 | X 自身有 expected 正证据 | 20,confirmed |
+| T8b | 同族 A=expected 明星、B 涨停但无自身证据且无覆盖扫描证据 | A→20/confirmed;**B→15/unscanned,行不得丢失**(positive 家族无漏行空洞) |
+| T9 | X 无正证据,家族扫描元数据显式声明覆盖全部候选(scanned-no-star) | 15,starEvidenceStatus=**not-confirmed** |
+| T9b | predict 文件存在但 `stars:[]`、`starTransitions:[]` 全空且无覆盖 X 的扫描证据 | 15,starEvidenceStatus=**unscanned**(空数组不得提升状态;判定全程无日期比较) |
 | T10 | 既有 v1 档案(07-10 真实形状) | E2 旧闸逐字段不变;scoreVersion 输出 shadow-v2(消费语义可审计) |
 | T11 | S2 日同股同族双行 | 互斥取最高,duplicateRowsIgnored=1 |
 | T12 | 未知 event rule | `dailyEventRuleVersion`(不变) |

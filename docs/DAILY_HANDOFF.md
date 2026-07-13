@@ -3790,3 +3790,15 @@ Files: docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md(rev3)、docs/DAILY_HAND
 Validated: 仅文档;三项阻断逐条修订;PR #37 描述同步更新。
 
 Deployment: 无。等 Codex 复审后进入 Owner 拍板;不实现、不部署、不启动 PR4。
+
+## 2026-07-13 - Claude - P6 规格 rev4:按 Codex 三审两项状态机闭合修订
+
+Changed:
+- 明星证据从家族级升级为逐股三分 starEvidenceStatusForStock(positive/scanned-no-star/unscanned),R1/R2a/R2b 与三值一一对应无漏行空洞;明文两条反证禁令(空数组不算证据;同族他股明星不证明 X 被扫描);家族级映射降为诊断字段;新增 T8b(positive 家族中 B 股 15/unscanned 不丢行)。
+- SNAP=ok 补全链 provenance:冻结层+综合层+当日必需原始 kpl-snapshots/{5,6,7} 全部无 missing/contaminated 且原始层齐全;层级豁免须显式 provenance 元数据,禁止默认忽略;T6/T6b 补依赖链断言。
+
+Files: docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md(rev4)、docs/DAILY_HANDOFF.md
+
+Validated: 仅文档;两项闭合问题逐条修订。
+
+Deployment: 无。等 Codex 复审;通过后进入 Owner 对 §7 的规格拍板;不实现、不部署、不启动 PR4。
