@@ -79,13 +79,13 @@
 | R1 | X 涨停 ∧ 归属 G ∧ `starEvidenceStatusForStock(X) = positive` | `star-limit-up` 20,starEvidenceStatus=confirmed |
 | R2a | X 涨停 ∧ 归属 G ∧ 状态 = scanned-no-star | `ordinary-limit-up` 15,starEvidenceStatus=not-confirmed(X 确实被扫过没星,真 15) |
 | R2b | X 涨停 ∧ 归属 G ∧ 状态 = unscanned | `ordinary-limit-up` 15,starEvidenceStatus=**unscanned**(下界 15,Owner 已裁定) |
-
-R1/R2a/R2b 与 `starEvidenceStatusForStock` 三值一一对应,**任何涨停且可归属的股票必落入其一,不存在漏行空洞**(Codex 三审 #1 的 B 股案例:同族 A=positive→20,B 无自身证据且无覆盖证据→unscanned→15,行不丢失)。
 | R3 | X 涨停 ∧ 无法归属 | `data-missing`,`['mainReasonFamily']`(不变) |
 | R4 | X 未涨停 ∧ mainlineKnowable ∧ 确认主线成分 ∧ 收盘涨幅>5% | `confirmed-mainline-big-gain` 8(不变) |
 | R5 | X 未涨停 ∧ ¬mainlineKnowable ∧ CL ∧ 收盘涨幅>5% | **新增显式行**:`data-missing`,`['confirmedMainlineUnknown']`,附 closeGainPct;发射范围=当日全部「>5% 未涨停」股(有界) |
 | R6 | X 未涨停 ∧ noneDeterminable ∧ 非 R5 | 不发射(缺席=none 0,评分器判定) |
 | R7 | X 未涨停 ∧ ¬noneDeterminable | 不发射;由日级 noneDeterminable=false 兜底 |
+
+R1/R2a/R2b 与 `starEvidenceStatusForStock` 三值一一对应,**任何涨停且可归属的股票必落入其一,不存在漏行空洞**(Codex 三审 #1 的 B 股案例:同族 A=positive→20,B 无自身证据且无覆盖证据→unscanned→15,行不丢失)。
 
 v2 档案日级新增:`stockEvents.rowsAuthoritative`、`stockEvents.noneDeterminable`、`stockEvents.snapshotStatus`(含 snapshotEvidence 引用,ok 蕴含全链 provenance 干净)、`stockEvents.starEvidenceStatusByFamily`(诊断用;行级发射以每行 starEvidenceStatus 为准)。既有字段语义不变。
 
