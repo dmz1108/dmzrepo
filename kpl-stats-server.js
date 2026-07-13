@@ -6454,23 +6454,68 @@ async function mergeXuangubaoLimitUpSourceViewTab(sourceView, day, dbPayload = n
   return sourceView;
 }
 
-// 复盘列表龙头指标(按需+缓存):给最终行补 近10日涨幅 gain10 / 近30日涨幅 gain30 / 近10日涨停次数 zt10Count
-// gain 用收盘价库(只 31 天，gain30 仅最近交易日算得出，更早缺则为 null)；涨停次数读近 10 个交易日涨停底库
+// 复盘列表龙头指标(按需+缓存):给最终行补 近10日涨幅 gain10 / 近30日涨幅 gain30 / 近10日涨停次数 zt10Count。
+// 窗口统一包含目标日:10日=前9个交易日+目标日，30日=前29个交易日+目标日。
+// 累计收益需用窗口首日前一交易日收盘作基准，因此10/30日涨幅分别需要目标日及向前10/30日的收盘点。
+// 历史/盘后目标价只信完整且收盘后保存的收盘价库；当日盘中用目标日实时价或实时涨幅推导目标价。
+function strategyLeaderTargetDayGain(row) {
+  // enrich 后 targetDayGain 即裁定值；显式 null 表示目标日证据不足，不能再退回可能跨日的旧 gain。
+  if (row && Object.prototype.hasOwnProperty.call(row, 'targetDayGain')) {
+    return numOrNull(row.targetDayGain);
+  }
+  for (const value of [row?.todayGain, row?.gainPct, row?.gain]) {
+    const gain = numOrNull(value);
+    if (gain != null) return gain;
+  }
+  return null;
+}
+
 async function enrichReviewLeaderMetrics(rows, isoDay, apiKey) {
   if (!Array.isArray(rows) || !rows.length) return;
   const codes = new Set(rows.map(r => normalizeReasonSourceCode(r.code)).filter(Boolean));
   const td = await getRecentTradingDays(isoDay, apiKey, 31).catch(() => []);
-  if (!td.length) return;
+  if (!td.length || td[td.length - 1] !== isoDay) {
+    for (const row of rows) {
+      row.targetDayGain = null;
+      row.targetPriceState = 'missing';
+      row.gainWindowEndDay = isoDay;
+      row.gain10 = null;
+      row.gain30 = null;
+      row.zt10Count = 0;
+      row.mainZt10Count = 0;
+    }
+    return;
+  }
   const last = td.length - 1;
   const dayBack = n => (last - n >= 0 ? td[last - n] : null);
-  const closeMapOf = async d => {
-    if (!d) return new Map();
+  const closePayloadOf = async d => {
+    if (!d) return { day: d, payload: null, byCode: new Map(), usable: false };
     const cdb = await readEastmoneyCloseDbDay(d).catch(() => null);
-    return new Map((cdb?.stocks || [])
-      .map(s => [normalizeReasonSourceCode(s.code), Number(s.close)])
-      .filter(([c, v]) => c && codes.has(c) && Number.isFinite(v) && v > 0));
+    const payloadDay = isoFromCompactDate(cdb?.day || '');
+    const savedAfterClose = isSavedAfterMarketClose(cdb, d) || isSavedAtOrAfterMarketCloseForDay(cdb, d);
+    const usable = !!(cdb && payloadDay === d && isCompleteCloseDbPayload(cdb) && savedAfterClose);
+    const byCode = new Map();
+    if (usable) {
+      for (const stock of (cdb?.stocks || [])) {
+        const code = normalizeReasonSourceCode(stock?.code);
+        const close = numOrNull(stock?.close ?? stock?.price);
+        if (!code || !codes.has(code) || close == null || close <= 0) continue;
+        byCode.set(code, { close, gain: numOrNull(stock?.gain) });
+      }
+    }
+    return { day: d, payload: cdb, byCode, usable };
   };
-  const [c0, c10, c30] = await Promise.all([closeMapOf(isoDay), closeMapOf(dayBack(10)), closeMapOf(dayBack(30))]);
+  const window10StartDay = dayBack(9);
+  const window30StartDay = dayBack(29);
+  const base10Day = dayBack(10);
+  const base30Day = dayBack(30);
+  const prevDay = dayBack(1);
+  const [targetClose, prevClose, base10Close, base30Close] = await Promise.all([
+    closePayloadOf(isoDay),
+    closePayloadOf(prevDay),
+    closePayloadOf(base10Day),
+    closePayloadOf(base30Day),
+  ]);
   const ztByCode = new Map();
   // 同一只股票可能同时出现在多个主线卡片。历史主因按「股票 + 主线家族」累计，
   // 不能只按股票保存一个当前主题，否则后出现的卡片会覆盖前一张卡片的归属。
@@ -6498,7 +6543,46 @@ async function enrichReviewLeaderMetrics(rows, isoDay, apiKey) {
     const c = normalizeReasonSourceCode(r.code);
     const rowTheme = String(r.finalBoardTopic || r.boardTopic || r.primaryRawTopic || r.primaryTopic || '').trim();
     const familyKey = rowTheme ? strategyMainlineFamilyInfo({ theme: rowTheme }).key : '';
-    const p0 = c0.get(c), p10 = c10.get(c), p30 = c30.get(c);
+    const finalRow = targetClose.byCode.get(c);
+    const prevRow = prevClose.byCode.get(c);
+    let p0 = finalRow?.close ?? null;
+    let targetDayGain = finalRow?.gain ?? null;
+    let targetPriceState = p0 != null ? 'post-close-final' : '';
+    let targetPriceAsOf = p0 != null ? String(targetClose.payload?.savedAt || targetClose.payload?.updatedAt || '') : '';
+
+    // 今天收盘库尚未形成时，实时涨幅只允许用于“今天”，历史日绝不拿当前行情回填。
+    if (p0 == null && isoDay === chinaNowParts().day) {
+      const liveGain = strategyLeaderTargetDayGain(r);
+      const livePrice = numOrNull(r?.price ?? r?.lastPrice ?? r?.currentPrice);
+      if (livePrice != null && livePrice > 0) p0 = livePrice;
+      else if (liveGain != null && prevRow?.close > 0) p0 = prevRow.close * (1 + liveGain / 100);
+      if (targetDayGain == null) {
+        targetDayGain = liveGain != null
+          ? liveGain
+          : (p0 != null && prevRow?.close > 0 ? (p0 / prevRow.close - 1) * 100 : null);
+      }
+      if (p0 != null || targetDayGain != null) {
+        targetPriceState = 'intraday-live';
+        targetPriceAsOf = String(r?.asOf || r?.fetchedAt || r?.updatedAt || '');
+      }
+    }
+    if (targetDayGain == null && p0 != null && prevRow?.close > 0) {
+      targetDayGain = (p0 / prevRow.close - 1) * 100;
+    }
+    if (targetDayGain != null) {
+      targetDayGain = Number(targetDayGain.toFixed(2));
+      r.gain = targetDayGain;
+    }
+    r.targetDayGain = targetDayGain;
+    r.targetPriceState = targetPriceState || 'missing';
+    r.targetPriceAsOf = targetPriceAsOf || null;
+    r.gainWindowEndDay = isoDay;
+    r.gain10WindowStartDay = window10StartDay || null;
+    r.gain30WindowStartDay = window30StartDay || null;
+    r.gain10BaseDay = base10Day || null;
+    r.gain30BaseDay = base30Day || null;
+    const p10 = base10Close.byCode.get(c)?.close;
+    const p30 = base30Close.byCode.get(c)?.close;
     r.gain10 = (Number.isFinite(p0) && Number.isFinite(p10)) ? Number(((p0 / p10 - 1) * 100).toFixed(2)) : null;
     r.gain30 = (Number.isFinite(p0) && Number.isFinite(p30)) ? Number(((p0 / p30 - 1) * 100).toFixed(2)) : null;
     r.zt10Count = ztByCode.get(c) || 0;
@@ -21098,7 +21182,14 @@ function strategyMainlineNormalizeRisingStock(row) {
   if (isExcludedFromReview(code, name)) return null;
   const gain = numOrNull(row?.gainPct ?? row?.gain ?? row?.todayGain ?? row?.zf ?? row?.changePct);
   if (gain == null) return null;
-  return { code, name, gain: Number(gain) };
+  return {
+    code,
+    name,
+    gain: Number(gain),
+    price: numOrNull(row?.price ?? row?.close ?? row?.lastPrice),
+    priceSource: String(row?.priceSource || ''),
+    asOf: String(row?.asOf || row?.fetchedAt || row?.updatedAt || ''),
+  };
 }
 function strategyMainlineIsNearLimitStock(stock, limitCodes = new Set()) {
   const code = normalizeReasonSourceCode(stock?.code);
@@ -22172,19 +22263,62 @@ function strategyMainlineStarStatus(row) {
 }
 
 // 读取主线相关板块当日已有的 L2 扫描结果（只消费，不在这里触发扫描），产出 code -> 明星判定。
-function strategyMainlineCollectStars(boards, day) {
+function strategyMainlineCollectStars(boards, day, options = {}) {
   const byCode = new Map();
   const scannedPlates = new Set();         // 当日有 L2 扫描结果的板块(含运行中分批回传)
   const completedPlates = new Set();       // 扫描已完成(job done)的板块
   const pendingPlates = new Set();         // 仍在排队/运行的板块——存在即不允许判负(结论未定)
   const coveredCodes = new Set();          // 全部结果行覆盖到的股票(含 running 分批,仅供观测)
   const completedCoveredCodes = new Set(); // 仅 done 任务结果覆盖的股票——判负只认这份(评审二修)
-  for (const board of (Array.isArray(boards) ? boards : [])) {
-    const plateId = String(board?.plateId || '');
-    if (!plateId) continue;
-    let job = null;
-    try { job = localL2TaskQueue.latest(plateId, day); } catch { continue; }
-    if (!job) continue;
+  const boardRows = Array.isArray(boards) ? boards : [];
+  const boardByPlate = new Map(boardRows.map(board => [String(board?.plateId || ''), board]).filter(([plateId]) => plateId));
+  const familyKey = String(options?.familyKey || '');
+  const selectedJobs = [];
+  const seenJobs = new Set();
+  const addJob = (job) => {
+    const id = String(job?.jobId || '');
+    if (!job || (id && seenJobs.has(id))) return;
+    if (id) seenJobs.add(id);
+    selectedJobs.push(job);
+  };
+  let dayJobs = [];
+  try {
+    dayJobs = typeof localL2TaskQueue?.listDay === 'function' ? localL2TaskQueue.listDay(day) : [];
+  } catch {}
+  if (dayJobs.length) {
+    const grouped = new Map();
+    for (const job of dayJobs) {
+      const plateId = String(job?.plateId || '');
+      if (!plateId) continue;
+      const jobFamilyKey = String(job?.familyKey || strategyMainlineFamilyInfo({ theme: job?.boardName }).key || '');
+      const exactBoard = boardByPlate.has(plateId);
+      const sameFamily = !!(familyKey && jobFamilyKey && familyKey === jobFamilyKey);
+      if (!exactBoard && !sameFamily) continue;
+      if (!grouped.has(plateId)) grouped.set(plateId, []);
+      grouped.get(plateId).push(job);
+    }
+    for (const jobs of grouped.values()) {
+      const latest = jobs[0] || null;
+      const latestSuccessful = jobs.find(job =>
+        String(job?.status || '') === 'done' && Array.isArray(job?.results) && job.results.length > 0
+      ) || null;
+      if (latest && ['queued', 'running'].includes(String(latest.status || ''))) addJob(latest);
+      addJob(latestSuccessful || latest);
+    }
+  } else {
+    // 兼容尚未升级 listDay 的队列实现。
+    for (const plateId of boardByPlate.keys()) {
+      let job = null;
+      try {
+        job = typeof localL2TaskQueue?.latestSuccessful === 'function'
+          ? (localL2TaskQueue.latestSuccessful(plateId, day) || localL2TaskQueue.latest(plateId, day))
+          : localL2TaskQueue.latest(plateId, day);
+      } catch { continue; }
+      addJob(job);
+    }
+  }
+  for (const job of selectedJobs) {
+    const plateId = String(job?.plateId || '');
     const jobStatus = String(job.status || '');
     if (jobStatus === 'queued' || jobStatus === 'running') pendingPlates.add(plateId);
     if (!Array.isArray(job.results) || !job.results.length) continue;
@@ -22198,7 +22332,12 @@ function strategyMainlineCollectStars(boards, day) {
       if (jobDone) completedCoveredCodes.add(code);
       if (byCode.has(code)) continue;
       const star = strategyMainlineStarStatus(row);
-      if (star) byCode.set(code, { ...star, code, name: String(row?.name || ''), boardName: String(board?.name || job.boardName || '') });
+      if (star) byCode.set(code, {
+        ...star,
+        code,
+        name: String(row?.name || ''),
+        boardName: String(boardByPlate.get(plateId)?.name || job.boardName || ''),
+      });
     }
   }
   return { byCode, scannedPlates, completedPlates, pendingPlates, coveredCodes, completedCoveredCodes };
@@ -22294,6 +22433,10 @@ function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase, prior
         plateId: String(board.plateId),
         boardName: String(board.name || ''),
         day,
+        trigger: 'strategy-auto',
+        familyKey: strategyMainlineFamilyInfo({ theme: board.name }).key,
+        scanChannel: String(board?.scanChannel || ''),
+        zsType: board?.zsType ?? null,
         stocks: board.memberRows,
         priorityCodes: strategyMainlineScanPriorityCodes(board, priorByCode),   // 猎场股优先扫(主因命中来自真实上下文)
         limitStocks: STRATEGY_MAINLINE_AUTO_SCAN_LIMIT_STOCKS,
@@ -22399,7 +22542,7 @@ function strategyMainlineStaleness(payload, sessionPhase = '', nowMs = Date.now(
 // P1-D 口径元数据(会签约束5):同名指标不同口径必须可区分——静态声明本响应各指标族的数据口径,
 // 前端与 AI 分析按此标注展示,不得把收盘口径当盘中口径混用。
 const STRATEGY_MAINLINE_METRIC_PROFILE = {
-  leaderGain: { fields: ['gain10', 'gain30'], source: 'eastmoney-close-db', basis: 'close', note: '龙头10/30日涨幅为收盘价库口径,盘中不含今日涨幅' },
+  leaderGain: { fields: ['gain10', 'gain30', 'targetDayGain'], source: 'eastmoney-close-db+target-day-live', basis: 'target-day-inclusive', note: '龙头10/30个交易日累计收益均包含目标日,以窗口首日前收盘为基准;盘中使用目标日实时价,盘后使用目标日最终收盘价' },
   leaderZt: { fields: ['zt10Count', 'mainZt10Count'], source: 'limit-up-db', basis: 'daily', note: '涨停次数按涨停底库交易日统计' },
   realtimeBoard: { fields: ['gainPct', 'netInflow', 'zt'], source: 'live-board-rank', basis: 'intraday-live', note: '板块涨幅/净流入/涨停数在 realtimeSource=live 时为盘中实时,snapshot 时为快照口径' },
   cardKlineGain: { fields: ['cardData.gain10', 'cardData.gain30', 'qiLeaders'], source: 'board-snapshot-kline', basis: 'intraday-kline', note: '实时卡展开与QI龙头的10/30日涨幅为K线口径,含快照日盘中涨幅' },
@@ -22977,12 +23120,16 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay, options = {}) {
       const code = normalizeReasonSourceCode(s?.code);
       if (!code) return;
       const cur = pool.get(code) || {
-        code, name: '', gain: null, lianban: 0, firstLimitTime: '', nearLimit: false,
+        code, name: '', gain: null, price: null, priceSource: '', lianban: 0, firstLimitTime: '', nearLimit: false,
         finalBoardTopic: m.theme,
       };
       if (!cur.name && s.name) cur.name = String(s.name);
-      const gain = numOrNull(s.gain);
+      const gain = strategyLeaderTargetDayGain(s);
       if (gain != null) cur.gain = cur.gain == null ? gain : Math.max(cur.gain, gain);
+      const price = numOrNull(s?.price ?? s?.lastPrice ?? s?.currentPrice);
+      if (price != null && price > 0) cur.price = price;
+      if (!cur.priceSource && s?.priceSource) cur.priceSource = String(s.priceSource);
+      if (!cur.asOf && (s?.asOf || s?.fetchedAt || s?.updatedAt)) cur.asOf = String(s.asOf || s.fetchedAt || s.updatedAt);
       cur.lianban = Math.max(cur.lianban || 0, Number(s.lianban) || 0);
       if (!cur.firstLimitTime && s.firstLimitTime) cur.firstLimitTime = String(s.firstLimitTime);
       if (s.nearLimit) cur.nearLimit = true;
@@ -23089,24 +23236,22 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay, options = {}) {
       // 可能来自近15日活跃股的历史数据(maxLianban),不设门槛会把历史连板错当今日连板计分。
       const todayLimit = !!r.todayLimit;
       const todayLianban = todayLimit ? (Number(r.lianban) || 0) : 0;
-      const sealMin = todayLimit ? strategyParseSealMinutes(r.firstLimitTime) : null;
       const starBonus = r.star ? (r.star.level === 'confirmed' ? 15 : 8) : 0;
-      // v2 公平打分(owner 定稿):涨停次数按值给分(同次数同分,每次14上限40);
+      // v2 公平打分(owner 定稿):涨停次数按值给分(同次数同分,每次14且不封顶);
       // 主因新鲜度:最近一次本主线主因涨停距今 ≤3交易日+10 / ≤6日+6 / 10日内+2;
-      // 当日在场:今日涨停或大涨≥3% +6。
+      // 当日涨停已经进入 zt10Count,不得再叠加在场/当日涨停/连板/早封分。
+      // 当日在场 +6 只奖励未涨停但目标日上涨≥5%的股票;连板与封板时间只展示。
       const freshDist = freshByCode.has(r.code) ? freshByCode.get(r.code) : null;
       const freshScore = freshDist == null ? 0 : (freshDist <= 3 ? 10 : freshDist <= 6 ? 6 : 2);
-      const present = todayLimit || (isFiniteNumeric(r.gain) && Number(r.gain) >= 3);
+      const targetDayGain = strategyLeaderTargetDayGain(r);
+      const present = !todayLimit && targetDayGain != null && targetDayGain >= 5;
       const leadScore = Number((
-        Math.min(40, (Number(r.zt10Count) || 0) * 14) +
+        (Number(r.zt10Count) || 0) * 14 +
         strategyLeaderRankScore(g10Rank, 10, 30, 3) +
         strategyLeaderRankScore(g30Rank, 10, 20, 2) +
         freshScore +
         (present ? 6 : 0) +
-        (todayLimit ? 10 : 0) +
-        Math.min(24, todayLianban * 8) +
-        starBonus +
-        (sealMin != null && sealMin <= 600 ? 6 : 0)
+        starBonus
       ).toFixed(1));
       const basis = [];
       if (Number(r.zt10Count) > 0) basis.push(`10日${r.zt10Count}板`);
@@ -23115,15 +23260,23 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay, options = {}) {
       basis.push(`主因${Number(r.mainZt10Count) || 0}次${freshDist != null ? `·最近${freshDist === 0 ? '今日' : freshDist + '日前'}` : ''}`);
       if (todayLianban >= 2) basis.push(`今日${todayLianban}板`);
       else if (todayLimit) basis.push('今日涨停');
-      else if (isFiniteNumeric(r.gain) && Number(r.gain) >= 5) basis.push(`今日+${Number(r.gain).toFixed(1)}%`);
-      return { ...r, lianban: todayLianban, leadScore, basis, gated: (Number(r.mainZt10Count) || 0) >= 1 };
+      else if (targetDayGain != null && targetDayGain >= 5) basis.push(`今日+${targetDayGain.toFixed(1)}%`);
+      return {
+        ...r,
+        gain: targetDayGain,
+        targetDayGain,
+        lianban: todayLianban,
+        leadScore,
+        basis,
+        gated: (Number(r.mainZt10Count) || 0) >= 1,
+      };
     });
     // 龙头是「历史挣出来的」：三榜排名+主因门槛。没人过门槛就是没有龙头——不用今日强势股冒充。
     // （首日新题材天然无复盘数据 → 无龙头，只看明星；次日它进了主因库，龙头才开始产生。）
     const leaderOrder = (a, b) =>
       b.leadScore - a.leadScore ||
       ((freshByCode.get(a.code) ?? 99) - (freshByCode.get(b.code) ?? 99)) ||
-      ((Number(b.gain) || -999) - (Number(a.gain) || -999)) ||
+      ((strategyLeaderTargetDayGain(b) ?? -999) - (strategyLeaderTargetDayGain(a) ?? -999)) ||
       String(a.code).localeCompare(String(b.code));
     const gated = scored.filter(r => r.gated).sort(leaderOrder);
     if (gated.length) {
@@ -23181,7 +23334,13 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay, options = {}) {
             gain30: isFiniteNumeric(r.gain30) ? Number(r.gain30) : null,
             freshDist: freshByCode.has(r.code) ? freshByCode.get(r.code) : null,
             todayLimit: !!r.todayLimit,
-            todayGain: isFiniteNumeric(r.gain) ? Number(r.gain) : null,
+            todayGain: strategyLeaderTargetDayGain(r),
+            targetPriceState: r.targetPriceState || null,
+            gainWindowEndDay: r.gainWindowEndDay || null,
+            gain10WindowStartDay: r.gain10WindowStartDay || null,
+            gain30WindowStartDay: r.gain30WindowStartDay || null,
+            gain10BaseDay: r.gain10BaseDay || null,
+            gain30BaseDay: r.gain30BaseDay || null,
             basis: r.basis,
           })),
       };
@@ -23403,14 +23562,17 @@ function strategyMainlineAugmentPrediction(item, isToday, day, recordTrend = tru
   const momentum = strategyMainlineMomentumScore(trend);
   if (momentum > 0) scoreParts.momentum = momentum;
   const focusStocks = strategyMainlineFocusStocks(item);
-  // 明星股：只匹配本主线相关的股票（今日涨停/大涨/潜力股），避免把邻板块扫描结果错挂进来。
-  const l2Stars = strategyMainlineCollectStars(item?.resonanceBoards, day);
-  const starByCode = l2Stars.byCode;
   const themeCodes = new Set([
     ...(Array.isArray(item?.todayCodes) ? item.todayCodes : []),
     ...(Array.isArray(item?.risingStocks) ? item.risingStocks.map(s => normalizeReasonSourceCode(s?.code)) : []),
     ...focusStocks.map(s => s.code),
   ].filter(Boolean));
+  // 明星股：精确板块 ID 之外也消费同一标准主线家族的扫描，解决 KPL/东财/同花顺
+  // 跨来源板块 ID 不同导致任务已完成却无法挂回卡片的问题；最终仍以 themeCodes 交集防止错挂。
+  const l2Stars = strategyMainlineCollectStars(item?.resonanceBoards, day, {
+    familyKey: item?.familyKey || item?.key || '',
+  });
+  const starByCode = l2Stars.byCode;
   const starStocks = [...starByCode.values()]
     .filter(star => themeCodes.has(star.code) && star.level !== 'sealedWeak')
     .sort((a, b) => (STRATEGY_MAINLINE_STAR_LEVEL_ORDER[a.level] ?? 9) - (STRATEGY_MAINLINE_STAR_LEVEL_ORDER[b.level] ?? 9) || (Number(b.gain) || 0) - (Number(a.gain) || 0))

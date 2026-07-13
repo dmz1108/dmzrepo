@@ -419,6 +419,17 @@ function createStrategyBackend(opts = {}) {
       if (method === 'GET') {
         if (!canReadL2Scan(req)) { sendJson(res, 403, { error: 'login required' }); return true; }
         const adminViewer = !!canRunL2Scan(req);
+        if (url.searchParams.get('history') === '1') {
+          if (!adminViewer) { sendJson(res, 403, { error: 'admin required' }); return true; }
+          const day = url.searchParams.get('day') || nowParts().day;
+          if (!DATE_RE.test(day)) { sendJson(res, 400, { error: 'bad day' }); return true; }
+          const jobs = typeof scanBackend.listDay === 'function' ? scanBackend.listDay(day) : [];
+          sendJson(res, 200, {
+            day,
+            jobs: jobs.slice(0, 50).map(job => l2ScanForViewer(job, true)).filter(Boolean),
+          });
+          return true;
+        }
         const jobId = url.searchParams.get('jobId') || url.searchParams.get('job_id');
         if (jobId) {
           const job = scanBackend.get(jobId);
@@ -475,6 +486,8 @@ function createStrategyBackend(opts = {}) {
           plateId: String(plateId),
           boardName: body.boardName || body.name || boardForPick?.name || stockInfo.name || '',
           day,
+          trigger: 'manual',
+          zsType: sourceZsType ?? normZsType(boardForPick?.zsType),
           threshold,
           minAmount,
           limitStocks,
