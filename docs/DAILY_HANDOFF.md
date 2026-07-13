@@ -3830,3 +3830,14 @@ Files: docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md(rev6)、docs/DAILY_HAND
 Validated: 仅文档;两项阻断逐条修订;noneDeterminable 布尔保留但仅在 R5b 如约发射前提下与决策树等价(已注明)。
 
 Deployment: 无。等 Codex 复核 rev6;不实现、不部署、不启动 PR4。
+
+## 2026-07-13 - Claude - P6 规格 rev6 收尾:Codex 六审通过,四处非语义文字修正
+
+Changed:
+- §0 修正措辞(rev6 决策树+R5b 修正确立,rev5 布尔有缺口见 T16b);S5 条件简写 LU∧¬CL 并注明可与 S4 重叠、仅诊断标签;§5 迁移时间表述理顺;R5b 明确「对当前评分家族 G:X ∈ confirmedMainlineMembers[G],行携带 familyKey=G」防实现误解。
+
+Files: docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md、docs/DAILY_HANDOFF.md
+
+Validated: 仅文字,语义零改动(Codex 六审已确认语义通过、R5b 精化接受)。
+
+Deployment: 无。规格只待 Owner 确认最后一项默认值(reconstructed 主线只展示/审计、不参与评分)即可定稿合并;不实现、不部署、不启动 PR4。

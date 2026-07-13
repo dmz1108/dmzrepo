@@ -7,7 +7,7 @@
 
 **范围**:`strategy-daily-events.js` 生成器的行级发射语义(event rule v2)+ `strategy-leader-scoring-v3.js` 评分器日级闸门的对应调整。
 
-**实现范围(Owner 2026-07-13 口径修正)**:S2、S4、S5 均按「按股票、按字段」闸实现;唯一的全日闸是 S3(涨停事实本身不可信)。核心原则:**缺少某类数据,不等于当天所有已经确定的事件都不得分;能由可靠证据独立确认的分数(如涨停 15/20)必须记录**。此前「首个实现 PR = S2 only」的范围声明废止——rev4 的派生标志(`mainlineKnowable`、`noneDeterminable`、逐股明星三分)对 S4/S5 本就推导出正确行为,本修订放开范围并补齐状态表与测试。
+**实现范围(Owner 2026-07-13 口径修正)**:S2、S4、S5 均按「按股票、按字段」闸实现;唯一的全日闸是 S3(涨停事实本身不可信)。核心原则:**缺少某类数据,不等于当天所有已经确定的事件都不得分;能由可靠证据独立确认的分数(如涨停 15/20)必须记录**。此前「首个实现 PR = S2 only」的范围声明废止——S4/S5 的正确行为由 **rev6 的逐股决策树(§2.1)与 R5b 显式行**共同修正确立(rev5 的日级布尔在 mainlineKnowable∧¬CL 组合下存在误判 0 的缺口,见 T16b)。
 
 **两条档案级不变量(Owner 口径修正)**:
 1. 每日事件档案必须保存**所有可独立确认的 15/20 分事件**及其 provenance,无论当日其他字段缺什么;
@@ -95,7 +95,7 @@
 | S2 | LU∧MR∧CL∧¬SNAP | **06-23、07-02** | 全池全阻断 | 行级判定(§3) |
 | S3 | ¬LU | 尚未出现 | 全日阻断 | **不变**,`dataMissing:['limitUpDbUnreliable']`(涨停事实本身不可信,正负证据全失效——唯一保留的全日闸) |
 | S4 | LU∧¬MR | 尚未出现 | 全日阻断 | **按股票收窄**:归属可靠的涨停股正常 15/20(明星按逐股三分);仅缺归属股 R3 → `mainReasonFamily`;¬MR ⇒ ¬mainlineKnowable,8 分不确定按 R5/R7 处理(CL 在则 >5% 显式行,CL 缺则 noneUndeterminable)。MR 全局不完整**不得**阻断归属已确定股票 |
-| S5 | LU∧(¬CL ∨ ¬SNAP 之外的 CL 缺失组合,即 LU∧¬CL) | 尚未出现 | 全日阻断 | **按字段收窄**:涨停+可靠归属不依赖 CL/SNAP,正常 15/20;依赖收盘涨幅或确认主线的判定(8 分、none 0)仅阻断相应股票/字段(¬noneDeterminable → E7);**不得反向清除已确认涨停事件** |
+| S5 | LU∧¬CL(可与 S4 重叠,仅为诊断标签,不构成互斥控制流) | 尚未出现 | 全日阻断 | **按字段收窄**:涨停+可靠归属不依赖 CL/SNAP,正常 15/20;依赖收盘涨幅或确认主线的判定(8 分、none 0)按 §2.1 决策树逐股阻断;**不得反向清除已确认涨停事件** |
 
 `reconstructed`:重建确认主线 `postCloseConfirmed.status='reconstructed'`,计分上视同 ¬mainlineKnowable(只进展示与审计),家族级 canonicalSource 裁定前不变。
 
@@ -111,7 +111,7 @@
 | R3 | X 涨停 ∧ 无法归属 | `data-missing`,`['mainReasonFamily']`(不变) |
 | R4 | X 未涨停 ∧ mainlineKnowable ∧ 确认主线成分 ∧ 收盘涨幅>5% | `confirmed-mainline-big-gain` 8(不变) |
 | R5 | X 未涨停 ∧ ¬mainlineKnowable ∧ CL ∧ 收盘涨幅>5% | **显式行**:`data-missing`,`['confirmedMainlineUnknown']`,附 closeGainPct;发射范围=当日全部「>5% 未涨停」股(有界) |
-| R5b | X 未涨停 ∧ mainlineKnowable ∧ ¬CL ∧ X 属确认主线成分(familyEvidenceCodes) | **显式行**:`data-missing`,`['closePrice']`;发射范围=确认主线成分中未涨停股(有界)。本行是 §2.1 精化分支的前提:发射后行缺席才可安全解释为「非成分 → none 0」 |
+| R5b | X 未涨停 ∧ mainlineKnowable ∧ ¬CL ∧ **对当前评分家族 G:X ∈ confirmedMainlineMembers[G]**(即 G 的 familyEvidenceCodes) | **显式行**:`data-missing`,`['closePrice']`,**行携带 familyKey=G**;发射范围=各确认主线家族成分中未涨停股(有界),逐家族发射,不得误解为任意主线成分。本行是 §2.1 精化分支的前提:发射后行缺席才可安全解释为「非 G 成分 → 对 G 而言 none 0」 |
 | R6 | X 未涨停 ∧ 按 §2.1 决策树判 none 0 ∧ 非 R5/R5b | 不发射(缺席=none 0,评分器判定) |
 | R7 | X 未涨停 ∧ ¬mainlineKnowable ∧ ¬CL | 不发射;由日级 noneDeterminable=false 兜底(E7 输出 `['closePrice','confirmedMainlineUnknown']`) |
 
@@ -140,7 +140,7 @@ v2 档案日级新增:`stockEvents.rowsAuthoritative`、`stockEvents.noneDetermi
 2. **生产只备份并重生成两个 S2 实证日:`06-23`、`07-02`**。S1 各日的 v1 档案在生产保持原样,经 E2 消费;不安装任何 S1 v2 文件(历史主因映射/板块目录会演化,今日重跑 S1 可能改变行集与证据)。
 3. T1 黄金不变性作为**离线 golden 测试**:隔离目录内用锁定输入生成 S1 v2 对照,校验行集一致后丢弃,不安装。
 4. 冻结快照、预测记录、三库、污染快照文件:零接触。07-02 综合策略快照的污染条目、06-23/07-02 原始板块快照缺失,均登记 data-quality 清单。
-5. 07-10 起线上自动生成档案自实现部署日起自然切 v2;之前的 v1 档案永不重写。
+5. 实现部署日起,新生成档案自然切 v2;部署前既有 v1 档案(含 07-10 起线上自动生成的)永不重写。
 
 ## 6. 测试案例(实现 PR 必须全部覆盖)
 
