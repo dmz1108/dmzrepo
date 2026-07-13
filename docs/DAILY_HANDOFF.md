@@ -3737,6 +3737,123 @@ Deployment:
 Notes for next agent:
 - 本次只替换静态行情HTML;v3评分模块虽已合并main,仍未接入或部署,云端正式龙头榜继续使用v2。
 
+## 2026-07-13 - Claude - P6 规格:事件档案 v2 状态转换表与测试案例(仅文档)
+
+Changed:
+- 新增 `docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md`:P6 完整性收窄的精确状态转换表(日级 S1-S5、行级 R1-R7、评分器 E1-E8)、迁移与再生成规则、14 个必备测试案例、两日验收重跑预期。
+- 采纳 Owner 四点修正:污染快照不改名不删除、由 data-quality 清单隔离并在生成器读取前查验(SNAP 定义);明星不可考日 starEvidenceStatus 必须为 unscanned;reconstructed 确认主线默认不进计分,等家族级 canonicalSource 裁定;联合污染检测归 P1 范围引用。
+- 核心原则成文:收窄只在生成器层做(行级证据写细 + R5 显式不确定行),评分器保持偏执、零新增数据源依赖;DAILY_EVENT_POINTS 与趋势系数零改动;v1 档案走 E2 兼容旧闸。
+
+Files:
+- docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md(新增)
+- docs/DAILY_HANDOFF.md
+
+Validated:
+- 仅文档,无代码改动;规格与 06-23/07-02 两个实证日(07-01 替代验收 0/74、07-08 验收 0/90 的共同根因)逐一对齐;S2 行级三分法此前已用 07-08 批次1 真实数据实测(20 只:18 无事件确定、1 涨停确定、1 不可判定)。
+
+Deployment:
+- 无。未部署、未重启、未改 v2 榜、未启动 PR4。
+
+Notes for next agent:
+- Codex:按本规格实现 P6(先 S2+S5,S4 定义保留),T1-T14 全覆盖,S1 黄金不变性是硬门;实现 PR 保持 Draft 交 Claude 复审。
+- 悬决两项(规格 §6)需 Owner 拍板:S4 启用时机;reconstructed 是否随 canonicalSource 裁定升级为可计分。
+
+## 2026-07-13 - Claude - P6 规格 rev2:按 Codex 首轮评审六项阻断修订
+
+Changed:
+- 规格修订(全部采纳):生产迁移收缩为仅重生成 06-23/07-02 两个 S2 日,S1 黄金不变性改为离线 golden 不安装;starEvidenceAvailable 改为纯显式元数据判定,删除一切日期条件;快照术语拆为三层(kpl-snapshots 原始/strategy-data 综合/冻结主线)并明确 S2 检查对象与 data-quality 条目最少字段;scoreVersion 升 leader-scoring-v3-shadow-v2;首个实现 PR 范围统一为 S2 only(S4/S5 规范保留待 Owner 批准);两日 complete 数改标测算预期。
+- 按评审要求把 2026-07-09-mainline-semantics-topics.md 移出本 PR;内容保留在分支 claude/mainline-semantics-topics-scaffold(commit d0fe304),未丢弃。
+
+Files:
+- docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md(rev2)
+- docs/strategy/discussions/2026-07-09-mainline-semantics-topics.md(移出)
+- docs/DAILY_HANDOFF.md
+
+Validated:
+- 仅文档;六项阻断逐条对照修订,非阻断项(测算预期措辞)一并处理。
+
+Deployment:
+- 无。不合并、不实现、不部署、不启动 PR4,等 Codex 复审。
+
+Notes for next agent:
+- Codex:请复审 PR #37 rev2;实现仍等规格定稿 + Owner 对 §7 两项拍板。
+
+## 2026-07-13 - Claude - P6 规格 rev3:按 Codex 二审三项阻断修订
+
+Changed:
+- 明星证据改为按家族三值 `starEvidenceStatusByFamily`(positive/scanned-no-star/unscanned),空 stars/starTransitions 数组不提升状态,R2a/R2b 按家族状态区分;
+- data-quality 清单改判别联合:contaminated 绑 observedSha256/observedSourceDay,missing 绑 expectedPath 且 sha256=null,禁止伪 SHA;
+- 隔离查验上移到加载/编排层(finalizeStrategyDailyEvents/回填加载器),生成器保持纯函数只信 quality.snapshotStatus/snapshotEvidence,零新增文件 I/O;T6 拆双断言、新增 T6b/T9b。
+
+Files: docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md(rev3)、docs/DAILY_HANDOFF.md
+
+Validated: 仅文档;三项阻断逐条修订;PR #37 描述同步更新。
+
+Deployment: 无。等 Codex 复审后进入 Owner 拍板;不实现、不部署、不启动 PR4。
+
+## 2026-07-13 - Claude - P6 规格 rev4:按 Codex 三审两项状态机闭合修订
+
+Changed:
+- 明星证据从家族级升级为逐股三分 starEvidenceStatusForStock(positive/scanned-no-star/unscanned),R1/R2a/R2b 与三值一一对应无漏行空洞;明文两条反证禁令(空数组不算证据;同族他股明星不证明 X 被扫描);家族级映射降为诊断字段;新增 T8b(positive 家族中 B 股 15/unscanned 不丢行)。
+- SNAP=ok 补全链 provenance:冻结层+综合层+当日必需原始 kpl-snapshots/{5,6,7} 全部无 missing/contaminated 且原始层齐全;层级豁免须显式 provenance 元数据,禁止默认忽略;T6/T6b 补依赖链断言。
+
+Files: docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md(rev4)、docs/DAILY_HANDOFF.md
+
+Validated: 仅文档;两项闭合问题逐条修订。
+
+Deployment: 无。等 Codex 复审;通过后进入 Owner 对 §7 的规格拍板;不实现、不部署、不启动 PR4。
+
+## 2026-07-13 - Claude - P6 规格 rev5:按 Owner 口径修正扩展 S4/S5 为按股票/按字段闸
+
+Changed:
+- 废止「S2 only」范围:S2/S4/S5 均实现,唯一全日闸保留 S3(涨停事实不可信);核心原则成文「缺某类数据 ≠ 当天已确定事件不得分」。
+- S4:归属可靠涨停股正常 15/20,仅缺归属股 dataMissing;S5:涨停+归属不依赖 CL/SNAP 正常 15/20,8分/none 按字段阻断,禁止反向清除已确认事件。
+- 两条档案级不变量:所有可独立确认的 15/20 事件及 provenance 必存档;总分 incomplete 时已确认事件分在 knownPoints/evidence 中完整可审计。
+- §7 第 1 项标记已裁定;新增 T15(S4 逐股)、T16(S5 字段阻断+不反清)、T17(incomplete 审计不变量)。
+
+Files: docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md(rev5)、docs/DAILY_HANDOFF.md
+
+Validated: 仅文档;rev4 派生标志(mainlineKnowable/noneDeterminable/逐股三分)对 S4/S5 本已推导出与 Owner 裁定一致的行为,本轮为范围放开+状态表补行+测试补三条,无机制重设计。
+
+Deployment: 无。等 Codex 复核 rev5;§7 仅余 reconstructed 一项待裁;不实现、不部署、不启动 PR4。
+
+## 2026-07-13 - Claude - P6 规格 rev6:按 Codex 五审两项阻断修订
+
+Changed:
+- 新增 §2.1 逐股事件决策树为唯一真值(LU→逐股涨停→逐股家族证据→CL→主线可知性);S1-S5 降为诊断标签不作互斥控制流;五审反例(mainlineKnowable∧¬CL 把成分股误判 0)以 R5b 显式行修复,E7 原因改为 ['closePrice','confirmedMainlineUnknown']。
+- 新增 familyEvidenceForStock(X) ∈ {reliable, missing} 显式判定(missingMainReasonCodes 优先;provenance 落 sourceReason;多家族分别发行);T15 改用该状态。
+- 一处精化待 Codex 复核:mainlineKnowable∧¬CL 下非成分股判 none 0(8 分因非成分即被排除,不依赖涨幅),成分股按建议阻断;若 Codex 不接受可整支退回保守口径。
+- T16 修正、新增 T16b(五审反例夹具)、T17 收紧为「同窗含已确认事件+缺失事件」双条件断言。
+
+Files: docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md(rev6)、docs/DAILY_HANDOFF.md
+
+Validated: 仅文档;两项阻断逐条修订;noneDeterminable 布尔保留但仅在 R5b 如约发射前提下与决策树等价(已注明)。
+
+Deployment: 无。等 Codex 复核 rev6;不实现、不部署、不启动 PR4。
+
+## 2026-07-13 - Claude - P6 规格 rev6 收尾:Codex 六审通过,四处非语义文字修正
+
+Changed:
+- §0 修正措辞(rev6 决策树+R5b 修正确立,rev5 布尔有缺口见 T16b);S5 条件简写 LU∧¬CL 并注明可与 S4 重叠、仅诊断标签;§5 迁移时间表述理顺;R5b 明确「对当前评分家族 G:X ∈ confirmedMainlineMembers[G],行携带 familyKey=G」防实现误解。
+
+Files: docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md、docs/DAILY_HANDOFF.md
+
+Validated: 仅文字,语义零改动(Codex 六审已确认语义通过、R5b 精化接受)。
+
+Deployment: 无。规格只待 Owner 确认最后一项默认值(reconstructed 主线只展示/审计、不参与评分)即可定稿合并;不实现、不部署、不启动 PR4。
+
+## 2026-07-13 - Claude - P6 规格定稿:Owner §7 终裁落档
+
+Changed:
+- reconstructed 终裁写入 §2/§7:重建主线只展示/审计,不产生主线8分;可靠15/20事件不受影响照常进历史窗口;formalScore 可 incomplete 但已确认事件分必须保留于 knownPoints/evidence;升级计分须待 canonicalSource/sourceDay/防污染/重建可信标准全部定稿后另开讨论。
+- 规格标记定稿:六轮 Codex 评审(13项阻断+R5b精化接受)+ Owner §7 两项拍板全部完成;§7 改为决策记录,无悬决项。
+
+Files: docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md(定稿)、docs/DAILY_HANDOFF.md
+
+Validated: 仅文档;六审四处文字收尾已在上一提交完成,本次仅落档 Owner 终裁与定稿标记。
+
+Deployment: 无。PR #37 待合并(合并由 Codex/Owner 执行);合并后 Codex 另开 P6 实现 Draft PR(S2/S4/S5 逐股闸 + T1-T17)交 Claude 复审;不实现、不部署、不启动 PR4。
+
 ## 2026-07-13 - Codex - 公司端 L2 worker 实盘能力复核
 
 Changed:
