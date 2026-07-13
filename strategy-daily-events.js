@@ -1,7 +1,7 @@
 'use strict';
 
-const STRATEGY_DAILY_EVENT_SCHEMA_VERSION = 1;
-const STRATEGY_DAILY_EVENT_RULE_VERSION = 'leader-scoring-v3-events-v1';
+const STRATEGY_DAILY_EVENT_SCHEMA_VERSION = 2;
+const STRATEGY_DAILY_EVENT_RULE_VERSION = 'leader-scoring-v3-events-v2';
 const STRATEGY_DAILY_EVENT_MAX_SAMPLES = 160;
 const INTRADAY_PHASES = new Set(['早盘', '上午盘', '午间休市', '午后', '尾盘']);
 
@@ -174,56 +174,86 @@ function mergeIntradayObservation(existing, input = {}) {
 }
 
 function collectStarEvidence(predict, snapshot) {
-  const starCodes = new Set();
+  const positiveByStockFamily = new Map();
   const familyStatus = new Map();
   const noteFamily = (familyKey, status) => {
     const key = text(familyKey);
     if (!key) return;
-    const current = familyStatus.get(key) || { observed: false, scanned: false, positive: false };
+    const current = familyStatus.get(key) || {
+      observed: false, positiveCodes: new Set(), scannedCodes: new Set(), coversAllCandidates: false,
+    };
     current.observed = true;
-    if (['qi', 'scanned-no-star'].includes(status)) current.scanned = true;
+    current.l2VerificationStatus = text(status) || current.l2VerificationStatus || '';
     familyStatus.set(key, current);
   };
+  const notePositive = (familyKey, rawCode, source) => {
+    const code = codeOf(rawCode);
+    const key = text(familyKey);
+    if (!code) return;
+    positiveByStockFamily.set(`${key}:${code}`, { status: 'positive', source });
+    noteFamily(key, 'qi');
+    const family = familyStatus.get(key);
+    if (family) family.positiveCodes.add(code);
+  };
+  const noteCoverage = (candidate, familyKey) => {
+    const family = familyStatus.get(familyKey);
+    if (!family) return;
+    const coverage = candidate?.scanCoverage || candidate?.l2Coverage || {};
+    const covered = [
+      ...(Array.isArray(candidate?.scannedCodes) ? candidate.scannedCodes : []),
+      ...(Array.isArray(candidate?.l2ScannedCodes) ? candidate.l2ScannedCodes : []),
+      ...(Array.isArray(candidate?.completedCoveredCodes) ? candidate.completedCoveredCodes : []),
+      ...(Array.isArray(coverage?.codes) ? coverage.codes : []),
+    ].map(codeOf).filter(Boolean);
+    for (const code of covered) family.scannedCodes.add(code);
+    family.coversAllCandidates = family.coversAllCandidates || candidate?.allCandidatesScanned === true ||
+      candidate?.scanCoverageAllCandidates === true || coverage?.coversAllCandidates === true;
+  };
+
   for (const candidate of (Array.isArray(predict?.candidates) ? predict.candidates : [])) {
     const familyKey = text(candidate?.familyKey || candidate?.key);
     noteFamily(familyKey, text(candidate?.l2VerificationStatus));
+    noteCoverage(candidate, familyKey);
     for (const star of (Array.isArray(candidate?.stars) ? candidate.stars : [])) {
       const level = text(star?.level);
-      const code = codeOf(star?.code);
-      if (!code || !['expected', 'confirmed'].includes(level)) continue;
-      starCodes.add(code);
-      const status = familyStatus.get(familyKey) || { observed: true, scanned: false, positive: false };
-      status.positive = true;
-      status.scanned = true;
-      familyStatus.set(familyKey, status);
+      if (['expected', 'confirmed'].includes(level)) notePositive(familyKey, star?.code, 'predict-candidate-star');
     }
   }
   for (const row of (Array.isArray(predict?.top) ? predict.top : [])) {
     const level = text(row?.star?.level);
-    const code = codeOf(row?.star?.code);
-    if (code && ['expected', 'confirmed'].includes(level)) starCodes.add(code);
+    if (['expected', 'confirmed'].includes(level)) {
+      notePositive(text(row?.familyKey || row?.key), row?.star?.code, 'predict-top-star');
+    }
   }
   for (const row of (Array.isArray(predict?.starTransitions) ? predict.starTransitions : [])) {
-    const code = codeOf(row?.code);
-    if (code && text(row?.firstExpectedAt)) starCodes.add(code);
+    if (text(row?.firstExpectedAt)) {
+      notePositive(text(row?.mainlineKey || row?.familyKey), row?.code, 'predict-star-transition');
+    }
   }
-  // 盘后冻结快照本身也是持久化证据。服务若在尾盘重启导致 predict 缺失,
-  // 仍可使用快照中的 expected/confirmed 正证据;active 依旧不算明星。
+  // 冻结快照中的 expected/confirmed 是持久化正证据;active 不是。
   for (const mainline of (Array.isArray(snapshot?.mainlines) ? snapshot.mainlines : [])) {
     const familyKey = text(mainline?.familyKey || mainline?.key);
     noteFamily(familyKey, text(mainline?.l2VerificationStatus));
+    noteCoverage(mainline, familyKey);
     for (const star of (Array.isArray(mainline?.starStocks) ? mainline.starStocks : [])) {
       const level = text(star?.level);
-      const code = codeOf(star?.code);
-      if (!code || !['expected', 'confirmed'].includes(level)) continue;
-      starCodes.add(code);
-      const status = familyStatus.get(familyKey) || { observed: true, scanned: false, positive: false };
-      status.positive = true;
-      status.scanned = true;
-      familyStatus.set(familyKey, status);
+      if (['expected', 'confirmed'].includes(level)) notePositive(familyKey, star?.code, 'frozen-snapshot-star');
     }
   }
-  return { starCodes, familyStatus };
+
+  const statusForStock = (rawCode, familyKey) => {
+    const code = codeOf(rawCode);
+    const positive = positiveByStockFamily.get(`${text(familyKey)}:${code}`);
+    if (positive?.status === 'positive') return positive;
+    const family = familyStatus.get(text(familyKey));
+    const l2Status = text(family?.l2VerificationStatus);
+    const explicitlyCovered = family?.scannedCodes?.has(code) || family?.coversAllCandidates === true;
+    if (explicitlyCovered && ['qi', 'scanned-no-star'].includes(l2Status)) {
+      return { status: 'scanned-no-star', source: family?.coversAllCandidates ? 'family-full-coverage' : 'stock-scan-coverage' };
+    }
+    return { status: 'unscanned', source: 'no-explicit-stock-coverage' };
+  };
+  return { positiveByStockFamily, familyStatus, statusForStock };
 }
 
 function buildFamilyEvidence(input, reasonByCode, limitCodes, starEvidence) {
@@ -279,24 +309,30 @@ function buildFamilyEvidence(input, reasonByCode, limitCodes, starEvidence) {
       });
     }
     byFamily.get(family.key).limitUpCodes.push(code);
-    if (starEvidence.starCodes.has(code)) byFamily.get(family.key).starCodes.push(code);
+    if (starEvidence.statusForStock(code, family.key).status === 'positive') {
+      byFamily.get(family.key).starCodes.push(code);
+    }
   }
 
   return [...byFamily.values()].map(row => {
     const status = starEvidence.familyStatus.get(row.familyKey);
     const starEvidenceStatus = row.starCodes.length
       ? 'confirmed'
-      : (status?.scanned ? 'scanned-no-star' : 'unscanned');
+      : (status?.coversAllCandidates && ['qi', 'scanned-no-star'].includes(text(status?.l2VerificationStatus))
+          ? 'scanned-no-star' : 'unscanned');
     const missingFields = [];
     const failReasons = [];
     if (!input.quality?.limitUpComplete) missingFields.push('limitUpDb');
     if (!input.quality?.mainReasonComplete) missingFields.push('mainReasonDb');
+    if (input.quality?.snapshotStatus !== 'ok' || input.quality?.snapshotUsable !== true) missingFields.push('snapshot');
     if (row.netInflow == null) missingFields.push('netInflow');
     if (starEvidenceStatus === 'unscanned') missingFields.push('starEvidence');
     if (row.netInflow != null && row.netInflow <= 0) failReasons.push('net-inflow-not-positive');
     if (row.starCodes.length < 1) failReasons.push('no-confirmed-star');
     if (row.limitUpCodes.length < 2) failReasons.push('family-limit-up-count-below-2');
     const eligible = missingFields.length === 0 && failReasons.length === 0;
+    const reconstructedEligible = input.quality?.snapshotReconstructed === true &&
+      missingFields.every(field => field === 'snapshot') && failReasons.length === 0;
     return {
       familyKey: row.familyKey,
       theme: row.theme,
@@ -317,11 +353,13 @@ function buildFamilyEvidence(input, reasonByCode, limitCodes, starEvidence) {
         netInflowPositive: row.netInflow != null ? row.netInflow > 0 : null,
         hasStar: row.starCodes.length >= 1,
         familyLimitUpsAtLeast2: row.limitUpCodes.length >= 2,
-        sourceDataComplete: !!(input.quality?.limitUpComplete && input.quality?.mainReasonComplete),
+        sourceDataComplete: !!(input.quality?.limitUpComplete && input.quality?.mainReasonComplete &&
+          input.quality?.snapshotStatus === 'ok' && input.quality?.snapshotUsable === true),
       },
       missingFields,
       failReasons,
       eligible,
+      reconstructedEligible,
       sourceMainline: row.sourceMainline,
     };
   });
@@ -352,83 +390,152 @@ function buildStockEvents(input, confirmedFamilies, reasonByCode, limitCodes, st
   const events = [];
   const missingReasonCodes = [];
   const limitRows = Array.isArray(input.limitDb?.stocks) ? input.limitDb.stocks : [];
-  for (const row of limitRows) {
-    const code = codeOf(row?.code);
-    if (!code || input.isExcluded?.(row)) continue;
-    const reason = reasonByCode.get(code);
-    const family = reason ? familyForTheme(reason.finalBoardTopic, input.familyInfo) : null;
-    if (!family?.key) {
-      missingReasonCodes.push(code);
+  const rowsAuthoritative = input.quality?.limitUpComplete === true;
+  const snapshotUsable = input.quality?.snapshotStatus === 'ok' && input.quality?.snapshotUsable === true;
+  const mainlineKnowable = rowsAuthoritative && input.quality?.mainReasonComplete === true && snapshotUsable;
+  const closeComplete = input.quality?.closeComplete === true;
+  const missingReasonSet = new Set((Array.isArray(input.quality?.missingMainReasonCodes)
+    ? input.quality.missingMainReasonCodes : []).map(codeOf).filter(Boolean));
+
+  if (rowsAuthoritative) {
+    for (const row of limitRows) {
+      const code = codeOf(row?.code);
+      if (!code || input.isExcluded?.(row)) continue;
+      const reason = reasonByCode.get(code);
+      const family = !missingReasonSet.has(code) && reason
+        ? familyForTheme(reason.finalBoardTopic, input.familyInfo) : null;
+      if (!family?.key) {
+        missingReasonCodes.push(code);
+        events.push({
+          code,
+          name: text(row?.name || reason?.name),
+          familyKey: null,
+          theme: null,
+          event: 'data-missing',
+          points: null,
+          status: 'dataMissing',
+          historyEligible: false,
+          familyEvidenceStatus: 'missing',
+          dataMissing: ['mainReasonFamily'],
+        });
+        continue;
+      }
+      const starStatus = starEvidence.statusForStock(code, family.key);
+      const isStar = starStatus.status === 'positive';
       events.push({
         code,
-        name: text(row?.name),
-        familyKey: null,
-        theme: null,
-        event: 'data-missing',
-        points: null,
-        status: 'dataMissing',
-        historyEligible: false,
-        dataMissing: ['mainReasonFamily'],
+        name: text(row?.name || reason?.name),
+        familyKey: family.key,
+        theme: family.label,
+        event: isStar ? 'star-limit-up' : 'ordinary-limit-up',
+        points: isStar ? 20 : 15,
+        status: 'confirmed',
+        historyEligible: true,
+        familyEvidenceStatus: 'reliable',
+        starEvidenceStatus: isStar ? 'confirmed'
+          : (starStatus.status === 'scanned-no-star' ? 'not-confirmed' : 'unscanned'),
+        starEvidenceSource: starStatus.source,
+        dataMissing: [],
+        sourceReason: {
+          finalBoardTopic: text(reason?.finalBoardTopic),
+          finalDetailReason: text(reason?.finalDetailReason),
+        },
       });
-      continue;
     }
-    const isStar = starEvidence.starCodes.has(code);
-    const sourceComplete = !!(input.quality?.limitUpComplete && input.quality?.mainReasonComplete);
-    events.push({
-      code,
-      name: text(row?.name || reason?.name),
-      familyKey: family.key,
-      theme: family.label,
-      event: isStar ? 'star-limit-up' : 'ordinary-limit-up',
-      points: isStar ? 20 : 15,
-      status: sourceComplete ? 'confirmed' : 'provisional',
-      historyEligible: sourceComplete,
-      starEvidenceStatus: isStar ? 'confirmed' : 'not-confirmed',
-      dataMissing: sourceComplete ? [] : [
-        ...(!input.quality?.limitUpComplete ? ['limitUpDb'] : []),
-        ...(!input.quality?.mainReasonComplete ? ['mainReasonDb'] : []),
-      ],
-      sourceReason: {
-        finalBoardTopic: text(reason?.finalBoardTopic),
-        finalDetailReason: text(reason?.finalDetailReason),
-      },
-    });
   }
 
   const closeByCode = new Map((Array.isArray(input.closeDb?.stocks) ? input.closeDb.stocks : [])
     .map(row => [codeOf(row?.code), row]).filter(([code]) => code));
-  for (const family of confirmedFamilies) {
-    const source = family.sourceMainline || {};
-    for (const code of familyEvidenceCodes(source)) {
-      if (limitCodes.has(code) || events.some(event => event.code === code)) continue;
-      const closeRow = closeByCode.get(code);
+  const familyMembers = new Map(confirmedFamilies.map(family => [
+    family.familyKey,
+    familyEvidenceCodes(family.sourceMainline || {}),
+  ]));
+
+  if (rowsAuthoritative && mainlineKnowable && closeComplete) {
+    for (const family of confirmedFamilies) {
+      for (const code of (familyMembers.get(family.familyKey) || [])) {
+        if (limitCodes.has(code)) continue;
+        const closeRow = closeByCode.get(code);
+        const gain = num(closeRow?.gain);
+        if (gain == null || gain <= 5) continue;
+        events.push({
+          code,
+          name: text(closeRow?.name),
+          familyKey: family.familyKey,
+          theme: family.theme,
+          event: 'confirmed-mainline-big-gain',
+          points: 8,
+          closeGainPct: gain,
+          status: 'confirmed',
+          historyEligible: true,
+          dataMissing: [],
+          sourceReason: { confirmedMainline: true, snapshotStatus: 'ok' },
+        });
+      }
+    }
+  } else if (rowsAuthoritative && mainlineKnowable && !closeComplete) {
+    // R5b:主线归属已知但收盘价不可用,只阻断该主线的成员股;非成员仍可确定为 none 0。
+    for (const family of confirmedFamilies) {
+      for (const code of (familyMembers.get(family.familyKey) || [])) {
+        if (limitCodes.has(code)) continue;
+        events.push({
+          code,
+          name: text(reasonByCode.get(code)?.name),
+          familyKey: family.familyKey,
+          theme: family.theme,
+          event: 'data-missing',
+          points: null,
+          status: 'dataMissing',
+          historyEligible: false,
+          dataMissing: ['closePrice'],
+          sourceReason: { confirmedMainlineMember: true, snapshotStatus: 'ok' },
+        });
+      }
+    }
+  } else if (rowsAuthoritative && !mainlineKnowable && closeComplete) {
+    // R5:主线不可确认时,所有收盘涨幅>5%的未板股都显式阻断,不能把未知归属写成 none 0。
+    for (const [code, closeRow] of closeByCode) {
+      if (limitCodes.has(code) || input.isExcluded?.(closeRow)) continue;
       const gain = num(closeRow?.gain);
       if (gain == null || gain <= 5) continue;
-      const complete = !!input.quality?.closeComplete;
       events.push({
         code,
         name: text(closeRow?.name),
-        familyKey: family.familyKey,
-        theme: family.theme,
-        event: 'confirmed-mainline-big-gain',
-        points: 8,
+        familyKey: null,
+        theme: null,
+        event: 'data-missing',
+        points: null,
         closeGainPct: gain,
-        status: complete ? 'confirmed' : 'provisional',
-        historyEligible: complete,
-        dataMissing: complete ? [] : ['closeDb'],
+        status: 'dataMissing',
+        historyEligible: false,
+        dataMissing: ['confirmedMainlineUnknown'],
       });
     }
   }
 
   const order = { 'star-limit-up': 0, 'ordinary-limit-up': 1, 'confirmed-mainline-big-gain': 2, 'data-missing': 3 };
   events.sort((a, b) => (order[a.event] ?? 9) - (order[b.event] ?? 9) || a.code.localeCompare(b.code));
-  const unresolvedFamilyCount = events.filter(row => row.event === 'data-missing').length;
+  const unresolvedFamilyCount = events.filter(row => row.dataMissing?.includes('mainReasonFamily')).length;
   const attributedLimitUpCount = events.filter(row =>
     row.event === 'star-limit-up' || row.event === 'ordinary-limit-up').length;
+  const starEvidenceStatusByFamily = {};
+  for (const row of events.filter(event => event.familyKey && event.starEvidenceStatus)) {
+    const bucket = starEvidenceStatusByFamily[row.familyKey] || { confirmed: 0, notConfirmed: 0, unscanned: 0 };
+    if (row.starEvidenceStatus === 'confirmed') bucket.confirmed += 1;
+    else if (row.starEvidenceStatus === 'not-confirmed') bucket.notConfirmed += 1;
+    else bucket.unscanned += 1;
+    starEvidenceStatusByFamily[row.familyKey] = bucket;
+  }
+  const noneDeterminable = rowsAuthoritative && (mainlineKnowable || closeComplete);
   return {
-    // complete=必需来源库完整;coverageComplete=每只涨停股都能归到有效主线家族。
-    // 两者故意分开:来源完整日仍可能有「其他/事件类」个股,这些行保持 dataMissing。
-    complete: !!(input.quality?.limitUpComplete && input.quality?.mainReasonComplete && input.quality?.closeComplete),
+    complete: rowsAuthoritative && noneDeterminable && events.every(row => row.status !== 'dataMissing'),
+    rowsAuthoritative,
+    noneDeterminable,
+    mainlineKnowable,
+    snapshotStatus: text(input.quality?.snapshotStatus) || 'missing',
+    snapshotEvidence: Array.isArray(input.quality?.snapshotEvidence)
+      ? input.quality.snapshotEvidence.slice() : [],
+    starEvidenceStatusByFamily,
     coverageComplete: unresolvedFamilyCount === 0,
     attributedLimitUpCount,
     unresolvedFamilyCount,
@@ -459,8 +566,7 @@ function buildPostCloseRecord(existing, input = {}) {
     .map(row => [codeOf(row?.code), row]).filter(([code]) => code));
   const starEvidence = collectStarEvidence(input.predict, input.snapshot);
   const familyEvidence = buildFamilyEvidence(input, reasonByCode, limitCodes, starEvidence);
-  const confirmedFamilies = familyEvidence
-    .filter(row => row.eligible)
+  const sortFamilies = rows => rows
     .sort((a, b) =>
       b.limitUpCount - a.limitUpCount ||
       b.starCount - a.starCount ||
@@ -469,13 +575,22 @@ function buildPostCloseRecord(existing, input = {}) {
       (b.snapshotScore ?? -Infinity) - (a.snapshotScore ?? -Infinity) ||
       a.familyKey.localeCompare(b.familyKey))
     .slice(0, 2);
-  const sourceComplete = !!(input.quality?.limitUpComplete && input.quality?.mainReasonComplete && input.snapshot?.mainlines?.length);
+  const confirmedFamilies = sortFamilies(familyEvidence.filter(row => row.eligible));
+  const snapshotStatus = text(input.quality?.snapshotStatus) || 'missing';
+  const snapshotUsable = snapshotStatus === 'ok' && input.quality?.snapshotUsable === true;
+  const sourceComplete = !!(input.quality?.limitUpComplete && input.quality?.mainReasonComplete &&
+    snapshotUsable && input.snapshot?.mainlines?.length);
+  const reconstructed = input.quality?.snapshotReconstructed === true;
+  const displayFamilies = reconstructed
+    ? sortFamilies(familyEvidence.filter(row => row.reconstructedEligible))
+    : confirmedFamilies;
   base.schemaVersion = STRATEGY_DAILY_EVENT_SCHEMA_VERSION;
   base.ruleVersion = STRATEGY_DAILY_EVENT_RULE_VERSION;
   base.updatedAt = generatedAt;
   base.postCloseConfirmed = {
     generatedAt,
-    status: sourceComplete ? (confirmedFamilies.length ? 'confirmed' : 'no-qualified-mainline') : 'dataMissing',
+    status: reconstructed ? 'reconstructed'
+      : (sourceComplete ? (confirmedFamilies.length ? 'confirmed' : 'no-qualified-mainline') : 'dataMissing'),
     complete: sourceComplete,
     historyUsableFrom: 'next-trading-day',
     rule: {
@@ -487,14 +602,17 @@ function buildPostCloseRecord(existing, input = {}) {
       strengthBreadth: 'persisted-for-calibration-no-extra-threshold',
     },
     sourceStatus: {
-      snapshot: !!input.snapshot?.mainlines?.length,
+      snapshot: snapshotUsable,
+      snapshotStatus,
+      snapshotEvidence: Array.isArray(input.quality?.snapshotEvidence)
+        ? input.quality.snapshotEvidence.slice() : [],
       limitUpDb: !!input.quality?.limitUpComplete,
       mainReasonDb: !!input.quality?.mainReasonComplete,
       closeDb: !!input.quality?.closeComplete,
       missingMainReasonCodes: Array.isArray(input.quality?.missingMainReasonCodes)
         ? input.quality.missingMainReasonCodes.slice() : [],
     },
-    confirmedMainlines: confirmedFamilies.map((row, index) => ({
+    confirmedMainlines: displayFamilies.map((row, index) => ({
       rank: index + 1,
       familyKey: row.familyKey,
       theme: row.theme,

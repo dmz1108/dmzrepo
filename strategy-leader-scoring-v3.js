@@ -1,10 +1,11 @@
 'use strict';
 
 const LEADER_SCORING_V3_SCHEMA_VERSION = 1;
-const LEADER_SCORING_V3_SCORE_VERSION = 'leader-scoring-v3-shadow-v1';
+const LEADER_SCORING_V3_SCORE_VERSION = 'leader-scoring-v3-shadow-v2';
 const LEADER_SCORING_V3_HISTORY_DAYS = 10;
 const LEADER_SCORING_V3_TREND_RULE = 'positive-gain10-1x-plus-positive-gain30-0.25x-shadow';
-const LEADER_SCORING_V3_EVENT_RULE_VERSION = 'leader-scoring-v3-events-v1';
+const LEADER_SCORING_V3_EVENT_RULE_VERSION_V1 = 'leader-scoring-v3-events-v1';
+const LEADER_SCORING_V3_EVENT_RULE_VERSION = 'leader-scoring-v3-events-v2';
 
 const DAILY_EVENT_POINTS = Object.freeze({
   'star-limit-up': 20,
@@ -51,18 +52,51 @@ function eventPoints(event) {
     : null;
 }
 
-function eventForCode(record, code, familyKey) {
-  const day = validDay(record?.day);
-  if (!record) {
-    return { day, complete: false, status: 'dataMissing', event: null, points: null, dataMissing: ['dailyEventRecord'] };
+function eventEvidence(record, row, points) {
+  return {
+    ruleVersion: text(record?.ruleVersion),
+    storedPoints: finiteNumber(row?.points),
+    storedPointsMatch: finiteNumber(row?.points) === points,
+    sourceStatus: text(row?.status),
+    historyEligible: row?.historyEligible === true,
+    starEvidenceStatus: text(row?.starEvidenceStatus) || null,
+    starEvidenceSource: text(row?.starEvidenceSource) || null,
+    familyEvidenceStatus: text(row?.familyEvidenceStatus) || null,
+    sourceReason: row?.sourceReason && typeof row.sourceReason === 'object'
+      ? JSON.parse(JSON.stringify(row.sourceReason)) : null,
+    closeGainPct: finiteNumber(row?.closeGainPct),
+  };
+}
+
+function pickStoredEvent(record, rows, day) {
+  const scored = rows
+    .map(row => ({ row, points: eventPoints(text(row?.event)) }))
+    .filter(item => item.points !== null)
+    .sort((a, b) => b.points - a.points || text(a.row?.event).localeCompare(text(b.row?.event)));
+  if (rows.length && !scored.length) {
+    return {
+      day, complete: false, status: 'dataMissing', event: null, points: null,
+      dataMissing: ['unknownDailyEvent'],
+    };
   }
+  if (!scored.length) return null;
+  const picked = scored[0];
+  return {
+    day,
+    complete: true,
+    status: 'confirmed',
+    event: text(picked.row?.event),
+    points: picked.points,
+    dataMissing: [],
+    evidence: eventEvidence(record, picked.row, picked.points),
+    duplicateRowsIgnored: Math.max(0, scored.length - 1),
+  };
+}
+
+function eventForCodeV1(record, code, familyKey, day) {
   if (record.complete !== true || record?.stockEvents?.complete !== true) {
     return { day, complete: false, status: 'dataMissing', event: null, points: null, dataMissing: ['dailyEventIncomplete'] };
   }
-  if (text(record?.ruleVersion) !== LEADER_SCORING_V3_EVENT_RULE_VERSION) {
-    return { day, complete: false, status: 'dataMissing', event: null, points: null, dataMissing: ['dailyEventRuleVersion'] };
-  }
-
   const rows = (Array.isArray(record?.stockEvents?.events) ? record.stockEvents.events : [])
     .filter(row => codeOf(row?.code) === code);
   if (rows.some(row => row?.status === 'dataMissing' || row?.historyEligible === false)) {
@@ -75,23 +109,53 @@ function eventForCode(record, code, familyKey) {
       dataMissing: [...new Set(rows.flatMap(row => Array.isArray(row?.dataMissing) ? row.dataMissing : ['stockEvent']))],
     };
   }
-
   const sameFamily = rows.filter(row => text(row?.familyKey) === familyKey);
-  const scored = sameFamily
-    .map(row => ({ row, points: eventPoints(text(row?.event)) }))
-    .filter(item => item.points !== null)
-    .sort((a, b) => b.points - a.points || text(a.row?.event).localeCompare(text(b.row?.event)));
-  if (sameFamily.length && !scored.length) {
+  const picked = pickStoredEvent(record, sameFamily, day);
+  if (picked) return picked;
+  return {
+    day,
+    complete: true,
+    status: 'confirmed',
+    event: 'none',
+    points: 0,
+    dataMissing: [],
+    otherFamilyEvents: rows.filter(row => text(row?.familyKey) !== familyKey)
+      .map(row => ({ familyKey: text(row?.familyKey), event: text(row?.event) })),
+  };
+}
+
+function eventForCodeV2(record, code, familyKey, day) {
+  const stockEvents = record?.stockEvents || {};
+  if (stockEvents.rowsAuthoritative !== true) {
+    return {
+      day, complete: false, status: 'dataMissing', event: null, points: null,
+      dataMissing: ['limitUpDbUnreliable'],
+    };
+  }
+  const rows = (Array.isArray(stockEvents.events) ? stockEvents.events : [])
+    .filter(row => codeOf(row?.code) === code);
+  const blocked = rows.filter(row => row?.status === 'dataMissing' || row?.historyEligible === false);
+  if (blocked.length) {
     return {
       day,
       complete: false,
       status: 'dataMissing',
       event: null,
       points: null,
-      dataMissing: ['unknownDailyEvent'],
+      dataMissing: [...new Set(blocked.flatMap(row =>
+        Array.isArray(row?.dataMissing) && row.dataMissing.length ? row.dataMissing : ['stockEvent']))],
+      evidence: blocked.map(row => ({
+        familyKey: text(row?.familyKey) || null,
+        sourceStatus: text(row?.status),
+        sourceReason: row?.sourceReason || null,
+        closeGainPct: finiteNumber(row?.closeGainPct),
+      })),
     };
   }
-  if (!scored.length) {
+  const sameFamily = rows.filter(row => text(row?.familyKey) === familyKey);
+  const picked = pickStoredEvent(record, sameFamily, day);
+  if (picked) return picked;
+  if (stockEvents.noneDeterminable === true) {
     return {
       day,
       complete: true,
@@ -103,23 +167,29 @@ function eventForCode(record, code, familyKey) {
         .map(row => ({ familyKey: text(row?.familyKey), event: text(row?.event) })),
     };
   }
-
-  const picked = scored[0];
   return {
     day,
-    complete: true,
-    status: 'confirmed',
-    event: text(picked.row?.event),
-    points: picked.points,
-    dataMissing: [],
-    evidence: {
-      ruleVersion: text(record?.ruleVersion),
-      storedPoints: finiteNumber(picked.row?.points),
-      storedPointsMatch: finiteNumber(picked.row?.points) === picked.points,
-      sourceStatus: text(picked.row?.status),
-    },
-    duplicateRowsIgnored: Math.max(0, scored.length - 1),
+    complete: false,
+    status: 'dataMissing',
+    event: null,
+    points: null,
+    dataMissing: ['closePrice', 'confirmedMainlineUnknown'],
   };
+}
+
+function eventForCode(record, code, familyKey) {
+  const day = validDay(record?.day);
+  if (!record) {
+    return { day, complete: false, status: 'dataMissing', event: null, points: null, dataMissing: ['dailyEventRecord'] };
+  }
+  const ruleVersion = text(record?.ruleVersion);
+  if (ruleVersion === LEADER_SCORING_V3_EVENT_RULE_VERSION_V1) {
+    return eventForCodeV1(record, code, familyKey, day);
+  }
+  if (ruleVersion === LEADER_SCORING_V3_EVENT_RULE_VERSION) {
+    return eventForCodeV2(record, code, familyKey, day);
+  }
+  return { day, complete: false, status: 'dataMissing', event: null, points: null, dataMissing: ['dailyEventRuleVersion'] };
 }
 
 function normalizeHistoryDays(targetDay, tradingDays, count = LEADER_SCORING_V3_HISTORY_DAYS) {
@@ -362,6 +432,7 @@ module.exports = {
   DAILY_EVENT_POINTS,
   LEADER_SCORING_V3_HISTORY_DAYS,
   LEADER_SCORING_V3_EVENT_RULE_VERSION,
+  LEADER_SCORING_V3_EVENT_RULE_VERSION_V1,
   LEADER_SCORING_V3_SCHEMA_VERSION,
   LEADER_SCORING_V3_SCORE_VERSION,
   LEADER_SCORING_V3_TREND_RULE,
