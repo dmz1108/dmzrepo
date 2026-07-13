@@ -78,6 +78,11 @@ const MAIN_REASON = {};
 const readLimitUpMainReasonDbDay = async d => MAIN_REASON[d] || null;
 const LIMIT_UP = {};
 const readLimitUpDbDay = async d => LIMIT_UP[d] || null;
+const KLINE = {};
+const fetchEastmoneyKline = async code => KLINE[code] || null;
+const compactDate = value => String(value || '').replace(/\D/g, '').slice(0, 8);
+const numOrNull = value => (value == null || value === '' || !Number.isFinite(Number(value))) ? null : Number(value);
+const isFiniteNumeric = value => value != null && value !== '' && Number.isFinite(Number(value));
 // 完整性检查 stub(语义保真:收盘后保存 + 可靠 + ruleVersion 兼容)
 const isSavedAfterMarketClose = (payload) => payload?.savedAtOK === true;
 const isReliableLimitUpDbPayload = (payload) => Array.isArray(payload?.stocks) && payload.stocks.length > 0 && payload.reliable !== false;
@@ -104,13 +109,20 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   MAIN_REASON['2026-07-03'] = reasonDb([{ code: '600001', name: 'A', finalBoardTopic: '算力' }]);
 
   // 07-06(尾盘,有效):旧记录明星【无 level】→ 等级未知,不进封板统计(③);
-  //                   数据完整、预判算力、实际第一=算力AI → top1 命中。
+  //                   数据完整、预判算力、实际第一=算力AI → top1 命中；保存两个龙头并回看三项收益。
   PREDICTS['2026-07-06'] = { sessionPhase: '尾盘', confirmedKey: '', top: [
-    { key: '算力', theme: '算力', star: { code: '600001', name: '老股' }, leader: null }] };
+    { key: '算力', theme: '算力', star: { code: '600001', name: '老股' },
+      leader: { code: '600014', name: '龙一' },
+      leaders: [{ code: '600014', name: '龙一', leadScore: 88 }, { code: '600015', name: '龙二', leadScore: 77 }] }] };
   LIMIT_UP['2026-07-06'] = finalLimitDb(['600001', '600003']);
   MAIN_REASON['2026-07-06'] = reasonDb([
     { code: '600001', name: 'A', finalBoardTopic: '算力' },
     { code: '600003', name: 'C', finalBoardTopic: '算力' }]);
+  CLOSE['2026-07-06'] = { '600014': 10, '600015': 20 };
+  CLOSE['2026-07-07'] = { '600014': 11, '600015': 18 };
+  CLOSE['2026-07-09'] = { '600014': 13, '600015': 22 };
+  KLINE['600014'] = { x: ['2026-07-06', '2026-07-07'], y: [[9.5, 10, 10.2, 9.4], [10.5, 11, 12, 10.4]] };
+  KLINE['600015'] = { x: ['2026-07-06', '2026-07-07'], y: [[19.5, 20, 20.2, 19.2], [20, 18, 21, 17.8]] };
 
   // 07-07(上午盘,有效):并列第一(⑤)——网络安全2 vs 数字货币2 vs 半导体1;预判数字货币 →
   //                     命中任意并列第一 = top1 命中;明星 active → 不进封板统计(③)。
@@ -141,7 +153,7 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   MAIN_REASON['2026-07-09'] = reasonDb([
     { code: '002396', name: '星网', finalBoardTopic: '算力' },
     { code: '600009', name: 'I', finalBoardTopic: '算力' }]);
-  CLOSE['2026-07-09'] = { '002396': 10, '000938': 20 };
+  CLOSE['2026-07-09'] = { ...CLOSE['2026-07-09'], '002396': 10, '000938': 20 };
   CLOSE['2026-07-10'] = { '002396': 11, '000938': 19 };
 
   // 07-10(尾盘,⑦真实镜像·脱靶 + ①最新收盘日无次日):预判医药,实际第一=商业航天 →
@@ -183,24 +195,32 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   // ④ 涨停库缺失 → null 不冒充 false
   A(d2.star.sealedSameDay === null && d2.star.sealStatus === 'noData', '④终盘涨停库缺失 → sealedSameDay=null(数据不足,不是 false)');
 
-  // ⑤ 并列第一
+  // ⑤ 回看两名龙头:次日最高、次日收盘、第三个后续交易日收盘。
+  A(d6.thirdDay === '2026-07-09' && d6.leaders.length === 2, '⑤龙头前两名均入回看且第三个后续交易日锚定正确');
+  A(d6.leaders[0].leadScore === 88 && d6.leaders[0].nextHighGain === 20
+    && d6.leaders[0].nextCloseGain === 10 && d6.leaders[0].threeDayGain === 30, '⑤龙头1三项收益计算正确');
+  A(d6.leaders[1].leadScore === 77 && d6.leaders[1].nextHighGain === 5
+    && d6.leaders[1].nextCloseGain === -10 && d6.leaders[1].threeDayGain === 10, '⑤龙头2三项收益计算正确');
+
+  // ⑥ 并列第一
   A(d7.actualFirstTied === true, '⑤网络安全2=数字货币2 → 并列第一标记');
   A(d7.mainlineHitTop1 === true, '⑤预判命中任意并列第一家族 → top1 命中');
   A(d7.actualTop.filter(t => t.rankTier === 1).length === 2, '⑤actualTop 完整包含两个并列第一家族');
   A(d7.actualTop.some(t => t.rankTier === 2), '⑤Top3 按名次层级(半导体进第二层级),非数组截断');
 
-  // ⑥ 主因库不完整覆盖
+  // ⑦ 主因库不完整覆盖
   A(d3.mainlineHitTop1 === null && d3.mainReasonMissingCount === 1, '⑥主因库缺 1 只涨停股 → 命中 null + 返回缺失数(830001 剔除后不计缺)');
   A(d2.mainlineHitTop1 === null && d2.mainReasonMissingCount === null, '⑥涨停库缺失无法验证覆盖 → 命中 null');
 
-  // ⑦ 真实镜像统计:有效分母 = 07-06(命中)+07-07(命中)+07-09(命中)+07-10(脱靶)=4;
+  // ⑧ 真实镜像统计:有效分母 = 07-06(命中)+07-07(命中)+07-09(命中)+07-10(脱靶)=4;
   //    07-08(已收盘)/07-02/07-03(数据不完整)不计。
   const s = out.stats;
   A(s.mainlineTotal === 4 && s.mainlineTop1Hits === 3, '⑦分母只含有效盘中样本:4 天,top1=3(已收盘/不完整均剔除)');
   A(s.expectedSealTotal === 2 && s.expectedSealWins === 1 && s.expectedSealRate === 50, '⑦预期明星封板统计:仅 expected 计入 = 1/2(confirmed/active/无level 不计)');
-  // 明星/龙头次日胜率也只计有效样本:d9 star +10% 胜、d9 leader -5% 败;d8(已收盘)有次日数据但不计
+  // 明星/龙头次日胜率也只计有效样本:d6 leader +10% 胜,d9 star +10% 胜,d9 leader -5% 败;
+  // d8(已收盘)有次日数据但不计。
   A(s.starTotal === 1 && s.starWins === 1, '⑦明星次日胜率分母剔除已收盘样本');
-  A(s.leaderTotal === 1 && s.leaderWins === 0, '⑦龙头次日胜率分母剔除已收盘样本');
+  A(s.leaderTotal === 2 && s.leaderWins === 1 && s.leaderWinRate === 50, '⑦龙头1次日胜率按有效样本统计且剔除已收盘样本');
 
   // ---------- 当日盘中:待盘后验证 ----------
   TODAY = '2026-07-10'; TODAY_CLOSED = false;

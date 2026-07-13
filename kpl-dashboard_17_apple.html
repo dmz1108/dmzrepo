@@ -7330,9 +7330,20 @@
   body.view-strategy .mlr-theme i { font-style: normal; color: #ffd78a; margin-left: 3px; }
   body.view-strategy .mlr-arrow { color: rgba(174,190,214,0.4); font-size: 12px; margin: 0 -2px; }
   body.view-strategy .mlr-result { display: inline-flex; align-items: center; gap: 7px; flex-wrap: wrap; }
-  body.view-strategy .mlr-slot { color: rgba(174,190,214,0.72); display: inline-flex; gap: 5px; align-items: center; }
+  body.view-strategy .mlr-slot { color: rgba(174,190,214,0.72); display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; min-width: 0; }
   body.view-strategy .mlr-label { color: rgba(174,190,214,0.5); font-size: 10px; font-weight: 700; letter-spacing: 0; }
-  body.view-strategy .mlr-name { color: #cfe0f5; }
+  body.view-strategy .mlr-name { color: #cfe0f5; font-weight: 650; }
+  body.view-strategy .mlr-performance { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  body.view-strategy .mlr-perf {
+    display: inline-flex; align-items: baseline; gap: 3px;
+    padding: 2px 5px; border: 1px solid rgba(174,190,214,0.12); border-radius: 4px;
+    background: rgba(174,190,214,0.045); font-variant-numeric: tabular-nums;
+  }
+  body.view-strategy .mlr-perf i { color: rgba(174,190,214,0.48); font-size: 9px; font-style: normal; font-weight: 650; }
+  body.view-strategy .mlr-perf b { font-size: 10.5px; font-weight: 760; }
+  body.view-strategy .mlr-perf.up b { color: #ff7a7a; }
+  body.view-strategy .mlr-perf.down b { color: #2bd583; }
+  body.view-strategy .mlr-perf.flat b, body.view-strategy .mlr-perf.na b { color: #8f9fb6; }
   body.view-strategy .mlr-gain { font-weight: 760; font-variant-numeric: tabular-nums; }
   body.view-strategy .mlr-gain.up { color: #ff7a7a; }
   body.view-strategy .mlr-gain.down { color: #2bd583; }
@@ -11647,6 +11658,7 @@ function renderStrategyMainlinesHTML(d) {
       const parts = [`最大档${amountW}`, `主动买${buyYi}`, `主${r.activeRatio ?? '-'}/被${r.passiveRatio ?? '-'}/合${r.supportRatio ?? '-'}`];
       if (mb.empty) parts.push('⚠最大档字段在但无大单:非明星');
       if (mb.dataMissing) parts.push('⚠最大档字段缺失:需检查worker采集');
+      if (mb.priceMissing) parts.push('⚠现价缺失:无法确认该股允许最大档');
       return ` | [管理员证据] ${parts.join(' · ')}`;
     }
     const stars = (m.starStocks || []).slice(0, 3).map(s =>
@@ -11811,10 +11823,18 @@ function renderMainlineReviewHTML(d) {
   const gainCell = (s, isStar) => {
     if (!s) return '<span class="mlr-na">—</span>';
     const extra = isStar ? starLevelChip(s) + sealChip(s) : '';
-    const g = s.nextCloseGain;
-    if (g == null) return `<span class="mlr-name">${escapeHTML(s.name || s.code || '')}</span>${extra}<span class="mlr-na">—</span>`;
-    const cls = g > 0 ? 'up' : (g < 0 ? 'down' : 'flat');
-    return `<span class="mlr-name">${escapeHTML(s.name || s.code || '')}</span>${extra}<span class="mlr-gain ${cls}">${g > 0 ? '+' : ''}${g}%</span><span class="mlr-win">${s.win ? '✓' : '✗'}</span>`;
+    const metric = (label, value, title) => {
+      if (value == null) return `<span class="mlr-perf na" title="${escapeHTML(title)}"><i>${label}</i><b>--</b></span>`;
+      const n = Number(value);
+      const cls = n > 0 ? 'up' : (n < 0 ? 'down' : 'flat');
+      return `<span class="mlr-perf ${cls}" title="${escapeHTML(title)}"><i>${label}</i><b>${n > 0 ? '+' : ''}${n}%</b></span>`;
+    };
+    const performance = [
+      metric('次高', s.nextHighGain, '下一交易日最高价相对预判日收盘价的涨幅'),
+      metric('次收', s.nextCloseGain, '下一交易日收盘价相对预判日收盘价的涨幅'),
+      metric('3日', s.threeDayGain, '第三个后续交易日收盘价相对预判日收盘价的涨跌幅'),
+    ].join('');
+    return `<span class="mlr-name">${escapeHTML(s.name || s.code || '')}</span>${extra}<span class="mlr-performance">${performance}</span>`;
   };
   // 主线命中徽标(口径:盘后涨停主因家族格局,非"整个市场实际主线"):
   // ✓=预判命中(并列)第一家族;△=第一家族在预判前三;✗=脱靶;待盘后验证=当日盘中;—=盘后数据不完整
@@ -11868,7 +11888,12 @@ function renderMainlineReviewHTML(d) {
     if (r.mainlineHitTop3) return 'hit-near';
     return 'hit-miss';
   };
-  const body = rows.map(r => `<div class="mlr-row ${rowHitClass(r)}${r.sampleValid === false ? ' invalid' : ''}">
+  const body = rows.map(r => {
+    const leaders = Array.isArray(r.leaders) && r.leaders.length ? r.leaders : (r.leader ? [r.leader] : []);
+    const leaderCells = leaders.slice(0, 2).map((leader, index) =>
+      `<span class="mlr-slot"><span class="mlr-label">龙头${index + 1}</span> ${gainCell(leader, false)}</span>`
+    ).join('');
+    return `<div class="mlr-row ${rowHitClass(r)}${r.sampleValid === false ? ' invalid' : ''}">
     <div class="mlr-l1">
       <span class="mlr-day">${escapeHTML(String(r.day || '').slice(5))}</span>
       <span class="mlr-pred"><span class="mlr-theme">${escapeHTML(r.theme || '')}${r.confirmed ? '<i title="管理员确认的当日主线">✔</i>' : ''}</span>${r.phase ? `<em class="mlr-phase" title="预判冻结时点">${escapeHTML(r.phase)}</em>` : ''}</span>
@@ -11878,10 +11903,11 @@ function renderMainlineReviewHTML(d) {
     </div>
     <div class="mlr-l2">
       <span class="mlr-slot"><span class="mlr-label">明星</span> ${gainCell(r.star, true)}</span>
-      <span class="mlr-slot"><span class="mlr-label">龙头</span> ${gainCell(r.leader, false)}</span>
+      ${leaderCells || '<span class="mlr-slot"><span class="mlr-label">龙头</span><span class="mlr-na">—</span></span>'}
       ${expectedCell(r)}
     </div>
-  </div>`).join('');
+  </div>`;
+  }).join('');
   const rate = (wins, total, pct) => total ? `${wins}/${total}${pct != null ? `(${pct}%)` : ''}` : '--';
   const mlChips = stats.mainlineTotal
     ? `<b class="mlr-chip">主线命中 ${rate(stats.mainlineTop1Hits, stats.mainlineTotal, stats.mainlineTop1Rate)}</b><b class="mlr-chip near">前三 ${rate(stats.mainlineTop3Hits, stats.mainlineTotal, stats.mainlineTop3Rate)}</b>`
@@ -11894,7 +11920,7 @@ function renderMainlineReviewHTML(d) {
       <div class="mlr-title"><span class="mlr-ic">📋</span>预判回看</div>
       <div class="mlr-stats">${mlChips}${sealChipStat}</div>
     </div>
-    <div class="mlr-sub"><small>明星次日胜率 ${rate(stats.starWins, stats.starTotal, stats.starWinRate)} · 龙头次日胜率 ${rate(stats.leaderWins, stats.leaderTotal, stats.leaderWinRate)} · 主线按盘后涨停主因家族格局评判(主因库完整覆盖终盘涨停才计分),盘前/集合竞价/已收盘记录不计样本</small></div>
+    <div class="mlr-sub"><small>回看主线命中、预期明星转封，以及明星/前两名龙头的次日最高、次日收盘和3日收盘表现。明星次日胜率 ${rate(stats.starWins, stats.starTotal, stats.starWinRate)} · 龙头1次日胜率 ${rate(stats.leaderWins, stats.leaderTotal, stats.leaderWinRate)} · 盘前/集合竞价/已收盘记录不计样本</small></div>
     <div class="mlr-list">${body}</div>
   </section>`;
 }
