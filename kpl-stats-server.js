@@ -25293,12 +25293,14 @@ function strategyNormStocks(r) {
   const arr = Array.isArray(r) ? r : (r?.stocks || r?.data || r?.list || []);
   return arr.map(s => ({ code: String(s.code || s.dm || ''), name: String(s.name || s.mc || '') })).filter(s => s.code);
 }
-function strategyNormRealtimeStocks(r) {
+function strategyNormRealtimeStocks(r, priceSource = 'board-realtime') {
   const arr = Array.isArray(r) ? r : (r?.stocks || r?.data || r?.list || []);
   return arr.map(s => ({
     code: String(s.code || s.dm || s.stockCode || ''),
     name: String(s.name || s.mc || s.stockName || ''),
     gainPct: numOrNull(s.gainPct ?? s.gain ?? s.todayGain ?? s.zf ?? s.changePct),
+    price: numOrNull(s.price ?? s.close ?? s.lastPrice),
+    priceSource,
   })).filter(s => s.code);
 }
 async function getStrategyBoardStocks(plateId, day, info) {
@@ -25380,8 +25382,8 @@ async function getStrategyBoardRealtimeStocks(plateId, day, info, opts = {}) {
   if (opts.historicalOnly) return getStrategyBoardSnapshotStocks(plateId, day, info);
   const zsType = Number(info?.zsType);
   try {
-    if (zsType === 6) return strategyNormRealtimeStocks(await fetchEastmoneyConceptStocks(plateId));
-    if (zsType === 5) return strategyNormRealtimeStocks(await fetchThsConceptStocks(plateId));
+    if (zsType === 6) return strategyNormRealtimeStocks(await fetchEastmoneyConceptStocks(plateId), 'eastmoney-board-realtime');
+    if (zsType === 5) return strategyNormRealtimeStocks(await fetchThsConceptStocks(plateId), 'ths-board-realtime');
     if (zsType === 7) {
       const apiKey = await readSavedApiKey().catch(() => '');
       if (!apiKey) return [];
@@ -25390,6 +25392,8 @@ async function getStrategyBoardRealtimeStocks(plateId, day, info, opts = {}) {
         code: String(row?.[0] || ''),
         name: String(row?.[1] || ''),
         gainPct: numOrNull(row?.[6]),
+        price: numOrNull(row?.[5]),
+        priceSource: 'kpl-board-realtime',
       })).filter(s => s.code);
     }
   } catch (err) { strategyMainlineDiagNoteRead(`board-members-live ${plateId} zs${zsType}`, err); }   // 七审:实时成分抓取失败不再空吞

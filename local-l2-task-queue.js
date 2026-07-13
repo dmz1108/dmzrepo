@@ -17,10 +17,14 @@ function isExcludedL2StockCode(code) {
 function normalizeStock(stock, index = 0) {
   const code = String(stock?.code || stock?.dm || stock?.symbol || '').replace(/\D/g, '').slice(0, 6);
   if (!code || isExcludedL2StockCode(code)) return null;
+  const price = numOrNull(stock?.price ?? stock?.close ?? stock?.lastPrice);
   return {
     code,
     name: String(stock?.name || stock?.mc || stock?.stockName || '').trim(),
     gainPct: numOrNull(stock?.gainPct ?? stock?.gain ?? stock?.todayGain ?? stock?.zf ?? stock?.changePct),
+    price: price != null && price > 0 ? price : null,
+    priceSource: price != null && price > 0 ? String(stock?.priceSource || 'board-realtime') : '',
+    priceAsOf: price != null && price > 0 ? String(stock?.priceAsOf || stock?.asOf || '') : '',
     sourceIndex: index,
   };
 }
@@ -313,6 +317,7 @@ class LocalL2TaskQueue {
   start(payload = {}) {
     const lastSeenMs = this.worker.lastSeenAt ? Date.parse(this.worker.lastSeenAt) : 0;
     const workerOnline = !!lastSeenMs && Date.now() - lastSeenMs < 45000;
+    const sortSnapshotAt = payload.sortSnapshotAt || new Date().toISOString();
     const limitStocks = Math.max(0, Math.floor(Number(payload.limitStocks || payload.maxStocks || 0)));
     const rawStocks = Array.isArray(payload.stocks) ? payload.stocks : [];
     const normalizedStocks = rawStocks
@@ -335,6 +340,7 @@ class LocalL2TaskQueue {
       .slice(0, limitStocks > 0 ? limitStocks : undefined)
       .map((stock, index) => ({
         ...stock,
+        priceAsOf: stock.price != null ? (stock.priceAsOf || sortSnapshotAt) : '',
         rank: index + 1,
         batch: Math.floor(index / this.batchSize) + 1,
       }));
@@ -356,7 +362,7 @@ class LocalL2TaskQueue {
       startedAt: '',
       endedAt: '',
       updatedAt: new Date().toISOString(),
-      sortSnapshotAt: payload.sortSnapshotAt || new Date().toISOString(),
+      sortSnapshotAt,
       sortBy: '实时涨幅快照',
       total: stocks.length,
       priorityCodes: effectivePriorityCodes,
@@ -446,7 +452,24 @@ class LocalL2TaskQueue {
     if (Array.isArray(body.results)) {
       const threshold = Number(job.threshold || 1.5);
       const minAmount = PICK_SIGNAL_MIN_AMOUNT;
-      const withSignals = body.results.map(row => addPickSignals(row, threshold, minAmount));
+      const stockByCode = new Map(job.stocks.map(stock => [String(stock?.code || ''), stock]));
+      const withSignals = body.results.map(row => {
+        const code = String(row?.code || row?.dm || row?.symbol || '').replace(/\D/g, '').slice(0, 6);
+        const taskStock = stockByCode.get(code);
+        const workerPrice = numOrNull(row?.price ?? row?.close ?? row?.lastPrice);
+        const taskPrice = numOrNull(taskStock?.price);
+        const enriched = { ...row };
+        if (workerPrice != null && workerPrice > 0) {
+          enriched.price = workerPrice;
+          enriched.priceSource = String(row?.priceSource || 'worker-result');
+          enriched.priceAsOf = String(row?.priceAsOf || row?.asOf || body?.asOf || job.updatedAt);
+        } else if (taskPrice != null && taskPrice > 0) {
+          enriched.price = taskPrice;
+          enriched.priceSource = String(taskStock?.priceSource || 'task-realtime-snapshot');
+          enriched.priceAsOf = String(taskStock?.priceAsOf || job.sortSnapshotAt);
+        }
+        return addPickSignals(enriched, threshold, minAmount);
+      });
       if (withSignals.length && !job.firstResultAt) job.firstResultAt = job.updatedAt;
       job.metrics = {
         resultRows: withSignals.length,
