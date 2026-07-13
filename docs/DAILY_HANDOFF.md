@@ -4288,4 +4288,6 @@ Validated:
 - 全部 21 套 `tests/*.test.js` 通过；HTML 内联脚本编译检查通过，`git diff --check` 无误。
 
 Deployment:
-- 当前记录为 Git 实现与测试结果；生产部署、页面验收及云端日志状态在部署后补记。
+- PR #46 已合并至 `main@6a26602`；`kpl-dashboard_17_apple.html` 已部署到 `C:\PandaDashboard`，回退备份为 `C:\PandaDashboard\_deploy-backups\pr46-l2-history-details-20260713-2255`。
+- 部署后文件 SHA-256 为 `CBCCBE1BDDEE4AD4FC53B9D78AB47E0A652FF08225571D77046890597DB34746`；公网 `/kpl` 已包含金额明细，`/health` 返回正常。
+- 仅静态页面更新，未重启主服务、Caddy、娱乐服务或公司端 L2 worker；三份云端运维日志均已追加本次备份、部署和验收记录。
