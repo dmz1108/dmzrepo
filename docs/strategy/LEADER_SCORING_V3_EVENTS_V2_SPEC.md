@@ -132,7 +132,7 @@ v2 档案日级新增:`stockEvents.rowsAuthoritative`、`stockEvents.noneDetermi
 | E7 | 无同族行 ∧ noneDeterminable≠true | dataMissing `['closePrice','confirmedMainlineUnknown']`(0/8 均不可判,替代旧笼统标签 noneUndeterminable) |
 | E8 | event rule ∉ {v1,v2} | `['dailyEventRuleVersion']`(不变) |
 
-**scoreVersion 升级**(Codex 阻断 #4):评分器以 v2 闸运行时输出 `LEADER_SCORING_V3_SCORE_VERSION = 'leader-scoring-v3-shadow-v2'`,新旧报告可审计区分;event rule v1/v2 同时接受。`scoreToday`、资格门、趋势锚、互斥、tieBreakers:全部不变。日级顶层 `complete` 含义不变,v2 模式评分器不再读它。
+**初始 scoreVersion 升级**(Codex 阻断 #4):事件 v2 首次上线时评分器输出 `leader-scoring-v3-shadow-v2`,使新旧报告可审计区分;event rule v1/v2 同时接受。日级顶层 `complete` 含义不变,v2 模式评分器不再读它。后续 Owner 于2026-07-13修正滚动窗口和跨题材涨停消费口径后,评分消费者单独升级为 `leader-scoring-v3-shadow-v3`;事件文件规则仍保持 `leader-scoring-v3-events-v2`,既有事件档案不改写。
 
 ## 5. 迁移与再生成(Codex 阻断 #1:最小范围)
 
@@ -158,7 +158,7 @@ v2 档案日级新增:`stockEvents.rowsAuthoritative`、`stockEvents.noneDetermi
 | T8b | 同族 A=expected 明星、B 涨停但无自身证据且无覆盖扫描证据 | A→20/confirmed;**B→15/unscanned,行不得丢失**(positive 家族无漏行空洞) |
 | T9 | X 无正证据,家族扫描元数据显式声明覆盖全部候选(scanned-no-star) | 15,starEvidenceStatus=**not-confirmed** |
 | T9b | predict 文件存在但 `stars:[]`、`starTransitions:[]` 全空且无覆盖 X 的扫描证据 | 15,starEvidenceStatus=**unscanned**(空数组不得提升状态;判定全程无日期比较) |
-| T10 | 既有 v1 档案(07-10 真实形状) | E2 旧闸逐字段不变;scoreVersion 输出 shadow-v2(消费语义可审计) |
+| T10 | 既有 v1 档案(07-10 真实形状) | E2 旧闸逐字段不变;评分消费者按当前 scoreVersion 输出并保持可审计 |
 | T11 | S2 日同股同族双行 | 互斥取最高,duplicateRowsIgnored=1 |
 | T12 | 未知 event rule | `dailyEventRuleVersion`(不变) |
 | T13 | 端到端:07-08 星网形状(07-02 换 v2 档案) | 整窗 complete,formalScore 非空,basis=confirmed-target-day-family-limit-up |

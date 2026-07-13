@@ -4235,3 +4235,32 @@ Changed:
 
 Deployment:
 - 仅整理 Git 交接；未再次修改云端、未重启服务、未发起新的 L2 任务。PR4 仍暂停，等待 Claude 独立复核 P6 v2 锁定双跑。
+
+## 2026-07-13 - Codex - 修正v3十日窗口与跨题材涨停计分
+
+Changed:
+- 按Owner定稿把滚动10日从“目标日前10日另加当天”修正为严格“前9个交易日+目标日”,总窗口恰好10日。
+- gain10/gain30改为目标日内含:盘中要求目标日实时价及asOf,盘后要求目标日最终收盘价及asOf;前一交易日锚不再通过完整性闸。
+- 将主线家族资格与真实涨停活跃度分离:窗口内至少一次可靠同族涨停确认资格后,该股窗口内所有可靠真实涨停按当日明星20/普通15计分,不因某日细分主因归到另一家族而漏算;同日仍严格互斥。
+- 主因家族缺失但涨停事实可靠的日,只有在窗口内另一日已确认目标家族后才恢复普通15分下界,不虚构明星20分。评分消费者版本升级为`leader-scoring-v3-shadow-v3`,事件档案规则仍为events-v2且不改写。
+
+Files:
+- `strategy-leader-scoring-v3.js`
+- `tests/leader-scoring-v3.test.js`
+- `tests/strategy-daily-events-v2.test.js`
+- `docs/strategy/discussions/2026-07-12-leader-scoring-v3.md`
+- `docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md`
+- `docs/strategy/validation/2026-07-13-v3-inclusive-window-replay.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 锁定07-08算力AI完整池90股;原始证据raw SHA=`218ba6028bb1f44b1e85006301842c2cd84f1246afafc3a283508ba6022665a5`,新口径派生输入canonical SHA=`fa8e31b6fda6057694c743faf2ec2d3382f7764ec077203ed93c31fa4874b3c2`;除目标日内含涨幅/锚/对应tie-break字段外,其余证据规范化SHA两边均为`b60e47aeec9eecd934a41dcf8c9784fef1298d637f654893a6a8dd2e10aca7ec`。
+- 完整86/90、正式84、缺失4与P6锁定回放一致,未放松完整性闸。紫光股份两次真实涨停计30、趋势25.70、总55.70、完整池第5;航锦科技06-24出窗后两次涨停计30、趋势5.42、总35.42、第17。
+- `node --check`通过;`leader-scoring-v3`和`strategy-daily-events-v2`定向测试通过;全量`tests/*.test.js`全部通过。
+
+Deployment:
+- Git代码和文档变更,尚未部署云端、未重启服务、未改运行时事件档案/冻结快照/正式v2榜,PR4仍未启动。
+
+Notes for next agent:
+- 请使用同一canonical SHA复核完整池,重点检查紫光06-30跨族普通涨停、07-06算力涨停及航锦06-24出窗;不得用手工股票特判解释结果。
+- 后续PR4/实时调用方必须显式提供`gainPriceState`和`gainAsOf`;盘中使用当日实时价,盘后使用当日终盘价。正式v2取数路径继续冻结,Owner再次批准前v3不得参与线上排序。

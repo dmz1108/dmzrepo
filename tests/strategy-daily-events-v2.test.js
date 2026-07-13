@@ -193,8 +193,8 @@ function scoredEvent(code, type, points, over = {}) {
     day, complete: true, ruleVersion: 'leader-scoring-v3-events-v1',
     stockEvents: { complete: true, events: [scoredEvent('000001', 'ordinary-limit-up', 15)] },
   };
-  A(eventForCode(v1, '000001', FAMILY).points === 15 && LEADER_SCORING_V3_SCORE_VERSION.endsWith('shadow-v2'),
-    'T10 v1档案保持旧闸且输出评分版本升级shadow-v2');
+  A(eventForCode(v1, '000001', FAMILY).points === 15 && LEADER_SCORING_V3_SCORE_VERSION.endsWith('shadow-v3'),
+    'T10 v1档案保持旧闸且评分消费者输出目标日内含版shadow-v3');
   const duplicate = v2Record(day, [
     scoredEvent('000001', 'ordinary-limit-up', 15),
     scoredEvent('000001', 'star-limit-up', 20),
@@ -215,7 +215,8 @@ function scoredEvent(code, type, points, over = {}) {
   const endToEnd = scoreLeaderV3({
     targetDay: '2026-07-08', code: '002396', name: '星网锐捷', familyKey: FAMILY,
     tradingDays: historyDays, dailyRecords: [...noEventHistory, today], todayRecord: today,
-    gainAnchorDay: '2026-07-07', gain10: 10, gain30: 20,
+    gainAnchorDay: '2026-07-08', gainPriceState: 'post-close-final', gainAsOf: '2026-07-08T07:30:00.000Z',
+    gain10: 10, gain30: 20,
   });
   A(endToEnd.complete && endToEnd.formalScore !== null &&
     endToEnd.formalEligibilityBasis === 'confirmed-target-day-family-limit-up',
@@ -223,7 +224,8 @@ function scoredEvent(code, type, points, over = {}) {
   const noTrend = scoreLeaderV3({
     targetDay: '2026-07-08', code: '600405', familyKey: FAMILY,
     tradingDays: historyDays, dailyRecords: [...noEventHistory, today], todayRecord: today,
-    gainAnchorDay: '2026-07-07', gain10: null, gain30: null,
+    gainAnchorDay: '2026-07-08', gainPriceState: 'post-close-final', gainAsOf: '2026-07-08T07:30:00.000Z',
+    gain10: null, gain30: null,
   });
   A(!noTrend.complete && noTrend.dataMissing.includes('trend:gain10') && noTrend.dataMissing.includes('trend:gain30'),
     'T14 P6不放松趋势层缺失');
@@ -265,20 +267,41 @@ function scoredEvent(code, type, points, over = {}) {
 
   // T17:总分不完整仍保留已确认分与provenance。
   const mixed = noEventHistory.slice();
-  mixed[0] = v2Record(historyDays[0], [scoredEvent('000001', 'ordinary-limit-up', 15)]);
-  mixed[1] = v2Record(historyDays[1], [{
+  mixed[1] = v2Record(historyDays[1], [scoredEvent('000001', 'ordinary-limit-up', 15)]);
+  mixed[2] = v2Record(historyDays[2], [{
     code: '000001', familyKey: null, event: 'data-missing', points: null,
     status: 'dataMissing', historyEligible: false, dataMissing: ['confirmedMainlineUnknown'], closeGainPct: 7.2,
   }]);
   const audited = scoreLeaderV3({
     targetDay: '2026-07-08', code: '000001', familyKey: FAMILY,
     tradingDays: historyDays, dailyRecords: mixed, todayRecord: v2Record('2026-07-08'),
-    gainAnchorDay: '2026-07-07', gain10: null, gain30: null,
+    gainAnchorDay: '2026-07-08', gainPriceState: 'post-close-final', gainAsOf: '2026-07-08T07:30:00.000Z',
+    gain10: null, gain30: null,
   });
   const known = audited.components.history.evidence.find(row => row.points === 15);
   A(audited.formalScore === null && audited.components.history.knownPoints === 15 &&
     known?.evidence?.sourceReason?.finalBoardTopic === '算力',
   'T17 总分incomplete仍保留已确认15分及主因provenance');
+
+  // T18:窗口内另一日已可靠确认家族后,主因缺失日的真实涨停可恢复15分下界。
+  const qualifiedWithMissingReason = noEventHistory.slice();
+  qualifiedWithMissingReason[1] = v2Record(historyDays[1], [scoredEvent('000001', 'ordinary-limit-up', 15)]);
+  qualifiedWithMissingReason[2] = v2Record(historyDays[2], [{
+    code: '000001', familyKey: null, event: 'data-missing', points: null,
+    status: 'dataMissing', historyEligible: false, dataMissing: ['mainReasonFamily'],
+  }]);
+  const recovered = scoreLeaderV3({
+    targetDay: '2026-07-08', code: '000001', familyKey: FAMILY,
+    tradingDays: historyDays, dailyRecords: qualifiedWithMissingReason,
+    todayRecord: v2Record('2026-07-08'),
+    gainAnchorDay: '2026-07-08', gainPriceState: 'post-close-final', gainAsOf: '2026-07-08T07:30:00.000Z',
+    gain10: 0, gain30: 0,
+  });
+  const recoveredRow = recovered.components.history.evidence.find(row => row.day === historyDays[2]);
+  A(recovered.complete && recovered.components.eventWindow.limitUpEventCount === 2 &&
+    recovered.components.eventWindow.points === 30 && recoveredRow?.points === 15 &&
+    recoveredRow?.evidence?.recoveredFrom?.join(',') === 'mainReasonFamily',
+  'T18 另一日确认家族资格后,主因缺失涨停按普通涨停15分下界恢复且不伪造明星20分');
 
   if (!process.exitCode) console.log('ALL STRATEGY-DAILY-EVENTS-V2 CHECKS PASSED');
 })().catch(error => {
