@@ -3880,3 +3880,30 @@ Notes for next agent:
 - 进一步代码核对确认:东财、同花顺、KPL 的实时成分接口本身已有现价,但 `strategyNormRealtimeStocks`、KPL 实时映射和 `local-l2-task-queue.normalizeStock` 当前会丢弃该字段。优先修法应是云端保留任务股票的 `price`,worker 结果缺价时再按 code 从任务快照补回;让公司 worker 直接回传 `price/lastPrice` 可作为兼容路径,但不再是唯一方案。
 - 修复后复测 `rowsWithPrice == resultRows`,并给结果保留价格来源/任务时间,避免历史任务混入当前价。
 - 在现价覆盖完成前,明星最大档会按最高非零档倒推。高档字段存在但为零时可能被错误绕过,因此预期明星/明星确认结果只能视为待复核,不能据此校准阈值。
+
+## 2026-07-13 - Codex - L2 任务现价补全实现
+
+Changed:
+- 东财、同花顺、KPL 实时成分标准化现在保留现价及来源,KPL 使用实时成员行 `row[5]`。
+- 本地 L2 队列把任务创建时的现价、来源和快照时间下发并持久化;公司 worker 未返回现价时,结果按 code 从任务快照补回。
+- worker 自带 `price/close/lastPrice` 时仍优先使用,并记录 `worker-result` 来源;五档金额、买卖比、扫描门槛和公司 worker 协议保持兼容。
+
+Files:
+- `kpl-stats-server.js`
+- `local-l2-task-queue.js`
+- `tests/scan-priority.test.js`
+- `tests/local-l2-persistence.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check` 两个运行文件通过。
+- `scan-priority` 覆盖任务保价、缺价按 code 回填、worker 价格优先、三源实时映射和价格覆盖指标。
+- `local-l2-persistence` 覆盖回填价格与来源落盘、重启恢复。
+- `star-l2-layers` 与 `qi-mainline-states` 回归通过;`git diff --check` 通过。
+
+Deployment:
+- GitHub Draft PR 阶段;未部署云端、未修改运行配置、未重启服务。
+
+Notes for next agent:
+- 部署后用公司 worker 重跑至少一个板块,验收 `rowsWithPrice == resultRows`、`rowsWithAllBuckets == resultRows`,并抽查低价主板/创业板/高价股的最大档映射。
+- 价格来自任务创建时实时成分快照,用于最大可统计档映射;不得用历史任务补当前价格。

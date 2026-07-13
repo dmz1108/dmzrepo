@@ -41,8 +41,8 @@ try {
     boardName: '测试板块',
     day: '2026-07-10',
     stocks: [
-      { code: '600001', name: '测试一', gainPct: 6.8 },
-      { code: '000002', name: '测试二', gainPct: 4.2 },
+      { code: '600001', name: '测试一', gainPct: 6.8, price: 10.1, priceSource: 'board-realtime' },
+      { code: '000002', name: '测试二', gainPct: 4.2, price: 4.8, priceSource: 'board-realtime' },
     ],
   });
   assert.equal(job.status, 'queued', '有 token 时任务应进入排队');
@@ -75,7 +75,6 @@ try {
         name: '测试二',
         rank: 2,
         gainPct: 4.2,
-        price: 4.8,
         thresholds: {
           '500000': th(10000000, 12000000, 8000000, 9000000),
           '3000000': th(20000000, 26000000, 18000000, 24000000),
@@ -93,6 +92,9 @@ try {
 
   const latestPayload = JSON.parse(fs.readFileSync(latestFile, 'utf8'));
   assert.equal(latestPayload.job.results[0].price, 10.2, '现价字段应落盘');
+  assert.equal(latestPayload.job.results[0].priceSource, 'worker-result', 'worker 自带现价应优先并记录来源');
+  assert.equal(latestPayload.job.results[1].price, 4.8, 'worker 缺价时应从任务股票快照补回现价');
+  assert.equal(latestPayload.job.results[1].priceSource, 'board-realtime', '任务快照补价应保留来源');
   assert.ok(latestPayload.job.results[0].thresholds['10000000'], '1000w 档应落盘');
   assert.equal(latestPayload.job.claimedBy, '', '落盘文件不保存 worker 标识');
 
