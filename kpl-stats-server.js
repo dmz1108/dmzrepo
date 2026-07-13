@@ -20767,6 +20767,9 @@ async function getStrategyBoardsForDay(day, options = {}) {
     try {
       const payload = JSON.parse(await fs.readFile(snapshotPath(useDay, String(zsType)), 'utf8'));
       const cardData = payload?.cardData || {};
+      // P1:优先信任快照 payload 内部声明的日期,而非仅凭文件名 useDay。
+      // 文件内部 day 与 useDay 不一致时以内部声明为准,交给上层按跨日剔除。
+      const declaredDay = isoFromCompactDate(payload?.day || '') || useDay;
       for (const b of (Array.isArray(payload?.boards) ? payload.boards : [])) {
         const plateId = String(b?.plateId ?? b?.id ?? b?.code ?? '');
         if (!plateId) continue;
@@ -20779,7 +20782,7 @@ async function getStrategyBoardsForDay(day, options = {}) {
           netInflow: Number(b?.netInflow ?? b?.mainInflow ?? b?.inflow ?? NaN),
           zsType,
           qiLeaders: computeBoardQiLeaders(cardData[plateId]),
-          sourceDay: useDay,       // P1 防跨日污染:板块数据真实来源日,回退时 ≠ requestedDay
+          sourceDay: declaredDay,  // P1 防跨日污染:优先 payload 内部声明日期,回退/错标时 ≠ requestedDay
           sourceKind: 'snapshot',
         });
       }

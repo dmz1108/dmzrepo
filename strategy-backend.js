@@ -263,11 +263,15 @@ function createStrategyBackend(opts = {}) {
     const rawBoards = (await getBoards(day, boardOptions).catch(() => []))
       .filter((b) => !isHiddenBoard(b, hidden));
     // P1 防跨日污染:板块数据真实来源日 ≠ 目标日(getBoards 回退到最近有快照的交易日)时,
-    // 绝不把昨日板块资金当作本日事实落盘。改为如实产出「本日无自有板块数据」,并显式标注来源日。
-    const boardSourceDays = [...new Set(rawBoards.map((b) => String(b?.sourceDay || '')).filter(Boolean))];
-    const boardsSourceDay = boardSourceDays.length === 1 ? boardSourceDays[0] : (boardSourceDays[0] || '');
-    const boardsStale = !!(boardsSourceDay && boardsSourceDay !== day);
-    const boards = boardsStale ? [] : rawBoards;
+    // 绝不把昨日板块资金当作本日事实落盘。逐行剔除:只有来源日 == 目标日的板块才算本日事实;
+    // 任何非空来源日 ≠ 目标日的板块一律剔除,并记录完整来源日集合与被剔除数量(不能只看第一个值)。
+    const boardSourceDays = [...new Set(rawBoards.map((b) => String(b?.sourceDay || '')).filter(Boolean))].sort();
+    const foreignBoards = rawBoards.filter((b) => { const s = String(b?.sourceDay || ''); return s && s !== day; });
+    const droppedForeignBoardCount = foreignBoards.length;
+    const foreignSourceDays = [...new Set(foreignBoards.map((b) => String(b.sourceDay)))].sort();
+    const boards = rawBoards.filter((b) => String(b?.sourceDay || '') === day);   // 仅保留本日来源
+    const boardsStale = droppedForeignBoardCount > 0;   // 出现任何跨日来源即判 stale(含混合来源)
+    const boardsSourceDay = boardsStale ? (foreignSourceDays[0] || null) : day;
     const map = new Map(boards.map((b) => [scopedBoardKey(b.plateId, b.zsType), b]));
     const focusIds = new Set(focusRaw.map((b) => scopedBoardKey(b.plateId, b.zsType)));
 
@@ -296,7 +300,12 @@ function createStrategyBackend(opts = {}) {
       qiBoard: filterQiBoard(qiBoard, hidden),
       boardsSourceDay: boardsSourceDay || null,
       boardsStale,
-      boardsUnavailableReason: boardsStale ? 'cross-day-fallback-suppressed' : '',
+      boardsSourceDays: boardSourceDays,       // 完整来源日集合(审计,不只第一个值)
+      foreignSourceDays,                       // 被判跨日的来源日集合
+      droppedForeignBoardCount,                // 被剔除的跨日板块数
+      boardsUnavailableReason: boardsStale
+        ? (boards.length ? 'partial-cross-day-suppressed' : 'cross-day-fallback-suppressed')
+        : '',
     };
   }
 

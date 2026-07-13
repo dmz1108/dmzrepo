@@ -57,6 +57,7 @@ async function scanBoardSnapshotContamination(options = {}) {
   const days = files.map(f => (DAY_RE.exec(f) || [])[1]).filter(Boolean).sort();
 
   const suspected = [];
+  const suppressed = [];
   const inspected = [];
   for (let i = 1; i < days.length; i++) {
     const prevDay = days[i - 1];
@@ -68,14 +69,14 @@ async function scanBoardSnapshotContamination(options = {}) {
     let cur, prev;
     try { cur = JSON.parse(curRaw); prev = JSON.parse(prevRaw); } catch { continue; }
 
-    // 若快照已带 boardsStale/boardsSourceDay(新写入器产物),优先信任显式来源日
+    // 新写入器产物:boardsStale=true 表示跨日回退已被拒绝、boards 已清空,
+    // 文件不含昨日板块值 → 属「已抑制/本日事实缺失」,绝不能标 contaminated(那会污染 P6 判别联合)。
     if (cur && cur.boardsStale === true) {
-      suspected.push({
-        targetDay: curDay, state: 'contaminated',
-        observedSourceDay: cur.boardsSourceDay || prevDay,
-        observedSha256: crypto.createHash('sha256').update(curRaw).digest('hex'),
+      suppressed.push({
+        targetDay: curDay, state: 'suppressed',
+        boardsSourceDay: cur.boardsSourceDay || null,
         path: `strategy-data/snapshots/${curDay}.json`,
-        reason: 'writer-flagged-cross-day-fallback', equalBoards: null, comparedBoards: null,
+        reason: 'writer-suppressed-cross-day-fallback (no board facts persisted)',
       });
       continue;
     }
@@ -98,7 +99,7 @@ async function scanBoardSnapshotContamination(options = {}) {
       });
     }
   }
-  return { snapshotDir, dayCount: days.length, minEqualBoards, minRatio, suspected, inspected };
+  return { snapshotDir, dayCount: days.length, minEqualBoards, minRatio, suspected, suppressed, inspected };
 }
 
 module.exports = { scanBoardSnapshotContamination };
@@ -116,8 +117,10 @@ if (require.main === module) {
       console.log(JSON.stringify({ entries: report.suspected.map(({ equalBoards, comparedBoards, ...e }) => e) }, null, 2));
     } else {
       console.log(`扫描 ${report.dayCount} 天,阈值 equal>=${report.minEqualBoards} 且 ratio>=${report.minRatio}`);
-      console.log(`可疑跨日污染日:${report.suspected.length}`);
+      console.log(`可疑跨日污染日(contaminated):${report.suspected.length}`);
       for (const s of report.suspected) console.log(`  ${s.targetDay} <- ${s.observedSourceDay}  ${s.reason}`);
+      console.log(`已抑制/本日事实缺失(suppressed,非污染):${report.suppressed.length}`);
+      for (const s of report.suppressed) console.log(`  ${s.targetDay}  ${s.reason}`);
     }
   }).catch(err => { console.error(err); process.exitCode = 1; });
 }

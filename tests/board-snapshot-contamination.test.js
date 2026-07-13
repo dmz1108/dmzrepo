@@ -50,6 +50,20 @@ const ok = (cond, msg) => { if (!cond) { failed++; console.error('FAIL: ' + msg)
   ok(stale.strong.length === 0, '回退时无 strong 板块');
   ok(stale.qiBoard === null, '回退时不调 QI 聚合(否则会二次回退绕回污染)');
 
+  // ── 2b. Codex 阻断#1:混合来源日(target + previous),stale 放第二位,不能只看第一个值
+  const be2b = makeBackend(() => [
+    { plateId: 'pT', name: '本日', zsType: 6, gainPct: 4, ztCount: 3, netInflow: 6e8, sourceDay: TODAY, sourceKind: 'snapshot' },
+    { plateId: 'pF', name: '昨日', zsType: 6, gainPct: 1, ztCount: 0, netInflow: 9e9, sourceDay: '2026-07-10', sourceKind: 'snapshot' },
+  ]);
+  const mixed = await be2b.buildPayload(TODAY);
+  ok(mixed.boardsStale === true, '混合来源(第二位是跨日)→ boardsStale=true,不被顺序骗过');
+  ok(mixed.droppedForeignBoardCount === 1, '记录被剔除的跨日板块数=1');
+  ok(mixed.boardsSourceDays.includes(TODAY) && mixed.boardsSourceDays.includes('2026-07-10'),
+    '记录完整来源日集合,不只第一个值');
+  ok(!JSON.stringify(mixed.boards).includes('9000000000') && !JSON.stringify(mixed.boards).includes('"pF"'),
+    '跨日板块 pF 被逐行剔除,不进本日事实');
+  ok(mixed.boardsUnavailableReason === 'partial-cross-day-suppressed', '部分抑制原因标注正确');
+
   // ── 3. saveSnapshot 落盘的是抑制后的诚实空档,不是昨日券商 +106 亿
   const saved = await be2.saveSnapshot(PAST, { force: true });
   const onDisk = JSON.parse(fs.readFileSync(path.join(dataDir, 'snapshots', `${PAST}.json`), 'utf8'));
@@ -79,6 +93,16 @@ const ok = (cond, msg) => { if (!cond) { failed++; console.error('FAIL: ' + msg)
   ok(entry && entry.state === 'contaminated' && entry.observedSourceDay === '2026-07-01' &&
     /^[a-f0-9]{64}$/.test(entry.observedSha256) && entry.path === 'strategy-data/snapshots/2026-07-02.json',
     '清单条目为判别联合 contaminated 形状(path + state + observedSha256 + observedSourceDay)');
+
+  // ── 4b. Codex 阻断#2:新写入器抑制后的诚实空档(boardsStale:true + boards:{})绝不能标 contaminated
+  const dayD = { date: '2026-07-06', boardsStale: true, boardsSourceDay: '2026-07-03', boards: {} };  // 已抑制,无板块值
+  fs.writeFileSync(path.join(sweepDir, '2026-07-06.json'), JSON.stringify(dayD));
+  const report2 = await scanBoardSnapshotContamination({ snapshotDir: sweepDir, minEqualBoards: 3 });
+  ok(!report2.suspected.some(s => s.targetDay === '2026-07-06'), '已抑制的诚实空档不进 contaminated');
+  ok(report2.suppressed.some(s => s.targetDay === '2026-07-06' && s.state === 'suppressed'),
+    '已抑制文件归入 suppressed(区别于污染)');
+  ok(report2.suspected.some(s => s.targetDay === '2026-07-02' && s.state === 'contaminated'),
+    '真正含跨日复制值的旧文件仍命中 contaminated');
   fs.rmSync(sweepDir, { recursive: true, force: true });
 
   fs.rmSync(dataDir, { recursive: true, force: true });
