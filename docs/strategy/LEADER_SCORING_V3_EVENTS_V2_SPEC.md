@@ -1,13 +1,17 @@
-# P6 规格:每日事件档案 v2 完整性收窄 — 状态转换表与测试案例(rev4)
+# P6 规格:每日事件档案 v2 完整性收窄 — 状态转换表与测试案例(rev5)
 
-状态:按 Codex 三审两项状态机闭合问题修订;待 Codex 复审、Owner 拍板。本文档只定义规则,不是实现。
-作者:Claude(2026-07-13,rev4)。依据:Owner 对 P6 提前实施的确认与四点修正;06-23 / 07-02 两个缺原始快照日分别导致 07-01 替代验收 0/74、07-08 验收 0/90 的实证。
+状态:语义经 Codex 四轮评审通过后,按 Owner 2026-07-13 口径修正扩展 S4/S5;待 Codex 复核、Owner 定稿。本文档只定义规则,不是实现。
+作者:Claude(2026-07-13,rev5)。依据:Owner 对 P6 提前实施的确认与四点修正;06-23 / 07-02 两个缺原始快照日分别导致 07-01 替代验收 0/74、07-08 验收 0/90 的实证。
 
 ## 0. 范围与非目标
 
 **范围**:`strategy-daily-events.js` 生成器的行级发射语义(event rule v2)+ `strategy-leader-scoring-v3.js` 评分器日级闸门的对应调整。
 
-**首个实现 PR 的范围 = S2 only**(Codex 阻断 #6):S3 维持现行为;S4、S5 仅作规范定义保留,未经 Owner 明确批准不进入实现。
+**实现范围(Owner 2026-07-13 口径修正)**:S2、S4、S5 均按「按股票、按字段」闸实现;唯一的全日闸是 S3(涨停事实本身不可信)。核心原则:**缺少某类数据,不等于当天所有已经确定的事件都不得分;能由可靠证据独立确认的分数(如涨停 15/20)必须记录**。此前「首个实现 PR = S2 only」的范围声明废止——rev4 的派生标志(`mainlineKnowable`、`noneDeterminable`、逐股明星三分)对 S4/S5 本就推导出正确行为,本修订放开范围并补齐状态表与测试。
+
+**两条档案级不变量(Owner 口径修正)**:
+1. 每日事件档案必须保存**所有可独立确认的 15/20 分事件**及其 provenance,无论当日其他字段缺什么;
+2. 趋势或其他必要字段缺失时,v3 **总分**可保持 incomplete(formalScore=null),但**已确认的事件分必须在明细(history.evidence / knownPoints)中完整可审计**,任何字段缺失不得反向清除已确认涨停事件。
 
 **非目标(硬边界)**:
 - 不改任何分值:`DAILY_EVENT_POINTS`(20/15/8/0)与趋势系数(10日×1、30日×0.25)一个数字都不动。
@@ -64,9 +68,9 @@
 |---|---|---|---|---|
 | S1 | LU∧MR∧CL∧SNAP | 回填期除 06-23/07-02 外各日 | 日 complete,正常计分 | **不变**(黄金不变性 T1,仅离线校验) |
 | S2 | LU∧MR∧CL∧¬SNAP | **06-23、07-02** | 全池全阻断 | 行级判定(§3) |
-| S3 | ¬LU | 尚未出现 | 全日阻断 | **不变**,`dataMissing:['limitUpDbUnreliable']` |
-| S4 | LU∧¬MR | 尚未出现 | 全日阻断 | 规范保留,不实现(待 Owner 批准) |
-| S5 | LU∧¬CL∧¬SNAP | 尚未出现 | 全日阻断 | 规范保留,不实现(待 Owner 批准) |
+| S3 | ¬LU | 尚未出现 | 全日阻断 | **不变**,`dataMissing:['limitUpDbUnreliable']`(涨停事实本身不可信,正负证据全失效——唯一保留的全日闸) |
+| S4 | LU∧¬MR | 尚未出现 | 全日阻断 | **按股票收窄**:归属可靠的涨停股正常 15/20(明星按逐股三分);仅缺归属股 R3 → `mainReasonFamily`;¬MR ⇒ ¬mainlineKnowable,8 分不确定按 R5/R7 处理(CL 在则 >5% 显式行,CL 缺则 noneUndeterminable)。MR 全局不完整**不得**阻断归属已确定股票 |
+| S5 | LU∧(¬CL ∨ ¬SNAP 之外的 CL 缺失组合,即 LU∧¬CL) | 尚未出现 | 全日阻断 | **按字段收窄**:涨停+可靠归属不依赖 CL/SNAP,正常 15/20;依赖收盘涨幅或确认主线的判定(8 分、none 0)仅阻断相应股票/字段(¬noneDeterminable → E7);**不得反向清除已确认涨停事件** |
 
 `reconstructed`:重建确认主线 `postCloseConfirmed.status='reconstructed'`,计分上视同 ¬mainlineKnowable(只进展示与审计),家族级 canonicalSource 裁定前不变。
 
@@ -133,10 +137,13 @@ v2 档案日级新增:`stockEvents.rowsAuthoritative`、`stockEvents.noneDetermi
 | T12 | 未知 event rule | `dailyEventRuleVersion`(不变) |
 | T13 | 端到端:07-08 星网形状(07-02 换 v2 档案) | 整窗 complete,formalScore 非空,basis=confirmed-target-day-family-limit-up |
 | T14 | 端到端:600405 形状 | 仍 incomplete(`trend:gain10/gain30`),收窄不外溢趋势层 |
+| T15 | S4 日:同日 A 涨停且归属可靠,B 涨停但缺归属 | A 正常 15(或凭自身正证据 20);**仅 B** `dataMissing:['mainReasonFamily']`;MR 全局不完整不阻断 A |
+| T16 | S5 日(¬CL):涨停归属股 + 未板股 | 涨停股正常 15/20;未板股 E7 → `noneUndeterminable`;**断言涨停行未被反向清除** |
+| T17 | 总分 incomplete 审计不变量:窗口含缺失日/趋势缺失,但窗口内有已确认事件 | formalScore=null 的同时,`history.knownPoints` 与 `history.evidence` 中已确认事件分及 provenance 完整保留、可审计 |
 
 **验收重跑测算预期(非验收承诺,最终以锁定输入与三组 SHA 为准)**:07-08 约 87/90、07-01 约 60/74;两日各出首份合规 v2/v3 正式名次对照表。实现后由 Codex 执行、Claude 复核,不得据测算预期预先宣布 v3 优劣。
 
 ## 7. 悬而未决(需 Owner 拍板)
 
-1. S4 / S5 的启用时机(首个实现 PR 均不包含)。
+1. ~~S4 / S5 的启用时机~~ **已裁定**(Owner 2026-07-13 口径修正):S4/S5 与 S2 同批实现,按股票/按字段闸,见 §0 与 §2。
 2. 家族级 canonicalSource 裁定后,`reconstructed` 确认主线是否升级为可计分(本规格默认不可)。

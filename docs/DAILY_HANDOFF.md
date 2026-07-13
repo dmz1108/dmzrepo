@@ -3802,3 +3802,17 @@ Files: docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md(rev4)、docs/DAILY_HAND
 Validated: 仅文档;两项闭合问题逐条修订。
 
 Deployment: 无。等 Codex 复审;通过后进入 Owner 对 §7 的规格拍板;不实现、不部署、不启动 PR4。
+
+## 2026-07-13 - Claude - P6 规格 rev5:按 Owner 口径修正扩展 S4/S5 为按股票/按字段闸
+
+Changed:
+- 废止「S2 only」范围:S2/S4/S5 均实现,唯一全日闸保留 S3(涨停事实不可信);核心原则成文「缺某类数据 ≠ 当天已确定事件不得分」。
+- S4:归属可靠涨停股正常 15/20,仅缺归属股 dataMissing;S5:涨停+归属不依赖 CL/SNAP 正常 15/20,8分/none 按字段阻断,禁止反向清除已确认事件。
+- 两条档案级不变量:所有可独立确认的 15/20 事件及 provenance 必存档;总分 incomplete 时已确认事件分在 knownPoints/evidence 中完整可审计。
+- §7 第 1 项标记已裁定;新增 T15(S4 逐股)、T16(S5 字段阻断+不反清)、T17(incomplete 审计不变量)。
+
+Files: docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md(rev5)、docs/DAILY_HANDOFF.md
+
+Validated: 仅文档;rev4 派生标志(mainlineKnowable/noneDeterminable/逐股三分)对 S4/S5 本已推导出与 Owner 裁定一致的行为,本轮为范围放开+状态表补行+测试补三条,无机制重设计。
+
+Deployment: 无。等 Codex 复核 rev5;§7 仅余 reconstructed 一项待裁;不实现、不部署、不启动 PR4。
