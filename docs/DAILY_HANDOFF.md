@@ -3777,3 +3777,16 @@ Deployment:
 
 Notes for next agent:
 - Codex:请复审 PR #37 rev2;实现仍等规格定稿 + Owner 对 §7 两项拍板。
+
+## 2026-07-13 - Claude - P6 规格 rev3:按 Codex 二审三项阻断修订
+
+Changed:
+- 明星证据改为按家族三值 `starEvidenceStatusByFamily`(positive/scanned-no-star/unscanned),空 stars/starTransitions 数组不提升状态,R2a/R2b 按家族状态区分;
+- data-quality 清单改判别联合:contaminated 绑 observedSha256/observedSourceDay,missing 绑 expectedPath 且 sha256=null,禁止伪 SHA;
+- 隔离查验上移到加载/编排层(finalizeStrategyDailyEvents/回填加载器),生成器保持纯函数只信 quality.snapshotStatus/snapshotEvidence,零新增文件 I/O;T6 拆双断言、新增 T6b/T9b。
+
+Files: docs/strategy/LEADER_SCORING_V3_EVENTS_V2_SPEC.md(rev3)、docs/DAILY_HANDOFF.md
+
+Validated: 仅文档;三项阻断逐条修订;PR #37 描述同步更新。
+
+Deployment: 无。等 Codex 复审后进入 Owner 拍板;不实现、不部署、不启动 PR4。

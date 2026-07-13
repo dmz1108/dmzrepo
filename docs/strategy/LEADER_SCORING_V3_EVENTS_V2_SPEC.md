@@ -1,7 +1,7 @@
-# P6 规格:每日事件档案 v2 完整性收窄 — 状态转换表与测试案例(rev2)
+# P6 规格:每日事件档案 v2 完整性收窄 — 状态转换表与测试案例(rev3)
 
-状态:按 Codex 首轮评审六项阻断修订;待 Codex 复审、Owner 拍板。本文档只定义规则,不是实现。
-作者:Claude(2026-07-13,rev2)。依据:Owner 对 P6 提前实施的确认与四点修正;06-23 / 07-02 两个缺原始快照日分别导致 07-01 替代验收 0/74、07-08 验收 0/90 的实证。
+状态:按 Codex 二审三项阻断修订;待 Codex 复审、Owner 拍板。本文档只定义规则,不是实现。
+作者:Claude(2026-07-13,rev3)。依据:Owner 对 P6 提前实施的确认与四点修正;06-23 / 07-02 两个缺原始快照日分别导致 07-01 替代验收 0/74、07-08 验收 0/90 的实证。
 
 ## 0. 范围与非目标
 
@@ -25,7 +25,14 @@
 | 综合策略快照 | `strategy-data/snapshots/<DAY>.json` | 07-02 该层文件存在但**已被跨日污染**(东财 12 板块资金=07-01 昨值) |
 | 冻结主线快照 | `strategy-mainline-snapshot-<DAY>.json` | 生成器 `buildPostCloseRecord` 实际读取的输入(经 `input.snapshot`) |
 
-**data-quality 清单**:独立文件,每条至少 `{path, sha256, targetDay, observedSourceDay, reason}`。生成器读取**任何**快照层文件之前必须先查清单;命中即视同该文件不存在,且绝不读取其内容。
+**data-quality 清单**(判别联合,Codex 二审 #2):独立文件,条目按 `state` 区分两种形状,禁止伪 SHA 或空字符串冒充已验证文件:
+
+| state | 必备字段 | 语义 |
+|---|---|---|
+| `contaminated` | `{path, state, observedSha256, targetDay, observedSourceDay, reason}` | 文件存在但内容被证伪(如 07-02 综合快照:observedSourceDay=2026-07-01) |
+| `missing` | `{expectedPath, state, targetDay, reason, sha256: null}` | 文件不存在(如 06-23/07-02 原始板块快照),sha256 显式为 null |
+
+**隔离查验在加载/编排层,不在生成器**(Codex 二审 #3):`buildPostCloseRecord(existing, input)` 是纯函数,只接收 snapshot 对象与 quality 元数据,不做任何文件 I/O。契约:`finalizeStrategyDailyEvents` 与回填加载器在读取任何快照层文件**之前**先查 data-quality 清单,命中则不读取内容,并向生成器传入显式元数据:`quality.snapshotStatus ∈ {ok, missing, quarantined}`、`quality.snapshotUsable`(布尔)、`quality.snapshotEvidence`(命中的清单条目引用)。生成器只信任并落档这些元数据,不新增文件读取。
 
 ## 2. 日级源状态
 
@@ -36,13 +43,20 @@
 | LU | 涨停底库可信 | `limitUpComplete` |
 | MR | 主因库覆盖完整 | `mainReasonComplete`(missingMainReasonCodes 可枚举) |
 | CL | 收盘库完整 | `closeComplete` |
-| SNAP | 冻结主线快照可用 | 冻结主线快照存在 ∧ 该文件不在清单 ∧ 其上游综合策略快照该日不在清单。任一不满足 → SNAP=false,`snapshotUsable` 注明 `missing` 或 `quarantined:<清单条目>` |
+| SNAP | 冻结主线快照可用 | 由加载层判定后以 `quality.snapshotStatus='ok'` 传入(冻结主线快照存在 ∧ 该文件与其上游综合策略快照均未命中清单)。`missing`/`quarantined` → SNAP=false,连同 snapshotEvidence 落档 |
 
 派生:
 - `mainlineKnowable = LU ∧ MR ∧ SNAP`
 - `rowsAuthoritative = LU`
 - `noneDeterminable = LU ∧ (mainlineKnowable ∨ CL)`
-- `starEvidenceAvailable`(Codex 阻断 #2,显式证据判定,**不含任何日期条件**):当日持久化 predict 记录含 stars/starTransitions 结构 ∨ 冻结主线快照含 starStocks 结构 ∨ L2 扫描元数据为 scanned。三者均无 → false
+
+**明星证据按家族判定,不设日级布尔**(Codex 二审 #1)。`starEvidenceStatusByFamily[G]` 三值:
+
+| 值 | 判定(全部显式,禁止日期条件,空数组不算证据) |
+|---|---|
+| `positive` | 家族 G 内存在 level ∈ {expected, confirmed} 的明星正证据(持久化 predict candidates[].stars / starTransitions 含 firstExpectedAt / 冻结快照 starStocks) |
+| `scanned-no-star` | 无正证据,但 G 有显式扫描元数据:`l2VerificationStatus ∈ {qi, scanned-no-star}` 或 worker 扫描记录 |
+| `unscanned` | 其余一切情况。**`stars: []`、`starTransitions: []` 等空结构只证明字段存在,不提升状态** |
 
 | 状态 | 条件 | 实例 | v1 现行为 | v2 行为 |
 |---|---|---|---|---|
@@ -60,16 +74,16 @@
 
 | 行规则 | 条件 | 发射 |
 |---|---|---|
-| R1 | X 涨停 ∧ 归属 G ∧ starEvidenceAvailable ∧ X 有 expected/confirmed 明星正证据 | `star-limit-up` 20,starEvidenceStatus=confirmed |
-| R2a | X 涨停 ∧ 归属 G ∧ starEvidenceAvailable ∧ 无明星正证据 | `ordinary-limit-up` 15,starEvidenceStatus=not-confirmed(扫过没星,真 15) |
-| R2b | X 涨停 ∧ 归属 G ∧ ¬starEvidenceAvailable | `ordinary-limit-up` 15,starEvidenceStatus=**unscanned**(下界 15,Owner 已裁定) |
+| R1 | X 涨停 ∧ 归属 G ∧ X 自身有 expected/confirmed 正证据 | `star-limit-up` 20,starEvidenceStatus=confirmed |
+| R2a | X 涨停 ∧ 归属 G ∧ X 无正证据 ∧ `starEvidenceStatusByFamily[G] = scanned-no-star` | `ordinary-limit-up` 15,starEvidenceStatus=not-confirmed(该家族确实扫过没星,真 15) |
+| R2b | X 涨停 ∧ 归属 G ∧ X 无正证据 ∧ `starEvidenceStatusByFamily[G] = unscanned` | `ordinary-limit-up` 15,starEvidenceStatus=**unscanned**(下界 15,Owner 已裁定) |
 | R3 | X 涨停 ∧ 无法归属 | `data-missing`,`['mainReasonFamily']`(不变) |
 | R4 | X 未涨停 ∧ mainlineKnowable ∧ 确认主线成分 ∧ 收盘涨幅>5% | `confirmed-mainline-big-gain` 8(不变) |
 | R5 | X 未涨停 ∧ ¬mainlineKnowable ∧ CL ∧ 收盘涨幅>5% | **新增显式行**:`data-missing`,`['confirmedMainlineUnknown']`,附 closeGainPct;发射范围=当日全部「>5% 未涨停」股(有界) |
 | R6 | X 未涨停 ∧ noneDeterminable ∧ 非 R5 | 不发射(缺席=none 0,评分器判定) |
 | R7 | X 未涨停 ∧ ¬noneDeterminable | 不发射;由日级 noneDeterminable=false 兜底 |
 
-v2 档案日级新增:`stockEvents.rowsAuthoritative`、`stockEvents.noneDeterminable`、`stockEvents.snapshotUsable`、`stockEvents.starEvidenceAvailable`。既有字段语义不变。
+v2 档案日级新增:`stockEvents.rowsAuthoritative`、`stockEvents.noneDeterminable`、`stockEvents.snapshotStatus`(含 snapshotEvidence 引用)、`stockEvents.starEvidenceStatusByFamily`(按家族映射,替代任何日级明星布尔)。既有字段语义不变。
 
 ## 4. 评分器状态转换(v2 模式)
 
@@ -103,10 +117,12 @@ v2 档案日级新增:`stockEvents.rowsAuthoritative`、`stockEvents.noneDetermi
 | T3 | S2 日 + 未板 ≤5% | 无行;E6 → none 0 |
 | T4 | S2 日 + 未板 +7.29%(东方锆业形状) | R5 行 → `confirmedMainlineUnknown`,整窗 incomplete |
 | T5 | S2 日 + 涨停不可归属 | `mainReasonFamily`(与 v1 相同) |
-| T6 | 快照文件存在但在清单(07-02 综合快照形状) | snapshotUsable=`quarantined:<条目>`,按 S2;生成器未读文件内容 |
+| T6 | 快照文件存在但在清单(07-02 综合快照形状,state=contaminated 含 observedSha256/observedSourceDay) | **加载层**:查清单命中,未读文件内容(断言无该文件读取);**生成器**:收到 snapshotStatus=quarantined + snapshotEvidence,按 S2 处理 |
+| T6b | 快照缺失(06-23 形状,state=missing,sha256=null) | 加载层传 snapshotStatus=missing;按 S2;清单条目无伪 SHA |
 | T7 | S3(¬LU) | 全员 `limitUpDbUnreliable` |
-| T8 | starEvidenceAvailable=true ∧ 有 expected 明星 | 20,confirmed |
-| T9 | 档案无任何明星元数据(predict 无 stars/starTransitions、快照无 starStocks、L2 非 scanned) | 15,starEvidenceStatus=**unscanned**;判定过程无任何日期比较 |
+| T8 | 家族 G 有 expected 明星正证据 | 该股 20,confirmed;G 状态=positive |
+| T9 | 家族 G 无正证据但有显式 `l2VerificationStatus=scanned-no-star` | 15,starEvidenceStatus=**not-confirmed** |
+| T9b | predict 文件存在但 `stars:[]`、`starTransitions:[]` 全空且 G 无扫描元数据 | 15,starEvidenceStatus=**unscanned**(空数组不得提升状态;判定全程无日期比较) |
 | T10 | 既有 v1 档案(07-10 真实形状) | E2 旧闸逐字段不变;scoreVersion 输出 shadow-v2(消费语义可审计) |
 | T11 | S2 日同股同族双行 | 互斥取最高,duplicateRowsIgnored=1 |
 | T12 | 未知 event rule | `dailyEventRuleVersion`(不变) |
