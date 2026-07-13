@@ -4265,3 +4265,26 @@ Deployment:
 Notes for next agent:
 - 请独立复核“10个交易日事件窗口”与“10日累计收益基准收盘”两个概念,不要把06-25首日收盘误当收益基准。
 - 合并和部署前应使用相同证据参数复核紫光目标日涨幅、v2在场分和历史缺失不回退行为。
+
+## 2026-07-13 - Codex - 去除v2同一涨停重复积分
+
+Changed:
+- 按 Owner 裁定,目标日涨停只通过`zt10Count`计分一次;涨停股不再叠加“当日在场+6”“当日涨停+10”“连板每板+8”和“早封+6”。
+- `present +6`仅用于目标日未涨停但上涨≥3%的股票;连板和封板时间继续展示,不参与龙头总分。
+- L2明星信号暂保留为独立资金证据,本次未改变主因硬门槛、家族归属和10日涨停事实。
+- 用同一份7月8日算力AI 90股锁定池重算,前五变为:星网锐捷84、紫光股份65、恒林股份62、祥鑫科技61、长源东谷55。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/leader-pool-debug.test.js`
+- `docs/strategy/validation/2026-07-13-v2-target-day-inclusive.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 新增回归证明:同一股票从当日一板改为二板、保留09:30封板时间,总分不变;今日涨停/二板文字仍正常展示。
+- 锁定证据 SHA-256=`0511d6e7ff2ce3fbe95217612f7a6cc6273037ff83551fcbb29de1c3d6e5bcd8`;未更换候选池或行情证据。
+- `git diff --check`、`node --check kpl-stats-server.js`通过;全部21个`tests/*.test.js`文件通过。
+
+Deployment:
+- 未部署云端,未修改生产文件/运行时数据库/冻结快照,未重启服务;PR #43 需重新独立复核。

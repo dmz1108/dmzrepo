@@ -101,18 +101,19 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   });
 
   // 1. 机制复现A(归属丢失):星网当日主因=算力(canonical 命中族'算力'),池子补全靠主因库把它拉进池,
-  //    但 todayCodes 未含它 → 拿不到今日涨停/连板/封速加分,评分被压低。
+  //    但 todayCodes 未含它 → 页面拿不到今日涨停/连板标识;涨停分仍只能由 zt10Count 计一次。
   const buggy = mkMainline();
   await strategyMainlineReworkLeaders([buggy], '2026-07-08', { debug: true, traceCodes: ['002396', '000938'] });
   const buggyXW = (buggy.leaders || []).find(r => r.code === '002396');
   A(!!buggyXW, '归属丢失时:主因库池子补全仍把星网拉进龙头池(不至彻底缺席)');
-  A(buggyXW && !buggyXW.basis.some(b => b.startsWith('今日')), '但星网拿不到今日涨停/连板/封速加分(归属错误的真实代价)');
+  A(buggyXW && !buggyXW.basis.some(b => b.startsWith('今日')), '但星网拿不到今日涨停/连板展示标识');
   const buggyZG = (buggy.leaders || []).find(r => r.code === '000938');
   A(!!buggyZG, '紫光:云计算历史主因按生产家族并入算力龙头池,光模块记录仍归光通信');
   A(buggyZG?.gain === 6.8 && buggyZG?.basis.includes('今日+6.8%'),
     '紫光目标日+6.8%统一进入v2在场分和说明,不再因字段名不同漏6分');
 
-  // 2. 机制复现A'(归属修复):todayCodes 含星网 + 盘中一板(lianban=1,非近10日总数5),评分抬升且登顶
+  // 2. 机制复现A'(归属修复):todayCodes 含星网 + 当日一板(lianban=1,非近10日总数5)。
+  //    修复归属只恢复今日状态,不得把同一涨停再按在场/当日涨停/连板/早封重复加分。
   const fixed = mkMainline({
     todayCodes: ['002396'],
     // Codex 第8点:7-08 当日 limitUpCount/lianban=1(单板),5 是近10日总涨停(在 zt10Count 里)
@@ -121,8 +122,19 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   await strategyMainlineReworkLeaders([fixed], '2026-07-08', { debug: true });
   const fixedXW = (fixed.leaders || []).find(r => r.code === '002396');
   A(!!fixedXW && fixedXW.lianban === 1, '修复后星网今日连板=1(单板),不误用近10日总数5');
-  A(fixedXW && fixedXW.leadScore > buggyXW.leadScore + 15, `归属修复后星网评分抬升(${buggyXW?.leadScore} → ${fixedXW?.leadScore}):今日涨停+在场+封速生效`);
-  A(fixed.leaders[0]?.code === '002396', '修复后由底库数据自动算出星网第一龙头,无硬编码干预');
+  A(fixedXW && fixedXW.basis.includes('今日涨停'), '归属修复后恢复今日涨停展示');
+  A(fixedXW && fixedXW.leadScore === buggyXW.leadScore,
+    `同一次涨停不再因在场/当日涨停/一板/早封重复加分(${buggyXW?.leadScore} = ${fixedXW?.leadScore})`);
+  A(fixed.leaders[0]?.code === '002396', '去重后仍由底库数据自动算出星网第一龙头,无硬编码干预');
+
+  const fixedTwoBoard = mkMainline({
+    todayCodes: ['002396'],
+    risingStocks: [{ code: '002396', name: '星网锐捷', gain: 10.0, lianban: 2, firstLimitTime: '093000' }],
+  });
+  await strategyMainlineReworkLeaders([fixedTwoBoard], '2026-07-08', { debug: true });
+  const fixedTwoBoardXW = (fixedTwoBoard.leaders || []).find(r => r.code === '002396');
+  A(fixedTwoBoardXW?.leadScore === fixedXW?.leadScore && fixedTwoBoardXW?.basis.includes('今日2板'),
+    '二板和早封保留展示但不产生额外奖励分');
 
   // 3. 家族回归:主线显示为算力AI,历史记录写云计算时仍应按同一生产家族补入紫光;
   //    光模块按现行 taxonomy 保持独立的光通信家族,不跨族计数。

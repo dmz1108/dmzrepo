@@ -23184,25 +23184,22 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay, options = {}) {
       // 可能来自近15日活跃股的历史数据(maxLianban),不设门槛会把历史连板错当今日连板计分。
       const todayLimit = !!r.todayLimit;
       const todayLianban = todayLimit ? (Number(r.lianban) || 0) : 0;
-      const sealMin = todayLimit ? strategyParseSealMinutes(r.firstLimitTime) : null;
       const starBonus = r.star ? (r.star.level === 'confirmed' ? 15 : 8) : 0;
       // v2 公平打分(owner 定稿):涨停次数按值给分(同次数同分,每次14上限40);
       // 主因新鲜度:最近一次本主线主因涨停距今 ≤3交易日+10 / ≤6日+6 / 10日内+2;
-      // 当日在场:今日涨停或大涨≥3% +6。
+      // 当日涨停已经进入 zt10Count,不得再叠加在场/当日涨停/连板/早封分。
+      // 当日在场 +6 只奖励未涨停但目标日上涨≥3%的股票;连板与封板时间只展示。
       const freshDist = freshByCode.has(r.code) ? freshByCode.get(r.code) : null;
       const freshScore = freshDist == null ? 0 : (freshDist <= 3 ? 10 : freshDist <= 6 ? 6 : 2);
       const targetDayGain = strategyLeaderTargetDayGain(r);
-      const present = todayLimit || (targetDayGain != null && targetDayGain >= 3);
+      const present = !todayLimit && targetDayGain != null && targetDayGain >= 3;
       const leadScore = Number((
         Math.min(40, (Number(r.zt10Count) || 0) * 14) +
         strategyLeaderRankScore(g10Rank, 10, 30, 3) +
         strategyLeaderRankScore(g30Rank, 10, 20, 2) +
         freshScore +
         (present ? 6 : 0) +
-        (todayLimit ? 10 : 0) +
-        Math.min(24, todayLianban * 8) +
-        starBonus +
-        (sealMin != null && sealMin <= 600 ? 6 : 0)
+        starBonus
       ).toFixed(1));
       const basis = [];
       if (Number(r.zt10Count) > 0) basis.push(`10日${r.zt10Count}板`);

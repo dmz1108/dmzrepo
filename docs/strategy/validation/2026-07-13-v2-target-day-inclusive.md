@@ -2,12 +2,14 @@
 
 ## Scope
 
-This change corrects the official v2 leader metric date/price path without changing any v2 scoring weight.
+This change corrects the official v2 leader metric date/price path and removes repeated scoring of the same target-day limit-up event, following the Owner's decision.
 
 - A 10-session event window is the previous 9 trading sessions plus the target day.
 - A 10-session cumulative return uses the close immediately before that window as its base, then the target-day live price intraday or final close post-close.
 - The same rule applies to the 30-session return.
 - A historical day without a complete, correctly dated, after-close close-price payload remains missing. It must not fall back to a stale `gain` value.
+- A target-day limit-up is scored only through `zt10Count`. It no longer also earns the legacy present, target-day limit-up, streak or early-seal bonuses.
+- The `present` bonus remains only for a non-limit-up stock whose target-day gain is at least 3%. Streak and seal time remain display-only facts.
 
 ## Locked evidence
 
@@ -50,7 +52,17 @@ The score path read only `gain`, so the existing `todayGain=6.8%` evidence did n
 59 + 6 = 65
 ```
 
-Against the locked pool this moves 紫光股份 above the old fifth-place score of 61, so its expected corrected v2 position is rank 5. No v2 weight, hard gate, limit-up count or family rule changes in this task.
+After the Owner additionally removed duplicate target-day limit-up scoring, the same locked pool produces:
+
+| Rank | Code | Name | Score |
+|---:|---|---|---:|
+| 1 | 002396 | 星网锐捷 | 84 |
+| 2 | 000938 | 紫光股份 | 65 |
+| 3 | 603661 | 恒林股份 | 62 |
+| 4 | 002965 | 祥鑫科技 | 61 |
+| 5 | 603950 | 长源东谷 | 55 |
+
+紫光股份 still receives the 6-point non-limit-up presence signal because it closed up 6.8%, but a target-day limit-up receives no second present bonus. Hard gates, limit-up facts and family rules remain unchanged.
 
 ## Validation
 
