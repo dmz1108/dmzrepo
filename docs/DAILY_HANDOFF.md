@@ -4668,3 +4668,32 @@ Deployment:
 
 Notes for next agent:
 - 生产最终运行文件与 `main@89f9698` 一致。若再次部署，应先确认共享工作区和云端是否已有并发执行者，避免对同一版本重复重启。
+
+## 2026-07-14 - Codex - 固化任务路由与四类运维 SOP
+
+Changed:
+- 把任务入口加入 `CLAUDE.md`：TGB 湖南人、L2 worker、行情资金源、复盘健康各自必须先读对应 SOP。
+- 新增统一执行规范，明确大文件禁止走 GitHub Contents API、精确读取、分阶段测试、长步骤进度汇报和无进展接管规则。
+- 固化 L2 云端队列与公司 worker 的五档结果契约、心跳/任务状态、最大可统计档和明星股数据质量边界。
+- 固化东财/同花顺/KPL 板块资金字段语义、来源独立、重叠概念不相加及快照边界。
+- 固化四源复盘健康定义、当天口径、行数重算、缺失/过期/未发布状态、手动补齐和 30 个交易日保留规则。
+
+Files:
+- `CLAUDE.md`
+- `docs/COLLABORATION_WORKFLOW.md`
+- `docs/PROJECT_MAP.md`
+- `docs/ops/AGENT_EXECUTION_SOP.md`
+- `docs/ops/L2_WORKER_RUNBOOK.md`
+- `docs/ops/MARKET_DATA_SOURCE_CONTRACTS.md`
+- `docs/ops/REVIEW_SOURCE_HEALTH_SOP.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 文档事实已对照当前 `local-l2-task-queue.js` 五档/45 秒心跳、`strategyMainlineStarStatus`、东财 `f62`、同花顺 `zjjlr`、KPL 接口和 `tests/review-source-health.test.js`。
+- `git diff --check` 通过；新增文档未包含 Token、Cookie、密码、私钥或运行时数据库内容。
+
+Deployment:
+- 纯 Git 文档变更，未部署生产，未重启任何服务，未修改运行时数据。
+
+Notes for next agent:
+- 新任务不应依赖长聊天记忆；从 `CLAUDE.md` 的任务路由进入对应 SOP。长 OCR/子任务两分钟无可见进展时必须检查并由主任务接管，不能静默等待。
