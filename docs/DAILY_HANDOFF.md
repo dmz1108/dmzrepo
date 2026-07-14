@@ -4649,3 +4649,22 @@ Deployment:
 
 Notes for next agent:
 - 云端运行代码现与 `main@89f9698` 的两份部署文件一致，PR #53 与 PR #59 均已落地；确认状态继续视为可变管理员状态，读取时动态叠加。
+
+## 2026-07-14 - Codex continuation - PR #59 并发部署最终对账
+
+Changed:
+- 共享工作区在部署期间出现同版本并发操作；保留上一条未提交交接，不覆盖其记录。两边均部署 `origin/main@89f9698` 的相同文件哈希，无代码冲突。
+- 云端同时保留两份有效回退备份：`C:\PandaDashboard\_deploy-backups\pr53-pr59-20260714-074509` 与 `C:\PandaDashboard\_deploy-backups\pr53-pr59-mainline-confirm-20260714-074410`。
+- 两份云端运维日志已追加并发归因更正：`2864 -> 14484` 来自并行部署；continuation 复验后最终受控重启为 `14484 -> 7856`。
+
+Validated:
+- 最终生产 SHA-256 仍为 `kpl-stats-server.js=855AD06AD9C2834601294F334E6AA283EECB7EB5D2E9C9AB5AE00DD358E2EB0D`、`kpl-dashboard_17_apple.html=9BFD4167858AB4C12C47824CBB4E03016351398DDEBDB213C1ED2B89FEA96A6C`；云端语法检查、内网及公网健康均通过。
+- 公网市场首页、`/kpl`、`/admin` 与 DreamerQi 首页均为 HTTP 200；`/kpl` 哈希与 Git 主线一致，并包含 PR #53 日期跳转及 PR #59 错误反馈代码。
+- 2026-07-14 冻结主线响应返回 PCB `confirmedMainline`，PCB 行为 `isConfirmedMainline=true`；AI 只读策略接口返回同一 PCB 确认主题。未登录用户管理与运维日志接口均返回 403。
+
+Deployment:
+- 最终主服务 PID 为 `7856`，仅操作 `Panda Dashboard Server`；回退未触发，未重启 Caddy、娱乐服务、Consistency Gate 或公司端 L2 worker。
+- 未修改确认记录、冻结快照、预测档案、L2 任务、业务数据库、用户数据或运行时配置；云端两份当前运维日志均已记录部署与并发更正，未写入敏感值。
+
+Notes for next agent:
+- 生产最终运行文件与 `main@89f9698` 一致。若再次部署，应先确认共享工作区和云端是否已有并发执行者，避免对同一版本重复重启。
