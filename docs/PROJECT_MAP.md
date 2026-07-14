@@ -49,6 +49,14 @@ This GitHub seed is a sanitized code package exported from that layout. It is no
 - `package-lock.json`: locked dependency graph.
 - `site.webmanifest`, `favicon.ico`: site metadata and icon.
 
+### Operations And Data Contracts
+
+- `docs/ops/AGENT_EXECUTION_SOP.md`: efficient, non-stalling agent execution rules.
+- `docs/ops/TGB_HUNAN_DAILY_SOP.md`: official-image TGB Hunan daily review workflow.
+- `docs/ops/L2_WORKER_RUNBOOK.md`: cloud queue, company worker, five-bucket result contract, and star-stock validation.
+- `docs/ops/MARKET_DATA_SOURCE_CONTRACTS.md`: Eastmoney, THS, and KPL sector-data semantics and aggregation boundaries.
+- `docs/ops/REVIEW_SOURCE_HEALTH_SOP.md`: four-source review health, count reconciliation, and daily repair rules.
+
 ## Runtime State Not Included
 
 The production server contains runtime state that must not be committed:

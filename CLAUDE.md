@@ -8,10 +8,16 @@ You are joining the DreamerQi / PandaDashboard project. Start by understanding t
 2. Read `docs/CLAUDE_HANDOFF_EN.md`.
 3. Read `docs/DAILY_HANDOFF.md`.
 4. Read `docs/COLLABORATION_WORKFLOW.md`.
-5. Read `docs/strategy/AI_DISCUSSION_GROUP.md`.
-6. Read `docs/AI_PRODUCTION_READ.md` before any market-data or strategy task.
+5. Read `docs/ops/AGENT_EXECUTION_SOP.md`.
+6. Read `docs/strategy/AI_DISCUSSION_GROUP.md`.
 7. Read `docs/PROJECT_MAP.md` and `docs/SANITIZATION.md`.
-8. Optionally read the sanitized operation notes:
+8. Read the task-specific runbook before acting:
+   - market data or strategy evidence: `docs/AI_PRODUCTION_READ.md`
+   - TGB 湖南人 daily review: `docs/ops/TGB_HUNAN_DAILY_SOP.md`
+   - L2 worker, queue, buckets, or star-stock scan: `docs/ops/L2_WORKER_RUNBOOK.md`
+   - sector gain, capital flow, DDE, or source mapping: `docs/ops/MARKET_DATA_SOURCE_CONTRACTS.md`
+   - review source health, source counts, or daily backfill: `docs/ops/REVIEW_SOURCE_HEALTH_SOP.md`
+9. Optionally read the sanitized operation notes:
    - `docs/PROJECT_HANDOFF.sanitized.md`
    - `docs/panda-cloud-ops-2026-06-19.sanitized.md`
    - `docs/cloud-change-log-20260705.sanitized.md`
@@ -23,12 +29,14 @@ Then respond with a short summary of:
 - the recent homepage changes,
 - the market/admin risk areas,
 - the latest relevant notes in `docs/DAILY_HANDOFF.md`,
+- the task-specific runbook that applies,
 - whether the current task needs the AI discussion group protocol,
 - the files you intend to edit.
 
 ## Hard Rules
 
 - Do not commit API keys, cookies, SMTP passwords, sync tokens, admin passwords, private keys, user data, sessions, market databases, logs, backups, or production config files.
+- Do not use the GitHub Contents API to fetch large project files. Follow `docs/ops/AGENT_EXECUTION_SOP.md` for normal Git, precise reads, compact test output, progress updates, and timeout recovery.
 - Do not copy the raw cloud server directory into GitHub.
 - For strategy attribution, leader scoring, star-stock, or historical repair work, capture and replay a filtered production evidence case before changing code. Synthetic tests alone are insufficient.
 - Never put the AI read-only token or captured evidence JSON in Git. Record only safe request parameters, evidence hashes, completeness, and conclusions.

@@ -26,6 +26,15 @@ GitHub is the source of truth for **code and documentation**, but **not** for pr
   - `docs/strategy/AI_DISCUSSION_GROUP.md`
 - If the task depends on production state, check or ask for the latest cloud operation log summary.
 - For market-data or strategy tasks, read `docs/AI_PRODUCTION_READ.md` and capture a filtered production evidence case before forming a final diagnosis.
+- Read the matching operational runbook under `docs/ops/` before TGB, L2, market-source, or review-health work.
+
+## Execution Discipline
+
+- Follow `docs/ops/AGENT_EXECUTION_SOP.md` in every environment.
+- Do not fetch large files through the GitHub Contents API. Use normal Git first; use SSH/SCP for the deployed cloud copy when production state is the question.
+- Locate symbols with `rg`, then read only the required line ranges. Do not repeatedly load all of `kpl-stats-server.js` or a large HTML file.
+- During development, run focused tests. Run the full relevant suite before merge and keep verbose output in an ignored temporary log; report only the summary or failure tail.
+- A long command, OCR pass, or sub-agent task must not make the user-facing task appear frozen. Report the current stage, and take back control when a delegated step stops making progress.
 
 ## Shared Production Evidence
 
@@ -115,3 +124,10 @@ Otherwise Git and cloud will drift, and another agent may accidentally overwrite
 - `main` represents the latest approved code baseline.
 - Cloud production is kept close to `main`; runtime data and secrets stay cloud-only.
 - When unsure whether something is code or runtime data, **ask before committing**.
+
+## Operational Runbooks
+
+- `docs/ops/TGB_HUNAN_DAILY_SOP.md`
+- `docs/ops/L2_WORKER_RUNBOOK.md`
+- `docs/ops/MARKET_DATA_SOURCE_CONTRACTS.md`
+- `docs/ops/REVIEW_SOURCE_HEALTH_SOP.md`
