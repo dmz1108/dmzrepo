@@ -4587,3 +4587,13 @@ Deployment:
 Notes for next agent(Codex 复核):
 - 重点:自动跳只在搜索态触发;reviewAutoJumpKey 去重防手动切日被反复拽;无二次跳循环。
 - 若 Owner 后续想要「点按钮跳」而非自动,改为在卡片渲染一个链接调用同一逻辑即可。
+
+## 2026-07-13 - Claude - 涨停复盘:卡片涨停日可点切换(方案 B,叠加在自动跳之上)
+
+Changed:
+- Owner 选定方案 B:保留搜索自动跳最近涨停日,同时把卡片近10天轨迹里的**每个涨停日格子做成可点**——点哪天就把下方明细切到哪天(可达任意历史涨停日,非仅最近);当前复盘日在轨迹上高亮(accent 环)。
+- 新增全局 `switchReviewDayFromCard(day)`:设 reviewDateOverride 并 refresh;并把 reviewAutoJumpKey 置为「搜索词@点选日」→ 手点后自动跳不会把它再拽走。未涨停日格子保持不可点。
+
+Files: kpl-dashboard_17_apple.html(renderReviewStockDetailHTML 轨迹格子可点+高亮;新增 switchReviewDayFromCard)、docs/DAILY_HANDOFF.md
+
+Validated: 内联脚本 node --check 通过;dashboard 测试 + 全仓 22 文件全过。纯前端 review 页,无接口改动。

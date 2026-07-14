@@ -12215,6 +12215,16 @@ function maybeAutoJumpToRecentLimitUp(data, day) {
   state.reviewDateOverride = ref;
   refreshLimitupReviewPage();                           // 内部会 setDatePickerValue(ref) 并重渲染明细表
 }
+// 卡片上点某个涨停日 → 手动把复盘日切到那天(可达任意历史涨停日,非仅最近)。
+// 标记为用户主动选择,避免随后自动跳把它再拽走。
+function switchReviewDayFromCard(day) {
+  const d = String(day || '').trim();
+  if (!d) return;
+  const term = String(state.reviewSearchTerm || '').trim().toLowerCase();
+  if (term) state.reviewAutoJumpKey = term + '@' + d;   // 视为该搜索已定位到此日,抑制自动跳
+  state.reviewDateOverride = d;
+  refreshLimitupReviewPage();
+}
 function reviewBoardCountLabel(n) {
   n = Number(n || 0);
   return n >= 2 ? `${n}连板` : (n === 1 ? '首板' : '');
@@ -12270,12 +12280,17 @@ function renderReviewStockDetailHTML(data) {
       <span style="flex:none;font-size:10px;color:${info.color};white-space:nowrap;"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${info.color};vertical-align:1px;margin-right:3px;"></span>${info.label}</span>
     </div>`;
   }).join('');
+  // 卡片轨迹里的涨停日可点:点哪天就把下方明细切到哪天(当前复盘日高亮)。未涨停日不可点。
+  const activeReviewDay = String((state.reviewData && state.reviewData.day) || state.reviewDateOverride || '');
   const cells = (data.history || []).map(h => {
     const md = escapeHTML(String(h.day).slice(5));
     if (!h.limitUp) return `<div style="text-align:center;"><div style="height:32px;border-radius:5px;background:rgba(255,255,255,0.05);"></div><div style="font-size:9px;color:var(--text-faint);margin-top:3px;">${md}</div></div>`;
     const drift = h.boardTopic && t && t.finalBoardTopic && h.boardTopic !== t.finalBoardTopic;
     const cstyle = drift ? 'background:transparent;border:1px solid var(--up);color:var(--up);' : 'background:var(--up-soft);color:var(--up);';
-    return `<div style="text-align:center;"><div title="${escapeHTML(h.boardTopic || '')} ${h.limitUpCount || ''}板${drift ? ' · 异于今日主因' : ''}" style="height:32px;border-radius:5px;${cstyle}display:flex;align-items:center;justify-content:center;font-size:11px;">${h.limitUpCount || '·'}</div><div style="font-size:9px;color:var(--text-faint);margin-top:3px;">${md}</div></div>`;
+    const isActive = String(h.day) === activeReviewDay;
+    const ring = isActive ? 'box-shadow:0 0 0 2px var(--accent);' : '';
+    const dayAttr = escapeHTML(String(h.day));
+    return `<div style="text-align:center;cursor:pointer;" title="点击查看 ${md} 涨停复盘 · ${escapeHTML(h.boardTopic || '')} ${h.limitUpCount || ''}板${drift ? ' · 异于今日主因' : ''}" onclick="switchReviewDayFromCard('${dayAttr}')"><div style="height:32px;border-radius:5px;${cstyle}${ring}display:flex;align-items:center;justify-content:center;font-size:11px;">${h.limitUpCount || '·'}</div><div style="font-size:9px;color:${isActive ? 'var(--accent)' : 'var(--text-faint)'};margin-top:3px;">${md}</div></div>`;
   }).join('');
   return `<div style="max-width:540px;background:var(--bg-subtle);border:1px solid var(--border);border-radius:14px;padding:22px 24px;margin:12px 0;">
     <div class="review-detail-drag" title="按住拖动卡片到合适位置 · 双击复位"><span></span><span></span><span></span><span></span></div>
