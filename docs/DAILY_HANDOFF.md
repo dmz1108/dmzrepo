@@ -4807,3 +4807,29 @@ Deployment:
 Notes for next agent:
 - 后续每日先运行 `--tgb-hunan-raw-evidence` 抓官方证据，再由 Codex 按 SOP 人工录入和完整对账；禁止恢复 Qwen/OCR 自动路径或把 raw evidence 误报为完成。
 - 这是 TGB 来源质量和写入权限收紧，不改变市场归因算法，因此本次不需要 AI 讨论组协议。
+
+## 2026-07-14 - Codex - 部署 PR #66 TGB 人工-only 规则
+
+Changed:
+- PR #66 已合并至 `main@c8c6c41ee2fff818bd70b4bc4484ec1595fb4e35`；从该已复核主线仅部署 `kpl-stats-server.js`。
+- 生产 TGB 自动流程现只保存官方 raw evidence；正式行必须按 SOP 由 Codex 人工逐行转录。旧 `--tgb-vision-sync` 只作为 raw-evidence 兼容别名，不读取 Qwen 配置、不写正式库、不重折综合主因库。
+- 两份云端运维日志已追加并复读确认。
+
+Files:
+- `kpl-stats-server.js`（云端部署）
+- `docs/DAILY_HANDOFF.md`
+- 云端 `panda-cloud-ops-2026-06-19.md` 与 `_cloud-change-log-20260705.md`
+
+Validated:
+- 部署前云端后端 SHA-256 精确匹配旧主线 `855ad06ad9c2834601294f334e6aa283eecb7eb5d2e9c9ab5ae00dd358e2eb0d`，无云端漂移；暂存、部署文件与新主线 SHA-256 均为 `564ced7d1b7602f8dd90c9cc0dac08cdd1aa3ad64c1e7dbc5e5ad33d6a1af34c`，云端 `node --check` 通过。
+- 生产源码包含 `manual-hunan-table-required` 和旧 CLI raw-only 标记；历史视觉构建器仅剩定义、生产调用数为 0。
+- 公网 `/health`、`/kpl`、`/admin` 与主页均为 HTTP 200；未登录后台运维、用户管理和 L2 扫描接口仍为 HTTP 403。
+- 2026-07-14 TGB 正式文件 SHA-256 仍为 `489156551d80a78166e075d09545bffca8b19d6c6c42df37108a5fa8d9738570`，综合主因库仍为 `2a6f55a6564b28eddea467b9720f61695fd79eab5ae5bc3aaf819074f0a359ab`；公网四个正式源继续全部 79/79，TGB 覆盖和主因覆盖 100%、低置信 0、`sourceErrors` 为空。
+
+Deployment:
+- 回退备份：`C:\PandaDashboard\_deploy-backups\pr66-tgb-manual-only-20260714-165303`，包含旧后端和追加前两份云端日志。
+- 仅重启计划任务 `Panda Dashboard Server`，PID `11092 -> 12600`；未重启 Caddy、娱乐服务、Consistency Gate 或公司端 L2 worker。
+- 未修改 TGB 正式行、raw evidence、综合主因库、策略数据、用户数据、会话或运行时配置。
+
+Notes for next agent:
+- 生产后端已与 `main@c8c6c41` 一致，PR #66 无待部署文件。后续 TGB 每日复盘必须保持人工逐行、逐块计数、双遍复核和完整终盘池对账标准。
