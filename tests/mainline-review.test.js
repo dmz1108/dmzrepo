@@ -59,14 +59,15 @@ const STRATEGY_MAINLINE_INTRADAY_PHASES = extractSet('STRATEGY_MAINLINE_INTRADAY
 // ---- 待测函数 + 可控 IO/时钟 stub ----
 eval(extractFn('strategyMainlineActualFamilyRanking'));
 eval(extractFn('strategyMainlineExpectedStarTransitions'));
+eval(extractFn('strategyMainlineReviewFormalTop'));
 
-let TODAY = '2026-07-12';           // 周日:全部历史交易日都算已收盘
+let TODAY = '2026-07-14';           // 次日:全部夹具交易日都算已收盘
 let TODAY_CLOSED = true;            // 仅当 day===TODAY 时用
 const readSavedApiKey = async () => 'k';
 const chinaNowParts = () => ({ day: TODAY, hour: 16, minute: 0 });
 const isoFromCompactDate = d => String(d);
 const isAfterMarketClose = (day) => day < TODAY ? true : (day > TODAY ? false : TODAY_CLOSED);
-let TRADING_DAYS = ['2026-07-02', '2026-07-03', '2026-07-06', '2026-07-07', '2026-07-08', '2026-07-09', '2026-07-10'];
+let TRADING_DAYS = ['2026-07-02', '2026-07-03', '2026-07-06', '2026-07-07', '2026-07-08', '2026-07-09', '2026-07-10', '2026-07-13'];
 const getRecentTradingDays = async () => TRADING_DAYS.slice();
 const CLOSE = {};
 const readEastmoneyCloseDbDay = async d => CLOSE[d]
@@ -167,17 +168,33 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
     { code: '600012', name: 'K', finalBoardTopic: '商业航天' },
     { code: '600013', name: 'L', finalBoardTopic: '医药' }]);
 
+  // 07-13(schema v2):医药盘面候选排名第一,但候选状态为 unscanned 且无明星正证据。
+  // 回看必须显示“今日无主线”,不得拿医药参与正式主线命中率。
+  PREDICTS['2026-07-13'] = { schemaVersion: 2, sessionPhase: '尾盘', confirmedKey: '', top: [
+    { key: 'group:医药', theme: '医药', star: null, leader: { code: '603538', name: '美诺华' } },
+    { key: 'theme:特色药', theme: '特色药', star: null, leader: null }],
+    candidates: [
+      { key: 'group:医药', theme: '医药', l2VerificationStatus: 'unscanned', stars: [] },
+      { key: 'theme:特色药', theme: '特色药', l2VerificationStatus: 'unscanned', stars: [] }],
+    starTransitions: [] };
+
   const out = await getStrategyMainlineReview(10);
   const byDay = new Map(out.days.map(r => [r.day, r]));
-  A(out.ok === true && out.days.length === 7, '七天预判记录全部入列(含最新收盘日与无效样本日)');
+  A(out.ok === true && out.days.length === 8, '八天预判记录全部入列(含无正式主线日、最新收盘日与无效样本日)');
 
   const d2 = byDay.get('2026-07-02'), d3 = byDay.get('2026-07-03'), d6 = byDay.get('2026-07-06');
   const d7 = byDay.get('2026-07-07'), d8 = byDay.get('2026-07-08'), d9 = byDay.get('2026-07-09'), d10 = byDay.get('2026-07-10');
+  const d13 = byDay.get('2026-07-13');
 
-  // ① 最新收盘日无次日
-  A(!!d10 && d10.nextDay === null, '①最新收盘日(07-10)无次日仍入回看,nextDay=null');
-  A(d10.leader && d10.leader.nextCloseGain === null && d10.leader.win === null, '①无次日数据 → nextCloseGain=null 不装有数据');
-  A(d10.mainlineHitTop1 === false && d10.mainlineHitTop3 === false, '①无次日不影响当日主线命中评判(照常=脱靶)');
+  // ⓪ schema v2 无明星正证据:保留日期行,但不产生正式主线、明星或龙头。
+  A(d13?.noMainline === true && d13.theme === '' && d13.noMainlineReason === 'no-l2-star-evidence', '⓪07-13 医药未通过L2明星验证 → 今日无主线');
+  A(d13.star === null && d13.leader === null && d13.leaders.length === 0, '⓪无正式主线不回看候选明星/龙头');
+  A(d13.mainlineHitTop1 === null && d13.mainlineHitTop3 === null, '⓪无正式主线不进入命中判断');
+
+  // ① 下一交易日已知但收盘价尚缺
+  A(!!d10 && d10.nextDay === '2026-07-13', '①07-10 正确锚定下一交易日 07-13');
+  A(d10.leader && d10.leader.nextCloseGain === null && d10.leader.win === null, '①次日收盘数据缺失 → nextCloseGain=null 不装有数据');
+  A(d10.mainlineHitTop1 === false && d10.mainlineHitTop3 === false, '①次日数据缺失不影响当日主线命中评判(照常=脱靶)');
 
   // ② 已收盘不计样本(7-08 真实镜像)
   A(d8.sampleValid === false && d8.sampleInvalidReason === 'phase:已收盘', '②07-08 已收盘 → sampleValid=false + 明确原因');

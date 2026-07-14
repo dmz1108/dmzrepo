@@ -61,7 +61,7 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
   await writeMainlinePredict('2026-07-10', '早盘', manyMainlines, { key: 'fam-a' });
   const out = written['/fake/mainline-predict-2026-07-10.json'];
   A(out && Array.isArray(out.top) && out.top.length === 3, 'top 仍为前3');
-  A(JSON.stringify(Object.keys(out.top[0]).sort()) === JSON.stringify(['certainty','key','leader','leaders','predictScore','rank','score','stage','star','theme'].sort()), 'top 元素保留旧字段并新增 leaders');
+  A(JSON.stringify(Object.keys(out.top[0]).sort()) === JSON.stringify(['certainty','key','l2VerificationStatus','leader','leaders','predictScore','rank','score','stage','star','theme'].sort()), 'top 元素保留旧字段并新增 leaders/L2验证状态');
   A(out.top[0].leader.code === '600001' && out.top[0].star.code === '600003', 'top 龙头/明星取值不变');
   A(out.top[0].leaders.length === 2 && out.top[0].leaders[0].code === '600001'
     && out.top[0].leaders[1].code === '600002' && out.top[0].leaders[1].leadScore === 71, 'top 保存前两名龙头及 leadScore');
