@@ -4434,3 +4434,34 @@ Notes for next agent:
 - “封板”不是明星确认的替代条件；该股自己的最大可统计档必须同时满足比值规则和主动买累计不少于 3 亿元。
 - L2 未扫描不等于无明星。硬排除只允许发生在相关任务完成且成分覆盖达标之后，不能因为 worker 尚未返回就提前移除主线。
 - 预判回看的 3 日指标指第三个后续交易日收盘相对预判日收盘的累计涨跌幅，不是三个自然日。
+
+## 2026-07-14 - Codex - 预判回看无明星时显示今日无主线
+
+Changed:
+- 将盘中候选档案与预判回看的“正式主线”分离：schema v2 记录只有存在 L2 预期明星或明星确认正证据时，才能进入正式主线回看。
+- `unscanned`、`scanned-no-star` 和仅 `active` 的候选继续保留作审计，但不再产生正式主线、明星、龙头或主线命中统计。
+- 预判记录的 `top` 从本次起直接保存 `l2VerificationStatus`；旧 schema v1 档案因缺少可验证字段继续按历史口径展示，不反向伪造结论。
+- 行情页对无正式主线的日期明确显示“今日无主线”，并提示候选未通过 L2 明星验证。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/mainline-review.test.js`
+- `tests/predict-records.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 云端真实 `mainline-predict-2026-07-13.json` 的原始前三为医药、特色药、独家药品，但三者均为 `unscanned` 且无明星正证据，按新口径 `formalTop=[]`。
+- 全部 21 个 `tests/*.test.js` 文件通过，新增回归锁定 2026-07-13 显示“今日无主线”、明星/龙头为空且不进入命中判断。
+- `node --check kpl-stats-server.js`、`git diff --check` 和行情页内联脚本编译均通过。
+
+Deployment:
+- PR #51 已合并至 `main@fc5d097`；部署前确认云端两份运行文件与上一版 `main@68764ed` SHA-256 完全一致，无云端漂移。
+- `kpl-stats-server.js` 与 `kpl-dashboard_17_apple.html` 已部署到 `C:\PandaDashboard`；回退备份为 `C:\PandaDashboard\_deploy-backups\pr51-review-no-mainline-20260714-0800`。
+- 仅重启计划任务 `Panda Dashboard Server`，主服务 PID `12724 -> 11640`；Caddy、娱乐服务和公司端 L2 worker 均未重启。
+- 公网 `/health` 正常；预判回看接口对 2026-07-13 返回 `noMainline=true`、主题为空、明星/龙头为空、命中结果为空。未改写原始预测档案、冻结快照、L2 任务或业务数据库。
+- 三份云端运维日志均已追加本次备份、部署、重启和验收记录，未记录 Token、Cookie、账号或管理员会话。
+
+Notes for next agent:
+- 盘中“候选方向”仍可在今日主线实时分析中出现；回看中的“正式主线”必须有 expected/confirmed 明星正证据，两者不要再混用。
+- 2026-07-13 的原始医药预测文件保持不变作为审计证据，展示层根据其已保存的候选状态得出“今日无主线”。
