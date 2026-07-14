@@ -11581,6 +11581,26 @@ function strategyBoardSourceLabel(zsType) {
   if (source === 7) return 'KPL';
   return '';
 }
+function strategyMainlineDisplayInflow(mainline) {
+  const rows = (Array.isArray(mainline && mainline.resonanceBoards) ? mainline.resonanceBoards : [])
+    .filter(board => board && board.netInflow != null && board.netInflow !== '' && Number.isFinite(Number(board.netInflow)))
+    .slice()
+    .sort((a, b) => Number(b.netInflow) - Number(a.netInflow));
+  const board = rows[0] || null;
+  if (board) {
+    return {
+      value: Number(board.netInflow),
+      boardName: String(board.name || ''),
+      zsType: board.zsType ?? null,
+    };
+  }
+  const rawValue = mainline && mainline.netInflow;
+  return {
+    value: rawValue != null && rawValue !== '' && Number.isFinite(Number(rawValue)) ? Number(rawValue) : null,
+    boardName: String((mainline && mainline.netInflowBoard) || ''),
+    zsType: mainline && mainline.netInflowZsType != null ? mainline.netInflowZsType : null,
+  };
+}
 function renderStrategyMainlinesHTML(d) {
   const lines = (d && d.mainlines) || [];
   const usingFallbackDay = d && d.requestedDay && d.day && d.requestedDay !== d.day;
@@ -11626,7 +11646,10 @@ function renderStrategyMainlinesHTML(d) {
     const recent = (m.recentTopStocks || []).slice(0, 2).map(s =>
       `<span class="ml-stock">${escapeHTML(s.name || s.code || '')}<i>${Number(s.count) || 0}次</i></span>`
     ).join('');
-    const inflowClass = m.netInflow == null ? 'empty' : (Number(m.netInflow) > 0 ? 'up' : (Number(m.netInflow) < 0 ? 'down' : 'flat'));
+    // 冻结快照可能保存过旧版“重叠板块资金求和”结果；展示时直接使用快照内的单板原始值，
+    // 不改写冻结文件，也不把多个概念的资金再次相加。
+    const displayInflow = strategyMainlineDisplayInflow(m);
+    const inflowClass = displayInflow.value == null ? 'empty' : (displayInflow.value > 0 ? 'up' : (displayInflow.value < 0 ? 'down' : 'flat'));
     const gainValue = Number(m.boardGainPct);
     const gainClass = !Number.isFinite(gainValue) ? 'empty' : (gainValue > 0 ? 'up' : (gainValue < 0 ? 'down' : 'flat'));
     const metricCell = (label, value, cls = '') => `<span class="ml-signal-cell ${escapeHTML(cls)}"><i>${escapeHTML(label)}</i><b>${escapeHTML(value)}</b></span>`;
@@ -11634,12 +11657,12 @@ function renderStrategyMainlinesHTML(d) {
       ${metricCell('涨停', String(Number(m.count) || 0))}
       ${metricCell('大涨/冲板', `${Number(m.bigGainCount) || 0}/${Number(m.nearLimitCount) || 0}`)}
       ${metricCell(m.boardGainName ? String(m.boardGainName).slice(0, 6) : '板块涨幅', Number.isFinite(gainValue) ? `${gainValue > 0 ? '+' : ''}${gainValue.toFixed(2)}%` : '--', gainClass)}
-      ${metricCell(Number(m.netInflow) < 0 ? '净流出' : '净流入', m.netInflow != null ? fmtInflow(m.netInflow) : '--', inflowClass)}
+      ${metricCell(Number(displayInflow.value) < 0 ? '净流出' : '净流入', displayInflow.value != null ? fmtInflow(displayInflow.value) : '--', inflowClass)}
     </div>`;
     const driver = strategyMainlineTopScorePart(m.scoreParts);
-    const inflowSource = strategyBoardSourceLabel(m.netInflowZsType);
-    const inflowTrace = m.netInflowBoard
-      ? ` · 资金口径 ${escapeHTML(m.netInflowBoard)}${inflowSource ? `·${escapeHTML(inflowSource)}` : ''}（单板）`
+    const inflowSource = strategyBoardSourceLabel(displayInflow.zsType);
+    const inflowTrace = displayInflow.boardName
+      ? ` · 资金口径 ${escapeHTML(displayInflow.boardName)}${inflowSource ? `·${escapeHTML(inflowSource)}` : ''}（单板）`
       : '';
     const scoreMeta = strategyMainlineScoreMetaHTML(m);
     const leadersHtml = strategyMainlineLeadersHTML(m);

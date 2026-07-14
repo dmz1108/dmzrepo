@@ -19,6 +19,19 @@ function extractFn(name) {
   return src.slice(match.index, end + 1);
 }
 
+function extractHtmlFn(name) {
+  const match = html.match(new RegExp(`function ${name}\\(`));
+  if (!match) throw new Error(`not found in html: ${name}`);
+  const bodyStart = html.indexOf('{', html.indexOf(')', match.index));
+  let depth = 0;
+  let end = bodyStart;
+  for (; end < html.length; end += 1) {
+    if (html[end] === '{') depth += 1;
+    else if (html[end] === '}' && --depth === 0) break;
+  }
+  return html.slice(match.index, end + 1);
+}
+
 const assert = (condition, message) => {
   if (!condition) {
     console.error(`FAIL: ${message}`);
@@ -76,6 +89,18 @@ assert(src.includes('netInflowZsType: mainline.netInflowZsType ?? null'), 'AI只
 assert(!src.includes('netItems.reduce((sum, item) => sum + Number(item.netInflow), 0)'), '家族资金不再相加');
 
 assert(html.includes('资金口径') && html.includes('同花顺') && html.includes('（单板）'), '前端明确展示资金板块、来源和单板口径');
+eval(extractHtmlFn('strategyMainlineDisplayInflow'));
+const legacyDisplay = strategyMainlineDisplayInflow({
+  netInflow: 35.58e8,
+  netInflowBoard: 'CPO概念',
+  resonanceBoards: [
+    { name: 'CPO概念', zsType: 6, netInflow: 101.25e8 },
+    { name: 'AI应用', zsType: 6, netInflow: -41.84e8 },
+    { name: '液冷概念', zsType: 6, netInflow: -23.84e8 },
+  ],
+});
+assert(legacyDisplay.value === 101.25e8 && legacyDisplay.boardName === 'CPO概念' && legacyDisplay.zsType === 6,
+  '旧冻结快照展示直接采用单板原始值，不显示历史相加结果');
 let scriptsCompile = true;
 for (const match of html.matchAll(/<script(?![^>]*src=)[^>]*>([\s\S]*?)<\/script>/g)) {
   try {
