@@ -11807,18 +11807,34 @@ function renderStrategyMainlinesHTML(d) {
     <div class="ml-grid">${cards}</div>
   </section>`;
 }
-function confirmMainlineTheme(key, theme) {
-  fetch(`${KPL_STATS_BASE}/api/strategy-mainline-confirm?day=${encodeURIComponent(state.date)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...adminHeaders() },
-    body: JSON.stringify({ key, theme }),
-  }).then(res => res.json()).catch(() => null).finally(() => loadStrategyMainlines(state.date));
+async function confirmMainlineTheme(key, theme) {
+  try {
+    const res = await fetch(`${KPL_STATS_BASE}/api/strategy-mainline-confirm?day=${encodeURIComponent(state.date)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...adminHeaders() },
+      body: JSON.stringify({ key, theme }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.ok === false) throw new Error(data.error || `HTTP ${res.status}`);
+    clearError();
+    await loadStrategyMainlines(state.date);
+  } catch (e) {
+    showError(`确认主线失败：${e.message || e}`);
+  }
 }
-function unconfirmMainlineTheme() {
-  fetch(`${KPL_STATS_BASE}/api/strategy-mainline-confirm?day=${encodeURIComponent(state.date)}`, {
-    method: 'DELETE',
-    headers: adminHeaders(),
-  }).then(res => res.json()).catch(() => null).finally(() => loadStrategyMainlines(state.date));
+async function unconfirmMainlineTheme() {
+  try {
+    const res = await fetch(`${KPL_STATS_BASE}/api/strategy-mainline-confirm?day=${encodeURIComponent(state.date)}`, {
+      method: 'DELETE',
+      headers: adminHeaders(),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.ok === false) throw new Error(data.error || `HTTP ${res.status}`);
+    clearError();
+    await loadStrategyMainlines(state.date);
+  } catch (e) {
+    showError(`取消主线确认失败：${e.message || e}`);
+  }
 }
 async function loadStrategyMainlineReview() {
   const el = document.getElementById('strategy-mainline-review');
