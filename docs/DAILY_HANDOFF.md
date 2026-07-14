@@ -4597,3 +4597,26 @@ Changed:
 Files: kpl-dashboard_17_apple.html(renderReviewStockDetailHTML 轨迹格子可点+高亮;新增 switchReviewDayFromCard)、docs/DAILY_HANDOFF.md
 
 Validated: 内联脚本 node --check 通过;dashboard 测试 + 全仓 22 文件全过。纯前端 review 页,无接口改动。
+
+## 2026-07-14 - Codex - 主线确认状态动态叠加与错误反馈
+
+Changed:
+- 修复管理员确认记录已写入、但冻结快照和缓存主线响应仍返回 `confirmedMainline:null` 的问题；接口读取时动态叠加确认记录，不改写冻结快照。
+- 公开主线接口与 AI 只读策略接口使用同一确认口径；取消确认后旧快照上的确认标志也会立即清除。
+- 前端确认/取消操作不再静默吞掉 403、登录失效或网络错误，管理员会看到明确失败原因。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/mainline-confirm.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js` 通过。
+- `node tests/mainline-confirm.test.js` 与前端内联脚本编译检查通过。
+
+Deployment:
+- 本条记录提交时尚未部署；合并后需原子部署后端与行情页并重启主服务，随后用已存在的 2026-07-14 确认记录验证冻结响应。
+
+Notes for next agent:
+- 确认状态是管理员可变状态，不属于冻结快照历史事实；以后不得把它永久烘焙进快照后停止动态读取。

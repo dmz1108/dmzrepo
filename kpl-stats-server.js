@@ -25019,6 +25019,32 @@ async function getStrategyMainlines(day) {
   };
 }
 
+function strategyMainlineMatchesConfirm(mainline, confirm) {
+  if (!mainline || !confirm) return false;
+  const confirmKey = String(confirm.key || '').trim();
+  const confirmTheme = String(confirm.theme || '').trim();
+  const mainlineKey = String(mainline.familyKey || mainline.key || '').trim();
+  const mainlineTheme = String(mainline.theme || '').trim();
+  return !!((confirmKey && mainlineKey === confirmKey) || (confirmTheme && mainlineTheme === confirmTheme));
+}
+
+async function getStrategyMainlinesWithConfirm(day) {
+  const payload = await getStrategyMainlines(day);
+  if (!payload || typeof payload !== 'object') return payload;
+  const confirmDay = isoFromCompactDate(payload.day || day || chinaNowParts().day);
+  const confirm = await readMainlineConfirm(confirmDay).catch(() => null);
+  return {
+    ...payload,
+    confirmedMainline: confirm || null,
+    mainlines: Array.isArray(payload.mainlines)
+      ? payload.mainlines.map(mainline => ({
+          ...mainline,
+          isConfirmedMainline: strategyMainlineMatchesConfirm(mainline, confirm),
+        }))
+      : payload.mainlines,
+  };
+}
+
 async function readAiReadOnlyToken() {
   const envToken = String(process.env.PANDA_AI_READONLY_TOKEN || process.env.PANDA_AI_STRATEGY_TOKEN || '').trim();
   if (envToken) return envToken;
@@ -25190,7 +25216,7 @@ async function buildAiStrategyLivePayload(url) {
     : await resolveMainReasonStatusDay(requestedDay, apiKey).catch(() => requestedDay);
 
   const [strategyPayload, realtimeBoardsRaw, reviewBundle, reviewArtifacts, hotThemes, resonance, l2Status, closeDb] = await Promise.all([
-    strategyMainlineWithTimeout(getStrategyMainlines(requestedDay), 15000, { ok: false, reason: 'strategy-mainline-timeout', mainlines: [] }),
+    strategyMainlineWithTimeout(getStrategyMainlinesWithConfirm(requestedDay), 15000, { ok: false, reason: 'strategy-mainline-timeout', mainlines: [] }),
     strategyMainlineWithTimeout(getStrategyBoardsForDay(requestedDay, { allowFallback: false, liveIfMissing: true, liveRankCount: 160 }), 10000, []),
     strategyMainlineWithTimeout(buildDaySourceViewWithConsensus(reviewDay), 12000, null),
     strategyMainlineWithTimeout(summarizeRequiredReviewSourceArtifacts(reviewDay), 5000, null),
@@ -25908,7 +25934,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/limit-up-main-reason-db/recent-universe') return await getLimitUpMainReasonRecentUniverse(url, req, res);
     if (url.pathname === '/api/limit-up-main-reason-db/pending') return await getLimitUpMainReasonPending(url, req, res);
     if (url.pathname === '/api/limit-up-main-reason-db/hot-themes') return await getLimitUpMainReasonHotThemes(url, req, res);
-    if (url.pathname === '/api/strategy-mainlines') return send(res, 200, await getStrategyMainlines(url.searchParams.get('day') || chinaNowParts().day).catch(e => ({ ok: false, error: String(e && e.message || e) })));
+    if (url.pathname === '/api/strategy-mainlines') return send(res, 200, await getStrategyMainlinesWithConfirm(url.searchParams.get('day') || chinaNowParts().day).catch(e => ({ ok: false, error: String(e && e.message || e) })));
     if (url.pathname === '/api/admin/strategy-daily-events') return await getStrategyDailyEventsApi(url, req, res);
     if (url.pathname === '/api/detail-evidence-index') return await getDetailEvidenceIndexApi(url, req, res);
     if (url.pathname === '/api/strategy-mainline-review') {
