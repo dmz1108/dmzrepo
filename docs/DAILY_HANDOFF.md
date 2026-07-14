@@ -4754,3 +4754,30 @@ Deployment:
 Notes for next agent:
 - 权限修复合并后只需部署 `strategy-backend.js` 并重启主服务，随后复核健康、页面和未登录/普通用户权限边界。
 - 同花顺 `zjjlr` 实时资金口径本次没有问题也没有改动；成员关系是另一条新鲜度链。当前自动任务会复用任何非空且未判不完整的旧成员文件，后续若改为轮换或分批刷新，应先按 AI 讨论/生产证据流程设计限速、失败回退和真实新鲜度指标，不能在盘中直接强刷全部 382 个多页页面。
+
+## 2026-07-14 - Codex - 部署 PR #64 策略默认权限初始化修复
+
+Changed:
+- PR #64 已合并至 `main@ec5dec5b256c44826009bdc8a4c6c28f1c47cf3b`；从该已复核主线仅部署 `strategy-backend.js`。
+- 生产 `createStrategyBackend()` 现可在未显式注入 L2 权限函数时安全回退到 `isAdmin`，生产现有显式 `canRunL2Scan` / `canReadL2Scan` 行为保持不变。
+- 两份云端运维日志已追加部署记录并复读确认。
+
+Files:
+- `strategy-backend.js`（云端部署）
+- `docs/DAILY_HANDOFF.md`
+- 云端 `panda-cloud-ops-2026-06-19.md` 与 `_cloud-change-log-20260705.md`
+
+Validated:
+- 部署前云端文件 SHA-256 精确匹配修复前主线 `418fe8f6df006972de7bb54d740ab73e64d6a2f729b90289826907104a9b1faa`，无云端漂移；暂存、部署文件与新主线 SHA-256 均为 `5633b3b79a7f85bb7f7a06646a014442b69ce8c7ed00a2273a4b98d8677e43dd`，云端 `node --check` 通过。
+- PR 合并前全仓 25/25 测试文件通过；公网 `/health`、`/kpl`、`/admin` 与主页均为 HTTP 200。
+- 未登录后台运维、云健康、用户管理和 L2 扫描接口均返回 HTTP 403，`/api/auth/me` 返回 HTTP 401；认证/注册/找回密码接线与普通用户管理员门控专项测试通过。
+- 重启后同花顺目录状态仍为 2026-07-14、382/382、失败 0；成员库审计保持只读，没有触发刷新或写库。
+
+Deployment:
+- 回退备份：`C:\PandaDashboard\_deploy-backups\pr64-strategy-permissions-20260714-163544`，包含旧 `strategy-backend.js` 和追加前两份云端日志。
+- 仅重启计划任务 `Panda Dashboard Server`，PID `7856 -> 11092`；未重启 Caddy、娱乐服务、Consistency Gate 或公司端 L2 worker。
+- 未修改策略快照、管理员确认、预测档案、L2 任务、同花顺成员库、行情数据库、用户数据、会话或运行时配置。
+
+Notes for next agent:
+- 生产 `strategy-backend.js` 已与 `main@ec5dec5` 一致，PR #64 无待部署文件。
+- 同花顺审计结论仍有效：382/382 是目录覆盖，不是成员名单当天复核；后续刷新机制改造需先走 AI 讨论与生产证据流程，不得把实时 `zjjlr` 资金新鲜度和成员关系新鲜度混为一谈。
