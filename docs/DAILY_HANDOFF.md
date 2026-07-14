@@ -4486,3 +4486,36 @@ Notes for next agent(Codex 复核):
 - 行为变更仅限「历史/重建日无自有快照」场景:原本静默显示昨日板块,现改为诚实空档 + boardsStale 标记。今日路径(allowFallback:false)不受影响。
 - 建议合并后在云端跑 `node tools/scan-board-snapshot-contamination.js --emit-manifest` 对全部历史 snapshots 普查,把命中日并入 data-quality 清单(P6 的 SNAP 层即可自动隔离)。
 - 顺带发现(未修,超出本 PR 范围):`createStrategyBackend` 第 198 行 `canRunL2Scan` 默认分支引用尚未初始化的 `isAdmin`(const TDZ),仅在未注入 canRunL2Scan 时触发;生产始终注入故不发作,建议后续把 `const isAdmin` 提到引用之前。
+
+## 2026-07-14 - Codex - 合并并部署 PR #48 板块跨日污染止血
+
+Changed:
+- 复核并合并 PR #48；历史/重建日板块回退数据现在携带真实 `sourceDay`，跨日或来源未知的行不会再冒充目标日事实，且不会通过 QI 聚合二次回退绕回。
+- 云端新增只读普查工具并扫描 18 个复合快照日，识别出 7 个逐板资金、涨幅和涨停数与前一存档日完全相同的跨日复制日：2026-06-27、06-28、06-29、07-01、07-03、07-05、07-06；`suppressed=0`。
+- 将普查结果按 `targetDay + path` 结构化合并进现有质量清单：旧 10 条全部原样保留，新增 7 条后共 17 条（missing 9、contaminated 8）；没有改写或删除任何原始、复合、冻结快照。
+
+Files:
+- `kpl-stats-server.js`
+- `strategy-backend.js`
+- `tools/scan-board-snapshot-contamination.js`
+- `strategy-data/strategy-data-quality.json`（仅云端运行时，不入 Git）
+- 三份云端运维日志（仅云端运行时）
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- PR 最终 head `28c0052` 与上一轮已审功能补丁 patch-id 完全一致；`git diff --check`、专项 32 项、全仓 22 个测试文件通过。
+- 部署前云端两份运行文件与 prior main `24ca370` 哈希完全一致，确认无云端漂移；上传后再次校验三份文件 SHA-256，并在云端完成 `node --check`。
+- 公网 `/health`、`/kpl`、`/admin` 和 `dreamerqi.com` 均为 HTTP 200；2026-07-13 预判回看仍返回 `noMainline=true`、无正式明星/龙头。
+- 质量加载器验收：2026-07-01、07-02、07-03 均为 `quarantined / snapshotUsable=false`；干净对照日 2026-07-10 仍为 `ok / snapshotUsable=true`。
+
+Deployment:
+- PR #48 已合并至 `main@33aad213156290c2f64d183557d3fcb7016b171b`。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\pr48-cross-day-20260714-085506`，包含旧运行文件、旧质量清单和三份日志备份。
+- 部署后 SHA-256：`kpl-stats-server.js=35F8D4BD6ED2E895D137DAFB1F7B212845631011236830DE3306BAF1DE684B2F`，`strategy-backend.js=418FE8F6DF006972DE7BB54D740AB73E64D6A2F729B90289826907104A9B1FAA`，普查工具 `CA56B6223307FDD5B3972A8F003B1DC8DE88591705684B40D2A67AC773C49A92`。
+- 仅重启 `Panda Dashboard Server`，PID `11640 -> 12756`；Caddy、娱乐服务和公司端 L2 worker 均未重启。
+- 质量清单 SHA-256：合并前 `1EDD7EBD05CB288449C9ED91E648755D1C4FE94A4C833EEF3AFC38F2787FE2A7`，合并后 `8699D2218052C2CF87BC233579C4B8901581FC45523511A9005F8730871CD978`；所有 contaminated 证据 SHA 均在安装前与云端原文件逐项核对。
+- 三份云端日志已记录完整部署、备份、扫描、清单合并和验收信息；未记录任何 Token、Cookie、账号或管理员会话。
+
+Notes for next agent:
+- `--emit-manifest` 只输出本次扫描 entries；以后再次运行时必须与现有质量清单按键合并，禁止重定向覆盖整个文件。
+- 周末遗留复合快照也被记录为污染证据，但非交易日不会进入正常交易日评分；保留这些条目用于审计，不删除历史原件。
