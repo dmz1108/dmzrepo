@@ -4546,3 +4546,22 @@ Deployment:
 Notes for next agent:
 - 本次没有改同花顺原始 `zjjlr` 单位；官方原始排名中该字段按亿元返回，现有乘以 `1e8` 的转换正确。
 - 持久化板块成员库解决盘中超时，但其历史更新时间仍需由每日同花顺板块同步任务持续维护；不得把成员库的新鲜度与实时资金值的新鲜度混为一谈。
+
+## 2026-07-14 - Codex - Deploy PR #57 frozen strategy inflow display
+
+Changed:
+- Deployed the already-merged PR #57 frontend fix to production. This is the follow-up to PR #55 for old frozen strategy snapshots: cards now display a representative source-board inflow from `resonanceBoards` instead of the legacy overlapping-board summed value.
+
+Files:
+- kpl-dashboard_17_apple.html deployed to `C:\PandaDashboard` only; no source code change in this handoff entry.
+
+Validated:
+- Public `/kpl` SHA-256 is `8d6e4726aeeea4a2b7b5b08ff137de895fb0befdbe03a9c50b5ed52313568adb` and includes `strategyMainlineDisplayInflow`.
+- Public `/health` returned HTTP 200.
+
+Deployment:
+- Production touched: yes. Backup `C:\PandaDashboard\_deploy-backups\pr57-frozen-inflow-20260714-204209`.
+- Service restart: no. Main Node PID remained `2864`; Caddy, yule-server, and company L2 worker were not restarted.
+
+Notes for next agent:
+- PR #57 is display-only. It does not rewrite frozen snapshots or change strategy ranking, L2, prediction records, user data, or any runtime database.
