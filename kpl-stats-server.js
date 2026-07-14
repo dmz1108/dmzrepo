@@ -535,6 +535,8 @@ let jiuyangongsheAuthStatusCache = null;
 let jiuyangongsheAuthBrowserProcess = null;
 let jiuyangongsheAutoLoginTask = null;
 let thsConceptBoardsRealtimeCache = null;
+const THS_CONCEPT_MEMBERS_CACHE_MS = 30 * 60 * 1000;
+const thsConceptMembersRealtimeCache = new Map();
 let thsLocalConceptCache = null;
 let thsLocalStockNameCache = null;
 let thsLocalStockLinkCache = null;
@@ -11209,13 +11211,9 @@ async function fetchThsConceptBoards(options = {}) {
   return boards;
 }
 
-async function fetchThsConceptStocks(plateId) {
+async function fetchThsConceptMembersFromWeb(plateId) {
   const code = String(plateId || '').trim();
   if (!code) return [];
-  const localBoard = findThsLocalConceptBoardByAnyId(code);
-  if (localBoard?.stocks?.length) {
-    return enrichThsLocalStocksWithRealtime(localBoard.stocks);
-  }
   const referer = `https://q.10jqka.com.cn/gn/detail/code/${code}/`;
   const detail = await thsFetchHtml(referer, 'https://q.10jqka.com.cn/gn/').catch(() => '');
   const first = await thsFetchHtml(`${referer}page/1/ajax/1/`, referer);
@@ -11251,6 +11249,51 @@ async function fetchThsConceptStocks(plateId) {
     if (row.code && row.name) byCode.set(row.code, row);
   }
   return [...byCode.values()];
+}
+
+async function fetchThsConceptMembers(plateId) {
+  const code = String(plateId || '').trim();
+  if (!code) return [];
+  const now = Date.now();
+  const cached = thsConceptMembersRealtimeCache.get(code);
+  if (cached?.rows?.length && cached.expiresAt > now) return cached.rows;
+  if (cached?.task) return cached.task;
+  const task = fetchThsConceptMembersFromWeb(code)
+    .then(rows => {
+      const normalized = Array.isArray(rows) ? rows : [];
+      if (normalized.length) {
+        thsConceptMembersRealtimeCache.set(code, {
+          rows: normalized,
+          expiresAt: Date.now() + THS_CONCEPT_MEMBERS_CACHE_MS,
+        });
+      } else {
+        thsConceptMembersRealtimeCache.delete(code);
+      }
+      return normalized;
+    })
+    .catch(err => {
+      thsConceptMembersRealtimeCache.delete(code);
+      throw err;
+    });
+  thsConceptMembersRealtimeCache.set(code, { task, expiresAt: now + THS_CONCEPT_MEMBERS_CACHE_MS });
+  return task;
+}
+
+async function fetchThsConceptStocks(plateId) {
+  const code = String(plateId || '').trim();
+  if (!code) return [];
+  const localBoard = findThsLocalConceptBoardByAnyId(code);
+  if (localBoard?.stocks?.length) {
+    return enrichThsLocalStocksWithRealtime(localBoard.stocks);
+  }
+  // 云端已有的同花顺板块库保存完整成员名单。盘中优先复用成员名单并只刷新行情，
+  // 避免同花顺多页 HTML 请求耗时二三十秒，被策略的 1.5 秒保护超时反复丢成空数组。
+  const persisted = await readThsConceptBoard(code).catch(() => null);
+  if (persisted?.stocks?.length) {
+    return enrichThsLocalStocksWithRealtime(persisted.stocks);
+  }
+  const members = await fetchThsConceptMembers(code);
+  return enrichThsLocalStocksWithRealtime(members);
 }
 
 async function readThsConceptCatalog() {
@@ -21165,6 +21208,7 @@ function strategyCreateMainlineSeed(theme, key) {
     netInflowSeen: false,
     netInflowBoard: '',
     netInflowBest: null,
+    netInflowZsType: null,
     boardKeySet: new Set(),
   };
 }
@@ -21181,6 +21225,31 @@ function strategyEnsureMainlineSeedShape(seed) {
   if (!Array.isArray(seed.boards)) seed.boards = [];
   if (!Number.isFinite(Number(seed.netInflowTotal))) seed.netInflowTotal = 0;
   return seed;
+}
+function strategyMainlineRecordNetInflow(seed, board, value) {
+  const netInflow = numOrNull(value);
+  if (!seed || netInflow == null) return false;
+  strategyEnsureMainlineSeedShape(seed);
+  if (!seed.netInflowSeen || seed.netInflowBest == null || netInflow > Number(seed.netInflowBest)) {
+    seed.netInflowTotal = netInflow;
+    seed.netInflowBest = netInflow;
+    seed.netInflowBoard = String(board?.name || '');
+    seed.netInflowZsType = board?.zsType ?? null;
+  }
+  seed.netInflowSeen = true;
+  return true;
+}
+function strategyMainlineRepresentativeBoardInflow(boards) {
+  const rows = (Array.isArray(boards) ? boards : [])
+    .filter(board => isFiniteNumeric(board?.netInflow))
+    .slice()
+    .sort((a, b) => Number(b.netInflow) - Number(a.netInflow));
+  const board = rows[0] || null;
+  return {
+    value: board ? Number(board.netInflow) : null,
+    boardName: String(board?.name || ''),
+    zsType: board?.zsType ?? null,
+  };
 }
 function strategyMainlineNormalizeRisingStock(row) {
   const code = normalizeReasonSourceCode(row?.code || row?.dm || row?.stockCode);
@@ -21329,9 +21398,9 @@ function strategyMergeMainlineFamilies(rawMainlines) {
       uniqueBoardMap.set(key, board);
     }
     const uniqueBoardsForStats = [...uniqueBoardMap.values()];
-    const netItems = uniqueBoardsForStats.filter(item => isFiniteNumeric(item.netInflow));
-    const netInflow = netItems.length ? netItems.reduce((sum, item) => sum + Number(item.netInflow), 0) : null;
-    const netLead = netItems.slice().sort((a, b) => Number(b.netInflow) - Number(a.netInflow))[0] || {};
+    // 同一主线族内的概念板成分高度重叠，资金不能相加；使用单一代表板块值。
+    const netSelection = strategyMainlineRepresentativeBoardInflow(uniqueBoardsForStats);
+    const netInflow = netSelection.value;
     const gainItems = uniqueBoardsForStats.filter(item => isFiniteNumeric(item.gainPct));
     const gainLead = gainItems.sort((a, b) => Number(b.gainPct) - Number(a.gainPct))[0] || {};
     const scoreParts = strategyMergeScoreParts(sorted);
@@ -21424,7 +21493,9 @@ function strategyMergeMainlineFamilies(rawMainlines) {
       prevCompare,
       roles,
       netInflow,
-      netInflowBoard: String(netLead.name || ''),
+      netInflowBoard: netSelection.boardName,
+      netInflowZsType: netSelection.zsType,
+      netInflowAggregation: 'representative-board-max',
       boardGainPct: isFiniteNumeric(gainLead.gainPct) ? Number(gainLead.gainPct) : null,
       boardGainName: gainLead.name || '',
       recentHeat,
@@ -21697,8 +21768,13 @@ function strategyMainlineRoleBreakdown(candidates, currentCount = 0) {
 function strategyMainlineRealtimeThemeName(raw) {
   const s = String(raw || '').trim();
   if (!s) return '';
+  const fineName = s.replace(/概念$/u, '').trim();
   const info = strategyThemeTaxonomyInfo(s);
-  return String(info?.standard || s.replace(/概念$/u, '')).trim();
+  // 宽口径词只负责家族归并，不覆盖实时板块自己的细分名称。
+  // 例如「医药电商」仍显示医药电商，家族键继续是 group:医药；否则用户会把
+  // 医药电商的资金误读成整个医药行业的资金。
+  if (info?.broad && fineName && fineName !== String(info.standard || '').trim()) return fineName;
+  return String(info?.standard || fineName).trim();
 }
 
 function strategyMainlineRealtimeInflowScore(value) {
@@ -21955,14 +22031,7 @@ function strategyMainlineAttachRealtimeBoardToSeed(seed, board, matchedCodes = n
     seed.maxGainPct = gainPct;
     seed.gainBoard = boardName;
   }
-  if (netInflow != null) {
-    seed.netInflowSeen = true;
-    seed.netInflowTotal += netInflow;
-    if (seed.netInflowBest == null || netInflow > seed.netInflowBest) {
-      seed.netInflowBest = netInflow;
-      seed.netInflowBoard = boardName;
-    }
-  }
+  strategyMainlineRecordNetInflow(seed, board, netInflow);
   seed.boards.push({
     name: boardName,
     plateId: String(board?.plateId || ''),
@@ -23767,14 +23836,7 @@ function strategyMainlineAddRealtimeBoardSeed(seedByKey, board) {
     seed.maxGainPct = gainPct;
     seed.gainBoard = boardName;
   }
-  if (netInflow != null) {
-    seed.netInflowSeen = true;
-    seed.netInflowTotal += netInflow;
-    if (seed.netInflowBest == null || netInflow > seed.netInflowBest) {
-      seed.netInflowBest = netInflow;
-      seed.netInflowBoard = boardName;
-    }
-  }
+  strategyMainlineRecordNetInflow(seed, board, netInflow);
   seed.boards.push({
     name: boardName,
     plateId: String(board?.plateId || ''),
@@ -24369,6 +24431,7 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
       historicalThemes: hist.topTopics || [],
       netInflow: seed.netInflowSeen ? Number(seed.netInflowTotal) : null,
       netInflowBoard: seed.netInflowBoard || '',
+      netInflowZsType: seed.netInflowZsType ?? null,
       boardGainPct: seed.maxGainPct == null ? null : Number(seed.maxGainPct),
       boardGainName: seed.gainBoard || '',
       boards: seed.boards,
@@ -24503,6 +24566,8 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
       roles,
       netInflow: t.netInflow ?? null,
       netInflowBoard: t.netInflowBoard || '',
+      netInflowZsType: t.netInflowZsType ?? null,
+      netInflowAggregation: 'representative-board-max',
       boardGainPct,
       boardGainName: t.boardGainName || '',
       recentHeat,
@@ -25028,6 +25093,8 @@ function aiCompactMainline(mainline) {
     boardCount: aiNum(mainline.boardCount, 0),
     netInflow: aiNum(mainline.netInflow, 0),
     netInflowBoard: mainline.netInflowBoard || '',
+    netInflowZsType: mainline.netInflowZsType ?? null,
+    netInflowAggregation: mainline.netInflowAggregation || '',
     boardGainPct: aiNum(mainline.boardGainPct),
     boardGainName: mainline.boardGainName || '',
     explain: mainline.explain || '',

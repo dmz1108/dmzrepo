@@ -11574,6 +11574,13 @@ function strategyMainlineStatusHTML(d) {
     ${meta.length ? `<em>${escapeHTML(meta.join(' · '))}</em>` : ''}
   </div>`;
 }
+function strategyBoardSourceLabel(zsType) {
+  const source = Number(zsType);
+  if (source === 5) return '同花顺';
+  if (source === 6) return '东财';
+  if (source === 7) return 'KPL';
+  return '';
+}
 function renderStrategyMainlinesHTML(d) {
   const lines = (d && d.mainlines) || [];
   const usingFallbackDay = d && d.requestedDay && d.day && d.requestedDay !== d.day;
@@ -11630,6 +11637,10 @@ function renderStrategyMainlinesHTML(d) {
       ${metricCell(Number(m.netInflow) < 0 ? '净流出' : '净流入', m.netInflow != null ? fmtInflow(m.netInflow) : '--', inflowClass)}
     </div>`;
     const driver = strategyMainlineTopScorePart(m.scoreParts);
+    const inflowSource = strategyBoardSourceLabel(m.netInflowZsType);
+    const inflowTrace = m.netInflowBoard
+      ? ` · 资金口径 ${escapeHTML(m.netInflowBoard)}${inflowSource ? `·${escapeHTML(inflowSource)}` : ''}（单板）`
+      : '';
     const scoreMeta = strategyMainlineScoreMetaHTML(m);
     const leadersHtml = strategyMainlineLeadersHTML(m);
     const nearRows = Array.isArray(m.nearLimitStocks) && m.nearLimitStocks.length ? m.nearLimitStocks : (m.risingStocks || []);
@@ -11714,7 +11725,7 @@ function renderStrategyMainlinesHTML(d) {
             ${combinedBadge}
             ${newThemeBadge}
           </div>
-          <div class="ml-sub">${escapeHTML(driver.label)} · ${Number(m.boardCount) || 0}个共振板块${m.netInflowBoard ? ` · 资金板块 ${escapeHTML(m.netInflowBoard)}` : ''}</div>
+          <div class="ml-sub" title="重叠概念板块的资金不相加，采用单个代表板块值">${escapeHTML(driver.label)} · ${Number(m.boardCount) || 0}个共振板块${inflowTrace}</div>
         </div>
         <div class="ml-score-wrap">
           ${m.predictScore != null ? `<div class="ml-score" title="只含前瞻信号:大涨扩散/冲板/普涨广度/动能/历史主因/资金"><b>${Number(m.predictScore || 0).toFixed(0)}</b><span>预判分</span></div>` : ''}
