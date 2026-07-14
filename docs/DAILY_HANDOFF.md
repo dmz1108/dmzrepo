@@ -4620,3 +4620,32 @@ Deployment:
 
 Notes for next agent:
 - 确认状态是管理员可变状态，不属于冻结快照历史事实；以后不得把它永久烘焙进快照后停止动态读取。
+
+## 2026-07-14 - Codex - 部署 PR #53 与 PR #59 主线确认修复
+
+Changed:
+- 复核 `f7bae7a` 后确认 PR #59 已由外部合并至 `main@89f96988dfc00801c5befce8376c322743c45a1b`；本次没有重复创建 PR。
+- 从确认后的 `main` 同时部署 `kpl-stats-server.js` 与 `kpl-dashboard_17_apple.html`，因此云端也已包含此前仅合并未部署的 PR #53 复盘卡片日期切换功能。
+- 冻结/缓存主线响应现按读取时的管理员确认记录动态叠加；确认/取消失败在行情页显示明确错误，不改写历史快照。
+
+Files:
+- `kpl-stats-server.js`（云端部署）
+- `kpl-dashboard_17_apple.html`（云端部署）
+- `docs/DAILY_HANDOFF.md`
+- 云端 `panda-cloud-ops-2026-06-19.md` 与 `_cloud-change-log-20260705.md`
+
+Validated:
+- 部署前云端后端与行情页 SHA-256 精确匹配 PR #55/#57 已部署基线，无未回填云端漂移；暂存文件、部署文件哈希与 `main@89f9698` 一致，云端 `node --check` 通过。
+- 复核阶段通过主线确认专项、QI 主线状态、指标口径、同花顺资金口径、静态缓存/认证权限专项测试及行情页内联脚本编译；`git diff --check` 通过。
+- 公网 `/health`、`/kpl`、`/admin` 与主页均为 HTTP 200；公网 `/kpl` SHA-256 与 Git 主线一致。
+- 2026-07-14 冻结 `/api/strategy-mainlines` 返回 `confirmedMainline=PCB`，且恰有一条 PCB 主线 `isConfirmedMainline=true`；AI 只读策略接口返回同一确认主题。
+- 未登录认证请求被拒绝，管理员用户接口返回 HTTP 403；登录、注册、找回密码入口及普通用户管理员权限门控仍在。
+
+Deployment:
+- 回退备份：`C:\PandaDashboard\_deploy-backups\pr53-pr59-20260714-074509`。
+- 部署 SHA-256：`kpl-stats-server.js=855AD06AD9C2834601294F334E6AA283EECB7EB5D2E9C9AB5AE00DD358E2EB0D`；`kpl-dashboard_17_apple.html=9BFD4167858AB4C12C47824CBB4E03016351398DDEBDB213C1ED2B89FEA96A6C`。
+- 仅重启计划任务 `Panda Dashboard Server`，PID `2864 -> 14484`；未重启 Caddy、娱乐服务或公司端 L2 worker。
+- 未修改确认记录、冻结快照、预测档案、L2 任务、业务数据库、用户数据或运行时配置；两份云端运维日志已追加且未记录任何敏感值。
+
+Notes for next agent:
+- 云端运行代码现与 `main@89f9698` 的两份部署文件一致，PR #53 与 PR #59 均已落地；确认状态继续视为可变管理员状态，读取时动态叠加。
