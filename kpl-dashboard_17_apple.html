@@ -11839,6 +11839,7 @@ function renderMainlineReviewHTML(d) {
   // 主线命中徽标(口径:盘后涨停主因家族格局,非"整个市场实际主线"):
   // ✓=预判命中(并列)第一家族;△=第一家族在预判前三;✗=脱靶;待盘后验证=当日盘中;—=盘后数据不完整
   const hitCell = (r) => {
+    if (r.noMainline) return '<span class="mlr-hit na" title="候选方向没有L2预期明星或明星确认，不计主线命中率">未形成</span>';
     if (r.pendingReview) return '<span class="mlr-hit wait" title="当日尚未收盘,待盘后验证,不计命中率">待盘后验证</span>';
     if (r.mainlineHitTop1 == null) {
       const miss = Number(r.mainReasonMissingCount);
@@ -11881,6 +11882,7 @@ function renderMainlineReviewHTML(d) {
   };
   // 行级结果配色(与 hitCell 同口径):驱动左侧强调条颜色,一眼可扫命中/前三/脱靶/待验证
   const rowHitClass = (r) => {
+    if (r.noMainline) return 'hit-na';
     if (r.sampleValid === false) return 'hit-invalid';
     if (r.pendingReview) return 'hit-wait';
     if (r.mainlineHitTop1 == null) return 'hit-na';
@@ -11896,15 +11898,15 @@ function renderMainlineReviewHTML(d) {
     return `<div class="mlr-row ${rowHitClass(r)}${r.sampleValid === false ? ' invalid' : ''}">
     <div class="mlr-l1">
       <span class="mlr-day">${escapeHTML(String(r.day || '').slice(5))}</span>
-      <span class="mlr-pred"><span class="mlr-theme">${escapeHTML(r.theme || '')}${r.confirmed ? '<i title="管理员确认的当日主线">✔</i>' : ''}</span>${r.phase ? `<em class="mlr-phase" title="预判冻结时点">${escapeHTML(r.phase)}</em>` : ''}</span>
+      <span class="mlr-pred"><span class="mlr-theme">${r.noMainline ? '今日无主线' : `${escapeHTML(r.theme || '')}${r.confirmed ? '<i title="管理员确认的当日主线">✔</i>' : ''}`}</span>${r.phase ? `<em class="mlr-phase" title="预判冻结时点">${escapeHTML(r.phase)}</em>` : ''}</span>
       <span class="mlr-arrow" aria-hidden="true">→</span>
       <span class="mlr-result">${hitCell(r)}${actualCell(r)}</span>
       ${sampleTag(r)}
     </div>
-    <div class="mlr-l2">
+    <div class="mlr-l2">${r.noMainline ? '<span class="mlr-na" title="盘中候选仍保留在预测档案中">候选未通过 L2 明星验证，不计正式主线</span>' : `
       <span class="mlr-slot"><span class="mlr-label">明星</span> ${gainCell(r.star, true)}</span>
       ${leaderCells || '<span class="mlr-slot"><span class="mlr-label">龙头</span><span class="mlr-na">—</span></span>'}
-      ${expectedCell(r)}
+      ${expectedCell(r)}`}
     </div>
   </div>`;
   }).join('');

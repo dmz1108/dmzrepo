@@ -22878,6 +22878,7 @@ async function writeMainlinePredict(day, sessionPhase, mainlines, confirm) {
       key: m.familyKey || m.key || '', theme: m.theme || '', rank: m.rank || 0,
       score: m.score ?? null, predictScore: m.predictScore ?? null,
       stage: m.stage?.label || '', certainty: m.certainty?.label || '',
+      l2VerificationStatus: m.l2VerificationStatus || '',
       leader: m.mainLeader ? { code: m.mainLeader.code, name: m.mainLeader.name } : null,
       // 保存预测时点前两名龙头候选。leader 继续保留第一名以兼容旧记录/旧页面。
       leaders: (Array.isArray(m.leaders) && m.leaders.length ? m.leaders : (m.mainLeader ? [m.mainLeader] : []))
@@ -23416,6 +23417,31 @@ function strategyMainlineExpectedStarTransitions(predict, main) {
   }
   return [];
 }
+
+// schema v2 起已经保存候选的 L2 验证状态。回看里的“正式主线”只认预期明星/明星确认的
+// 正证据；unscanned、scanned-no-star、active 都仍可留在候选档案，但不能冒充正式主线。
+// 更早的旧档案没有足够字段可还原当时 L2 状态，继续按旧口径展示，避免伪造历史结论。
+function strategyMainlineReviewFormalTop(predict) {
+  const top = Array.isArray(predict?.top) ? predict.top.filter(Boolean) : [];
+  const strictL2Evidence = Number(predict?.schemaVersion || 0) >= 2 || Array.isArray(predict?.candidates);
+  if (!strictL2Evidence) return top;
+  const candidateByKey = new Map((Array.isArray(predict?.candidates) ? predict.candidates : [])
+    .filter(Boolean)
+    .map(row => [String(row?.key || row?.familyKey || '').trim(), row])
+    .filter(([key]) => key));
+  const positiveLevels = new Set(['expected', 'confirmed']);
+  return top.filter(main => {
+    const key = String(main?.key || '').trim();
+    const candidate = candidateByKey.get(key) || null;
+    const status = String(main?.l2VerificationStatus || candidate?.l2VerificationStatus || '').trim();
+    const levels = [
+      main?.star?.level,
+      ...(Array.isArray(candidate?.stars) ? candidate.stars.map(star => star?.level) : []),
+    ].map(level => String(level || '').trim()).filter(Boolean);
+    const hadExpectedTransition = strategyMainlineExpectedStarTransitions(predict, main).length > 0;
+    return status === 'qi' || levels.some(level => positiveLevels.has(level)) || hadExpectedTransition;
+  });
+}
 // 只有真实盘中阶段生成的预测才是"预判"(Codex 复审 PR#25 二审):
 // 盘前/集合竞价没有盘面信号、已收盘是答案不是预测——这三类记录展示但不计任何命中率分母。
 const STRATEGY_MAINLINE_INTRADAY_PHASES = new Set(['早盘', '上午盘', '午间休市', '午后', '尾盘']);
@@ -23470,7 +23496,9 @@ async function getStrategyMainlineReview(days = 10) {
     const sampleValid = STRATEGY_MAINLINE_INTRADAY_PHASES.has(phase);
     const sampleInvalidReason = sampleValid ? '' : (phase ? `phase:${phase}` : 'phase:unknown');
     const pendingReview = day === todayIso && !isAfterMarketClose(day);   // 当前盘中:待盘后验证
-    const main = predict.top.find(t => predict.confirmedKey && t.key === predict.confirmedKey) || predict.top[0];
+    const formalTop = strategyMainlineReviewFormalTop(predict);
+    const main = formalTop.find(t => predict.confirmedKey && t.key === predict.confirmedKey) || formalTop[0] || null;
+    const noMainline = !main;
     const [c0, c1, c3] = await Promise.all([closeMapOf(day), closeMapOf(nextDay), closeMapOf(thirdDay)]);
     const evalStock = async (stock) => {
       if (!stock?.code) return null;
@@ -23491,11 +23519,11 @@ async function getStrategyMainlineReview(days = 10) {
         win: closeGain != null ? closeGain > 0 : null,
       };
     };
-    const rawLeaders = (Array.isArray(main.leaders) && main.leaders.length ? main.leaders : (main.leader ? [main.leader] : []))
+    const rawLeaders = (Array.isArray(main?.leaders) && main.leaders.length ? main.leaders : (main?.leader ? [main.leader] : []))
       .filter(stock => stock?.code)
       .slice(0, 2);
     const [star, leaders] = await Promise.all([
-      evalStock(main.star),
+      evalStock(main?.star),
       Promise.all(rawLeaders.map(evalStock)),
     ]);
     const leader = leaders[0] || null;
@@ -23566,9 +23594,9 @@ async function getStrategyMainlineReview(days = 10) {
       .map(f => ({ theme: f.label, count: f.count, rankTier: f.rankTier }));
     const actualFirstTied = tier1.length > 1;
     let mainlineHitTop1 = null, mainlineHitTop3 = null;
-    if (actualRanking.length) {
+    if (actualRanking.length && main) {
       const tiedFirstFamilies = tier1.map(f => f.familyKey);
-      const predictedFamilies = predict.top.slice(0, 3)
+      const predictedFamilies = formalTop.slice(0, 3)
         .map(t => strategyMainlineFamilyInfo({ theme: t?.theme || '', key: t?.key || '' }).key)
         .filter(Boolean);
       const mainFamily = strategyMainlineFamilyInfo({ theme: main.theme || '', key: main.key || '' }).key;
@@ -23583,8 +23611,10 @@ async function getStrategyMainlineReview(days = 10) {
     }
     rows.push({
       day, nextDay, thirdDay,
-      theme: main.theme, confirmed: !!(predict.confirmedKey && main.key === predict.confirmedKey),
-      stage: main.stage || '', certainty: main.certainty || '',
+      theme: main?.theme || '', confirmed: !!(main && predict.confirmedKey && main.key === predict.confirmedKey),
+      stage: main?.stage || '', certainty: main?.certainty || '',
+      noMainline, noMainlineReason: noMainline ? 'no-l2-star-evidence' : '',
+      candidateThemes: noMainline ? predict.top.slice(0, 3).map(row => String(row?.theme || '')).filter(Boolean) : [],
       phase, sampleValid, sampleInvalidReason, pendingReview,
       actualTop, actualFirstTied, mainlineHitTop1, mainlineHitTop3, mainReasonMissingCount,
       star, expectedStars, leader, leaders,
@@ -23602,7 +23632,7 @@ async function getStrategyMainlineReview(days = 10) {
       expectedSealWins, expectedSealTotal,
       expectedSealRate: expectedSealTotal ? Number((expectedSealWins / expectedSealTotal * 100).toFixed(1)) : null,
     },
-    note: '回看同时统计次日最高涨幅、次日收盘涨幅和第三个后续交易日收盘涨跌幅；收盘指标来自每日收盘价库，次日最高来自复权日K。主线命中按当日盘后涨停主因家族格局评判，盘前/集合竞价/已收盘生成的记录不计分母。',
+    note: '回看只将存在L2预期明星或明星确认正证据的方向认定为正式主线；未扫描、覆盖不足或已扫描无明星的候选显示为今日无主线且不计命中率。回看同时统计次日最高涨幅、次日收盘涨幅和第三个后续交易日收盘涨跌幅；收盘指标来自每日收盘价库，次日最高来自复权日K。',
   };
 }
 
