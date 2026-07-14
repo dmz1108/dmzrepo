@@ -4465,3 +4465,24 @@ Deployment:
 Notes for next agent:
 - 盘中“候选方向”仍可在今日主线实时分析中出现；回看中的“正式主线”必须有 expected/confirmed 明星正证据，两者不要再混用。
 - 2026-07-13 的原始医药预测文件保持不变作为审计证据，展示层根据其已保存的候选状态得出“今日无主线”。
+## 2026-07-13 - Claude - P1 板块跨日污染止血(草案 PR,待 Codex 复核)
+
+Changed:
+- 起点:07-02 综合快照被证实携带 07-01 东财资金(券商 BK0711 +106.34亿=昨值)。根因:`getStrategyBoardsForDay` 默认 allowFallback=true → `resolveStrategySnapshotDay` 回退最近有快照的交易日 → `buildPayload` 对非当日(历史/重建)以 allowFallback 取到昨日板块,`saveSnapshot` 写进目标日文件名。
+- 更正:盘中实时主线路径(kpl-stats-server.js:24894,allowFallback:false+liveIfMissing)本就安全,不会拿昨日冒充今日;污染只发生在历史/重建的复合快照写入。危害是持续腐蚀历史存档与回测可比性,非实时误导。
+- 修:①`getStrategyBoardsForDay` 给每块板块标 `sourceDay`(快照读=useDay,实时=requestedDay)②`strategy-backend.buildPayload` 检测 boardsSourceDay≠day 即判 `boardsStale`,抑制板块/strong/focus指标/qiBoard(避免 QI 聚合二次回退绕回污染),落盘为诚实空档并带 `boardsSourceDay/boardsStale/boardsUnavailableReason`,绝不把回退数据当本日事实 ③新增 `tools/scan-board-snapshot-contamination.js` 离线普查:逐板 netInflow+gainPct+ztCount 联合相等(排除0/null假相等)判 suspected-stale,产出判别联合 contaminated 清单条目。
+
+Files:
+- kpl-stats-server.js(板块 sourceDay 标注,2 处)
+- strategy-backend.js(buildPayload 跨日抑制)
+- tools/scan-board-snapshot-contamination.js(新增,只读普查)
+- tests/board-snapshot-contamination.test.js(新增,14 断言)
+
+Validated:
+- node --check 三文件通过;新测试 14/14;全仓 22 个测试文件全过。
+- 未部署、未重启、未改任何现存快照文件;普查工具只读。
+
+Notes for next agent(Codex 复核):
+- 行为变更仅限「历史/重建日无自有快照」场景:原本静默显示昨日板块,现改为诚实空档 + boardsStale 标记。今日路径(allowFallback:false)不受影响。
+- 建议合并后在云端跑 `node tools/scan-board-snapshot-contamination.js --emit-manifest` 对全部历史 snapshots 普查,把命中日并入 data-quality 清单(P6 的 SNAP 层即可自动隔离)。
+- 顺带发现(未修,超出本 PR 范围):`createStrategyBackend` 第 198 行 `canRunL2Scan` 默认分支引用尚未初始化的 `isAdmin`(const TDZ),仅在未注入 canRunL2Scan 时触发;生产始终注入故不发作,建议后续把 `const isAdmin` 提到引用之前。

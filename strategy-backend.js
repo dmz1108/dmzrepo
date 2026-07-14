@@ -260,8 +260,22 @@ function createStrategyBackend(opts = {}) {
       liveRankCount: 500,
       includeBoards: focusRaw.map((b) => ({ plateId: b.plateId, zsType: b.zsType })),
     } : {};
-    const boards = (await getBoards(day, boardOptions).catch(() => []))
+    const rawBoards = (await getBoards(day, boardOptions).catch(() => []))
       .filter((b) => !isHiddenBoard(b, hidden));
+    // P1 防跨日污染:板块数据真实来源日 ≠ 目标日(getBoards 回退到最近有快照的交易日)时,
+    // 绝不把昨日板块资金当作本日事实落盘。逐行剔除:只有来源日 == 目标日的板块才算本日事实;
+    // 任何非空来源日 ≠ 目标日的板块一律剔除,并记录完整来源日集合与被剔除数量(不能只看第一个值)。
+    const boardSourceDays = [...new Set(rawBoards.map((b) => String(b?.sourceDay || '')).filter(Boolean))].sort();
+    const foreignBoards = rawBoards.filter((b) => { const s = String(b?.sourceDay || ''); return s && s !== day; });
+    const unknownBoards = rawBoards.filter((b) => !String(b?.sourceDay || ''));   // 来源日缺失:不能等同「本日来源」
+    const droppedForeignBoardCount = foreignBoards.length;
+    const unknownSourceDayCount = unknownBoards.length;
+    const foreignSourceDays = [...new Set(foreignBoards.map((b) => String(b.sourceDay)))].sort();
+    const boards = rawBoards.filter((b) => String(b?.sourceDay || '') === day);   // 仅保留确证本日来源
+    const boardsStale = droppedForeignBoardCount > 0;   // 出现任何跨日来源即判 stale(含混合来源)
+    // 完全可信 = 有数据 且 无跨日 且 无未知来源。只有此时才允许 QI 聚合,否则 getQiAggregate 会二次回退。
+    const boardsFullyTrusted = boards.length > 0 && droppedForeignBoardCount === 0 && unknownSourceDayCount === 0;
+    const boardsSourceDay = boardsStale ? (foreignSourceDays[0] || null) : (boardsFullyTrusted ? day : null);
     const map = new Map(boards.map((b) => [scopedBoardKey(b.plateId, b.zsType), b]));
     const focusIds = new Set(focusRaw.map((b) => scopedBoardKey(b.plateId, b.zsType)));
 
@@ -278,9 +292,28 @@ function createStrategyBackend(opts = {}) {
     });
     const strong = pickStrong(boards).filter((b) => !focusIds.has(scopedBoardKey(b.plateId, b.zsType)));  // 与重点关注按来源去重
     const boardsMap = listToBoardMap(boards);
+    // 只有板块数据完全可信(有数据、无跨日、无未知来源)才调 QI 聚合——否则 getQiAggregate 收到空/不足 boards
+    // 会再次以 allowFallback 回退取数,昨日 QI 会从这里绕回来。空池、全未知来源、跨日均封住此旁路。
     let qiBoard = null;
-    if (getQiAggregate) { try { qiBoard = await getQiAggregate(day, boards); } catch (e) { qiBoard = null; } }
-    return { date: day, savedAt: new Date().toISOString(), focus, strong, boards: boardsMap, qiBoard: filterQiBoard(qiBoard, hidden) };
+    if (getQiAggregate && boardsFullyTrusted) { try { qiBoard = await getQiAggregate(day, boards); } catch (e) { qiBoard = null; } }
+    return {
+      date: day,
+      savedAt: new Date().toISOString(),
+      focus,
+      strong,
+      boards: boardsMap,
+      qiBoard: filterQiBoard(qiBoard, hidden),
+      boardsSourceDay: boardsSourceDay || null,
+      boardsStale,
+      boardsFullyTrusted,                      // 完全可信才允许下游按本日事实使用
+      boardsSourceDays: boardSourceDays,       // 完整来源日集合(审计,不只第一个值)
+      foreignSourceDays,                       // 被判跨日的来源日集合
+      droppedForeignBoardCount,                // 被剔除的跨日板块数
+      unknownSourceDayCount,                   // 来源日缺失被剔除的板块数
+      boardsUnavailableReason: droppedForeignBoardCount > 0
+        ? (boards.length ? 'partial-cross-day-suppressed' : 'cross-day-fallback-suppressed')
+        : (unknownSourceDayCount > 0 ? 'unknown-source-suppressed' : ''),
+    };
   }
 
   // ---------- 快照存储 + 清理 ----------
