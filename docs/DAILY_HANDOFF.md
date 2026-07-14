@@ -4539,7 +4539,9 @@ Validated:
 - 新增专项测试覆盖细分名称、代表单板资金、来源保留、持久化成员库优先级及前端脚本编译；全仓23个测试文件全部通过，`node --check` 与 `git diff --check` 通过。
 
 Deployment:
-- 本条记录提交时仅为 GitHub 代码变更，尚未部署、未重启服务、未改运行时数据库。
+- PR #55 已合并至 `main@5e7f33ec8af735e23ee5978bb726f5932b7a739e` 并部署云端；部署前两份运行文件与基线 `main@7a08ec55` 哈希完全一致，无云端漂移。
+- 回退备份为 `C:\PandaDashboard\_deploy-backups\pr55-ths-20260714-175544`；仅重启 `Panda Dashboard Server`，PID `12756 -> 2864`，未重启 Caddy、娱乐服务或公司端 L2 worker。
+- 公网 `/health`、`/kpl`、`/admin`、主页均为 HTTP 200；同花顺 `301565` 成分接口由部署前约26秒/49只改善为0.21秒/169只；两份云端运维日志均已追加，未改运行时数据库。
 
 Notes for next agent:
 - 本次没有改同花顺原始 `zjjlr` 单位；官方原始排名中该字段按亿元返回，现有乘以 `1e8` 的转换正确。
