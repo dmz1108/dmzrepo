@@ -4697,3 +4697,33 @@ Deployment:
 
 Notes for next agent:
 - 新任务不应依赖长聊天记忆；从 `CLAUDE.md` 的任务路由进入对应 SOP。长 OCR/子任务两分钟无可见进展时必须检查并由主任务接管，不能静默等待。
+
+## 2026-07-14 - Codex - 手工补录 2026-07-14 TGB 湖南人复盘
+
+Changed:
+- 严格按 `docs/ops/TGB_HUNAN_DAILY_SOP.md` 强制刷新当天淘股吧原文和 18 张原始图片，仅采用官方白底 `@TGB湖南人` 表格 `image-01-06.png`。
+- 排除“市场连板股”重复摘要、20 行涨停炸板区、同花顺红色可视化图、回帖图、广告和二维码；按原图逐行手工录入 79 行正式 `review/tgb-hunan-structured`。
+- 原图红色板块标题确实写成字序异常的 `其热点他`，按来源忠实原则原样保留，没有擅自改写为“其他热点”。
+- 写入正式源后只强制重折 `2026-07-14` 综合主因库，没有触碰其他日期。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 仅云端运行时：`C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-07-14.json`
+- 仅云端运行时：`C:\PandaDashboard\kpl-limitup-main-reason-db\2026-07-14.json`
+- 云端 `panda-cloud-ops-2026-06-19.md` 与 `_cloud-change-log-20260705.md`
+
+Validated:
+- 官方文章：`https://www.tgb.cn/a/2tqr78PROTL`，标题 `7.14湖南人涨停复盘+晚间消息汇总`；使用图片 `image-01-06.png`。
+- 题材块：业绩 24、医药 8、机器人 7、石油化工 6、PCB板 5、半导体 3、被动元件 4、公告 3、其热点他 4、其他个股 15，合计 79。
+- 写入前在本机和云端分别对账终盘涨停池：正式 79、基准 79、missing 0、extra 0、duplicate 0、weak 0、规范化名称不一致 0。
+- 正式 TGB 源 SHA-256：`489156551d80a78166e075d09545bffca8b19d6c6c42df37108a5fa8d9738570`；重折后综合主因库 SHA-256：`2a6f55a6564b28eddea467b9720f61695fd79eab5ae5bc3aaf819074f0a359ab`。
+- 公网强制刷新 `source-view` 后，综合归纳/复盘啦/选股宝/韭研/淘股吧均为 79；TGB 覆盖 100%、主因覆盖 100%、低置信 0、`sourceErrors` 为空；公网 `/health` 为 HTTP 200。
+
+Deployment:
+- 生产运行时数据已更新；未部署应用代码，未重启任何服务，`Panda Dashboard Server` PID 保持 `7856`。
+- 回退备份：`C:\PandaDashboard\backups\tgb-hunan-manual-20260714-20260714-084735`，包含重折前综合主因库、raw manifest、官方图片和修改前云端日志；此前不存在当天正式 TGB 文件。
+- 自动 Qwen OCR 仍因服务商 `Arrearage` 被质量闸拒绝，未写任何正式行；最终正式文件全部来自人工读图和双重对账。
+- 两份云端运维日志均已更新并复读确认，未记录 Token、Cookie、密码、私钥、用户数据或管理员会话。
+
+Notes for next agent:
+- 2026-07-14 四个正式复盘源现均为 79/79。后续继续每日执行同一 SOP，不能用自动 OCR 失败结果、同花顺红图或炸板区覆盖人工正式库。
