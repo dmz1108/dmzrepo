@@ -4565,3 +4565,25 @@ Deployment:
 
 Notes for next agent:
 - PR #57 is display-only. It does not rewrite frozen snapshots or change strategy ranking, L2, prediction records, user data, or any runtime database.
+
+## 2026-07-13 - Claude - 涨停复盘:搜索个股当日未涨停时自动跳到最近涨停日
+
+Changed:
+- 需求(Owner):在涨停复盘搜个股,若当日未涨停,下方涨停明细表自动跳到该股最近一次涨停日(如搜紫光股份→跳到 7-06),搜索词保留使该股直接出现在表里。Owner 选定「自动跳」方案。
+- 实现(纯前端,kpl-dashboard_17_apple.html,仅 review 页):`loadReviewStockDetail` 拿到个股详情后调用新函数 `maybeAutoJumpToRecentLimitUp(data, day)`——仅在搜索态、该股当日未涨停(`!data.isSelectedDay`)、有更早 `data.referenceDay` 且 ≠ 当前复盘日时,设 `state.reviewDateOverride=referenceDay` 并 `refreshLimitupReviewPage()`(内部 setDatePickerValue + 重渲染)。
+- 防坑:用 `state.reviewAutoJumpKey='搜索词@最近涨停日'` 去重——手动把日期切回其它日不会被反复拽走;跳到目标日后该股当日已涨停(isSelectedDay=true)→ 不再二次跳,无循环。referenceDay/isSelectedDay 复用后端 `/api/limit-up-main-reason-db/stock` 已有字段,无接口改动。
+
+Files:
+- kpl-dashboard_17_apple.html(state 新增 reviewAutoJumpKey;新增 maybeAutoJumpToRecentLimitUp;loadReviewStockDetail 调用)
+- docs/DAILY_HANDOFF.md
+
+Validated:
+- 内联脚本 node --check 通过;dashboard 相关测试(qi-mainline-states/metric-profile/star-l2-layers/static-cache-auth-hardening)通过;全仓 22 个测试文件全过。
+- 逻辑推演(紫光 7-14 搜索→跳 7-06)稳定无循环;仅 review 页行为,不涉数据/接口/其它页。
+
+Deployment:
+- 未部署;纯前端静态改动,合并后需部署 kpl-dashboard_17_apple.html,无需重启 Node 服务。
+
+Notes for next agent(Codex 复核):
+- 重点:自动跳只在搜索态触发;reviewAutoJumpKey 去重防手动切日被反复拽;无二次跳循环。
+- 若 Owner 后续想要「点按钮跳」而非自动,改为在卡片渲染一个链接调用同一逻辑即可。

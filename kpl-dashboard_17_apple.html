@@ -9076,6 +9076,7 @@ const state = {
   reviewSourceTab: 'final',
   reviewSelectedTopic: '',
   reviewSearchTerm: '',
+  reviewAutoJumpKey: '',   // 记住已自动跳转过的「搜索词@最近涨停日」,避免手动切回时被反复拽走
   strategyData: {},
   smartPick: {},
   smartPickPublicLoads: {},
@@ -12194,10 +12195,25 @@ async function loadReviewStockDetail(code, day) {
     reviewDetailCache = { code, day, data };
     const container = document.getElementById('review-stock-detail');
     if (container && container.dataset.code === code) { container.innerHTML = renderReviewStockDetailHTML(data); applyReviewDetailOffset(); }
+    maybeAutoJumpToRecentLimitUp(data, day);
   } catch (e) {
     const container = document.getElementById('review-stock-detail');
     if (container && container.dataset.code === code) container.innerHTML = `<div style="padding:14px;color:var(--text-dim);font-size:13px;">查询失败：${escapeHTML(e.message)}</div>`;
   }
+}
+// 搜索个股且当日未涨停时,自动把复盘日切到该股最近一次涨停日,让下方明细表跳到那天(搜索词保留 → 该股即出现在表里)。
+// 只在有搜索词时触发;用「搜索词@最近涨停日」做去重键,手动切回其它日期不会被反复拽走。
+function maybeAutoJumpToRecentLimitUp(data, day) {
+  const term = String(state.reviewSearchTerm || '').trim();
+  if (!term) return;                                   // 仅在搜索态触发
+  if (!data || !data.ok || data.isSelectedDay) return; // 该股当日已涨停则无需跳
+  const ref = String(data.referenceDay || '').trim();
+  if (!ref || ref === String(day || '')) return;       // 无更早涨停日 / 已在该日
+  const jumpKey = term.toLowerCase() + '@' + ref;
+  if (state.reviewAutoJumpKey === jumpKey) return;      // 同一搜索已跳过一次,不再反复拽
+  state.reviewAutoJumpKey = jumpKey;
+  state.reviewDateOverride = ref;
+  refreshLimitupReviewPage();                           // 内部会 setDatePickerValue(ref) 并重渲染明细表
 }
 function reviewBoardCountLabel(n) {
   n = Number(n || 0);
