@@ -4781,3 +4781,29 @@ Deployment:
 Notes for next agent:
 - 生产 `strategy-backend.js` 已与 `main@ec5dec5` 一致，PR #64 无待部署文件。
 - 同花顺审计结论仍有效：382/382 是目录覆盖，不是成员名单当天复核；后续刷新机制改造需先走 AI 讨论与生产证据流程，不得把实时 `zjjlr` 资金新鲜度和成员关系新鲜度混为一谈。
+
+## 2026-07-14 - Codex - 固化 TGB 湖南人复盘只允许人工逐行转录
+
+Changed:
+- 按 Owner 最新决定，TGB 湖南人正式复盘永久改为官方原图人工逐行转录；Qwen、OCR 和其他自动视觉结果不得用于生成、补全、猜测或校验正式行。
+- 自动补源路径现在最多保存官方文章、raw manifest 和原始图片；缺少手工结构化文件时明确返回 `manual-hunan-table-required`，不会再调用视觉结构化或写正式库。
+- 原自动 TGB 视觉任务改为固定跳过；旧 `--tgb-vision-sync` 参数只保留为 raw-evidence 兼容别名，不读取 Qwen 配置、不重折综合主因库。
+- TGB SOP 固化逐题材块处理、双遍人工复核、每块累计计数、最长两分钟进度汇报、看不清即明确阻断及最终池 missing/extra/duplicate/weak 全为 0 的一致性标准。
+
+Files:
+- `CLAUDE.md`
+- `docs/ops/TGB_HUNAN_DAILY_SOP.md`
+- `kpl-stats-server.js`
+- `tests/tgb-manual-only.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 新增专项测试确认正式补源、自动任务和旧 CLI 三条生产可达路径均不读取 Qwen 配置、不调用视觉结构化、不自动写 TGB 正式库；旧视觉构建器只剩历史定义、无生产调用者。
+- TGB 人工-only、复盘源健康和细分证据索引专项测试通过；合并前全仓 26/26 测试文件全部通过，`node --check kpl-stats-server.js` 与 `git diff --check` 通过。
+
+Deployment:
+- 本条记录提交时尚未部署生产；没有修改任何 TGB 正式文件、raw evidence、综合主因库、策略数据、用户数据或运行时配置，也未重启服务。
+
+Notes for next agent:
+- 后续每日先运行 `--tgb-hunan-raw-evidence` 抓官方证据，再由 Codex 按 SOP 人工录入和完整对账；禁止恢复 Qwen/OCR 自动路径或把 raw evidence 误报为完成。
+- 这是 TGB 来源质量和写入权限收紧，不改变市场归因算法，因此本次不需要 AI 讨论组协议。

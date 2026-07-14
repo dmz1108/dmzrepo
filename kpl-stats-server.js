@@ -506,7 +506,6 @@ let autoCloseDbBackfillDay = '';
 let autoMorningMainReasonDay = '';
 let autoMorningMainReasonLastSlot = '';
 let autoTgbHunanRawEvidenceLastSlot = '';
-let autoTgbVisionLastSlot = '';
 let closeDbSyncTask = null;
 let closeDbSyncState = {
   running: false,
@@ -15294,22 +15293,16 @@ async function ensureTgbHunanStructuredArtifactDay(day, apiKey, options = {}) {
   if (imported.ok) return imported;
   const rawEvidence = await fetchTgbHunanRawEvidenceDay(isoDay, { force: !!options.force })
     .catch(err => ({ ok: false, error: err.message }));
-  const generated = rawEvidence?.ok
-    ? await buildTgbHunanStructuredArtifactFromVision(isoDay, apiKey, options)
-      .catch(err => ({ ok: false, method: 'vision-structured-image', error: err.message }))
-    : { ok: false, method: 'vision-structured-image', error: rawEvidence?.error || rawEvidence?.reason || 'TGB raw evidence is not ready' };
-  if (generated.ok) return {
-    ...generated,
-    importAttempt: imported,
-    rawEvidence,
-  };
   return {
     ok: false,
-    method: generated.method || 'raw-evidence-only',
+    method: 'manual-hunan-table-required',
+    manualRequired: true,
+    automaticStructuringDisabled: true,
     importAttempt: imported,
     rawEvidence,
-    generated,
-    error: generated.error || 'TGB exact structured source is missing. Raw official article/images were saved, but automatic structuring did not pass validation.',
+    error: rawEvidence?.ok
+      ? 'TGB official article/images were saved. Formal rows require manual transcription from the official @TGB湖南人 table and full limit-up-pool reconciliation.'
+      : `TGB raw evidence is not ready: ${rawEvidence?.error || rawEvidence?.reason || 'unknown error'}`,
   };
 }
 
@@ -20451,39 +20444,13 @@ async function runAutoTgbHunanRawEvidenceIfDue() {
   });
 }
 
-// 日常自动:TGB 湖南人复盘默认自动生成正式结构化库,避免当天综合归纳缺 TGB 源。
-// 生成后仍需要人工抽查/修正细分原因;如需临时关闭,设置 TGB_AUTO_QWEN_STRUCTURING=0。
+// TGB 正式库固定为人工逐行转录。保留空任务名仅为兼容旧调度调用，绝不读取 OCR 配置或写正式库。
 async function runAutoTgbVisionSyncIfDue() {
-  if (process.env.TGB_AUTO_QWEN_STRUCTURING === '0') return;
-  // TGB auto structuring uses the guarded Qwen OCR table parser. It only writes when
-  // OCR rows pass the limit-up-pool validation gate, so failed recognition stays out
-  // of the official source database.
-  const now = chinaNowParts();
-  const minuteOfDay = now.hour * 60 + now.minute;
-  // 两个窗口:① 晚间 17:30-23:00 同步「当天」复盘(湖南人 17点后发);② 次日早 9:20-11:30 同步「上一交易日」(兜底)。
-  const evening = minuteOfDay >= 17 * 60 + 30 && minuteOfDay <= 23 * 60;
-  const morning = minuteOfDay >= 9 * 60 + 20 && minuteOfDay <= 11 * 60 + 30;
-  if (!evening && !morning) return;
-  if (!isChinaMarketTradingDay(now.day)) return;
-  const slot = `${now.day}:${evening ? 'e' : 'm'}:${Math.floor(minuteOfDay / 20)}`;
-  if (autoTgbVisionLastSlot === slot) return;
-  autoTgbVisionLastSlot = slot;
-  const qwenConfig = await readTgbQwenOcrConfig().catch(() => ({ configured: false }));
-  if (!qwenConfig.configured) return;                            // 未配 OCR key 不跑
-  const apiKey = await readSavedApiKey();
-  const tradingDays = apiKey ? await getRecentTradingDays(now.day, apiKey, 5).catch(() => []) : [];
-  // 晚间同步当天(复盘已发);早间同步上一交易日。当天涨停池(对账基准)未就绪时 buildTgb... 会安静跳过。
-  const targetDay = evening ? now.day : ([...tradingDays].reverse().find(day => day < now.day) || previousChinaTradingDay(now.day));
-  if (!targetDay || !isChinaMarketTradingDay(targetDay)) return;
-  try { await fs.access(tgbHunanStructuredSourcePath(isoFromCompactDate(targetDay))); return; } catch {}  // 已有→幂等跳过
-  const r = await ensureTgbHunanStructuredArtifactDay(targetDay, apiKey, { force: false }).catch(err => ({ ok: false, error: err.message }));
-  if (!r.ok) { console.error(`TGB OCR auto sync ${targetDay} skipped: ${r.error || r.reason || r.message}`); return; }
-  // 折入存盘DB:非reuse重建(重跑 fetchAutoReviewSourceRows,4源读缓存文件+tgb读结构化,基本不联网),
-  // 让 tgb 进存盘 rawRows → 共识/覆盖/数据源健康 全一致
-  await ensureLimitUpMainReasonDbDay(targetDay, apiKey, true, { reuseAutoSource: false }).catch(err => {
-    console.error('TGB vision DB refold failed:', err.message);
-  });
-  console.log(`TGB OCR auto sync ${targetDay}: ${r.count || r.rows || 0} rows, folded into DB`);
+  return {
+    skipped: true,
+    manualRequired: true,
+    reason: 'tgb-manual-only',
+  };
 }
 
 async function runAutoEastmoneyConceptSyncIfDue() {
@@ -26078,7 +26045,7 @@ async function runMainReasonBackfillCli() {
   }, null, 2));
 }
 
-async function runTgbHunanRawEvidenceCli() {
+async function runTgbHunanRawEvidenceCli(options = {}) {
   const endDay = isoFromCompactDate(cliArgValue('day', chinaNowParts().day));
   const days = Math.max(1, Math.min(MAIN_REASON_SYNC_MAX_DAYS, Number(cliArgValue('days', '1')) || 1));
   const force = process.argv.includes('--force') || cliArgValue('force', '') === '1' || cliArgValue('force', '') === 'true';
@@ -26106,7 +26073,10 @@ async function runTgbHunanRawEvidenceCli() {
     endDay,
     days,
     force,
+    invokedAs: options.invokedAs || '--tgb-hunan-raw-evidence',
     ocrDisabled: true,
+    manualRequired: true,
+    automaticStructuringDisabled: true,
     officialTgbOnly: true,
     scanned: results.length,
     saved: results.filter(item => item.rawEvidence?.downloadedImageCount || item.rawEvidence?.articleCount).length,
@@ -26207,23 +26177,9 @@ async function runRefreshZt10Cli() {
 }
 
 async function runTgbVisionSyncCli() {
-  const endDay = isoFromCompactDate(cliArgValue('day', chinaNowParts().day));
-  const days = Math.max(1, Math.min(MAIN_REASON_SYNC_MAX_DAYS, Number(cliArgValue('days', '1')) || 1));
-  const apiKey = await readSavedApiKey().catch(() => '');
-  const tradingDays = apiKey ? await getRecentTradingDays(endDay, apiKey, days).catch(() => [endDay]) : [endDay];
-  const results = [];
-  for (const day of tradingDays) {
-    if (!isChinaMarketTradingDay(day)) { results.push({ day, skipped: true, reason: 'market closed' }); continue; }
-    const r = await ensureTgbHunanStructuredArtifactDay(day, apiKey, { force: true })
-      .catch(err => ({ ok: false, day, reason: err.message }));
-    if (r.ok) {
-      // 折入存盘DB(非reuse重建→tgb进rawRows→共识/覆盖/健康一致),否则只写了文件、综合归纳不生效
-      await ensureLimitUpMainReasonDbDay(day, apiKey, true, { reuseAutoSource: false }).then(() => { r.refolded = true; }).catch(e => { r.refoldError = e.message; });
-    }
-    results.push(r);
-  }
-  const ocrConfig = await readTgbQwenOcrConfig().catch(() => ({ configured: false, model: '' }));
-  console.log(JSON.stringify({ ok: results.some(r => r.ok), mode: 'tgb-vision-sync', qwenOcrConfigured: !!ocrConfig.configured, qwenOcrModel: ocrConfig.model || '', endDay, days, results }, null, 2));
+  return runTgbHunanRawEvidenceCli({
+    invokedAs: '--tgb-vision-sync (legacy alias; raw evidence only)',
+  });
 }
 
 if (process.argv.includes('--refresh-zt10')) {

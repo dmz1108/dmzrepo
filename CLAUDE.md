@@ -40,6 +40,7 @@ Then respond with a short summary of:
 - Do not copy the raw cloud server directory into GitHub.
 - For strategy attribution, leader scoring, star-stock, or historical repair work, capture and replay a filtered production evidence case before changing code. Synthetic tests alone are insufficient.
 - Never put the AI read-only token or captured evidence JSON in Git. Record only safe request parameters, evidence hashes, completeness, and conclusions.
+- TGB 湖南人复盘只允许官方原图人工逐行转录；禁止使用 Qwen、OCR 或其他自动视觉结果生成、补全或校验正式行。自动流程最多保存原文和图片证据。
 - Do not perform a broad rewrite of the frontend structure. Work inside the current files and patterns unless the user explicitly asks for a structural rebuild.
 - For homepage work, edit `Qi/qi-home.jsx`, then run `node Qi/build-home.js`.
 - Do not maintain `Qi/qi-home.compiled.js` manually.
