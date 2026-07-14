@@ -20,7 +20,6 @@ function makeBackend(boardsByDay) {
     getBoards: async (day) => boardsByDay(day),
     getQiAggregate: async () => ({ day: TODAY, leaders: [{ code: '000001' }] }),
     isAdmin: () => false,
-    canRunL2Scan: () => false,   // 注入以避开 createStrategyBackend 的 isAdmin TDZ(生产始终注入,故不触发)
   });
 }
 

@@ -195,6 +195,7 @@ function createStrategyBackend(opts = {}) {
   const getBoardRealtimeStocks = opts.getBoardRealtimeStocks || getBoardStocks;
   const l2FocusScanner = opts.l2FocusScanner || null;
   const localL2TaskQueue = opts.localL2TaskQueue || null;
+  const isAdmin = opts.isAdmin || (() => false);
   const canRunL2Scan = typeof opts.canRunL2Scan === 'function' ? opts.canRunL2Scan : isAdmin;
   const canReadL2Scan = typeof opts.canReadL2Scan === 'function' ? opts.canReadL2Scan : canRunL2Scan;
   // 逐笔统计适配器：(code, day, minAmount) -> { activeBuy, passiveBuy, activeSell, passiveSell }
@@ -204,7 +205,6 @@ function createStrategyBackend(opts = {}) {
   // QI 龙头作战室聚合：(day, boards) -> { day, prevDay, total, newCount, leaders:[...] }
   // 不注入 = 不下发 qiBoard，前端会用各板块 qiLeaders 客户端兜底聚合。
   const getQiAggregate = typeof opts.getQiAggregate === 'function' ? opts.getQiAggregate : null;
-  const isAdmin = opts.isAdmin || (() => false);
   const nowParts = opts.nowParts || defaultNowParts;
   const SMART_PICK_RATIO = opts.smartPickRatio || 1.5;
 
