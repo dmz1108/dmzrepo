@@ -5050,3 +5050,31 @@ Deployment:
 Notes for next agent:
 - 部署后成功标准：`realtime=true`、`cacheState=fresh`、`realtimeMetricCount` 约 35-40、总目录仍约 382，目录接口和今日实时连续请求维持亚秒级。
 - 如果未来策略需要捕捉“涨幅不在前 40 但资金异常流入”的板块，应另加少量按资金排序的候选页，不能恢复每分钟全 39 页抓取。
+
+## 2026-07-15 - Codex - 完成同花顺性能部署与现网验收
+
+Changed:
+- PR #73、#74、#75、#76 均已合并至 `main`；最终生产版本为 `main@a8b7835`，包含同花顺热缓存、上游限流适配、Node 24 部署兼容和强势候选窗口。
+- 受保护 workflow run `29385047147` 只部署 `kpl-stats-server.js`，重启主服务并通过本机健康检查；部署器自动更新两份云端运维日志。
+
+Files:
+- 云端 `C:\PandaDashboard\kpl-stats-server.js`
+- 云端 `C:\PandaDashboard\ths-concepts-db\realtime-cache.json`（运行时自动生成，不入 Git）
+- 云端 `panda-cloud-ops-2026-06-19.md` 与 `_cloud-change-log-20260705.md`
+- Git `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 热缓存于启动后约 1.83 秒形成：`day=2026-07-15`、`realtime=true`、`cacheState=fresh`、总目录 382、实时指标覆盖 294、`lastError` 为空。
+- 同花顺目录连续三次为 0.068/0.073/0.075 秒；改动前冷请求约 22.76 秒。
+- 今日实时同花顺连续两次为 0.143/0.069 秒；改动前缓存过期后的首请求约 26.65 秒。
+- 策略接口连续两次为 0.064/0.059 秒，返回当日 2 条主线且 `staleness=fresh`；健康接口 HTTP 200。
+- 自动预热随后约 2.94 秒完成下一轮，页面请求始终保持约 0.06-0.09 秒，没有再次暴露后台抓取耗时。
+
+Deployment:
+- 生产已变更并重启 `Panda Dashboard Server`；最终备份目录为 `C:\PandaDashboard\_deploy-backups\github-29385047147-1`。
+- 最终 workflow：https://github.com/dmz1108/dmzrepo/actions/runs/29385047147 。
+- 首次 run `29384113774` 在替换/停服前因 Node 24 拒绝 `.tmp` 扩展退出；没有改变生产文件。后续成功 run 均按清单备份、部署、健康检查并清理暂存文件。
+
+Notes for next agent:
+- 同花顺性能任务已完成。后续不要恢复 30 秒阻塞式全 39 页刷新，也不要把并发提高到 4 以上。
+- 监控以 `/api/ths-concepts/status` 的 `realtime` 为准；若 `lastError` 非空，保留同日完整缓存并检查上游，不得用昨日指标冒充今日。
