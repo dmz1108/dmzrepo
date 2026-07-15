@@ -143,6 +143,27 @@ function normalizeRestoredJob(job) {
   return copy;
 }
 
+function hasCompletePersistedResult(job) {
+  const total = Number(job?.total || 0);
+  const scanned = Number(job?.scanned || 0);
+  const expectedCodes = new Set((Array.isArray(job?.stocks) ? job.stocks : [])
+    .map(stock => String(stock?.code || '').replace(/\D/g, '').slice(0, 6))
+    .filter(Boolean));
+  const results = Array.isArray(job?.results) ? job.results : [];
+  const resultCodes = new Set(results
+    .map(row => String(row?.code || row?.dm || row?.symbol || '').replace(/\D/g, '').slice(0, 6))
+    .filter(Boolean));
+  const metrics = job?.metrics || {};
+  return total > 0 &&
+    scanned >= total &&
+    expectedCodes.size >= total &&
+    [...expectedCodes].every(code => resultCodes.has(code)) &&
+    results.length >= total &&
+    Number(metrics.resultRows || 0) >= total &&
+    Number(metrics.rowsWithPrice || 0) >= total &&
+    Number(metrics.rowsWithAllBuckets || 0) >= total;
+}
+
 function workerJob(job) {
   return {
     jobId: job.jobId,
@@ -301,14 +322,29 @@ class LocalL2TaskQueue {
           if (!job) continue;
           const existing = this.jobs.get(job.jobId);
           if (existing && String(existing.updatedAt || '') > String(job.updatedAt || '')) continue;
-          if (job.status === 'queued' || job.status === 'running') {
-            job.note = `${job.note || '本机计算任务'}；服务重启后已从落盘结果恢复，等待重新发起扫描`;
+          const unfinished = job.status === 'queued' || job.status === 'running';
+          if (unfinished && hasCompletePersistedResult(job)) {
+            job.status = 'done';
+            job.scanned = job.total;
+            job.endedAt = job.endedAt || job.updatedAt || payload?.savedAt || new Date().toISOString();
+            job.error = '';
+            job.note = '本机计算结果已完整落盘；服务重启时自动恢复为完成';
+          } else if (unfinished) {
+            job.status = 'queued';
+            job.startedAt = '';
+            job.endedAt = '';
+            job.error = '';
+            job.note = '服务重启后已从落盘结果恢复并重新排队';
           }
           this.jobs.set(job.jobId, job);
           const key = latestJobKey(job.plateId, job.day);
           const existingLatest = this.jobs.get(this.latestByPlate.get(key));
           if (!existingLatest || String(job.createdAt || job.updatedAt || '') >= String(existingLatest.createdAt || existingLatest.updatedAt || '')) {
             this.latestByPlate.set(key, job.jobId);
+          }
+          if (unfinished) {
+            if (job.status === 'queued' && !this.queue.includes(job.jobId)) this.queue.push(job.jobId);
+            this.persistJob(job);
           }
           restored += 1;
         }
@@ -535,4 +571,4 @@ function createLocalL2TaskQueue(options = {}) {
   return new LocalL2TaskQueue(options);
 }
 
-module.exports = { createLocalL2TaskQueue, DEFAULT_THRESHOLDS };
+module.exports = { createLocalL2TaskQueue, DEFAULT_THRESHOLDS, isExcludedL2StockCode };

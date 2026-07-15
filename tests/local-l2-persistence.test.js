@@ -132,6 +132,44 @@ try {
   assert.equal(restoredSuccessful.results[0].thresholds['10000000'].activeBuy, 350000000, '恢复后有效任务五档资金应完整');
   assert.equal(restoredSuccessful.results[0].price, 10.2, '恢复后有效任务现价应完整');
 
+  const recoverRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'panda-l2-recover-'));
+  try {
+    const beforeRestart = createLocalL2TaskQueue({ token, batchSize: 2, persistDir: recoverRoot, persistDays: 30 });
+    const completeRunning = beforeRestart.start({
+      plateId: 'BK_COMPLETE', boardName: '完整结果板块', day: '2026-07-15',
+      stocks: [{ code: '600010', name: '完整结果股', gainPct: 6, price: 12, priceSource: 'board-realtime' }],
+    });
+    beforeRestart.claim({ token, workerId: 'worker-recover' });
+    beforeRestart.update({
+      token, jobId: completeRunning.jobId, scanned: 1,
+      results: [{
+        code: '600010', name: '完整结果股', gainPct: 6,
+        thresholds: {
+          '500000': th(1, 1, 1, 1),
+          '3000000': th(1, 1, 1, 1),
+          '5000000': th(1, 1, 1, 1),
+          '8000000': th(1, 1, 1, 1),
+          '10000000': th(1, 1, 1, 1),
+        },
+      }],
+    });
+    assert.equal(beforeRestart.get(completeRunning.jobId).status, 'running', '模拟 worker 已回完整结果但漏发 done');
+
+    const incompleteQueued = beforeRestart.start({
+      plateId: 'BK_PENDING', boardName: '待续扫板块', day: '2026-07-15',
+      stocks: [{ code: '600011', name: '待续扫股', gainPct: 5.5, price: 8, priceSource: 'board-realtime' }],
+    });
+
+    const afterRestart = createLocalL2TaskQueue({ token, batchSize: 2, persistDir: recoverRoot, persistDays: 30 });
+    assert.equal(afterRestart.get(completeRunning.jobId).status, 'done', '完整落盘的 running 任务应在重启时恢复为 done');
+    assert.match(afterRestart.get(completeRunning.jobId).note, /自动恢复为完成/, '自动完成应保留可审计说明');
+    assert.equal(afterRestart.status().pending, 1, '未完成任务应在重启后重新入队');
+    const reclaimed = afterRestart.claim({ token, workerId: 'worker-recover-2' });
+    assert.equal(reclaimed.job.jobId, incompleteQueued.jobId, '重启后 worker 应能重新领取未完成任务');
+  } finally {
+    fs.rmSync(recoverRoot, { recursive: true, force: true });
+  }
+
   console.log('ALL LOCAL-L2-PERSISTENCE CHECKS PASSED');
 } finally {
   fs.rmSync(tempRoot, { recursive: true, force: true });
