@@ -5678,3 +5678,31 @@ Validated:
 Notes for next agent:
 - 缓存作用域仅限成对构建;历史/诊断/盘后复核路径不进该作用域,不受影响。
 - 若未来把两套预测拆到不同请求(非并行),该缓存自然失效退回真读,无副作用。
+
+## 2026-07-15 - Claude - #88 二审三项修复(动能隔离/预测按源/暂缺语义)
+
+Changed(Codex 二审 head b2b9eba 提出,已逐项修复并同步最新 main):
+- P1 动能采样按来源隔离:strategyMainlineTrackTrend 之前按 familyKey 存全局采样,东财/同花顺
+  同题材共用键→先跑一边写基线、另一边拿它算假 delta,串改两套分数排名。augmentPrediction 增
+  trendKeyPrefix,调用点按 'zs'+activeBoardZsTypes 组装(zs6::/zs5:: 各一套)。
+- P1 盘中预测/回看按来源落库:不再把跨源并集当预测真值。writeMainlinePredictBySource 存
+  bySource 两块(schema v3),同题材两份分块不互相覆盖、各源第2名保留;顶层兼容层=东财单源。
+  getStrategyMainlineReview 按 bySource 分源评各自第1主线命中,row.bySource + stats.bySource。
+- P2 区分"源不可用"与"源可用但无合格主线":slim available=ok(含有效零结果),新增
+  hasMainlines;前端有 mainlinesBySource 不走单列空态早退,双栏三态(有主线/无合格主线/暂缺)。
+
+Files:
+- kpl-stats-server.js(trackTrend 键/augment/两套预测落库+回看/slim 语义/AI compact)
+- kpl-dashboard_17_apple.html(空态早退守卫 + renderColumn 三态)
+- tests/strategy-two-source-mainlines.test.js(动能隔离真实回归 + 有效零结果 + 前端三态)
+- tests/predict-records.test.js(同题材双源重复 + 两边第2名)
+- tests/leader-pool-debug.test.js(augment 新签名)
+
+Validated:
+- node --check 通过;前端内联脚本可编译;全仓 36 个测试文件全绿。
+- 已 rebase 到最新 main(2f45121),DAILY_HANDOFF 冲突按时间线保留双方。
+
+Notes for next agent:
+- 回看 star/leader 封板胜率暂仍走主口径(顶层=东财单源);per-source 的封板胜率数据已在
+  bySource.*.starTransitions 落库,如需分源封板统计可后续扩展 reader。
+- 生产证据 bundleSha256=c5acd5e9…f654f60c(2026-07-15)不变。等 Codex 三审。
