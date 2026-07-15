@@ -31,6 +31,7 @@ const numOrNull = value => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 const chinaNowParts = () => ({ day: '2026-07-15' });
+const THS_CONCEPT_REALTIME_MAX_PAGES = 4;
 let thsConceptBoardsRealtimeCache = null;
 let thsConceptBoardsRealtimeTask = null;
 let thsConceptBoardsRealtimeState = {};
@@ -70,6 +71,9 @@ assert(fetchSource.includes("if (meta.cacheState === 'stale')")
 assert(freshSource.includes('THS_CONCEPT_PAGE_CONCURRENCY'), 'THS page fetch concurrency is centrally bounded');
 assert(src.includes("Math.min(4, Number(process.env.THS_CONCEPT_PAGE_CONCURRENCY) || 4)"),
   'THS upstream concurrency never exceeds the previously stable four requests');
+assert(src.includes('THS_CONCEPT_REALTIME_MAX_PAGES')
+  && freshSource.includes('Math.min(sourcePageCount, THS_CONCEPT_REALTIME_MAX_PAGES)'),
+  'realtime refresh fetches only the bounded top-gain page window');
 assert(freshSource.includes('const firstFailures = pageResults.filter')
   && freshSource.includes('mapLimit(firstFailures.map(result => result.page), 1')
   && freshSource.includes('thsCookieCache = null'),
