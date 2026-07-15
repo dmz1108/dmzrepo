@@ -4834,6 +4834,40 @@ Deployment:
 Notes for next agent:
 - 生产后端已与 `main@c8c6c41` 一致，PR #66 无待部署文件。后续 TGB 每日复盘必须保持人工逐行、逐块计数、双遍复核和完整终盘池对账标准。
 
+## 2026-07-14 - Codex - Claude 管理员生产运维通道
+
+Changed:
+- 为 Claude 建立独立的生产 SSH 身份；公钥已登记到云端，私钥仅进入 GitHub `production` 加密环境，未写入聊天、Git 或普通环境变量。
+- 新增仅允许从 `main` 手动触发的生产工作流。操作脚本必须位于 `ops/production/`、固定 SHA-256，并经过 GitHub `production` 环境人工批准后才会以管理员身份执行。
+- 新增管理员权限自检、主服务重启、基于已批准 `main` 源码归档的备份/部署/健康检查/自动回退脚本；特殊数据库维护通过合并到 `main` 的日期化请求脚本执行。
+- 新增 Claude 生产权限使用、审计和紧急撤销说明。
+
+Files:
+- `.github/workflows/production-ops.yml`
+- `ops/production/verify-access.ps1`
+- `ops/production/restart-main.ps1`
+- `ops/production/deploy-from-main.ps1`
+- `ops/production/manifests/example.json`
+- `ops/production/requests/README.md`
+- `docs/ops/CLAUDE_PRODUCTION_ACCESS.md`
+- `tests/production-ops-workflow.test.js`
+- `CLAUDE.md`
+- `docs/COLLABORATION_WORKFLOW.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Claude 专用密钥已实测可通过云端 SSH 管理入口登录为 Administrator；项目目录写入/删除、三个运行时数据目录读取、Node 与主服务计划任务可见性均通过。
+- 三个 PowerShell 运维脚本均通过云端 Windows PowerShell 语法解析；`tests/production-ops-workflow.test.js` 和 YAML 解析通过。
+- GitHub `production` 环境只允许 `main`，配置 Owner 必审和单任务并发锁；SSH 主机指纹固定，checkout action 使用提交 SHA 固定。
+- 仓库和输出未包含私钥、Token、Cookie、密码或运行时数据库。
+
+Deployment:
+- 云端仅增加独立 SSH 公钥并保留修改前 authorized-keys 备份；未部署网站代码、未重启服务、未修改业务数据库。
+- GitHub `production` 环境已保存加密 SSH 凭据和固定主机指纹；工作流合并后仍需执行一次 `verify-access` 端到端验收。
+
+Notes for next agent:
+- Claude 获得的是完整但可审计的管理员执行能力，不应索取私钥。每次生产操作先把脚本/manifest 合并进 `main`，固定脚本 SHA，然后触发工作流并等待 Owner 批准。
+
 ## 2026-07-14 - Codex - 落地 DreamerQi 次级页面 1 号编辑社区方案
 
 Changed:

@@ -1,0 +1,167 @@
+name: DreamerQi Production Operations
+
+run-name: production ${{ inputs.script_path }} at ${{ github.sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      script_path:
+        description: Tracked PowerShell operation under ops/production
+        required: true
+        default: ops/production/verify-access.ps1
+        type: string
+      expected_sha256:
+        description: SHA-256 of the exact script on main
+        required: true
+        type: string
+      manifest_path:
+        description: Optional tracked JSON manifest under ops/production
+        required: false
+        default: ''
+        type: string
+      confirmation:
+        description: Type RUN_PRODUCTION
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dreamerqi-production-operations
+  cancel-in-progress: false
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+
+    steps:
+      - name: Check out approved main
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Validate approved operation
+        id: validate
+        shell: bash
+        env:
+          SCRIPT_PATH: ${{ inputs.script_path }}
+          EXPECTED_SHA256: ${{ inputs.expected_sha256 }}
+          MANIFEST_PATH: ${{ inputs.manifest_path }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo "Production operations must run from main" >&2; exit 1; }
+          [[ "$CONFIRMATION" == "RUN_PRODUCTION" ]] || { echo "Confirmation phrase mismatch" >&2; exit 1; }
+          [[ "$SCRIPT_PATH" =~ ^ops/production/[A-Za-z0-9._/-]+\.ps1$ ]] || { echo "Invalid script path" >&2; exit 1; }
+          [[ "$SCRIPT_PATH" != *".."* ]] || { echo "Parent traversal is forbidden" >&2; exit 1; }
+          git ls-files --error-unmatch "$SCRIPT_PATH" >/dev/null
+          [[ ! -L "$SCRIPT_PATH" ]] || { echo "Symlink operations are forbidden" >&2; exit 1; }
+          [[ $(wc -c < "$SCRIPT_PATH") -le 262144 ]] || { echo "Operation script is too large" >&2; exit 1; }
+          [[ "$EXPECTED_SHA256" =~ ^[A-Fa-f0-9]{64}$ ]] || { echo "Expected SHA-256 is invalid" >&2; exit 1; }
+          actual_sha=$(sha256sum "$SCRIPT_PATH" | awk '{print $1}')
+          [[ "${actual_sha,,}" == "${EXPECTED_SHA256,,}" ]] || { echo "Operation script SHA-256 mismatch" >&2; exit 1; }
+          if [[ -n "$MANIFEST_PATH" ]]; then
+            [[ "$MANIFEST_PATH" =~ ^ops/production/[A-Za-z0-9._/-]+\.json$ ]] || { echo "Invalid manifest path" >&2; exit 1; }
+            [[ "$MANIFEST_PATH" != *".."* ]] || { echo "Manifest traversal is forbidden" >&2; exit 1; }
+            git ls-files --error-unmatch "$MANIFEST_PATH" >/dev/null
+            jq -e . "$MANIFEST_PATH" >/dev/null
+          fi
+          remote_script="dreamerqi-op-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.ps1"
+          remote_archive="dreamerqi-source-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.zip"
+          git archive --format=zip --output="$RUNNER_TEMP/$remote_archive" "$GITHUB_SHA"
+          echo "script_sha=$actual_sha" >> "$GITHUB_OUTPUT"
+          echo "remote_script=$remote_script" >> "$GITHUB_OUTPUT"
+          echo "remote_archive=$remote_archive" >> "$GITHUB_OUTPUT"
+          echo "Approved commit: $GITHUB_SHA"
+          echo "Approved script: $SCRIPT_PATH"
+          echo "Approved script SHA-256: $actual_sha"
+          echo "Manifest: ${MANIFEST_PATH:-none}"
+
+      - name: Configure encrypted SSH identity
+        shell: bash
+        env:
+          SSH_KEY: ${{ secrets.DREAMERQI_CLAUDE_OPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DREAMERQI_CLOUD_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_KEY" > "$HOME/.ssh/dreamerqi_ops"
+          chmod 600 "$HOME/.ssh/dreamerqi_ops"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Verify administrator connection
+        shell: bash
+        env:
+          HOST: ${{ secrets.DREAMERQI_CLOUD_HOST }}
+          PORT: ${{ secrets.DREAMERQI_CLOUD_PORT }}
+          USER: ${{ secrets.DREAMERQI_CLOUD_USER }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -i "$HOME/.ssh/dreamerqi_ops" -p "$PORT" "$USER@$HOST" whoami
+
+      - name: Upload approved script and source archive
+        shell: bash
+        env:
+          HOST: ${{ secrets.DREAMERQI_CLOUD_HOST }}
+          PORT: ${{ secrets.DREAMERQI_CLOUD_PORT }}
+          USER: ${{ secrets.DREAMERQI_CLOUD_USER }}
+          SCRIPT_PATH: ${{ inputs.script_path }}
+          REMOTE_SCRIPT: ${{ steps.validate.outputs.remote_script }}
+          REMOTE_ARCHIVE: ${{ steps.validate.outputs.remote_archive }}
+        run: |
+          set -euo pipefail
+          scp -q -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -i "$HOME/.ssh/dreamerqi_ops" -P "$PORT" "$SCRIPT_PATH" \
+            "$USER@$HOST:C:/Windows/Temp/$REMOTE_SCRIPT"
+          scp -q -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -i "$HOME/.ssh/dreamerqi_ops" -P "$PORT" "$RUNNER_TEMP/$REMOTE_ARCHIVE" \
+            "$USER@$HOST:C:/Windows/Temp/$REMOTE_ARCHIVE"
+
+      - name: Execute approved production operation
+        shell: bash
+        env:
+          HOST: ${{ secrets.DREAMERQI_CLOUD_HOST }}
+          PORT: ${{ secrets.DREAMERQI_CLOUD_PORT }}
+          USER: ${{ secrets.DREAMERQI_CLOUD_USER }}
+          REMOTE_SCRIPT: ${{ steps.validate.outputs.remote_script }}
+          REMOTE_ARCHIVE: ${{ steps.validate.outputs.remote_archive }}
+          SCRIPT_SHA: ${{ steps.validate.outputs.script_sha }}
+          MANIFEST_PATH: ${{ inputs.manifest_path }}
+        run: |
+          set -euo pipefail
+          launcher="$RUNNER_TEMP/launcher.ps1"
+          cat > "$launcher" <<EOF
+          \$ErrorActionPreference = 'Stop'
+          \$env:DREAMERQI_OPS_ACTOR = '$GITHUB_ACTOR'
+          \$env:DREAMERQI_OPS_COMMIT = '$GITHUB_SHA'
+          \$env:DREAMERQI_OPS_RUN_ID = '$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT'
+          \$env:DREAMERQI_OPS_SCRIPT_SHA256 = '$SCRIPT_SHA'
+          \$env:DREAMERQI_OPS_MANIFEST_PATH = '$MANIFEST_PATH'
+          \$env:DREAMERQI_OPS_SOURCE_ARCHIVE = 'C:\Windows\Temp\$REMOTE_ARCHIVE'
+          & 'C:\Windows\Temp\$REMOTE_SCRIPT'
+          EOF
+          encoded=$(iconv -f UTF-8 -t UTF-16LE "$launcher" | base64 -w 0)
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -i "$HOME/.ssh/dreamerqi_ops" -p "$PORT" "$USER@$HOST" \
+            "powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand $encoded"
+
+      - name: Remove staged production files
+        if: always()
+        shell: bash
+        env:
+          HOST: ${{ secrets.DREAMERQI_CLOUD_HOST }}
+          PORT: ${{ secrets.DREAMERQI_CLOUD_PORT }}
+          USER: ${{ secrets.DREAMERQI_CLOUD_USER }}
+          REMOTE_SCRIPT: ${{ steps.validate.outputs.remote_script }}
+          REMOTE_ARCHIVE: ${{ steps.validate.outputs.remote_archive }}
+        run: |
+          set +e
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -i "$HOME/.ssh/dreamerqi_ops" -p "$PORT" "$USER@$HOST" \
+            "powershell -NoProfile -Command \"Remove-Item -LiteralPath 'C:\Windows\Temp\$REMOTE_SCRIPT','C:\Windows\Temp\$REMOTE_ARCHIVE' -Force -ErrorAction SilentlyContinue\""
