@@ -5570,5 +5570,32 @@ Deployment:
 
 Notes for next agent:
 - 独立复核应使用同一证据参数和哈希，重点挑战“完整 running 自动转 done”的五项条件与“排除代码不进覆盖分母”的边界。
-- 合并部署后主服务重启会把 50/50 肝炎任务恢复为 `done`，未完成旧任务重新入队；公司 worker 仍需在线才能消费 pending。
+- 合并部署后主服务重启会把 50/50 肝炎任务恢复为 `done`；只有中国时区当天的残缺任务会重新入队，公司 worker 仍需在线才能消费 pending。
 - 湖南人自动任务无需用户每天发消息或保持本任务打开，但依赖本机 Codex、网络和云端访问可用；原文未发布、图片不清或对账失败时必须停止写入并报告，不得猜测。
+
+## 2026-07-15 - Codex - 收敛 PR103 的 L2 重启续扫日期
+
+Changed:
+- 接受 Claude 对 PR103 的 P2 阻断：30 天是持久化记录保留期，不是 L2 可重扫窗口；实时 L2 不能用今天盘口补写历史任务。
+- 队列启动时按中国时区确定唯一续扫日。任意日期的完整落盘任务仍可修正为 `done`；只有当天残缺任务恢复排队，历史残缺任务保留原记录并转为终止状态，不进入 worker 队列。
+- 新增 25 天前残缺任务回归：重启后 pending 只含当天任务，worker 领取当天任务后不能再领取历史任务。
+- 同步更新 L2 状态归并讨论，记录 Claude 挑战、Codex 修订和 Owner 明确要求修复的共同边界。
+
+Files:
+- `local-l2-task-queue.js`
+- `tests/local-l2-persistence.test.js`
+- `docs/strategy/discussions/2026-07-15-l2-scan-status-reconciliation.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check local-l2-task-queue.js` 通过。
+- `node tests/local-l2-persistence.test.js` 通过，覆盖中国日期、当天续扫、历史终止和 worker 不领取历史任务。
+- L2 专项测试全部通过；`node --test tests/*.test.js` 为 33/33 通过，`git diff --check` 通过。
+- 变更只包含代码、测试和安全文档；敏感词扫描新增命中仅为既有测试假 Token，未加入密钥、运行时任务文件或原始 L2 数据。
+
+Deployment:
+- 未部署生产、未修改运行时数据或配置、未重启服务；PR103 继续保持 Draft，等待 Claude 复核。
+
+Notes for next agent:
+- 复核重点是 `persistDays` 与 `resumeDay` 已完全解耦；历史完整任务只做状态修正，历史残缺任务永不入队。
+- 本次没有改变 L2 明星阈值、自动扫描门槛、策略评分、主线排名或冻结快照。
