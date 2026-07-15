@@ -5601,3 +5601,25 @@ Validated:
 
 尚未处理(按 Owner 分阶段决定,留后续):
 - 点 3 snapshot-day 可用性把 KPL-only 快照算数;点 4 冻结历史快照 PR 文案勿称历史已完全剔除;点 5 证据包 + 讨论组记录。
+
+## 2026-07-15 - Claude - #88 点3/4/5:快照日可用性 + 历史边界澄清 + 生产证据/讨论组
+
+Changed:
+- 点3(代码):`strategySnapshotDayHasSnap` 从遍历 `[6,5,7]` 改为 `STRATEGY_ZS_TYPES`——仅有 KPL(7) 快照、缺 zs5/zs6 的日期对策略页视为空板日不可用,避免 `resolveStrategySnapshotDay` 选到策略板块为空的日子。三处调用(getStrategyBoardsForDay / getDayBoardsWithMembers 策略路径 / getStrategyQiBoard)均策略口径,不误伤看板/复盘。
+- 点4(文案边界):明确本改动仅影响新生成快照 + 实时 live 口径,不改历史冻结快照;PR 文案与讨论记录不宣称历史展示已完全剔除 KPL。历史迁移/重建另起经审核方案。
+- 点5(证据+讨论组):按 AI_PRODUCTION_READ.md 抓取标准证据包并回放校验,新增讨论组收敛记录。
+
+Files:
+- `kpl-stats-server.js`(strategySnapshotDayHasSnap)
+- `tests/strategy-kpl-exclusion.test.js`(新增点3断言:有东财/同花顺快照的日可用、仅 KPL 的日不可用、无快照日不可用)
+- `docs/strategy/discussions/2026-07-15-strategy-kpl-exclusion-r2-pairing.md`(新增讨论组记录)
+
+Validated:
+- 生产证据包:`day=2026-07-15 codes=002396,000566 themes=算力AI,大消费 window=30`,`bundleSha256=c5acd5e9779b91044795248c103793f399fc9b7501c0ba38706883f2f654f60c`,`complete=true`,`missingSources=[]`,`sourceErrors=[]`;`replay --require-complete --expect-sha` 通过。
+- 快照对照:KPL(7) 今日 8 板板名全部不在东财∪同花顺(21 名)集合内→证实旧口径把 8 个 KPL 独有板算进策略。
+- `node --check` 通过;全仓 33 个测试文件全绿。
+- Token 仅由安全环境注入,未写入任何文件/命令参数/PR/文档;证据 JSON 留在 tmp 未入 Git,仅记录参数、哈希与结论。
+
+Notes for next agent:
+- #88 P1/点2/点3 已修并测,点4 边界已澄清,点5 证据+讨论组已补;等 Codex 重新复核。
+- 历史冻结快照仍含 KPL(本 PR 不动);`getStrategyBoardStocks` 逐 plateId 保留 [6,5,7](策略不传 KPL plateId,无副作用)——是否统一待 Owner 定。
