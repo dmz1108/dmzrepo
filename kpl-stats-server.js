@@ -178,6 +178,8 @@ const EASTMONEY_ZS_TYPE = '6';
 const THS_ZS_TYPE = '5';
 const DISABLED_ZS_TYPES = new Set([]);
 const AUTO_SNAPSHOT_ZS_TYPES = [DEFAULT_ZS_TYPE, EASTMONEY_ZS_TYPE, THS_ZS_TYPE];
+// 策略页只用 东财(6) + 同花顺(5) 两个源;KPL(7) 不进策略统计与展示(Owner 2026-07-15)。
+const STRATEGY_ZS_TYPES = [6, 5];
 const BOARD_COUNT = 8;
 const BOARD_INITIAL_CANDIDATE_COUNT = 15;
 const MIN_VISIBLE_BOARD_COUNT = 4;
@@ -21036,7 +21038,7 @@ async function prevStrategySnapshotDay(useDay) {
 // 收集某快照日「全部板块」的 QI 龙头代码集合（10日∪30日），用于新晋对比
 async function collectStrategyQiCodes(snapDay) {
   const set = new Set();
-  for (const zsType of [6, 5, 7]) {
+  for (const zsType of STRATEGY_ZS_TYPES) {   // Owner 2026-07-15:策略只用东财+同花顺,剔除 KPL(7)
     try {
       const payload = JSON.parse(await fs.readFile(snapshotPath(snapDay, String(zsType)), 'utf8'));
       const cardData = payload?.cardData || {};
@@ -21058,7 +21060,7 @@ async function getStrategyBoardsForDay(day, options = {}) {
     .map((b) => `${String(b?.zsType ?? '')}:${String(b?.plateId ?? '').trim()}`)
     .filter((key) => !key.endsWith(':')));
   const shouldHydrateIncluded = (board, zsType) => includeKeys.has(`${String(zsType)}:${String(board?.plateId ?? '')}`);
-  for (const zsType of [6, 5, 7]) {
+  for (const zsType of STRATEGY_ZS_TYPES) {   // Owner 2026-07-15:剔除 KPL(7),策略只用东财+同花顺
     let hidden; try { hidden = await getPermanentHiddenSet(zsType); } catch { hidden = new Set(); }
     try {
       const payload = JSON.parse(await fs.readFile(snapshotPath(useDay, String(zsType)), 'utf8'));
@@ -21088,7 +21090,7 @@ async function getStrategyBoardsForDay(day, options = {}) {
     const apiKey = await readSavedApiKey().catch(() => '');
     if (apiKey) {
       const liveOutByKey = new Map(out.map(board => [`${String(board?.zsType ?? '')}:${String(board?.plateId ?? '')}`, board]));
-      for (const zsType of [6, 5, 7]) {
+      for (const zsType of STRATEGY_ZS_TYPES) {   // Owner 2026-07-15:剔除 KPL(7)
         const scopedPrefix = `${String(zsType)}:`;
         const includedForType = [...includeKeys].filter(key => key.startsWith(scopedPrefix));
         if (out.length && includeKeys.size && !includedForType.length) continue;
