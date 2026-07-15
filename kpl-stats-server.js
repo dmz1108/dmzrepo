@@ -21184,8 +21184,16 @@ async function getDayBoardsWithMembers(day, options = {}) {
       const gainPct = Number(b?.gainPct ?? b?.gain ?? b?.zf ?? b?.changePct ?? b?.涨幅 ?? NaN);
       const ztList = Array.isArray(cardData[plateId]?.ztList) ? cardData[plateId].ztList : [];
       const codes = ztList.map(x => normalizeReasonSourceCode(x?.code ?? x)).filter(Boolean);
+      // 按板名去重(同名跨源塌成一条,取涨停最高者作主板→板块数/排名口径不变);
+      // 但每源各留一份到 bySource,供 R2 同源配对可靠拿到东财/同花顺两组(Codex #88 点2)。
       const cur = bmap.get(name);
-      if (!cur || (Number(zt) || 0) > (Number(cur.zt) || 0)) bmap.set(name, { name, plateId, zsType: z, zt, netInflow, gainPct, codes });
+      const bySource = (cur && cur.bySource) || {};
+      bySource[z] = { zsType: z, plateId, netInflow, gainPct, zt };
+      const winner = (!cur || (Number(zt) || 0) > (Number(cur.zt) || 0))
+        ? { name, plateId, zsType: z, zt, netInflow, gainPct, codes }
+        : cur;
+      winner.bySource = bySource;
+      bmap.set(name, winner);
     }
   };
   for (const z of zsTypes) {
@@ -21512,16 +21520,20 @@ function strategyMainlineRepresentativeBoardInflow(boards) {
 // R2 同源配对(Owner 2026-07-15):按源(东财6/同花顺5)各取净流入最大的板,净流入与卡片涨幅取自
 // 同一个板,绝不跨源拼。KPL(7)已在取板层剔除,这里天然只会有 6/5。缺某源即该组为 null。
 function strategyMainlineSourcePairs(boards) {
+  // 每块板优先读 bySource[zs](同名跨源塌板时仍能拿到该源的净流入/涨幅);无 bySource 时回退按板自身 zsType。
   const pick = (zs) => {
-    const lead = (Array.isArray(boards) ? boards : [])
-      .filter(b => Number(b?.zsType) === zs && isFiniteNumeric(b?.netInflow))
-      .sort((a, b) => Number(b.netInflow) - Number(a.netInflow))[0];
-    if (!lead) return null;
-    return {
-      board: String(lead?.name || ''),
-      netInflow: Number(lead.netInflow),
-      gainPct: isFiniteNumeric(lead?.gainPct) ? Number(lead.gainPct) : null,
-    };
+    let best = null;
+    for (const b of (Array.isArray(boards) ? boards : [])) {
+      const s = b && b.bySource && b.bySource[zs];
+      const inflow = s ? Number(s.netInflow)
+        : (Number(b?.zsType) === zs && isFiniteNumeric(b?.netInflow) ? Number(b.netInflow) : NaN);
+      if (!Number.isFinite(inflow)) continue;
+      const gainPct = s
+        ? (isFiniteNumeric(s.gainPct) ? Number(s.gainPct) : null)
+        : (isFiniteNumeric(b?.gainPct) ? Number(b.gainPct) : null);
+      if (!best || inflow > best.netInflow) best = { board: String(b?.name || ''), netInflow: inflow, gainPct };
+    }
+    return best;
   };
   return { eastmoney: pick(6), ths: pick(5) };
 }
@@ -24116,6 +24128,7 @@ function strategyMainlineAddRealtimeBoardSeed(seedByKey, board) {
     confirmedCount: codes.length || (zt != null ? zt : 0),
     bigGainCount: risingStocks.length,
     nearLimitCount: nearLimitStocks.length,
+    bySource: board?.bySource || null,   // R2:保留每源净流入/涨幅,供 strategyMainlineSourcePairs 同源配对
   });
   return seed;
 }
@@ -24869,6 +24882,7 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
         bigGainCount: Number(b.bigGainCount) || 0,
         nearLimitCount: Number(b.nearLimitCount) || 0,
         breadth: b.breadth || null,
+        bySource: b.bySource || null,   // R2:合并路径经 resonanceBoards 取同源配对时需保留
       })),
       mainLeader: leaders[0] || null,
       leaders,

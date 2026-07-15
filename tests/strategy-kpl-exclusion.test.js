@@ -42,6 +42,9 @@ const fsStub = { readFile: async (p) => { if (SNAP[p]) return JSON.stringify(SNA
 // 在 eval 作用域内把标识符 fs 指向 stub(getDayBoardsWithMembers 内部用 fs.readFile)
 const fs2 = fsStub; // eslint 占位
 eval(extractFn('getDayBoardsWithMembers').replace(/\bfs\.readFile\b/g, 'fsStub.readFile'));
+// R2 同源配对(点2):真实 strategyMainlineSourcePairs + isFiniteNumeric,验证塌板后仍能同源拿两组。
+eval(extractFn('isFiniteNumeric'));
+eval(extractFn('strategyMainlineSourcePairs'));
 
 (async () => {
   // 1. 策略口径 zsTypes=[6,5]:KPL(7) 完全不进候选
@@ -52,6 +55,18 @@ eval(extractFn('getDayBoardsWithMembers').replace(/\bfs\.readFile\b/g, 'fsStub.r
   const yy = strat.boards.find(b => b.name === '医药');
   A(yy && Number(yy.zsType) === 6, '策略口径:同名“医药”取自东财(zt2>同花顺zt1),不被 KPL(zt20)顶掉');
   A(names.includes('东财独有板'), '策略口径:东财独有板保留');
+
+  // 点2:塌板后 bySource 仍分别保留东财(6)与同花顺(5),且不含 KPL(7)
+  A(yy && yy.bySource && yy.bySource[6] && yy.bySource[5], '点2:同名“医药”塌板后 bySource 同时保留东财(6)与同花顺(5)');
+  A(yy && yy.bySource && !yy.bySource[7], '点2:策略口径下 bySource 不含 KPL(7)');
+  A(yy.bySource[6].netInflow === 8e8 && Number(yy.bySource[6].gainPct) === 3, '点2:bySource[6] 是东财自己的净流入/涨幅(8亿/3%)');
+  A(yy.bySource[5].netInflow === 6e8 && Number(yy.bySource[5].gainPct) === 4, '点2:bySource[5] 是同花顺自己的净流入/涨幅(6亿/4%)');
+
+  // 点2 端到端:strategyMainlineSourcePairs 从塌成一条的“医药”里同源还原东财/同花顺两组
+  const pairs = strategyMainlineSourcePairs(strat.boards);
+  A(pairs.eastmoney && pairs.eastmoney.netInflow === 8e8 && Number(pairs.eastmoney.gainPct) === 3, '点2:sourcePairs 东财组=8亿/3%(取自 bySource[6],非跨源拼)');
+  A(pairs.ths && pairs.ths.netInflow === 6e8 && Number(pairs.ths.gainPct) === 4, '点2:sourcePairs 同花顺组=6亿/4%(取自 bySource[5],非跨源拼)');
+  A(pairs.eastmoney.board === '医药' && pairs.ths.board === '医药', '点2:两组均落在“医药”板(塌板后仍成对)');
 
   // 2. 默认(不传 zsTypes)仍遍历 [6,5,7]:KPL 保留,不误伤看板/复盘等页面
   const all = await getDayBoardsWithMembers('2026-07-15', { allowFallback: false });
