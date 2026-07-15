@@ -5273,3 +5273,34 @@ Deployment:
 
 Notes for next agent:
 - 本次娱乐页顶部栏问题已完成 Git 合并、生产发布和公网验收；若浏览器仍显示旧版，先强制刷新以清除旧文档缓存。
+
+## 2026-07-15 - Codex - 首页瞎聊聊改用四人室外预览图
+
+Changed:
+- 按用户最终选择，将首页“瞎聊聊”卡片替换为蓝调屋顶、四人一起看手机的室外场景。
+- 保持卡片布局、文案、遮罩、跳转和响应式规则不变；PNG/WebP 均输出为 `1200 × 720`，资源缓存版本升为 `v=3`，首页编译脚本缓存键同步更新。
+- 新增仅包含首页静态文件、无需重启服务的受保护生产清单。
+
+Files:
+- `Qi/assets/chatter-cute-preview.png`
+- `Qi/assets/chatter-cute-preview.webp`
+- `Qi/qi-home.jsx`
+- `Qi/qi-home.compiled.js`
+- `Qi/index.html`
+- `tests/font-woff2-yule-cache.test.js`
+- `tests/explore-editorial-layout.test.js`
+- `ops/production/manifests/chat-rooftop-preview-20260715.json`
+- `design-qa.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 桌面 `1440 × 1024` 和手机 `390 × 844` 实页对照通过，四个人物、手机和屋顶夜景均在卡片裁切内；手机无横向溢出，浏览器控制台错误为 0。
+- 浏览器实际选择 `v=3` WebP，天然尺寸为 `1200 × 720`；卡片仍指向 `#chat`。
+- `node Qi/build-home.js`、编译脚本语法、专项测试、`git diff --check` 和全仓测试 `32/32` 均通过。
+
+Deployment:
+- 本条记录提交时尚未部署生产，未修改云端运行时状态，未重启任何服务。
+
+Notes for next agent:
+- 本次仅更换首页静态视觉资源和缓存版本，不涉及账号、权限、行情、策略或运行时数据库，不需要 AI 讨论组协议。
+- 合并至 `main` 后使用 `ops/production/manifests/chat-rooftop-preview-20260715.json` 运行受保护生产工作流，并在公网确认图片 `v=3` 命中及首页卡片裁切。
