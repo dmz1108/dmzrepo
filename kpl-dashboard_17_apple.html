@@ -11120,7 +11120,12 @@ function renderLimitupReview(data) {
     searchInput.addEventListener('input', () => handleLimitupReviewSearch(searchInput.value));
   }
   let detailCode = normalizedSearch && visibleStocks.length ? String(visibleStocks[0].code || '') : '';
-  if (normalizedSearch && !detailCode) detailCode = resolveReviewUniverseCode(searchTerm, day);
+  let exactUniverseStock = null;
+  if (normalizedSearch && !detailCode) {
+    exactUniverseStock = resolveExactReviewUniverseStock(searchTerm, day);
+    detailCode = exactUniverseStock ? String(exactUniverseStock.code || '') : resolveReviewUniverseCode(searchTerm, day);
+  }
+  if (exactUniverseStock) maybeAutoJumpToReviewUniverseStock(exactUniverseStock, searchTerm, day);
   scheduleReviewStockDetail(detailCode, day);
   if (activeTab.key === 'final' && state.adminLoggedIn) loadReviewPending(day);
   else { const pc = document.getElementById('review-pending'); if (pc) pc.innerHTML = ''; }
@@ -12478,6 +12483,27 @@ function resolveReviewUniverseCode(term, day) {
     if (reviewStockSearchText(s).includes(q)) return String(s.code || '');
   }
   return '';
+}
+function resolveExactReviewUniverseStock(term, day) {
+  const q = String(term || '').trim().toLowerCase();
+  if (!q || reviewUniverseCache.day !== String(day || '')) return null;
+  return reviewUniverseCache.stocks.find(s => [s?.code, s?.name, s?.initials]
+    .map(value => String(value || '').trim().toLowerCase())
+    .includes(q)) || null;
+}
+function maybeAutoJumpToReviewUniverseStock(stock, term, day) {
+  const ref = String(stock?.latestDay || '').trim();
+  const normalizedTerm = String(term || '').trim().toLowerCase();
+  if (!ref || !normalizedTerm || ref === String(day || '')) return;
+  const jumpKey = normalizedTerm + '@' + ref;
+  if (state.reviewAutoJumpKey === jumpKey) return;
+  state.reviewAutoJumpKey = jumpKey;
+  state.reviewDateOverride = ref;
+  setTimeout(() => {
+    if (String(state.reviewSearchTerm || '').trim().toLowerCase() !== normalizedTerm) return;
+    if (state.reviewAutoJumpKey !== jumpKey) return;
+    refreshLimitupReviewPage();
+  }, 0);
 }
 
 function setDatePickerValue(day) {

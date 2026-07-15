@@ -7059,11 +7059,15 @@ async function getLimitUpMainReasonRecentUniverse(url, req, res) {
       const code = normalizeReasonSourceCode(s.code);
       if (!code) continue;
       const name = String(s.name || '');
+      const latestDay = isoFromCompactDate(d);
       const prev = byCode.get(code);
-      if (!prev) byCode.set(code, { code, name, initials: reviewStockNamePinyinInitials(name) });
-      else if (!prev.name && name) {
-        prev.name = name;
-        prev.initials = reviewStockNamePinyinInitials(name);
+      if (!prev) byCode.set(code, { code, name, initials: reviewStockNamePinyinInitials(name), latestDay });
+      else {
+        if (latestDay > String(prev.latestDay || '')) prev.latestDay = latestDay;
+        if (!prev.name && name) {
+          prev.name = name;
+          prev.initials = reviewStockNamePinyinInitials(name);
+        }
       }
     }
   }
