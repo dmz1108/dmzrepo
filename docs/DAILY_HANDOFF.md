@@ -5480,3 +5480,27 @@ Deployment:
 Notes for next agent:
 - 这是复盘搜索导航修复，不改变四源归纳、策略评分或历史库，不需要 AI 讨论组协议。
 - 公网文件、接口、哈希和健康检查已通过；受 in-app browser 重载行情页超时限制，未冒充部署后输入点击已通过。
+
+## 2026-07-15 - Claude - 明星门槛下调 + 自动扫描门槛下调/高流入直通(Owner 定稿)
+
+Changed(kpl-stats-server.js,两项 Owner 2026-07-15 定稿):
+- ① 明星判定改单一最大档判据:该股最大可统计档 主动买 > 1.5亿(旧 3亿)且 activeRatio(主动买/主动卖) > 1.65;封板满足→明星确认,未封大涨(≥5%)满足→预期明星。不再看 passiveRatio/supportRatio,不再要求逐档先决。最大档无大单/数据缺失/现价缺失一律不确认。取证脚本 run 已确认旧 3亿+2-of-3 口径把今日医药(最大档主动买最高仅 0.62亿)全判 sealedWeak;新口径亦不误放(0.62亿<1.5亿)。
+- ② 自动扫描准入门槛 净流入 8亿→5亿;新增高流入直通 `AUTO_SCAN_HIGH_INFLOW_OVERRIDE=10e8`:净流入≥10亿时无视"涨停≥2"直接排队 L2 验证(救大消费这类钱多涨停少、原先恒挂"L2待验证"的主线)。补选板豁免与限流不变。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/star-l2-layers.test.js`(按新明星规则重写)
+- `tests/scan-priority.test.js`(静态断言适配新过滤式,校验补选豁免仍在 + 高流入直通存在)
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js` 通过;全仓 30 个测试文件全绿;`git diff --check` 通过。
+- 生产实证(只读 ops run 29392424725):今日医药各涨停股最大档主动买 0.05~0.62亿,均 < 1.5亿——新星标口径下今日医药仍无明星(如实,非漏报);验证了 sealedWeak 主因是金额而非 dataMissing(worker 五档齐全 withAllBuckets==rows)。
+
+Deployment:
+- 未部署;核心策略改动,合并 main 后经受保护生产工作流部署 `kpl-stats-server.js` 并重启主服务。等 Codex 复核。
+
+Notes for next agent(Codex 复核重点):
+- 明星口径:确认"只看最大档 activeBuy>1.5亿 且 activeRatio>1.65、丢弃 passive/support 与逐档先决"符合 Owner 定稿;旧常量 STAR_SEAL_RATIO/PRE_RATIO/MAX_PRE_RATIO 已停用但保留定义以兼容提取脚本。
+- 自动扫描:高流入直通阈值 10亿 为 Claude 建议默认值,Owner 可调;仅放宽"涨停数"闸,金额下限仍 5亿、限流(每5分钟2个/单任务在飞)不变,不至于压垮 worker。
+- KPL 剔除 + 策略卡片 R2 同源配对是另一个独立 PR,不在本 PR 内。

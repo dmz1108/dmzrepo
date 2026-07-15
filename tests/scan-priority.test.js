@@ -84,7 +84,8 @@ eval(extractFn('strategyNormRealtimeStocks'));
   A(src.includes('strategyMainlineBoardThemeRelated(board?.name, t?.theme)'), '第三键题材过滤复用 strategyMainlineBoardThemeRelated');
 
   // 2. 板块级字典序与豁免 + 调用点接线(静态断言)
-  A(src.includes("(b?.scanChannel === 'supplement' || Number(b?.zt) >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT)"), '补选板块豁免涨停>=2门槛');
+  A(src.includes("b?.scanChannel === 'supplement' || Number(b?.zt) >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT"), '补选板块豁免涨停>=2门槛');
+  A(src.includes('Number(b?.netInflow) >= STRATEGY_MAINLINE_AUTO_SCAN_HIGH_INFLOW_OVERRIDE'), '高流入直通:净流入≥阈值无视涨停数');
   A(src.includes("((a?.scanChannel === 'supplement') ? 0 : 1) - ((b?.scanChannel === 'supplement') ? 0 : 1)"), '板块级第一键=补选来源');
   A(src.includes('bigGainOf(b) - bigGainOf(a)'), '板块级第三键=大涨数');
   A(src.includes('strategyMainlineScanPriorityCodes(board, priorByCode)'), '派发时传入真实主因上下文');
