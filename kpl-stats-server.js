@@ -96,7 +96,7 @@ const THS_CONCEPT_BOARD_DIR = path.join(THS_CONCEPT_DIR, 'boards');
 const THS_CONCEPT_REALTIME_CACHE_PATH = path.join(THS_CONCEPT_DIR, 'realtime-cache.json');
 const THS_CONCEPT_BOARDS_FRESH_MS = Math.max(30 * 1000, Number(process.env.THS_CONCEPT_BOARDS_FRESH_MS) || 60 * 1000);
 const THS_CONCEPT_BOARDS_STALE_MS = Math.max(THS_CONCEPT_BOARDS_FRESH_MS, Number(process.env.THS_CONCEPT_BOARDS_STALE_MS) || 5 * 60 * 1000);
-const THS_CONCEPT_PAGE_CONCURRENCY = Math.max(2, Math.min(8, Number(process.env.THS_CONCEPT_PAGE_CONCURRENCY) || 6));
+const THS_CONCEPT_PAGE_CONCURRENCY = Math.max(1, Math.min(4, Number(process.env.THS_CONCEPT_PAGE_CONCURRENCY) || 4));
 const THS_MANUAL_BOARD_DIR = path.join(__dirname, 'ths-manual-boards');
 const THS_LOCAL_BLOCKUPDATE_DIRS = [
   process.env.THS_BLOCKUPDATE_DIR,
@@ -11264,18 +11264,35 @@ async function fetchThsConceptBoardsFresh(options = {}) {
   if (!quoteBoards.length) throw new Error('THS realtime catalog first page empty');
   if (pageCount > 1) {
     const pages = Array.from({ length: pageCount - 1 }, (_, index) => index + 2);
-    const pageResults = await mapLimit(pages, THS_CONCEPT_PAGE_CONCURRENCY, async page => {
-      try {
-        const html = await thsFetchHtml(
-          `https://q.10jqka.com.cn/gn/index/field/199112/order/desc/page/${page}/ajax/1/`,
-          'https://q.10jqka.com.cn/gn/',
-        );
-        const boards = parseThsGnSection(html);
-        return { page, boards, ok: boards.length > 0 };
-      } catch (err) {
-        return { page, boards: [], ok: false, error: String(err?.message || err) };
+    const fetchPage = async (page, attempts = 1) => {
+      let lastError = '';
+      for (let attempt = 0; attempt < attempts; attempt += 1) {
+        if (attempt > 0) {
+          thsCookieCache = null;
+          await sleep(400 + attempt * 600);
+        }
+        try {
+          const html = await thsFetchHtml(
+            `https://q.10jqka.com.cn/gn/index/field/199112/order/desc/page/${page}/ajax/1/`,
+            'https://q.10jqka.com.cn/gn/',
+          );
+          const boards = parseThsGnSection(html);
+          if (boards.length) return { page, boards, ok: true };
+          lastError = 'empty page';
+        } catch (err) {
+          lastError = String(err?.message || err);
+        }
       }
-    });
+      return { page, boards: [], ok: false, error: lastError };
+    };
+    let pageResults = await mapLimit(pages, THS_CONCEPT_PAGE_CONCURRENCY, page => fetchPage(page, 1));
+    const firstFailures = pageResults.filter(result => !result.ok);
+    if (firstFailures.length) {
+      // 同花顺会对突发并发返回 200 但空内容。失败页降为单路、换 Cookie 重试，避免继续放大限流。
+      const retries = await mapLimit(firstFailures.map(result => result.page), 1, page => fetchPage(page, 3));
+      const retryByPage = new Map(retries.map(result => [result.page, result]));
+      pageResults = pageResults.map(result => result.ok ? result : retryByPage.get(result.page) || result);
+    }
     const failedPages = pageResults.filter(result => !result.ok);
     if (failedPages.length) {
       throw new Error(`THS realtime catalog incomplete: ${failedPages.length}/${pages.length} pages failed`);
@@ -11959,7 +11976,7 @@ async function thsConceptStatus(url, req, res) {
 async function thsConceptCatalog(url, req, res) {
   const catalog = await readThsConceptCatalog();
   const cacheOnly = url.searchParams.get('cache') === '1' || url.searchParams.get('cacheOnly') === '1';
-  const quoteBoards = cacheOnly ? [] : await fetchThsConceptBoards().catch(() => []);
+  const quoteBoards = cacheOnly ? [] : await fetchThsConceptBoards({ background: true }).catch(() => []);
   const realtimeMeta = thsConceptBoardsCacheMetadata();
   if (!catalog && !quoteBoards.length) return send(res, 404, { error: 'ths concept catalog not found' });
   const catalogById = new Map((catalog?.boards || []).map(board => [String(board.plateId), board]));
@@ -20080,7 +20097,7 @@ async function fetchBoardRankingForSnapshot(zsType, apiKey, options = {}) {
     if (!catalog?.boards?.length && isAfterMarketClose(chinaNowParts().day)) {
       catalog = await syncThsConcepts({ reason: 'ranking-demand' }).catch(() => null);
     }
-    const quoteBoards = await fetchThsConceptBoards().catch(() => []);
+    const quoteBoards = await fetchThsConceptBoards({ background: true }).catch(() => []);
     const stockCountById = new Map((catalog?.boards || []).map(board => [
       String(board.plateId),
       board.stockCount,
