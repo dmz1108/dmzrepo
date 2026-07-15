@@ -4982,3 +4982,23 @@ Deployment:
 Notes for next agent:
 - 部署后先触发一次完整同花顺目录刷新生成 `ths-concepts-db/realtime-cache.json`，再连续验证实时页与策略页；正常请求应稳定命中内存/同日磁盘热缓存。
 - 昨日实时数据不会冒充今日；同日 15:00 后完成的最终缓存当天保持新鲜，次日会重新抓取。
+
+## 2026-07-15 - Codex - 修复 Node 24 生产部署语法校验
+
+Changed:
+- 修复通用生产部署脚本把 JavaScript 暂存为 `.tmp` 后执行 `node --check` 的兼容问题；Node 24 会拒绝未知 `.tmp` 扩展，现改为校验归档中保留 `.js` 扩展的同一 SHA-256 目标文件，因此不降低完整性保护。
+
+Files:
+- `ops/production/deploy-from-main.ps1`
+- `tests/production-ops-workflow.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 首次同花顺性能部署 run `29384113774` 在停止服务前的预校验阶段退出，错误为 Node 24 `ERR_UNKNOWN_FILE_EXTENSION .tmp`；部署脚本未替换生产文件、未停止或重启主服务。
+- `tests/production-ops-workflow.test.js` 和 `git diff --check` 通过；当前 macOS 环境没有 `pwsh`，合并后的受保护工作流将用云端 Windows PowerShell 实际执行验证。
+
+Deployment:
+- 本条仅修复部署工具；网站代码仍待重新执行同花顺性能部署，生产业务文件尚未变化。
+
+Notes for next agent:
+- 合并本修复后须使用新脚本 SHA-256 重新触发同一清单；不要 rerun 旧 workflow，因为旧 run 固定的是修复前脚本。

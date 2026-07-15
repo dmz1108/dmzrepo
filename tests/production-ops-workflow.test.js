@@ -29,6 +29,8 @@ assert(!workflow.includes("C:\\Windows\\Temp\\$REMOTE_SCRIPT"), 'backslashes mus
 
 assert(deploy.includes('_deploy-backups'), 'deployer must create rollback backups');
 assert(deploy.includes('node --check'), 'deployer must validate staged JavaScript');
+assert(deploy.includes('& node --check $sourcePath'), 'Node syntax validation must retain the .js extension under Node 24');
+assert(!deploy.includes('& node --check $tempPath'), 'Node 24 must not syntax-check the extensionless .tmp staging path');
 assert(deploy.includes('Wait-Health'), 'deployer must verify service health');
 assert(deploy.includes('Copy-Item -LiteralPath $record.backupPath'), 'deployer must restore backups on failure');
 assert(deploy.includes('duplicate manifest destination'), 'deployer must reject duplicate deployment targets');
