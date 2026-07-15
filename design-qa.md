@@ -40,3 +40,36 @@ No actionable P0, P1, or P2 findings remain.
 - Repository test suite: `30/30` passed via `node --test tests/*.test.js` after rebasing onto the latest `origin/main`.
 
 final result: passed
+
+# DreamerQi Homepage Chatter Rooftop Preview QA — 2026-07-15
+
+## Comparison target
+
+- Source visual truth: `Qi/assets/chatter-cute-preview.png`, the selected four-person outdoor rooftop image at `1200 × 720`.
+- Browser-rendered implementation: the homepage `瞎聊聊` card using the existing image card component and overlay.
+- Desktop viewport: `1440 × 1024`.
+- Mobile viewport: `390 × 844`.
+- State: anonymous homepage visitor, public API fallback cards visible.
+
+## Evidence
+
+- Desktop implementation: `tmp/product-design-home-chat-rooftop/home-chat-rooftop-desktop-1440.png`.
+- Focused desktop card: `tmp/product-design-home-chat-rooftop/home-chat-rooftop-desktop-card.png`.
+- Mobile implementation: `tmp/product-design-home-chat-rooftop/home-chat-rooftop-mobile-390.png`.
+- Required same-input comparison: the selected source asset, focused desktop card, and mobile viewport were inspected together.
+
+## Findings
+
+No actionable P0, P1, or P2 findings remain.
+
+- The exact selected four-person outdoor scene is used; no placeholder, code drawing, or approximate substitute was introduced.
+- The `5:3` source ratio matches the existing `object-fit: cover` card slot, preserving all four faces, the phone, and the rooftop setting at both breakpoints.
+- The left-side city and sky negative space remains visible while the existing lower gradient keeps the white `瞎聊聊` label legible.
+- The existing card structure, copy, border, radius, responsive grid, and `#chat` destination are unchanged.
+- PNG and WebP are both `1200 × 720`; the browser selected the `v=3` WebP asset with natural dimensions `1200 × 720`.
+- Desktop and mobile document widths match their viewports with no horizontal overflow; final browser console errors: `0`.
+- `node Qi/build-home.js`, compiled-script syntax, targeted tests, `git diff --check`, and the full repository suite (`32/32`) passed.
+
+## Final result
+
+passed
