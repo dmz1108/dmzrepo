@@ -22491,14 +22491,15 @@ function strategyMainlineBucketRatios(bucket) {
   };
 }
 
-// ===== 明星股三层判定(Owner 定稿 2026-07-10,详见 docs/strategy/discussions/2026-07-10-star-leader-prediction.md) =====
-// 第一层·每档先决:每个档位的主动比与被动比各自 ≥1.5(不是相加);
-// 第二层·最大档特征:该股最大可统计档 三比值 2/3>1.8(涨停前,"预期明星")/ 2/3≥2(封板,"明星确认"),
-//   且最大档主动买入累计必须 ≥3亿。金额闸同时约束预期与确认,封板本身不能替代大资金证据;
-// 第三层·必含该股最大可统计档:3元股即300w档,10元以上即1000w档,按股价自适应。
+// ===== 明星股判定(Owner 定稿 2026-07-15,覆盖 2026-07-10 旧三层规则) =====
+// 单一最大档判据:该股最大可统计档 主动买入累计 > 1.5亿 且 主动买/主动卖 activeRatio > 1.65。
+//   涨停(封板)满足即"明星确认";未封但大涨(≥5%)满足即"预期明星"。
+//   不再看 passiveRatio/supportRatio,不再要求逐档(小档)先决——只按最大档这两条判(Owner 2026-07-15)。
+// 必含该股最大可统计档:3元股即300w档,10元以上即1000w档,按股价自适应;最大档无大单/数据缺失/现价缺失一律不确认。
 const STRATEGY_MAINLINE_ALL_BUCKETS = [500000, 3000000, 5000000, 8000000, 10000000];
-const STRATEGY_MAINLINE_STAR_MAX_PRE_RATIO = 1.8;   // 第二层:最大档涨停前 2/3 比值下限
-const STRATEGY_MAINLINE_STAR_MAX_BUY_MIN = 3e8;     // 第二层:最大档主动买入累计成交下限(预期/确认共用)
+const STRATEGY_MAINLINE_STAR_MAX_BUY_MIN = 1.5e8;         // 最大档主动买入累计下限(预期/确认共用,Owner 2026-07-15:3亿→1.5亿)
+const STRATEGY_MAINLINE_STAR_MAX_ACTIVE_RATIO_MIN = 1.65; // 最大档 主动买/主动卖(activeRatio)下限(Owner 2026-07-15)
+const STRATEGY_MAINLINE_STAR_MAX_PRE_RATIO = 1.8;   // 旧规则阈值,2026-07-15 起明星闸不再使用,仅保留定义以兼容历史提取脚本
 const STRATEGY_MAINLINE_STAR_LEVEL_ORDER = { confirmed: 0, expected: 1, active: 2 };  // 展示排序:确认 > 预期 > 活跃
 // 限价单笔申报上限(股):主板100万 / 创业板30万 / 科创板10万(按代码前缀;精确交易所规则核实记录见讨论文档议题A)
 function strategyMainlinePerOrderShareCap(code) {
@@ -22565,40 +22566,24 @@ function strategyMainlineStarStatus(row) {
   } : null;
   const gain = numOrNull(row?.gainPct ?? row?.gain);
   const sealed = gain != null && gain >= limitUpThreshold(row?.code, row?.name);
+  // Owner 2026-07-15 单一最大档判据:主动买 > 1.5亿 且 activeRatio(主动买/主动卖) > 1.65。
+  // 封板满足→明星确认;未封大涨(≥5%)满足→预期明星。不看被动/合力比值,不要求逐档先决。
+  const maxActiveRatio = maxRatios ? maxRatios.activeRatio : null;
+  const maxBucketStarPass = !maxBucketPriceMissing && !maxBucketEmpty && !maxBucketDataMissing
+    && maxActiveBuy > STRATEGY_MAINLINE_STAR_MAX_BUY_MIN
+    && maxActiveRatio != null && maxActiveRatio > STRATEGY_MAINLINE_STAR_MAX_ACTIVE_RATIO_MIN;
   if (sealed) {
-    if (maxBucketPriceMissing) {
-      return { level: 'sealedWeak', label: '涨停但最大档现价缺失', gain, ratios: display, maxBucket };
-    }
-    if (maxBucketEmpty) {
-      // 最大档有字段但没有大单 → 大资金缺席,不是明星(小档再强也不回退)
-      return { level: 'sealedWeak', label: '涨停但最大档无大单', gain, ratios: display, maxBucket };
-    }
-    if (maxBucketDataMissing) {
-      // 最大档缺失不能用小档代替。缺数据只能标记不足,不能把未知判成明星。
-      return { level: 'sealedWeak', label: '涨停但最大档数据缺失', gain, ratios: display, maxBucket };
-    }
-    if (maxActiveBuy < STRATEGY_MAINLINE_STAR_MAX_BUY_MIN) {
-      return { level: 'sealedWeak', label: '涨停但最大档主动买不足3亿', gain, ratios: display, maxBucket };
-    }
-    const passCount = [maxRatios.activeRatio, maxRatios.passiveRatio, maxRatios.supportRatio]
-      .filter(v => v >= STRATEGY_MAINLINE_STAR_SEAL_RATIO).length;
-    if (passCount >= 2) return { level: 'confirmed', label: '明星确认', gain, ratios: display, maxBucket };
-    return { level: 'sealedWeak', label: '涨停但比值未达标', gain, ratios: display, maxBucket };
+    // 最大档无可信证据一律不确认,不用小档回退(缺数据不能把未知判成明星)。
+    if (maxBucketPriceMissing) return { level: 'sealedWeak', label: '涨停但最大档现价缺失', gain, ratios: display, maxBucket };
+    if (maxBucketEmpty) return { level: 'sealedWeak', label: '涨停但最大档无大单', gain, ratios: display, maxBucket };
+    if (maxBucketDataMissing) return { level: 'sealedWeak', label: '涨停但最大档数据缺失', gain, ratios: display, maxBucket };
+    if (maxActiveBuy <= STRATEGY_MAINLINE_STAR_MAX_BUY_MIN) return { level: 'sealedWeak', label: '涨停但最大档主动买不足1.5亿', gain, ratios: display, maxBucket };
+    if (!(maxActiveRatio > STRATEGY_MAINLINE_STAR_MAX_ACTIVE_RATIO_MIN)) return { level: 'sealedWeak', label: '涨停但最大档主动买卖比不足1.65', gain, ratios: display, maxBucket };
+    return { level: 'confirmed', label: '明星确认', gain, ratios: display, maxBucket };
   }
   if (gain != null && gain >= STRATEGY_MAINLINE_BIG_GAIN_PCT) {
-    if (maxBucketEmpty) return null;   // 最大档无大单 → 明星条件不成立,连"资金活跃"也不给
-    const allPass = buckets.every(({ ratios }) =>
-      ratios.activeRatio >= STRATEGY_MAINLINE_STAR_PRE_RATIO &&
-      ratios.passiveRatio >= STRATEGY_MAINLINE_STAR_PRE_RATIO);
-    if (!allPass) return null;
-    // 第二层涨停前预判:最大档三比值 2/3 > 1.8 且最大档主动买累计 ≥3亿 → 预期明星(未封板已见强烈买入意愿)
-    if (maxRatios && !maxBucketPriceMissing) {
-      const strongCount = [maxRatios.activeRatio, maxRatios.passiveRatio, maxRatios.supportRatio]
-        .filter(v => v > STRATEGY_MAINLINE_STAR_MAX_PRE_RATIO).length;
-      if (strongCount >= 2 && maxActiveBuy >= STRATEGY_MAINLINE_STAR_MAX_BUY_MIN) {
-        return { level: 'expected', label: '预期明星', gain, ratios: display, maxBucket };
-      }
-    }
+    if (maxBucketEmpty || maxBucketDataMissing || maxBucketPriceMissing) return null;   // 无可信最大档证据 → 连资金活跃也不给
+    if (maxBucketStarPass) return { level: 'expected', label: '预期明星', gain, ratios: display, maxBucket };
     return { level: 'active', label: '资金活跃', gain, ratios: display, maxBucket };
   }
   return null;
