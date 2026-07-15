@@ -5491,6 +5491,7 @@ Files:
 - `kpl-stats-server.js`
 - `tests/star-l2-layers.test.js`(按新明星规则重写)
 - `tests/scan-priority.test.js`(静态断言适配新过滤式,校验补选豁免仍在 + 高流入直通存在)
+- `ops/production/manifests/strategy-star-auto-scan-gates-20260715.json`
 - `docs/DAILY_HANDOFF.md`
 
 Validated:
@@ -5498,7 +5499,7 @@ Validated:
 - 生产实证(只读 ops run 29392424725):今日医药各涨停股最大档主动买 0.05~0.62亿,均 < 1.5亿——新星标口径下今日医药仍无明星(如实,非漏报);验证了 sealedWeak 主因是金额而非 dataMissing(worker 五档齐全 withAllBuckets==rows)。
 
 Deployment:
-- 未部署;核心策略改动,合并 main 后经受保护生产工作流部署 `kpl-stats-server.js` 并重启主服务。等 Codex 复核。
+- PR #87 已经 Owner 批准、Codex 复核并合并 `main`；本条更新时尚未部署生产。受保护发布清单只更新 `kpl-stats-server.js` 并重启主服务。
 
 Notes for next agent(Codex 复核重点):
 - 明星口径:确认"只看最大档 activeBuy>1.5亿 且 activeRatio>1.65、丢弃 passive/support 与逐档先决"符合 Owner 定稿;旧常量 STAR_SEAL_RATIO/PRE_RATIO/MAX_PRE_RATIO 已停用但保留定义以兼容提取脚本。
