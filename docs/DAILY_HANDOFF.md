@@ -5250,3 +5250,26 @@ Deployment:
 Notes for next agent:
 - 本次仅发布娱乐页静态文件，不修改娱乐数据库、采集服务、账号数据、行情或策略；生产清单 `restart=none`。
 - 合并至 `main` 后运行受保护生产工作流，并在公网桌面/手机检查六项导航、娱乐当前态、登录/注册和更新时间。
+
+## 2026-07-15 - Codex - 娱乐页导航与更新时间完成生产发布
+
+Changed:
+- PR #89 已合并娱乐页顶部导航统一、真实更新时间、导航回归测试与单文件生产清单。
+- 受保护生产工作流从固定 `main@86d43bc93adf759d0df9a2c19a8da787d7f48295` 原子替换云端 `yule.html`。
+
+Files:
+- 云端 `C:\PandaDashboard\yule.html`
+- 云端两份运维日志（部署器自动追加）
+- Git `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 工作流 run `29399731652` 成功，部署器返回 `health=ok`；生产与 `main` 的 `yule.html` SHA-256 均为 `55626cb29e2476f43a476238428fedc3626eee3658680d95177c5464cc324721`。
+- 公网页面源码按顺序包含“行情 / 娱乐 / 探索 / 瞎聊聊 / 关于 / 联系”，不再包含额外“首页”；娱乐 `/health` 返回真实 `lastCollectAt`。
+- 生产首页、行情和后台均为 HTTP 200。
+
+Deployment:
+- 生产已变更；回退备份为 `C:\PandaDashboard\_deploy-backups\github-29399731652-1`。
+- 清单使用 `restart=none`，未重启娱乐服务、主服务、Caddy、Consistency Gate 或公司端 L2 worker；未修改任何运行时数据库。
+
+Notes for next agent:
+- 本次娱乐页顶部栏问题已完成 Git 合并、生产发布和公网验收；若浏览器仍显示旧版，先强制刷新以清除旧文档缓存。
