@@ -135,6 +135,11 @@ function todayStamp() {
   const p = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`;
 }
+function beijingDayStamp(now = Date.now()) {
+  const d = new Date(Number(now) + 8 * 3600000);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}`;
+}
 function log(level, ...parts) {
   const line = `[${nowIso()}] [${level}] ${parts.map(p => typeof p === 'string' ? p : JSON.stringify(p)).join(' ')}`;
   // 控制台 + 文件(文件写失败也不抛)
@@ -355,6 +360,20 @@ function listItems(category, opts = {}) {
     (b.hotScore || 0) - (a.hotScore || 0) ||
     String(b.createdAt).localeCompare(String(a.createdAt)));
   return out;
+}
+function pickHomeTeaser(items, day = beijingDayStamp()) {
+  const rows = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (!rows.length) return null;
+  const requestedDay = String(day || '');
+  const latestDay = rows.reduce((latest, item) => {
+    const itemDay = String(item?.day || '');
+    return itemDay > latest ? itemDay : latest;
+  }, '');
+  const dayRows = rows.filter(item => String(item?.day || '') === requestedDay);
+  const candidates = dayRows.length
+    ? dayRows
+    : rows.filter(item => String(item?.day || '') === latestDay);
+  return candidates.find(itemHasUsableImage) || candidates[0] || rows.find(itemHasUsableImage) || rows[0] || null;
 }
 function getItem(id) {
   const found = getItemWithPath(id);
@@ -1876,9 +1895,9 @@ const server = http.createServer(async (req, res) => {
       if (!isPublicItem(it)) return sendJson(res, 404, { ok: false, error: 'not found' });
       return sendJson(res, 200, { ok: true, item: publicItemOf(it) });
     }
-    // 主页卡片:当天最热明星热点
+    // 主页卡片:北京时间当天跨频道最值得看的内容，优先选择有可用图片的条目。
     if (p === '/api/yule/home-teaser') {
-      let pick = listItems('star')[0] || listItems('music')[0] || listItems('screen')[0] || listItems('fashion')[0] || listItems()[0] || null;
+      const pick = pickHomeTeaser(listItems());
       return sendJson(res, 200, { ok: true, teaser: pick ? cardOf(pick) : null });
     }
     // 手动触发采集(本地/调试用)
