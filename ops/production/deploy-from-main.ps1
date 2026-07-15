@@ -95,7 +95,9 @@ try {
     $tempPath = "$destinationPath.github-$runId.tmp"
     Copy-Item -LiteralPath $sourcePath -Destination $tempPath -Force
     if ([System.IO.Path]::GetExtension($destinationPath) -ieq '.js') {
-      & node --check $tempPath
+      # Node 24 rejects syntax-checking a staged file whose final extension is .tmp.
+      # Validate the approved archive source (which retains .js); deployed hash verification still protects the copy.
+      & node --check $sourcePath
       if ($LASTEXITCODE -ne 0) { throw "node syntax check failed: $destinationRelative" }
     }
     $records += [PSCustomObject]@{
