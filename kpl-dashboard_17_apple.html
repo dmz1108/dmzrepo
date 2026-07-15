@@ -11680,7 +11680,8 @@ function renderStrategyMainlinesHTML(d) {
     priorDay && priorDay !== realtimeDay ? `主因参考${formatStatusDay(priorDay)}` : '',
   ].filter(Boolean).join(' · ');
   const sourceSuffix = sourceNote ? ` · ${escapeHTML(sourceNote)}` : '';
-  if (!lines.length) {
+  // 有 mainlinesBySource 时不走这个单列空态早退——即使两边都是有效零结果,也要保留双栏各自展示真实原因(Codex 二审 P2)。
+  if (!lines.length && !(d && d.mainlinesBySource)) {
     const emptyText = d && d.message
       ? String(d.message)
       : '暂无可用主线数据，请先同步今日实时看板。';
@@ -11868,12 +11869,21 @@ function renderStrategyMainlinesHTML(d) {
   if (d && d.mainlinesBySource) {
     const bs = d.mainlinesBySource;
     const renderColumn = (title, src, zsLabel) => {
-      const avail = !!(src && src.available && Array.isArray(src.mainlines) && src.mainlines.length);
-      const body = avail
-        ? `<div class="ml-grid">${src.mainlines.slice(0, 8).map(renderCard).join('')}</div>`
-        : `<div class="rht-loading">${escapeHTML((src && src.message) || '该源暂缺：暂无该来源的实时板块/主线数据，不借用另一来源补值。')}</div>`;
+      // 三态区分(Codex 二审 P2):有主线 / 源可用但无合格主线(有效零结果,展示真实资金/L2/无候选原因) / 源暂缺(不可用)。
+      const hasCards = !!(src && src.available && src.hasMainlines && Array.isArray(src.mainlines) && src.mainlines.length);
+      let body, tag;
+      if (hasCards) {
+        body = `<div class="ml-grid">${src.mainlines.slice(0, 8).map(renderCard).join('')}</div>`;
+        tag = ` · ${Number(src.count) || 0} 条`;
+      } else if (src && src.available) {
+        body = `<div class="rht-loading">${escapeHTML(src.message || '本源已完成计算，当前暂无满足资金/L2 条件的主线。')}</div>`;
+        tag = ' · 无合格主线';
+      } else {
+        body = `<div class="rht-loading">${escapeHTML((src && src.message) || '该源暂缺：暂无该来源的实时板块/主线数据，不借用另一来源补值。')}</div>`;
+        tag = ' · 暂缺';
+      }
       return `<div class="ml-col">
-        <div class="ml-col-title"><span>${escapeHTML(title)}</span><small>${escapeHTML(zsLabel)}${avail ? ` · ${Number(src.count) || 0} 条` : ' · 暂缺'}</small></div>
+        <div class="ml-col-title"><span>${escapeHTML(title)}</span><small>${escapeHTML(zsLabel)}${tag}</small></div>
         ${body}
       </div>`;
     };

@@ -24459,11 +24459,15 @@ async function buildStrategyMainlineHistoryContext(endDay, themeKeys, days = 15,
 function strategyMainlineSlimSourcePayload(payload, source, zsType) {
   const ok = !!(payload && payload.ok);
   const mainlines = ok && Array.isArray(payload.mainlines) ? payload.mainlines : [];
+  const hasMainlines = ok && mainlines.length > 0;
+  // available=源可用(已完成有效结果,含"已完成但无合格主线"的有效零结果——资金闸/L2闸排除全部候选);
+  // 与 hasMainlines 区分开(Codex 二审 P2)。ok=true+[] 是有效零结果,不能当"该源暂缺"。
   return {
     source, zsType, ok,
-    available: ok && mainlines.length > 0,
-    reason: ok ? (mainlines.length ? '' : String(payload.reason || 'no-qualified-mainline')) : String((payload && payload.reason) || 'source-unavailable'),
-    message: ok ? String(payload.message || '') : String((payload && payload.message) || ''),
+    available: ok,
+    hasMainlines,
+    reason: String((payload && payload.reason) || (ok ? '' : 'source-unavailable')),
+    message: String((payload && payload.message) || ''),
     count: mainlines.length,
     mainLeaderTheme: mainlines[0] ? String(mainlines[0].theme || '') : '',
     mainlines: mainlines.map(m => ({ ...m, source })),
@@ -25667,7 +25671,9 @@ async function buildAiStrategyLivePayload(url) {
     source: src.source || '',
     zsType: src.zsType ?? null,
     available: !!src.available,
+    hasMainlines: !!src.hasMainlines,
     reason: src.reason || '',
+    message: src.message || '',
     count: Number(src.count || 0),
     mainLeaderTheme: src.mainLeaderTheme || '',
     mainlines: (src.mainlines || []).map(aiCompactMainline).filter(Boolean),
