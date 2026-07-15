@@ -5388,3 +5388,38 @@ Deployment:
 Notes for next agent:
 - 本次不涉及账号权限、行情、策略、娱乐采集数据库或历史修复，不需要 AI 讨论组协议。
 - 合并至 `main` 后使用 `ops/production/manifests/home-today-contact-20260715.json` 发布；该清单会更新首页静态文件和娱乐接口，并只重启娱乐服务。
+
+## 2026-07-15 - Codex - PR #93/#94 生产发布与策略 PR #87/#88 审核
+
+Changed:
+- 从固定 `main@1ae6b546fe3fc0d187eaf908f934ab970d798279` 运行两次受保护生产工作流，先发布 PR #93 的海思科首字母搜索，再发布 PR #94 的首页“今日值得看”和移动联系我们回顶。
+- 工作流 run `29403351866` 原子替换主服务与行情页并只重启主服务；run `29403507709` 原子替换娱乐服务与首页文件并只重启娱乐服务。
+- 对策略草稿 PR #87、#88 在最新 `main` 上完成冲突合并模拟、代码审查和全仓测试，并将正式 `COMMENTED` 审核写入 GitHub；两项均明确为“暂不批准”。
+
+Files:
+- 云端 `C:\PandaDashboard\kpl-stats-server.js`
+- 云端 `C:\PandaDashboard\kpl-dashboard_17_apple.html`
+- 云端 `C:\PandaDashboard\yule-server.js`
+- 云端 `C:\PandaDashboard\Qi\qi-home.jsx`
+- 云端 `C:\PandaDashboard\Qi\qi-home.compiled.js`
+- 云端 `C:\PandaDashboard\Qi\index.html`
+- 云端两份运维日志（部署器自动追加）
+- Git `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 两次工作流均通过脚本哈希、固定提交、管理员连接、备份、原子替换、定向重启和本机健康检查；两个 run 均为 `success`、`health=ok`。
+- 生产近 30 日复盘股票池返回 `002653 / 海思科 / initials: hsk`，主服务健康检查为 `ok`。
+- 生产首页已引用 `qi-home.compiled.js?v=20260715-home-today-contact`，娱乐推荐为 2026-07-15 的 `Sweety《樱花草》` 和 `800 × 800` 图片；首页、行情、后台、娱乐均为 HTTP 200。
+- 公网首页 `index.html`、首页编译脚本和行情 HTML 的 SHA-256 均与 `main` 对应文件一致。
+- PR #87 合并模拟全仓测试 `33/33` 通过；PR #88 合并模拟全仓测试 `34/34` 通过；两者仅 `docs/DAILY_HANDOFF.md` 与最新 `main` 冲突，代码可自动合并。
+- PR #88 审核确认真实主线链路 `getDayBoardsWithMembers` 仍遍历 `[6,5,7]`，且按板块名跨来源去重会丢失东财/同花顺其中一源；现有测试没有覆盖这两个 P1 问题。
+- PR #87 审核确认公式实现与描述基本一致，但缺标准生产证据包、正向翻转案例和自动扫描行为测试；当前 reviewer 环境未注入 AI 只读 Token，未伪造独立生产证据结论。
+
+Deployment:
+- 生产已变更；主服务发布备份为 `C:\PandaDashboard\_deploy-backups\github-29403351866-1`，娱乐与首页发布备份为 `C:\PandaDashboard\_deploy-backups\github-29403507709-1`。
+- 仅重启主服务和娱乐服务；未重启 Caddy、Consistency Gate 或公司端 L2 worker，未修改任何运行时数据库。
+
+Notes for next agent:
+- PR #87 审核：`https://github.com/dmz1108/dmzrepo/pull/87#pullrequestreview-4702711567`；PR #88 审核：`https://github.com/dmz1108/dmzrepo/pull/88#pullrequestreview-4702711558`。GitHub 不允许仓库账号对自己名下 PR 设置 `REQUEST_CHANGES`，因此状态为 `COMMENTED`，正文已明确阻断。
+- Claude 需要同步最新 `main`、解决交接文档冲突并逐项回复审核；#87 必须补齐可重放证据与行为测试，#88 必须先修真实主线链路仍消费 KPL、同名跨源丢失和 KPL-only 日期判可用的问题。
+- 部署后通过接口与文件哈希完成公网验收；in-app browser 新标签连接两次超时，因此未把部署后手机点击冒充已重跑成功，手机点击回顶的实页交互证据来自部署前同一编译产物的 `390 × 844` 验收。
