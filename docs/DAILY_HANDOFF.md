@@ -5156,3 +5156,24 @@ Deployment:
 
 Notes for next agent:
 - 探索页 UI 任务已上线完成；后续改版继续以 `Qi/qi-home.jsx` 为源，重新生成 compiled 文件并同步提高 `Qi/index.html` 的缓存版本。
+
+## 2026-07-15 - Claude - 只读取证脚本:核对今日 L2 sealedWeak 是数据缺失还是真弱
+
+Changed:
+- 新增只读生产取证脚本 `ops/production/requests/2026-07-15-medical-l2-star-evidence.ps1`，用于回答 Owner 疑问「今日主线榜为什么只显示一个」。
+- 脚本加载当日持久化 L2 job（`strategy-data/local-l2-jobs/<day>/<jobId>/latest.json` 的 `job.results`），用与 `tests/star-l2-layers.test.js` 完全一致的 extract-and-eval 手法抽取生产真逻辑（`strategyMainlineStarStatus` 及其常量/辅助），逐股打印：最大可统计档、present/empty/dataMissing、activeBuy、三比值、判定 level，以及 job 的 `resultRows/rowsWithPrice/rowsWithAllBuckets/status`。
+- 目的：区分 Codex 2026-07-15「no-l2-qualified-mainline」结论下那些 `sealedWeak` 到底是「最大档主动买不足3亿/比值未达标」（真弱、板面正确）还是「最大档数据缺失」（worker 未回该股最大档 → 假阴性、误藏真主线）。
+
+Files:
+- `ops/production/requests/2026-07-15-medical-l2-star-evidence.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 本地 `node --check` 通过内嵌 JS；用合成 job 树端到端跑通：满档+主动买4亿→`confirmed`；缺1000万档→`dataMissing`/`sealedWeak`「涨停但最大档数据缺失」；主动买<3亿→`sealedWeak`「主动买不足3亿」。判定与生产逻辑一致。
+- 脚本纯只读：仅读 `C:\PandaDashboard` 项目文件，写一个临时 .js 到 %TEMP% 并在 finally 删除；不写、不重启、不改任何生产文件/服务/运行时库；只打印聚合的逐股档位金额（与 admin leader-debug 同口径），不含原始逐笔、Token 或凭据。
+
+Deployment:
+- 未改任何生产状态；仅通过受保护生产工作流执行只读脚本，restart=none。执行结果只回读到 Actions 日志与本 handoff，不落原始 L2 到 Git。
+
+Notes for next agent:
+- 若结果显示 sealedWeak 主因是 `dataMissing`，则今日「无主线」是假阴性、需查 worker 最大档回传或 `ALL_BUCKETS`/`STAR_BUCKETS` 档位匹配；若主因是 activeBuy<3亿/比值未达标，则 Codex「今日暂无 L2 明星主线」结论成立、板面正确。
