@@ -4899,3 +4899,31 @@ Deployment:
 Notes for next agent:
 - 当前工作在 `codex/redesign-qi-secondary-pages-20260714`；合并前复核与 26/26 全套均已通过，下一步从已确认 `main` 备份并部署三个 `Qi` 静态文件。
 - 本次仅涉及首页/公共次级页面，不改变行情、策略、归因或生产数据，因此不需要 AI 讨论组协议。
+
+## 2026-07-14 - Codex - 部署 PR #68 DreamerQi 次级页面设计
+
+Changed:
+- PR #68 已以 merge commit `f5344025feda5cc1dd27bc41aea276912fa7410c` 合并至 `main`；生产只从该已确认主线导出并部署三个首页静态文件。
+- 已将 `瞎聊聊`、`探索`、`关于`、`联系` 和共享导航的新编辑社区设计同步到 GitHub 与云端。
+
+Files:
+- 云端 `C:\PandaDashboard\Qi\index.html`
+- 云端 `C:\PandaDashboard\Qi\qi-home.jsx`
+- 云端 `C:\PandaDashboard\Qi\qi-home.compiled.js`
+- 云端 `panda-cloud-ops-2026-06-19.md` 与 `_cloud-change-log-20260705.md`
+- Git `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 部署前现网三文件均与新主线哈希不同；暂存文件、部署文件与 `main@f534402` 的 SHA-256 逐一一致，云端 `node --check Qi\qi-home.compiled.js` 通过。
+- 公网主页、新 bundle、`/health`、聊天接口、探索主页、探索接口、`/kpl` 和 `/admin` 均返回 HTTP 200；两处健康检查均为 `ok=true`。
+- 公网 bundle SHA-256 为 `36d90c07e756542f837104f808e7ec9a63073d7884e45c1270bf5461bc463981`，首页含新缓存版本，聊天返回 1 条公开帖子，探索返回 8 个城市。
+- 云端两份运维日志均只追加一次 PR #68 记录；未修改市场数据、策略数据、账号数据或运行时数据库。
+
+Deployment:
+- 生产已变更；回退备份为 `C:\PandaDashboard\_deploy-backups\pr68-secondary-pages-20260714-180747`，包含三份旧静态文件和追加前的两份云端运维日志。
+- 部署后 SHA-256：`index.html=bba0a9334d05c134a0ce0573cc37d3985b24a93808ba32245dac199fa15502c6`、`qi-home.jsx=30636033868b6d65527126702a08725b882d56d44c268dfac1b6c7f85c21f086`、`qi-home.compiled.js=36d90c07e756542f837104f808e7ec9a63073d7884e45c1270bf5461bc463981`。
+- 三份文件均为静态资源，按项目规范未重启 `Panda Dashboard Server`，也未重启 Caddy、娱乐服务、Consistency Gate 或 L2 worker。
+
+Notes for next agent:
+- PR #68 已完成 GitHub 合并、生产部署和公网验收；当前无该设计任务遗留部署项。
+- 后续继续改首页时仍以 `Qi/qi-home.jsx` 为源码并运行 `node Qi/build-home.js`，不要手改编译产物。
