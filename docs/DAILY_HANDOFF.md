@@ -4954,3 +4954,31 @@ Deployment:
 Notes for next agent:
 - 不要恢复整仓归档；只读检查和重启操作应只上传已固定 SHA-256 的运维脚本。
 - Claude 生产管理员通道已可用。部署、重启和数据库维护仍必须使用合并到 `main` 的受审脚本并等待 Owner 批准，禁止索取或输出私钥。
+
+## 2026-07-15 - Codex - 优化同花顺实时与策略取数延迟
+
+Changed:
+- 将同花顺实时概念目录由 30 秒阻塞缓存改为 60 秒新鲜期、5 分钟容错期的 stale-while-revalidate；过期请求先返回同日完整缓存，后台再刷新。
+- 修复缓存到期时间从慢抓取开始计算的问题，改为抓取完成后开始计时；增加同日磁盘热缓存，服务重启后可直接恢复。
+- 增加刷新任务合并，实时页、策略页和后台预热并发请求只共享一轮同花顺抓取；策略补充目录冷启动时不再阻塞等待。
+- 盘中自动预热同花顺目录，正式手动/盘后同步仍强制等待完整新抓取；普通实时刷新跳过慢速目录发现，目录发现只保留在正式同步。
+- 分页并发从固定 4 提升为可配置且上限 8 的默认 6，并增加分页完整性闸门；任一分页失败时保留上一份完整缓存，不用残缺数据覆盖。
+- 同花顺状态和目录响应增加缓存状态、采集时间、年龄、刷新状态与上次耗时，便于后续确认是否命中新链路。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/ths-realtime-performance.test.js`
+- `ops/production/manifests/ths-performance-20260715.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 生产改动前实测：`/api/dashboard-preview?zs_type=5` 冷请求约 26.65 秒，紧接缓存请求约 0.07 秒；`/api/ths-concepts/catalog` 冷请求约 22.76 秒，持久化目录约 0.17 秒，确认瓶颈为重复整目录抓取。
+- `node --check kpl-stats-server.js`、`tests/ths-realtime-performance.test.js`、`tests/ths-strategy-correctness.test.js` 和 `git diff --check` 通过。
+- 28/28 个 `tests/*.test.js` 文件全部通过；同花顺资金代表单板口径、策略归因、权限、L2 和现有页面行为均未改变。
+
+Deployment:
+- 尚未部署生产，未修改运行时数据，未重启服务；清单已准备为仅部署 `kpl-stats-server.js` 并重启主服务。
+
+Notes for next agent:
+- 部署后先触发一次完整同花顺目录刷新生成 `ths-concepts-db/realtime-cache.json`，再连续验证实时页与策略页；正常请求应稳定命中内存/同日磁盘热缓存。
+- 昨日实时数据不会冒充今日；同日 15:00 后完成的最终缓存当天保持新鲜，次日会重新抓取。

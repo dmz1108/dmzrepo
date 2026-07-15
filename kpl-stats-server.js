@@ -93,6 +93,10 @@ const EASTMONEY_CLOSE_DIR = path.join(__dirname, 'eastmoney-close-db');
 const WIND_CLOSE_SYNC_SCRIPT = path.join(__dirname, 'wind-close-db-sync.py');
 const THS_CONCEPT_DIR = path.join(__dirname, 'ths-concepts-db');
 const THS_CONCEPT_BOARD_DIR = path.join(THS_CONCEPT_DIR, 'boards');
+const THS_CONCEPT_REALTIME_CACHE_PATH = path.join(THS_CONCEPT_DIR, 'realtime-cache.json');
+const THS_CONCEPT_BOARDS_FRESH_MS = Math.max(30 * 1000, Number(process.env.THS_CONCEPT_BOARDS_FRESH_MS) || 60 * 1000);
+const THS_CONCEPT_BOARDS_STALE_MS = Math.max(THS_CONCEPT_BOARDS_FRESH_MS, Number(process.env.THS_CONCEPT_BOARDS_STALE_MS) || 5 * 60 * 1000);
+const THS_CONCEPT_PAGE_CONCURRENCY = Math.max(2, Math.min(8, Number(process.env.THS_CONCEPT_PAGE_CONCURRENCY) || 6));
 const THS_MANUAL_BOARD_DIR = path.join(__dirname, 'ths-manual-boards');
 const THS_LOCAL_BLOCKUPDATE_DIRS = [
   process.env.THS_BLOCKUPDATE_DIR,
@@ -534,6 +538,15 @@ let jiuyangongsheAuthStatusCache = null;
 let jiuyangongsheAuthBrowserProcess = null;
 let jiuyangongsheAutoLoginTask = null;
 let thsConceptBoardsRealtimeCache = null;
+let thsConceptBoardsRealtimeTask = null;
+let thsConceptBoardsRealtimeTaskIncludesDiscovery = false;
+let thsConceptBoardsRealtimeCacheLoaded = false;
+let thsConceptBoardsKeepWarmTimer = null;
+let thsConceptBoardsRealtimeState = {
+  status: 'idle',
+  refreshing: false,
+  source: 'ths-realtime',
+};
 const THS_CONCEPT_MEMBERS_CACHE_MS = 30 * 60 * 1000;
 const thsConceptMembersRealtimeCache = new Map();
 let thsLocalConceptCache = null;
@@ -2229,6 +2242,10 @@ function eastmoneyCloseDbPath(day) {
 
 function thsConceptCatalogPath() {
   return path.join(THS_CONCEPT_DIR, 'catalog.json');
+}
+
+function thsConceptRealtimeCachePath() {
+  return THS_CONCEPT_REALTIME_CACHE_PATH;
 }
 
 function thsConceptBoardPath(plateId) {
@@ -11153,11 +11170,83 @@ function mergeThsLocalConceptBoards(localData, quoteBoards) {
     .map((board, index) => ({ ...board, rank: index + 1 }));
 }
 
-async function fetchThsConceptBoards(options = {}) {
-  const now = Date.now();
-  if (!options.force && thsConceptBoardsRealtimeCache?.expiresAt > now) {
-    return thsConceptBoardsRealtimeCache.boards;
+function thsConceptBoardsCacheMetadata(now = Date.now(), day = chinaNowParts().day) {
+  const cache = thsConceptBoardsRealtimeCache;
+  const sameDay = !!(cache?.day && cache.day === day);
+  const fetchedAtMs = Number(cache?.fetchedAtMs || 0);
+  const ageMs = fetchedAtMs ? Math.max(0, now - fetchedAtMs) : null;
+  let cacheState = 'empty';
+  if (cache?.boards?.length && !sameDay) cacheState = 'previous-day';
+  else if (cache?.boards?.length && (cache.marketFinal || now <= Number(cache.expiresAt || 0))) cacheState = 'fresh';
+  else if (cache?.boards?.length && now <= Number(cache.staleUntil || 0)) cacheState = 'stale';
+  else if (cache?.boards?.length) cacheState = 'expired';
+  return {
+    cacheState,
+    day: cache?.day || null,
+    fetchedAt: cache?.fetchedAt || null,
+    ageMs,
+    boardCount: cache?.boards?.length || 0,
+    refreshing: !!thsConceptBoardsRealtimeTask,
+    lastDurationMs: numOrNull(thsConceptBoardsRealtimeState.lastDurationMs),
+    lastError: String(thsConceptBoardsRealtimeState.lastError || ''),
+  };
+}
+
+async function loadThsConceptBoardsRealtimeCache() {
+  if (thsConceptBoardsRealtimeCacheLoaded) return thsConceptBoardsRealtimeCache;
+  thsConceptBoardsRealtimeCacheLoaded = true;
+  try {
+    const payload = JSON.parse(await fs.readFile(thsConceptRealtimeCachePath(), 'utf8'));
+    const fetchedAtMs = Date.parse(payload?.fetchedAt || '');
+    const today = chinaNowParts().day;
+    if (payload?.day !== today || !Number.isFinite(fetchedAtMs) || !Array.isArray(payload?.boards) || !payload.boards.length) {
+      return null;
+    }
+    thsConceptBoardsRealtimeCache = {
+      day: payload.day,
+      fetchedAt: payload.fetchedAt,
+      fetchedAtMs,
+      expiresAt: fetchedAtMs + THS_CONCEPT_BOARDS_FRESH_MS,
+      staleUntil: fetchedAtMs + THS_CONCEPT_BOARDS_STALE_MS,
+      marketFinal: payload.marketFinal === true,
+      boards: payload.boards.map(board => publicThsConceptBoard(board, board)),
+    };
+    thsConceptBoardsRealtimeState = {
+      ...thsConceptBoardsRealtimeState,
+      status: 'disk-cache-loaded',
+      fetchedAt: payload.fetchedAt,
+      boardCount: payload.boards.length,
+    };
+    return thsConceptBoardsRealtimeCache;
+  } catch {
+    return null;
   }
+}
+
+async function writeThsConceptBoardsRealtimeCache(cache) {
+  if (!cache?.day || !cache?.boards?.length) return;
+  await fs.mkdir(THS_CONCEPT_DIR, { recursive: true });
+  const target = thsConceptRealtimeCachePath();
+  const tmp = `${target}.${process.pid}.${Date.now()}.tmp`;
+  const payload = {
+    version: 1,
+    source: 'ths-realtime',
+    day: cache.day,
+    fetchedAt: cache.fetchedAt,
+    marketFinal: cache.marketFinal === true,
+    boardCount: cache.boards.length,
+    boards: cache.boards.map(board => publicThsConceptBoard(board, board)),
+  };
+  await fs.writeFile(tmp, JSON.stringify(payload), 'utf8');
+  try {
+    await fs.rename(tmp, target);
+  } catch (err) {
+    await fs.rm(tmp, { force: true }).catch(() => {});
+    throw err;
+  }
+}
+
+async function fetchThsConceptBoardsFresh(options = {}) {
   let localData = null;
   try {
     localData = loadThsLocalConceptData();
@@ -11170,16 +11259,26 @@ async function fetchThsConceptBoards(options = {}) {
   );
   const pageCount = Math.max(1, Math.min(80, parseThsPageInfo(firstHtml) || 1));
   const quoteBoards = parseThsGnSection(firstHtml);
+  if (!quoteBoards.length) throw new Error('THS realtime catalog first page empty');
   if (pageCount > 1) {
     const pages = Array.from({ length: pageCount - 1 }, (_, index) => index + 2);
-    const pageBoards = await mapLimit(pages, 4, async page => {
-      const html = await thsFetchHtml(
-        `https://q.10jqka.com.cn/gn/index/field/199112/order/desc/page/${page}/ajax/1/`,
-        'https://q.10jqka.com.cn/gn/',
-      ).catch(() => '');
-      return parseThsGnSection(html);
+    const pageResults = await mapLimit(pages, THS_CONCEPT_PAGE_CONCURRENCY, async page => {
+      try {
+        const html = await thsFetchHtml(
+          `https://q.10jqka.com.cn/gn/index/field/199112/order/desc/page/${page}/ajax/1/`,
+          'https://q.10jqka.com.cn/gn/',
+        );
+        const boards = parseThsGnSection(html);
+        return { page, boards, ok: boards.length > 0 };
+      } catch (err) {
+        return { page, boards: [], ok: false, error: String(err?.message || err) };
+      }
     });
-    quoteBoards.push(...pageBoards.flat());
+    const failedPages = pageResults.filter(result => !result.ok);
+    if (failedPages.length) {
+      throw new Error(`THS realtime catalog incomplete: ${failedPages.length}/${pages.length} pages failed`);
+    }
+    quoteBoards.push(...pageResults.flatMap(result => result.boards));
   }
 
   const byId = new Map();
@@ -11187,14 +11286,16 @@ async function fetchThsConceptBoards(options = {}) {
     if (board?.plateId && !byId.has(String(board.plateId))) byId.set(String(board.plateId), board);
   }
 
-  const seedPlateId = quoteBoards[0]?.plateId || '300188';
-  const navBoards = await fetchThsConceptNavBoards(seedPlateId).catch(() => []);
-  const missingNavBoards = navBoards.filter(board => board.plateId && !byId.has(String(board.plateId)));
-  const detailBoards = await mapLimit(missingNavBoards, 6, board =>
-    fetchThsConceptDetailMeta(board.plateId, board).catch(() => board)
-  );
-  for (const board of detailBoards) {
-    if (board?.plateId && !byId.has(String(board.plateId))) byId.set(String(board.plateId), board);
+  if (options.includeDiscovery) {
+    const seedPlateId = quoteBoards[0]?.plateId || '300188';
+    const navBoards = await fetchThsConceptNavBoards(seedPlateId).catch(() => []);
+    const missingNavBoards = navBoards.filter(board => board.plateId && !byId.has(String(board.plateId)));
+    const detailBoards = await mapLimit(missingNavBoards, 6, board =>
+      fetchThsConceptDetailMeta(board.plateId, board).catch(() => board)
+    );
+    for (const board of detailBoards) {
+      if (board?.plateId && !byId.has(String(board.plateId))) byId.set(String(board.plateId), board);
+    }
   }
 
   let boards = [...byId.values()]
@@ -11203,11 +11304,126 @@ async function fetchThsConceptBoards(options = {}) {
   if (localData?.boards?.length) {
     boards = mergeThsLocalConceptBoards(localData, boards);
   }
-  thsConceptBoardsRealtimeCache = {
-    expiresAt: now + 30 * 1000,
-    boards,
+  return boards.map(board => publicThsConceptBoard(board, board));
+}
+
+function startThsConceptBoardsRefresh(options = {}) {
+  if (thsConceptBoardsRealtimeTask) return thsConceptBoardsRealtimeTask;
+  thsConceptBoardsRealtimeTaskIncludesDiscovery = options.includeDiscovery === true;
+  const startedAtMs = Date.now();
+  thsConceptBoardsRealtimeState = {
+    ...thsConceptBoardsRealtimeState,
+    status: 'refreshing',
+    refreshing: true,
+    startedAt: new Date(startedAtMs).toISOString(),
+    lastError: '',
   };
-  return boards;
+  thsConceptBoardsRealtimeTask = fetchThsConceptBoardsFresh(options)
+    .then(async boards => {
+      const completedAtMs = Date.now();
+      const fetchedAt = new Date(completedAtMs).toISOString();
+      const completedNow = chinaNowParts(new Date(completedAtMs));
+      const completedMinute = completedNow.hour * 60 + completedNow.minute;
+      const cache = {
+        day: completedNow.day,
+        fetchedAt,
+        fetchedAtMs: completedAtMs,
+        expiresAt: completedAtMs + THS_CONCEPT_BOARDS_FRESH_MS,
+        staleUntil: completedAtMs + THS_CONCEPT_BOARDS_STALE_MS,
+        marketFinal: completedMinute >= 15 * 60,
+        boards,
+      };
+      thsConceptBoardsRealtimeCache = cache;
+      thsConceptBoardsRealtimeCacheLoaded = true;
+      thsConceptBoardsRealtimeState = {
+        ...thsConceptBoardsRealtimeState,
+        status: 'ok',
+        refreshing: false,
+        fetchedAt,
+        boardCount: boards.length,
+        lastDurationMs: completedAtMs - startedAtMs,
+        lastError: '',
+        persistError: '',
+      };
+      await writeThsConceptBoardsRealtimeCache(cache).catch(err => {
+        thsConceptBoardsRealtimeState.persistError = String(err?.message || err).slice(0, 160);
+      });
+      return boards;
+    })
+    .catch(err => {
+      thsConceptBoardsRealtimeState = {
+        ...thsConceptBoardsRealtimeState,
+        status: 'error',
+        refreshing: false,
+        lastDurationMs: Date.now() - startedAtMs,
+        lastError: String(err?.message || err).slice(0, 160),
+      };
+      throw err;
+    })
+    .finally(() => {
+      thsConceptBoardsRealtimeTask = null;
+      thsConceptBoardsRealtimeTaskIncludesDiscovery = false;
+    });
+  return thsConceptBoardsRealtimeTask;
+}
+
+async function fetchThsConceptBoards(options = {}) {
+  await loadThsConceptBoardsRealtimeCache();
+  if (options.force) {
+    if (thsConceptBoardsRealtimeTask && options.includeDiscovery !== false && !thsConceptBoardsRealtimeTaskIncludesDiscovery) {
+      await thsConceptBoardsRealtimeTask.catch(() => null);
+    }
+    return startThsConceptBoardsRefresh({ ...options, includeDiscovery: options.includeDiscovery !== false });
+  }
+  const now = Date.now();
+  const meta = thsConceptBoardsCacheMetadata(now);
+  if (meta.cacheState === 'fresh') return thsConceptBoardsRealtimeCache.boards;
+  if (meta.cacheState === 'stale') {
+    startThsConceptBoardsRefresh(options).catch(() => {});
+    return thsConceptBoardsRealtimeCache.boards;
+  }
+  if (options.background) {
+    startThsConceptBoardsRefresh(options).catch(() => {});
+    return [];
+  }
+  return startThsConceptBoardsRefresh(options);
+}
+
+function scheduleThsConceptBoardsKeepWarm(delayMs) {
+  if (thsConceptBoardsKeepWarmTimer) clearTimeout(thsConceptBoardsKeepWarmTimer);
+  thsConceptBoardsKeepWarmTimer = setTimeout(
+    thsConceptBoardsKeepWarmTick,
+    Math.max(5 * 1000, Number(delayMs || THS_CONCEPT_BOARDS_FRESH_MS)),
+  );
+  thsConceptBoardsKeepWarmTimer.unref?.();
+}
+
+async function thsConceptBoardsKeepWarmTick() {
+  let nextDelayMs = 60 * 1000;
+  try {
+    const now = chinaNowParts();
+    const phase = strategyMainlineSessionPhase(now);
+    const minuteOfDay = now.hour * 60 + now.minute;
+    const shouldRefresh = chinaMarketDayStatus(now.day).isTradingDay && (
+      ['集合竞价', '早盘', '上午盘', '午后', '尾盘'].includes(phase)
+      || (minuteOfDay > 15 * 60 && minuteOfDay <= 15 * 60 + 5)
+    );
+    if (!shouldRefresh) return;
+    await loadThsConceptBoardsRealtimeCache();
+    const meta = thsConceptBoardsCacheMetadata();
+    if (meta.cacheState === 'fresh') {
+      const remainingMs = Number(thsConceptBoardsRealtimeCache?.expiresAt || 0) - Date.now();
+      nextDelayMs = remainingMs + 1000;
+      return;
+    }
+    await startThsConceptBoardsRefresh().catch(() => null);
+  } finally {
+    scheduleThsConceptBoardsKeepWarm(nextDelayMs);
+  }
+}
+
+function startThsConceptBoardsKeepWarm() {
+  scheduleThsConceptBoardsKeepWarm(5 * 1000);
 }
 
 async function fetchThsConceptMembersFromWeb(plateId) {
@@ -11612,7 +11828,8 @@ async function syncThsConceptsInner(options = {}) {
     total: 0,
   };
 
-  const boards = await fetchThsConceptBoards();
+  // 正式同步必须等待当次完整抓取；普通页面请求才使用 stale-while-revalidate。
+  const boards = await fetchThsConceptBoards({ force: true, includeDiscovery: true });
   thsConceptSyncState = {
     ...thsConceptSyncState,
     status: 'loading-constituents',
@@ -11699,6 +11916,7 @@ async function syncThsConcepts(options = {}) {
 }
 
 async function thsConceptStatus(url, req, res) {
+  await loadThsConceptBoardsRealtimeCache();
   const catalog = await readThsConceptCatalog();
   const state = !thsConceptSyncState.running && catalog?.boards?.length
     ? {
@@ -11723,6 +11941,7 @@ async function thsConceptStatus(url, req, res) {
       syncedBoardCount: catalog.syncedBoardCount || 0,
       failedBoardCount: catalog.failedBoardCount || 0,
     } : null,
+    realtime: thsConceptBoardsCacheMetadata(),
   });
 }
 
@@ -11730,6 +11949,7 @@ async function thsConceptCatalog(url, req, res) {
   const catalog = await readThsConceptCatalog();
   const cacheOnly = url.searchParams.get('cache') === '1' || url.searchParams.get('cacheOnly') === '1';
   const quoteBoards = cacheOnly ? [] : await fetchThsConceptBoards().catch(() => []);
+  const realtimeMeta = thsConceptBoardsCacheMetadata();
   if (!catalog && !quoteBoards.length) return send(res, 404, { error: 'ths concept catalog not found' });
   const catalogById = new Map((catalog?.boards || []).map(board => [String(board.plateId), board]));
   const sourceBoards = quoteBoards.length
@@ -11740,8 +11960,9 @@ async function thsConceptCatalog(url, req, res) {
     : (catalog?.boards || []);
   return send(res, 200, {
     ...(catalog || { version: 1, source: 'ths', savedAt: null }),
-    day: quoteBoards.length ? chinaNowParts().day : catalog?.day,
-    realtime: !!quoteBoards.length,
+    day: quoteBoards.length ? realtimeMeta.day || chinaNowParts().day : catalog?.day,
+    realtime: !!quoteBoards.length && realtimeMeta.day === chinaNowParts().day,
+    realtimeCache: realtimeMeta,
     boards: sourceBoards.map(board => publicThsConceptBoard(board, board)),
   });
 }
@@ -21819,8 +22040,9 @@ function strategyMainlineCatalogBoardScore(board, seed) {
 }
 
 async function getStrategyMainlineRealtimeCatalogBoards(day) {
-  const [eastmoneyQuoteBoards, thsCatalog] = await Promise.all([
+  const [eastmoneyQuoteBoards, thsQuoteBoards, thsCatalog] = await Promise.all([
     fetchEastmoneyConceptBoards().catch(() => []),
+    fetchThsConceptBoards({ background: true }).catch(() => []),
     readThsConceptCatalog().catch(() => null),
   ]);
   const eastmoneyBoards = (eastmoneyQuoteBoards || []).map(board => {
@@ -21836,7 +22058,8 @@ async function getStrategyMainlineRealtimeCatalogBoards(day) {
       zsType: 6,
     };
   });
-  const thsBoards = (thsCatalog?.boards || []).map(board => {
+  const thsSourceBoards = thsQuoteBoards.length ? thsQuoteBoards : (thsCatalog?.boards || []);
+  const thsBoards = thsSourceBoards.map(board => {
     const view = publicThsConceptBoard(board, board);
     return {
       plateId: view.plateId,
@@ -26222,6 +26445,7 @@ if (process.argv.includes('--refresh-zt10')) {
   }
   scheduleDailyAutoCleanup();
   strategy.startCron();
+  startThsConceptBoardsKeepWarm();
   startStrategyMainlineKeepWarm();
 
   setInterval(() => {
