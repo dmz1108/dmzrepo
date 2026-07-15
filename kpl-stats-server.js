@@ -36,6 +36,20 @@ const {
 // 无论调用方是否 .catch 吞掉,都把真实错误写进当前诊断上下文;正常缺文件(ENOENT)只记 missing。
 // 每次诊断构建用 strategyMainlineDiagStore.run() 严格包住(七审:不用 enterWith),并发互不串写。
 const strategyMainlineDiagStore = new AsyncLocalStorage();
+// 两套独立预测(v2)性能:东财[6]/同花顺[5] 并行各跑一遍引擎时,「按日、与板块来源无关」的
+// 磁盘读取(涨停库/主因库/收盘库/主线确认)本会被读两遍。这里用一个「配对运行期作用域」的 memo
+// 缓存把同一天的读取去重:仅当处于 strategyMainlineReadCache.run() 作用域(即成对构建两套预测时)
+// 才生效,其它任何调用者一律绕过、行为零变化。结果字节一致(同一天同一文件),不改任何预测口径。
+const strategyMainlineReadCache = new AsyncLocalStorage();
+function strategyMainlineReadCachedCall(kind, impl, day, options) {
+  const store = strategyMainlineReadCache.getStore();
+  // 带非默认 options 的读取不缓存(可能改变返回);无作用域时直接透传。
+  if (!store || (options && Object.keys(options).length)) return impl(day, options);
+  const key = kind + '|' + String(day);
+  let hit = store.get(key);
+  if (hit === undefined) { hit = impl(day, options); store.set(key, hit); }   // 缓存 Promise,天然去重并发
+  return hit;
+}
 function strategyMainlineDiagScrubPath(text) {
   return String(text || '')
     .replace(/[A-Za-z]:\\[^\s"']+/g, '[path]')
@@ -4900,6 +4914,9 @@ function normalizeLimitUpRow(row, day) {
 
 const limitUpDbDayTimedCache = new Map();
 async function readLimitUpDbDay(day, options = {}) {
+  return strategyMainlineReadCachedCall('limitUpDb', readLimitUpDbDayImpl, day, options);
+}
+async function readLimitUpDbDayImpl(day, options = {}) {
   const key = String(day || '');
   const timed = options.force ? null : limitUpDbDayTimedCache.get(key);
   if (timed && Date.now() - timed.at < 60 * 1000) return timed.payload;
@@ -7631,6 +7648,9 @@ async function getEastmoneyConceptBoardForDisplay(plateId, day) {
 }
 
 async function readEastmoneyCloseDbDay(day) {
+  return strategyMainlineReadCachedCall('closeDb', readEastmoneyCloseDbDayImpl, day, undefined);
+}
+async function readEastmoneyCloseDbDayImpl(day) {
   const normalizedDay = isoFromCompactDate(compactDate(day));
   if (closeDbDayCache.has(normalizedDay)) return closeDbDayCache.get(normalizedDay);
   try {
@@ -18353,6 +18373,9 @@ function applyMainReasonOverridesToPayload(payload, overrides) {
 const mainReasonDbDayTimedCache = new Map();
 const DAY_FILE_CACHE_TTL_MS = 60 * 1000;
 async function readLimitUpMainReasonDbDay(day, options = {}) {
+  return strategyMainlineReadCachedCall('mainReason', readLimitUpMainReasonDbDayImpl, day, options);
+}
+async function readLimitUpMainReasonDbDayImpl(day, options = {}) {
   const isoDay = isoFromCompactDate(day);
   const timed = options.force ? null : mainReasonDbDayTimedCache.get(isoDay);
   if (timed && Date.now() - timed.at < DAY_FILE_CACHE_TTL_MS) return timed.payload;
@@ -22947,6 +22970,9 @@ function strategyMainlineAttachResponseMeta(payload, options = {}) {
   };
 }
 async function readMainlineConfirm(day) {
+  return strategyMainlineReadCachedCall('confirm', readMainlineConfirmImpl, day, undefined);
+}
+async function readMainlineConfirmImpl(day) {
   try { return JSON.parse(await fs.readFile(strategyMainlineConfirmPath(day), 'utf8')); } catch { return null; }
 }
 async function writeMainlineConfirm(day, data) {
@@ -24488,10 +24514,12 @@ async function buildStrategyMainlinesLive(day, options = {}) {
   }
   // 正常页面路径:东财[6]/同花顺[5] 各自独立跑整套引擎(取板→富化→评分→排序),绝不跨源借值。
   // 两次都不写盘中预测,由本函数用并集写一次,保持 writeMainlinePredict 原有回看语义。
-  const [em, th] = await Promise.all([
+  // 配对运行期内共享「按日只读」缓存:东财[6]/同花顺[5] 两遍引擎对同一天的涨停库/主因库/收盘库/
+  // 主线确认只读一次(结果字节一致,不改预测口径);来源相关的取板/富化/评分/排序仍各跑各的。
+  const [em, th] = await strategyMainlineReadCache.run(new Map(), () => Promise.all([
     buildStrategyMainlinesLiveImpl(day, { ...options, boardZsTypes: [6], writePredict: false }, null).catch(() => null),
     buildStrategyMainlinesLiveImpl(day, { ...options, boardZsTypes: [5], writePredict: false }, null).catch(() => null),
-  ]);
+  ]));
   const composed = strategyMainlineComposeBySourcePayload(em, th);
   if (!composed) return em || th || strategyMainlineEmptyPayload(isoFromCompactDate(day || chinaNowParts().day), isoFromCompactDate(day || chinaNowParts().day), 'strategy-mainline-unavailable', '今日主线榜暂不可用。', '');
   const today = isoFromCompactDate(chinaNowParts().day);

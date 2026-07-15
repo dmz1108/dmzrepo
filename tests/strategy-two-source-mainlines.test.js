@@ -79,4 +79,40 @@ A(/zsTypes:\s*activeBoardZsTypes/.test(src), 'impl 取板按 activeBoardZsTypes(
 A(/async function getDayThemeBoardStats\([^)]*\)\s*\{[\s\S]*?getDayBoardsWithMembers\(day,\s*\{\s*zsTypes:\s*STRATEGY_ZS_TYPES\s*\}/.test(src), '今日热点榜资金/涨幅补充(策略辅助指标)剔除 KPL');
 A(/async function getStrategyStrongResonance\([^)]*\)\s*\{[\s\S]*?getDayBoardsWithMembers\(day,\s*\{\s*zsTypes:\s*STRATEGY_ZS_TYPES\s*\}/.test(src), '强势板块共振榜(策略辅助指标)剔除 KPL');
 
-console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL STRATEGY-TWO-SOURCE-MAINLINES CHECKS PASSED');
+// ---- 6. 性能优化:配对运行期「按日只读」缓存去重且结果一致(不改口径) ----
+const { AsyncLocalStorage } = require('async_hooks');
+const strategyMainlineReadCache = new AsyncLocalStorage();
+eval(extractFn('strategyMainlineReadCachedCall'));
+(async () => {
+  let calls = 0;
+  const loader = async (day) => { calls += 1; return { day, payload: 'DB-' + day }; };
+  // 无作用域:每次都真读(其它调用者行为零变化)
+  calls = 0;
+  await strategyMainlineReadCachedCall('mainReason', loader, '2026-07-15', undefined);
+  await strategyMainlineReadCachedCall('mainReason', loader, '2026-07-15', undefined);
+  A(calls === 2, '无配对作用域:不缓存,每次都真读(不影响其它调用者)');
+  // 作用域内:同一天只读一次,不同天各读一次,结果与真读一致
+  await strategyMainlineReadCache.run(new Map(), async () => {
+    calls = 0;
+    const a1 = await strategyMainlineReadCachedCall('mainReason', loader, '2026-07-15', undefined);
+    const a2 = await strategyMainlineReadCachedCall('mainReason', loader, '2026-07-15', undefined);
+    const b1 = await strategyMainlineReadCachedCall('mainReason', loader, '2026-07-14', undefined);
+    A(calls === 2, '配对作用域:同一天(07-15)只读一次、不同天(07-14)另读一次 → 共 2 次真读');
+    A(a1.payload === 'DB-2026-07-15' && a2.payload === 'DB-2026-07-15' && a1 === a2, '缓存命中返回同一份且内容一致(结果字节不变)');
+    A(b1.payload === 'DB-2026-07-14', '不同天返回各自的内容');
+    // 带非默认 options 不走缓存(可能改变返回)
+    calls = 0;
+    await strategyMainlineReadCachedCall('mainReason', loader, '2026-07-15', { overrides: true });
+    await strategyMainlineReadCachedCall('mainReason', loader, '2026-07-15', { overrides: true });
+    A(calls === 2, '带非默认 options 的读取绕过缓存(保守,不改带参返回)');
+  });
+  // 不同 kind 同一天互不串
+  await strategyMainlineReadCache.run(new Map(), async () => {
+    calls = 0;
+    await strategyMainlineReadCachedCall('mainReason', loader, '2026-07-15', undefined);
+    await strategyMainlineReadCachedCall('limitUpDb', loader, '2026-07-15', undefined);
+    A(calls === 2, '不同库(kind)同一天各自缓存,不串键');
+  });
+
+  console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL STRATEGY-TWO-SOURCE-MAINLINES CHECKS PASSED');
+})();

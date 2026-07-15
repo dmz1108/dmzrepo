@@ -432,7 +432,8 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
     // 权限错误(EACCES):非 ENOENT,必须入 readErrors
     const permErr = Object.assign(new Error('permission denied'), { code: 'EACCES' });
     const fs = { readFile: async () => { throw permErr; } };
-    eval(extractFn('readLimitUpMainReasonDbDay').replace('readLimitUpMainReasonDbDay(', 'readMainReasonEacces('));
+    // v2 性能优化后:诊断读取逻辑在 ...Impl 里,公开名只是「配对运行期只读缓存」的透传壳。
+    eval(extractFn('readLimitUpMainReasonDbDayImpl').replace('readLimitUpMainReasonDbDayImpl(', 'readMainReasonEacces('));
     const store = { readErrors: [], timeouts: [], missing: [] };
     // 关键:调用方按现网写法 .catch(()=>null) 吞掉——底层的 note-before-throw 仍已记录
     const got = await strategyMainlineDiagStore.run(store, () => readMainReasonEacces('2026-07-08').catch(() => null));
@@ -450,7 +451,7 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
       const store2 = { readErrors: [], timeouts: [], missing: [] };
       const enoErr = Object.assign(new Error('no such file'), { code: 'ENOENT' });
       const fs = { readFile: async () => { throw enoErr; } };
-      eval(extractFn('readLimitUpMainReasonDbDay').replace('readLimitUpMainReasonDbDay(', 'readMainReasonEnoent('));
+      eval(extractFn('readLimitUpMainReasonDbDayImpl').replace('readLimitUpMainReasonDbDayImpl(', 'readMainReasonEnoent('));
       const got2 = await strategyMainlineDiagStore.run(store2, () => readMainReasonEnoent('2026-07-09').catch(() => null));
       A(got2 === null && store2.readErrors.length === 0 && store2.missing[0] === 'main-reason 2026-07-09', 'ENOENT 缺文件只记 missing,不使 complete=false');
     }

@@ -5652,3 +5652,29 @@ Notes for next agent:
 - 两套预测目前实现为「并行各跑一遍 impl」;性能上两源板块盘约各半、总量与旧合并相近,但共享证据读取翻倍——如盘中压力大可后续抽公共佐证层单读。
 - 历史冻结快照无 mainlinesBySource → 前端回退单列(与 Codex 点4「不动历史」一致)。
 - getStrongThemeMap(复盘💪强势标)仍默认三源——属复盘页非策略辅助指标,不误伤。
+
+## 2026-07-15 - Claude - #88 v2 性能:配对运行期「按日只读」共享缓存
+
+Changed:
+- 两套独立预测并行各跑一遍引擎时,「按日、与板块来源无关」的磁盘读取会被读两遍。新增
+  `strategyMainlineReadCache`(AsyncLocalStorage)+ `strategyMainlineReadCachedCall`:仅在
+  `buildStrategyMainlinesLive` 成对构建两套预测的 run() 作用域内生效,把同一天的
+  涨停库/主因库/收盘库/主线确认只读一次(缓存 Promise,天然去重并发)。
+- 四个按日只读函数(readLimitUpDbDay / readEastmoneyCloseDbDay / readLimitUpMainReasonDbDay /
+  readMainlineConfirm)拆成公开薄壳 + `...Impl`;壳走缓存,Impl 是原逻辑。其它任何调用者
+  (不在该作用域)一律绕过缓存,行为零变化;带非默认 options 的读取也绕过。
+- 关键:只共享「与来源无关」的按日读取,来源相关的取板/富化/评分/排序仍各跑各的——两套预测
+  结果字节不变,不改任何口径。主因上下文的 30 日读取(经 readLimitUpMainReasonDbDay)因此
+  从「两源×30 天」降到「30 天」。
+
+Files:
+- `kpl-stats-server.js`(ReadCache/CachedCall + 四个 reader 薄壳 + buildStrategyMainlinesLive 包 run 作用域)
+- `tests/strategy-two-source-mainlines.test.js`(增缓存去重/结果一致/options 绕过/kind 不串键)
+- `tests/leader-pool-debug.test.js`(EACCES/ENOENT 诊断改测 ...Impl 真身)
+
+Validated:
+- `node --check` 通过;全仓 36 个测试文件全绿。缓存结果与真读字节一致(测试断言),预测口径不变。
+
+Notes for next agent:
+- 缓存作用域仅限成对构建;历史/诊断/盘后复核路径不进该作用域,不受影响。
+- 若未来把两套预测拆到不同请求(非并行),该缓存自然失效退回真读,无副作用。
