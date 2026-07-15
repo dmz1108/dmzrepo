@@ -5623,3 +5623,32 @@ Validated:
 Notes for next agent:
 - #88 P1/点2/点3 已修并测,点4 边界已澄清,点5 证据+讨论组已补;等 Codex 重新复核。
 - 历史冻结快照仍含 KPL(本 PR 不动);`getStrategyBoardStocks` 逐 plateId 保留 [6,5,7](策略不传 KPL plateId,无副作用)——是否统一待 Owner 定。
+
+## 2026-07-15 - Claude - #88 v2:东财/同花顺两套独立主线预测(Owner 取代 R2)
+
+Changed:
+- Owner 最终口径:策略页拆两套独立预测,各只用本源数据,绝不跨源借资金/涨幅/板块数;KPL 不进任一边,也不进策略辅助指标(热点/共振)。
+- 后端:`buildStrategyMainlinesLiveImpl` 增 `options.boardZsTypes`;`buildStrategyMainlinesLive` 正常页面路径并行跑东财[6]/同花顺[5],composed `mainlinesBySource:{eastmoney,ths}`(各带 available/count/mainLeaderTheme/mainlines,缺源 available=false 不借值;dualResonance 标双源共振不合并卡)。顶层 mainlines 保留为两套并集(带 source/sourceRank,不跨源重打分)供缓存/确认/AI 兼容;盘中预测用并集写一次。诊断/盘后复核路径口径不变。
+- 确认标记落到东财/同花顺各自 mainlines;AI live 证据链输出 strategy.mainlinesBySource。
+- 策略辅助指标剔除 KPL:共振榜(已改)+ 今日热点榜资金/涨幅补充 getDayThemeBoardStats 传 STRATEGY_ZS_TYPES(题材列表仍源自四源复盘主因库)。
+- 前端:今日主线榜「东财主线预测 | 同花顺主线预测」两栏(桌面并列 ≤900px 上下),缺源显示暂缺,🔗双源共振标;旧冻结快照无 mainlinesBySource 时回退单列。
+
+Files:
+- `kpl-stats-server.js`(buildStrategyMainlinesLiveImpl/Live + compose/assemble/slim + getStrategyMainlinesWithConfirm + AI live + getDayThemeBoardStats)
+- `kpl-dashboard_17_apple.html`(renderStrategyMainlinesHTML 两栏 + CSS)
+- `tests/strategy-two-source-mainlines.test.js`(新增:5 条必测行为——A#1/B#1 分列、源独有题材不串、同名不交叉取值、缺源不借值、KPL 不进任一边)
+- `tests/strategy-kpl-exclusion.test.js`(增热点榜剔除 KPL 静态断言)
+- `docs/strategy/discussions/2026-07-15-strategy-kpl-exclusion-r2-pairing.md`(v2 Shared Decision + 生产证据)
+
+Validated:
+- 生产证据:`bundleSha256=c5acd5e9779b91044795248c103793f399fc9b7501c0ba38706883f2f654f60c`,`complete=true`;`replay --expect-sha` 通过。两源净流入前5不同(东财第1=创新药76.56亿,同花顺第1=仿制药一致性评价43.08亿)——实证两套独立预测的必要性;KPL 8 板全为独有,两套均不含。
+- `node --check` 通过;前端内联脚本可编译;全仓 36 个测试文件全绿。
+- Token 仅环境注入,证据 JSON 留 tmp,均未入 Git。
+
+Deployment:
+- 未部署。核心策略引擎 + 前端结构变更,合并后经 production-ops.yml 部署 kpl-stats-server.js + kpl-dashboard_17_apple.html 并重启主服务。等 Codex 复核。
+
+Notes for next agent:
+- 两套预测目前实现为「并行各跑一遍 impl」;性能上两源板块盘约各半、总量与旧合并相近,但共享证据读取翻倍——如盘中压力大可后续抽公共佐证层单读。
+- 历史冻结快照无 mainlinesBySource → 前端回退单列(与 Codex 点4「不动历史」一致)。
+- getStrongThemeMap(复盘💪强势标)仍默认三源——属复盘页非策略辅助指标,不误伤。

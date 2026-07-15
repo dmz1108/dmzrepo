@@ -140,3 +140,22 @@ Owner PR #88 定稿：策略页明确分成两套**独立**预测，不是「合
 
 - 双跑引擎的性能/缓存：两源各跑一遍全套（含实时补水），需确认可接受或做并发/缓存。→ 待 Owner 确认实现走法后落地。
 - 响应体积变化对 AI live 证据链的影响（两套 mainlines）。
+
+### v2 生产证据(2026-07-15)
+
+标准证据包(AI_PRODUCTION_READ.md;Token 仅环境注入,未入 Git):
+- `day=2026-07-15 codes=002396,000566 themes=算力AI,大消费 window=30`
+- `bundleSha256 = c5acd5e9779b91044795248c103793f399fc9b7501c0ba38706883f2f654f60c`,`complete=true`,`missingSources=[]`,`sourceErrors=[]`;`replay --expect-sha` 通过。
+
+两源独立性证据(`/api/snapshot` 各源净流入前 5,支撑「两套独立预测」而非合并):
+- 东财(6) 净流入前 5:创新药 76.56亿 / 医药医疗风格 63.24亿 / 创新医疗服务 36.1亿 / CRO 33.46亿 / 减肥药 31.43亿。
+- 同花顺(5) 净流入前 5:仿制药一致性评价 43.08亿 / 减肥药 42.22亿 / 辅助生殖 34.64亿 / 细胞免疫治疗 24.71亿 / 肝炎概念 24.69亿。
+- 结论:两源的板块名、排序、净流入量级都不同(东财第 1=创新药 76.56亿,同花顺第 1=仿制药一致性评价 43.08亿)。合并成一套会把两种口径混成一个分数,无法回答「东财/同花顺各自第 1 主线」——这正是 v2 拆两套的实证依据。
+- KPL(7) 8 个板名全部为独有(不在东财∪同花顺),两套预测均不含之。
+
+### v2 状态(实现已落地,待 Codex 复核)
+
+- 后端:`buildStrategyMainlinesLiveImpl(options.boardZsTypes)` + `buildStrategyMainlinesLive` 并行跑东财[6]/同花顺[5],`mainlinesBySource:{eastmoney,ths}`;两边独立候选/评分/排序,缺源 available=false 不借值;dualResonance 标双源共振不合并卡。
+- 策略辅助指标剔除 KPL:共振榜(getStrategyStrongResonance)、今日热点榜资金/涨幅(getDayThemeBoardStats)。
+- 前端:今日主线榜「东财 | 同花顺」两栏(桌面并列、移动上下),缺源显示暂缺。
+- 回归:`tests/strategy-two-source-mainlines.test.js`(5 条必测行为全覆盖)+ `tests/strategy-kpl-exclusion.test.js`(含共振榜/热点榜剔除);全仓 34 用例全绿。
