@@ -21168,6 +21168,8 @@ async function getDayBoardsWithMembers(day, options = {}) {
   const requestedDay = isoFromCompactDate(day);
   const allowFallback = options.allowFallback !== false;
   const useDay = allowFallback ? await resolveStrategySnapshotDay(requestedDay) : requestedDay;
+  // 默认三源 [6,5,7](看板/复盘等页面仍需 KPL);策略主线传 STRATEGY_ZS_TYPES=[6,5] 以剔除 KPL,避免误伤其它页面。
+  const zsTypes = Array.isArray(options.zsTypes) && options.zsTypes.length ? options.zsTypes : [6, 5, 7];
   const bmap = new Map();
   const absorbPayload = async (payload, z) => {
     let hidden; try { hidden = await getPermanentHiddenSet(z); } catch { hidden = new Set(); }
@@ -21186,7 +21188,7 @@ async function getDayBoardsWithMembers(day, options = {}) {
       if (!cur || (Number(zt) || 0) > (Number(cur.zt) || 0)) bmap.set(name, { name, plateId, zsType: z, zt, netInflow, gainPct, codes });
     }
   };
-  for (const z of [6, 5, 7]) {
+  for (const z of zsTypes) {
     try {
       const p = JSON.parse(await fs.readFile(snapshotPath(useDay, String(z)), 'utf8'));
       await absorbPayload(p, z);
@@ -21196,7 +21198,7 @@ async function getDayBoardsWithMembers(day, options = {}) {
   if (!bmap.size && options.liveIfMissing && isChinaMarketTradingDay(requestedDay)) {
     const apiKey = await readSavedApiKey().catch(() => '');
     if (apiKey) {
-      await mapLimit([6, 5, 7], 3, async z => {
+      await mapLimit(zsTypes, 3, async z => {
         try {
           let hidden; try { hidden = await getPermanentHiddenSet(z); } catch { hidden = new Set(); }
           const rankBoards = await fetchBoardRankingForSnapshot(String(z), apiKey, {
@@ -24474,6 +24476,7 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     liveIfMissing: !diagHistoricalBoards,
     boardPool: STRATEGY_MAINLINE_LIVE_BOARD_POOL + STRATEGY_MAINLINE_SUPPLEMENT_BOARDS,
     liveRankCount: 80,
+    zsTypes: STRATEGY_ZS_TYPES,   // Owner 2026-07-15:策略主线只用东财+同花顺,剔除 KPL(7);真实取板链路
   }), diagStore?.readErrors || null, { useDay: requestedDay, boards: [], source: 'none' });
   const isoDay = requestedDay;
   if (!Array.isArray(boardPayload?.boards) || !boardPayload.boards.length) {

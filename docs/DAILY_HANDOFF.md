@@ -5565,3 +5565,22 @@ Notes for next agent(Codex 复核重点):
 - 卡片两组并列展示与旧「资金口径 单板」行共存;如需去掉旧行 Owner 再定。
 - 与 PR #87(星标门槛 + 自动扫描)相互独立,合并顺序无依赖。
 
+## 2026-07-15 - Claude - 修正 #88 P1:KPL 剔除挪到真实主线取板链路(Codex 复核发现)
+
+Changed:
+- Codex 复核指出前一版把 `STRATEGY_ZS_TYPES` 只加在 `getStrategyBoardsForDay`/`collectStrategyQiCodes`,而真实主线链路是 `buildStrategyMainlinesLiveImpl → getDayBoardsWithMembers`(仍固定 [6,5,7])——KPL 实际未被剔除。**属实,已修**。
+- `getDayBoardsWithMembers` 新增 `options.zsTypes`(默认 [6,5,7],看板/复盘等共享调用者不变、不误伤);`buildStrategyMainlinesLiveImpl` 的取板调用传 `zsTypes: STRATEGY_ZS_TYPES`,主线候选/板块数/资金/涨幅/排序/L2 的板源现在真实剔除 KPL。
+- 新增 `tests/strategy-kpl-exclusion.test.js`:**贯穿真实 `getDayBoardsWithMembers`**(仅 stub 磁盘 IO),断言 zsTypes=[6,5] 时 KPL 独有板+同名 KPL 板均不进候选、同名“医药”取自东财;默认口径 KPL 仍在(不误伤)。
+
+Files:
+- `kpl-stats-server.js`(getDayBoardsWithMembers + buildStrategyMainlinesLiveImpl 取板调用)
+- `tests/strategy-kpl-exclusion.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check` 通过;全仓 33 个测试文件全绿;`git diff --check` 通过。
+
+尚未处理(按 Owner「先只修 P1」决定,留后续):
+- Codex 点 2:`getDayBoardsWithMembers` 按板名跨源去重(`bmap.get(name)`)会让同名东财/同花顺板塌成一条,R2 `sourcePairs` 仍常拿不到两源——需改 source-aware 身份(zsType+name/plateId)+ 贯穿上游的行为测试。
+- 点 3 snapshot-day 可用性把 KPL-only 快照算数;点 4 冻结历史快照不受本次影响、PR 文案勿称历史已完全剔除;点 5 证据包 + 讨论组记录。
+- getStrategyStrongResonance / getDayThemeBoardStats / getStrongThemeMap 等其它策略面板仍走默认 [6,5,7](本次只修主线 P1)。
