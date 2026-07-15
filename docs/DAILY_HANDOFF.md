@@ -5026,3 +5026,27 @@ Deployment:
 Notes for next agent:
 - 部署后观察 `realtimeCache.cacheState/status/lastDurationMs/lastError`；只有 `realtime=true` 且 `boardCount` 与目录规模相符才算预热成功。
 - 页面请求必须保持非阻塞，即使同花顺上游继续限流，也只能显示“等待今日数据”，不能回退昨日数值冒充今天。
+
+## 2026-07-15 - Codex - 将同花顺实时抓取收敛为强势候选窗口
+
+Changed:
+- 根据现网限流边界，将同花顺实时抓取从全部约 39 页收敛为按涨幅排序的前 4 页（约 40 个最强板块）；盘后 `catalog.json` 继续提供全部 382 个板块名称、ID 和成员映射。
+- 实时与策略排序只消费前 4 页的真实涨幅/资金，其余目录行保持数值 `null`，不会用旧值或估算值填充；正式盘后同步仍通过导航发现完整目录。
+- 缓存状态增加 `realtimeMetricCount`、`realtimePageLimit` 和当前刷新开始时间，刷新期间保留上一条错误，便于判断热缓存是否真正形成。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/ths-realtime-performance.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 现网完整目录为 382 个板块、39 页；6 路并发时只有前约 4 页可稳定返回，继续请求会触发大量 HTTP 200 空内容。
+- 新口径仍保留全部目录行，但只把前 4 页标成实时指标覆盖；策略当前候选池和今日实时前排均处于该窗口内。
+- `node --check kpl-stats-server.js`、同花顺性能/正确性专项测试和 `git diff --check` 通过。
+
+Deployment:
+- 尚未部署本次页数收敛；生产当前仍运行 PR #75，页面非阻塞但后台预热会因尝试全 39 页而失败。
+
+Notes for next agent:
+- 部署后成功标准：`realtime=true`、`cacheState=fresh`、`realtimeMetricCount` 约 35-40、总目录仍约 382，目录接口和今日实时连续请求维持亚秒级。
+- 如果未来策略需要捕捉“涨幅不在前 40 但资金异常流入”的板块，应另加少量按资金排序的候选页，不能恢复每分钟全 39 页抓取。

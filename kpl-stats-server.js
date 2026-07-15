@@ -97,6 +97,7 @@ const THS_CONCEPT_REALTIME_CACHE_PATH = path.join(THS_CONCEPT_DIR, 'realtime-cac
 const THS_CONCEPT_BOARDS_FRESH_MS = Math.max(30 * 1000, Number(process.env.THS_CONCEPT_BOARDS_FRESH_MS) || 60 * 1000);
 const THS_CONCEPT_BOARDS_STALE_MS = Math.max(THS_CONCEPT_BOARDS_FRESH_MS, Number(process.env.THS_CONCEPT_BOARDS_STALE_MS) || 5 * 60 * 1000);
 const THS_CONCEPT_PAGE_CONCURRENCY = Math.max(1, Math.min(4, Number(process.env.THS_CONCEPT_PAGE_CONCURRENCY) || 4));
+const THS_CONCEPT_REALTIME_MAX_PAGES = Math.max(2, Math.min(10, Number(process.env.THS_CONCEPT_REALTIME_MAX_PAGES) || 4));
 const THS_MANUAL_BOARD_DIR = path.join(__dirname, 'ths-manual-boards');
 const THS_LOCAL_BLOCKUPDATE_DIRS = [
   process.env.THS_BLOCKUPDATE_DIR,
@@ -11188,7 +11189,10 @@ function thsConceptBoardsCacheMetadata(now = Date.now(), day = chinaNowParts().d
     marketFinal: cache?.marketFinal === true,
     ageMs,
     boardCount: cache?.boards?.length || 0,
+    realtimeMetricCount: Number(cache?.realtimeMetricCount || 0),
+    realtimePageLimit: THS_CONCEPT_REALTIME_MAX_PAGES,
     refreshing: !!thsConceptBoardsRealtimeTask,
+    startedAt: thsConceptBoardsRealtimeState.startedAt || null,
     lastDurationMs: numOrNull(thsConceptBoardsRealtimeState.lastDurationMs),
     lastError: String(thsConceptBoardsRealtimeState.lastError || ''),
   };
@@ -11211,6 +11215,7 @@ async function loadThsConceptBoardsRealtimeCache() {
       expiresAt: fetchedAtMs + THS_CONCEPT_BOARDS_FRESH_MS,
       staleUntil: fetchedAtMs + THS_CONCEPT_BOARDS_STALE_MS,
       marketFinal: payload.marketFinal === true,
+      realtimeMetricCount: Number(payload.realtimeMetricCount || 0),
       boards: payload.boards.map(board => publicThsConceptBoard(board, board)),
     };
     thsConceptBoardsRealtimeState = {
@@ -11236,6 +11241,7 @@ async function writeThsConceptBoardsRealtimeCache(cache) {
     day: cache.day,
     fetchedAt: cache.fetchedAt,
     marketFinal: cache.marketFinal === true,
+    realtimeMetricCount: Number(cache.realtimeMetricCount || 0),
     boardCount: cache.boards.length,
     boards: cache.boards.map(board => publicThsConceptBoard(board, board)),
   };
@@ -11259,7 +11265,9 @@ async function fetchThsConceptBoardsFresh(options = {}) {
     'https://q.10jqka.com.cn/gn/index/field/199112/order/desc/page/1/ajax/1/',
     'https://q.10jqka.com.cn/gn/',
   );
-  const pageCount = Math.max(1, Math.min(80, parseThsPageInfo(firstHtml) || 1));
+  const sourcePageCount = Math.max(1, Math.min(80, parseThsPageInfo(firstHtml) || 1));
+  // 实时页和策略只消费强势候选。完整板块名录来自盘后 catalog，不应每分钟重抓 39 页。
+  const pageCount = Math.min(sourcePageCount, THS_CONCEPT_REALTIME_MAX_PAGES);
   const quoteBoards = parseThsGnSection(firstHtml);
   if (!quoteBoards.length) throw new Error('THS realtime catalog first page empty');
   if (pageCount > 1) {
@@ -11344,7 +11352,6 @@ function startThsConceptBoardsRefresh(options = {}) {
     status: 'refreshing',
     refreshing: true,
     startedAt: new Date(startedAtMs).toISOString(),
-    lastError: '',
   };
   thsConceptBoardsRealtimeTask = fetchThsConceptBoardsFresh(options)
     .then(async boards => {
@@ -11359,6 +11366,7 @@ function startThsConceptBoardsRefresh(options = {}) {
         expiresAt: completedAtMs + THS_CONCEPT_BOARDS_FRESH_MS,
         staleUntil: completedAtMs + THS_CONCEPT_BOARDS_STALE_MS,
         marketFinal: completedMinute >= 15 * 60,
+        realtimeMetricCount: boards.filter(board => numOrNull(board.gain) != null).length,
         boards,
       };
       thsConceptBoardsRealtimeCache = cache;
@@ -11369,6 +11377,7 @@ function startThsConceptBoardsRefresh(options = {}) {
         refreshing: false,
         fetchedAt,
         boardCount: boards.length,
+        realtimeMetricCount: cache.realtimeMetricCount,
         lastDurationMs: completedAtMs - startedAtMs,
         lastError: '',
         persistError: '',
