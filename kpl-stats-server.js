@@ -21343,7 +21343,9 @@ function strategyBoardTopicAligned(boardName, mainTheme) {
 // 强势板块共振榜:看板硬闸(涨停家数≥2 且 净流入>0)选出强势板块,用「成员股 code」关节。
 // 严格口径:只统计「个股最终主因」与「板块名称」同题材的成员股;仅属板块成分但主因不符的不算共振。
 async function getStrategyStrongResonance(day) {
-  const { useDay, boards } = await getDayBoardsWithMembers(day);
+  // Codex #88 二审 P1:强势板块共振榜属策略页(/api/strong-board-resonance + AI live/review 证据链),
+  // 必须只用东财(6)+同花顺(5),否则 KPL 独有板会进共振榜——违反 Owner「策略页不统计不展示 KPL」定稿。
+  const { useDay, boards } = await getDayBoardsWithMembers(day, { zsTypes: STRATEGY_ZS_TYPES });
   const strong = boards.filter(b => Number.isFinite(b.zt) && b.zt >= 2 && Number.isFinite(b.netInflow) && b.netInflow > 0);
   const { payload } = await buildDaySourceViewWithConsensus(useDay, {}).catch(() => ({ payload: null }));
   const finalRows = ((payload?.tabs || []).find(t => t.key === 'final') || {}).rows || [];

@@ -39,6 +39,11 @@ const SNAP = {
   ] },
   // 点3:仅有 KPL(7) 快照的日期——对策略页是空板日,不应被判为可用
   '2026-07-14|7': { boards: [ { name: 'KPL独有板', plateId: 'BK7B', ztCount: 3, netInflow: 20e8, gainPct: 6 } ] },
+  // 二审 P1:强势板块共振榜——KPL 强板即使涨停/净流入最高也不能进榜(仅 stub 每源快照,带 cardData 成员码)
+  '2026-07-11|6': { boards: [ { name: '东财强板', plateId: 'E1', ztCount: 3, netInflow: 10e8, gainPct: 5 } ],
+    cardData: { E1: { ztList: [{ code: '600001' }, { code: '600002' }] } } },
+  '2026-07-11|7': { boards: [ { name: 'KPL强板', plateId: 'K1', ztCount: 9, netInflow: 99e8, gainPct: 9 } ],
+    cardData: { K1: { ztList: [{ code: '600003' }, { code: '600004' }] } } },
 };
 const STRATEGY_ZS_TYPES = [6, 5];   // strategySnapshotDayHasSnap 内部引用该常量
 const fsStub = {
@@ -53,6 +58,20 @@ eval(extractFn('isFiniteNumeric'));
 eval(extractFn('strategyMainlineSourcePairs'));
 // 点3:策略日可用性按策略来源集判断——真实 strategySnapshotDayHasSnap(fs.access→stub)。
 eval(extractFn('strategySnapshotDayHasSnap').replace(/\bfs\.access\b/g, 'fsStub.access'));
+// 二审 P1:强势板块共振榜——真实 getStrategyStrongResonance,仅 stub 共识/题材对齐依赖。
+const STRATEGY_STRONG_RESONANCE_MIN_STOCKS = 1;
+const strategyBoardTopicAligned = () => true;             // 对齐判断放开,聚焦「来源剔除」这一维
+const strategyResonanceTopicKey = t => String(t || '').trim();
+const CONSENSUS_ROWS = {
+  '2026-07-11': [
+    { code: '600001', name: 'a', finalBoardTopic: '东财强板', consensusTier: 'strong', agreeCount: 3, limitUpCount: 1, gain: 10 },
+    { code: '600002', name: 'b', finalBoardTopic: '东财强板', consensusTier: 'strong', agreeCount: 3, limitUpCount: 1, gain: 10 },
+    { code: '600003', name: 'c', finalBoardTopic: 'KPL强板', consensusTier: 'strong', agreeCount: 3, limitUpCount: 1, gain: 10 },
+    { code: '600004', name: 'd', finalBoardTopic: 'KPL强板', consensusTier: 'strong', agreeCount: 3, limitUpCount: 1, gain: 10 },
+  ],
+};
+const buildDaySourceViewWithConsensus = async (useDay) => ({ payload: { tabs: [{ key: 'final', rows: CONSENSUS_ROWS[useDay] || [] }] } });
+eval(extractFn('getStrategyStrongResonance'));
 
 (async () => {
   // 1. 策略口径 zsTypes=[6,5]:KPL(7) 完全不进候选
@@ -80,6 +99,13 @@ eval(extractFn('strategySnapshotDayHasSnap').replace(/\bfs\.access\b/g, 'fsStub.
   A((await strategySnapshotDayHasSnap('2026-07-15')) === true, '点3:2026-07-15 有东财/同花顺快照→策略日可用');
   A((await strategySnapshotDayHasSnap('2026-07-14')) === false, '点3:2026-07-14 仅有 KPL(7) 快照→策略日不可用(不会选到空板日)');
   A((await strategySnapshotDayHasSnap('2026-07-13')) === false, '点3:无任何快照的日→不可用');
+
+  // 二审 P1:强势板块共振榜(/api/strong-board-resonance)——贯穿真实 getStrategyStrongResonance
+  const reso = await getStrategyStrongResonance('2026-07-11');
+  const resoNames = (reso.boards || []).map(b => b.name);
+  A(resoNames.includes('东财强板'), '二审P1:东财强板(zt3/10亿)进共振榜——证明测试口径能正常surface强板');
+  A(!resoNames.includes('KPL强板'), '二审P1:KPL强板即便 zt9/99亿(最高)也不进共振榜——策略页按来源剔除');
+  A(!(reso.boards || []).some(b => Number(b.netInflow) === 99e8), '二审P1:共振榜净流入不含 KPL 的 99亿(未被 KPL 值污染)');
 
   // 2. 默认(不传 zsTypes)仍遍历 [6,5,7]:KPL 保留,不误伤看板/复盘等页面
   const all = await getDayBoardsWithMembers('2026-07-15', { allowFallback: false });
