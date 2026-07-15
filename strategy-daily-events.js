@@ -582,8 +582,11 @@ function buildPostCloseRecord(existing, input = {}) {
   const confirmedFamilies = sortFamilies(familyEvidence.filter(row => row.eligible));
   const snapshotStatus = text(input.quality?.snapshotStatus) || 'missing';
   const snapshotUsable = snapshotStatus === 'ok' && input.quality?.snapshotUsable === true;
+  // A usable frozen snapshot with zero rows is a complete "no qualified
+  // mainline" conclusion, not missing data. The snapshot loader already owns
+  // contamination/readability checks, so row count must not redefine quality.
   const sourceComplete = !!(input.quality?.limitUpComplete && input.quality?.mainReasonComplete &&
-    snapshotUsable && input.snapshot?.mainlines?.length);
+    snapshotUsable && Array.isArray(input.snapshot?.mainlines));
   const reconstructed = input.quality?.snapshotReconstructed === true;
   const displayFamilies = reconstructed
     ? sortFamilies(familyEvidence.filter(row => row.reconstructedEligible))

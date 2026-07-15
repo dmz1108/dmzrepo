@@ -5085,10 +5085,13 @@ Changed:
 - 将“构建成功但 0 条主线”视为已完成的有效结果，使 L2 排除全部候选后能够覆盖先前的正数缓存，而不是继续展示旧卡片和 `L2 待验证`。
 - 保温任务对有效空结果恢复正常 150 秒刷新，不再按失败退避到 15 分钟；空结果带明确原因与用户可见说明。
 - 收盘快照允许保存有效的“今日无主线”，历史回看不会因为没有主线卡片而丢失当日结论。
+- 每日事件档案同步把有效空快照记为完整的 `no-qualified-mainline`，不再误记为 `dataMissing`。
 
 Files:
 - `kpl-stats-server.js`
+- `strategy-daily-events.js`
 - `tests/mainline-empty-state.test.js`
+- `tests/strategy-daily-events.test.js`
 - `docs/DAILY_HANDOFF.md`
 
 Validated:
