@@ -4945,10 +4945,12 @@ Validated:
 - 工作流全部 Bash 步骤通过语法解析，YAML、专项测试与 `git diff --check` 通过。
 - 示例部署归档实测只包含清单和 `strategy-backend.js`，没有打包仓库其他文件。
 - 首次端到端自检在远端脚本执行前主动取消；两个可能残留的临时文件已清理并确认剩余 0。
+- 修复后 GitHub production run `29381350328` 在 20 秒内完成：Administrator、项目写入/删除、主服务计划任务、三个运行时数据目录和 Node 检查全部通过，远端临时脚本清理成功。
 
 Deployment:
-- 没有执行远端运维脚本，没有部署网站、没有重启服务、没有修改业务数据库。
-- 本修复合并后需重新运行 `verify-access` 完成端到端验收。
+- 仅执行无业务写入的 `verify-access` 探针；没有部署网站、没有重启服务、没有修改业务数据库或运行时配置。
+- 两份云端运维日志已备份后追加本次验收记录；备份目录为 `C:\PandaDashboard\_deploy-backups\claude-production-access-20260715-092229`。
 
 Notes for next agent:
 - 不要恢复整仓归档；只读检查和重启操作应只上传已固定 SHA-256 的运维脚本。
+- Claude 生产管理员通道已可用。部署、重启和数据库维护仍必须使用合并到 `main` 的受审脚本并等待 Owner 批准，禁止索取或输出私钥。
