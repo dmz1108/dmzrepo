@@ -5508,3 +5508,34 @@ Notes for next agent(Codex 复核重点):
 - 自动扫描:高流入直通阈值 10亿 为 Claude 建议默认值,Owner 可调;仅放宽"涨停数"闸,金额下限仍 5亿、限流(每5分钟2个/单任务在飞)不变,不至于压垮 worker。
 - Owner 已明确接受此 PR 未补齐标准生产证据包与 10 亿边界行为测试的风险；下一交易时段应关注新规则实际入队与明星结果，异常时使用本次备份回滚。
 - KPL 剔除 + 策略卡片 R2 同源配对是另一个独立 PR,不在本 PR 内。
+
+## 2026-07-15 - Codex - 手工补录 2026-07-15 TGB 湖南人复盘
+
+Changed:
+- 严格按 `docs/ops/TGB_HUNAN_DAILY_SOP.md` 强制刷新当天淘股吧原文和 17 张原始图片，只采用官方白底 `@TGB湖南人` 表格 `image-01-06.png`；全程未调用 OCR、Qwen 或其他自动视觉识别。
+- 排除顶部重复的“市场连板股”摘要、底部 20 行“涨停炸板”、同花顺可视化图和非官方图片，按原图题材块与细分原因人工逐行录入 71 行正式 `review/tgb-hunan-structured`。
+- 写入正式源后只强制重折 `2026-07-15` 综合主因库，没有修改其他日期。
+- 已在 Codex App 建立工作日自动任务“每日淘股吧湖南人复盘”，当前按北京时间每个工作日 19:30 执行同一人工-only SOP；非交易日跳过，任何对账或清晰度失败都停止写入并报告。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 仅云端运行时：`C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-07-15.json`
+- 仅云端运行时：`C:\PandaDashboard\kpl-limitup-main-reason-db\2026-07-15.json`
+- 云端 `panda-cloud-ops-2026-06-19.md` 与 `_cloud-change-log-20260705.md`
+
+Validated:
+- 官方文章：`https://www.tgb.cn/a/2ts6SAZffqJ`，标题 `7.15湖南人涨停复盘+晚间消息汇总`；使用图片 `image-01-06.png`。
+- 题材块：业绩 23、医药 15、大消费 11、机器人 7、其他热点 6、其他个股 9，合计 71。
+- 本机与云端分别对账终盘涨停池：正式 71、基准 71、missing 0、extra 0、duplicate 0、weak 0；唯一名称差异为原图“迪哲医药”与终盘池“迪哲医药-U”，按来源忠实保留原图名称并显式记录。
+- 正式 TGB 源 SHA-256：`e01446e4c489e5463ffb0495a09fda8a428df0550e7c485a29aa2b8434a16ac3`；重折后综合主因库 SHA-256：`8132fc983b69dc3ba739ed3605b49216c2b0e2e42076d4d7251d4418ed08ea7f`。
+- 公网强制刷新 `source-view` 后，综合归纳/复盘啦/选股宝/韭研/淘股吧均为 71；TGB 71 行均为 `manual-structured-image`、`confidence=0.99`、`reasonQuality=clear`、低置信 0，`sourceErrors` 为空。
+- 同日 `after-close-status?mainReasonMode=same-day` 返回涨停库、主因库、收盘价、东财概念、同花顺概念全部正常；TGB 覆盖和主因覆盖均为 100%，公网 `/health` 为 HTTP 200。
+
+Deployment:
+- 生产运行时数据已更新；未部署应用代码，未重启任何服务。
+- 回退备份：`C:\PandaDashboard\backups\tgb-hunan-manual-20260715-20260715-194530`，包含写入前综合主因库、raw manifest、官方图片和单日重折输出；此前不存在当天正式 TGB 文件。
+- 两份云端运维日志均已追加记录；未记录 Token、Cookie、密码、私钥、用户数据或管理员会话。
+
+Notes for next agent:
+- 2026-07-15 四个正式复盘源现均为 71/71。后续每日继续同一 SOP，不能用自动视觉结果、同花顺图、摘要重复区或炸板区覆盖人工正式库。
+- 默认 `/api/after-close-status` 仍按 previous-trading-day 展示上一交易日；验证当天人工重折结果时应显式使用 `mainReasonMode=same-day`，正式 `source-view?day=2026-07-15&force=1` 已确认当天五个标签均为 71。
