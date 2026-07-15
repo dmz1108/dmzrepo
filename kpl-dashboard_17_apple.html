@@ -12459,13 +12459,13 @@ function reviewStockSearchText(stock) {
     .join(' ');
 }
 
-// 近10交易日涨停股名录（用于综合归纳搜索非当日涨停股时解析代码）
+// 近30交易日涨停股名录（用于综合归纳搜索非当日涨停股时解析代码）
 let reviewUniverseCache = { day: '', stocks: [] };
 async function ensureReviewUniverse(day) {
   const key = String(day || '');
   if (reviewUniverseCache.day === key && reviewUniverseCache.stocks.length) return reviewUniverseCache;
   try {
-    const res = await fetch(`${KPL_STATS_BASE}/api/limit-up-main-reason-db/recent-universe?day=${encodeURIComponent(key)}&days=10`, { cache: 'no-store' });
+    const res = await fetch(`${KPL_STATS_BASE}/api/limit-up-main-reason-db/recent-universe?day=${encodeURIComponent(key)}&days=30`, { cache: 'no-store' });
     const data = await res.json();
     reviewUniverseCache = { day: key, stocks: Array.isArray(data?.stocks) ? data.stocks : [] };
   } catch { reviewUniverseCache = { day: key, stocks: [] }; }

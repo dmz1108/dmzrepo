@@ -69,4 +69,14 @@ if (!serverSrc.includes("initials: reviewStockNamePinyinInitials(name)")) {
   throw new Error('recent-universe endpoint does not expose server initials');
 }
 
+// A stock can fall outside the previous 10-trading-day window while still
+// needing to resolve by initials. Keep the page request aligned with the
+// server's supported 30-day maximum so names such as 海思科 remain searchable.
+if (!pageSrc.includes('recent-universe?day=${encodeURIComponent(key)}&days=30')) {
+  throw new Error('review search universe does not request 30 trading days');
+}
+if (pageSrc.includes('recent-universe?day=${encodeURIComponent(key)}&days=10')) {
+  throw new Error('review search universe still uses the obsolete 10-day window');
+}
+
 console.log('ALL REVIEW STOCK SEARCH CHECKS PASSED');
