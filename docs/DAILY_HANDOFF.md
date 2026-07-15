@@ -4927,3 +4927,28 @@ Deployment:
 Notes for next agent:
 - PR #68 已完成 GitHub 合并、生产部署和公网验收；当前无该设计任务遗留部署项。
 - 后续继续改首页时仍以 `Qi/qi-home.jsx` 为源码并运行 `node Qi/build-home.js`，不要手改编译产物。
+
+## 2026-07-14 - Codex - 加速 Claude 生产工作流并修正远端路径展开
+
+Changed:
+- 只在部署清单存在时创建源码归档，且归档仅包含清单与其明确列出的源码文件；权限自检和单纯重启不再上传源码。
+- 修正 Bash 生成 Windows PowerShell 路径时反斜杠转义变量的问题，统一使用 Windows PowerShell 可识别的正斜杠临时路径。
+- 增加清单结构、已跟踪文件、符号链接、路径穿越和选择性归档检查。
+
+Files:
+- `.github/workflows/production-ops.yml`
+- `docs/ops/CLAUDE_PRODUCTION_ACCESS.md`
+- `tests/production-ops-workflow.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 工作流全部 Bash 步骤通过语法解析，YAML、专项测试与 `git diff --check` 通过。
+- 示例部署归档实测只包含清单和 `strategy-backend.js`，没有打包仓库其他文件。
+- 首次端到端自检在远端脚本执行前主动取消；两个可能残留的临时文件已清理并确认剩余 0。
+
+Deployment:
+- 没有执行远端运维脚本，没有部署网站、没有重启服务、没有修改业务数据库。
+- 本修复合并后需重新运行 `verify-access` 完成端到端验收。
+
+Notes for next agent:
+- 不要恢复整仓归档；只读检查和重启操作应只上传已固定 SHA-256 的运维脚本。

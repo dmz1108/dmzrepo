@@ -62,7 +62,7 @@ gh workflow run production-ops.yml \
   -f confirmation=RUN_PRODUCTION
 ```
 
-The generic deployer backs up existing files, validates staged JavaScript, stops only the selected task, replaces all manifest files as one operation, restarts, checks local health, and restores the backup if verification fails.
+The workflow uploads only the manifest and its listed source files, not the whole repository. The generic deployer backs up existing files, validates staged JavaScript, stops only the selected task, replaces all manifest files as one operation, restarts, checks local health, and restores the backup if verification fails. Read-only checks and restart-only operations upload no source archive.
 
 ## Database Or Special Maintenance
 

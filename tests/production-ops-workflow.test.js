@@ -20,6 +20,12 @@ assert(workflow.includes('expected_sha256'), 'production workflow must pin the a
 assert(workflow.includes('StrictHostKeyChecking=yes'), 'production SSH must pin the host identity');
 assert(workflow.includes('actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5'), 'checkout action must be commit pinned');
 assert(workflow.includes('ops/production/'), 'operation scripts must be tracked under the approved directory');
+assert(workflow.includes('archive_paths=("$MANIFEST_PATH")'), 'deployment archives must start from the reviewed manifest');
+assert(workflow.includes('"${archive_paths[@]}"'), 'deployment archives must contain only manifest-selected files');
+assert(workflow.includes('if [[ -n "$MANIFEST_PATH" ]]'), 'read-only and restart operations must not upload a source archive');
+assert(workflow.includes('Symlink manifest sources are forbidden'), 'manifest-selected source files must reject symlinks');
+assert(workflow.includes("& 'C:/Windows/Temp/${REMOTE_SCRIPT}'"), 'remote script path must expand before PowerShell execution');
+assert(!workflow.includes("C:\\Windows\\Temp\\$REMOTE_SCRIPT"), 'backslashes must not escape remote path variables in bash');
 
 assert(deploy.includes('_deploy-backups'), 'deployer must create rollback backups');
 assert(deploy.includes('node --check'), 'deployer must validate staged JavaScript');
