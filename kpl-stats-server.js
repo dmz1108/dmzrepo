@@ -21008,7 +21008,9 @@ function computeBoardQiLeaders(card) {
   return (qi10.length || qi30.length) ? { qi10, qi30 } : null;
 }
 async function strategySnapshotDayHasSnap(d) {
-  for (const z of [6, 5, 7]) { try { await fs.access(snapshotPath(d, String(z))); return true; } catch {} }
+  // Codex #88 点3:策略日可用性只按策略来源集(东财6/同花顺5)判断——仅有 KPL(7) 快照的日期
+  // 对策略页是「空板日」,不能算可用,否则会选到 zs5/zs6 缺失、策略板块为空的日子。
+  for (const z of STRATEGY_ZS_TYPES) { try { await fs.access(snapshotPath(d, String(z))); return true; } catch {} }
   return false;
 }
 // 请求日(通常=今天盘中、快照15:30才生成)无快照时，回退到最近一个有快照的交易日，避免策略页空白

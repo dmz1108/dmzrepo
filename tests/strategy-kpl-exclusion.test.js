@@ -37,14 +37,22 @@ const SNAP = {
     { name: 'KPL独有板', plateId: 'BK7', ztCount: 9, netInflow: 99e8, gainPct: 9 },
     { name: '医药', plateId: 'BK7M', ztCount: 20, netInflow: 50e8, gainPct: 8 },  // 涨停最高,旧按名去重会顶掉别源
   ] },
+  // 点3:仅有 KPL(7) 快照的日期——对策略页是空板日,不应被判为可用
+  '2026-07-14|7': { boards: [ { name: 'KPL独有板', plateId: 'BK7B', ztCount: 3, netInflow: 20e8, gainPct: 6 } ] },
 };
-const fsStub = { readFile: async (p) => { if (SNAP[p]) return JSON.stringify(SNAP[p]); throw new Error('ENOENT ' + p); } };
+const STRATEGY_ZS_TYPES = [6, 5];   // strategySnapshotDayHasSnap 内部引用该常量
+const fsStub = {
+  readFile: async (p) => { if (SNAP[p]) return JSON.stringify(SNAP[p]); throw new Error('ENOENT ' + p); },
+  access: async (p) => { if (SNAP[p]) return; throw new Error('ENOENT ' + p); },
+};
 // 在 eval 作用域内把标识符 fs 指向 stub(getDayBoardsWithMembers 内部用 fs.readFile)
 const fs2 = fsStub; // eslint 占位
 eval(extractFn('getDayBoardsWithMembers').replace(/\bfs\.readFile\b/g, 'fsStub.readFile'));
 // R2 同源配对(点2):真实 strategyMainlineSourcePairs + isFiniteNumeric,验证塌板后仍能同源拿两组。
 eval(extractFn('isFiniteNumeric'));
 eval(extractFn('strategyMainlineSourcePairs'));
+// 点3:策略日可用性按策略来源集判断——真实 strategySnapshotDayHasSnap(fs.access→stub)。
+eval(extractFn('strategySnapshotDayHasSnap').replace(/\bfs\.access\b/g, 'fsStub.access'));
 
 (async () => {
   // 1. 策略口径 zsTypes=[6,5]:KPL(7) 完全不进候选
@@ -67,6 +75,11 @@ eval(extractFn('strategyMainlineSourcePairs'));
   A(pairs.eastmoney && pairs.eastmoney.netInflow === 8e8 && Number(pairs.eastmoney.gainPct) === 3, '点2:sourcePairs 东财组=8亿/3%(取自 bySource[6],非跨源拼)');
   A(pairs.ths && pairs.ths.netInflow === 6e8 && Number(pairs.ths.gainPct) === 4, '点2:sourcePairs 同花顺组=6亿/4%(取自 bySource[5],非跨源拼)');
   A(pairs.eastmoney.board === '医药' && pairs.ths.board === '医药', '点2:两组均落在“医药”板(塌板后仍成对)');
+
+  // 点3:策略日可用性按策略来源集判断——有东财/同花顺快照的日算可用,仅 KPL 的日算空板日
+  A((await strategySnapshotDayHasSnap('2026-07-15')) === true, '点3:2026-07-15 有东财/同花顺快照→策略日可用');
+  A((await strategySnapshotDayHasSnap('2026-07-14')) === false, '点3:2026-07-14 仅有 KPL(7) 快照→策略日不可用(不会选到空板日)');
+  A((await strategySnapshotDayHasSnap('2026-07-13')) === false, '点3:无任何快照的日→不可用');
 
   // 2. 默认(不传 zsTypes)仍遍历 [6,5,7]:KPL 保留,不误伤看板/复盘等页面
   const all = await getDayBoardsWithMembers('2026-07-15', { allowFallback: false });
