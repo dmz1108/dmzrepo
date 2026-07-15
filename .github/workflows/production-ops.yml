@@ -68,11 +68,34 @@ jobs:
             [[ "$MANIFEST_PATH" =~ ^ops/production/[A-Za-z0-9._/-]+\.json$ ]] || { echo "Invalid manifest path" >&2; exit 1; }
             [[ "$MANIFEST_PATH" != *".."* ]] || { echo "Manifest traversal is forbidden" >&2; exit 1; }
             git ls-files --error-unmatch "$MANIFEST_PATH" >/dev/null
-            jq -e . "$MANIFEST_PATH" >/dev/null
+            [[ ! -L "$MANIFEST_PATH" ]] || { echo "Symlink manifests are forbidden" >&2; exit 1; }
+            jq -e '
+              (.files | type == "array") and
+              (.files | length >= 1 and length <= 50) and
+              all(.files[]; (.source | type == "string") and (.destination | type == "string")) and
+              (.restart | type == "string")
+            ' "$MANIFEST_PATH" >/dev/null
           fi
           remote_script="dreamerqi-op-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.ps1"
-          remote_archive="dreamerqi-source-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.zip"
-          git archive --format=zip --output="$RUNNER_TEMP/$remote_archive" "$GITHUB_SHA"
+          remote_archive=''
+          if [[ -n "$MANIFEST_PATH" ]]; then
+            remote_archive="dreamerqi-source-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.zip"
+            archive_paths=("$MANIFEST_PATH")
+            declare -A seen_sources=()
+            mapfile -t manifest_sources < <(jq -r '.files[].source' "$MANIFEST_PATH")
+            for source_path in "${manifest_sources[@]}"; do
+              [[ -n "$source_path" ]] || { echo "Manifest source path is empty" >&2; exit 1; }
+              [[ "$source_path" != /* ]] || { echo "Absolute manifest sources are forbidden" >&2; exit 1; }
+              [[ ! "$source_path" =~ (^|/)\.\.(/|$) ]] || { echo "Manifest source traversal is forbidden" >&2; exit 1; }
+              git ls-files --error-unmatch "$source_path" >/dev/null
+              [[ ! -L "$source_path" ]] || { echo "Symlink manifest sources are forbidden" >&2; exit 1; }
+              if [[ -z "${seen_sources[$source_path]+x}" ]]; then
+                archive_paths+=("$source_path")
+                seen_sources[$source_path]=1
+              fi
+            done
+            git archive --format=zip --output="$RUNNER_TEMP/$remote_archive" "$GITHUB_SHA" -- "${archive_paths[@]}"
+          fi
           echo "script_sha=$actual_sha" >> "$GITHUB_OUTPUT"
           echo "remote_script=$remote_script" >> "$GITHUB_OUTPUT"
           echo "remote_archive=$remote_archive" >> "$GITHUB_OUTPUT"
@@ -112,6 +135,7 @@ jobs:
           PORT: ${{ secrets.DREAMERQI_CLOUD_PORT }}
           USER: ${{ secrets.DREAMERQI_CLOUD_USER }}
           SCRIPT_PATH: ${{ inputs.script_path }}
+          MANIFEST_PATH: ${{ inputs.manifest_path }}
           REMOTE_SCRIPT: ${{ steps.validate.outputs.remote_script }}
           REMOTE_ARCHIVE: ${{ steps.validate.outputs.remote_archive }}
         run: |
@@ -119,9 +143,12 @@ jobs:
           scp -q -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             -i "$HOME/.ssh/dreamerqi_ops" -P "$PORT" "$SCRIPT_PATH" \
             "$USER@$HOST:C:/Windows/Temp/$REMOTE_SCRIPT"
-          scp -q -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-            -i "$HOME/.ssh/dreamerqi_ops" -P "$PORT" "$RUNNER_TEMP/$REMOTE_ARCHIVE" \
-            "$USER@$HOST:C:/Windows/Temp/$REMOTE_ARCHIVE"
+          if [[ -n "$MANIFEST_PATH" ]]; then
+            [[ -n "$REMOTE_ARCHIVE" ]] || { echo "Validated deployment archive is missing" >&2; exit 1; }
+            scp -q -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              -i "$HOME/.ssh/dreamerqi_ops" -P "$PORT" "$RUNNER_TEMP/$REMOTE_ARCHIVE" \
+              "$USER@$HOST:C:/Windows/Temp/$REMOTE_ARCHIVE"
+          fi
 
       - name: Execute approved production operation
         shell: bash
@@ -135,6 +162,10 @@ jobs:
           MANIFEST_PATH: ${{ inputs.manifest_path }}
         run: |
           set -euo pipefail
+          source_archive=''
+          if [[ -n "$REMOTE_ARCHIVE" ]]; then
+            source_archive="C:/Windows/Temp/${REMOTE_ARCHIVE}"
+          fi
           launcher="$RUNNER_TEMP/launcher.ps1"
           cat > "$launcher" <<EOF
           \$ErrorActionPreference = 'Stop'
@@ -143,8 +174,8 @@ jobs:
           \$env:DREAMERQI_OPS_RUN_ID = '$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT'
           \$env:DREAMERQI_OPS_SCRIPT_SHA256 = '$SCRIPT_SHA'
           \$env:DREAMERQI_OPS_MANIFEST_PATH = '$MANIFEST_PATH'
-          \$env:DREAMERQI_OPS_SOURCE_ARCHIVE = 'C:\Windows\Temp\$REMOTE_ARCHIVE'
-          & 'C:\Windows\Temp\$REMOTE_SCRIPT'
+          \$env:DREAMERQI_OPS_SOURCE_ARCHIVE = '$source_archive'
+          & 'C:/Windows/Temp/${REMOTE_SCRIPT}'
           EOF
           encoded=$(iconv -f UTF-8 -t UTF-16LE "$launcher" | base64 -w 0)
           ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
@@ -162,6 +193,10 @@ jobs:
           REMOTE_ARCHIVE: ${{ steps.validate.outputs.remote_archive }}
         run: |
           set +e
+          cleanup_command="Remove-Item -LiteralPath 'C:/Windows/Temp/${REMOTE_SCRIPT}' -Force -ErrorAction SilentlyContinue"
+          if [[ -n "$REMOTE_ARCHIVE" ]]; then
+            cleanup_command="$cleanup_command; Remove-Item -LiteralPath 'C:/Windows/Temp/${REMOTE_ARCHIVE}' -Force -ErrorAction SilentlyContinue"
+          fi
           ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             -i "$HOME/.ssh/dreamerqi_ops" -p "$PORT" "$USER@$HOST" \
-            "powershell -NoProfile -Command \"Remove-Item -LiteralPath 'C:\Windows\Temp\$REMOTE_SCRIPT','C:\Windows\Temp\$REMOTE_ARCHIVE' -Force -ErrorAction SilentlyContinue\""
+            "powershell -NoProfile -Command \"$cleanup_command\""
