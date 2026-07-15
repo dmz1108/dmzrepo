@@ -129,6 +129,21 @@ A(record.stockEvents.events.filter(row => row.code === '000001').length === 1, '
 A(record.eventCoverageComplete === true && record.stockEvents.familyCoveragePct === 100, '来源完整与逐股家族覆盖分别可诊断');
 A(record.historyUsableFrom === 'next-trading-day', '盘后答案明确只能从下一交易日起使用');
 
+const noMainline = buildPostCloseRecord(null, {
+  day: '2026-07-13', generatedAt: '2026-07-13T08:10:00.000Z',
+  snapshot: { mainlines: [] }, predict, limitDb, mainReasonDb, closeDb, familyInfo,
+  isExcluded: () => false,
+  quality: {
+    limitUpComplete: true, mainReasonComplete: true, closeComplete: true, missingMainReasonCodes: [],
+    snapshotStatus: 'ok', snapshotUsable: true, snapshotEvidence: [],
+  },
+});
+A(noMainline.complete === true && noMainline.postCloseConfirmed.complete === true,
+  '有效空快照仍是完整盘后结论');
+A(noMainline.postCloseConfirmed.status === 'no-qualified-mainline' &&
+  noMainline.postCloseConfirmed.confirmedMainlines.length === 0,
+  '0 条主线保存为今日无主线而非 dataMissing');
+
 const missing = buildPostCloseRecord(null, {
   day: '2026-07-14', generatedAt: '2026-07-14T08:10:00.000Z',
   snapshot, predict, limitDb, mainReasonDb: { stocks: [] }, closeDb, familyInfo,

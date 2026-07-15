@@ -22829,12 +22829,13 @@ function strategyMainlineAgeMs(payload, nowMs = Date.now()) {
 function strategyMainlineQuality(payload) {
   const mainlines = Array.isArray(payload?.mainlines) ? payload.mainlines : [];
   const mainlineCount = mainlines.length;
+  const resolved = !!(payload?.ok && Array.isArray(payload?.mainlines));
   const withInflow = mainlines.filter(item => isFiniteNumeric(item?.netInflow)).length;
   const withBoards = mainlines.filter(item => Number(item?.boardCount) > 0 || (Array.isArray(item?.resonanceBoards) && item.resonanceBoards.length)).length;
   const withLeaders = mainlines.filter(item => item?.mainLeader || (Array.isArray(item?.leaders) && item.leaders.length)).length;
   const pct = value => mainlineCount ? Number((value / mainlineCount * 100).toFixed(1)) : 0;
   return {
-    ok: mainlineCount >= 1,
+    ok: resolved,
     mainlineCount,
     inflowCoveragePct: pct(withInflow),
     boardCoveragePct: pct(withBoards),
@@ -22842,7 +22843,10 @@ function strategyMainlineQuality(payload) {
   };
 }
 function strategyMainlineIsUsablePayload(payload) {
-  return !!(payload?.ok && Array.isArray(payload.mainlines) && payload.mainlines.length >= 1);
+  // A completed build with zero qualified mainlines is still a resolved result.
+  // Reject only genuinely unavailable/error payloads, otherwise an older positive
+  // cache can survive after L2 has ruled every candidate out.
+  return !!(payload?.ok && Array.isArray(payload.mainlines));
 }
 function strategyMainlineStaleness(payload, sessionPhase = '', nowMs = Date.now()) {
   if (payload?.snapshot || payload?.frozen || payload?.snapshotState === 'frozen') return 'snapshot';
@@ -22988,9 +22992,11 @@ function strategyMainlineKeepWarmTick() {
     }
     Promise.resolve(startStrategyMainlineRefresh(today, { writePredict: true }))
       .then(payload => {
-        const ok = !!(payload?.ok && Array.isArray(payload.mainlines) && payload.mainlines.length);
+        const ok = strategyMainlineIsUsablePayload(payload);
         if (ok) {
-          strategyMainlineWarmState.lastResult = 'ok';
+          strategyMainlineWarmState.lastResult = payload.mainlines.length
+            ? 'ok'
+            : `ok-empty:${payload?.reason || 'no-qualified-mainline'}`;
           strategyMainlineWarmState.consecutiveFailures = 0;
           strategyMainlineScheduleWarm(STRATEGY_MAINLINE_KEEP_WARM_MS);
         } else {
@@ -23032,7 +23038,7 @@ function startStrategyMainlineRefresh(day, options = {}) {
   return job;
 }
 async function writeStrategyMainlineSnapshot(day, payload, reason = '') {
-  if (!payload?.ok || !Array.isArray(payload.mainlines) || !payload.mainlines.length) return null;
+  if (!payload?.ok || !Array.isArray(payload.mainlines)) return null;
   await fs.mkdir(STRATEGY_MAINLINE_DATA_DIR, { recursive: true });
   const snapshot = JSON.parse(JSON.stringify({
     ...payload,
@@ -24882,6 +24888,20 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
   if (isTodayQuery && options.writePredict !== false) {
     await writeMainlinePredict(isoDay, sessionPhaseNow, mainlines, mainlineConfirm);
   }
+  const emptyMainlineState = mainlines.length ? null : (l2Gate.excluded.length
+    ? {
+        reason: 'no-l2-qualified-mainline',
+        message: '当前候选方向已完成 L2 扫描，但没有出现预期明星或明星确认，今日暂不确认主线。',
+      }
+    : (inflowGate.excluded.length
+      ? {
+          reason: 'no-net-inflow-mainline',
+          message: '当前候选方向未满足资金净流入条件，今日暂不确认主线。',
+        }
+      : {
+          reason: 'no-qualified-mainline',
+          message: '盘中尚未形成满足条件的主线，系统会继续观察实时板块和 L2 扫描结果。',
+        }));
   // 个股归属追踪(诊断端点专用):某只股当天到底被哪些板块携带、映射到哪个题材、
   // 当日综合主因怎么说、最终落进了哪些主线的 todayCodes——用于定位"该进未进"。
   let debugTrace = null;
@@ -24923,6 +24943,7 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
   }
   return {
     ok: true,
+    ...(emptyMainlineState || {}),
     ...(debugTrace ? { debugTrace } : {}),
     ...(options.postCloseReview ? {
       // 盘后归属复核标记:本结果用当日综合主因(收盘后答案)重算,是与冻结盘中预测并列的对照,
@@ -25126,7 +25147,7 @@ async function ensureStrategyMainlineSnapshot(day, reason = '') {
   const existing = await readStrategyMainlineSnapshot(isoDay);
   if (existing) return { skipped: true, reason: 'exists', day: isoDay, snapshot: existing };
   const live = await buildStrategyMainlinesLive(isoDay, { writePredict: false });
-  if (!live?.ok || !Array.isArray(live.mainlines) || !live.mainlines.length) {
+  if (!live?.ok || !Array.isArray(live.mainlines)) {
     return { skipped: true, reason: live?.reason || 'not-ready', day: isoDay, payload: live };
   }
   const snapshot = await writeStrategyMainlineSnapshot(isoDay, live, reason || 'after-close');
