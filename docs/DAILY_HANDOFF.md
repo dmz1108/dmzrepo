@@ -5105,3 +5105,30 @@ Deployment:
 Notes for next agent:
 - 数据未准备或读取失败仍为 `ok:false`，不会写缓存；只有构建契约完整的 `ok:true + mainlines:[]` 才代表真实“无主线”。
 - 部署后确认今日接口返回 `count=0`、`reason=no-l2-qualified-mainline`，且不再返回旧的 `细胞免疫治疗 · L2 待验证`。
+
+## 2026-07-15 - Codex - 探索页改为城市生活编辑式布局
+
+Changed:
+- 保留探索页现有数据接口、城市/主题筛选、周末路线、地点详情与图片代理逻辑，重新组织为“编辑导语 → 今日精选 → 周末路线 → 主题索引 → 城市清单”的阅读顺序。
+- 首屏直接展示真实地点照片；旧版五张同权重说明卡收拢为低干扰整理流程带，周末路线和主题区去除卡片套卡片。
+- 已核验地点在城市清单与详情中强化商圈、地址和电话；详情弹窗改为桌面/手机双端响应式信息布局。
+- 增加键盘焦点、减少动态效果适配、横向筛选和手机端滚动卡片，并更新首页脚本缓存版本。
+
+Files:
+- `Qi/qi-home.jsx`
+- `Qi/qi-home.compiled.js`
+- `Qi/index.html`
+- `tests/explore-editorial-layout.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 使用现网 `/api/discovery` 数据完成 1440×1000 与 390×844 的 Playwright 视觉检查；桌面和手机页面均无横向溢出，5 张精选图正常渲染。
+- 验证精选地点打开详情、Escape 关闭、手机详情信息重排和图片加载；浏览器无页面脚本错误。
+- `node Qi/build-home.js`、`node --check Qi/qi-home.compiled.js`、探索页专项测试、静态缓存与鉴权回归测试、`git diff --check` 均通过。
+
+Deployment:
+- 当前仅 GitHub 工作分支变更，尚未部署生产，未重启服务。
+
+Notes for next agent:
+- 生产部署应原子更新 `Qi/qi-home.jsx`、`Qi/qi-home.compiled.js`、`Qi/index.html`；本次不涉及后端或运行时数据。
+- 部署后分别检查 `https://explore.dreamerqi.com` 的桌面/手机首屏、筛选、详情弹窗与图片代理。

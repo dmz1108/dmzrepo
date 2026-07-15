@@ -1449,28 +1449,28 @@ function SpbDiscover() {
     hour12: false
   }) : '等待首次更新';
   const shell = {
-    padding: '64px clamp(18px, 4vw, 56px) 86px',
+    padding: '56px clamp(18px, 4vw, 56px) 88px',
     borderTop: `1px solid ${spb.line}`,
-    background: 'linear-gradient(180deg, oklch(0.155 0.013 265), oklch(0.135 0.012 265))'
+    background: 'oklch(0.145 0.012 265)'
   };
   const chip = active => ({
     border: `1px solid ${active ? 'oklch(0.72 0.15 242 / 0.58)' : spb.line}`,
-    background: active ? spb.blue : 'oklch(0.18 0.014 265 / 0.70)',
+    background: active ? spb.blue : 'transparent',
     color: active ? spb.bg : spb.sub,
-    borderRadius: 8,
-    padding: '9px 14px',
+    borderRadius: 6,
+    padding: '8px 12px',
     cursor: 'pointer',
     fontFamily: 'inherit',
-    fontSize: 13.5,
+    fontSize: 13,
     fontWeight: active ? 700 : 550,
     boxShadow: 'none'
   });
   const cityCard = {
-    background: 'oklch(0.185 0.014 265 / 0.92)',
+    background: 'oklch(0.18 0.014 265 / 0.82)',
     border: `1px solid ${spb.line}`,
-    borderRadius: 10,
-    padding: 20,
-    boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.055), 0 20px 54px rgba(0,0,0,0.22)'
+    borderRadius: 8,
+    padding: 18,
+    boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.045)'
   };
   const shopRow = {
     padding: '15px 0',
@@ -1494,18 +1494,12 @@ function SpbDiscover() {
     if (/大众点评/.test(raw)) return '口碑榜单';
     return raw.replace(/线索/g, '').trim() || '城市线索';
   };
-  const sourceTone = item => {
-    if (item?.poi?.verified) return '地址已核验';
-    const raw = String(item?.sourceName || '');
-    if (/站内地点资料/.test(raw)) return '已整理';
-    if (/大众点评|微信|百度新闻/.test(raw)) return '公开线索';
-    return '待观察';
-  };
   const poiLine = item => {
     const poi = item?.poi?.verified ? item.poi : null;
     if (!poi) return '';
     return [poi.businessArea || poi.district, poi.address].filter(Boolean).join(' · ');
   };
+  const phoneLine = item => item?.poi?.verified && item.poi.tel ? `电话 ${item.poi.tel}` : '';
   const visitCheckText = item => {
     const poi = item?.poi?.verified ? item.poi : null;
     if (poi?.tel) return `地址已核验，可电话 ${poi.tel} 确认营业和排队`;
@@ -1522,7 +1516,7 @@ function SpbDiscover() {
     if (parts.length) return parts.join(' · ');
     return item?.tagline || '近期城市去处';
   };
-  const sourcePlan = [['新店雷达', '新开、首店、试营业、快闪和上新，是探索页的第一层线索。'], ['口碑校验', '优先看本地公众号、榜单线索、城市新闻和地点资料，过滤泛资讯。'], ['地址核验', '配置校验服务后，会补充真实地址、电话和商圈，区分线索与可到达地点。'], ['路线价值', '不只列店名，还判断适合约饭、拍照、慢逛、看展还是夜间小聚。'], ['到店提醒', '详情里保留营业、预约、排队、临时调整等二次确认提醒。']];
+  const sourcePlan = ['新店雷达', '口碑校验', '地址核验', '路线编排', '到店提醒'];
   const openItem = (city, item) => {
     const photos = getItemPhotos(item);
     setSelectedItem({
@@ -1590,17 +1584,106 @@ function SpbDiscover() {
   return React.createElement("section", {
     style: shell
   }, React.createElement("style", null, `
-        .qi-discover-shell { max-width: 1320px; margin: 0 auto; }
-        .qi-discover-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 260px); gap: 28px; align-items: end; }
-        .qi-discover-title { margin: 14px 0 0; font-family: ${spb.disp}; font-size: 62px; line-height: 1.05; letter-spacing: 0; color: ${spb.ink}; font-weight: 680; }
-        .qi-discover-plan { margin-top: 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; }
+        .qi-discover-shell { max-width: 1280px; margin: 0 auto; }
+        .qi-discover-shell button { transition: border-color 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease; }
+        .qi-discover-shell button:hover { border-color: oklch(0.72 0.15 242 / 0.58) !important; }
+        .qi-discover-shell button:focus-visible { outline: 2px solid ${spb.blueSoft}; outline-offset: 3px; }
+        .qi-discover-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); gap: clamp(32px, 7vw, 92px); align-items: end; }
+        .qi-discover-title { margin: 13px 0 0; max-width: 800px; font-family: ${spb.disp}; font-size: 54px; line-height: 1.06; letter-spacing: 0; color: ${spb.ink}; font-weight: 680; }
+        .qi-discover-update { padding: 4px 0 4px 20px; border-left: 2px solid oklch(0.73 0.14 45); }
+        .qi-discover-stats { margin-top: 24px; display: flex; gap: 8px 22px; flex-wrap: wrap; color: ${spb.sub}; font-size: 13px; }
+        .qi-discover-stats strong { color: ${spb.ink}; font-family: ${spb.mono}; font-size: 14px; }
+        .qi-discover-filter { position: sticky; top: 66px; z-index: 24; margin-top: 30px; padding: 12px 0; border-top: 1px solid ${spb.line}; border-bottom: 1px solid ${spb.line}; background: oklch(0.145 0.012 265 / 0.94); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+        .qi-discover-filter-row { display: flex; gap: 8px; align-items: center; overflow-x: auto; scrollbar-width: none; }
+        .qi-discover-filter-row + .qi-discover-filter-row { margin-top: 9px; }
+        .qi-discover-filter-row::-webkit-scrollbar { display: none; }
+        .qi-discover-filter-row button { flex: 0 0 auto; }
+        .qi-discover-section { margin-top: 48px; }
+        .qi-discover-section-head { display: flex; align-items: end; justify-content: space-between; gap: 24px; }
         .qi-discover-section-title { margin: 8px 0 0; font-family: ${spb.disp}; color: ${spb.ink}; font-size: 30px; line-height: 1.18; letter-spacing: 0; }
+        .qi-discover-section-note { max-width: 420px; color: ${spb.sub}; font-size: 13.5px; line-height: 1.6; text-align: right; }
+        .qi-discover-feature-grid { margin-top: 18px; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: 220px; gap: 12px; }
+        .qi-discover-feature { position: relative; overflow: hidden; min-width: 0; border: 1px solid ${spb.line}; border-radius: 8px; padding: 0; background: oklch(0.2 0.014 265); cursor: pointer; text-align: left; font-family: inherit; }
+        .qi-discover-feature.is-lead { grid-column: span 7; grid-row: span 2; }
+        .qi-discover-feature.is-side { grid-column: span 5; }
+        .qi-discover-feature.is-bottom { grid-column: span 6; }
+        .qi-discover-feature:hover { transform: translateY(-2px); }
+        .qi-discover-feature img { transition: transform 420ms ease; }
+        .qi-discover-feature:hover img { transform: scale(1.025); }
+        .qi-discover-feature-copy { position: absolute; inset: auto 0 0; z-index: 2; padding: 20px; background: linear-gradient(180deg, transparent, rgba(7,9,15,0.92)); }
+        .qi-discover-feature.is-lead .qi-discover-feature-copy { padding: 26px; }
+        .qi-discover-feature-title { margin-top: 10px; color: ${spb.ink}; font-family: ${spb.disp}; font-size: 25px; line-height: 1.14; font-weight: 680; }
+        .qi-discover-feature.is-lead .qi-discover-feature-title { max-width: 720px; font-size: 40px; }
+        .qi-discover-feature-summary { margin-top: 8px; max-width: 720px; color: oklch(0.9 0.02 255); font-size: 14px; line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .qi-discover-feature.is-lead .qi-discover-feature-summary { font-size: 15.5px; -webkit-line-clamp: 3; }
+        .qi-discover-route-grid { margin-top: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); border-top: 1px solid ${spb.line}; border-bottom: 1px solid ${spb.line}; }
+        .qi-discover-route { min-width: 0; padding: 20px; border-right: 1px solid ${spb.line}; }
+        .qi-discover-route:last-child { border-right: none; }
+        .qi-discover-stop { position: relative; display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 12px; width: 100%; padding: 13px 0; border: none; border-bottom: 1px solid ${spb.line}; background: transparent; text-align: left; cursor: pointer; font-family: inherit; }
+        .qi-discover-stop:last-child { border-bottom: none; }
+        .qi-discover-time { width: 42px; height: 28px; display: grid; place-items: center; border-radius: 5px; border: 1px solid ${spb.line}; background: oklch(0.205 0.018 265); color: ${spb.blueSoft}; font-family: ${spb.mono}; font-size: 11px; font-weight: 800; }
+        .qi-discover-stop:nth-child(2) .qi-discover-time { background: oklch(0.25 0.055 48); color: oklch(0.85 0.12 62); }
+        .qi-discover-stop:nth-child(3) .qi-discover-time { background: oklch(0.23 0.045 155); color: oklch(0.84 0.1 155); }
+        .qi-discover-category-grid { margin-top: 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; border-top: 1px solid ${spb.line}; }
+        .qi-discover-category { min-width: 0; padding: 19px 0 17px; border-bottom: 1px solid ${spb.line}; }
+        .qi-discover-category-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; width: 100%; padding: 10px 0; border: none; background: transparent; text-align: left; cursor: pointer; font-family: inherit; }
+        .qi-discover-method { margin-top: 48px; padding: 16px 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-top: 1px solid ${spb.line}; border-bottom: 1px solid ${spb.line}; }
+        .qi-discover-method-item { padding: 0 16px; border-right: 1px solid ${spb.line}; color: ${spb.sub}; font-size: 13px; }
+        .qi-discover-method-item:first-child { padding-left: 0; }
+        .qi-discover-method-item:last-child { padding-right: 0; border-right: none; }
+        .qi-discover-city-grid { margin-top: 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 370px), 1fr)); gap: 16px; }
+        .qi-discover-shop { width: 100%; display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 14px; background: transparent; border-left: none; border-right: none; border-bottom: none; cursor: pointer; text-align: left; font-family: inherit; }
+        .qi-discover-shop-image { width: 92px; height: 92px; border-radius: 6px; overflow: hidden; background: oklch(0.23 0.025 250); border: 1px solid ${spb.line}; }
+        .qi-discover-modal { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: clamp(18px, 4vw, 42px); background: rgba(5, 7, 12, 0.76); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+        .qi-discover-dialog { width: min(860px, 100%); max-height: min(88vh, 900px); overflow: auto; border: 1px solid ${spb.line}; border-radius: 8px; background: oklch(0.175 0.014 265); box-shadow: 0 34px 90px rgba(0,0,0,0.52); }
+        .qi-discover-dialog-hero { position: relative; min-height: 300px; overflow: hidden; border-radius: 8px 8px 0 0; background: oklch(0.22 0.025 250); }
+        .qi-discover-dialog-hero > img { height: 320px !important; }
+        .qi-discover-dialog-content { padding: 28px clamp(22px, 4vw, 38px) 34px; }
+        .qi-discover-dialog-heading { display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, auto); gap: 26px; align-items: start; }
+        .qi-discover-dialog-title { margin: 10px 0 0; font-family: ${spb.disp}; font-size: 42px; line-height: 1.08; color: ${spb.ink}; }
+        .qi-discover-dialog-meta { color: ${spb.faint}; font-size: 13px; text-align: right; line-height: 1.7; }
+        .qi-discover-facts { margin-top: 20px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid ${spb.line}; border-bottom: 1px solid ${spb.line}; }
+        .qi-discover-fact { min-width: 0; padding: 15px 16px; border-right: 1px solid ${spb.line}; }
+        .qi-discover-fact:nth-child(3n) { border-right: none; }
+        .qi-discover-fact:nth-child(n + 4) { border-top: 1px solid ${spb.line}; }
         @media (max-width: 760px) {
-          .qi-discover-hero { grid-template-columns: 1fr; align-items: start; }
-          .qi-discover-title { font-size: 42px; }
-          .qi-discover-plan { display: flex; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x proximity; scrollbar-width: none; }
-          .qi-discover-plan::-webkit-scrollbar { display: none; }
-          .qi-discover-plan > div { flex: 0 0 min(78vw, 280px); scroll-snap-align: start; }
+          .qi-discover-hero { grid-template-columns: 1fr; gap: 24px; align-items: start; }
+          .qi-discover-title { font-size: 39px; }
+          .qi-discover-update { padding: 0 0 0 15px; }
+          .qi-discover-filter { top: 58px; margin-top: 24px; }
+          .qi-discover-section { margin-top: 38px; }
+          .qi-discover-section-head { align-items: start; flex-direction: column; gap: 8px; }
+          .qi-discover-section-note { max-width: none; text-align: left; }
+          .qi-discover-feature-grid { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+          .qi-discover-feature-grid::-webkit-scrollbar { display: none; }
+          .qi-discover-feature { flex: 0 0 min(84vw, 340px); min-height: 360px; scroll-snap-align: start; }
+          .qi-discover-feature.is-lead { flex-basis: min(90vw, 380px); }
+          .qi-discover-feature.is-lead .qi-discover-feature-copy { padding: 20px; }
+          .qi-discover-feature.is-lead .qi-discover-feature-title { font-size: 30px; }
+          .qi-discover-feature-summary, .qi-discover-feature.is-lead .qi-discover-feature-summary { font-size: 14px; -webkit-line-clamp: 3; }
+          .qi-discover-route-grid { grid-template-columns: 1fr; }
+          .qi-discover-route { padding: 18px 0; border-right: none; border-bottom: 1px solid ${spb.line}; }
+          .qi-discover-route:last-child { border-bottom: none; }
+          .qi-discover-category-grid { grid-template-columns: 1fr; }
+          .qi-discover-method { grid-template-columns: repeat(5, minmax(126px, 1fr)); overflow-x: auto; }
+          .qi-discover-method-item { min-width: 126px; }
+          .qi-discover-city-grid { margin-top: 16px; grid-template-columns: 1fr; }
+          .qi-discover-shop { grid-template-columns: 78px minmax(0, 1fr); gap: 12px; }
+          .qi-discover-shop-image { width: 78px; height: 78px; }
+          .qi-discover-modal { align-items: end; padding: 10px; }
+          .qi-discover-dialog { max-height: calc(100vh - 20px); }
+          .qi-discover-dialog-hero { min-height: 230px; }
+          .qi-discover-dialog-hero > img { height: 250px !important; }
+          .qi-discover-dialog-content { padding: 22px 22px 30px; }
+          .qi-discover-dialog-heading { grid-template-columns: 1fr; gap: 12px; }
+          .qi-discover-dialog-title { font-size: 34px; }
+          .qi-discover-dialog-meta { display: flex; gap: 7px 14px; flex-wrap: wrap; text-align: left; }
+          .qi-discover-facts { grid-template-columns: 1fr; }
+          .qi-discover-fact { padding: 13px 0; border-right: none; border-top: 1px solid ${spb.line}; }
+          .qi-discover-fact:first-child { border-top: none; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .qi-discover-shell button, .qi-discover-feature img { transition: none; }
         }
       `), React.createElement("div", {
     className: "qi-discover-shell"
@@ -1609,85 +1692,52 @@ function SpbDiscover() {
   }, React.createElement("div", null, React.createElement("div", {
     style: {
       fontFamily: spb.mono,
-      fontSize: 12.5,
+      fontSize: 12,
       letterSpacing: '0.1em',
       textTransform: 'uppercase',
       color: spb.blueSoft
     }
-  }, "Explore"), React.createElement("h1", {
+  }, "Explore / City notes"), React.createElement("h1", {
     className: "qi-discover-title"
   }, "\u57CE\u5E02\u65B0\u5E97\u4E0E\u597D\u53BB\u5904"), React.createElement("p", {
     style: {
       margin: '16px 0 0',
-      maxWidth: 620,
+      maxWidth: 680,
       color: spb.sub,
       fontSize: 16,
-      lineHeight: 1.7
+      lineHeight: 1.72
     }
-  }, "\u628A\u8FD1\u671F\u65B0\u5F00\u3001\u9996\u5E97\u3001\u63A2\u5E97\u3001\u5C55\u89C8\u3001\u5E02\u96C6\u548C\u751F\u6D3B\u65B9\u5F0F\u7A7A\u95F4\u6574\u7406\u6210\u53EF\u9605\u8BFB\u7684\u57CE\u5E02\u8DEF\u7EBF\u3002\u5148\u770B\u662F\u5426\u503C\u5F97\u53BB\uFF0C\u518D\u51B3\u5B9A\u4EC0\u4E48\u65F6\u5019\u53BB\u3001\u548C\u54EA\u91CC\u4E00\u8D77\u901B\u3002")), React.createElement("div", {
-    style: {
-      width: '100%',
-      border: `1px solid ${spb.line}`,
-      borderRadius: 10,
-      padding: '14px 16px',
-      background: 'oklch(0.185 0.014 265 / 0.76)'
-    }
+  }, "\u4ECE\u65B0\u5F00\u5C0F\u5E97\u3001\u5C55\u89C8\u4E0E\u57CE\u5E02\u7A7A\u95F4\u91CC\uFF0C\u6311\u51FA\u771F\u6B63\u503C\u5F97\u4E13\u7A0B\u53BB\u6216\u987A\u8DEF\u505C\u7559\u7684\u5730\u65B9\u3002\u6BCF\u4E2A\u53BB\u5904\u90FD\u9644\u4E0A\u5546\u5708\u3001\u5730\u5740\u4E0E\u5230\u5E97\u524D\u9700\u8981\u786E\u8BA4\u7684\u4FE1\u606F\u3002"), React.createElement("div", {
+    className: "qi-discover-stats"
+  }, React.createElement("span", null, React.createElement("strong", null, totalItems), " \u4E2A\u53BB\u5904"), React.createElement("span", null, React.createElement("strong", null, cities.length), " \u5EA7\u57CE\u5E02"), React.createElement("span", null, React.createElement("strong", null, Math.max(0, categories.length - 1)), " \u4E2A\u4E3B\u9898"))), React.createElement("div", {
+    className: "qi-discover-update"
   }, React.createElement("div", {
     style: {
       fontFamily: spb.mono,
       fontSize: 11.5,
-      color: spb.faint
+      letterSpacing: '0.08em',
+      color: 'oklch(0.82 0.11 58)'
     }
-  }, "UPDATED"), React.createElement("div", {
+  }, "\u672C\u671F\u66F4\u65B0"), React.createElement("div", {
     style: {
-      marginTop: 6,
+      marginTop: 7,
       color: spb.ink,
-      fontSize: 14.5,
-      fontWeight: 700
+      fontSize: 15,
+      fontWeight: 760,
+      lineHeight: 1.5
     }
   }, updatedText), React.createElement("div", {
     style: {
-      marginTop: 6,
+      marginTop: 8,
       color: spb.sub,
-      fontSize: 13
-    }
-  }, totalItems, " \u6761\u7AD9\u5185\u5185\u5BB9"))), React.createElement("div", {
-    className: "qi-discover-plan"
-  }, sourcePlan.map(([title, text]) => React.createElement("div", {
-    key: title,
-    style: {
-      border: `1px solid ${spb.line}`,
-      borderRadius: 10,
-      padding: '15px 16px',
-      background: 'oklch(0.185 0.014 265 / 0.76)',
-      boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.055)'
-    }
-  }, React.createElement("div", {
-    style: {
-      color: spb.ink,
-      fontSize: 15,
-      fontWeight: 800
-    }
-  }, title), React.createElement("div", {
-    style: {
-      marginTop: 7,
-      color: spb.sub,
-      fontSize: 13.5,
+      fontSize: 13,
       lineHeight: 1.62
     }
-  }, text)))), React.createElement("div", {
-    style: {
-      marginTop: 34,
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 14
-    }
+  }, "\u7F16\u8F91\u6392\u5E8F\u7EFC\u5408\u8FD1\u671F\u70ED\u5EA6\u3001\u5730\u70B9\u5B8C\u6574\u5EA6\u4E0E\u8DEF\u7EBF\u4EF7\u503C\u3002"))), React.createElement("div", {
+    className: "qi-discover-filter",
+    "aria-label": "\u63A2\u7D22\u7B5B\u9009"
   }, React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: 10,
-      flexWrap: 'wrap'
-    }
+    className: "qi-discover-filter-row"
   }, React.createElement("button", {
     type: "button",
     "aria-pressed": cityId === 'all',
@@ -1700,11 +1750,7 @@ function SpbDiscover() {
     onClick: () => setCityId(city.id),
     style: chip(cityId === city.id)
   }, city.name))), React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: 9,
-      flexWrap: 'wrap'
-    }
+    className: "qi-discover-filter-row"
   }, categories.map(item => React.createElement("button", {
     key: item,
     type: "button",
@@ -1729,55 +1775,125 @@ function SpbDiscover() {
       color: spb.sub,
       fontSize: 16
     }
-  }, "\u6B63\u5728\u52A0\u8F7D\u4ECA\u65E5\u63A2\u7D22\u5185\u5BB9...") : null, !loading && weekendRoutes.length ? React.createElement("div", {
-    style: {
-      marginTop: 34,
-      border: `1px solid ${spb.line}`,
-      borderRadius: 10,
-      padding: '20px clamp(18px, 3vw, 24px)',
-      background: 'oklch(0.185 0.014 265 / 0.88)',
-      boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.055)'
-    }
+  }, "\u6B63\u5728\u52A0\u8F7D\u4ECA\u65E5\u63A2\u7D22\u5185\u5BB9...") : null, !loading && featuredItems.length ? React.createElement("section", {
+    className: "qi-discover-section",
+    "aria-labelledby": "discover-picks-title"
   }, React.createElement("div", {
-    style: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'end',
-      gap: 18,
-      flexWrap: 'wrap'
-    }
+    className: "qi-discover-section-head"
   }, React.createElement("div", null, React.createElement("div", {
     style: {
       fontFamily: spb.mono,
       fontSize: 12,
       letterSpacing: '0.08em',
-      color: spb.blueSoft,
+      textTransform: 'uppercase',
+      color: spb.blueSoft
+    }
+  }, "Today picks"), React.createElement("h2", {
+    id: "discover-picks-title",
+    className: "qi-discover-section-title"
+  }, "\u4ECA\u65E5\u503C\u5F97\u5148\u770B\u7684\u53BB\u5904")), React.createElement("div", {
+    className: "qi-discover-section-note"
+  }, "\u628A\u56FE\u6587\u3001\u5730\u5740\u548C\u8DEF\u7EBF\u4EF7\u503C\u8F83\u5B8C\u6574\u7684\u53BB\u5904\u653E\u5728\u6700\u524D\u9762")), React.createElement("div", {
+    className: "qi-discover-feature-grid"
+  }, featuredItems.map((item, index) => {
+    const photo = getItemPhoto(item);
+    const layoutClass = index === 0 ? 'is-lead' : index < 3 ? 'is-side' : 'is-bottom';
+    return React.createElement("button", {
+      key: `${item.cityId}-${item.id || item.name}-${index}`,
+      type: "button",
+      className: `qi-discover-feature ${layoutClass}`,
+      onClick: () => openItem({
+        id: item.cityId,
+        name: item.cityName
+      }, item)
+    }, photo ? React.createElement("img", {
+      src: photoSrc(photo),
+      alt: item.name,
+      loading: index === 0 ? 'eager' : 'lazy',
+      onError: hideBrokenImage,
+      style: {
+        position: 'absolute',
+        inset: 0,
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover',
+        display: 'block'
+      }
+    }) : null, React.createElement("div", {
+      className: "qi-discover-feature-copy"
+    }, React.createElement("div", {
+      style: {
+        display: 'flex',
+        gap: 7,
+        flexWrap: 'wrap',
+        alignItems: 'center'
+      }
+    }, [item.cityName, item.category, item.poi?.businessArea || item.district].filter(Boolean).slice(0, 3).map(text => React.createElement("span", {
+      key: text,
+      style: {
+        color: spb.ink,
+        background: 'oklch(0.12 0.01 265 / 0.64)',
+        border: '1px solid oklch(1 0 0 / 0.22)',
+        borderRadius: 6,
+        padding: '5px 8px',
+        fontSize: 11.5,
+        fontWeight: 720,
+        backdropFilter: 'blur(8px)'
+      }
+    }, text)), React.createElement("span", {
+      style: {
+        color: spb.bg,
+        background: index === 0 ? 'oklch(0.84 0.12 62)' : spb.blueSoft,
+        borderRadius: 6,
+        padding: '5px 8px',
+        fontSize: 11.5,
+        fontWeight: 820
+      }
+    }, scoreText(item))), React.createElement("div", {
+      className: "qi-discover-feature-title"
+    }, item.name), React.createElement("div", {
+      style: {
+        marginTop: 7,
+        color: index === 0 ? 'oklch(0.87 0.1 62)' : spb.blueSoft,
+        fontSize: 12.5,
+        fontWeight: 760
+      }
+    }, itemReason(item)), React.createElement("div", {
+      className: "qi-discover-feature-summary"
+    }, item.editorialSummary || item.summary || item.tagline || ''), poiLine(item) || phoneLine(item) ? React.createElement("div", {
+      style: {
+        marginTop: 10,
+        color: 'oklch(0.84 0.09 155)',
+        fontSize: 12.5,
+        fontWeight: 720,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+      }
+    }, [poiLine(item), phoneLine(item)].filter(Boolean).join(' · ')) : null));
+  }))) : null, !loading && weekendRoutes.length ? React.createElement("section", {
+    className: "qi-discover-section",
+    "aria-labelledby": "discover-routes-title"
+  }, React.createElement("div", {
+    className: "qi-discover-section-head"
+  }, React.createElement("div", null, React.createElement("div", {
+    style: {
+      fontFamily: spb.mono,
+      fontSize: 12,
+      letterSpacing: '0.08em',
+      color: 'oklch(0.84 0.12 62)',
       textTransform: 'uppercase'
     }
   }, "Weekend routes"), React.createElement("h2", {
+    id: "discover-routes-title",
     className: "qi-discover-section-title"
   }, "\u5468\u672B\u53EF\u4EE5\u8FD9\u6837\u901B")), React.createElement("div", {
-    style: {
-      maxWidth: 360,
-      color: spb.sub,
-      fontSize: 13.5,
-      lineHeight: 1.6
-    }
-  }, "\u6309\u57CE\u5E02\u3001\u7C7B\u578B\u548C\u63A8\u8350\u5206\u81EA\u52A8\u4E32\u8054\uFF0C\u4E0D\u9700\u8981\u5207\u6362\u5E94\u7528\u4E5F\u80FD\u5148\u5224\u65AD\u8DEF\u7EBF\u662F\u5426\u987A\u3002")), React.createElement("div", {
-    style: {
-      marginTop: 18,
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 270px), 1fr))',
-      gap: 14
-    }
+    className: "qi-discover-section-note"
+  }, "\u4E0A\u5348\u8F7B\u8D77\u70B9\u3001\u4E0B\u5348\u4E3B\u76EE\u7684\u5730\u3001\u508D\u665A\u7528\u4E00\u9910\u6216\u5C0F\u805A\u6536\u5C3E")), React.createElement("div", {
+    className: "qi-discover-route-grid"
   }, weekendRoutes.map(route => React.createElement("article", {
     key: route.city.id,
-    style: {
-      border: `1px solid ${spb.line}`,
-      borderRadius: 8,
-      padding: 16,
-      background: 'oklch(0.16 0.012 265 / 0.66)'
-    }
+    className: "qi-discover-route"
   }, React.createElement("div", {
     style: {
       display: 'flex',
@@ -1789,68 +1905,41 @@ function SpbDiscover() {
     style: {
       margin: 0,
       color: spb.ink,
-      fontSize: 18,
-      fontWeight: 850
+      fontSize: 19,
+      fontWeight: 820
     }
   }, route.city.name), React.createElement("span", {
     style: {
-      color: spb.blueSoft,
+      color: spb.faint,
       fontFamily: spb.mono,
       fontSize: 11
     }
-  }, route.stops.length, " stops")), React.createElement("div", {
+  }, route.stops.length, " \u7AD9")), React.createElement("div", {
     style: {
-      marginTop: 13,
-      display: 'grid',
-      gap: 10
+      marginTop: 8
     }
-  }, route.stops.map((stop, index) => React.createElement("button", {
+  }, route.stops.map(stop => React.createElement("button", {
     key: `${route.city.id}-${stop.time}-${stop.item.id || stop.item.name}`,
     type: "button",
-    onClick: () => openItem(route.city, stop.item),
-    style: {
-      display: 'grid',
-      gridTemplateColumns: '46px minmax(0, 1fr)',
-      gap: 11,
-      alignItems: 'start',
-      textAlign: 'left',
-      border: 'none',
-      background: 'transparent',
-      padding: 0,
-      cursor: 'pointer',
-      fontFamily: 'inherit'
-    }
+    className: "qi-discover-stop",
+    onClick: () => openItem(route.city, stop.item)
   }, React.createElement("div", {
-    style: {
-      width: 38,
-      height: 38,
-      borderRadius: 8,
-      display: 'grid',
-      placeItems: 'center',
-      background: index === 1 ? spb.blueSoft : 'oklch(0.245 0.018 265)',
-      color: index === 1 ? spb.bg : spb.blueSoft,
-      fontFamily: spb.mono,
-      fontSize: 12,
-      fontWeight: 850,
-      border: `1px solid ${spb.line}`
-    }
+    className: "qi-discover-time"
   }, stop.time), React.createElement("div", {
     style: {
-      minWidth: 0,
-      paddingBottom: 10,
-      borderBottom: index === route.stops.length - 1 ? 'none' : `1px solid ${spb.line}`
+      minWidth: 0
     }
   }, React.createElement("div", {
     style: {
       color: spb.faint,
-      fontSize: 12.5
+      fontSize: 12
     }
   }, stop.title), React.createElement("div", {
     style: {
       marginTop: 3,
       color: spb.ink,
       fontSize: 15.5,
-      fontWeight: 800,
+      fontWeight: 780,
       overflow: 'hidden',
       textOverflow: 'ellipsis',
       whiteSpace: 'nowrap'
@@ -1864,18 +1953,11 @@ function SpbDiscover() {
       textOverflow: 'ellipsis',
       whiteSpace: 'nowrap'
     }
-  }, [stop.item.category, stop.item.poi?.businessArea || stop.item.district, scoreText(stop.item)].filter(Boolean).join(' · ')))))))))) : null, !loading && categorySpotlights.length ? React.createElement("div", {
-    style: {
-      marginTop: 34
-    }
+  }, [stop.item.category, stop.item.poi?.businessArea || stop.item.district, scoreText(stop.item)].filter(Boolean).join(' · ')))))))))) : null, !loading && categorySpotlights.length ? React.createElement("section", {
+    className: "qi-discover-section",
+    "aria-labelledby": "discover-categories-title"
   }, React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'end',
-      justifyContent: 'space-between',
-      gap: 18,
-      flexWrap: 'wrap'
-    }
+    className: "qi-discover-section-head"
   }, React.createElement("div", null, React.createElement("div", {
     style: {
       fontFamily: spb.mono,
@@ -1885,36 +1967,15 @@ function SpbDiscover() {
       color: spb.blueSoft
     }
   }, "Categories"), React.createElement("h2", {
-    style: {
-      margin: '8px 0 0',
-      fontFamily: spb.disp,
-      color: spb.ink,
-      fontSize: 30,
-      lineHeight: 1.16,
-      letterSpacing: 0
-    }
+    id: "discover-categories-title",
+    className: "qi-discover-section-title"
   }, "\u6309\u4E3B\u9898\u5148\u770B")), React.createElement("div", {
-    style: {
-      color: spb.sub,
-      fontSize: 14,
-      lineHeight: 1.6
-    }
-  }, "\u6BCF\u7C7B\u53EA\u9732\u51FA\u6700\u503C\u5F97\u5148\u770B\u7684\u524D\u4E09\u4E2A\uFF0C\u51CF\u5C11\u91CD\u590D\u4FE1\u606F")), React.createElement("div", {
-    style: {
-      marginTop: 18,
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 250px), 1fr))',
-      gap: 14
-    }
+    className: "qi-discover-section-note"
+  }, "\u6BCF\u7C7B\u5148\u9732\u51FA\u4E09\u4E2A\u4EE3\u8868\u53BB\u5904\uFF0C\u5FEB\u901F\u5224\u65AD\u4ECA\u5929\u60F3\u901B\u4EC0\u4E48")), React.createElement("div", {
+    className: "qi-discover-category-grid"
   }, categorySpotlights.map(group => React.createElement("article", {
     key: group.name,
-    style: {
-      border: `1px solid ${spb.line}`,
-      borderRadius: 10,
-      padding: 16,
-      background: 'oklch(0.205 0.014 265 / 0.68)',
-      boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.07)'
-    }
+    className: "qi-discover-category"
   }, React.createElement("div", {
     style: {
       display: 'flex',
@@ -1933,61 +1994,43 @@ function SpbDiscover() {
     type: "button",
     onClick: () => setCategory(group.name),
     style: {
-      border: `1px solid ${spb.line}`,
-      borderRadius: 8,
+      border: 'none',
       background: 'transparent',
       color: spb.blueSoft,
-      padding: '5px 9px',
+      padding: '4px 0',
       cursor: 'pointer',
-      fontSize: 12
+      fontSize: 12.5,
+      fontWeight: 720
     }
-  }, "\u770B\u5168\u90E8 ", group.count)), React.createElement("div", {
+  }, "\u67E5\u770B ", group.count, " \u4E2A")), React.createElement("div", {
     style: {
-      marginTop: 12,
-      display: 'grid',
-      gap: 9
+      marginTop: 7
     }
   }, group.items.map(item => React.createElement("button", {
     key: `${group.name}-${item.id || item.name}`,
     type: "button",
+    className: "qi-discover-category-row",
     onClick: () => openItem({
       id: item.cityId,
       name: item.cityName
-    }, item),
+    }, item)
+  }, React.createElement("span", {
     style: {
-      textAlign: 'left',
-      border: `1px solid ${spb.line}`,
-      borderRadius: 8,
-      background: 'oklch(0.18 0.014 265 / 0.62)',
-      padding: '10px 11px',
-      cursor: 'pointer',
-      fontFamily: 'inherit'
-    }
-  }, React.createElement("div", {
-    style: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      gap: 10,
-      alignItems: 'center'
+      minWidth: 0
     }
   }, React.createElement("span", {
     style: {
+      display: 'block',
       color: spb.ink,
       fontSize: 14.5,
-      fontWeight: 780,
+      fontWeight: 760,
       overflow: 'hidden',
       textOverflow: 'ellipsis',
       whiteSpace: 'nowrap'
     }
   }, item.name), React.createElement("span", {
     style: {
-      color: spb.blueSoft,
-      fontFamily: spb.mono,
-      fontSize: 11,
-      whiteSpace: 'nowrap'
-    }
-  }, scoreText(item))), React.createElement("div", {
-    style: {
+      display: 'block',
       marginTop: 5,
       color: spb.faint,
       fontSize: 12.5,
@@ -1995,17 +2038,30 @@ function SpbDiscover() {
       textOverflow: 'ellipsis',
       whiteSpace: 'nowrap'
     }
-  }, [item.cityName, item.poi?.businessArea || item.district, item.sceneTag].filter(Boolean).join(' · '))))))))) : null, !loading && featuredItems.length ? React.createElement("div", {
+  }, [item.cityName, item.poi?.businessArea || item.district, item.sceneTag].filter(Boolean).join(' · '))), React.createElement("span", {
     style: {
-      marginTop: 34
+      color: 'oklch(0.84 0.12 62)',
+      fontFamily: spb.mono,
+      fontSize: 11,
+      whiteSpace: 'nowrap'
     }
-  }, React.createElement("div", {
+  }, scoreText(item))))))))) : null, !loading ? React.createElement("div", {
+    className: "qi-discover-method",
+    "aria-label": "\u63A2\u7D22\u5185\u5BB9\u6574\u7406\u6D41\u7A0B"
+  }, sourcePlan.map((title, index) => React.createElement("div", {
+    key: title,
+    className: "qi-discover-method-item"
+  }, React.createElement("span", {
     style: {
-      display: 'flex',
-      alignItems: 'end',
-      justifyContent: 'space-between',
-      gap: 18,
-      flexWrap: 'wrap'
+      marginRight: 8,
+      color: index === 2 ? 'oklch(0.84 0.12 62)' : spb.blueSoft,
+      fontFamily: spb.mono,
+      fontSize: 11
+    }
+  }, String(index + 1).padStart(2, '0')), React.createElement("span", null, title)))) : null, !loading ? React.createElement("div", {
+    className: "qi-discover-section-head",
+    style: {
+      marginTop: 48
     }
   }, React.createElement("div", null, React.createElement("div", {
     style: {
@@ -2015,183 +2071,12 @@ function SpbDiscover() {
       textTransform: 'uppercase',
       color: spb.blueSoft
     }
-  }, "Today picks"), React.createElement("h2", {
-    style: {
-      margin: '9px 0 0',
-      fontFamily: spb.disp,
-      color: spb.ink,
-      fontSize: 31,
-      lineHeight: 1.16,
-      letterSpacing: 0
-    }
-  }, "\u4ECA\u65E5\u503C\u5F97\u5148\u770B\u7684\u53BB\u5904")), React.createElement("div", {
-    style: {
-      color: spb.sub,
-      fontSize: 14,
-      lineHeight: 1.6
-    }
-  }, "\u6309\u63A8\u8350\u6307\u6570\u3001\u8FD1\u671F\u70ED\u5EA6\u548C\u56FE\u6587\u5B8C\u6574\u5EA6\u6392\u5E8F")), React.createElement("div", {
-    style: {
-      marginTop: 18,
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))',
-      gap: 16
-    }
-  }, featuredItems.map((item, index) => {
-    const photo = getItemPhoto(item);
-    const isLead = index === 0;
-    return React.createElement("button", {
-      key: `${item.cityId}-${item.id || item.name}-${index}`,
-      type: "button",
-      onClick: () => openItem({
-        id: item.cityId,
-        name: item.cityName
-      }, item),
-      style: {
-        minHeight: isLead ? 310 : 244,
-        gridColumn: isLead ? '1 / -1' : 'span 1',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'flex-end',
-        position: 'relative',
-        overflow: 'hidden',
-        border: `1px solid ${spb.line}`,
-        borderRadius: 10,
-        padding: 0,
-        background: 'oklch(0.2 0.014 265)',
-        cursor: 'pointer',
-        textAlign: 'left',
-        fontFamily: 'inherit',
-        boxShadow: '0 24px 64px rgba(0,0,0,0.24)'
-      }
-    }, photo ? React.createElement("img", {
-      src: photoSrc(photo),
-      alt: item.name,
-      loading: "lazy",
-      onError: hideBrokenImage,
-      style: {
-        position: 'absolute',
-        inset: 0,
-        width: '100%',
-        height: '100%',
-        objectFit: 'cover',
-        display: 'block'
-      }
-    }) : null, React.createElement("div", {
-      style: {
-        position: 'absolute',
-        inset: 0,
-        background: 'linear-gradient(180deg, rgba(6,8,14,0.08), rgba(6,8,14,0.38) 42%, rgba(6,8,14,0.86))'
-      }
-    }), React.createElement("div", {
-      style: {
-        position: 'relative',
-        padding: isLead ? 22 : 18,
-        width: '100%'
-      }
-    }, React.createElement("div", {
-      style: {
-        display: 'flex',
-        gap: 8,
-        flexWrap: 'wrap'
-      }
-    }, [item.cityName, item.category, item.sceneTag].filter(Boolean).slice(0, 3).map(text => React.createElement("span", {
-      key: text,
-      style: {
-        color: spb.ink,
-        background: 'oklch(0.12 0.01 265 / 0.48)',
-        border: '1px solid oklch(1 0 0 / 0.2)',
-        borderRadius: 8,
-        padding: '6px 9px',
-        fontSize: 12,
-        fontWeight: 760,
-        backdropFilter: 'blur(10px)'
-      }
-    }, text)), React.createElement("span", {
-      style: {
-        color: spb.bg,
-        background: spb.blueSoft,
-        border: '1px solid oklch(1 0 0 / 0.16)',
-        borderRadius: 8,
-        padding: '6px 9px',
-        fontSize: 12,
-        fontWeight: 820
-      }
-    }, sourceTone(item)), React.createElement("span", {
-      style: {
-        color: spb.ink,
-        background: 'oklch(0.12 0.01 265 / 0.48)',
-        border: '1px solid oklch(1 0 0 / 0.2)',
-        borderRadius: 8,
-        padding: '6px 9px',
-        fontSize: 12,
-        fontWeight: 820,
-        backdropFilter: 'blur(10px)'
-      }
-    }, scoreText(item))), React.createElement("div", {
-      style: {
-        marginTop: 13,
-        color: spb.ink,
-        fontFamily: spb.disp,
-        fontSize: isLead ? 38 : 25,
-        lineHeight: 1.12,
-        letterSpacing: 0,
-        fontWeight: 650
-      }
-    }, item.name), React.createElement("div", {
-      style: {
-        marginTop: 8,
-        color: spb.blueSoft,
-        fontSize: 13.5,
-        fontWeight: 760
-      }
-    }, itemReason(item)), poiLine(item) ? React.createElement("div", {
-      style: {
-        marginTop: 7,
-        color: 'oklch(0.82 0.045 150)',
-        fontSize: 12.8,
-        fontWeight: 760,
-        display: '-webkit-box',
-        WebkitLineClamp: 1,
-        WebkitBoxOrient: 'vertical',
-        overflow: 'hidden'
-      }
-    }, poiLine(item)) : null, React.createElement("div", {
-      style: {
-        marginTop: 10,
-        color: 'oklch(0.9 0.02 255)',
-        lineHeight: 1.58,
-        fontSize: isLead ? 15.5 : 14.5,
-        display: '-webkit-box',
-        WebkitLineClamp: isLead ? 3 : 2,
-        WebkitBoxOrient: 'vertical',
-        overflow: 'hidden'
-      }
-    }, item.editorialSummary || item.summary || ''), React.createElement("div", {
-      style: {
-        marginTop: 14,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 14,
-        color: 'oklch(0.86 0.025 255 / 0.82)',
-        fontSize: 12.5
-      }
-    }, React.createElement("span", {
-      style: {
-        minWidth: 0,
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap'
-      }
-    }, item.bestVisitTime || sourceLabel(item)), React.createElement("span", null, "\u67E5\u770B\u8BE6\u60C5"))));
-  }))) : null, React.createElement("div", {
-    style: {
-      marginTop: 34,
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 330px), 1fr))',
-      gap: 18
-    }
+  }, "City index"), React.createElement("h2", {
+    className: "qi-discover-section-title"
+  }, "\u6309\u57CE\u5E02\u7EE7\u7EED\u770B")), React.createElement("div", {
+    className: "qi-discover-section-note"
+  }, "\u6BCF\u5EA7\u57CE\u5E02\u4FDD\u7559\u8FD1\u671F\u66F4\u503C\u5F97\u5B89\u6392\u7684\u5730\u70B9\uFF0C\u70B9\u5F00\u53EF\u67E5\u770B\u5730\u5740\u3001\u7535\u8BDD\u548C\u5546\u5708")) : null, React.createElement("div", {
+    className: "qi-discover-city-grid"
   }, visibleCities.map(city => React.createElement("article", {
     key: city.id,
     style: cityCard
@@ -2233,30 +2118,13 @@ function SpbDiscover() {
     return React.createElement("button", {
       key: item.id || item.name,
       type: "button",
+      className: "qi-discover-shop",
       onClick: () => openItem(city, item),
       style: {
-        ...shopRow,
-        width: '100%',
-        display: 'grid',
-        gridTemplateColumns: '72px minmax(0, 1fr)',
-        gap: 13,
-        background: 'transparent',
-        borderLeft: 'none',
-        borderRight: 'none',
-        borderBottom: 'none',
-        cursor: 'pointer',
-        textAlign: 'left',
-        fontFamily: 'inherit'
+        ...shopRow
       }
     }, React.createElement("div", {
-      style: {
-        height: 72,
-        borderRadius: 8,
-        overflow: 'hidden',
-        background: 'linear-gradient(135deg, oklch(0.34 0.05 245), oklch(0.22 0.04 292))',
-        border: `1px solid ${spb.line}`,
-        boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.12)'
-      }
+      className: "qi-discover-shop-image"
     }, photo ? React.createElement("img", {
       src: photoSrc(photo),
       alt: item.name,
@@ -2330,7 +2198,17 @@ function SpbDiscover() {
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap'
       }
-    }, poiLine(item)) : null, item.district || item.sceneTag || item?.poi?.verified ? React.createElement("div", {
+    }, poiLine(item)) : null, phoneLine(item) ? React.createElement("div", {
+      style: {
+        marginTop: 5,
+        color: 'oklch(0.84 0.09 155)',
+        fontSize: 12.5,
+        fontWeight: 720,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+      }
+    }, phoneLine(item)) : null, item.district || item.sceneTag || item?.poi?.verified ? React.createElement("div", {
       style: {
         marginTop: 10,
         display: 'flex',
@@ -2378,42 +2256,18 @@ function SpbDiscover() {
       lineHeight: 1.7
     }
   }, "\u6682\u65E0\u65B0\u589E\uFF0C\u7B49\u5F85\u4E0B\u4E00\u6B21\u66F4\u65B0\u3002")))), selectedItem ? React.createElement("div", {
-    onClick: closeItem,
-    style: {
-      position: 'fixed',
-      inset: 0,
-      zIndex: 80,
-      background: 'rgba(5, 7, 12, 0.72)',
-      backdropFilter: 'blur(18px)',
-      WebkitBackdropFilter: 'blur(18px)',
-      display: 'grid',
-      placeItems: 'center',
-      padding: 'clamp(18px, 4vw, 42px)'
-    }
+    className: "qi-discover-modal",
+    onClick: closeItem
   }, React.createElement("article", {
+    className: "qi-discover-dialog",
     ref: itemDialogRef,
     role: "dialog",
     "aria-modal": "true",
     "aria-label": "\u63A2\u7D22\u5730\u70B9\u8BE6\u60C5",
     tabIndex: -1,
-    onClick: event => event.stopPropagation(),
-    style: {
-      width: 'min(820px, 100%)',
-      maxHeight: 'min(86vh, 860px)',
-      overflow: 'auto',
-      background: 'linear-gradient(180deg, oklch(0.245 0.015 265 / 0.96), oklch(0.175 0.014 265 / 0.98))',
-      border: `1px solid ${spb.line}`,
-      borderRadius: 10,
-      boxShadow: '0 34px 90px rgba(0,0,0,0.52), inset 0 1px 0 oklch(1 0 0 / 0.1)'
-    }
+    onClick: event => event.stopPropagation()
   }, React.createElement("div", {
-    style: {
-      position: 'relative',
-      minHeight: 260,
-      background: 'linear-gradient(135deg, oklch(0.35 0.08 238), oklch(0.23 0.07 292))',
-      overflow: 'hidden',
-      borderRadius: '10px 10px 0 0'
-    }
+    className: "qi-discover-dialog-hero"
   }, selectedItem.photo ? React.createElement("img", {
     src: photoSrc(selectedItem.photo),
     alt: selectedItem.name,
@@ -2447,7 +2301,7 @@ function SpbDiscover() {
       height: 42,
       borderRadius: 999,
       border: `1px solid ${spb.line}`,
-      background: 'oklch(0.165 0.013 265 / 0.72)',
+      background: 'oklch(0.165 0.013 265 / 0.82)',
       color: spb.ink,
       fontSize: 24,
       lineHeight: 1,
@@ -2476,17 +2330,9 @@ function SpbDiscover() {
       backdropFilter: 'blur(12px)'
     }
   }, text)))), React.createElement("div", {
-    style: {
-      padding: '26px clamp(22px, 4vw, 36px) 32px'
-    }
+    className: "qi-discover-dialog-content"
   }, React.createElement("div", {
-    style: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'flex-start',
-      gap: 18,
-      flexWrap: 'wrap'
-    }
+    className: "qi-discover-dialog-heading"
   }, React.createElement("div", {
     style: {
       minWidth: 0
@@ -2500,21 +2346,9 @@ function SpbDiscover() {
       textTransform: 'uppercase'
     }
   }, "Explore pick"), React.createElement("h2", {
-    style: {
-      margin: '10px 0 0',
-      fontFamily: spb.disp,
-      fontSize: 42,
-      lineHeight: 1.1,
-      letterSpacing: 0,
-      color: spb.ink
-    }
+    className: "qi-discover-dialog-title"
   }, selectedItem.name)), React.createElement("div", {
-    style: {
-      color: spb.faint,
-      fontSize: 13,
-      textAlign: 'right',
-      lineHeight: 1.6
-    }
+    className: "qi-discover-dialog-meta"
   }, React.createElement("div", null, selectedItem.cityName || selectedItem.city), React.createElement("div", null, [selectedItem.category, selectedItem.sceneTag].filter(Boolean).join(' · ')), selectedItem?.poi?.verified ? React.createElement("div", {
     style: {
       color: 'oklch(0.82 0.045 150)'
@@ -2528,20 +2362,10 @@ function SpbDiscover() {
       fontWeight: 750
     }
   }, selectedItem.editorialTitle || selectedItem.tagline) : null, React.createElement("div", {
-    style: {
-      marginTop: 16,
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
-      gap: 10
-    }
+    className: "qi-discover-facts"
   }, [['为什么看', itemReason(selectedItem)], ['推荐指数', scoreText(selectedItem)], ['出发前', visitCheckText(selectedItem)], ...(selectedItem?.poi?.verified ? [['地址', selectedItem.poi.address], ['电话', selectedItem.poi.tel || '暂无公开电话'], ['商圈', selectedItem.poi.businessArea || selectedItem.poi.district || selectedItem.district || '暂无商圈']] : []), ['最佳时间', selectedItem.bestVisitTime || '按距离和当天行程安排'], ['适合谁', selectedItem.visitAudience || '适合近期城市探索'], ['附近还能去哪', selectedItem.nearbySuggestion || '搭配同商圈咖啡、餐厅或展览空间']].map(([title, text]) => React.createElement("div", {
     key: title,
-    style: {
-      border: `1px solid ${spb.line}`,
-      borderRadius: 8,
-      padding: '13px 14px',
-      background: 'oklch(0.205 0.014 265 / 0.62)'
-    }
+    className: "qi-discover-fact"
   }, React.createElement("div", {
     style: {
       color: spb.faint,
