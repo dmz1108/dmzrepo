@@ -5132,3 +5132,27 @@ Deployment:
 Notes for next agent:
 - 生产部署应原子更新 `Qi/qi-home.jsx`、`Qi/qi-home.compiled.js`、`Qi/index.html`；本次不涉及后端或运行时数据。
 - 部署后分别检查 `https://explore.dreamerqi.com` 的桌面/手机首屏、筛选、详情弹窗与图片代理。
+
+## 2026-07-15 - Codex - 探索页新版完成生产发布
+
+Changed:
+- PR #80 已合并探索页城市生活编辑式布局；PR #81 已合并只包含三份首页文件的受保护部署清单。
+- GitHub 生产工作流原子更新云端 `Qi/qi-home.jsx`、`Qi/qi-home.compiled.js`、`Qi/index.html`，未改后端和运行时数据。
+
+Files:
+- 云端 `C:\PandaDashboard\Qi\qi-home.jsx`
+- 云端 `C:\PandaDashboard\Qi\qi-home.compiled.js`
+- 云端 `C:\PandaDashboard\Qi\index.html`
+- 云端两份运维日志（部署器自动追加）
+- Git `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 生产 `https://explore.dreamerqi.com` 已返回缓存版本 `20260715-explore-editorial`。
+- 生产桌面 1440×1000 与手机 390×844 验收通过：页面无横向溢出，5 张精选图片均加载，筛选、详情打开和 Escape 关闭正常，浏览器无脚本错误。
+
+Deployment:
+- 受保护工作流 run `29389881566` 成功，`restart=none`，没有重启任何服务。
+- 该工作流执行前先完成队列中已获批准的主线空状态部署 run `29387589967`，两次运行均成功。
+
+Notes for next agent:
+- 探索页 UI 任务已上线完成；后续改版继续以 `Qi/qi-home.jsx` 为源，重新生成 compiled 文件并同步提高 `Qi/index.html` 的缓存版本。
