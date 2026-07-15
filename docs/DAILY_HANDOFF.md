@@ -5225,3 +5225,28 @@ Deployment:
 Notes for next agent:
 - 娱乐页视觉任务已完成 GitHub 合并、生产部署与公网验收；当前无待部署文件。
 - 后续若修改 `yule.html`，继续使用受保护清单部署，并保持娱乐 API、管理权限门和真实图片数据链不变。
+
+## 2026-07-15 - Codex - 娱乐页导航统一与真实更新时间待发布
+
+Changed:
+- 修复生产娱乐页仍使用独立顶部栏的问题：移除额外“首页”，按主页统一为“行情 / 娱乐 / 探索 / 瞎聊聊 / 关于 / 联系”，同时对齐 Logo、桌面/手机高度、留白和登录/注册按钮。
+- 娱乐页内容概览增加真实 `UPDATED` 状态，读取 `/health` 的 `state.lastCollectAt` 并按北京时间显示；缺失或读取失败时明确显示暂不可用，不伪造时间。
+- 新增只包含 `yule.html`、无需重启服务的受保护生产清单。
+
+Files:
+- `yule.html`
+- `tests/yule-nav-consistency.test.js`
+- `ops/production/manifests/yule-navigation-updated-at-20260715.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 本地桌面与手机对照确认娱乐页顶部栏和主页顺序、尺寸、账号入口一致，手机栏目可横向浏览且页面无横向溢出。
+- 娱乐页真实健康数据可显示北京时间更新时间；接口缺失和失败状态有明确回退。
+- 娱乐页内联脚本语法、导航专项测试、`git diff --check` 和全仓测试通过；首页、行情、后台和娱乐入口均可访问。
+
+Deployment:
+- 本条记录提交时尚未部署生产，未修改云端运行时状态，未重启任何服务。
+
+Notes for next agent:
+- 本次仅发布娱乐页静态文件，不修改娱乐数据库、采集服务、账号数据、行情或策略；生产清单 `restart=none`。
+- 合并至 `main` 后运行受保护生产工作流，并在公网桌面/手机检查六项导航、娱乐当前态、登录/注册和更新时间。

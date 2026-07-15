@@ -23,17 +23,17 @@
   a{color:inherit;text-decoration:none;}
   button{font:inherit;}
   a:focus-visible,button:focus-visible{outline:2px solid var(--blueSoft);outline-offset:3px;}
-  .nav{min-height:64px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:clamp(12px,2.5vw,28px);
-       padding:10px max(16px,calc((100vw - 1180px)/2));position:sticky;top:0;background:oklch(0.145 0.012 265 / .90);
-       backdrop-filter:blur(18px);z-index:40;}
-  .nav a.brand{display:flex;align-items:center;gap:8px;font-family:var(--disp);font-weight:650;font-size:18px;flex:0 0 auto;}
-  .nav a.brand svg{width:34px;height:auto;}
-  .nav .links{display:flex;gap:4px;margin-left:clamp(2px,1.4vw,16px);}
-  .nav .links a{font-size:13.5px;color:var(--sub);font-weight:650;display:inline-flex;align-items:center;justify-content:center;
-                 min-height:36px;padding:0 12px;border-radius:8px;border:1px solid transparent;transition:color .18s,border-color .18s,background .18s;}
-  .nav .links a.active{color:var(--ink);background:var(--panel2);border-color:var(--lineStrong);}
-  .nav .links a:hover{color:var(--ink);background:var(--panel);border-color:var(--lineStrong);}
-  .account-area{margin-left:auto;display:flex;align-items:center;gap:8px;min-height:38px;}
+  .nav{min-height:82px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:flex-start;
+       gap:clamp(14px,3vw,30px);padding:12px clamp(18px,4vw,56px);background:oklch(0.145 0.012 265 / .94);z-index:40;}
+  .nav a.brand{display:flex;align-items:center;min-width:0;flex:0 0 auto;}
+  .nav a.brand svg{width:auto;height:56px;display:block;overflow:visible;}
+  .nav .links{display:flex;align-items:center;justify-content:flex-start;flex:0 1 auto;flex-wrap:wrap;
+              gap:clamp(16px,2.2vw,30px);min-width:0;}
+  .nav .links a{font-size:15px;color:var(--sub);font-weight:500;display:inline-flex;align-items:center;justify-content:center;
+                 padding:8px 0;border-bottom:2px solid transparent;white-space:nowrap;transition:color .18s,border-color .18s;}
+  .nav .links a.active{color:var(--ink);font-weight:700;border-bottom-color:var(--blue);}
+  .nav .links a:hover{color:var(--ink);}
+  .account-area{margin-left:auto;display:flex;align-items:center;justify-content:flex-end;flex:0 1 auto;flex-wrap:wrap;gap:12px;min-width:0;}
   .account-pill{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:999px;background:oklch(0.205 0.014 265 / .72);
                 min-height:38px;padding:4px 5px 4px 10px;color:var(--sub);max-width:min(360px,42vw);}
   .account-pill.is-logged-in{border-color:oklch(0.72 0.15 242 / .42);background:oklch(0.205 0.026 250 / .78);}
@@ -41,11 +41,12 @@
                   color:var(--bg);font-family:var(--disp);font-weight:800;font-size:12px;flex:0 0 auto;}
   .account-name{color:var(--ink);font-size:14px;font-weight:700;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .account-role{color:var(--faint);font-size:12px;white-space:nowrap;}
-  .account-action{height:30px;border:1px solid var(--line);border-radius:999px;background:oklch(0.16 0.012 265 / .7);color:var(--sub);
-                  padding:0 10px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;font-weight:700;
+  .account-action{min-height:38px;border:1px solid var(--line);border-radius:8px;background:oklch(0.205 0.014 265 / .58);color:var(--sub);
+                  padding:9px 15px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:14.5px;font-weight:600;
                   transition:background .18s,border-color .18s,color .18s,transform .18s;white-space:nowrap;}
   .account-action:hover{color:var(--ink);border-color:oklch(0.58 0.11 245);background:oklch(0.255 0.035 250 / .86);transform:translateY(-1px);}
-  .account-action.primary{background:var(--blue);border-color:transparent;color:var(--bg);}
+  .account-action.primary{background:linear-gradient(135deg,var(--blue),var(--blueSoft));border-color:transparent;color:var(--bg);font-weight:700;
+                          box-shadow:0 0 22px oklch(0.72 0.15 242 / .24);}
   .auth-ov{position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.64);backdrop-filter:blur(14px);display:grid;place-items:center;padding:20px;}
   .auth-modal{width:min(420px,100%);background:var(--panel);border:1px solid var(--lineStrong);border-radius:10px;box-shadow:0 28px 90px rgba(0,0,0,.48);padding:22px;}
   .auth-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:18px;}
@@ -72,8 +73,13 @@
   .brief-stat{display:grid;gap:5px;}
   .brief-stat strong{font-family:var(--disp);font-size:34px;font-weight:600;line-height:1;color:var(--ink);}
   .brief-stat span{color:var(--faint);font-size:12px;line-height:1.4;}
-  .brief-note{margin:16px 0 0!important;padding-top:14px;border-top:1px solid var(--line);font-family:var(--mono);font-size:10.5px!important;line-height:1.55!important;color:var(--blueSoft)!important;}
-  .channel-bar{position:sticky;top:64px;z-index:30;display:grid;grid-template-columns:96px minmax(0,1fr);align-items:center;
+  .brief-meta{display:grid;gap:7px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line);}
+  .brief-update{display:flex;align-items:baseline;justify-content:space-between;gap:14px;font-family:var(--mono);}
+  .brief-update-label{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);}
+  .brief-update time{font-size:11px;line-height:1.5;color:var(--ink);text-align:right;}
+  .brief-update[data-state="error"] time{color:var(--faint);}
+  .brief-note{margin:0!important;font-family:var(--mono);font-size:10.5px!important;line-height:1.55!important;color:var(--blueSoft)!important;}
+  .channel-bar{position:sticky;top:0;z-index:30;display:grid;grid-template-columns:96px minmax(0,1fr);align-items:center;
                margin:0 0 28px;border-bottom:1px solid var(--line);background:oklch(0.145 0.012 265 / .94);backdrop-filter:blur(18px);}
   .channel-label{font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:.12em;text-transform:uppercase;}
   .tabs{display:flex;gap:8px;overflow-x:auto;flex-wrap:nowrap;padding:12px 0;scrollbar-width:none;}
@@ -165,23 +171,24 @@
     .lead-card img{aspect-ratio:16/10;height:auto;}
     .grid{grid-template-columns:repeat(2,minmax(0,1fr));}
   }
-  @media (max-width:560px){
-    .nav{min-height:58px;padding:8px 10px;gap:6px;}
-    .nav a.brand{font-size:0;gap:0;}
-    .nav a.brand svg{width:30px;}
-    .nav .links{min-width:0;overflow-x:auto;margin-left:0;scrollbar-width:none;}
+  @media (max-width:680px){
+    .nav{min-height:70px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;padding:9px 14px;flex-wrap:nowrap;}
+    .nav a.brand svg{height:44px;width:auto;}
+    .nav .links{min-width:0;overflow-x:auto;flex-wrap:nowrap;gap:14px;scrollbar-width:none;}
     .nav .links::-webkit-scrollbar{display:none;}
-    .nav .links a{min-height:34px;padding:0 9px;font-size:12.5px;}
-    .account-area{min-height:34px;}
-    .account-pill{min-height:34px;max-width:none;padding:3px;gap:3px;border-color:transparent;background:transparent;}
+    .nav .links a{font-size:15px;}
+    .account-area{margin-left:0;flex-wrap:nowrap;gap:7px;}
+    .account-pill{min-height:40px;max-width:none;padding:3px;gap:3px;border-color:transparent;background:transparent;}
     .account-avatar,.account-role,.account-name{display:none;}
-    .account-action{height:28px;padding:0 8px;font-size:12px;}
+    .account-action{min-height:34px;padding:8px 10px;font-size:13px;}
+  }
+  @media (max-width:560px){
     .wrap{padding:30px 14px 64px;}
     .hero{gap:26px;padding-bottom:28px;}
     .hero h1{font-size:clamp(40px,13.5vw,56px);line-height:1.02;letter-spacing:-.04em;}
     .hero p{font-size:14px;line-height:1.65;margin-top:16px;}
     .brief-stat strong{font-size:30px;}
-    .channel-bar{top:58px;grid-template-columns:1fr;margin-bottom:24px;}
+    .channel-bar{top:0;grid-template-columns:1fr;margin-bottom:24px;}
     .channel-label{display:none;}
     .tabs{margin:0 -14px;padding:10px 14px;}
     .tab{min-height:38px;font-size:13.5px;}
@@ -205,15 +212,16 @@
 </head>
 <body>
 <nav class="nav" aria-label="主导航">
-  <a class="brand" href="https://dreamerqi.com/">
-    <svg width="38" height="32" viewBox="0 0 160 135" fill="none"><circle cx="61" cy="68" r="30" stroke="#eef2f7" stroke-width="11" fill="none"/><path d="M78 84 L92 98" stroke="#eef2f7" stroke-width="11" stroke-linecap="round"/><rect x="106.5" y="61" width="11" height="37" rx="5.5" fill="#eef2f7"/><circle cx="112" cy="43" r="9" fill="#4a9bff"/></svg>
-    Qi
+  <a class="brand" href="https://dreamerqi.com/" aria-label="Qi home">
+    <svg viewBox="0 0 160 135" fill="none"><ellipse cx="65" cy="68" rx="53.2" ry="22" transform="rotate(-28 65 68)" stroke="#313848" stroke-width="2.5"/><circle cx="61" cy="68" r="30" stroke="#eef2f7" stroke-width="11" fill="none"/><path d="M78 84 L92 98" stroke="#eef2f7" stroke-width="11" stroke-linecap="round"/><rect x="106.5" y="61" width="11" height="37" rx="5.5" fill="#eef2f7"/><circle cx="112" cy="43" r="9" fill="#4a9bff"/></svg>
   </a>
   <div class="links" aria-label="站点页面">
-    <a href="https://dreamerqi.com/">首页</a>
     <a href="https://market.dreamerqi.com/">行情</a>
     <a href="/" class="active">娱乐</a>
     <a href="https://explore.dreamerqi.com/">探索</a>
+    <a href="https://dreamerqi.com/#chat">瞎聊聊</a>
+    <a href="https://dreamerqi.com/#about">关于</a>
+    <a href="https://dreamerqi.com/#contact">联系</a>
   </div>
   <div class="account-area" id="accountArea" aria-live="polite"></div>
 </nav>
@@ -231,7 +239,13 @@
         <div class="brief-stat"><strong>—</strong><span>条站内内容</span></div>
         <div class="brief-stat"><strong>—</strong><span>个持续更新频道</span></div>
       </div>
-      <p class="brief-note" id="heroNote">正在整理今日娱乐内容</p>
+      <div class="brief-meta">
+        <div class="brief-update" id="heroUpdateStatus" data-state="loading">
+          <span class="brief-update-label">Updated</span>
+          <time id="heroUpdatedAt" aria-live="polite">正在读取</time>
+        </div>
+        <p class="brief-note" id="heroNote">正在整理今日娱乐内容</p>
+      </div>
     </aside>
   </header>
 
@@ -333,11 +347,8 @@ function renderAccount(session=readSharedAccountSession()){
     </div>`;
     return;
   }
-  area.innerHTML = `<div class="account-pill">
-    <span class="account-role">未登录</span>
-    <button type="button" class="account-action" onclick="openAuthModal()">登录</button>
-    <a class="account-action primary" href="https://dreamerqi.com/">注册</a>
-  </div>`;
+  area.innerHTML = `<button type="button" class="account-action" onclick="openAuthModal()">登录</button>
+    <a class="account-action primary" href="https://dreamerqi.com/">注册</a>`;
 }
 function authMessage(error){
   const raw = String(error || '').trim().toLowerCase();
@@ -476,6 +487,35 @@ function renderHeroStats(){
       <div class="brief-stat"><strong>${visibleCats.length}</strong><span>个持续更新频道</span></div>`;
   }
   if(note) note.textContent = largest ? '编辑顺序 · 热度、相关度、更新时间' : '今日内容正在持续更新';
+}
+
+function formatBeijingUpdatedAt(value){
+  const date = new Date(value);
+  if(!value || Number.isNaN(date.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('zh-CN', {
+    timeZone:'Asia/Shanghai', month:'2-digit', day:'2-digit',
+    hour:'2-digit', minute:'2-digit', hour12:false
+  }).formatToParts(date).reduce((map,part)=>{ map[part.type] = part.value; return map; }, {});
+  if(!parts.month || !parts.day || !parts.hour || !parts.minute) return '';
+  return `${parts.month}.${parts.day} ${parts.hour}:${parts.minute} 北京时间`;
+}
+
+async function renderHeroUpdatedAt(){
+  const status = document.getElementById('heroUpdateStatus');
+  const time = document.getElementById('heroUpdatedAt');
+  if(!status || !time) return;
+  const data = await getJSON(`/health?_=${Date.now()}`);
+  const raw = data&&data.state&&data.state.lastCollectAt;
+  const label = formatBeijingUpdatedAt(raw);
+  if(!label){
+    status.dataset.state = 'error';
+    time.removeAttribute('datetime');
+    time.textContent = '更新时间暂不可用';
+    return;
+  }
+  status.dataset.state = 'ready';
+  time.dateTime = new Date(raw).toISOString();
+  time.textContent = label;
 }
 
 function catMeta(key){
@@ -768,6 +808,7 @@ window.addEventListener('focus', refreshAccountStatus);
   }
   await ensureCategories();
   renderHeroStats();
+  renderHeroUpdatedAt();
   if(!CATS.length){
     document.getElementById('content').innerHTML='<div class="empty">娱乐频道暂时不可用，请稍后再试</div>';
     return;

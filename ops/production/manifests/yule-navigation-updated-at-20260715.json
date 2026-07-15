@@ -1,0 +1,9 @@
+{
+  "files": [
+    {
+      "source": "yule.html",
+      "destination": "yule.html"
+    }
+  ],
+  "restart": "none"
+}
