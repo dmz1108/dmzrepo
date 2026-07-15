@@ -5584,3 +5584,20 @@ Validated:
 - Codex 点 2:`getDayBoardsWithMembers` 按板名跨源去重(`bmap.get(name)`)会让同名东财/同花顺板塌成一条,R2 `sourcePairs` 仍常拿不到两源——需改 source-aware 身份(zsType+name/plateId)+ 贯穿上游的行为测试。
 - 点 3 snapshot-day 可用性把 KPL-only 快照算数;点 4 冻结历史快照不受本次影响、PR 文案勿称历史已完全剔除;点 5 证据包 + 讨论组记录。
 - getStrategyStrongResonance / getDayThemeBoardStats / getStrongThemeMap 等其它策略面板仍走默认 [6,5,7](本次只修主线 P1)。
+
+## 2026-07-15 - Claude - #88 点2:同源塌板保留 bySource,R2 配对可靠成对
+
+Changed:
+- Codex 复核点2 属实:`getDayBoardsWithMembers` 按板名去重会让同名东财/同花顺板塌成一条,`strategyMainlineSourcePairs` 之后按板自身 zsType 过滤往往只剩胜出源一组。
+- 去重仍按板名(板块数/排名口径不动),但每源各留一份净流入/涨幅到 `winner.bySource[zsType]`;`strategyMainlineSourcePairs` 优先读 `bySource[zs]`(塌板后仍同源还原),无则回退板自身 zsType,绝不跨源拼。
+- `seed.boards` 与 `resonanceBoards` 映射透传 `bySource`,合并与种子两条路径均可用。
+
+Files:
+- `kpl-stats-server.js`(getDayBoardsWithMembers 去重 + strategyMainlineSourcePairs + seed/resonance 透传)
+- `tests/strategy-kpl-exclusion.test.js`(扩充:塌成一条的“医药”仍能同源还原东财 8亿/3% 与同花顺 6亿/4%;KPL zt20/50亿 不进策略口径不污染配对)
+
+Validated:
+- `node --check` 通过;全仓 33 个测试文件全绿。
+
+尚未处理(按 Owner 分阶段决定,留后续):
+- 点 3 snapshot-day 可用性把 KPL-only 快照算数;点 4 冻结历史快照 PR 文案勿称历史已完全剔除;点 5 证据包 + 讨论组记录。
