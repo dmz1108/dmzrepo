@@ -5451,3 +5451,29 @@ Deployment:
 Notes for next agent:
 - 本次是搜索窗口修复，不需要 AI 讨论组协议或策略证据回放。
 - in-app browser 在重载超大行情页时持续超时，因此不冒充已完成部署后点击验收；公网文件、接口、哈希与健康检查已完整通过。若用户仍保留发布前已打开的页面，需先强制刷新再用 `hsk` 验证。
+
+## 2026-07-15 - Codex - 修复 hsk 历史命中跳转
+
+Changed:
+- 确认上一次 30 日名录修复后，`hsk` 已能解析为 `002653`，但后续单股详情接口仍固定只回看 10 个交易日，返回 `ok:false / referenceDay:null`，因此页面无法跳到海思科的历史复盘日。
+- 30 日股票名录现在同时返回每只股票的 `latestDay`；前端对名称、代码或首字母的精确命中直接跳到最近涨停日，不再依赖 10 日详情回退。
+- 仅精确命中触发自动跳转，避免用户输入单个字母时被模糊命中提前拉走。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/review-stock-search.test.js`
+- `ops/production/manifests/review-hsk-reference-day-20260715.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 生产只读复现：`/recent-universe?days=30` 包含 `002653 / 海思科 / hsk`，但修复前 `/stock?code=002653&day=2026-07-15` 返回 `windowDays:10 / ok:false / referenceDay:null`。
+- 专项回归已覆盖 `hsk -> 002653 -> latestDay 2026-06-29 -> reviewDateOverride 2026-06-29 -> 刷新`完整链路。
+- `node --check kpl-stats-server.js`、`git diff --check`、行情页内联脚本检查与全仓 33 个测试文件全部通过。
+
+Deployment:
+- 本条首次提交时尚未部署，未修改生产运行时数据，未重启服务。
+
+Notes for next agent:
+- 这是复盘搜索导航修复，不改变四源归纳、策略评分或历史库，不需要 AI 讨论组协议。
+- 合并后用 `ops/production/manifests/review-hsk-reference-day-20260715.json` 发布；验收时应确认 30 日名录中海思科带 `latestDay: 2026-06-29`，然后在当前复盘日输入 `hsk` 自动跳转。

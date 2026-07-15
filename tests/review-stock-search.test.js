@@ -48,25 +48,39 @@ if (serverContext.result !== 'hsk') {
 
 const pageContext = {
   reviewUniverseCache: {
-    day: '2026-06-29',
-    stocks: [{ code: '002653', name: '海思科', initials: 'hsk' }],
+    day: '2026-07-15',
+    stocks: [{ code: '002653', name: '海思科', initials: 'hsk', latestDay: '2026-06-29' }],
   },
+  state: { reviewSearchTerm: 'hsk', reviewAutoJumpKey: '', reviewDateOverride: '' },
+  setTimeout: fn => fn(),
+  refreshCount: 0,
   // Simulate a browser that cannot produce a usable pinyin acronym.
   pinyinInitialsVariants: () => [''],
 };
+pageContext.refreshLimitupReviewPage = () => { pageContext.refreshCount += 1; };
 vm.createContext(pageContext);
 vm.runInContext([
   extractFunction(pageSrc, 'reviewStockSearchText'),
   extractFunction(pageSrc, 'resolveReviewUniverseCode'),
+  extractFunction(pageSrc, 'resolveExactReviewUniverseStock'),
+  extractFunction(pageSrc, 'maybeAutoJumpToReviewUniverseStock'),
   'this.searchText = reviewStockSearchText({ code: "002653", name: "海思科" });',
-  'this.resolved = resolveReviewUniverseCode("hsk", "2026-06-29");',
+  'this.resolved = resolveReviewUniverseCode("hsk", "2026-07-15");',
+  'this.exact = resolveExactReviewUniverseStock("hsk", "2026-07-15");',
+  'maybeAutoJumpToReviewUniverseStock(this.exact, "hsk", "2026-07-15");',
 ].join('\n'), pageContext);
 
 if (!pageContext.searchText.includes('hsk')) throw new Error('review search text misses server initials');
 if (pageContext.resolved !== '002653') throw new Error(`hsk did not resolve 002653: ${pageContext.resolved}`);
+if (pageContext.exact?.latestDay !== '2026-06-29') throw new Error('hsk exact match misses latest limit-up day');
+if (pageContext.state.reviewDateOverride !== '2026-06-29') throw new Error('hsk did not jump to latest limit-up day');
+if (pageContext.refreshCount !== 1) throw new Error(`hsk jump refresh mismatch: ${pageContext.refreshCount}`);
 
 if (!serverSrc.includes("initials: reviewStockNamePinyinInitials(name)")) {
   throw new Error('recent-universe endpoint does not expose server initials');
+}
+if (!serverSrc.includes('reviewStockNamePinyinInitials(name), latestDay')) {
+  throw new Error('recent-universe endpoint does not expose latest limit-up day');
 }
 
 // A stock can fall outside the previous 10-trading-day window while still
