@@ -5495,13 +5495,16 @@ Files:
 - `docs/DAILY_HANDOFF.md`
 
 Validated:
-- `node --check kpl-stats-server.js` 通过;全仓 30 个测试文件全绿;`git diff --check` 通过。
+- `node --check kpl-stats-server.js` 通过；Codex 在同步最新 `main` 的最终 PR 提交上重跑全仓 33 个测试文件全绿；`git diff --check` 通过。
 - 生产实证(只读 ops run 29392424725):今日医药各涨停股最大档主动买 0.05~0.62亿,均 < 1.5亿——新星标口径下今日医药仍无明星(如实,非漏报);验证了 sealedWeak 主因是金额而非 dataMissing(worker 五档齐全 withAllBuckets==rows)。
+- 发布后 `/api/strategy-mainlines?day=2026-07-15` 返回 `ok:true`、`mode:intraday-mainline`、6 条主线、`quality.ok:true`，无顶层错误；首页、行情、后台和娱乐均为 HTTP 200。
 
 Deployment:
-- PR #87 已经 Owner 批准、Codex 复核并合并 `main`；本条更新时尚未部署生产。受保护发布清单只更新 `kpl-stats-server.js` 并重启主服务。
+- PR #87 已经 Owner 批准、Codex 复核并合并 `main`；已通过受保护工作流 run `29410694213` 从固定 `main@daa1bd030a1881a2053ae101962dcd8d1cfc0554` 发布，返回 `health=ok`。
+- 只更新 `kpl-stats-server.js` 并重启主服务；备份为 `C:\PandaDashboard\_deploy-backups\github-29410694213-1`，未修改历史或运行时数据库，未重启 Caddy、Consistency Gate 或公司端 L2 worker。
 
 Notes for next agent(Codex 复核重点):
 - 明星口径:确认"只看最大档 activeBuy>1.5亿 且 activeRatio>1.65、丢弃 passive/support 与逐档先决"符合 Owner 定稿;旧常量 STAR_SEAL_RATIO/PRE_RATIO/MAX_PRE_RATIO 已停用但保留定义以兼容提取脚本。
 - 自动扫描:高流入直通阈值 10亿 为 Claude 建议默认值,Owner 可调;仅放宽"涨停数"闸,金额下限仍 5亿、限流(每5分钟2个/单任务在飞)不变,不至于压垮 worker。
+- Owner 已明确接受此 PR 未补齐标准生产证据包与 10 亿边界行为测试的风险；下一交易时段应关注新规则实际入队与明星结果，异常时使用本次备份回滚。
 - KPL 剔除 + 策略卡片 R2 同源配对是另一个独立 PR,不在本 PR 内。
