@@ -21306,11 +21306,12 @@ const STRATEGY_MAINLINE_STAR_BUCKETS = [500000, 3000000, 8000000];
 const STRATEGY_MAINLINE_STAR_PRE_RATIO = 1.5;
 const STRATEGY_MAINLINE_STAR_SEAL_RATIO = 2;
 // 自动 L2 扫描：只在交易时段、每 5 分钟窗口最多派 2 个板块、串行（上一个没跑完不派下一个）、无合格目标不扫。
-// 合格目标 = 今日实时里 净流入≥8亿 且 板内涨停≥2 的前排板块，当天已扫过的不重复。
+// 合格目标 = 今日实时里 净流入≥5亿 且 (板内涨停≥2 或 净流入≥10亿高流入直通) 的前排板块，当天已扫过的不重复。
 const STRATEGY_MAINLINE_AUTO_SCAN_WINDOW_MS = 5 * 60 * 1000;
 const STRATEGY_MAINLINE_AUTO_SCAN_MAX_PER_WINDOW = 2;
-const STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW = 8e8;
+const STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW = 5e8;   // Owner 2026-07-15:8亿→5亿(救钱不够8亿的中小主线)
 const STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT = 2;
+const STRATEGY_MAINLINE_AUTO_SCAN_HIGH_INFLOW_OVERRIDE = 10e8;  // 净流入≥此值无视涨停数直接排队验证(高流入直通,救钱多涨停少的主线如大消费)
 const STRATEGY_MAINLINE_AUTO_SCAN_LIMIT_STOCKS = 50;
 const strategyMainlineAutoScanState = { windowStart: 0, dispatched: 0, lastJobId: '' };
 function strategyResonanceTopicKey(raw) {
@@ -22747,7 +22748,8 @@ function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase, prior
     const candidates = (Array.isArray(boards) ? boards : [])
       .filter(b => String(b?.plateId || '') &&
         Number(b?.netInflow) >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW &&
-        (b?.scanChannel === 'supplement' || Number(b?.zt) >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT) &&
+        (b?.scanChannel === 'supplement' || Number(b?.zt) >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT
+          || Number(b?.netInflow) >= STRATEGY_MAINLINE_AUTO_SCAN_HIGH_INFLOW_OVERRIDE) &&
         Array.isArray(b?.memberRows) && b.memberRows.length)
       .sort((a, b) =>
         ((a?.scanChannel === 'supplement') ? 0 : 1) - ((b?.scanChannel === 'supplement') ? 0 : 1) ||
