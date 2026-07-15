@@ -906,28 +906,28 @@ function SpbDiscover() {
     ? new Date(payload.generatedAt).toLocaleString('zh-CN', { hour12: false })
     : '等待首次更新';
   const shell = {
-    padding: '64px clamp(18px, 4vw, 56px) 86px',
+    padding: '56px clamp(18px, 4vw, 56px) 88px',
     borderTop: `1px solid ${spb.line}`,
-    background: 'linear-gradient(180deg, oklch(0.155 0.013 265), oklch(0.135 0.012 265))',
+    background: 'oklch(0.145 0.012 265)',
   };
   const chip = (active) => ({
     border: `1px solid ${active ? 'oklch(0.72 0.15 242 / 0.58)' : spb.line}`,
-    background: active ? spb.blue : 'oklch(0.18 0.014 265 / 0.70)',
+    background: active ? spb.blue : 'transparent',
     color: active ? spb.bg : spb.sub,
-    borderRadius: 8,
-    padding: '9px 14px',
+    borderRadius: 6,
+    padding: '8px 12px',
     cursor: 'pointer',
     fontFamily: 'inherit',
-    fontSize: 13.5,
+    fontSize: 13,
     fontWeight: active ? 700 : 550,
     boxShadow: 'none',
   });
   const cityCard = {
-    background: 'oklch(0.185 0.014 265 / 0.92)',
+    background: 'oklch(0.18 0.014 265 / 0.82)',
     border: `1px solid ${spb.line}`,
-    borderRadius: 10,
-    padding: 20,
-    boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.055), 0 20px 54px rgba(0,0,0,0.22)',
+    borderRadius: 8,
+    padding: 18,
+    boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.045)',
   };
   const shopRow = {
     padding: '15px 0',
@@ -951,18 +951,12 @@ function SpbDiscover() {
     if (/大众点评/.test(raw)) return '口碑榜单';
     return raw.replace(/线索/g, '').trim() || '城市线索';
   };
-  const sourceTone = (item) => {
-    if (item?.poi?.verified) return '地址已核验';
-    const raw = String(item?.sourceName || '');
-    if (/站内地点资料/.test(raw)) return '已整理';
-    if (/大众点评|微信|百度新闻/.test(raw)) return '公开线索';
-    return '待观察';
-  };
   const poiLine = (item) => {
     const poi = item?.poi?.verified ? item.poi : null;
     if (!poi) return '';
     return [poi.businessArea || poi.district, poi.address].filter(Boolean).join(' · ');
   };
+  const phoneLine = (item) => item?.poi?.verified && item.poi.tel ? `电话 ${item.poi.tel}` : '';
   const visitCheckText = (item) => {
     const poi = item?.poi?.verified ? item.poi : null;
     if (poi?.tel) return `地址已核验，可电话 ${poi.tel} 确认营业和排队`;
@@ -979,13 +973,7 @@ function SpbDiscover() {
     if (parts.length) return parts.join(' · ');
     return item?.tagline || '近期城市去处';
   };
-  const sourcePlan = [
-    ['新店雷达', '新开、首店、试营业、快闪和上新，是探索页的第一层线索。'],
-    ['口碑校验', '优先看本地公众号、榜单线索、城市新闻和地点资料，过滤泛资讯。'],
-    ['地址核验', '配置校验服务后，会补充真实地址、电话和商圈，区分线索与可到达地点。'],
-    ['路线价值', '不只列店名，还判断适合约饭、拍照、慢逛、看展还是夜间小聚。'],
-    ['到店提醒', '详情里保留营业、预约、排队、临时调整等二次确认提醒。'],
-  ];
+  const sourcePlan = ['新店雷达', '口碑校验', '地址核验', '路线编排', '到店提醒'];
   const openItem = (city, item) => {
     const photos = getItemPhotos(item);
     setSelectedItem({ ...item, cityName: city.name, photo: photos[0] || '', photos });
@@ -1031,54 +1019,139 @@ function SpbDiscover() {
   return (
     <section style={shell}>
       <style>{`
-        .qi-discover-shell { max-width: 1320px; margin: 0 auto; }
-        .qi-discover-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 260px); gap: 28px; align-items: end; }
-        .qi-discover-title { margin: 14px 0 0; font-family: ${spb.disp}; font-size: 62px; line-height: 1.05; letter-spacing: 0; color: ${spb.ink}; font-weight: 680; }
-        .qi-discover-plan { margin-top: 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; }
+        .qi-discover-shell { max-width: 1280px; margin: 0 auto; }
+        .qi-discover-shell button { transition: border-color 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease; }
+        .qi-discover-shell button:hover { border-color: oklch(0.72 0.15 242 / 0.58) !important; }
+        .qi-discover-shell button:focus-visible { outline: 2px solid ${spb.blueSoft}; outline-offset: 3px; }
+        .qi-discover-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 300px); gap: clamp(32px, 7vw, 92px); align-items: end; }
+        .qi-discover-title { margin: 13px 0 0; max-width: 800px; font-family: ${spb.disp}; font-size: 54px; line-height: 1.06; letter-spacing: 0; color: ${spb.ink}; font-weight: 680; }
+        .qi-discover-update { padding: 4px 0 4px 20px; border-left: 2px solid oklch(0.73 0.14 45); }
+        .qi-discover-stats { margin-top: 24px; display: flex; gap: 8px 22px; flex-wrap: wrap; color: ${spb.sub}; font-size: 13px; }
+        .qi-discover-stats strong { color: ${spb.ink}; font-family: ${spb.mono}; font-size: 14px; }
+        .qi-discover-filter { position: sticky; top: 66px; z-index: 24; margin-top: 30px; padding: 12px 0; border-top: 1px solid ${spb.line}; border-bottom: 1px solid ${spb.line}; background: oklch(0.145 0.012 265 / 0.94); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+        .qi-discover-filter-row { display: flex; gap: 8px; align-items: center; overflow-x: auto; scrollbar-width: none; }
+        .qi-discover-filter-row + .qi-discover-filter-row { margin-top: 9px; }
+        .qi-discover-filter-row::-webkit-scrollbar { display: none; }
+        .qi-discover-filter-row button { flex: 0 0 auto; }
+        .qi-discover-section { margin-top: 48px; }
+        .qi-discover-section-head { display: flex; align-items: end; justify-content: space-between; gap: 24px; }
         .qi-discover-section-title { margin: 8px 0 0; font-family: ${spb.disp}; color: ${spb.ink}; font-size: 30px; line-height: 1.18; letter-spacing: 0; }
+        .qi-discover-section-note { max-width: 420px; color: ${spb.sub}; font-size: 13.5px; line-height: 1.6; text-align: right; }
+        .qi-discover-feature-grid { margin-top: 18px; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: 220px; gap: 12px; }
+        .qi-discover-feature { position: relative; overflow: hidden; min-width: 0; border: 1px solid ${spb.line}; border-radius: 8px; padding: 0; background: oklch(0.2 0.014 265); cursor: pointer; text-align: left; font-family: inherit; }
+        .qi-discover-feature.is-lead { grid-column: span 7; grid-row: span 2; }
+        .qi-discover-feature.is-side { grid-column: span 5; }
+        .qi-discover-feature.is-bottom { grid-column: span 6; }
+        .qi-discover-feature:hover { transform: translateY(-2px); }
+        .qi-discover-feature img { transition: transform 420ms ease; }
+        .qi-discover-feature:hover img { transform: scale(1.025); }
+        .qi-discover-feature-copy { position: absolute; inset: auto 0 0; z-index: 2; padding: 20px; background: linear-gradient(180deg, transparent, rgba(7,9,15,0.92)); }
+        .qi-discover-feature.is-lead .qi-discover-feature-copy { padding: 26px; }
+        .qi-discover-feature-title { margin-top: 10px; color: ${spb.ink}; font-family: ${spb.disp}; font-size: 25px; line-height: 1.14; font-weight: 680; }
+        .qi-discover-feature.is-lead .qi-discover-feature-title { max-width: 720px; font-size: 40px; }
+        .qi-discover-feature-summary { margin-top: 8px; max-width: 720px; color: oklch(0.9 0.02 255); font-size: 14px; line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .qi-discover-feature.is-lead .qi-discover-feature-summary { font-size: 15.5px; -webkit-line-clamp: 3; }
+        .qi-discover-route-grid { margin-top: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); border-top: 1px solid ${spb.line}; border-bottom: 1px solid ${spb.line}; }
+        .qi-discover-route { min-width: 0; padding: 20px; border-right: 1px solid ${spb.line}; }
+        .qi-discover-route:last-child { border-right: none; }
+        .qi-discover-stop { position: relative; display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 12px; width: 100%; padding: 13px 0; border: none; border-bottom: 1px solid ${spb.line}; background: transparent; text-align: left; cursor: pointer; font-family: inherit; }
+        .qi-discover-stop:last-child { border-bottom: none; }
+        .qi-discover-time { width: 42px; height: 28px; display: grid; place-items: center; border-radius: 5px; border: 1px solid ${spb.line}; background: oklch(0.205 0.018 265); color: ${spb.blueSoft}; font-family: ${spb.mono}; font-size: 11px; font-weight: 800; }
+        .qi-discover-stop:nth-child(2) .qi-discover-time { background: oklch(0.25 0.055 48); color: oklch(0.85 0.12 62); }
+        .qi-discover-stop:nth-child(3) .qi-discover-time { background: oklch(0.23 0.045 155); color: oklch(0.84 0.1 155); }
+        .qi-discover-category-grid { margin-top: 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; border-top: 1px solid ${spb.line}; }
+        .qi-discover-category { min-width: 0; padding: 19px 0 17px; border-bottom: 1px solid ${spb.line}; }
+        .qi-discover-category-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; width: 100%; padding: 10px 0; border: none; background: transparent; text-align: left; cursor: pointer; font-family: inherit; }
+        .qi-discover-method { margin-top: 48px; padding: 16px 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-top: 1px solid ${spb.line}; border-bottom: 1px solid ${spb.line}; }
+        .qi-discover-method-item { padding: 0 16px; border-right: 1px solid ${spb.line}; color: ${spb.sub}; font-size: 13px; }
+        .qi-discover-method-item:first-child { padding-left: 0; }
+        .qi-discover-method-item:last-child { padding-right: 0; border-right: none; }
+        .qi-discover-city-grid { margin-top: 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 370px), 1fr)); gap: 16px; }
+        .qi-discover-shop { width: 100%; display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 14px; background: transparent; border-left: none; border-right: none; border-bottom: none; cursor: pointer; text-align: left; font-family: inherit; }
+        .qi-discover-shop-image { width: 92px; height: 92px; border-radius: 6px; overflow: hidden; background: oklch(0.23 0.025 250); border: 1px solid ${spb.line}; }
+        .qi-discover-modal { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: clamp(18px, 4vw, 42px); background: rgba(5, 7, 12, 0.76); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+        .qi-discover-dialog { width: min(860px, 100%); max-height: min(88vh, 900px); overflow: auto; border: 1px solid ${spb.line}; border-radius: 8px; background: oklch(0.175 0.014 265); box-shadow: 0 34px 90px rgba(0,0,0,0.52); }
+        .qi-discover-dialog-hero { position: relative; min-height: 300px; overflow: hidden; border-radius: 8px 8px 0 0; background: oklch(0.22 0.025 250); }
+        .qi-discover-dialog-hero > img { height: 320px !important; }
+        .qi-discover-dialog-content { padding: 28px clamp(22px, 4vw, 38px) 34px; }
+        .qi-discover-dialog-heading { display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, auto); gap: 26px; align-items: start; }
+        .qi-discover-dialog-title { margin: 10px 0 0; font-family: ${spb.disp}; font-size: 42px; line-height: 1.08; color: ${spb.ink}; }
+        .qi-discover-dialog-meta { color: ${spb.faint}; font-size: 13px; text-align: right; line-height: 1.7; }
+        .qi-discover-facts { margin-top: 20px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid ${spb.line}; border-bottom: 1px solid ${spb.line}; }
+        .qi-discover-fact { min-width: 0; padding: 15px 16px; border-right: 1px solid ${spb.line}; }
+        .qi-discover-fact:nth-child(3n) { border-right: none; }
+        .qi-discover-fact:nth-child(n + 4) { border-top: 1px solid ${spb.line}; }
         @media (max-width: 760px) {
-          .qi-discover-hero { grid-template-columns: 1fr; align-items: start; }
-          .qi-discover-title { font-size: 42px; }
-          .qi-discover-plan { display: flex; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x proximity; scrollbar-width: none; }
-          .qi-discover-plan::-webkit-scrollbar { display: none; }
-          .qi-discover-plan > div { flex: 0 0 min(78vw, 280px); scroll-snap-align: start; }
+          .qi-discover-hero { grid-template-columns: 1fr; gap: 24px; align-items: start; }
+          .qi-discover-title { font-size: 39px; }
+          .qi-discover-update { padding: 0 0 0 15px; }
+          .qi-discover-filter { top: 58px; margin-top: 24px; }
+          .qi-discover-section { margin-top: 38px; }
+          .qi-discover-section-head { align-items: start; flex-direction: column; gap: 8px; }
+          .qi-discover-section-note { max-width: none; text-align: left; }
+          .qi-discover-feature-grid { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+          .qi-discover-feature-grid::-webkit-scrollbar { display: none; }
+          .qi-discover-feature { flex: 0 0 min(84vw, 340px); min-height: 360px; scroll-snap-align: start; }
+          .qi-discover-feature.is-lead { flex-basis: min(90vw, 380px); }
+          .qi-discover-feature.is-lead .qi-discover-feature-copy { padding: 20px; }
+          .qi-discover-feature.is-lead .qi-discover-feature-title { font-size: 30px; }
+          .qi-discover-feature-summary, .qi-discover-feature.is-lead .qi-discover-feature-summary { font-size: 14px; -webkit-line-clamp: 3; }
+          .qi-discover-route-grid { grid-template-columns: 1fr; }
+          .qi-discover-route { padding: 18px 0; border-right: none; border-bottom: 1px solid ${spb.line}; }
+          .qi-discover-route:last-child { border-bottom: none; }
+          .qi-discover-category-grid { grid-template-columns: 1fr; }
+          .qi-discover-method { grid-template-columns: repeat(5, minmax(126px, 1fr)); overflow-x: auto; }
+          .qi-discover-method-item { min-width: 126px; }
+          .qi-discover-city-grid { margin-top: 16px; grid-template-columns: 1fr; }
+          .qi-discover-shop { grid-template-columns: 78px minmax(0, 1fr); gap: 12px; }
+          .qi-discover-shop-image { width: 78px; height: 78px; }
+          .qi-discover-modal { align-items: end; padding: 10px; }
+          .qi-discover-dialog { max-height: calc(100vh - 20px); }
+          .qi-discover-dialog-hero { min-height: 230px; }
+          .qi-discover-dialog-hero > img { height: 250px !important; }
+          .qi-discover-dialog-content { padding: 22px 22px 30px; }
+          .qi-discover-dialog-heading { grid-template-columns: 1fr; gap: 12px; }
+          .qi-discover-dialog-title { font-size: 34px; }
+          .qi-discover-dialog-meta { display: flex; gap: 7px 14px; flex-wrap: wrap; text-align: left; }
+          .qi-discover-facts { grid-template-columns: 1fr; }
+          .qi-discover-fact { padding: 13px 0; border-right: none; border-top: 1px solid ${spb.line}; }
+          .qi-discover-fact:first-child { border-top: none; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .qi-discover-shell button, .qi-discover-feature img { transition: none; }
         }
       `}</style>
       <div className="qi-discover-shell">
       <div className="qi-discover-hero">
         <div>
-          <div style={{ fontFamily: spb.mono, fontSize: 12.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: spb.blueSoft }}>Explore</div>
+          <div style={{ fontFamily: spb.mono, fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', color: spb.blueSoft }}>Explore / City notes</div>
           <h1 className="qi-discover-title">
             城市新店与好去处
           </h1>
-          <p style={{ margin: '16px 0 0', maxWidth: 620, color: spb.sub, fontSize: 16, lineHeight: 1.7 }}>
-            把近期新开、首店、探店、展览、市集和生活方式空间整理成可阅读的城市路线。先看是否值得去，再决定什么时候去、和哪里一起逛。
+          <p style={{ margin: '16px 0 0', maxWidth: 680, color: spb.sub, fontSize: 16, lineHeight: 1.72 }}>
+            从新开小店、展览与城市空间里，挑出真正值得专程去或顺路停留的地方。每个去处都附上商圈、地址与到店前需要确认的信息。
           </p>
-        </div>
-        <div style={{ width: '100%', border: `1px solid ${spb.line}`, borderRadius: 10, padding: '14px 16px', background: 'oklch(0.185 0.014 265 / 0.76)' }}>
-          <div style={{ fontFamily: spb.mono, fontSize: 11.5, color: spb.faint }}>UPDATED</div>
-          <div style={{ marginTop: 6, color: spb.ink, fontSize: 14.5, fontWeight: 700 }}>{updatedText}</div>
-          <div style={{ marginTop: 6, color: spb.sub, fontSize: 13 }}>{totalItems} 条站内内容</div>
-        </div>
-      </div>
-
-      <div className="qi-discover-plan">
-        {sourcePlan.map(([title, text]) => (
-          <div key={title} style={{ border: `1px solid ${spb.line}`, borderRadius: 10, padding: '15px 16px', background: 'oklch(0.185 0.014 265 / 0.76)', boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.055)' }}>
-            <div style={{ color: spb.ink, fontSize: 15, fontWeight: 800 }}>{title}</div>
-            <div style={{ marginTop: 7, color: spb.sub, fontSize: 13.5, lineHeight: 1.62 }}>{text}</div>
+          <div className="qi-discover-stats">
+            <span><strong>{totalItems}</strong> 个去处</span>
+            <span><strong>{cities.length}</strong> 座城市</span>
+            <span><strong>{Math.max(0, categories.length - 1)}</strong> 个主题</span>
           </div>
-        ))}
+        </div>
+        <div className="qi-discover-update">
+          <div style={{ fontFamily: spb.mono, fontSize: 11.5, letterSpacing: '0.08em', color: 'oklch(0.82 0.11 58)' }}>本期更新</div>
+          <div style={{ marginTop: 7, color: spb.ink, fontSize: 15, fontWeight: 760, lineHeight: 1.5 }}>{updatedText}</div>
+          <div style={{ marginTop: 8, color: spb.sub, fontSize: 13, lineHeight: 1.62 }}>编辑排序综合近期热度、地点完整度与路线价值。</div>
+        </div>
       </div>
 
-      <div style={{ marginTop: 34, display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+      <div className="qi-discover-filter" aria-label="探索筛选">
+        <div className="qi-discover-filter-row">
           <button type="button" aria-pressed={cityId === 'all'} onClick={() => setCityId('all')} style={chip(cityId === 'all')}>全部城市</button>
           {cities.map(city => (
             <button key={city.id} type="button" aria-pressed={cityId === city.id} onClick={() => setCityId(city.id)} style={chip(cityId === city.id)}>{city.name}</button>
           ))}
         </div>
-        <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
+        <div className="qi-discover-filter-row">
           {categories.map(item => (
             <button key={item} type="button" aria-pressed={category === item} onClick={() => setCategory(item)} style={chip(category === item)}>{item}</button>
           ))}
@@ -1088,29 +1161,73 @@ function SpbDiscover() {
       {error ? <div role="alert" style={{ marginTop: 28, border: '1px solid oklch(0.68 0.15 32 / 0.38)', borderRadius: 8, padding: '12px 14px', color: 'oklch(0.82 0.11 32)', background: 'oklch(0.26 0.04 32 / 0.22)', fontSize: 14 }}>{error}</div> : null}
       {loading ? <div aria-live="polite" style={{ marginTop: 34, color: spb.sub, fontSize: 16 }}>正在加载今日探索内容...</div> : null}
 
-      {!loading && weekendRoutes.length ? (
-        <div style={{ marginTop: 34, border: `1px solid ${spb.line}`, borderRadius: 10, padding: '20px clamp(18px, 3vw, 24px)', background: 'oklch(0.185 0.014 265 / 0.88)', boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.055)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', gap: 18, flexWrap: 'wrap' }}>
+      {!loading && featuredItems.length ? (
+        <section className="qi-discover-section" aria-labelledby="discover-picks-title">
+          <div className="qi-discover-section-head">
             <div>
-              <div style={{ fontFamily: spb.mono, fontSize: 12, letterSpacing: '0.08em', color: spb.blueSoft, textTransform: 'uppercase' }}>Weekend routes</div>
-              <h2 className="qi-discover-section-title">周末可以这样逛</h2>
+              <div style={{ fontFamily: spb.mono, fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', color: spb.blueSoft }}>Today picks</div>
+              <h2 id="discover-picks-title" className="qi-discover-section-title">今日值得先看的去处</h2>
             </div>
-            <div style={{ maxWidth: 360, color: spb.sub, fontSize: 13.5, lineHeight: 1.6 }}>按城市、类型和推荐分自动串联，不需要切换应用也能先判断路线是否顺。</div>
+            <div className="qi-discover-section-note">把图文、地址和路线价值较完整的去处放在最前面</div>
           </div>
-          <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 270px), 1fr))', gap: 14 }}>
+          <div className="qi-discover-feature-grid">
+            {featuredItems.map((item, index) => {
+              const photo = getItemPhoto(item);
+              const layoutClass = index === 0 ? 'is-lead' : index < 3 ? 'is-side' : 'is-bottom';
+              return (
+                <button
+                  key={`${item.cityId}-${item.id || item.name}-${index}`}
+                  type="button"
+                  className={`qi-discover-feature ${layoutClass}`}
+                  onClick={() => openItem({ id: item.cityId, name: item.cityName }, item)}
+                >
+                  {photo ? (
+                    <img src={photoSrc(photo)} alt={item.name} loading={index === 0 ? 'eager' : 'lazy'} onError={hideBrokenImage} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  ) : null}
+                  <div className="qi-discover-feature-copy">
+                    <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center' }}>
+                      {[item.cityName, item.category, item.poi?.businessArea || item.district].filter(Boolean).slice(0, 3).map(text => (
+                        <span key={text} style={{ color: spb.ink, background: 'oklch(0.12 0.01 265 / 0.64)', border: '1px solid oklch(1 0 0 / 0.22)', borderRadius: 6, padding: '5px 8px', fontSize: 11.5, fontWeight: 720, backdropFilter: 'blur(8px)' }}>{text}</span>
+                      ))}
+                      <span style={{ color: spb.bg, background: index === 0 ? 'oklch(0.84 0.12 62)' : spb.blueSoft, borderRadius: 6, padding: '5px 8px', fontSize: 11.5, fontWeight: 820 }}>{scoreText(item)}</span>
+                    </div>
+                    <div className="qi-discover-feature-title">{item.name}</div>
+                    <div style={{ marginTop: 7, color: index === 0 ? 'oklch(0.87 0.1 62)' : spb.blueSoft, fontSize: 12.5, fontWeight: 760 }}>{itemReason(item)}</div>
+                    <div className="qi-discover-feature-summary">{item.editorialSummary || item.summary || item.tagline || ''}</div>
+                    {(poiLine(item) || phoneLine(item)) ? (
+                      <div style={{ marginTop: 10, color: 'oklch(0.84 0.09 155)', fontSize: 12.5, fontWeight: 720, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{[poiLine(item), phoneLine(item)].filter(Boolean).join(' · ')}</div>
+                    ) : null}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      {!loading && weekendRoutes.length ? (
+        <section className="qi-discover-section" aria-labelledby="discover-routes-title">
+          <div className="qi-discover-section-head">
+            <div>
+              <div style={{ fontFamily: spb.mono, fontSize: 12, letterSpacing: '0.08em', color: 'oklch(0.84 0.12 62)', textTransform: 'uppercase' }}>Weekend routes</div>
+              <h2 id="discover-routes-title" className="qi-discover-section-title">周末可以这样逛</h2>
+            </div>
+            <div className="qi-discover-section-note">上午轻起点、下午主目的地、傍晚用一餐或小聚收尾</div>
+          </div>
+          <div className="qi-discover-route-grid">
             {weekendRoutes.map(route => (
-              <article key={route.city.id} style={{ border: `1px solid ${spb.line}`, borderRadius: 8, padding: 16, background: 'oklch(0.16 0.012 265 / 0.66)' }}>
+              <article key={route.city.id} className="qi-discover-route">
                 <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
-                  <h3 style={{ margin: 0, color: spb.ink, fontSize: 18, fontWeight: 850 }}>{route.city.name}</h3>
-                  <span style={{ color: spb.blueSoft, fontFamily: spb.mono, fontSize: 11 }}>{route.stops.length} stops</span>
+                  <h3 style={{ margin: 0, color: spb.ink, fontSize: 19, fontWeight: 820 }}>{route.city.name}</h3>
+                  <span style={{ color: spb.faint, fontFamily: spb.mono, fontSize: 11 }}>{route.stops.length} 站</span>
                 </div>
-                <div style={{ marginTop: 13, display: 'grid', gap: 10 }}>
-                  {route.stops.map((stop, index) => (
-                    <button key={`${route.city.id}-${stop.time}-${stop.item.id || stop.item.name}`} type="button" onClick={() => openItem(route.city, stop.item)} style={{ display: 'grid', gridTemplateColumns: '46px minmax(0, 1fr)', gap: 11, alignItems: 'start', textAlign: 'left', border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}>
-                      <div style={{ width: 38, height: 38, borderRadius: 8, display: 'grid', placeItems: 'center', background: index === 1 ? spb.blueSoft : 'oklch(0.245 0.018 265)', color: index === 1 ? spb.bg : spb.blueSoft, fontFamily: spb.mono, fontSize: 12, fontWeight: 850, border: `1px solid ${spb.line}` }}>{stop.time}</div>
-                      <div style={{ minWidth: 0, paddingBottom: 10, borderBottom: index === route.stops.length - 1 ? 'none' : `1px solid ${spb.line}` }}>
-                        <div style={{ color: spb.faint, fontSize: 12.5 }}>{stop.title}</div>
-                        <div style={{ marginTop: 3, color: spb.ink, fontSize: 15.5, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stop.item.name}</div>
+                <div style={{ marginTop: 8 }}>
+                  {route.stops.map(stop => (
+                    <button key={`${route.city.id}-${stop.time}-${stop.item.id || stop.item.name}`} type="button" className="qi-discover-stop" onClick={() => openItem(route.city, stop.item)}>
+                      <div className="qi-discover-time">{stop.time}</div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ color: spb.faint, fontSize: 12 }}>{stop.title}</div>
+                        <div style={{ marginTop: 3, color: spb.ink, fontSize: 15.5, fontWeight: 780, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stop.item.name}</div>
                         <div style={{ marginTop: 5, color: spb.sub, fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{[stop.item.category, stop.item.poi?.businessArea || stop.item.district, scoreText(stop.item)].filter(Boolean).join(' · ')}</div>
                       </div>
                     </button>
@@ -1119,109 +1236,64 @@ function SpbDiscover() {
               </article>
             ))}
           </div>
-        </div>
+        </section>
       ) : null}
 
       {!loading && categorySpotlights.length ? (
-        <div style={{ marginTop: 34 }}>
-          <div style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap' }}>
+        <section className="qi-discover-section" aria-labelledby="discover-categories-title">
+          <div className="qi-discover-section-head">
             <div>
               <div style={{ fontFamily: spb.mono, fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', color: spb.blueSoft }}>Categories</div>
-              <h2 style={{ margin: '8px 0 0', fontFamily: spb.disp, color: spb.ink, fontSize: 30, lineHeight: 1.16, letterSpacing: 0 }}>按主题先看</h2>
+              <h2 id="discover-categories-title" className="qi-discover-section-title">按主题先看</h2>
             </div>
-            <div style={{ color: spb.sub, fontSize: 14, lineHeight: 1.6 }}>每类只露出最值得先看的前三个，减少重复信息</div>
+            <div className="qi-discover-section-note">每类先露出三个代表去处，快速判断今天想逛什么</div>
           </div>
-          <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 250px), 1fr))', gap: 14 }}>
+          <div className="qi-discover-category-grid">
             {categorySpotlights.map(group => (
-              <article key={group.name} style={{ border: `1px solid ${spb.line}`, borderRadius: 10, padding: 16, background: 'oklch(0.205 0.014 265 / 0.68)', boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.07)' }}>
+              <article key={group.name} className="qi-discover-category">
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
                   <h3 style={{ margin: 0, color: spb.ink, fontSize: 18, fontWeight: 850 }}>{group.name}</h3>
-                  <button type="button" onClick={() => setCategory(group.name)} style={{ border: `1px solid ${spb.line}`, borderRadius: 8, background: 'transparent', color: spb.blueSoft, padding: '5px 9px', cursor: 'pointer', fontSize: 12 }}>看全部 {group.count}</button>
+                  <button type="button" onClick={() => setCategory(group.name)} style={{ border: 'none', background: 'transparent', color: spb.blueSoft, padding: '4px 0', cursor: 'pointer', fontSize: 12.5, fontWeight: 720 }}>查看 {group.count} 个</button>
                 </div>
-                <div style={{ marginTop: 12, display: 'grid', gap: 9 }}>
+                <div style={{ marginTop: 7 }}>
                   {group.items.map(item => (
-                    <button key={`${group.name}-${item.id || item.name}`} type="button" onClick={() => openItem({ id: item.cityId, name: item.cityName }, item)} style={{ textAlign: 'left', border: `1px solid ${spb.line}`, borderRadius: 8, background: 'oklch(0.18 0.014 265 / 0.62)', padding: '10px 11px', cursor: 'pointer', fontFamily: 'inherit' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
-                        <span style={{ color: spb.ink, fontSize: 14.5, fontWeight: 780, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
-                        <span style={{ color: spb.blueSoft, fontFamily: spb.mono, fontSize: 11, whiteSpace: 'nowrap' }}>{scoreText(item)}</span>
-                      </div>
-                      <div style={{ marginTop: 5, color: spb.faint, fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{[item.cityName, item.poi?.businessArea || item.district, item.sceneTag].filter(Boolean).join(' · ')}</div>
+                    <button key={`${group.name}-${item.id || item.name}`} type="button" className="qi-discover-category-row" onClick={() => openItem({ id: item.cityId, name: item.cityName }, item)}>
+                      <span style={{ minWidth: 0 }}>
+                        <span style={{ display: 'block', color: spb.ink, fontSize: 14.5, fontWeight: 760, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+                        <span style={{ display: 'block', marginTop: 5, color: spb.faint, fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{[item.cityName, item.poi?.businessArea || item.district, item.sceneTag].filter(Boolean).join(' · ')}</span>
+                      </span>
+                      <span style={{ color: 'oklch(0.84 0.12 62)', fontFamily: spb.mono, fontSize: 11, whiteSpace: 'nowrap' }}>{scoreText(item)}</span>
                     </button>
                   ))}
                 </div>
               </article>
             ))}
           </div>
-        </div>
+        </section>
       ) : null}
 
-      {!loading && featuredItems.length ? (
-        <div style={{ marginTop: 34 }}>
-          <div style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap' }}>
-            <div>
-              <div style={{ fontFamily: spb.mono, fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', color: spb.blueSoft }}>Today picks</div>
-              <h2 style={{ margin: '9px 0 0', fontFamily: spb.disp, color: spb.ink, fontSize: 31, lineHeight: 1.16, letterSpacing: 0 }}>今日值得先看的去处</h2>
+      {!loading ? (
+        <div className="qi-discover-method" aria-label="探索内容整理流程">
+          {sourcePlan.map((title, index) => (
+            <div key={title} className="qi-discover-method-item">
+              <span style={{ marginRight: 8, color: index === 2 ? 'oklch(0.84 0.12 62)' : spb.blueSoft, fontFamily: spb.mono, fontSize: 11 }}>{String(index + 1).padStart(2, '0')}</span>
+              <span>{title}</span>
             </div>
-            <div style={{ color: spb.sub, fontSize: 14, lineHeight: 1.6 }}>按推荐指数、近期热度和图文完整度排序</div>
-          </div>
-          <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: 16 }}>
-            {featuredItems.map((item, index) => {
-              const photo = getItemPhoto(item);
-              const isLead = index === 0;
-              return (
-                <button
-                  key={`${item.cityId}-${item.id || item.name}-${index}`}
-                  type="button"
-                  onClick={() => openItem({ id: item.cityId, name: item.cityName }, item)}
-                  style={{
-                    minHeight: isLead ? 310 : 244,
-                    gridColumn: isLead ? '1 / -1' : 'span 1',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'flex-end',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    border: `1px solid ${spb.line}`,
-                    borderRadius: 10,
-                    padding: 0,
-                    background: 'oklch(0.2 0.014 265)',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    fontFamily: 'inherit',
-                    boxShadow: '0 24px 64px rgba(0,0,0,0.24)',
-                  }}
-                >
-                  {photo ? (
-                    <img src={photoSrc(photo)} alt={item.name} loading="lazy" onError={hideBrokenImage} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                  ) : null}
-                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(6,8,14,0.08), rgba(6,8,14,0.38) 42%, rgba(6,8,14,0.86))' }} />
-                  <div style={{ position: 'relative', padding: isLead ? 22 : 18, width: '100%' }}>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      {[item.cityName, item.category, item.sceneTag].filter(Boolean).slice(0, 3).map(text => (
-                        <span key={text} style={{ color: spb.ink, background: 'oklch(0.12 0.01 265 / 0.48)', border: '1px solid oklch(1 0 0 / 0.2)', borderRadius: 8, padding: '6px 9px', fontSize: 12, fontWeight: 760, backdropFilter: 'blur(10px)' }}>{text}</span>
-                      ))}
-                      <span style={{ color: spb.bg, background: spb.blueSoft, border: '1px solid oklch(1 0 0 / 0.16)', borderRadius: 8, padding: '6px 9px', fontSize: 12, fontWeight: 820 }}>{sourceTone(item)}</span>
-                      <span style={{ color: spb.ink, background: 'oklch(0.12 0.01 265 / 0.48)', border: '1px solid oklch(1 0 0 / 0.2)', borderRadius: 8, padding: '6px 9px', fontSize: 12, fontWeight: 820, backdropFilter: 'blur(10px)' }}>{scoreText(item)}</span>
-                    </div>
-                    <div style={{ marginTop: 13, color: spb.ink, fontFamily: spb.disp, fontSize: isLead ? 38 : 25, lineHeight: 1.12, letterSpacing: 0, fontWeight: 650 }}>{item.name}</div>
-                    <div style={{ marginTop: 8, color: spb.blueSoft, fontSize: 13.5, fontWeight: 760 }}>{itemReason(item)}</div>
-                    {poiLine(item) ? (
-                      <div style={{ marginTop: 7, color: 'oklch(0.82 0.045 150)', fontSize: 12.8, fontWeight: 760, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{poiLine(item)}</div>
-                    ) : null}
-                    <div style={{ marginTop: 10, color: 'oklch(0.9 0.02 255)', lineHeight: 1.58, fontSize: isLead ? 15.5 : 14.5, display: '-webkit-box', WebkitLineClamp: isLead ? 3 : 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.editorialSummary || item.summary || ''}</div>
-                    <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, color: 'oklch(0.86 0.025 255 / 0.82)', fontSize: 12.5 }}>
-                      <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.bestVisitTime || sourceLabel(item)}</span>
-                      <span>查看详情</span>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+          ))}
         </div>
       ) : null}
 
-      <div style={{ marginTop: 34, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 330px), 1fr))', gap: 18 }}>
+      {!loading ? (
+        <div className="qi-discover-section-head" style={{ marginTop: 48 }}>
+          <div>
+            <div style={{ fontFamily: spb.mono, fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', color: spb.blueSoft }}>City index</div>
+            <h2 className="qi-discover-section-title">按城市继续看</h2>
+          </div>
+          <div className="qi-discover-section-note">每座城市保留近期更值得安排的地点，点开可查看地址、电话和商圈</div>
+        </div>
+      ) : null}
+
+      <div className="qi-discover-city-grid">
         {visibleCities.map(city => (
           <article key={city.id} style={cityCard}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 14 }}>
@@ -1237,23 +1309,13 @@ function SpbDiscover() {
                     <button
                       key={item.id || item.name}
                       type="button"
+                      className="qi-discover-shop"
                       onClick={() => openItem(city, item)}
                       style={{
                         ...shopRow,
-                        width: '100%',
-                        display: 'grid',
-                        gridTemplateColumns: '72px minmax(0, 1fr)',
-                        gap: 13,
-                        background: 'transparent',
-                        borderLeft: 'none',
-                        borderRight: 'none',
-                        borderBottom: 'none',
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                        fontFamily: 'inherit',
                       }}
                     >
-                      <div style={{ height: 72, borderRadius: 8, overflow: 'hidden', background: 'linear-gradient(135deg, oklch(0.34 0.05 245), oklch(0.22 0.04 292))', border: `1px solid ${spb.line}`, boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.12)' }}>
+                      <div className="qi-discover-shop-image">
                         {photo ? (
                           <img src={photoSrc(photo)} alt={item.name} loading="lazy" onError={hideBrokenImage} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                         ) : (
@@ -1268,6 +1330,9 @@ function SpbDiscover() {
                         <div style={{ marginTop: 7, color: spb.sub, lineHeight: 1.58, fontSize: 14.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.editorialSummary || item.summary || item.tagline || ''}</div>
                         {poiLine(item) ? (
                           <div style={{ marginTop: 8, color: 'oklch(0.82 0.045 150)', fontSize: 12.5, fontWeight: 720, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{poiLine(item)}</div>
+                        ) : null}
+                        {phoneLine(item) ? (
+                          <div style={{ marginTop: 5, color: 'oklch(0.84 0.09 155)', fontSize: 12.5, fontWeight: 720, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{phoneLine(item)}</div>
                         ) : null}
                         {(item.district || item.sceneTag || item?.poi?.verified) ? (
                           <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -1292,37 +1357,19 @@ function SpbDiscover() {
       </div>
       {selectedItem ? (
         <div
+          className="qi-discover-modal"
           onClick={closeItem}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 80,
-            background: 'rgba(5, 7, 12, 0.72)',
-            backdropFilter: 'blur(18px)',
-            WebkitBackdropFilter: 'blur(18px)',
-            display: 'grid',
-            placeItems: 'center',
-            padding: 'clamp(18px, 4vw, 42px)',
-          }}
         >
           <article
+            className="qi-discover-dialog"
             ref={itemDialogRef}
             role="dialog"
             aria-modal="true"
             aria-label="探索地点详情"
             tabIndex={-1}
             onClick={(event) => event.stopPropagation()}
-            style={{
-              width: 'min(820px, 100%)',
-              maxHeight: 'min(86vh, 860px)',
-              overflow: 'auto',
-              background: 'linear-gradient(180deg, oklch(0.245 0.015 265 / 0.96), oklch(0.175 0.014 265 / 0.98))',
-              border: `1px solid ${spb.line}`,
-              borderRadius: 10,
-              boxShadow: '0 34px 90px rgba(0,0,0,0.52), inset 0 1px 0 oklch(1 0 0 / 0.1)',
-            }}
           >
-            <div style={{ position: 'relative', minHeight: 260, background: 'linear-gradient(135deg, oklch(0.35 0.08 238), oklch(0.23 0.07 292))', overflow: 'hidden', borderRadius: '10px 10px 0 0' }}>
+            <div className="qi-discover-dialog-hero">
               {selectedItem.photo ? (
                 <img src={photoSrc(selectedItem.photo)} alt={selectedItem.name} onError={hideBrokenImage} style={{ width: '100%', height: 320, objectFit: 'cover', display: 'block' }} />
               ) : (
@@ -1330,20 +1377,20 @@ function SpbDiscover() {
                   {selectedItem.category || selectedItem.cityName || 'Discovery'}
                 </div>
               )}
-              <button type="button" onClick={closeItem} aria-label="关闭" style={{ position: 'absolute', top: 16, right: 16, width: 42, height: 42, borderRadius: 999, border: `1px solid ${spb.line}`, background: 'oklch(0.165 0.013 265 / 0.72)', color: spb.ink, fontSize: 24, lineHeight: 1, cursor: 'pointer', boxShadow: '0 12px 32px rgba(0,0,0,0.26)' }}>×</button>
+              <button type="button" onClick={closeItem} aria-label="关闭" style={{ position: 'absolute', top: 16, right: 16, width: 42, height: 42, borderRadius: 999, border: `1px solid ${spb.line}`, background: 'oklch(0.165 0.013 265 / 0.82)', color: spb.ink, fontSize: 24, lineHeight: 1, cursor: 'pointer', boxShadow: '0 12px 32px rgba(0,0,0,0.26)' }}>×</button>
               <div style={{ position: 'absolute', left: 22, bottom: 20, display: 'flex', gap: 9, flexWrap: 'wrap' }}>
                 {[selectedItem.cityName || selectedItem.city, selectedItem.category, selectedItem.district, selectedItem?.poi?.verified ? '地址已核验' : '', scoreText(selectedItem)].filter(Boolean).map(text => (
                   <span key={text} style={{ border: `1px solid oklch(1 0 0 / 0.22)`, background: 'oklch(0.12 0.01 265 / 0.5)', color: spb.ink, borderRadius: 8, padding: '7px 11px', fontSize: 12.5, fontWeight: 750, backdropFilter: 'blur(12px)' }}>{text}</span>
                 ))}
               </div>
             </div>
-            <div style={{ padding: '26px clamp(22px, 4vw, 36px) 32px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 18, flexWrap: 'wrap' }}>
+            <div className="qi-discover-dialog-content">
+              <div className="qi-discover-dialog-heading">
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontFamily: spb.mono, fontSize: 12, letterSpacing: '0.08em', color: spb.blueSoft, textTransform: 'uppercase' }}>Explore pick</div>
-                  <h2 style={{ margin: '10px 0 0', fontFamily: spb.disp, fontSize: 42, lineHeight: 1.1, letterSpacing: 0, color: spb.ink }}>{selectedItem.name}</h2>
+                  <h2 className="qi-discover-dialog-title">{selectedItem.name}</h2>
                 </div>
-                <div style={{ color: spb.faint, fontSize: 13, textAlign: 'right', lineHeight: 1.6 }}>
+                <div className="qi-discover-dialog-meta">
                   <div>{selectedItem.cityName || selectedItem.city}</div>
                   <div>{[selectedItem.category, selectedItem.sceneTag].filter(Boolean).join(' · ')}</div>
                   {selectedItem?.poi?.verified ? <div style={{ color: 'oklch(0.82 0.045 150)' }}>地址已核验</div> : null}
@@ -1353,7 +1400,7 @@ function SpbDiscover() {
               {selectedItem.editorialTitle || selectedItem.tagline ? (
                 <div style={{ marginTop: 24, color: spb.ink, fontSize: 18, lineHeight: 1.55, fontWeight: 750 }}>{selectedItem.editorialTitle || selectedItem.tagline}</div>
               ) : null}
-              <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10 }}>
+              <div className="qi-discover-facts">
                 {[
                   ['为什么看', itemReason(selectedItem)],
                   ['推荐指数', scoreText(selectedItem)],
@@ -1363,7 +1410,7 @@ function SpbDiscover() {
                   ['适合谁', selectedItem.visitAudience || '适合近期城市探索'],
                   ['附近还能去哪', selectedItem.nearbySuggestion || '搭配同商圈咖啡、餐厅或展览空间'],
                 ].map(([title, text]) => (
-                  <div key={title} style={{ border: `1px solid ${spb.line}`, borderRadius: 8, padding: '13px 14px', background: 'oklch(0.205 0.014 265 / 0.62)' }}>
+                  <div key={title} className="qi-discover-fact">
                     <div style={{ color: spb.faint, fontFamily: spb.mono, fontSize: 11.5, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{title}</div>
                     <div style={{ marginTop: 7, color: spb.ink, fontSize: 14.5, lineHeight: 1.5, fontWeight: 760 }}>{text}</div>
                   </div>
