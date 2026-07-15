@@ -7024,7 +7024,28 @@ async function getLimitUpMainReasonStockDetail(url, req, res) {
   });
 }
 
-// 近 N 个交易日涨停股名录（code+name 去重）：用于综合归纳搜索非当日涨停股时把搜索词解析成代码（只读）
+// 服务端生成稳定的股票简称首字母，避免复盘搜索完全依赖访问者浏览器的
+// Intl 中文拼音排序实现。接口只返回首字母索引，不改变任何复盘原始数据。
+const REVIEW_PINYIN_BOUNDARY_CHARS = '\u963f\u516b\u64e6\u54d2\u59b8\u53d1\u65ee\u54c8\u8ba5\u5494\u5783\u5988\u62ff\u5662\u556a\u671f\u7136\u6492\u584c\u6316\u5915\u4e2b\u531d';
+const REVIEW_PINYIN_INITIAL_CHARS = 'abcdefghjklmnopqrstwxyz';
+const REVIEW_PINYIN_COLLATOR = typeof Intl !== 'undefined' && Intl.Collator
+  ? new Intl.Collator('zh-Hans-CN-u-co-pinyin')
+  : null;
+function reviewStockNamePinyinInitials(name) {
+  if (!REVIEW_PINYIN_COLLATOR) return '';
+  return Array.from(String(name || '')).map(char => {
+    if (/^[a-z0-9]$/i.test(char)) return char.toLowerCase();
+    if (!/[\u3400-\u9fff]/u.test(char)) return '';
+    for (let i = REVIEW_PINYIN_BOUNDARY_CHARS.length - 1; i >= 0; i -= 1) {
+      if (REVIEW_PINYIN_COLLATOR.compare(char, REVIEW_PINYIN_BOUNDARY_CHARS[i]) >= 0) {
+        return REVIEW_PINYIN_INITIAL_CHARS[i] || '';
+      }
+    }
+    return '';
+  }).join('');
+}
+
+// 近 N 个交易日涨停股名录（code+name+initials 去重）：用于综合归纳搜索非当日涨停股时把搜索词解析成代码（只读）
 async function getLimitUpMainReasonRecentUniverse(url, req, res) {
   const day = url.searchParams.get('day') || chinaNowParts().day;
   const isoDay = isoFromCompactDate(day);
@@ -7039,8 +7060,11 @@ async function getLimitUpMainReasonRecentUniverse(url, req, res) {
       if (!code) continue;
       const name = String(s.name || '');
       const prev = byCode.get(code);
-      if (!prev) byCode.set(code, { code, name });
-      else if (!prev.name && name) prev.name = name;
+      if (!prev) byCode.set(code, { code, name, initials: reviewStockNamePinyinInitials(name) });
+      else if (!prev.name && name) {
+        prev.name = name;
+        prev.initials = reviewStockNamePinyinInitials(name);
+      }
     }
   }
   return send(res, 200, { ok: true, day: isoDay, days, stocks: [...byCode.values()] });

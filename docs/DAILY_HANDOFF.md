@@ -5332,3 +5332,29 @@ Deployment:
 Notes for next agent:
 - 四人室外瞎聊聊首页预览图已完成 GitHub 合并、生产部署和公网哈希验收；当前无待发布文件。
 - 若浏览器仍显示旧图，使用带版本的首页链接或强制刷新，资源地址应命中 `chatter-cute-preview.webp?v=3`。
+
+## 2026-07-15 - Codex - 涨停复盘首字母搜索稳定化（海思科 hsk）
+
+Changed:
+- 修复涨停复盘股票简称首字母搜索依赖访问者浏览器 `Intl` 拼音排序实现的问题：主服务的近 N 日股票池新增只读 `initials` 字段，前端将服务端索引与本地计算结果合并匹配。
+- `resolveReviewUniverseCode` 统一复用完整搜索文本，股票名称、代码、服务端首字母、浏览器首字母及原有原因字段保持同一匹配口径；未写死“海思科”特例。
+- 新增同时部署主服务与行情前端、只重启主服务的受保护生产清单。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/review-stock-search.test.js`
+- `ops/production/manifests/review-hsk-search-20260715.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 生产只读核对 `2026-06-29 / 002653`：近 30 日股票池返回 `002653 / 海思科`，未发现源数据缺名；当前生产响应尚无 `initials`，证明问题是搜索索引兼容而非股票底库缺失。
+- 新增回归模拟浏览器无法生成拼音首字母时，服务端 `海思科 -> hsk` 且前端 `hsk -> 002653`；专项测试通过。
+- `node --check kpl-stats-server.js`、行情页内联脚本语法、`git diff --check` 和全仓测试 `32/32` 通过；生产行情页、后台和近 30 日股票池接口均为 HTTP 200。
+
+Deployment:
+- 本条记录提交时尚未部署生产，未修改云端运行时数据，未重启任何服务。
+
+Notes for next agent:
+- 本次是复盘搜索兼容性修复，不改变复盘原始库、四源归纳、题材归因、龙头评分或历史数据，因此不需要 AI 讨论组协议或策略证据回放。
+- 合并后使用 `ops/production/manifests/review-hsk-search-20260715.json` 发布，并在复盘页选择有海思科记录的日期，用 `hsk` 与 `002653` 对照验收。

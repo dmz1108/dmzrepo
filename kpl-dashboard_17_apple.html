@@ -12439,9 +12439,12 @@ function pinyinInitialsVariants(text) {
 function reviewStockSearchText(stock) {
   const name = String(stock?.name || '');
   const code = String(stock?.code || '');
+  const universeStock = reviewUniverseCache.stocks.find(item => String(item?.code || '') === code);
   return [
     name,
     code,
+    stock?.initials,
+    universeStock?.initials,
     pinyinInitialsVariants(name).join(' '),
     stock?.boardTopic,
     stock?.primaryRawTopic,
@@ -12472,9 +12475,7 @@ function resolveReviewUniverseCode(term, day) {
   const q = String(term || '').trim().toLowerCase();
   if (!q || reviewUniverseCache.day !== String(day || '')) return '';
   for (const s of reviewUniverseCache.stocks) {
-    const code = String(s.code || '');
-    if (code.toLowerCase().includes(q) || String(s.name || '').toLowerCase().includes(q)) return code;
-    if (pinyinInitialsVariants(s.name).some(v => v.includes(q))) return code;
+    if (reviewStockSearchText(s).includes(q)) return String(s.code || '');
   }
   return '';
 }
