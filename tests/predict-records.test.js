@@ -30,9 +30,12 @@ const fs = {
   writeFile: async (p, content) => { written[p] = JSON.parse(content); },
 };
 async function readMainlinePredict(day) { return existingPredict; }
+async function recordStrategyDailyIntradayObservation() {}
 `;
 const code = stubs + extractFn('strategyPredictCandidateRecord') + '\n' +
-  extractFn('strategyPredictStarTransitions') + '\n' + extractFn('writeMainlinePredict');
+  extractFn('strategyPredictStarTransitions') + '\n' +
+  extractFn('strategyPredictPickTop') + '\n' + extractFn('strategyPredictBuildBlock') + '\n' +
+  extractFn('writeMainlinePredict') + '\n' + extractFn('writeMainlinePredictBySource');
 eval(code);
 
 const fullMainline = {
@@ -126,6 +129,23 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
   existingPredict = null;
   await writeMainlinePredict('2026-07-11', '早盘', [], null);
   A(!written['/fake/mainline-predict-2026-07-11.json'], '空主线不写文件');
+
+  // 4. 两套独立预测按来源落库(Codex 二审 P1):同题材双源重复,两边各自的第 2 名都保留、绝不跨源覆盖
+  existingPredict = null;
+  const mkM = (over) => ({ familyKey: over.key, key: over.key, theme: over.theme, rank: over.rank, score: over.score,
+    mainLeader: { code: over.lead, name: over.lead }, leaders: [{ code: over.lead, name: over.lead, leadScore: 10 }], starStocks: [] });
+  const emList = [mkM({ key: 'k-ai', theme: '算力AI', rank: 1, score: 90, lead: '600001' }), mkM({ key: 'k-yy', theme: '医药', rank: 2, score: 40, lead: '600002' })];
+  const thList = [mkM({ key: 'k-ai', theme: '算力AI', rank: 1, score: 88, lead: '600003' }), mkM({ key: 'k-xf', theme: '大消费', rank: 2, score: 50, lead: '600004' })];
+  await writeMainlinePredictBySource('2026-07-14', '早盘', { eastmoney: { mainlines: emList }, ths: { mainlines: thList } }, { key: '' });
+  const p = written['/fake/mainline-predict-2026-07-14.json'];
+  A(p && p.schemaVersion === 3 && p.bySource, 'schema v3 + bySource 两套独立预测块');
+  A(p.bySource.eastmoney.top.map(t => t.theme).join(',') === '算力AI,医药', '东财块保留自己 top:算力AI+医药(第2名医药未被顶掉)');
+  A(p.bySource.ths.top.map(t => t.theme).join(',') === '算力AI,大消费', '同花顺块保留自己 top:算力AI+大消费(第2名大消费未被顶掉)');
+  // 同题材"算力AI"在两块各存一份,龙头取各自来源(不互相覆盖)
+  A(p.bySource.eastmoney.top[0].leader.code === '600001' && p.bySource.ths.top[0].leader.code === '600003', '同题材算力AI两边各存自己的龙头(600001 vs 600003,不跨源覆盖)');
+  // 顶层兼容层=东财单源(非跨源并集),不出现"算力AI×2"的重复占位
+  A(p.top.map(t => t.theme).join(',') === '算力AI,医药', '顶层兼容层=东财单源,不是跨源并集(无同题材重复占位)');
+  A(p.top.length === 2 && !p.top.some((t, i) => p.top.findIndex(x => x.theme === t.theme) !== i), '顶层无重复题材占位');
 
   console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL P1-C CHECKS PASSED');
 })();

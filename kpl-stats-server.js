@@ -23258,44 +23258,83 @@ function strategyPredictStarTransitions(existingRows, mainlines, observedAt) {
       String(a.mainlineKey).localeCompare(String(b.mainlineKey)) || String(a.code).localeCompare(String(b.code)))
     .slice(0, 100);
 }
+function strategyPredictPickTop(m) {
+  return m ? {
+    key: m.familyKey || m.key || '', theme: m.theme || '', rank: m.rank || 0,
+    score: m.score ?? null, predictScore: m.predictScore ?? null,
+    stage: m.stage?.label || '', certainty: m.certainty?.label || '',
+    l2VerificationStatus: m.l2VerificationStatus || '',
+    leader: m.mainLeader ? { code: m.mainLeader.code, name: m.mainLeader.name } : null,
+    // 保存预测时点前两名龙头候选。leader 继续保留第一名以兼容旧记录/旧页面。
+    leaders: (Array.isArray(m.leaders) && m.leaders.length ? m.leaders : (m.mainLeader ? [m.mainLeader] : []))
+      .slice(0, 2)
+      .map(stock => ({
+        code: stock.code || '',
+        name: stock.name || '',
+        leadScore: isFiniteNumeric(stock.leadScore) ? Number(stock.leadScore) : null,
+      })),
+    // level=预测时点的明星等级(expected=预期明星未封/confirmed=当时已封/active=仅资金活跃),
+    // 回看的"预期明星→当日封板"验证只统计 expected;旧记录无此字段 → 等级未知,不进统计。
+    star: (m.starStocks || [])[0]
+      ? { code: m.starStocks[0].code, name: m.starStocks[0].name, level: String(m.starStocks[0].level || '') || null }
+      : null,
+  } : null;
+}
+// 一套预测(单来源或旧合并口径)的落库块:top3 / candidates12 / 明星轨迹。各来源独立成块,同题材不跨源覆盖。
+function strategyPredictBuildBlock(mainlines, existingStarTransitions, savedAt) {
+  return {
+    top: (mainlines || []).slice(0, 3).map(strategyPredictPickTop).filter(Boolean),
+    candidates: (mainlines || []).slice(0, 12).map(strategyPredictCandidateRecord).filter(Boolean),
+    starTransitions: strategyPredictStarTransitions(existingStarTransitions, mainlines, savedAt),
+  };
+}
 async function writeMainlinePredict(day, sessionPhase, mainlines, confirm) {
   try {
     // 已收盘阶段既不覆盖也不首次创建(Codex 复审 PR#25:旧逻辑只挡覆盖,盘后首次生成会把
     // 收盘后答案写成"盘中预测",污染回看命中率——7-08 的 sessionPhase=已收盘 文件即此来源)。
     if (sessionPhase === '已收盘') return;
-    const pick = m => m ? {
-      key: m.familyKey || m.key || '', theme: m.theme || '', rank: m.rank || 0,
-      score: m.score ?? null, predictScore: m.predictScore ?? null,
-      stage: m.stage?.label || '', certainty: m.certainty?.label || '',
-      l2VerificationStatus: m.l2VerificationStatus || '',
-      leader: m.mainLeader ? { code: m.mainLeader.code, name: m.mainLeader.name } : null,
-      // 保存预测时点前两名龙头候选。leader 继续保留第一名以兼容旧记录/旧页面。
-      leaders: (Array.isArray(m.leaders) && m.leaders.length ? m.leaders : (m.mainLeader ? [m.mainLeader] : []))
-        .slice(0, 2)
-        .map(stock => ({
-          code: stock.code || '',
-          name: stock.name || '',
-          leadScore: isFiniteNumeric(stock.leadScore) ? Number(stock.leadScore) : null,
-        })),
-      // level=预测时点的明星等级(expected=预期明星未封/confirmed=当时已封/active=仅资金活跃),
-      // 回看的"预期明星→当日封板"验证只统计 expected;旧记录无此字段 → 等级未知,不进统计。
-      star: (m.starStocks || [])[0]
-        ? { code: m.starStocks[0].code, name: m.starStocks[0].name, level: String(m.starStocks[0].level || '') || null }
-        : null,
-    } : null;
-    const top = (mainlines || []).slice(0, 3).map(pick).filter(Boolean);
-    if (!top.length) return;
     const savedAt = new Date().toISOString();
     const existing = await readMainlinePredict(day);
-    const starTransitions = strategyPredictStarTransitions(existing?.starTransitions, mainlines, savedAt);
-    const candidates = (mainlines || []).slice(0, 12).map(strategyPredictCandidateRecord).filter(Boolean);
+    const block = strategyPredictBuildBlock(mainlines, existing?.starTransitions, savedAt);
+    if (!block.top.length) return;
     await fs.mkdir(STRATEGY_MAINLINE_DATA_DIR, { recursive: true });
     await fs.writeFile(strategyMainlinePredictPath(day), JSON.stringify({
       day, savedAt, sessionPhase: sessionPhase || '',
-      confirmedKey: confirm?.key || '', top,
-      schemaVersion: 2, candidates, starTransitions,
+      confirmedKey: confirm?.key || '', top: block.top,
+      schemaVersion: 2, candidates: block.candidates, starTransitions: block.starTransitions,
     }, null, 2), 'utf8');
     await recordStrategyDailyIntradayObservation(day, sessionPhase, mainlines, savedAt);
+  } catch {}
+}
+// 两套独立预测落库(Owner v2 / Codex 二审 P1):东财、同花顺各存一块(top/candidates/transitions),
+// 绝不把跨源并集当正式预测真值——同题材两份不再互相覆盖,任一源自己的第 2 名不会被另一源顶掉。
+// 顶层 top/candidates/starTransitions 保留为"东财单源"(非跨源并集)供旧回看兼容,真值以 bySource 为准。
+async function writeMainlinePredictBySource(day, sessionPhase, mainlinesBySource, confirm) {
+  try {
+    if (sessionPhase === '已收盘') return;
+    const savedAt = new Date().toISOString();
+    const existing = await readMainlinePredict(day);
+    const emList = (mainlinesBySource && mainlinesBySource.eastmoney && mainlinesBySource.eastmoney.mainlines) || [];
+    const thList = (mainlinesBySource && mainlinesBySource.ths && mainlinesBySource.ths.mainlines) || [];
+    const eastBlock = strategyPredictBuildBlock(emList, existing?.bySource?.eastmoney?.starTransitions, savedAt);
+    const thBlock = strategyPredictBuildBlock(thList, existing?.bySource?.ths?.starTransitions, savedAt);
+    if (!eastBlock.top.length && !thBlock.top.length) return;
+    await fs.mkdir(STRATEGY_MAINLINE_DATA_DIR, { recursive: true });
+    await fs.writeFile(strategyMainlinePredictPath(day), JSON.stringify({
+      day, savedAt, sessionPhase: sessionPhase || '',
+      confirmedKey: confirm?.key || '', schemaVersion: 3,
+      bySource: { eastmoney: eastBlock, ths: thBlock },
+      // 兼容层:东财单源(不跨源混排),供旧回看/旧页面;真值在 bySource。
+      top: eastBlock.top, candidates: eastBlock.candidates, starTransitions: eastBlock.starTransitions,
+    }, null, 2), 'utf8');
+    // 盘中观测:按 family 去重的两源并集(mergeIntradayObservation 本身按 familyKey 聚合,东财优先)。
+    const seen = new Set();
+    const obsList = [];
+    for (const m of [...emList, ...thList]) {
+      const k = String(m?.familyKey || m?.key || m?.theme || '');
+      if (k && !seen.has(k)) { seen.add(k); obsList.push(m); }
+    }
+    await recordStrategyDailyIntradayObservation(day, sessionPhase, obsList, savedAt);
   } catch {}
 }
 
@@ -23873,6 +23912,8 @@ async function getStrategyMainlineReview(days = 10) {
   let starWins = 0, starTotal = 0, leaderWins = 0, leaderTotal = 0;
   let mainlineTop1Hits = 0, mainlineTop3Hits = 0, mainlineTotal = 0;
   let expectedSealWins = 0, expectedSealTotal = 0;
+  // 两套独立预测(Owner v2)的按来源主线命中统计——各自评各自的第 1 主线是否命中当日真实第一家族。
+  const srcStat = { eastmoney: { total: 0, top1: 0, top3: 0 }, ths: { total: 0, top1: 0, top3: 0 } };
   // 从最新交易日开始(修复:旧循环从 length-2 起,最新收盘日因无次日收盘价被整行丢弃,
   // 连当日主线命中与封板结果也不展示;现在无次日数据只置 nextCloseGain=null)。
   for (let i = tradingDays.length - 1; i >= 0 && rows.length < days; i -= 1) {
@@ -23998,6 +24039,32 @@ async function getStrategyMainlineReview(days = 10) {
         if (mainlineHitTop3) mainlineTop3Hits += 1;
       }
     }
+    // 两套独立预测(schema v3):分别评东财/同花顺各自第 1 主线的命中,共享当日真实第一家族;
+    // 各源用自己的 bySource 块(不跨源),回看按来源解释(Codex 二审 P1)。
+    let reviewBySource = null;
+    if (predict.bySource && actualRanking.length) {
+      const tiedFirstFamilies = tier1.map(f => f.familyKey);
+      reviewBySource = {};
+      for (const skey of ['eastmoney', 'ths']) {
+        const block = predict.bySource[skey] || {};
+        const blockPredict = { top: block.top || [], candidates: block.candidates || [], starTransitions: block.starTransitions || [], confirmedKey: predict.confirmedKey, schemaVersion: predict.schemaVersion };
+        const fTop = strategyMainlineReviewFormalTop(blockPredict);
+        const sMain = fTop.find(t => predict.confirmedKey && t.key === predict.confirmedKey) || fTop[0] || null;
+        let hitTop1 = null, hitTop3 = null;
+        if (sMain) {
+          const predFams = fTop.slice(0, 3).map(t => strategyMainlineFamilyInfo({ theme: t?.theme || '', key: t?.key || '' }).key).filter(Boolean);
+          const mFam = strategyMainlineFamilyInfo({ theme: sMain.theme || '', key: sMain.key || '' }).key;
+          hitTop1 = tiedFirstFamilies.includes(mFam);
+          hitTop3 = tiedFirstFamilies.some(f => predFams.includes(f));
+          if (sampleValid && !pendingReview) {
+            srcStat[skey].total += 1;
+            if (hitTop1) srcStat[skey].top1 += 1;
+            if (hitTop3) srcStat[skey].top3 += 1;
+          }
+        }
+        reviewBySource[skey] = { theme: sMain ? String(sMain.theme || '') : '', noMainline: !sMain, mainlineHitTop1: hitTop1, mainlineHitTop3: hitTop3 };
+      }
+    }
     rows.push({
       day, nextDay, thirdDay,
       theme: main?.theme || '', confirmed: !!(main && predict.confirmedKey && main.key === predict.confirmedKey),
@@ -24007,6 +24074,7 @@ async function getStrategyMainlineReview(days = 10) {
       phase, sampleValid, sampleInvalidReason, pendingReview,
       actualTop, actualFirstTied, mainlineHitTop1, mainlineHitTop3, mainReasonMissingCount,
       star, expectedStars, leader, leaders,
+      ...(reviewBySource ? { bySource: reviewBySource } : {}),
     });
   }
   return {
@@ -24020,6 +24088,15 @@ async function getStrategyMainlineReview(days = 10) {
       mainlineTop3Rate: mainlineTotal ? Number((mainlineTop3Hits / mainlineTotal * 100).toFixed(1)) : null,
       expectedSealWins, expectedSealTotal,
       expectedSealRate: expectedSealTotal ? Number((expectedSealWins / expectedSealTotal * 100).toFixed(1)) : null,
+      // 两套独立预测各自的主线命中率(schema v3 起有 bySource 记录才累计;旧记录不参与)。
+      bySource: {
+        eastmoney: { mainlineTotal: srcStat.eastmoney.total, mainlineTop1Hits: srcStat.eastmoney.top1, mainlineTop3Hits: srcStat.eastmoney.top3,
+          mainlineTop1Rate: srcStat.eastmoney.total ? Number((srcStat.eastmoney.top1 / srcStat.eastmoney.total * 100).toFixed(1)) : null,
+          mainlineTop3Rate: srcStat.eastmoney.total ? Number((srcStat.eastmoney.top3 / srcStat.eastmoney.total * 100).toFixed(1)) : null },
+        ths: { mainlineTotal: srcStat.ths.total, mainlineTop1Hits: srcStat.ths.top1, mainlineTop3Hits: srcStat.ths.top3,
+          mainlineTop1Rate: srcStat.ths.total ? Number((srcStat.ths.top1 / srcStat.ths.total * 100).toFixed(1)) : null,
+          mainlineTop3Rate: srcStat.ths.total ? Number((srcStat.ths.top3 / srcStat.ths.total * 100).toFixed(1)) : null },
+      },
     },
     note: '回看只将存在L2预期明星或明星确认正证据的方向认定为正式主线；未扫描、覆盖不足或已扫描无明星的候选显示为今日无主线且不计命中率。回看同时统计次日最高涨幅、次日收盘涨幅和第三个后续交易日收盘涨跌幅；收盘指标来自每日收盘价库，次日最高来自复权日K。',
   };
@@ -24533,7 +24610,8 @@ async function buildStrategyMainlinesLive(day, options = {}) {
   const requestedDay = isoFromCompactDate(day || chinaNowParts().day);
   if (composed.ok && requestedDay === today && options.writePredict !== false) {
     const confirm = await readMainlineConfirm(requestedDay).catch(() => null);
-    await writeMainlinePredict(requestedDay, composed.sessionPhase || '', composed.mainlines, confirm).catch(() => {});
+    // 按来源分别落库(不把跨源并集当预测真值);顶层兼容层为东财单源。
+    await writeMainlinePredictBySource(requestedDay, composed.sessionPhase || '', composed.mainlinesBySource, confirm).catch(() => {});
   }
   return composed;
 }
