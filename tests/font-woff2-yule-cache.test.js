@@ -57,7 +57,7 @@ const webpBuf = fsReal.readFileSync(R('Qi', 'assets', 'chatter-cute-preview.webp
 A(webpBuf.slice(8, 12).toString('latin1') === 'WEBP' && webpBuf.length < 50 * 1024, `WebP 魔数正确且体积小(${Math.round(webpBuf.length / 1024)}KB)`);
 A(fsReal.existsSync(R('Qi', 'assets', 'chatter-cute-preview.png')), 'PNG 原图保留(回退)');
 const jsx = fsReal.readFileSync(R('Qi', 'qi-home.jsx'), 'utf8');
-A(jsx.includes('chatter-cute-preview.webp?v=1') && jsx.includes('chatter-cute-preview.png?v=1'), 'jsx:WebP 与 PNG 均带版本号');
+A(jsx.includes('chatter-cute-preview.webp?v=3') && jsx.includes('chatter-cute-preview.png?v=3'), 'jsx:WebP 与 PNG 均带版本号');
 A(jsx.includes('<picture>') && jsx.includes('type="image/webp"'), 'jsx:<picture> + <source type=image/webp> + <img> PNG 回退');
 const compiled = fsReal.readFileSync(R('Qi', 'qi-home.compiled.js'), 'utf8');
 A(compiled.includes('chatter-cute-preview.webp') && compiled.includes('image/webp'), 'compiled 已由 build-home.js 重新生成(含 WebP 引用)');

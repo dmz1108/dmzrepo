@@ -27,8 +27,8 @@ const SHARED_AUTH_TOKEN_COOKIE = 'panda_admin_token';
 const SHARED_AUTH_SESSION_COOKIE = 'panda_account_session';
 const AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
 const SERVICE_EMAIL = 'service@dreamerqi.com';
-const CHAT_PREVIEW_IMAGE = 'assets/chatter-cute-preview.png?v=1';
-const CHAT_PREVIEW_IMAGE_WEBP = 'assets/chatter-cute-preview.webp?v=1';
+const CHAT_PREVIEW_IMAGE = 'assets/chatter-cute-preview.png?v=3';
+const CHAT_PREVIEW_IMAGE_WEBP = 'assets/chatter-cute-preview.webp?v=3';
 const HOME_PAGES = new Set(['home', 'discover', 'stanning', 'chat', 'about', 'contact', 'privacy', 'terms']);
 function defaultHomePageForHost() {
   const host = String(typeof location !== 'undefined' && location.hostname || '').toLowerCase();
