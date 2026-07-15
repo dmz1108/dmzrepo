@@ -5423,3 +5423,28 @@ Notes for next agent:
 - PR #87 审核：`https://github.com/dmz1108/dmzrepo/pull/87#pullrequestreview-4702711567`；PR #88 审核：`https://github.com/dmz1108/dmzrepo/pull/88#pullrequestreview-4702711558`。GitHub 不允许仓库账号对自己名下 PR 设置 `REQUEST_CHANGES`，因此状态为 `COMMENTED`，正文已明确阻断。
 - Claude 需要同步最新 `main`、解决交接文档冲突并逐项回复审核；#87 必须补齐可重放证据与行为测试，#88 必须先修真实主线链路仍消费 KPL、同名跨源丢失和 KPL-only 日期判可用的问题。
 - 部署后通过接口与文件哈希完成公网验收；in-app browser 新标签连接两次超时，因此未把部署后手机点击冒充已重跑成功，手机点击回顶的实页交互证据来自部署前同一编译产物的 `390 × 844` 验收。
+
+## 2026-07-15 - Codex - 修复 hsk 搜索名录窗口
+
+Changed:
+- 定位到生产页面虽已支持服务端首字母，但前端只请求近 10 个交易日股票名录；海思科最近记录已超出该窗口，因此 `hsk` 无法解析为 `002653`。
+- 将复盘搜索名录扩展为服务端已支持的近 30 个交易日，并增加回归断言防止退回 10 日。
+- 新增受保护生产发布清单，只更新行情页并重启主服务。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `tests/review-stock-search.test.js`
+- `ops/production/manifests/review-hsk-window-20260715.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 生产只读对照确认 `days=10` 返回 535 只且无海思科，`days=30` 返回 1428 只且包含 `002653 / 海思科 / hsk`。
+- 复盘搜索专项测试、行情页内联脚本语法检查、`git diff --check` 和全仓 33 个测试文件全部通过。
+- 变更不涉及登录、管理员权限、复盘原始数据、策略归因或运行时数据库。
+
+Deployment:
+- 本条记录首次提交时尚未部署，未修改生产运行时状态，未重启服务。
+
+Notes for next agent:
+- 本次是搜索窗口修复，不需要 AI 讨论组协议或策略证据回放。
+- 合并后用 `ops/production/manifests/review-hsk-window-20260715.json` 发布，并在当前复盘日直接用 `hsk` 验证能否解析到海思科最近涨停日。
