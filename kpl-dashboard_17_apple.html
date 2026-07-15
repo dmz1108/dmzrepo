@@ -3400,6 +3400,32 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 11px;
   }
+  /* 两套独立主线预测(Owner v2):东财 | 同花顺 桌面两栏,移动上下;各栏内卡片竖排 */
+  body.view-strategy .ml-cols {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    align-items: start;
+  }
+  body.view-strategy .ml-col { min-width: 0; }
+  body.view-strategy .ml-col-title {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+    margin: 2px 0 9px; font-size: 15px; font-weight: 700; letter-spacing: .3px;
+  }
+  body.view-strategy .ml-col-title small { font-weight: 500; opacity: .58; font-size: 11.5px; }
+  body.view-strategy .ml-col .ml-grid { grid-template-columns: minmax(0, 1fr); }
+  body.view-strategy .ml-dual {
+    display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; background: rgba(120,90,255,.16); color: #8b6cff;
+    white-space: nowrap;
+  }
+  body.view-strategy .ml-dual-note {
+    margin: 6px 0 10px; padding: 7px 11px; border-radius: 9px; font-size: 12.5px;
+    background: rgba(120,90,255,.10); color: #7a5cff;
+  }
+  @media (max-width: 900px) {
+    body.view-strategy .ml-cols { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  }
   body.view-strategy .ml-card {
     min-width: 0;
     min-height: 236px;
@@ -11669,7 +11695,7 @@ function renderStrategyMainlinesHTML(d) {
     </section>`;
   }
   const statusHtml = strategyMainlineStatusHTML(d);
-  const cards = lines.slice(0, 8).map((m, i) => {
+  const renderCard = (m, i) => {
     const leader = m.mainLeader || {};
     const leaderName = leader.name || leader.code || '--';
     const leaderScore = Number(leader.leadScore);
@@ -11787,6 +11813,7 @@ function renderStrategyMainlinesHTML(d) {
             ${qiBadge}${confirmedBadge}
             ${combinedBadge}
             ${newThemeBadge}
+            ${m.dualResonance ? `<span class="ml-dual" title="该题材在东财与同花顺两套独立预测里都排进前列（各自独立评分，未合并）">🔗双源共振</span>` : ''}
           </div>
           <div class="ml-sub" title="重叠概念板块的资金不相加，采用单个代表板块值">${escapeHTML(driver.label)} · ${Number(m.boardCount) || 0}个共振板块${inflowTrace}</div>
           ${strategyMainlineSourcePairsHTML(m)}
@@ -11835,7 +11862,40 @@ function renderStrategyMainlinesHTML(d) {
         </div>
       </div>
     </article>`;
-  }).join('');
+  };
+  // 两套独立主线预测(Owner 2026-07-15 v2):东财只用东财数据、同花顺只用同花顺数据,各自独立;
+  // 桌面并列、移动上下;缺某源显示「暂缺」,绝不借另一源。KPL 不参与任何一边。
+  if (d && d.mainlinesBySource) {
+    const bs = d.mainlinesBySource;
+    const renderColumn = (title, src, zsLabel) => {
+      const avail = !!(src && src.available && Array.isArray(src.mainlines) && src.mainlines.length);
+      const body = avail
+        ? `<div class="ml-grid">${src.mainlines.slice(0, 8).map(renderCard).join('')}</div>`
+        : `<div class="rht-loading">${escapeHTML((src && src.message) || '该源暂缺：暂无该来源的实时板块/主线数据，不借用另一来源补值。')}</div>`;
+      return `<div class="ml-col">
+        <div class="ml-col-title"><span>${escapeHTML(title)}</span><small>${escapeHTML(zsLabel)}${avail ? ` · ${Number(src.count) || 0} 条` : ' · 暂缺'}</small></div>
+        ${body}
+      </div>`;
+    };
+    const dualThemes = (bs.dualResonanceThemes || []).filter(Boolean);
+    const dualNote = dualThemes.length
+      ? `<div class="ml-dual-note">🔗 双源共振题材（东财与同花顺各自独立预测都排进前列，未合并）：${dualThemes.map(escapeHTML).join('、')}</div>`
+      : '';
+    return `<section class="mainline-wrap">
+      <div class="ml-title">
+        <span>今日主线榜</span>
+        <small>东财 / 同花顺 各自独立预测（各只用本源板块、成员、涨幅、净流入；KPL 不参与）${sourceSuffix}${dayNote}</small>
+      </div>
+      ${statusHtml}
+      ${dualNote}
+      <div class="ml-cols">
+        ${renderColumn('东财主线预测', bs.eastmoney, '仅东财 zsType6')}
+        ${renderColumn('同花顺主线预测', bs.ths, '仅同花顺 zsType5')}
+      </div>
+    </section>`;
+  }
+  // 兼容:旧冻结快照无 mainlinesBySource 时,沿用单列渲染。
+  const cards = lines.slice(0, 8).map(renderCard).join('');
   return `<section class="mainline-wrap">
     <div class="ml-title">
       <span>今日主线榜</span>
