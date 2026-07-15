@@ -5200,3 +5200,28 @@ Deployment:
 Notes for next agent:
 - 当前工作在 `codex/redesign-yule-editorial-20260714`；本次只改娱乐页前端与交接/QA 文档，未改变娱乐 API、采集、账号权限、行情或策略逻辑。
 - 该任务不涉及市场策略、归因或历史修复，因此不需要 AI 讨论组协议。
+
+## 2026-07-15 - Codex - 部署娱乐页编辑部式改版
+
+Changed:
+- PR #84 已以 merge commit `c8e3e65cfa379a49f000688f9658986437542eb2` 合并娱乐页改版；PR #85 已以 merge commit `90720a06473932411062a9fc51c00b7bc04aec91` 合并只包含 `yule.html` 的生产部署清单。
+- 受保护生产工作流从固定 `main@90720a0` 原子替换云端 `yule.html`，同步上线编辑式主视觉、动态内容概览、编号热榜、频道筛选、详情页和移动端优化。
+
+Files:
+- 云端 `C:\PandaDashboard\yule.html`
+- 云端 `panda-cloud-ops-2026-06-19.md` 与 `_cloud-change-log-20260705.md`（部署器自动追加）
+- Git `ops/production/manifests/yule-editorial-20260715.json`
+- Git `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 工作流 run `29393365631` 成功，批准提交为 `90720a06473932411062a9fc51c00b7bc04aec91`，部署器返回 `health=ok`。
+- 公网 `yule.html` SHA-256 与主线完全一致，均为 `ab0caa9bb6f670bdc34b23a8753eaf74c78dd974b999ad75f4be9d45df975708`；页面包含新版标题、英文编辑眉题和编号热榜样式。
+- 公网娱乐首页、健康检查、分类接口和明星热点列表均为 HTTP 200；未登录管理列表仍为 HTTP 403；HTML 保持 `Cache-Control: no-cache`。
+
+Deployment:
+- 生产已变更；回退备份为 `C:\PandaDashboard\_deploy-backups\github-29393365631-1`。
+- 清单使用 `restart=none`，未重启娱乐服务、主服务、Caddy、Consistency Gate 或公司端 L2 worker；未修改娱乐数据库、账号数据、会话、行情或策略数据。
+
+Notes for next agent:
+- 娱乐页视觉任务已完成 GitHub 合并、生产部署与公网验收；当前无待部署文件。
+- 后续若修改 `yule.html`，继续使用受保护清单部署，并保持娱乐 API、管理权限门和真实图片数据链不变。
