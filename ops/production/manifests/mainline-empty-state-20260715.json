@@ -1,0 +1,13 @@
+{
+  "files": [
+    {
+      "source": "kpl-stats-server.js",
+      "destination": "kpl-stats-server.js"
+    },
+    {
+      "source": "strategy-daily-events.js",
+      "destination": "strategy-daily-events.js"
+    }
+  ],
+  "restart": "main"
+}
