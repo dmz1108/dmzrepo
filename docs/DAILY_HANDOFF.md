@@ -5304,3 +5304,31 @@ Deployment:
 Notes for next agent:
 - 本次仅更换首页静态视觉资源和缓存版本，不涉及账号、权限、行情、策略或运行时数据库，不需要 AI 讨论组协议。
 - 合并至 `main` 后使用 `ops/production/manifests/chat-rooftop-preview-20260715.json` 运行受保护生产工作流，并在公网确认图片 `v=3` 命中及首页卡片裁切。
+
+## 2026-07-15 - Codex - 四人室外瞎聊聊预览图完成生产发布
+
+Changed:
+- PR #91 已合并用户选定的蓝调屋顶四人室外图、PNG/WebP 缓存版本、首页构建产物、回归测试、设计验收和静态生产清单。
+- 受保护生产工作流从固定 `main@c08b405ebfe8d34f285ed00ff9b2963fab624717` 原子替换首页两份图片、JSX、编译脚本和入口 HTML。
+
+Files:
+- 云端 `C:\PandaDashboard\Qi\assets\chatter-cute-preview.png`
+- 云端 `C:\PandaDashboard\Qi\assets\chatter-cute-preview.webp`
+- 云端 `C:\PandaDashboard\Qi\qi-home.jsx`
+- 云端 `C:\PandaDashboard\Qi\qi-home.compiled.js`
+- 云端 `C:\PandaDashboard\Qi\index.html`
+- 云端两份运维日志（部署器自动追加）
+- Git `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 工作流 run `29400873545` 成功，部署器返回 `health=ok`，批准提交为 `c08b405ebfe8d34f285ed00ff9b2963fab624717`。
+- 公网 PNG SHA-256 与 `main` 同为 `8a1e2fcf6480ef57a3fb12909ce8437032b8537f692629bdca10db10e5adf040`；公网 WebP SHA-256 与 `main` 同为 `a20cfd61ae9d8f3d257742a8017c3fc6f32dd00626a203f750ee213c924f4b98`。
+- 公网首页已引用 `qi-home.compiled.js?v=20260715-chat-rooftop`；首页、预览图、行情、后台和娱乐页均为 HTTP 200。
+
+Deployment:
+- 生产已变更；回退备份为 `C:\PandaDashboard\_deploy-backups\github-29400873545-1`。
+- 清单使用 `restart=none`，未重启主服务、娱乐服务、Caddy、Consistency Gate 或公司端 L2 worker；未修改任何运行时数据库。
+
+Notes for next agent:
+- 四人室外瞎聊聊首页预览图已完成 GitHub 合并、生产部署和公网哈希验收；当前无待发布文件。
+- 若浏览器仍显示旧图，使用带版本的首页链接或强制刷新，资源地址应命中 `chatter-cute-preview.webp?v=3`。
