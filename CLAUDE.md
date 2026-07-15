@@ -17,6 +17,7 @@ You are joining the DreamerQi / PandaDashboard project. Start by understanding t
    - L2 worker, queue, buckets, or star-stock scan: `docs/ops/L2_WORKER_RUNBOOK.md`
    - sector gain, capital flow, DDE, or source mapping: `docs/ops/MARKET_DATA_SOURCE_CONTRACTS.md`
    - review source health, source counts, or daily backfill: `docs/ops/REVIEW_SOURCE_HEALTH_SOP.md`
+   - production deploy, restart, rollback, or database maintenance: `docs/ops/CLAUDE_PRODUCTION_ACCESS.md`
 9. Optionally read the sanitized operation notes:
    - `docs/PROJECT_HANDOFF.sanitized.md`
    - `docs/panda-cloud-ops-2026-06-19.sanitized.md`

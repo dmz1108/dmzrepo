@@ -85,6 +85,7 @@ Never put secrets, tokens, cookies, SMTP passwords, private keys, user data, or 
   - `C:\PandaDashboard\panda-cloud-ops-2026-06-19.md`
   - `C:\PandaDashboard\_cloud-change-log-20260705.md`
 - Git handoff records code collaboration; cloud logs record real production actions.
+- Claude and other non-SSH environments use the owner-approved GitHub `production` workflow described in `docs/ops/CLAUDE_PRODUCTION_ACCESS.md`. The encrypted SSH key stays in the GitHub environment and is never printed or copied into an AI chat.
 
 ## Deployment Checklist
 
