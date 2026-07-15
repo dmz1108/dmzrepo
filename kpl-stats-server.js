@@ -11182,8 +11182,10 @@ function thsConceptBoardsCacheMetadata(now = Date.now(), day = chinaNowParts().d
   else if (cache?.boards?.length) cacheState = 'expired';
   return {
     cacheState,
+    status: thsConceptBoardsRealtimeState.status || 'idle',
     day: cache?.day || null,
     fetchedAt: cache?.fetchedAt || null,
+    marketFinal: cache?.marketFinal === true,
     ageMs,
     boardCount: cache?.boards?.length || 0,
     refreshing: !!thsConceptBoardsRealtimeTask,
@@ -11284,6 +11286,17 @@ async function fetchThsConceptBoardsFresh(options = {}) {
   const byId = new Map();
   for (const board of quoteBoards) {
     if (board?.plateId && !byId.has(String(board.plateId))) byId.set(String(board.plateId), board);
+  }
+
+  // 普通实时刷新不再逐一访问导航/详情页，但仍用盘后目录补齐暂未出现在实时涨幅榜的板块。
+  // 这些补齐行没有伪造实时涨幅或资金，只保证搜索和板块映射的目录完整性。
+  if (!options.includeDiscovery) {
+    const persistedCatalog = await readThsConceptCatalog().catch(() => null);
+    for (const board of persistedCatalog?.boards || []) {
+      if (board?.plateId && !byId.has(String(board.plateId))) {
+        byId.set(String(board.plateId), publicThsConceptBoard(board, board));
+      }
+    }
   }
 
   if (options.includeDiscovery) {

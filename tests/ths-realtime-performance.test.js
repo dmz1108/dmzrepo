@@ -70,6 +70,9 @@ assert(fetchSource.includes("if (meta.cacheState === 'stale')")
 assert(freshSource.includes('THS_CONCEPT_PAGE_CONCURRENCY'), 'THS page fetch concurrency is centrally bounded');
 assert(freshSource.includes('THS realtime catalog incomplete'), 'partial multi-page responses fail quality validation instead of poisoning the cache');
 assert(freshSource.includes('if (options.includeDiscovery)'), 'slow navigation/detail discovery is excluded from ordinary realtime refreshes');
+assert(freshSource.includes('const persistedCatalog = await readThsConceptCatalog()')
+  && freshSource.includes('byId.set(String(board.plateId), publicThsConceptBoard(board, board))'),
+  'fast refresh preserves catalog-only boards without inventing realtime metrics');
 assert(warmSource.includes("['集合竞价', '早盘', '上午盘', '午后', '尾盘']"), 'background prewarm covers market sessions');
 assert(src.includes("fetchThsConceptBoards({ force: true, includeDiscovery: true })"), 'formal THS sync still waits for a complete fresh discovery pass');
 assert(src.includes("fetchThsConceptBoards({ background: true })"), 'strategy catalog never blocks on a cold THS refresh');
