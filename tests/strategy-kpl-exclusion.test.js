@@ -113,5 +113,9 @@ eval(extractFn('getStrategyStrongResonance'));
   const yyAll = all.boards.find(b => b.name === '医药');
   A(yyAll && Number(yyAll.zsType) === 7, '默认口径:同名“医药”按旧行为被 KPL(zt20)顶掉——证明默认确实吃 KPL');
 
+  // v2 静态:今日热点榜资金/涨幅补充(getDayThemeBoardStats)也剔除 KPL(策略辅助指标不含 KPL)
+  A(/async function getDayThemeBoardStats\([^)]*\)\s*\{[\s\S]*?getDayBoardsWithMembers\(day,\s*\{\s*zsTypes:\s*STRATEGY_ZS_TYPES\s*\}/.test(src),
+    'v2:今日热点榜资金/涨幅补充剔除 KPL(getDayThemeBoardStats 传 STRATEGY_ZS_TYPES)');
+
   console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL STRATEGY-KPL-EXCLUSION CHECKS PASSED');
 })();

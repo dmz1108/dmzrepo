@@ -21229,7 +21229,9 @@ async function getDayBoardsWithMembers(day, options = {}) {
 }
 
 async function getDayThemeBoardStats(day) {
-  const { useDay, boards } = await getDayBoardsWithMembers(day);
+  // Owner 2026-07-15 v2:KPL(7) 不进策略辅助指标——今日热点榜每张题材卡的资金/涨幅补充值只用东财+同花顺。
+  // 题材列表本身仍来自四源复盘主因库(不受此影响),这里只约束板块来源的资金/涨幅补充。
+  const { useDay, boards } = await getDayBoardsWithMembers(day, { zsTypes: STRATEGY_ZS_TYPES });
   const dbPayload = await readLimitUpMainReasonDbDay(isoFromCompactDate(useDay)).catch(() => null);
   const recByCode = new Map((dbPayload?.stocks || []).map(s => [normalizeReasonSourceCode(s.code), s]).filter(([c]) => c));
   const out = new Map();
@@ -24423,15 +24425,92 @@ async function buildStrategyMainlineHistoryContext(endDay, themeKeys, days = 15,
 
 // 七审:诊断构建用 strategyMainlineDiagStore.run() 严格包住单次执行(不用 enterWith),
 // run() 天然按异步上下文隔离——并发诊断请求各自的 store 不串写,诊断结束后普通请求无残留。
+// 两套独立主线预测(Owner 2026-07-15 v2)——把某一源的 impl 结果收敛成精简展示体。
+// source='eastmoney'(zsType 6) / 'ths'(zsType 5)。available=false 即「该源暂缺」,前端显示暂缺、绝不借另一源。
+function strategyMainlineSlimSourcePayload(payload, source, zsType) {
+  const ok = !!(payload && payload.ok);
+  const mainlines = ok && Array.isArray(payload.mainlines) ? payload.mainlines : [];
+  return {
+    source, zsType, ok,
+    available: ok && mainlines.length > 0,
+    reason: ok ? (mainlines.length ? '' : String(payload.reason || 'no-qualified-mainline')) : String((payload && payload.reason) || 'source-unavailable'),
+    message: ok ? String(payload.message || '') : String((payload && payload.message) || ''),
+    count: mainlines.length,
+    mainLeaderTheme: mainlines[0] ? String(mainlines[0].theme || '') : '',
+    mainlines: mainlines.map(m => ({ ...m, source })),
+  };
+}
+// 两套独立结果 + 双源共振标记(题材归一后两边都进各自前 N)。绝不塌成一张共享卡:各留各的分数/排序。
+function strategyMainlineAssembleBySource(em, th) {
+  const eastmoney = strategyMainlineSlimSourcePayload(em, 'eastmoney', 6);
+  const ths = strategyMainlineSlimSourcePayload(th, 'ths', 5);
+  const topKeys = (src, n = 5) => new Set((src.mainlines || []).slice(0, n)
+    .map(m => strategyResonanceTopicKey(m.theme)).filter(Boolean));
+  const emTop = topKeys(eastmoney), thTop = topKeys(ths);
+  const dualKeys = new Set([...emTop].filter(k => thTop.has(k)));
+  for (const src of [eastmoney, ths]) {
+    for (const m of src.mainlines) m.dualResonance = dualKeys.has(strategyResonanceTopicKey(m.theme));
+  }
+  return { eastmoney, ths, dualResonanceThemes: [...dualKeys] };
+}
+// 载体口径(缓存/确认/AI 兼容):两套 mainlines 的并集,各带 source 标签、保留各自 rank 为 sourceRank。
+// 仅用于承载,不做跨源重打分;页面按 mainlinesBySource 分「东财/同花顺」两栏展示。
+function strategyMainlineComposeBySourcePayload(em, th) {
+  const bySource = strategyMainlineAssembleBySource(em, th);
+  const carrier = (em && em.ok) ? em : ((th && th.ok) ? th : (em || th || null));
+  if (!carrier) return em || th || null;
+  const union = [];
+  for (const src of [bySource.eastmoney, bySource.ths]) {
+    for (const m of (src.mainlines || [])) union.push({ ...m, sourceRank: m.rank });
+  }
+  union.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0) || (Number(b.count) || 0) - (Number(a.count) || 0));
+  union.forEach((m, i) => { m.rank = i + 1; });
+  return {
+    ...carrier,
+    ok: !!(em?.ok || th?.ok),
+    mainlinesBySource: bySource,
+    mainlines: union,
+    count: union.length,
+    stockCount: new Set(union.flatMap(m => [
+      ...(m.todayCodes || []),
+      ...((m.risingStocks || []).map(s => s.code).filter(Boolean)),
+    ])).size,
+  };
+}
 async function buildStrategyMainlinesLive(day, options = {}) {
-  if (!options.leaderDebug) return buildStrategyMainlinesLiveImpl(day, options, null);
-  const diagStore = { readErrors: [], timeouts: [], missing: [] };
-  return strategyMainlineDiagStore.run(diagStore, () => buildStrategyMainlinesLiveImpl(day, options, diagStore));
+  if (options.leaderDebug) {
+    const diagStore = { readErrors: [], timeouts: [], missing: [] };
+    return strategyMainlineDiagStore.run(diagStore, () => buildStrategyMainlinesLiveImpl(day, options, diagStore));
+  }
+  // 盘后归属复核(诊断对照)或显式关闭时保持单一(合并)口径,不产两套。
+  if (options.postCloseReview || options.bySource === false) {
+    return buildStrategyMainlinesLiveImpl(day, options, null);
+  }
+  // 正常页面路径:东财[6]/同花顺[5] 各自独立跑整套引擎(取板→富化→评分→排序),绝不跨源借值。
+  // 两次都不写盘中预测,由本函数用并集写一次,保持 writeMainlinePredict 原有回看语义。
+  const [em, th] = await Promise.all([
+    buildStrategyMainlinesLiveImpl(day, { ...options, boardZsTypes: [6], writePredict: false }, null).catch(() => null),
+    buildStrategyMainlinesLiveImpl(day, { ...options, boardZsTypes: [5], writePredict: false }, null).catch(() => null),
+  ]);
+  const composed = strategyMainlineComposeBySourcePayload(em, th);
+  if (!composed) return em || th || strategyMainlineEmptyPayload(isoFromCompactDate(day || chinaNowParts().day), isoFromCompactDate(day || chinaNowParts().day), 'strategy-mainline-unavailable', '今日主线榜暂不可用。', '');
+  const today = isoFromCompactDate(chinaNowParts().day);
+  const requestedDay = isoFromCompactDate(day || chinaNowParts().day);
+  if (composed.ok && requestedDay === today && options.writePredict !== false) {
+    const confirm = await readMainlineConfirm(requestedDay).catch(() => null);
+    await writeMainlinePredict(requestedDay, composed.sessionPhase || '', composed.mainlines, confirm).catch(() => {});
+  }
+  return composed;
 }
 
 async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = null) {
   const requestedDay = isoFromCompactDate(day || chinaNowParts().day);
   const diagMode = !!options.leaderDebug;
+  // 两套独立主线预测(Owner 2026-07-15 v2):boardZsTypes 指定本次预测只用哪些板块来源。
+  // 传 [6] 只用东财、[5] 只用同花顺,各自独立取板/评分/排序,绝不跨源借值;不传则沿用 STRATEGY_ZS_TYPES=[6,5]。
+  const activeBoardZsTypes = Array.isArray(options.boardZsTypes) && options.boardZsTypes.length
+    ? options.boardZsTypes.map(Number)
+    : STRATEGY_ZS_TYPES;
   // 仅测试用途:诊断"今天"判定的日期覆盖。NODE_ENV !== test 时硬禁用。
   // 存在的唯一目的:让端点测试能在非交易日的机器上确定性触发"今日实时补水超时"路径(八审第3点)。
   const diagTodayIso = (diagMode && process.env.NODE_ENV === 'test' && process.env.STRATEGY_MAINLINE_DIAG_TODAY)
@@ -24450,7 +24529,7 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
   };
   const isIntradayToday = requestedDay === diagTodayIso && !isAfterMarketClose(requestedDay);
   const requiredLabelSet = (() => {
-    const set = new Set([5, 6, 7].map(z => `snapshot-zs${z} ${requestedDay}`));
+    const set = new Set(activeBoardZsTypes.map(z => `snapshot-zs${z} ${requestedDay}`));
     const win31 = strategyMainlineOfflineTradingDays(requestedDay, 31);
     const near10 = win31.slice(-10);
     for (const d of near10) { set.add(`limit-up ${d}`); set.add(`main-reason ${d}`); }
@@ -24493,7 +24572,7 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     liveIfMissing: !diagHistoricalBoards,
     boardPool: STRATEGY_MAINLINE_LIVE_BOARD_POOL + STRATEGY_MAINLINE_SUPPLEMENT_BOARDS,
     liveRankCount: 80,
-    zsTypes: STRATEGY_ZS_TYPES,   // Owner 2026-07-15:策略主线只用东财+同花顺,剔除 KPL(7);真实取板链路
+    zsTypes: activeBoardZsTypes,   // Owner 2026-07-15 v2:按本次预测的来源取板(东财[6]/同花顺[5] 各自独立;默认[6,5]剔除KPL)
   }), diagStore?.readErrors || null, { useDay: requestedDay, boards: [], source: 'none' });
   const isoDay = requestedDay;
   if (!Array.isArray(boardPayload?.boards) || !boardPayload.boards.length) {
@@ -25337,15 +25416,26 @@ async function getStrategyMainlinesWithConfirm(day) {
   if (!payload || typeof payload !== 'object') return payload;
   const confirmDay = isoFromCompactDate(payload.day || day || chinaNowParts().day);
   const confirm = await readMainlineConfirm(confirmDay).catch(() => null);
+  const withConfirm = list => Array.isArray(list)
+    ? list.map(mainline => ({ ...mainline, isConfirmedMainline: strategyMainlineMatchesConfirm(mainline, confirm) }))
+    : list;
+  // 两套独立预测:确认标记同样落到东财/同花顺各自的 mainlines(各自独立,不交叉)。
+  const bySource = payload.mainlinesBySource
+    ? {
+        ...payload.mainlinesBySource,
+        eastmoney: payload.mainlinesBySource.eastmoney
+          ? { ...payload.mainlinesBySource.eastmoney, mainlines: withConfirm(payload.mainlinesBySource.eastmoney.mainlines) }
+          : payload.mainlinesBySource.eastmoney,
+        ths: payload.mainlinesBySource.ths
+          ? { ...payload.mainlinesBySource.ths, mainlines: withConfirm(payload.mainlinesBySource.ths.mainlines) }
+          : payload.mainlinesBySource.ths,
+      }
+    : payload.mainlinesBySource;
   return {
     ...payload,
     confirmedMainline: confirm || null,
-    mainlines: Array.isArray(payload.mainlines)
-      ? payload.mainlines.map(mainline => ({
-          ...mainline,
-          isConfirmedMainline: strategyMainlineMatchesConfirm(mainline, confirm),
-        }))
-      : payload.mainlines,
+    mainlines: withConfirm(payload.mainlines),
+    ...(bySource ? { mainlinesBySource: bySource } : {}),
   };
 }
 
@@ -25539,6 +25629,21 @@ async function buildAiStrategyLivePayload(url) {
   const byZt = realtimeBoards.filter(board => board.ztCount != null)
     .sort((a, b) => Number(b.ztCount) - Number(a.ztCount)).slice(0, 30);
   const mainlines = (strategyPayload?.mainlines || []).map(aiCompactMainline).filter(Boolean);
+  // 两套独立预测(v2):AI 证据链按东财/同花顺各自输出,不跨源合并成一个预测分。
+  const aiCompactSourcePrediction = (src) => src ? {
+    source: src.source || '',
+    zsType: src.zsType ?? null,
+    available: !!src.available,
+    reason: src.reason || '',
+    count: Number(src.count || 0),
+    mainLeaderTheme: src.mainLeaderTheme || '',
+    mainlines: (src.mainlines || []).map(aiCompactMainline).filter(Boolean),
+  } : null;
+  const mainlinesBySource = strategyPayload?.mainlinesBySource ? {
+    eastmoney: aiCompactSourcePrediction(strategyPayload.mainlinesBySource.eastmoney),
+    ths: aiCompactSourcePrediction(strategyPayload.mainlinesBySource.ths),
+    dualResonanceThemes: strategyPayload.mainlinesBySource.dualResonanceThemes || [],
+  } : null;
   const reviewPayload = reviewBundle?.payload || null;
   const mainReasonDb = reviewBundle?.dbPayload || await readLimitUpMainReasonDbDay(reviewDay).catch(() => null);
   const sourceStats = aiReviewSourceSummary(reviewPayload);
@@ -25610,6 +25715,7 @@ async function buildAiStrategyLivePayload(url) {
       count: mainlines.length,
       stockCount: Number(strategyPayload?.stockCount || 0),
       mainlines,
+      mainlinesBySource,   // v2:东财/同花顺 两套独立预测(证据链)
       strongResonance: resonance ? {
         day: resonance.day,
         strongCount: Number(resonance.strongCount || 0),
