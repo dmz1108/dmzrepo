@@ -5002,3 +5002,27 @@ Deployment:
 
 Notes for next agent:
 - 合并本修复后须使用新脚本 SHA-256 重新触发同一清单；不要 rerun 旧 workflow，因为旧 run 固定的是修复前脚本。
+
+## 2026-07-15 - Codex - 适配同花顺上游限流并保持页面非阻塞
+
+Changed:
+- 现网发现同花顺在 6 路并发时会返回 HTTP 200 但空页面；将目录分页恢复为已验证的最高 4 路，并把失败页改为单路、换 Cookie、递增等待后重试。
+- 实时目录、今日实时板块榜和策略补充目录在没有同日热缓存时立即返回安全的持久化目录并后台预热，不再让用户请求等待整轮抓取。
+- 保留分页完整性闸门：重试后仍缺页则整轮不写热缓存，绝不把残缺板块榜标记成实时结果。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/ths-realtime-performance.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- PR #73 已由受保护 workflow run `29384346219` 成功部署并重启；首次 run `29384113774` 的 Node 24 `.tmp` 校验问题由 PR #74 修复。
+- 现网 PR #73 首轮预热返回 `THS realtime catalog incomplete: 34/38 pages failed`，质量闸门使 `realtime=false` 且继续返回 382 个持久化目录项，未生成残缺热缓存、未冒充今日实时数据。
+- `node --check kpl-stats-server.js`、同花顺性能/正确性专项测试和 `git diff --check` 通过。
+
+Deployment:
+- PR #73 主服务代码已在生产；本次上游稳定性修复尚未部署，需合并后再次按同一清单部署并重启主服务。
+
+Notes for next agent:
+- 部署后观察 `realtimeCache.cacheState/status/lastDurationMs/lastError`；只有 `realtime=true` 且 `boardCount` 与目录规模相符才算预热成功。
+- 页面请求必须保持非阻塞，即使同花顺上游继续限流，也只能显示“等待今日数据”，不能回退昨日数值冒充今天。

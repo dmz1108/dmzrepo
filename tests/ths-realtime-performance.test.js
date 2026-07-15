@@ -68,6 +68,12 @@ assert(fetchSource.includes("if (meta.cacheState === 'stale')")
   && fetchSource.includes('startThsConceptBoardsRefresh(options).catch(() => {})')
   && fetchSource.includes('return thsConceptBoardsRealtimeCache.boards'), 'stale-while-revalidate returns immediately and refreshes in background');
 assert(freshSource.includes('THS_CONCEPT_PAGE_CONCURRENCY'), 'THS page fetch concurrency is centrally bounded');
+assert(src.includes("Math.min(4, Number(process.env.THS_CONCEPT_PAGE_CONCURRENCY) || 4)"),
+  'THS upstream concurrency never exceeds the previously stable four requests');
+assert(freshSource.includes('const firstFailures = pageResults.filter')
+  && freshSource.includes('mapLimit(firstFailures.map(result => result.page), 1')
+  && freshSource.includes('thsCookieCache = null'),
+  'empty anti-bot pages retry serially with a refreshed cookie');
 assert(freshSource.includes('THS realtime catalog incomplete'), 'partial multi-page responses fail quality validation instead of poisoning the cache');
 assert(freshSource.includes('if (options.includeDiscovery)'), 'slow navigation/detail discovery is excluded from ordinary realtime refreshes');
 assert(freshSource.includes('const persistedCatalog = await readThsConceptCatalog()')
@@ -76,6 +82,8 @@ assert(freshSource.includes('const persistedCatalog = await readThsConceptCatalo
 assert(warmSource.includes("['集合竞价', '早盘', '上午盘', '午后', '尾盘']"), 'background prewarm covers market sessions');
 assert(src.includes("fetchThsConceptBoards({ force: true, includeDiscovery: true })"), 'formal THS sync still waits for a complete fresh discovery pass');
 assert(src.includes("fetchThsConceptBoards({ background: true })"), 'strategy catalog never blocks on a cold THS refresh');
+assert((src.match(/fetchThsConceptBoards\(\{ background: true \}\)/g) || []).length >= 3,
+  'catalog, realtime ranking, and strategy all avoid blocking on cold THS refreshes');
 assert(src.includes('startThsConceptBoardsKeepWarm();'), 'server startup enables THS prewarming');
 
 function createFetchHarness(meta, cache, refreshBoards = [{ plateId: 'fresh' }]) {
