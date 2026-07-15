@@ -347,7 +347,7 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   // 11. 接线静态断言(四审)
   A(src.includes('if (opts.historicalOnly) return getStrategyBoardSnapshotStocks(plateId, day, info);'), '历史成分改走快照还原(不再一刀切返回空)');
   A(src.includes('snapshotStats: await collectSnapshotCardStatsForCode(isoDay, code)'), 'debugTrace 带快照 cardData 三表携带证据');
-  A(src.includes('strategyMainlineAugmentPrediction(item, isTodayQuery, isoDay, !diagMode)') && src.includes('}, recordTrend)'), '诊断今天不写 strategyMainlineTrendSamples(recordTrend 贯通)');
+  A(src.includes('strategyMainlineAugmentPrediction(item, isTodayQuery, isoDay, !diagMode, trendKeyPrefix)') && src.includes('}, recordTrend)'), '诊断今天不写 strategyMainlineTrendSamples(recordTrend 贯通,来源前缀化)');
   A(src.includes('const debugErrors = diagStore ? diagStore.readErrors : null;') && src.includes('|| requiredMissing.length > 0'), 'debugMeta.complete 由 ok + 读错误 + 超时 + 必要缺失共同决定');
   A(src.includes('return strategyMainlineDiagStore.run(diagStore, () => buildStrategyMainlinesLiveImpl'), '诊断构建用 run() 严格包住单次执行(七审:不用 enterWith)');
   A(!src.includes('strategyMainlineDiagStore.enterWith'), 'enterWith 已移除');

@@ -24026,13 +24026,16 @@ async function getStrategyMainlineReview(days = 10) {
 }
 
 // 最终输出前的预判增强：广度分、动能分、潜力个股、明星股、首日题材、确定性分级都在这一处挂载。
-function strategyMainlineAugmentPrediction(item, isToday, day, recordTrend = true) {
+// trendKeyPrefix(Owner v2 两套独立预测):盘中动能采样必须按来源隔离,否则东财/同花顺同题材共用
+// 同一趋势键,先跑的一边写入基线后,另一边会拿它当基线算 delta,串改两边分数与排名(Codex 二审 P1)。
+function strategyMainlineAugmentPrediction(item, isToday, day, recordTrend = true, trendKeyPrefix = '') {
   const breadth = strategyMainlineBestBreadth(item?.resonanceBoards);
   const scoreParts = { ...(item?.scoreParts || {}) };
   const breadthScore = strategyMainlineBreadthScore(breadth);
   if (breadthScore > 0) scoreParts.breadth = breadthScore;
+  const trendKey = (trendKeyPrefix ? String(trendKeyPrefix) + '::' : '') + String(item?.familyKey || item?.key || '');
   const trend = isToday
-    ? strategyMainlineTrackTrend(item?.familyKey || item?.key, {
+    ? strategyMainlineTrackTrend(trendKey, {
         netInflow: isFiniteNumeric(item?.netInflow) ? Number(item.netInflow) : null,
         bigGainCount: Number(item?.bigGainCount) || 0,
         nearLimitCount: Number(item?.nearLimitCount) || 0,
@@ -25009,9 +25012,11 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     strategyMainlineMaybeAutoScan(boardPayload?.boards || [], isoDay, isTodayQuery, sessionPhaseNow, priorReason?.byCode);
   }
   const mainlineConfirm = await readMainlineConfirm(isoDay).catch(() => null);
+  // 动能采样按本次预测来源隔离(东财 zs6 / 同花顺 zs5 各自一套基线序列),两套独立预测不互相串改。
+  const trendKeyPrefix = 'zs' + activeBoardZsTypes.join('-');
   const inflowGate = strategyMainlineApplyInflowGate(
     strategyMergeMainlineFamilies(rawMainlines)
-      .map(item => strategyMainlineAugmentPrediction(item, isTodayQuery, isoDay, !diagMode)),
+      .map(item => strategyMainlineAugmentPrediction(item, isTodayQuery, isoDay, !diagMode, trendKeyPrefix)),
     mainlineConfirm
   );
   const l2Gate = strategyMainlineApplyL2StarGate(inflowGate.kept);

@@ -79,6 +79,33 @@ A(/zsTypes:\s*activeBoardZsTypes/.test(src), 'impl 取板按 activeBoardZsTypes(
 A(/async function getDayThemeBoardStats\([^)]*\)\s*\{[\s\S]*?getDayBoardsWithMembers\(day,\s*\{\s*zsTypes:\s*STRATEGY_ZS_TYPES\s*\}/.test(src), '今日热点榜资金/涨幅补充(策略辅助指标)剔除 KPL');
 A(/async function getStrategyStrongResonance\([^)]*\)\s*\{[\s\S]*?getDayBoardsWithMembers\(day,\s*\{\s*zsTypes:\s*STRATEGY_ZS_TYPES\s*\}/.test(src), '强势板块共振榜(策略辅助指标)剔除 KPL');
 
+// ---- 5b. 盘中动能采样按来源隔离:真实 strategyMainlineTrackTrend(Codex 二审 P1) ----
+// 复现场景:东财"医药"先记录 76.56 亿基线,6 分钟后同花顺"医药"43.08 亿——加了 zs 前缀后两边键不同,
+// 同花顺拿到的是自己的首个样本(trend=null),不会与东财基线算出 -33 亿的假动能。
+const STRATEGY_MAINLINE_TREND_MIN_GAP_MS = 3 * 60 * 1000;
+const STRATEGY_MAINLINE_TREND_WINDOW_MS = 45 * 60 * 1000;
+const STRATEGY_MAINLINE_TREND_BASE_MIN_AGE_MS = 5 * 60 * 1000;
+const strategyMainlineTrendSamples = new Map();
+const isFiniteNumeric = v => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
+eval(extractFn('strategyMainlineTrackTrend'));
+const sixMinAgo = Date.now() - 6 * 60 * 1000;
+// 东财"医药"6 分钟前的基线样本(净流入 76.56 亿,大涨 10)
+strategyMainlineTrendSamples.set('zs6::group:医药', [{ ts: sixMinAgo, netInflow: 76.56e8, bigGainCount: 10, nearLimitCount: 0, count: 5 }]);
+// 东财本次(有 6 分钟前基线)→ 应算出动能
+const emTrend = strategyMainlineTrackTrend('zs6::group:医药', { netInflow: 80e8, bigGainCount: 11, nearLimitCount: 0, count: 5 });
+A(emTrend && Number(emTrend.inflowDelta) > 0, '东财"医药"有自己 6 分钟前基线 → 算出正动能');
+// 同花顺本次同题材(zs5 键无任何历史样本)→ 首个样本,trend=null,绝不借东财基线
+const thTrend = strategyMainlineTrackTrend('zs5::group:医药', { netInflow: 43.08e8, bigGainCount: 2, nearLimitCount: 0, count: 8 });
+A(thTrend === null, '同花顺"医药"首次采样返回 null(不与东财 76.56 亿基线算出 -33 亿假动能)');
+A(strategyMainlineTrendSamples.has('zs5::group:医药') && strategyMainlineTrendSamples.get('zs5::group:医药').length === 1, '同花顺记录了自己独立的首个样本序列');
+// 反证:若不加来源前缀(共用"group:医药"键),第二次采样就会拿到第一次的基线算出假 delta
+strategyMainlineTrendSamples.set('group:医药', [{ ts: sixMinAgo, netInflow: 76.56e8, bigGainCount: 10, nearLimitCount: 0, count: 5 }]);
+const sharedTrend = strategyMainlineTrackTrend('group:医药', { netInflow: 43.08e8, bigGainCount: 2, nearLimitCount: 0, count: 8 });
+A(sharedTrend && Number(sharedTrend.inflowDelta) < 0, '反证:共用键时第二次采样确实会与前一基线算出负 delta(前缀正是为消除此串扰)');
+// 调用点确实按来源前缀 zs+zsType 组装趋势键
+A(/trendKeyPrefix = 'zs' \+ activeBoardZsTypes\.join\('-'\)/.test(src), '调用点按 zs+activeBoardZsTypes 组装来源前缀');
+A(/strategyMainlineTrackTrend\(trendKey,/.test(src) && /trendKeyPrefix \? String\(trendKeyPrefix\) \+ '::'/.test(src), 'augmentPrediction 用来源前缀化的 trendKey 采样');
+
 // ---- 6. 性能优化:配对运行期「按日只读」缓存去重且结果一致(不改口径) ----
 const { AsyncLocalStorage } = require('async_hooks');
 const strategyMainlineReadCache = new AsyncLocalStorage();
