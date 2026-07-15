@@ -5358,3 +5358,33 @@ Deployment:
 Notes for next agent:
 - 本次是复盘搜索兼容性修复，不改变复盘原始库、四源归纳、题材归因、龙头评分或历史数据，因此不需要 AI 讨论组协议或策略证据回放。
 - 合并后使用 `ops/production/manifests/review-hsk-search-20260715.json` 发布，并在复盘页选择有海思科记录的日期，用 `hsk` 与 `002653` 对照验收。
+
+## 2026-07-15 - Codex - 首页娱乐“今日值得看”与移动联系我们回顶
+
+Changed:
+- 首页娱乐预览卡改为“今日值得看”，沿用娱乐内容的真实标题、摘要和图片，并显示可读栏目名称。
+- 娱乐首页预览接口移除“明星优先”的旧规则，改为优先选择北京时间当天、跨栏目的带图内容；当天无内容时回退到数据中的最新日期。
+- 首页内部页面切换统一滚动到新页面顶部，修复手机从首页底部点击“联系我们”后仍停留在旧滚动位置的问题。
+- 更新首页编译产物和脚本缓存版本，并新增接口选取与页面回顶回归测试及受保护生产清单。
+
+Files:
+- `yule-server.js`
+- `Qi/qi-home.jsx`
+- `Qi/qi-home.compiled.js`
+- `Qi/index.html`
+- `tests/home-preview-contact.test.js`
+- `tests/explore-editorial-layout.test.js`
+- `ops/production/manifests/home-today-contact-20260715.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node Qi/build-home.js`、首页编译产物和娱乐服务语法、专项测试、`git diff --check` 与全仓测试均通过。
+- 手机 `390 × 844` 实页确认娱乐卡显示 2026-07-15 的 `Sweety《樱花草》`、真实 `800 × 800` 图片和“今日值得看”文案。
+- 手机从首页底部点击“联系我们”后，地址切换为 `#contact`，滚动位置从 `1600` 回到 `0`，联系我们首屏完整显示且浏览器无报错。
+
+Deployment:
+- 本条记录提交时尚未部署生产，未修改云端运行时状态，未重启任何服务。
+
+Notes for next agent:
+- 本次不涉及账号权限、行情、策略、娱乐采集数据库或历史修复，不需要 AI 讨论组协议。
+- 合并至 `main` 后使用 `ops/production/manifests/home-today-contact-20260715.json` 发布；该清单会更新首页静态文件和娱乐接口，并只重启娱乐服务。

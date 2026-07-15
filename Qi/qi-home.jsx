@@ -39,6 +39,14 @@ const AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
 const SERVICE_EMAIL = 'service@dreamerqi.com';
 const CHAT_PREVIEW_IMAGE = 'assets/chatter-cute-preview.png?v=3';
 const CHAT_PREVIEW_IMAGE_WEBP = 'assets/chatter-cute-preview.webp?v=3';   // WebP 优先,PNG 回退;带版本号走一年强缓存
+const YULE_CATEGORY_LABELS = {
+  star: '明星热点',
+  screen: '影视综艺',
+  fashion: '时尚穿搭',
+  music: '音乐现场',
+  society: '社会热点',
+  life: '生活方式',
+};
 const HOME_PAGES = new Set(['home', 'discover', 'stanning', 'chat', 'about', 'contact', 'privacy', 'terms']);
 
 function defaultHomePageForHost() {
@@ -704,13 +712,13 @@ function SpbShowcase() {
           sub: `涨停 ${zt || 0} · 跌停 ${dt || 0}`,
         },
         {
-          title: yule?.title || '娱乐热榜读取中',
-          label: '娱乐热榜第一',
+          title: yule?.title || '今日内容读取中',
+          label: '今日值得看',
           href: STANNING_URL,
           kind: 'image',
           image: absoluteAsset(yule?.cover || ''),
-          meta: yule?.category ? `热榜 · ${yule.category}` : '今日热榜',
-          sub: yule?.summary || '暂未读取到娱乐热榜内容',
+          meta: yule?.category ? `今日 · ${YULE_CATEGORY_LABELS[yule.category] || yule.category}` : '今日精选',
+          sub: yule?.summary || '正在整理今天值得看的内容',
         },
         {
           title: topExplore?.name || '探索热榜读取中',
@@ -737,7 +745,7 @@ function SpbShowcase() {
   }, []);
   const fallbackCards = [
     { title: '今日大盘情绪', label: '行情', href: MARKET_URL, kind: 'market', value: '读取中', meta: '上涨 -- · 下跌 --', sub: '涨停 -- · 跌停 --' },
-    { title: '娱乐热榜第一', label: '娱乐', href: STANNING_URL, kind: 'plain', value: 'trending now', meta: '读取中', sub: '正在加载娱乐热榜' },
+    { title: '今日内容读取中', label: '今日值得看', href: STANNING_URL, kind: 'plain', value: 'today picks', meta: '今日精选', sub: '正在整理今天值得看的内容' },
     { title: '探索热榜第一', label: '探索', href: EXPLORE_URL, kind: 'plain', value: 'shop photo', meta: '读取中', sub: '正在加载探索热榜' },
     { title: '瞎聊聊', label: '社区帖子流', href: CHAT_URL, kind: 'image', image: CHAT_PREVIEW_IMAGE, imageWebp: CHAT_PREVIEW_IMAGE_WEBP, meta: '图片 · 碎碎念 · 日常', sub: '晒图、唠嗑、盖楼回复，每天都有新鲜事' },
   ];
@@ -2311,6 +2319,13 @@ function QiHome() {
       window.removeEventListener('popstate', onHash);
     };
   }, []);
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [page]);
   React.useEffect(() => {
     let alive = true;
     const refreshSharedAuth = () => {

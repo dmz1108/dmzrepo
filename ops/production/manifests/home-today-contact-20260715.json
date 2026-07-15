@@ -1,0 +1,21 @@
+{
+  "files": [
+    {
+      "source": "yule-server.js",
+      "destination": "yule-server.js"
+    },
+    {
+      "source": "Qi/qi-home.jsx",
+      "destination": "Qi/qi-home.jsx"
+    },
+    {
+      "source": "Qi/qi-home.compiled.js",
+      "destination": "Qi/qi-home.compiled.js"
+    },
+    {
+      "source": "Qi/index.html",
+      "destination": "Qi/index.html"
+    }
+  ],
+  "restart": "yule"
+}
