@@ -5470,10 +5470,13 @@ Validated:
 - 生产只读复现：`/recent-universe?days=30` 包含 `002653 / 海思科 / hsk`，但修复前 `/stock?code=002653&day=2026-07-15` 返回 `windowDays:10 / ok:false / referenceDay:null`。
 - 专项回归已覆盖 `hsk -> 002653 -> latestDay 2026-06-29 -> reviewDateOverride 2026-06-29 -> 刷新`完整链路。
 - `node --check kpl-stats-server.js`、`git diff --check`、行情页内联脚本检查与全仓 33 个测试文件全部通过。
+- 发布后生产 30 日名录实际返回 `002653 / 海思科 / hsk / latestDay: 2026-06-29`；公网行情 HTML 包含新跳转函数且 SHA-256 与 `main@31c6a088fd5ad16d386eda115a76dcb1596ba9cf` 一致。
+- 主服务健康检查为 `ok`，首页、行情、后台和娱乐均为 HTTP 200。
 
 Deployment:
-- 本条首次提交时尚未部署，未修改生产运行时数据，未重启服务。
+- 已通过受保护工作流 run `29407600277` 从固定 `main@31c6a088fd5ad16d386eda115a76dcb1596ba9cf` 发布，返回 `health=ok`。
+- 只更新 `kpl-stats-server.js` 和 `kpl-dashboard_17_apple.html` 并重启主服务；备份为 `C:\PandaDashboard\_deploy-backups\github-29407600277-1`，未修改任何运行时数据库。
 
 Notes for next agent:
 - 这是复盘搜索导航修复，不改变四源归纳、策略评分或历史库，不需要 AI 讨论组协议。
-- 合并后用 `ops/production/manifests/review-hsk-reference-day-20260715.json` 发布；验收时应确认 30 日名录中海思科带 `latestDay: 2026-06-29`，然后在当前复盘日输入 `hsk` 自动跳转。
+- 公网文件、接口、哈希和健康检查已通过；受 in-app browser 重载行情页超时限制，未冒充部署后输入点击已通过。
