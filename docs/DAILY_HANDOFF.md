@@ -4833,3 +4833,35 @@ Deployment:
 
 Notes for next agent:
 - 生产后端已与 `main@c8c6c41` 一致，PR #66 无待部署文件。后续 TGB 每日复盘必须保持人工逐行、逐块计数、双遍复核和完整终盘池对账标准。
+
+## 2026-07-14 - Codex - 落地 DreamerQi 次级页面 1 号编辑社区方案
+
+Changed:
+- 按 Product Design 已选 1 号视觉方案，统一重做首页导航、`瞎聊聊`、`探索`、`关于`、`联系` 的深色编辑社区语言；保留现有品牌色、账号体系、探索数据链和聊天发布/图片/回复逻辑。
+- `瞎聊聊` 改为连续双栏：左侧题头、筛选和帖子列表，右侧发布框、社区数据与发帖提示；修复列表被发布框高度下压、分类回复数口径不一致、详情/回复失败在弹层后不可见等问题。
+- `探索` 加强路线、主题和地点层级，统一 8–10 px 圆角和选中态对比度；移动端方法卡横向滑动，使城市与类别筛选回到首屏。
+- `关于` 改为产品叙事与四种使用状态，`联系` 改为明确邮箱入口、问题反馈、合作建议和安全提醒；移动导航压缩为单行横向浏览。
+- 增加导航/筛选/输入框/详情弹层的可访问语义、键盘焦点与 Escape 关闭；更新首页 bundle 缓存版本。
+- 合并前复核补齐聊天与探索详情弹层的初始焦点、Tab/Shift+Tab 焦点环、背景滚动锁定和关闭后焦点恢复。
+
+Files:
+- `Qi/qi-home.jsx`
+- `Qi/qi-home.compiled.js`（由 `node Qi/build-home.js` 自动生成）
+- `Qi/index.html`
+- `design-qa.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node Qi/build-home.js`、`node --check Qi/qi-home.compiled.js`、`tests/font-woff2-yule-cache.test.js`、`tests/static-cache-auth-hardening.test.js` 和 `git diff --check` 通过；合并前 26/26 个 `tests/*.test.js` 文件全部通过，完整输出仅保存在忽略的临时日志。
+- 使用真实公开聊天/探索数据完成 1440×1024、1487×1058 和 390×844 浏览器验收；聊天筛选/详情/评论、探索城市筛选/地点详情、两类弹层 Escape 关闭均正常，最终聊天和探索状态控制台错误均为 0。
+- 登录、注册、忘记密码三种表单均可切换；首页 `SpbShowcase` 预览图仍在；关于、联系、隐私、条款均正常；未登录状态无后台入口。
+- Product Design 源图与实现已完成全屏和右栏聚焦并排对照，`design-qa.md` 最终结果为 `passed`。
+- 浏览器复验确认两类详情弹层打开后焦点进入关闭按钮，键盘焦点不会越出弹层，Escape 关闭后回到原触发卡片。
+- 公网主页、`/health`、`/kpl`、`/admin` 均返回 HTTP 200。
+
+Deployment:
+- 未部署生产，未修改云端运行时状态，未重启任何服务。
+
+Notes for next agent:
+- 当前工作在 `codex/redesign-qi-secondary-pages-20260714`；合并前复核与 26/26 全套均已通过，下一步从已确认 `main` 备份并部署三个 `Qi` 静态文件。
+- 本次仅涉及首页/公共次级页面，不改变行情、策略、归因或生产数据，因此不需要 AI 讨论组协议。
