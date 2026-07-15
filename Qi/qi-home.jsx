@@ -159,16 +159,19 @@ function SpbNavResponsive({ user, page = 'home', onPage, onLogin, onRegister, on
     textDecoration: 'none',
     fontWeight: 500,
     whiteSpace: 'nowrap',
+    padding: '8px 0',
+    borderBottom: '2px solid transparent',
   };
   const navShell = {
-    minHeight: 92,
+    minHeight: 82,
     borderBottom: `1px solid ${spb.line}`,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    gap: 'clamp(16px, 3vw, 28px)',
+    gap: 'clamp(14px, 3vw, 30px)',
     flexWrap: 'wrap',
-    padding: '14px clamp(20px, 4vw, 56px)',
+    padding: '12px clamp(18px, 4vw, 56px)',
+    background: 'oklch(0.145 0.012 265 / 0.94)',
   };
   const navCenter = {
     display: 'flex',
@@ -176,7 +179,7 @@ function SpbNavResponsive({ user, page = 'home', onPage, onLogin, onRegister, on
     justifyContent: 'flex-start',
     flex: '0 1 auto',
     flexWrap: 'wrap',
-    gap: 'clamp(18px, 2.4vw, 34px)',
+    gap: 'clamp(16px, 2.2vw, 30px)',
     minWidth: 0,
   };
   const rightDock = {
@@ -198,7 +201,7 @@ function SpbNavResponsive({ user, page = 'home', onPage, onLogin, onRegister, on
     fontFamily: 'inherit',
     fontWeight: 600,
     padding: '9px 15px',
-    borderRadius: 999,
+    borderRadius: 8,
     boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.06)',
   };
   const primaryButton = {
@@ -209,7 +212,7 @@ function SpbNavResponsive({ user, page = 'home', onPage, onLogin, onRegister, on
     color: spb.bg,
     background: `linear-gradient(135deg, ${spb.blue}, ${spb.blueSoft})`,
     padding: '10px 18px',
-    borderRadius: 999,
+    borderRadius: 8,
     fontFamily: 'inherit',
     boxShadow: `0 0 22px oklch(0.72 0.15 242 / 0.24)`,
   };
@@ -254,6 +257,7 @@ function SpbNavResponsive({ user, page = 'home', onPage, onLogin, onRegister, on
     ...item,
     color: page === target ? spb.ink : spb.sub,
     fontWeight: page === target ? 700 : 500,
+    borderBottomColor: page === target ? spb.blue : 'transparent',
   });
   const goPage = (target) => (event) => {
     if (!onPage) return;
@@ -262,19 +266,31 @@ function SpbNavResponsive({ user, page = 'home', onPage, onLogin, onRegister, on
   };
 
   return (
-    <div style={navShell}>
-      <a href="#" onClick={goPage('home')} style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', minWidth: 0, flex: '0 0 auto' }} aria-label="Qi home">
-        <QiLogo h={82} />
+    <>
+      <style>{`
+        .qi-nav-center, .qi-nav-actions { scrollbar-width: none; }
+        .qi-nav-center::-webkit-scrollbar, .qi-nav-actions::-webkit-scrollbar { display: none; }
+        @media (max-width: 680px) {
+          .qi-nav-shell { min-height: 70px !important; display: grid !important; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px !important; padding: 9px 14px !important; flex-wrap: nowrap !important; }
+          .qi-nav-logo svg { height: 44px !important; width: auto !important; }
+          .qi-nav-center { min-width: 0; overflow-x: auto; flex-wrap: nowrap !important; gap: 14px !important; }
+          .qi-nav-actions { margin-left: 0 !important; flex-wrap: nowrap !important; gap: 7px !important; }
+          .qi-nav-actions > button { padding: 8px 10px !important; font-size: 13px !important; }
+        }
+      `}</style>
+    <nav className="qi-nav-shell" aria-label="主导航" style={navShell}>
+      <a className="qi-nav-logo" href="#" onClick={goPage('home')} style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', minWidth: 0, flex: '0 0 auto' }} aria-label="Qi home">
+        <QiLogo h={56} />
       </a>
-      <div style={navCenter}>
+      <div className="qi-nav-center" style={navCenter}>
         <a style={item} href={MARKET_URL}>行情</a>
-        <a style={pageLink('stanning')} href={STANNING_URL}>娱乐</a>
-        <a style={pageLink('discover')} href={EXPLORE_URL}>探索</a>
-        <a style={pageLink('chat')} href={CHAT_URL} onClick={goPage('chat')}>瞎聊聊</a>
-        <a style={pageLink('about')} href="#about" onClick={goPage('about')}>关于</a>
-        <a style={pageLink('contact')} href="#contact" onClick={goPage('contact')}>联系</a>
+        <a style={pageLink('stanning')} href={STANNING_URL} aria-current={page === 'stanning' ? 'page' : undefined}>娱乐</a>
+        <a style={pageLink('discover')} href={EXPLORE_URL} aria-current={page === 'discover' ? 'page' : undefined}>探索</a>
+        <a style={pageLink('chat')} href={CHAT_URL} onClick={goPage('chat')} aria-current={page === 'chat' ? 'page' : undefined}>瞎聊聊</a>
+        <a style={pageLink('about')} href="#about" onClick={goPage('about')} aria-current={page === 'about' ? 'page' : undefined}>关于</a>
+        <a style={pageLink('contact')} href="#contact" onClick={goPage('contact')} aria-current={page === 'contact' ? 'page' : undefined}>联系</a>
       </div>
-      <div style={rightDock}>
+      <div className="qi-nav-actions" style={rightDock}>
         {user ? (
           <div style={accountPill}>
             <span style={avatar}>{String(user.name || 'Q').slice(0, 1).toUpperCase()}</span>
@@ -290,7 +306,8 @@ function SpbNavResponsive({ user, page = 'home', onPage, onLogin, onRegister, on
           </>
         )}
       </div>
-    </div>
+    </nav>
+    </>
   );
 }
 
@@ -777,6 +794,77 @@ function SpbShowcase() {
   );
 }
 
+function useDialogFocusTrap(dialogRef, isOpen, onClose) {
+  const onCloseRef = React.useRef(onClose);
+
+  React.useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  React.useEffect(() => {
+    if (!isOpen || typeof document === 'undefined') return undefined;
+
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    const focusableSelector = [
+      'a[href]',
+      'button:not([disabled])',
+      'textarea:not([disabled])',
+      'input:not([disabled])',
+      'select:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])',
+    ].join(',');
+    const focusableElements = () => Array.from(dialogRef.current?.querySelectorAll(focusableSelector) || [])
+      .filter(element => !element.hasAttribute('hidden') && element.getAttribute('aria-hidden') !== 'true');
+    const focusDialog = () => {
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const firstFocusable = focusableElements()[0];
+      (firstFocusable || dialog).focus();
+    };
+    const frame = window.requestAnimationFrame(focusDialog);
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onCloseRef.current?.();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const focusable = focusableElements();
+      if (!focusable.length) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const focusOutside = !dialog.contains(document.activeElement);
+      if (event.shiftKey && (document.activeElement === first || focusOutside)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || focusOutside)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus && typeof previousFocus.focus === 'function' && document.contains(previousFocus)) {
+        previousFocus.focus();
+      }
+    };
+  }, [dialogRef, isOpen]);
+}
+
 function SpbDiscover() {
   const [payload, setPayload] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
@@ -784,12 +872,13 @@ function SpbDiscover() {
   const [cityId, setCityId] = React.useState('all');
   const [category, setCategory] = React.useState('全部');
   const [selectedItem, setSelectedItem] = React.useState(null);
+  const itemDialogRef = React.useRef(null);
 
   React.useEffect(() => {
     let alive = true;
     setLoading(true);
     fetch(`${ADMIN_SERVER_BASE}/api/discovery?_=${Date.now()}`, { cache: 'no-store' })
-      .then(res => res.json().then(data => ({ ok: res.ok, data })))
+      .then(res => res.json().catch(() => ({})).then(data => ({ ok: res.ok, data })))
       .then(({ ok, data }) => {
         if (!alive) return;
         if (!ok) throw new Error(data?.error || '探索数据加载失败');
@@ -817,27 +906,28 @@ function SpbDiscover() {
     ? new Date(payload.generatedAt).toLocaleString('zh-CN', { hour12: false })
     : '等待首次更新';
   const shell = {
-    padding: 'clamp(52px, 7vw, 78px) clamp(20px, 4vw, 48px) 80px',
+    padding: '64px clamp(18px, 4vw, 56px) 86px',
     borderTop: `1px solid ${spb.line}`,
+    background: 'linear-gradient(180deg, oklch(0.155 0.013 265), oklch(0.135 0.012 265))',
   };
   const chip = (active) => ({
     border: `1px solid ${active ? 'oklch(0.72 0.15 242 / 0.58)' : spb.line}`,
-    background: active ? 'oklch(0.72 0.15 242 / 0.14)' : 'oklch(0.205 0.014 265 / 0.64)',
-    color: active ? spb.ink : spb.sub,
-    borderRadius: 999,
+    background: active ? spb.blue : 'oklch(0.18 0.014 265 / 0.70)',
+    color: active ? spb.bg : spb.sub,
+    borderRadius: 8,
     padding: '9px 14px',
     cursor: 'pointer',
     fontFamily: 'inherit',
     fontSize: 13.5,
     fontWeight: active ? 700 : 550,
-    boxShadow: active ? `0 0 22px oklch(0.72 0.15 242 / 0.12)` : 'none',
+    boxShadow: 'none',
   });
   const cityCard = {
-    background: 'linear-gradient(180deg, oklch(0.245 0.015 265 / 0.88), oklch(0.19 0.014 265 / 0.92))',
+    background: 'oklch(0.185 0.014 265 / 0.92)',
     border: `1px solid ${spb.line}`,
-    borderRadius: 18,
+    borderRadius: 10,
     padding: 20,
-    boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.08), 0 22px 58px rgba(0,0,0,0.22)',
+    boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.055), 0 20px 54px rgba(0,0,0,0.22)',
   };
   const shopRow = {
     padding: '15px 0',
@@ -900,6 +990,8 @@ function SpbDiscover() {
     const photos = getItemPhotos(item);
     setSelectedItem({ ...item, cityName: city.name, photo: photos[0] || '', photos });
   };
+  const closeItem = () => setSelectedItem(null);
+  useDialogFocusTrap(itemDialogRef, Boolean(selectedItem), closeItem);
   const featuredItems = visibleCities
     .flatMap(city => (city.items || []).map(item => ({ ...item, cityName: city.name, cityId: city.id })))
     .sort((a, b) => (Number(b.recommendationScore || b.qualityScore || 0) - Number(a.recommendationScore || a.qualityScore || 0)) || String(b.discoveredAt || b.publishedAt || '').localeCompare(String(a.discoveredAt || a.publishedAt || '')))
@@ -938,26 +1030,41 @@ function SpbDiscover() {
   }).filter(route => route.stops.length >= 2).slice(0, 4);
   return (
     <section style={shell}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 24, alignItems: 'end' }}>
+      <style>{`
+        .qi-discover-shell { max-width: 1320px; margin: 0 auto; }
+        .qi-discover-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 260px); gap: 28px; align-items: end; }
+        .qi-discover-title { margin: 14px 0 0; font-family: ${spb.disp}; font-size: 62px; line-height: 1.05; letter-spacing: 0; color: ${spb.ink}; font-weight: 680; }
+        .qi-discover-plan { margin-top: 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; }
+        .qi-discover-section-title { margin: 8px 0 0; font-family: ${spb.disp}; color: ${spb.ink}; font-size: 30px; line-height: 1.18; letter-spacing: 0; }
+        @media (max-width: 760px) {
+          .qi-discover-hero { grid-template-columns: 1fr; align-items: start; }
+          .qi-discover-title { font-size: 42px; }
+          .qi-discover-plan { display: flex; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x proximity; scrollbar-width: none; }
+          .qi-discover-plan::-webkit-scrollbar { display: none; }
+          .qi-discover-plan > div { flex: 0 0 min(78vw, 280px); scroll-snap-align: start; }
+        }
+      `}</style>
+      <div className="qi-discover-shell">
+      <div className="qi-discover-hero">
         <div>
           <div style={{ fontFamily: spb.mono, fontSize: 12.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: spb.blueSoft }}>Explore</div>
-          <h1 style={{ margin: '14px 0 0', fontFamily: spb.disp, fontSize: 'clamp(38px, 6vw, 62px)', lineHeight: 1.05, letterSpacing: '-0.035em', color: spb.ink, fontWeight: 600 }}>
+          <h1 className="qi-discover-title">
             城市新店与好去处
           </h1>
           <p style={{ margin: '16px 0 0', maxWidth: 620, color: spb.sub, fontSize: 16, lineHeight: 1.7 }}>
             把近期新开、首店、探店、展览、市集和生活方式空间整理成可阅读的城市路线。先看是否值得去，再决定什么时候去、和哪里一起逛。
           </p>
         </div>
-        <div style={{ minWidth: 190, justifySelf: 'end', border: `1px solid ${spb.line}`, borderRadius: 18, padding: '14px 16px', background: 'oklch(0.205 0.014 265 / 0.64)' }}>
+        <div style={{ width: '100%', border: `1px solid ${spb.line}`, borderRadius: 10, padding: '14px 16px', background: 'oklch(0.185 0.014 265 / 0.76)' }}>
           <div style={{ fontFamily: spb.mono, fontSize: 11.5, color: spb.faint }}>UPDATED</div>
           <div style={{ marginTop: 6, color: spb.ink, fontSize: 14.5, fontWeight: 700 }}>{updatedText}</div>
           <div style={{ marginTop: 6, color: spb.sub, fontSize: 13 }}>{totalItems} 条站内内容</div>
         </div>
       </div>
 
-      <div style={{ marginTop: 28, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 210px), 1fr))', gap: 12 }}>
+      <div className="qi-discover-plan">
         {sourcePlan.map(([title, text]) => (
-          <div key={title} style={{ border: `1px solid ${spb.line}`, borderRadius: 16, padding: '15px 16px', background: 'linear-gradient(180deg, oklch(0.235 0.015 265 / 0.78), oklch(0.19 0.014 265 / 0.72))', boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.07)' }}>
+          <div key={title} style={{ border: `1px solid ${spb.line}`, borderRadius: 10, padding: '15px 16px', background: 'oklch(0.185 0.014 265 / 0.76)', boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.055)' }}>
             <div style={{ color: spb.ink, fontSize: 15, fontWeight: 800 }}>{title}</div>
             <div style={{ marginTop: 7, color: spb.sub, fontSize: 13.5, lineHeight: 1.62 }}>{text}</div>
           </div>
@@ -966,33 +1073,33 @@ function SpbDiscover() {
 
       <div style={{ marginTop: 34, display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <button type="button" onClick={() => setCityId('all')} style={chip(cityId === 'all')}>全部城市</button>
+          <button type="button" aria-pressed={cityId === 'all'} onClick={() => setCityId('all')} style={chip(cityId === 'all')}>全部城市</button>
           {cities.map(city => (
-            <button key={city.id} type="button" onClick={() => setCityId(city.id)} style={chip(cityId === city.id)}>{city.name}</button>
+            <button key={city.id} type="button" aria-pressed={cityId === city.id} onClick={() => setCityId(city.id)} style={chip(cityId === city.id)}>{city.name}</button>
           ))}
         </div>
         <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
           {categories.map(item => (
-            <button key={item} type="button" onClick={() => setCategory(item)} style={chip(category === item)}>{item}</button>
+            <button key={item} type="button" aria-pressed={category === item} onClick={() => setCategory(item)} style={chip(category === item)}>{item}</button>
           ))}
         </div>
       </div>
 
-      {error ? <div style={{ marginTop: 28, color: 'oklch(0.72 0.2 28)', fontSize: 15 }}>{error}</div> : null}
-      {loading ? <div style={{ marginTop: 34, color: spb.sub, fontSize: 16 }}>正在加载今日探索内容...</div> : null}
+      {error ? <div role="alert" style={{ marginTop: 28, border: '1px solid oklch(0.68 0.15 32 / 0.38)', borderRadius: 8, padding: '12px 14px', color: 'oklch(0.82 0.11 32)', background: 'oklch(0.26 0.04 32 / 0.22)', fontSize: 14 }}>{error}</div> : null}
+      {loading ? <div aria-live="polite" style={{ marginTop: 34, color: spb.sub, fontSize: 16 }}>正在加载今日探索内容...</div> : null}
 
       {!loading && weekendRoutes.length ? (
-        <div style={{ marginTop: 34, border: `1px solid ${spb.line}`, borderRadius: 20, padding: '20px clamp(18px, 3vw, 24px)', background: 'linear-gradient(180deg, oklch(0.245 0.015 265 / 0.86), oklch(0.18 0.014 265 / 0.86))', boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.08)' }}>
+        <div style={{ marginTop: 34, border: `1px solid ${spb.line}`, borderRadius: 10, padding: '20px clamp(18px, 3vw, 24px)', background: 'oklch(0.185 0.014 265 / 0.88)', boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.055)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', gap: 18, flexWrap: 'wrap' }}>
             <div>
               <div style={{ fontFamily: spb.mono, fontSize: 12, letterSpacing: '0.08em', color: spb.blueSoft, textTransform: 'uppercase' }}>Weekend routes</div>
-              <h2 style={{ margin: '8px 0 0', fontFamily: spb.disp, color: spb.ink, fontSize: 30, lineHeight: 1.12, letterSpacing: '-0.025em' }}>周末可以这样逛</h2>
+              <h2 className="qi-discover-section-title">周末可以这样逛</h2>
             </div>
             <div style={{ maxWidth: 360, color: spb.sub, fontSize: 13.5, lineHeight: 1.6 }}>按城市、类型和推荐分自动串联，不需要切换应用也能先判断路线是否顺。</div>
           </div>
           <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 270px), 1fr))', gap: 14 }}>
             {weekendRoutes.map(route => (
-              <article key={route.city.id} style={{ border: `1px solid ${spb.line}`, borderRadius: 16, padding: 16, background: 'oklch(0.19 0.014 265 / 0.72)' }}>
+              <article key={route.city.id} style={{ border: `1px solid ${spb.line}`, borderRadius: 8, padding: 16, background: 'oklch(0.16 0.012 265 / 0.66)' }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
                   <h3 style={{ margin: 0, color: spb.ink, fontSize: 18, fontWeight: 850 }}>{route.city.name}</h3>
                   <span style={{ color: spb.blueSoft, fontFamily: spb.mono, fontSize: 11 }}>{route.stops.length} stops</span>
@@ -1000,7 +1107,7 @@ function SpbDiscover() {
                 <div style={{ marginTop: 13, display: 'grid', gap: 10 }}>
                   {route.stops.map((stop, index) => (
                     <button key={`${route.city.id}-${stop.time}-${stop.item.id || stop.item.name}`} type="button" onClick={() => openItem(route.city, stop.item)} style={{ display: 'grid', gridTemplateColumns: '46px minmax(0, 1fr)', gap: 11, alignItems: 'start', textAlign: 'left', border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: 'inherit' }}>
-                      <div style={{ width: 38, height: 38, borderRadius: 12, display: 'grid', placeItems: 'center', background: index === 1 ? spb.blueSoft : 'oklch(0.245 0.018 265)', color: index === 1 ? spb.bg : spb.blueSoft, fontFamily: spb.mono, fontSize: 12, fontWeight: 850, border: `1px solid ${spb.line}` }}>{stop.time}</div>
+                      <div style={{ width: 38, height: 38, borderRadius: 8, display: 'grid', placeItems: 'center', background: index === 1 ? spb.blueSoft : 'oklch(0.245 0.018 265)', color: index === 1 ? spb.bg : spb.blueSoft, fontFamily: spb.mono, fontSize: 12, fontWeight: 850, border: `1px solid ${spb.line}` }}>{stop.time}</div>
                       <div style={{ minWidth: 0, paddingBottom: 10, borderBottom: index === route.stops.length - 1 ? 'none' : `1px solid ${spb.line}` }}>
                         <div style={{ color: spb.faint, fontSize: 12.5 }}>{stop.title}</div>
                         <div style={{ marginTop: 3, color: spb.ink, fontSize: 15.5, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stop.item.name}</div>
@@ -1020,20 +1127,20 @@ function SpbDiscover() {
           <div style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap' }}>
             <div>
               <div style={{ fontFamily: spb.mono, fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', color: spb.blueSoft }}>Categories</div>
-              <h2 style={{ margin: '8px 0 0', fontFamily: spb.disp, color: spb.ink, fontSize: 30, lineHeight: 1.12, letterSpacing: '-0.025em' }}>按主题先看</h2>
+              <h2 style={{ margin: '8px 0 0', fontFamily: spb.disp, color: spb.ink, fontSize: 30, lineHeight: 1.16, letterSpacing: 0 }}>按主题先看</h2>
             </div>
             <div style={{ color: spb.sub, fontSize: 14, lineHeight: 1.6 }}>每类只露出最值得先看的前三个，减少重复信息</div>
           </div>
           <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 250px), 1fr))', gap: 14 }}>
             {categorySpotlights.map(group => (
-              <article key={group.name} style={{ border: `1px solid ${spb.line}`, borderRadius: 17, padding: 16, background: 'oklch(0.205 0.014 265 / 0.68)', boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.07)' }}>
+              <article key={group.name} style={{ border: `1px solid ${spb.line}`, borderRadius: 10, padding: 16, background: 'oklch(0.205 0.014 265 / 0.68)', boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.07)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
                   <h3 style={{ margin: 0, color: spb.ink, fontSize: 18, fontWeight: 850 }}>{group.name}</h3>
-                  <button type="button" onClick={() => setCategory(group.name)} style={{ border: `1px solid ${spb.line}`, borderRadius: 999, background: 'transparent', color: spb.blueSoft, padding: '5px 9px', cursor: 'pointer', fontSize: 12 }}>看全部 {group.count}</button>
+                  <button type="button" onClick={() => setCategory(group.name)} style={{ border: `1px solid ${spb.line}`, borderRadius: 8, background: 'transparent', color: spb.blueSoft, padding: '5px 9px', cursor: 'pointer', fontSize: 12 }}>看全部 {group.count}</button>
                 </div>
                 <div style={{ marginTop: 12, display: 'grid', gap: 9 }}>
                   {group.items.map(item => (
-                    <button key={`${group.name}-${item.id || item.name}`} type="button" onClick={() => openItem({ id: item.cityId, name: item.cityName }, item)} style={{ textAlign: 'left', border: `1px solid ${spb.line}`, borderRadius: 13, background: 'oklch(0.18 0.014 265 / 0.62)', padding: '10px 11px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                    <button key={`${group.name}-${item.id || item.name}`} type="button" onClick={() => openItem({ id: item.cityId, name: item.cityName }, item)} style={{ textAlign: 'left', border: `1px solid ${spb.line}`, borderRadius: 8, background: 'oklch(0.18 0.014 265 / 0.62)', padding: '10px 11px', cursor: 'pointer', fontFamily: 'inherit' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
                         <span style={{ color: spb.ink, fontSize: 14.5, fontWeight: 780, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
                         <span style={{ color: spb.blueSoft, fontFamily: spb.mono, fontSize: 11, whiteSpace: 'nowrap' }}>{scoreText(item)}</span>
@@ -1053,7 +1160,7 @@ function SpbDiscover() {
           <div style={{ display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap' }}>
             <div>
               <div style={{ fontFamily: spb.mono, fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', color: spb.blueSoft }}>Today picks</div>
-              <h2 style={{ margin: '9px 0 0', fontFamily: spb.disp, color: spb.ink, fontSize: 31, lineHeight: 1.12, letterSpacing: '-0.025em' }}>今日值得先看的去处</h2>
+              <h2 style={{ margin: '9px 0 0', fontFamily: spb.disp, color: spb.ink, fontSize: 31, lineHeight: 1.16, letterSpacing: 0 }}>今日值得先看的去处</h2>
             </div>
             <div style={{ color: spb.sub, fontSize: 14, lineHeight: 1.6 }}>按推荐指数、近期热度和图文完整度排序</div>
           </div>
@@ -1075,7 +1182,7 @@ function SpbDiscover() {
                     position: 'relative',
                     overflow: 'hidden',
                     border: `1px solid ${spb.line}`,
-                    borderRadius: 18,
+                    borderRadius: 10,
                     padding: 0,
                     background: 'oklch(0.2 0.014 265)',
                     cursor: 'pointer',
@@ -1091,12 +1198,12 @@ function SpbDiscover() {
                   <div style={{ position: 'relative', padding: isLead ? 22 : 18, width: '100%' }}>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       {[item.cityName, item.category, item.sceneTag].filter(Boolean).slice(0, 3).map(text => (
-                        <span key={text} style={{ color: spb.ink, background: 'oklch(0.12 0.01 265 / 0.48)', border: '1px solid oklch(1 0 0 / 0.2)', borderRadius: 999, padding: '6px 9px', fontSize: 12, fontWeight: 760, backdropFilter: 'blur(10px)' }}>{text}</span>
+                        <span key={text} style={{ color: spb.ink, background: 'oklch(0.12 0.01 265 / 0.48)', border: '1px solid oklch(1 0 0 / 0.2)', borderRadius: 8, padding: '6px 9px', fontSize: 12, fontWeight: 760, backdropFilter: 'blur(10px)' }}>{text}</span>
                       ))}
-                      <span style={{ color: spb.bg, background: spb.blueSoft, border: '1px solid oklch(1 0 0 / 0.16)', borderRadius: 999, padding: '6px 9px', fontSize: 12, fontWeight: 820 }}>{sourceTone(item)}</span>
-                      <span style={{ color: spb.ink, background: 'oklch(0.12 0.01 265 / 0.48)', border: '1px solid oklch(1 0 0 / 0.2)', borderRadius: 999, padding: '6px 9px', fontSize: 12, fontWeight: 820, backdropFilter: 'blur(10px)' }}>{scoreText(item)}</span>
+                      <span style={{ color: spb.bg, background: spb.blueSoft, border: '1px solid oklch(1 0 0 / 0.16)', borderRadius: 8, padding: '6px 9px', fontSize: 12, fontWeight: 820 }}>{sourceTone(item)}</span>
+                      <span style={{ color: spb.ink, background: 'oklch(0.12 0.01 265 / 0.48)', border: '1px solid oklch(1 0 0 / 0.2)', borderRadius: 8, padding: '6px 9px', fontSize: 12, fontWeight: 820, backdropFilter: 'blur(10px)' }}>{scoreText(item)}</span>
                     </div>
-                    <div style={{ marginTop: 13, color: spb.ink, fontFamily: spb.disp, fontSize: isLead ? 'clamp(28px, 4vw, 42px)' : 25, lineHeight: 1.08, letterSpacing: '-0.025em', fontWeight: 650 }}>{item.name}</div>
+                    <div style={{ marginTop: 13, color: spb.ink, fontFamily: spb.disp, fontSize: isLead ? 38 : 25, lineHeight: 1.12, letterSpacing: 0, fontWeight: 650 }}>{item.name}</div>
                     <div style={{ marginTop: 8, color: spb.blueSoft, fontSize: 13.5, fontWeight: 760 }}>{itemReason(item)}</div>
                     {poiLine(item) ? (
                       <div style={{ marginTop: 7, color: 'oklch(0.82 0.045 150)', fontSize: 12.8, fontWeight: 760, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{poiLine(item)}</div>
@@ -1118,7 +1225,7 @@ function SpbDiscover() {
         {visibleCities.map(city => (
           <article key={city.id} style={cityCard}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 14 }}>
-              <h2 style={{ margin: 0, fontFamily: spb.disp, fontSize: 27, letterSpacing: '-0.02em', color: spb.ink }}>{city.name}</h2>
+              <h2 style={{ margin: 0, fontFamily: spb.disp, fontSize: 27, letterSpacing: 0, color: spb.ink }}>{city.name}</h2>
               <span style={{ color: spb.blueSoft, fontFamily: spb.mono, fontSize: 12 }}>{(city.items || []).length}/{payload?.cityLimit || 5}</span>
             </div>
             <div style={{ marginTop: 8, color: spb.faint, fontSize: 13.5 }}>{city.updatedAt ? `更新 ${new Date(city.updatedAt).toLocaleString('zh-CN', { hour12: false })}` : '等待更新'}</div>
@@ -1146,7 +1253,7 @@ function SpbDiscover() {
                         fontFamily: 'inherit',
                       }}
                     >
-                      <div style={{ height: 72, borderRadius: 14, overflow: 'hidden', background: 'linear-gradient(135deg, oklch(0.34 0.05 245), oklch(0.22 0.04 292))', border: `1px solid ${spb.line}`, boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.12)' }}>
+                      <div style={{ height: 72, borderRadius: 8, overflow: 'hidden', background: 'linear-gradient(135deg, oklch(0.34 0.05 245), oklch(0.22 0.04 292))', border: `1px solid ${spb.line}`, boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.12)' }}>
                         {photo ? (
                           <img src={photoSrc(photo)} alt={item.name} loading="lazy" onError={hideBrokenImage} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                         ) : (
@@ -1156,7 +1263,7 @@ function SpbDiscover() {
                       <div style={{ minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                           <span style={{ color: spb.ink, fontSize: 17.5, fontWeight: 760, lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
-                          <span style={{ color: spb.bg, background: spb.blueSoft, borderRadius: 999, padding: '4px 8px', fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap' }}>{scoreText(item)}</span>
+                          <span style={{ color: spb.bg, background: spb.blueSoft, borderRadius: 8, padding: '4px 8px', fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap' }}>{scoreText(item)}</span>
                         </div>
                         <div style={{ marginTop: 7, color: spb.sub, lineHeight: 1.58, fontSize: 14.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.editorialSummary || item.summary || item.tagline || ''}</div>
                         {poiLine(item) ? (
@@ -1165,9 +1272,9 @@ function SpbDiscover() {
                         {(item.district || item.sceneTag || item?.poi?.verified) ? (
                           <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                             {item.district ? <span style={{ color: spb.blueSoft, fontSize: 12.5 }}>{item.district}</span> : null}
-                            {item.sceneTag ? <span style={{ color: spb.faint, border: `1px solid ${spb.line}`, borderRadius: 999, padding: '3px 8px', fontSize: 12 }}>{item.sceneTag}</span> : null}
-                            {item?.poi?.verified ? <span style={{ color: 'oklch(0.82 0.045 150)', border: '1px solid oklch(0.72 0.1 150 / 0.35)', borderRadius: 999, padding: '3px 8px', fontSize: 12 }}>地址已核验</span> : null}
-                            <span style={{ color: spb.faint, border: `1px solid ${spb.line}`, borderRadius: 999, padding: '3px 8px', fontSize: 12 }}>{sourceLabel(item)}</span>
+                            {item.sceneTag ? <span style={{ color: spb.faint, border: `1px solid ${spb.line}`, borderRadius: 8, padding: '3px 8px', fontSize: 12 }}>{item.sceneTag}</span> : null}
+                            {item?.poi?.verified ? <span style={{ color: 'oklch(0.82 0.045 150)', border: '1px solid oklch(0.72 0.1 150 / 0.35)', borderRadius: 8, padding: '3px 8px', fontSize: 12 }}>地址已核验</span> : null}
+                            <span style={{ color: spb.faint, border: `1px solid ${spb.line}`, borderRadius: 8, padding: '3px 8px', fontSize: 12 }}>{sourceLabel(item)}</span>
                           </div>
                         ) : null}
                       </div>
@@ -1185,7 +1292,7 @@ function SpbDiscover() {
       </div>
       {selectedItem ? (
         <div
-          onClick={() => setSelectedItem(null)}
+          onClick={closeItem}
           style={{
             position: 'fixed',
             inset: 0,
@@ -1199,6 +1306,11 @@ function SpbDiscover() {
           }}
         >
           <article
+            ref={itemDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="探索地点详情"
+            tabIndex={-1}
             onClick={(event) => event.stopPropagation()}
             style={{
               width: 'min(820px, 100%)',
@@ -1206,22 +1318,22 @@ function SpbDiscover() {
               overflow: 'auto',
               background: 'linear-gradient(180deg, oklch(0.245 0.015 265 / 0.96), oklch(0.175 0.014 265 / 0.98))',
               border: `1px solid ${spb.line}`,
-              borderRadius: 24,
+              borderRadius: 10,
               boxShadow: '0 34px 90px rgba(0,0,0,0.52), inset 0 1px 0 oklch(1 0 0 / 0.1)',
             }}
           >
-            <div style={{ position: 'relative', minHeight: 260, background: 'linear-gradient(135deg, oklch(0.35 0.08 238), oklch(0.23 0.07 292))', overflow: 'hidden', borderRadius: '24px 24px 0 0' }}>
+            <div style={{ position: 'relative', minHeight: 260, background: 'linear-gradient(135deg, oklch(0.35 0.08 238), oklch(0.23 0.07 292))', overflow: 'hidden', borderRadius: '10px 10px 0 0' }}>
               {selectedItem.photo ? (
                 <img src={photoSrc(selectedItem.photo)} alt={selectedItem.name} onError={hideBrokenImage} style={{ width: '100%', height: 320, objectFit: 'cover', display: 'block' }} />
               ) : (
-                <div style={{ height: 320, display: 'grid', placeItems: 'center', color: spb.ink, fontFamily: spb.disp, fontSize: 44, fontWeight: 600, letterSpacing: '-0.03em' }}>
+                <div style={{ height: 320, display: 'grid', placeItems: 'center', color: spb.ink, fontFamily: spb.disp, fontSize: 44, fontWeight: 600, letterSpacing: 0 }}>
                   {selectedItem.category || selectedItem.cityName || 'Discovery'}
                 </div>
               )}
-              <button type="button" onClick={() => setSelectedItem(null)} aria-label="关闭" style={{ position: 'absolute', top: 16, right: 16, width: 42, height: 42, borderRadius: 999, border: `1px solid ${spb.line}`, background: 'oklch(0.165 0.013 265 / 0.72)', color: spb.ink, fontSize: 24, lineHeight: 1, cursor: 'pointer', boxShadow: '0 12px 32px rgba(0,0,0,0.26)' }}>×</button>
+              <button type="button" onClick={closeItem} aria-label="关闭" style={{ position: 'absolute', top: 16, right: 16, width: 42, height: 42, borderRadius: 999, border: `1px solid ${spb.line}`, background: 'oklch(0.165 0.013 265 / 0.72)', color: spb.ink, fontSize: 24, lineHeight: 1, cursor: 'pointer', boxShadow: '0 12px 32px rgba(0,0,0,0.26)' }}>×</button>
               <div style={{ position: 'absolute', left: 22, bottom: 20, display: 'flex', gap: 9, flexWrap: 'wrap' }}>
                 {[selectedItem.cityName || selectedItem.city, selectedItem.category, selectedItem.district, selectedItem?.poi?.verified ? '地址已核验' : '', scoreText(selectedItem)].filter(Boolean).map(text => (
-                  <span key={text} style={{ border: `1px solid oklch(1 0 0 / 0.22)`, background: 'oklch(0.12 0.01 265 / 0.5)', color: spb.ink, borderRadius: 999, padding: '7px 11px', fontSize: 12.5, fontWeight: 750, backdropFilter: 'blur(12px)' }}>{text}</span>
+                  <span key={text} style={{ border: `1px solid oklch(1 0 0 / 0.22)`, background: 'oklch(0.12 0.01 265 / 0.5)', color: spb.ink, borderRadius: 8, padding: '7px 11px', fontSize: 12.5, fontWeight: 750, backdropFilter: 'blur(12px)' }}>{text}</span>
                 ))}
               </div>
             </div>
@@ -1229,7 +1341,7 @@ function SpbDiscover() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 18, flexWrap: 'wrap' }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontFamily: spb.mono, fontSize: 12, letterSpacing: '0.08em', color: spb.blueSoft, textTransform: 'uppercase' }}>Explore pick</div>
-                  <h2 style={{ margin: '10px 0 0', fontFamily: spb.disp, fontSize: 'clamp(30px, 5vw, 46px)', lineHeight: 1.06, letterSpacing: '-0.035em', color: spb.ink }}>{selectedItem.name}</h2>
+                  <h2 style={{ margin: '10px 0 0', fontFamily: spb.disp, fontSize: 42, lineHeight: 1.1, letterSpacing: 0, color: spb.ink }}>{selectedItem.name}</h2>
                 </div>
                 <div style={{ color: spb.faint, fontSize: 13, textAlign: 'right', lineHeight: 1.6 }}>
                   <div>{selectedItem.cityName || selectedItem.city}</div>
@@ -1251,14 +1363,14 @@ function SpbDiscover() {
                   ['适合谁', selectedItem.visitAudience || '适合近期城市探索'],
                   ['附近还能去哪', selectedItem.nearbySuggestion || '搭配同商圈咖啡、餐厅或展览空间'],
                 ].map(([title, text]) => (
-                  <div key={title} style={{ border: `1px solid ${spb.line}`, borderRadius: 16, padding: '13px 14px', background: 'oklch(0.205 0.014 265 / 0.62)' }}>
+                  <div key={title} style={{ border: `1px solid ${spb.line}`, borderRadius: 8, padding: '13px 14px', background: 'oklch(0.205 0.014 265 / 0.62)' }}>
                     <div style={{ color: spb.faint, fontFamily: spb.mono, fontSize: 11.5, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{title}</div>
                     <div style={{ marginTop: 7, color: spb.ink, fontSize: 14.5, lineHeight: 1.5, fontWeight: 760 }}>{text}</div>
                   </div>
                 ))}
               </div>
               {selectedItem.imageCaption ? (
-                <div style={{ marginTop: 12, border: `1px solid ${spb.line}`, borderRadius: 16, padding: '13px 15px', background: 'oklch(0.205 0.014 265 / 0.62)', color: spb.blueSoft, fontSize: 13.5, lineHeight: 1.65 }}>
+                <div style={{ marginTop: 12, border: `1px solid ${spb.line}`, borderRadius: 8, padding: '13px 15px', background: 'oklch(0.205 0.014 265 / 0.62)', color: spb.blueSoft, fontSize: 13.5, lineHeight: 1.65 }}>
                   {selectedItem.imageCaption}
                 </div>
               ) : null}
@@ -1268,7 +1380,7 @@ function SpbDiscover() {
               {(selectedItem.highlights || []).length ? (
                 <div style={{ marginTop: 22, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
                   {selectedItem.highlights.map(item => (
-                    <div key={item.title || item} style={{ border: `1px solid ${spb.line}`, borderRadius: 16, padding: '14px 15px', background: 'oklch(0.205 0.014 265 / 0.62)' }}>
+                    <div key={item.title || item} style={{ border: `1px solid ${spb.line}`, borderRadius: 8, padding: '14px 15px', background: 'oklch(0.205 0.014 265 / 0.62)' }}>
                       <div style={{ color: spb.ink, fontSize: 14.5, fontWeight: 800 }}>{item.title || item}</div>
                       {item.text ? <div style={{ marginTop: 7, color: spb.sub, fontSize: 13.5, lineHeight: 1.6 }}>{item.text}</div> : null}
                     </div>
@@ -1278,7 +1390,7 @@ function SpbDiscover() {
               {(selectedItem.photos || []).slice(1, 5).length ? (
                 <div style={{ marginTop: 24, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
                   {(selectedItem.photos || []).slice(1, 5).map((photo, index) => (
-                    <div key={photo} style={{ aspectRatio: index === 0 ? '1.25 / 1' : '1 / 1', gridColumn: index === 0 ? 'span 2' : 'span 1', borderRadius: 16, overflow: 'hidden', background: 'linear-gradient(135deg, oklch(0.34 0.05 245), oklch(0.22 0.04 292))', border: `1px solid ${spb.line}` }}>
+                    <div key={photo} style={{ aspectRatio: index === 0 ? '1.25 / 1' : '1 / 1', gridColumn: index === 0 ? 'span 2' : 'span 1', borderRadius: 8, overflow: 'hidden', background: 'linear-gradient(135deg, oklch(0.34 0.05 245), oklch(0.22 0.04 292))', border: `1px solid ${spb.line}` }}>
                       <img src={photoSrc(photo)} alt={selectedItem.name} loading="lazy" onError={hideBrokenImage} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                     </div>
                   ))}
@@ -1288,25 +1400,26 @@ function SpbDiscover() {
           </article>
         </div>
       ) : null}
+      </div>
     </section>
   );
 }
 
 const CHAT_TOPIC_PROMPTS = [
-  '☕ 今天的第一杯咖啡/奶茶是什么？',
-  '📷 晒一张刚拍的照片吧',
-  '🍜 今天吃了什么好吃的？',
-  '💭 用一句话记录现在的心情',
-  '🎬 最近在追什么剧或电影？',
-  '🌤 你那边今天天气怎么样？',
+  '今天路上有什么小发现？',
+  '最近拍到哪张照片想留下？',
+  '今天吃到什么值得记一笔？',
+  '用一句话记录现在的心情。',
+  '最近在看什么内容？',
+  '你那边今天是什么天气？',
 ];
 
 const CHAT_STARTER_CHIPS = [
-  ['☕ 日常打卡', '今日份日常打卡：'],
-  ['📷 晒一张图', '晒一张今天拍的图：'],
-  ['🍜 干饭报告', '今天的干饭报告：'],
-  ['💭 碎碎念', '此刻的碎碎念：'],
-  ['🎬 追剧安利', '最近在看的剧/电影，安利一下：'],
+  ['日常打卡', '今日份日常打卡：'],
+  ['晒一张图', '晒一张今天拍的图：'],
+  ['吃饭记录', '今天的吃饭记录：'],
+  ['碎碎念', '此刻的碎碎念：'],
+  ['内容安利', '最近在看的内容，安利一下：'],
 ];
 
 function SpbChat({ user, onLogin }) {
@@ -1326,17 +1439,18 @@ function SpbChat({ user, onLogin }) {
   const fileInputRef = React.useRef(null);
   const composerRef = React.useRef(null);
   const composerCardRef = React.useRef(null);
+  const postDialogRef = React.useRef(null);
 
   const loadPosts = React.useCallback(() => {
     setLoading(true);
     fetch(`${ADMIN_SERVER_BASE}/api/chatter/posts?_=${Date.now()}`, { cache: 'no-store' })
-      .then(res => res.json().then(data => ({ ok: res.ok, data })))
+      .then(res => res.json().catch(() => ({})).then(data => ({ ok: res.ok, data })))
       .then(({ ok, data }) => {
-        if (!ok) throw new Error(data?.error || '瞎聊聊加载失败');
+        if (!ok) throw new Error(data?.error || '瞎聊聊暂时无法读取');
         setPosts(Array.isArray(data.posts) ? data.posts : []);
         setError('');
       })
-      .catch(err => setError(err.message || '瞎聊聊加载失败'))
+      .catch(err => setError(err.message || '瞎聊聊暂时无法读取'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -1379,9 +1493,11 @@ function SpbChat({ user, onLogin }) {
     setDetailLoading(false);
     setReplySubmitting(false);
   };
+  useDialogFocusTrap(postDialogRef, Boolean(selectedPost), closePost);
   const openPost = async (post) => {
     setSelectedPost(post);
     setReplyText('');
+    setError('');
     setDetailLoading(true);
     try {
       const res = await fetch(`${ADMIN_SERVER_BASE}/api/chatter/posts/${encodeURIComponent(post.id)}?_=${Date.now()}`, { cache: 'no-store' });
@@ -1501,18 +1617,17 @@ function SpbChat({ user, onLogin }) {
     }
   };
 
-  const cardStyle = {
+  const surfaceStyle = {
     border: `1px solid ${spb.line}`,
-    borderRadius: 16,
-    background: 'linear-gradient(180deg, rgba(255,255,255,0.060), rgba(255,255,255,0.022)), oklch(0.192 0.014 265 / 0.94)',
-    boxShadow: '0 18px 44px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.06)',
-    overflow: 'hidden',
+    borderRadius: 10,
+    background: 'oklch(0.185 0.014 265 / 0.94)',
+    boxShadow: '0 20px 54px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.055)',
   };
   const smallButton = {
     border: `1px solid ${spb.line}`,
-    background: 'oklch(0.225 0.014 265 / 0.76)',
+    background: 'oklch(0.215 0.014 265 / 0.78)',
     color: spb.ink,
-    borderRadius: 10,
+    borderRadius: 8,
     padding: '10px 14px',
     fontFamily: 'inherit',
     fontSize: 13.5,
@@ -1521,8 +1636,8 @@ function SpbChat({ user, onLogin }) {
   };
   const primary = {
     ...smallButton,
-    borderColor: 'oklch(0.72 0.15 242 / 0.36)',
-    background: `linear-gradient(135deg, ${spb.blue}, ${spb.violet})`,
+    borderColor: 'oklch(0.72 0.15 242 / 0.40)',
+    background: spb.blue,
     color: spb.bg,
   };
   const avatarStyle = (name = 'Q') => ({
@@ -1535,8 +1650,8 @@ function SpbChat({ user, onLogin }) {
     color: spb.ink,
     fontSize: 14,
     fontWeight: 800,
-    background: 'linear-gradient(135deg, oklch(0.72 0.15 242 / 0.82), oklch(0.77 0.13 318 / 0.82))',
-    boxShadow: '0 8px 22px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.24)',
+    background: 'oklch(0.255 0.025 248)',
+    border: '1px solid oklch(0.72 0.15 242 / 0.28)',
   });
   const firstChar = name => String(name || 'Q').trim().slice(0, 1).toUpperCase() || 'Q';
   const postCountText = post => {
@@ -1546,7 +1661,8 @@ function SpbChat({ user, onLogin }) {
   const chatStats = React.useMemo(() => {
     const imageCount = posts.filter(post => post.imageUrl).length;
     const replyCount = posts.reduce((sum, post) => sum + Number(post.commentCount || (post.comments || []).length || 0), 0);
-    return { posts: posts.length, images: imageCount, replies: replyCount };
+    const repliedPosts = posts.filter(post => Number(post.commentCount || (post.comments || []).length || 0) > 0).length;
+    return { posts: posts.length, images: imageCount, replies: replyCount, repliedPosts };
   }, [posts]);
   const visiblePosts = React.useMemo(() => posts.filter(post => {
     if (filter === 'image') return !!post.imageUrl;
@@ -1557,201 +1673,196 @@ function SpbChat({ user, onLogin }) {
   const filterTabs = [
     ['all', '全部', chatStats.posts],
     ['image', '带图', chatStats.images],
-    ['reply', '有回复', chatStats.replies],
+    ['reply', '有回复', chatStats.repliedPosts],
     ['text', '文字', Math.max(chatStats.posts - chatStats.images, 0)],
   ];
   const statChip = (label, value) => (
-    <div style={{ border: `1px solid ${spb.line}`, borderRadius: 12, padding: '12px 14px', background: 'oklch(0.18 0.014 265 / 0.62)', minWidth: 116 }}>
-      <div style={{ color: spb.ink, fontSize: 24, fontWeight: 780, lineHeight: 1 }}>{value}</div>
-      <div style={{ marginTop: 7, color: spb.faint, fontSize: 12.5, fontWeight: 650 }}>{label}</div>
+    <div style={{ borderTop: `1px solid ${spb.line}`, padding: '12px 0', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 14 }}>
+      <div style={{ color: spb.sub, fontSize: 13.5, fontWeight: 650 }}>{label}</div>
+      <div style={{ color: spb.ink, fontSize: 17, fontWeight: 780, lineHeight: 1 }}>{value}</div>
+    </div>
+  );
+  const composerPanel = (
+    <div ref={composerCardRef} className="qi-chat-composer" style={{ ...surfaceStyle, padding: 22 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={avatarStyle(user?.name || 'Q')}>{firstChar(user?.name || 'Q')}</div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ color: spb.ink, fontSize: 19, fontWeight: 780 }}>发一条帖子</div>
+          <div style={{ marginTop: 4, color: spb.faint, fontSize: 13 }}>{user ? `当前账号：${user.name}` : '登录后可以发布文字和图片。'}</div>
+        </div>
+      </div>
+      <textarea
+        ref={composerRef}
+        aria-label="帖子内容"
+        className="qi-chat-input"
+        value={text}
+        onChange={event => setText(event.target.value.slice(0, 1200))}
+        placeholder={user ? `说点什么... 比如：${CHAT_TOPIC_PROMPTS[topicIndex]}` : '登录后可以发布文字和图片'}
+        style={{ marginTop: 16, width: '100%', minHeight: 118, resize: 'vertical', borderRadius: 8, border: `1px solid ${spb.line}`, background: 'oklch(0.125 0.011 265 / 0.72)', color: spb.ink, padding: 14, font: 'inherit', lineHeight: 1.65, outline: 'none' }}
+      />
+      <div style={{ marginTop: 12, display: 'flex', gap: 7, flexWrap: 'nowrap', alignItems: 'center', overflowX: 'auto', scrollbarWidth: 'none' }}>
+        <span style={{ color: spb.faint, fontSize: 12.5, flex: '0 0 auto' }}>提示：</span>
+        {CHAT_STARTER_CHIPS.slice(0, 4).map(([label, starter]) => (
+          <button key={label} type="button" className="qi-chat-chip qi-chat-action" onClick={() => applyStarter(starter)} style={{ ...smallButton, padding: '6px 8px', fontSize: 12, flex: '0 0 auto' }}>{label}</button>
+        ))}
+      </div>
+      {imageData ? (
+        <div style={{ marginTop: 12, position: 'relative', borderRadius: 8, overflow: 'hidden', border: `1px solid ${spb.line}`, background: spb.panel }}>
+          <img src={imageData} alt={imageName || '预览图'} style={{ width: '100%', maxHeight: 260, objectFit: 'contain', display: 'block', background: 'oklch(0.12 0.01 265)' }} />
+          <button type="button" onClick={clearImage} className="qi-chat-action" style={{ ...smallButton, position: 'absolute', top: 10, right: 10, background: 'oklch(0.12 0.01 265 / 0.78)' }}>移除</button>
+        </div>
+      ) : null}
+      <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={pickImage} style={{ display: 'none' }} />
+      <div style={{ marginTop: 14, display: 'flex', gap: 10, justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+        <button type="button" onClick={() => fileInputRef.current?.click()} className="qi-chat-action" style={smallButton}>选择图片</button>
+        <button type="button" onClick={submitPost} disabled={submitting} className="qi-chat-action" style={{ ...primary, opacity: submitting ? 0.62 : 1 }}>{user ? (submitting ? '发布中...' : '发一条帖子') : '登录后发布'}</button>
+      </div>
     </div>
   );
 
   return (
-    <section style={{ padding: 'clamp(42px, 6vw, 72px) clamp(18px, 4vw, 48px) 86px', borderTop: `1px solid ${spb.line}`, background: 'radial-gradient(circle at 18% 0%, oklch(0.36 0.07 245 / 0.20), transparent 34%), radial-gradient(circle at 88% 12%, oklch(0.42 0.08 315 / 0.14), transparent 30%), linear-gradient(180deg, oklch(0.17 0.013 265), oklch(0.145 0.012 265))' }}>
+    <section style={{ padding: '34px clamp(18px, 4vw, 56px) 86px', borderTop: `1px solid ${spb.line}`, background: 'linear-gradient(180deg, oklch(0.155 0.013 265), oklch(0.135 0.012 265))' }}>
       <style>{`
-        @keyframes qiChatBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
-        @keyframes qiChatFloat { 0%, 100% { transform: translateY(0) rotate(-0.6deg); } 50% { transform: translateY(-5px) rotate(0.8deg); } }
-        @keyframes qiChatTwinkle { 0%, 100% { opacity: 0.3; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.15); } }
-        @keyframes qiChatPop { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: none; } }
-        .qi-chat-card { transition: transform 0.18s ease, box-shadow 0.18s ease; }
-        .qi-chat-card:hover { transform: translateY(-3px); box-shadow: 0 26px 56px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.06); }
-        .qi-chat-chip { transition: transform 0.15s ease, border-color 0.15s ease; }
-        .qi-chat-chip:hover { transform: translateY(-2px); border-color: oklch(0.72 0.15 242 / 0.45); }
+        .qi-chat-shell { max-width: 1320px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 28px; align-items: start; }
+        .qi-chat-main-column { min-width: 0; display: grid; gap: 24px; }
+        .qi-chat-intro { grid-column: 1; grid-row: 1; }
+        .qi-chat-title { margin: 12px 0 0; font-family: ${spb.disp}; font-size: 64px; line-height: 1.02; color: ${spb.ink}; font-weight: 680; letter-spacing: 0; }
+        .qi-chat-feed { grid-column: 1; grid-row: 2; min-width: 0; }
+        .qi-chat-post-row { display: grid; grid-template-columns: 42px minmax(0, 1fr) 128px 58px; gap: 16px; align-items: center; width: 100%; padding: 18px; border: 0; border-top: 1px solid ${spb.line}; background: transparent; color: inherit; text-align: left; cursor: pointer; font-family: inherit; }
+        .qi-chat-post-row:first-of-type { border-top: 0; }
+        .qi-chat-post-row:hover { background: oklch(0.215 0.014 265 / 0.72); }
+        .qi-chat-image-thumb { width: 128px; height: 92px; object-fit: cover; border-radius: 8px; border: 1px solid ${spb.line}; background: oklch(0.13 0.01 265); }
+        .qi-chat-chip:hover, .qi-chat-post-row:focus-visible, .qi-chat-action:focus-visible, .qi-chat-input:focus-visible { outline: 2px solid ${spb.blue}; outline-offset: 2px; }
+        .qi-chat-aside { position: sticky; top: 18px; display: grid; gap: 16px; }
+        @media (max-width: 1020px) {
+          .qi-chat-shell { grid-template-columns: 1fr; grid-template-rows: auto; }
+          .qi-chat-main-column, .qi-chat-aside { display: contents; }
+          .qi-chat-intro { grid-column: 1; grid-row: 1; }
+          .qi-chat-composer { grid-column: 1; grid-row: 2; }
+          .qi-chat-feed { grid-column: 1; grid-row: 3; }
+          .qi-chat-stats { grid-column: 1; grid-row: 4; }
+          .qi-chat-tips { grid-column: 1; grid-row: 5; }
+        }
+        @media (max-width: 680px) {
+          .qi-chat-title { font-size: 44px; }
+          .qi-chat-post-row { grid-template-columns: 38px minmax(0, 1fr); gap: 12px; }
+          .qi-chat-image-thumb, .qi-chat-comment-count { display: none; }
+        }
         @media (prefers-reduced-motion: reduce) {
-          .qi-chat-card, .qi-chat-chip { transition: none; }
-          .qi-chat-anim { animation: none !important; }
+          .qi-chat-post-row { transition: none; }
         }
       `}</style>
-      <div style={{ maxWidth: 1160, margin: '0 auto' }}>
-        <div style={{ ...cardStyle, padding: 'clamp(18px, 3vw, 30px)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 'clamp(18px, 4vw, 34px)', alignItems: 'stretch' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 28 }}>
-            <div>
-              <div style={{ fontFamily: spb.mono, fontSize: 12.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: spb.blueSoft }}>Community Board</div>
-              <h1 style={{ margin: '13px 0 0', fontFamily: spb.disp, fontSize: 'clamp(38px, 6vw, 62px)', lineHeight: 1.02, color: spb.ink, fontWeight: 650 }}>瞎聊聊</h1>
-              <p style={{ margin: '16px 0 0', maxWidth: 660, color: spb.sub, fontSize: 16.5, lineHeight: 1.75 }}>
-                这里是 DreamerQi 的露天茶话会：晒图、唠嗑、碎碎念，想到什么发什么。每条帖子都能盖楼回复，来晚了就只能蹲别人的沙发啦～
-              </p>
-            </div>
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              {statChip('📝 帖子', chatStats.posts)}
-              {statChip('🖼️ 图片', chatStats.images)}
-              {statChip('💬 回复', chatStats.replies)}
-            </div>
+      <div className="qi-chat-shell">
+        <div className="qi-chat-main-column">
+          <div className="qi-chat-intro">
+            <div style={{ fontFamily: spb.mono, fontSize: 12.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: spb.blueSoft }}>Community Board</div>
+            <h1 className="qi-chat-title">瞎聊聊</h1>
+            <p style={{ margin: '18px 0 0', maxWidth: 720, color: spb.sub, fontSize: 16.5, lineHeight: 1.72 }}>
+              这里是 DreamerQi 的露天茶话会：晒图、唠嗑、碎碎念，想到什么发什么。未登录也能围观，发布和回复需要登录。
+            </p>
           </div>
-          <div style={{ position: 'relative', border: `1px solid ${spb.line}`, borderRadius: 14, overflow: 'hidden', minHeight: 220, background: 'linear-gradient(135deg, #e8f1ff 0%, #fdeef6 55%, #e9f9f0 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'clamp(14px, 3vw, 26px)', padding: '24px clamp(16px, 3vw, 26px)', flexWrap: 'wrap' }}>
-            {[
-              ['✦', '#f5a623', '7%', '10%', '3.2s', '0s'],
-              ['✧', '#5b8def', '80%', '9%', '2.7s', '0.6s'],
-              ['✦', '#57c48f', '11%', '78%', '3.6s', '1.1s'],
-              ['✧', '#e86a92', '87%', '72%', '2.9s', '0.3s'],
-            ].map(([glyph, color, left, top, duration, delay], idx) => (
-              <span key={idx} aria-hidden="true" className="qi-chat-anim" style={{ position: 'absolute', left, top, color, fontSize: 20, animation: `qiChatTwinkle ${duration} ease-in-out ${delay} infinite` }}>{glyph}</span>
-            ))}
-            <svg viewBox="0 0 160 150" width="132" height="124" aria-hidden="true" className="qi-chat-anim" style={{ flex: '0 0 auto', animation: 'qiChatBob 4s ease-in-out infinite' }}>
-              <circle cx="42" cy="34" r="20" fill="#fdf3e7" stroke="#454b6e" strokeWidth="5" />
-              <circle cx="118" cy="34" r="20" fill="#fdf3e7" stroke="#454b6e" strokeWidth="5" />
-              <circle cx="42" cy="34" r="9" fill="#f7b8c8" />
-              <circle cx="118" cy="34" r="9" fill="#f7b8c8" />
-              <rect x="18" y="30" width="124" height="96" rx="34" fill="#fdf6ec" stroke="#454b6e" strokeWidth="5" />
-              <circle cx="60" cy="74" r="7" fill="#2f3555" />
-              <circle cx="100" cy="74" r="7" fill="#2f3555" />
-              <circle cx="62.5" cy="71.5" r="2.4" fill="#fff" />
-              <circle cx="102.5" cy="71.5" r="2.4" fill="#fff" />
-              <ellipse cx="46" cy="92" rx="10" ry="6.5" fill="#f7b8c8" opacity="0.9" />
-              <ellipse cx="114" cy="92" rx="10" ry="6.5" fill="#f7b8c8" opacity="0.9" />
-              <path d="M70 92 Q80 102 90 92" fill="none" stroke="#2f3555" strokeWidth="4.5" strokeLinecap="round" />
-              <rect x="34" y="118" width="26" height="22" rx="11" fill="#fdf6ec" stroke="#454b6e" strokeWidth="5" />
-              <rect x="100" y="118" width="26" height="22" rx="11" fill="#fdf6ec" stroke="#454b6e" strokeWidth="5" />
-            </svg>
-            <div style={{ display: 'grid', gap: 10, justifyItems: 'start', minWidth: 0, flex: '1 1 220px', maxWidth: 320 }}>
-              <div className="qi-chat-anim" style={{ background: '#dbe8ff', border: '1.5px solid #9db9ee', borderRadius: '16px 16px 16px 4px', padding: '10px 16px', color: '#33406b', fontSize: 16.5, fontWeight: 760, animation: 'qiChatFloat 5s ease-in-out infinite' }}>今天聊点什么？</div>
-              <div key={topicIndex} className="qi-chat-anim" style={{ background: '#fbdde8', border: '1.5px solid #eaa6bf', borderRadius: '16px 16px 4px 16px', padding: '9px 15px', color: '#7c3f58', fontSize: 14, fontWeight: 680, animation: 'qiChatPop 0.45s ease both' }}>{CHAT_TOPIC_PROMPTS[topicIndex]}</div>
-              <div style={{ background: '#dcf3e5', border: '1.5px solid #93cfae', borderRadius: 999, padding: '7px 14px', color: '#2f6b4c', fontSize: 12.5, fontWeight: 750 }}>DreamerQi Chatter · 每天都有新鲜事</div>
-            </div>
-          </div>
-        </div>
 
-        <div ref={composerCardRef} style={{ margin: '22px auto 0', maxWidth: 880, ...cardStyle, padding: '18px clamp(16px, 3vw, 22px)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={avatarStyle(user?.name || 'Q')}>{firstChar(user?.name || 'Q')}</div>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ color: spb.ink, fontSize: 18, fontWeight: 780 }}>发一条帖子</div>
-              <div style={{ marginTop: 3, color: spb.faint, fontSize: 12.5 }}>{user ? `当前账号：${user.name}，想到什么就聊点什么～` : '未登录也可以围观，发布和回复需要登录。'}</div>
-            </div>
-          </div>
-          <div style={{ marginTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ color: spb.faint, fontSize: 12.5 }}>没灵感？试试：</span>
-            {CHAT_STARTER_CHIPS.map(([label, starter]) => (
-              <button key={label} type="button" className="qi-chat-chip" onClick={() => applyStarter(starter)} style={{ ...smallButton, borderRadius: 999, padding: '7px 13px', fontSize: 12.5 }}>{label}</button>
-            ))}
-          </div>
-          <textarea
-            ref={composerRef}
-            value={text}
-            onChange={event => setText(event.target.value.slice(0, 1200))}
-            placeholder={user ? `今天想发点什么？比如：${CHAT_TOPIC_PROMPTS[topicIndex]}` : '登录后可以发布文字和图片'}
-            style={{ marginTop: 14, width: '100%', minHeight: 112, resize: 'vertical', borderRadius: 14, border: `1px solid ${spb.line}`, background: 'oklch(0.145 0.012 265 / 0.72)', color: spb.ink, padding: 14, font: 'inherit', lineHeight: 1.65, outline: 'none' }}
-          />
-          {imageData ? (
-            <div style={{ marginTop: 12, position: 'relative', borderRadius: 14, overflow: 'hidden', border: `1px solid ${spb.line}`, background: spb.panel }}>
-              <img src={imageData} alt={imageName || '预览图'} style={{ width: '100%', maxHeight: 340, objectFit: 'contain', display: 'block', background: 'oklch(0.12 0.01 265)' }} />
-              <button type="button" onClick={clearImage} style={{ ...smallButton, position: 'absolute', top: 10, right: 10, background: 'oklch(0.12 0.01 265 / 0.72)' }}>移除</button>
+          <div className="qi-chat-feed">
+          {error ? (
+            <div role="alert" style={{ marginBottom: 14, border: '1px solid oklch(0.68 0.15 32 / 0.38)', borderRadius: 8, padding: '12px 14px', color: 'oklch(0.82 0.11 32)', background: 'oklch(0.26 0.04 32 / 0.22)', fontSize: 14 }}>
+              {error}
             </div>
           ) : null}
-          <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={pickImage} style={{ display: 'none' }} />
-          <div style={{ marginTop: 13, display: 'flex', gap: 10, justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-              <button type="button" onClick={() => fileInputRef.current?.click()} style={smallButton}>选择图片</button>
-              <span style={{ color: error ? 'oklch(0.72 0.2 28)' : spb.faint, fontSize: 12.5 }}>{error || '支持 JPG、PNG、WebP、GIF，图片不超过 5MB。'}</span>
-            </div>
-            <button type="button" onClick={submitPost} disabled={submitting} style={{ ...primary, opacity: submitting ? 0.62 : 1 }}>{user ? (submitting ? '发布中...' : '发布帖子') : '登录后发布'}</button>
-          </div>
-        </div>
 
-        <div style={{ marginTop: 30, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ fontFamily: spb.mono, fontSize: 12, color: spb.blueSoft, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Recent posts</div>
-            <h2 style={{ margin: '8px 0 0', fontFamily: spb.disp, color: spb.ink, fontSize: 31, lineHeight: 1.12 }}>帖子广场</h2>
-          </div>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-            {filterTabs.map(([key, label, count]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setFilter(key)}
-                style={{
-                  ...smallButton,
-                  color: filter === key ? spb.bg : spb.sub,
-                  borderColor: filter === key ? 'oklch(0.72 0.15 242 / 0.42)' : spb.line,
-                  background: filter === key ? spb.blue : 'oklch(0.205 0.014 265 / 0.70)',
-                }}
-              >
-                {label}{count ? ` ${count}` : ''}
-              </button>
-            ))}
-            <button type="button" onClick={loadPosts} style={smallButton}>刷新</button>
-          </div>
-        </div>
-
-        {loading ? <div style={{ marginTop: 28, color: spb.sub, fontSize: 15.5 }}>正在读取帖子...</div> : null}
-        {!loading && !posts.length ? (
-          <div style={{ marginTop: 22, ...cardStyle, padding: '30px 24px', textAlign: 'center' }}>
-            <div style={{ fontSize: 40, lineHeight: 1 }}>🛋️</div>
-            <div style={{ marginTop: 12, color: spb.ink, fontSize: 17, fontWeight: 760 }}>沙发还空着！</div>
-            <div style={{ marginTop: 8, color: spb.sub, fontSize: 14.5, lineHeight: 1.7 }}>第一条帖子的位置虚位以待，发张图或写句话，让广场热闹起来～</div>
-            <button type="button" onClick={goCompose} style={{ ...primary, marginTop: 16 }}>{user ? '抢下第一帖' : '登录后抢第一帖'}</button>
-          </div>
-        ) : null}
-        {!loading && posts.length > 0 && !visiblePosts.length ? (
-          <div style={{ marginTop: 22, ...cardStyle, padding: 24, color: spb.sub, lineHeight: 1.7 }}>这个分类还没有帖子，换个标签逛逛，或者自己来补一条～</div>
-        ) : null}
-        <div style={{ margin: '18px auto 0', display: 'grid', gap: 16, maxWidth: 880 }}>
-          {visiblePosts.map(post => (
-          <button
-            key={post.id}
-            type="button"
-            className="qi-chat-card"
-            onClick={() => openPost(post)}
-            style={{ ...cardStyle, width: '100%', padding: 0, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit', color: 'inherit', animation: 'qiChatPop 0.4s ease both' }}
-          >
-            <div style={{ padding: '15px 18px 13px', display: 'flex', alignItems: 'center', gap: 11, borderBottom: post.imageUrl ? `1px solid ${spb.line}` : 'none' }}>
-              <div style={avatarStyle(post.author || 'Q')}>{firstChar(post.author || 'Q')}</div>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ color: spb.ink, fontSize: 14.5, fontWeight: 780, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{post.author || '用户'}{post.authorRole === 'admin' ? ' · 管理员' : ''}</div>
-                <div style={{ marginTop: 3, color: spb.faint, fontSize: 12.2 }}>{formatTime(post.createdAt) || '刚刚'}</div>
+          <main style={{ ...surfaceStyle, overflow: 'hidden' }}>
+            <div style={{ padding: '13px 14px', display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+              <h2 style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: 0 }}>帖子广场</h2>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {filterTabs.map(([key, label, count]) => (
+                  <button
+                    key={key}
+                    type="button"
+                  className="qi-chat-chip qi-chat-action"
+                  aria-pressed={filter === key}
+                  onClick={() => setFilter(key)}
+                    style={{
+                      ...smallButton,
+                      padding: '8px 12px',
+                      color: filter === key ? spb.bg : spb.sub,
+                      borderColor: filter === key ? 'oklch(0.72 0.15 242 / 0.44)' : spb.line,
+                      background: filter === key ? spb.blue : 'oklch(0.18 0.014 265 / 0.72)',
+                    }}
+                  >
+                    {label}{count ? ` ${count}` : ''}
+                  </button>
+                ))}
               </div>
-              <span style={{ color: spb.blueSoft, fontSize: 12.5, fontWeight: 760 }}>帖子</span>
+              <button type="button" onClick={loadPosts} className="qi-chat-action" style={smallButton}>刷新</button>
             </div>
-            {post.imageUrl ? (
-              <div style={{ margin: '0 18px 16px', border: `1px solid ${spb.line}`, borderRadius: 14, overflow: 'hidden', background: 'oklch(0.12 0.01 265)' }}>
-                <img src={chatterImageSrc(post.imageUrl)} alt="" loading="lazy" decoding="async" style={{ width: '100%', height: 'auto', maxHeight: 520, objectFit: 'contain', display: 'block' }} />
+
+            {loading ? <div style={{ borderTop: `1px solid ${spb.line}`, padding: 20, color: spb.sub, fontSize: 15 }}>正在读取帖子...</div> : null}
+            {!loading && !posts.length ? (
+              <div style={{ borderTop: `1px solid ${spb.line}`, padding: 28 }}>
+                <div style={{ color: spb.ink, fontSize: 18, fontWeight: 760 }}>现在还没有帖子。</div>
+                <div style={{ marginTop: 8, color: spb.sub, fontSize: 14.5, lineHeight: 1.7 }}>第一条内容可以是一句话，也可以是一张图。登录后就能发布。</div>
+                <button type="button" onClick={goCompose} className="qi-chat-action" style={{ ...primary, marginTop: 16 }}>{user ? '发第一条帖子' : '登录后发帖'}</button>
               </div>
             ) : null}
-            <div style={{ padding: post.imageUrl ? '0 18px 17px' : '17px 18px' }}>
-              <div style={{ color: spb.ink, fontSize: 15.5, lineHeight: 1.72, whiteSpace: 'pre-wrap' }}>{post.text || '分享了一张图片'}</div>
-              {(post.commentCount || (post.comments || []).length) ? (
-                <div style={{ marginTop: 14, borderTop: `1px solid ${spb.line}`, paddingTop: 12, display: 'grid', gap: 8 }}>
-                  {(post.comments || []).slice(-2).map(comment => (
-                    <div key={comment.id} style={{ color: spb.sub, fontSize: 13.5, lineHeight: 1.58, background: 'oklch(0.155 0.012 265 / 0.54)', borderRadius: 10, padding: '8px 10px' }}>
-                      <span style={{ color: spb.blueSoft, fontWeight: 750 }}>{comment.author || '用户'}：</span>{comment.text}
+            {!loading && posts.length > 0 && !visiblePosts.length ? (
+              <div style={{ borderTop: `1px solid ${spb.line}`, padding: 24, color: spb.sub, lineHeight: 1.7 }}>这个分类暂时没有帖子，换个标签看看，或者自己补一条。</div>
+            ) : null}
+            {visiblePosts.map(post => {
+              const commentCount = Number(post.commentCount || (post.comments || []).length || 0);
+              return (
+                <button key={post.id} type="button" className="qi-chat-post-row" onClick={() => openPost(post)}>
+                  <div style={avatarStyle(post.author || 'Q')}>{firstChar(post.author || 'Q')}</div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ color: spb.ink, fontSize: 14.5, fontWeight: 780 }}>{post.author || '用户'}{post.authorRole === 'admin' ? ' · 管理员' : ''}</span>
+                      <span style={{ color: spb.faint, fontSize: 12.5 }}>{formatTime(post.createdAt) || '刚刚'}</span>
                     </div>
-                  ))}
-                </div>
-              ) : null}
-              <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', gap: 10, color: spb.faint, fontSize: 12.5, alignItems: 'center' }}>
-                <span>{postCountText(post)}</span>
-                <span style={{ color: spb.blueSoft, fontWeight: 760 }}>查看</span>
+                    <div style={{ marginTop: 7, color: spb.ink, fontSize: 18, lineHeight: 1.45, fontWeight: 700, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', whiteSpace: 'pre-wrap' }}>{post.text || '分享了一张图片'}</div>
+                    {(post.comments || []).slice(-1).map(comment => (
+                      <div key={comment.id} style={{ marginTop: 9, color: spb.sub, fontSize: 13.5, lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <span style={{ color: spb.blueSoft, fontWeight: 750 }}>{comment.author || '用户'}：</span>{comment.text}
+                      </div>
+                    ))}
+                  </div>
+                  {post.imageUrl ? <img className="qi-chat-image-thumb" src={chatterImageSrc(post.imageUrl)} alt="" loading="lazy" decoding="async" /> : <div className="qi-chat-image-thumb" style={{ display: 'grid', placeItems: 'center', color: spb.faint, fontFamily: spb.mono, fontSize: 11 }}>TEXT</div>}
+                  <div className="qi-chat-comment-count" style={{ color: spb.faint, fontSize: 13, textAlign: 'right' }}>{commentCount ? `${commentCount} 条` : '打开'}</div>
+                </button>
+              );
+            })}
+          </main>
+          </div>
+        </div>
+
+          <aside className="qi-chat-aside">
+            {composerPanel}
+            <div className="qi-chat-stats" style={{ ...surfaceStyle, padding: 20 }}>
+              <div style={{ color: spb.ink, fontSize: 18, fontWeight: 780 }}>社区动态</div>
+              <div style={{ marginTop: 10 }}>
+                {statChip('帖子', chatStats.posts)}
+                {statChip('图片', chatStats.images)}
+                {statChip('回复', chatStats.replies)}
               </div>
             </div>
-          </button>
-        ))}
-      </div>
+            <div className="qi-chat-tips" style={{ ...surfaceStyle, padding: 20 }}>
+              <div style={{ color: spb.ink, fontSize: 18, fontWeight: 780 }}>发帖小贴士</div>
+              <div style={{ marginTop: 14, display: 'grid', gap: 14 }}>
+                {[
+                  ['想到什么发什么', '记录生活、分享观点、求助答疑，真诚表达最重要。'],
+                  ['图文会更受欢迎', '带图的帖子更容易获得关注和回复。'],
+                  ['尊重与友善', '一起维护社区氛围，让每个人都能自在交流。'],
+                ].map(([title, body]) => (
+                  <div key={title} style={{ borderTop: `1px solid ${spb.line}`, paddingTop: 12 }}>
+                    <div style={{ color: spb.ink, fontSize: 14.5, fontWeight: 760 }}>{title}</div>
+                    <div style={{ marginTop: 5, color: spb.sub, fontSize: 13.5, lineHeight: 1.55 }}>{body}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </aside>
       </div>
 
       {selectedPost ? (
         <div onClick={closePost} style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(5,7,12,0.74)', backdropFilter: 'blur(18px)', display: 'grid', placeItems: 'center', padding: 'clamp(18px, 4vw, 42px)' }}>
-          <article onClick={event => event.stopPropagation()} style={{ width: 'min(860px, 100%)', maxHeight: '88vh', overflow: 'auto', ...cardStyle }}>
+          <article ref={postDialogRef} role="dialog" aria-modal="true" aria-label="帖子详情" tabIndex={-1} onClick={event => event.stopPropagation()} style={{ width: 'min(860px, 100%)', maxHeight: '88vh', overflow: 'auto', ...surfaceStyle }}>
             {selectedPost.imageUrl ? (
               <div style={{ background: 'oklch(0.11 0.01 265)', borderBottom: `1px solid ${spb.line}` }}>
                 <img src={chatterImageSrc(selectedPost.imageUrl)} alt="" style={{ width: '100%', maxHeight: '72vh', objectFit: 'contain', display: 'block' }} />
@@ -1766,18 +1877,19 @@ function SpbChat({ user, onLogin }) {
                     <div style={{ marginTop: 3, color: spb.faint, fontSize: 12.5 }}>{formatTime(selectedPost.createdAt)}</div>
                   </div>
                 </div>
-                <button type="button" onClick={closePost} style={smallButton}>关闭</button>
+                <button type="button" onClick={closePost} className="qi-chat-action" style={smallButton}>关闭</button>
               </div>
               <div style={{ marginTop: 18, color: spb.ink, fontSize: 18, lineHeight: 1.88, whiteSpace: 'pre-wrap' }}>{selectedPost.text || '分享了一张图片'}</div>
+              {error ? <div role="alert" style={{ marginTop: 16, border: '1px solid oklch(0.68 0.15 32 / 0.38)', borderRadius: 8, padding: '11px 13px', color: 'oklch(0.82 0.11 32)', background: 'oklch(0.26 0.04 32 / 0.22)', fontSize: 14 }}>{error}</div> : null}
               <div style={{ marginTop: 24, borderTop: `1px solid ${spb.line}`, paddingTop: 22 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'baseline' }}>
-                  <h3 style={{ margin: 0, fontFamily: spb.disp, color: spb.ink, fontSize: 24, letterSpacing: '-0.02em' }}>评论互动</h3>
+                  <h3 style={{ margin: 0, fontFamily: spb.disp, color: spb.ink, fontSize: 24, letterSpacing: 0 }}>评论互动</h3>
                   <span style={{ color: spb.faint, fontSize: 13 }}>{detailLoading ? '读取中...' : `${selectedPost.commentCount || 0} 条回复`}</span>
                 </div>
                 {(selectedPost.comments || []).length ? (
                   <div style={{ marginTop: 16, display: 'grid', gap: 12 }}>
                     {(selectedPost.comments || []).map(comment => (
-                      <div key={comment.id} style={{ border: `1px solid ${spb.line}`, borderRadius: 14, padding: '13px 14px', background: 'oklch(0.195 0.014 265 / 0.68)' }}>
+                      <div key={comment.id} style={{ border: `1px solid ${spb.line}`, borderRadius: 8, padding: '13px 14px', background: 'oklch(0.195 0.014 265 / 0.68)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, color: spb.faint, fontSize: 12.5 }}>
                           <span style={{ color: spb.blueSoft, fontWeight: 780 }}>{comment.author || '用户'}{comment.authorRole === 'admin' ? ' · 管理员' : ''}</span>
                           <span>{formatTime(comment.createdAt)}</span>
@@ -1791,14 +1903,16 @@ function SpbChat({ user, onLogin }) {
                 )}
                 <div style={{ marginTop: 16, display: 'grid', gap: 10 }}>
                   <textarea
+                    aria-label="回复内容"
+                    className="qi-chat-input"
                     value={replyText}
                     onChange={event => setReplyText(event.target.value.slice(0, 600))}
                     placeholder={user ? '写一条回复...' : '登录后可以评论互动'}
-                    style={{ width: '100%', minHeight: 92, resize: 'vertical', borderRadius: 14, border: `1px solid ${spb.line}`, background: 'oklch(0.145 0.012 265 / 0.72)', color: spb.ink, padding: 13, font: 'inherit', lineHeight: 1.65, outline: 'none' }}
+                    style={{ width: '100%', minHeight: 92, resize: 'vertical', borderRadius: 8, border: `1px solid ${spb.line}`, background: 'oklch(0.145 0.012 265 / 0.72)', color: spb.ink, padding: 13, font: 'inherit', lineHeight: 1.65, outline: 'none' }}
                   />
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                     <span style={{ color: spb.faint, fontSize: 12.5 }}>{user ? `以 ${user.name} 回复` : '未登录也可以看评论，回复需要登录。'}</span>
-                    <button type="button" onClick={submitReply} disabled={replySubmitting} style={{ ...primary, opacity: replySubmitting ? 0.62 : 1 }}>{user ? (replySubmitting ? '回复中...' : '回复') : '登录后回复'}</button>
+                    <button type="button" onClick={submitReply} disabled={replySubmitting} className="qi-chat-action" style={{ ...primary, opacity: replySubmitting ? 0.62 : 1 }}>{user ? (replySubmitting ? '回复中...' : '回复') : '登录后回复'}</button>
                   </div>
                 </div>
               </div>
@@ -1960,50 +2074,96 @@ const INFO_PAGE_DATA = {
 
 function SpbInfoPage({ pageKey }) {
   const data = INFO_PAGE_DATA[pageKey] || INFO_PAGE_DATA.about;
-  const showSummaryCard = pageKey !== 'about';
+  const isAbout = pageKey === 'about';
+  const isContact = pageKey === 'contact';
+  const isPolicy = pageKey === 'privacy' || pageKey === 'terms';
+  const visibleCards = isContact ? (data.cards || []).filter(card => !card.mail) : (data.cards || []);
+  const aboutIndex = ['01', '02', '03', '04'];
+  const aboutSummary = [
+    ['行情', '看清变化'],
+    ['娱乐', '保留热爱'],
+    ['探索', '走进生活'],
+    ['文档', '长期沉淀'],
+  ];
   return (
-    <section style={{ padding: 'clamp(64px, 8vw, 96px) clamp(20px, 4vw, 48px) 94px', borderTop: `1px solid ${spb.line}` }}>
-      <div style={{ maxWidth: 1120, margin: '0 auto' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: showSummaryCard ? 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))' : 'minmax(0, 900px)', gap: 'clamp(28px, 6vw, 72px)', alignItems: 'start' }}>
+    <section style={{ padding: '64px clamp(18px, 4vw, 56px) 94px', borderTop: `1px solid ${spb.line}`, background: 'linear-gradient(180deg, oklch(0.155 0.013 265), oklch(0.135 0.012 265))' }}>
+      <style>{`
+        .qi-info-shell { max-width: 1240px; margin: 0 auto; }
+        .qi-info-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(290px, 360px); gap: 52px; align-items: start; }
+        .qi-info-title { margin: 14px 0 0; font-family: ${spb.disp}; font-size: 64px; line-height: 1.04; color: ${spb.ink}; letter-spacing: 0; font-weight: 680; }
+        .qi-info-card-grid { margin-top: 42px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 245px), 1fr)); gap: 12px; }
+        .qi-info-story-row { display: grid; grid-template-columns: 58px minmax(190px, 0.38fr) minmax(0, 1fr); gap: 22px; padding: 24px 0; border-top: 1px solid ${spb.line}; }
+        .qi-contact-grid { margin-top: 36px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+        .qi-info-link:focus-visible { outline: 2px solid ${spb.blue}; outline-offset: 3px; }
+        @media (max-width: 820px) {
+          .qi-info-hero { grid-template-columns: 1fr; gap: 28px; }
+          .qi-info-story-row { grid-template-columns: 46px minmax(0, 1fr); }
+          .qi-info-story-copy { grid-column: 2; }
+        }
+        @media (max-width: 620px) {
+          .qi-info-title { font-size: 44px; }
+          .qi-contact-grid { grid-template-columns: 1fr; }
+          .qi-info-story-row { gap: 14px; }
+        }
+      `}</style>
+      <div className="qi-info-shell">
+        <div className="qi-info-hero">
           <div>
             <div style={{ fontFamily: spb.mono, color: spb.blueSoft, letterSpacing: '0.1em', textTransform: 'uppercase', fontSize: 12.5 }}>{data.eyebrow}</div>
-            <h1 style={{ margin: '16px 0 0', fontFamily: spb.disp, fontSize: 'clamp(40px, 6vw, 68px)', lineHeight: 1.06, color: spb.ink, letterSpacing: '-0.035em', fontWeight: 650 }}>{data.title}</h1>
-            <p style={{ marginTop: 22, color: spb.sub, fontSize: 18, lineHeight: 1.82, maxWidth: 780 }}>{data.intro}</p>
-            <p style={{ marginTop: 18, color: spb.ink, fontSize: 17, lineHeight: 1.78, maxWidth: 780 }}>{data.lead}</p>
+            <h1 className="qi-info-title">{data.title}</h1>
+            <p style={{ margin: '20px 0 0', color: spb.sub, fontSize: 17.5, lineHeight: 1.82, maxWidth: 760 }}>{data.intro}</p>
+            {!isContact ? <p style={{ margin: '16px 0 0', color: spb.ink, fontSize: 16.5, lineHeight: 1.78, maxWidth: 760 }}>{data.lead}</p> : null}
           </div>
-          {showSummaryCard ? (
-            <div style={{ border: `1px solid ${spb.line}`, borderRadius: 18, padding: 22, background: 'linear-gradient(180deg, oklch(0.225 0.018 265 / 0.9), oklch(0.18 0.014 265 / 0.9))', boxShadow: '0 18px 55px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.06)' }}>
-              <div style={{ fontFamily: spb.mono, fontSize: 12, color: spb.faint, letterSpacing: '0.08em', textTransform: 'uppercase' }}>DreamerQi</div>
-              <div style={{ marginTop: 14, color: spb.ink, fontSize: 23, lineHeight: 1.35, fontFamily: spb.disp, fontWeight: 650 }}>把复杂信息整理成可理解、可复盘、可继续改进的页面。</div>
-              <div style={{ marginTop: 20, height: 1, background: spb.line }} />
-              <div style={{ marginTop: 18, display: 'grid', gap: 11, color: spb.sub, fontSize: 14.5, lineHeight: 1.65 }}>
-                <span>实时观察</span>
-                <span>来源留痕</span>
-                <span>策略归纳</span>
-                <span>长期沉淀</span>
+
+          {isAbout ? (
+            <aside style={{ border: `1px solid ${spb.line}`, borderRadius: 10, padding: 22, background: 'oklch(0.185 0.014 265 / 0.92)', boxShadow: '0 20px 54px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.055)' }}>
+              <div style={{ fontFamily: spb.mono, fontSize: 11.5, color: spb.blueSoft, letterSpacing: '0.08em', textTransform: 'uppercase' }}>One place, four modes</div>
+              <div style={{ marginTop: 10, color: spb.ink, fontFamily: spb.disp, fontSize: 24, lineHeight: 1.35, fontWeight: 680 }}>一处入口，承接四种日常状态。</div>
+              <div style={{ marginTop: 19 }}>
+                {aboutSummary.map(([title, body], index) => (
+                  <div key={title} style={{ display: 'grid', gridTemplateColumns: '34px minmax(0, 1fr) auto', gap: 10, alignItems: 'baseline', padding: '12px 0', borderTop: `1px solid ${spb.line}` }}>
+                    <span style={{ fontFamily: spb.mono, color: spb.faint, fontSize: 11 }}>{aboutIndex[index]}</span>
+                    <span style={{ color: spb.ink, fontSize: 14.5, fontWeight: 780 }}>{title}</span>
+                    <span style={{ color: spb.sub, fontSize: 13 }}>{body}</span>
+                  </div>
+                ))}
               </div>
-            </div>
-          ) : null}
+            </aside>
+          ) : isContact ? (
+            <aside style={{ border: `1px solid ${spb.line}`, borderRadius: 10, padding: 22, background: 'oklch(0.185 0.014 265 / 0.92)', boxShadow: '0 20px 54px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.055)' }}>
+              <div style={{ fontFamily: spb.mono, fontSize: 11.5, color: spb.blueSoft, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Primary contact</div>
+              <div style={{ marginTop: 10, color: spb.ink, fontSize: 15, fontWeight: 760 }}>服务邮箱</div>
+              <a href={`mailto:${SERVICE_EMAIL}`} className="qi-info-link" style={{ display: 'block', marginTop: 8, color: spb.blueSoft, fontSize: 19, fontWeight: 780, lineHeight: 1.45, textDecoration: 'none', wordBreak: 'break-all' }}>{SERVICE_EMAIL}</a>
+              <div style={{ marginTop: 18, borderTop: `1px solid ${spb.line}`, paddingTop: 16, color: spb.sub, fontSize: 13.5, lineHeight: 1.68 }}>请在主题里写明“账号 / 页面 / 合作”，正文附上发生时间与页面名称，能更快进入对应处理路径。</div>
+              <a href={`mailto:${SERVICE_EMAIL}`} className="qi-info-link" style={{ marginTop: 18, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '100%', minHeight: 44, borderRadius: 8, background: spb.blue, color: spb.bg, fontSize: 14, fontWeight: 820, textDecoration: 'none' }}>写邮件联系我们</a>
+            </aside>
+          ) : (
+            <aside style={{ border: `1px solid ${spb.line}`, borderRadius: 10, padding: 22, background: 'oklch(0.185 0.014 265 / 0.92)' }}>
+              <div style={{ fontFamily: spb.mono, fontSize: 11.5, color: spb.blueSoft, letterSpacing: '0.08em', textTransform: 'uppercase' }}>DreamerQi policy</div>
+              <div style={{ marginTop: 12, color: spb.ink, fontFamily: spb.disp, fontSize: 23, lineHeight: 1.38, fontWeight: 680 }}>清晰说明服务边界，也认真保护每一次使用。</div>
+              <div style={{ marginTop: 18, borderTop: `1px solid ${spb.line}`, paddingTop: 16, color: spb.sub, fontSize: 13.5, lineHeight: 1.68 }}>{data.lead}</div>
+            </aside>
+          )}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: 16, marginTop: 44 }}>
-          {(data.cards || []).map((card) => (
-            <article key={card.title} style={{ minHeight: 190, border: `1px solid ${spb.line}`, borderRadius: 18, padding: 24, background: spb.panel, boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)' }}>
-              <div style={{ fontFamily: spb.disp, fontSize: 22, color: spb.ink, fontWeight: 650, letterSpacing: '-0.01em' }}>{card.title}</div>
-              {card.mail ? (
-                <a href={`mailto:${SERVICE_EMAIL}`} style={{ display: 'inline-flex', marginTop: 16, color: spb.blueSoft, fontSize: 19, fontWeight: 750, textDecoration: 'none', wordBreak: 'break-all' }}>{card.body}</a>
-              ) : (
-                <p style={{ margin: '14px 0 0', color: spb.sub, fontSize: 15.5, lineHeight: 1.78 }}>{card.body}</p>
-              )}
-            </article>
-          ))}
-        </div>
+        {visibleCards.length ? (
+          <div className={isContact ? 'qi-contact-grid' : 'qi-info-card-grid'}>
+            {visibleCards.map((card, index) => (
+              <article key={card.title} style={{ minHeight: isAbout ? 224 : 178, border: `1px solid ${spb.line}`, borderRadius: 10, padding: 22, background: 'oklch(0.185 0.014 265 / 0.78)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.045)' }}>
+                {isAbout ? <div style={{ fontFamily: spb.mono, fontSize: 11, color: spb.blueSoft }}>{aboutIndex[index] || String(index + 1).padStart(2, '0')}</div> : null}
+                <div style={{ marginTop: isAbout ? 24 : 0, fontFamily: spb.disp, fontSize: 22, color: spb.ink, fontWeight: 680, letterSpacing: 0 }}>{card.title}</div>
+                <p style={{ margin: '13px 0 0', color: spb.sub, fontSize: 15, lineHeight: 1.75 }}>{card.body}</p>
+              </article>
+            ))}
+          </div>
+        ) : null}
 
-        <div style={{ marginTop: 46, display: 'grid', gap: 18 }}>
-          {(data.sections || []).map((section) => (
-            <section key={section.title} style={{ borderTop: `1px solid ${spb.line}`, paddingTop: 22 }}>
-              <h2 style={{ margin: 0, color: spb.ink, fontFamily: spb.disp, fontSize: 'clamp(23px, 3vw, 31px)', letterSpacing: '-0.02em' }}>{section.title}</h2>
-              <p style={{ margin: '12px 0 0', color: spb.sub, fontSize: 16.5, lineHeight: 1.85, maxWidth: 900 }}>{section.body}</p>
+        <div style={{ marginTop: isAbout ? 48 : 42 }}>
+          {(data.sections || []).map((section, index) => (
+            <section key={section.title} className="qi-info-story-row">
+              <div style={{ fontFamily: spb.mono, color: isContact && index === 1 ? 'oklch(0.82 0.11 32)' : spb.blueSoft, fontSize: 12, paddingTop: 4 }}>{String(index + 1).padStart(2, '0')}</div>
+              <h2 style={{ margin: 0, color: spb.ink, fontFamily: spb.disp, fontSize: 28, lineHeight: 1.28, letterSpacing: 0, fontWeight: 680 }}>{section.title}</h2>
+              <p className="qi-info-story-copy" style={{ margin: 0, color: spb.sub, fontSize: 16, lineHeight: 1.84, maxWidth: isPolicy ? 820 : 760 }}>{section.body}</p>
             </section>
           ))}
         </div>

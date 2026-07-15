@@ -183,17 +183,20 @@ function SpbNavResponsive({
     color: spb.sub,
     textDecoration: 'none',
     fontWeight: 500,
-    whiteSpace: 'nowrap'
+    whiteSpace: 'nowrap',
+    padding: '8px 0',
+    borderBottom: '2px solid transparent'
   };
   const navShell = {
-    minHeight: 92,
+    minHeight: 82,
     borderBottom: `1px solid ${spb.line}`,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    gap: 'clamp(16px, 3vw, 28px)',
+    gap: 'clamp(14px, 3vw, 30px)',
     flexWrap: 'wrap',
-    padding: '14px clamp(20px, 4vw, 56px)'
+    padding: '12px clamp(18px, 4vw, 56px)',
+    background: 'oklch(0.145 0.012 265 / 0.94)'
   };
   const navCenter = {
     display: 'flex',
@@ -201,7 +204,7 @@ function SpbNavResponsive({
     justifyContent: 'flex-start',
     flex: '0 1 auto',
     flexWrap: 'wrap',
-    gap: 'clamp(18px, 2.4vw, 34px)',
+    gap: 'clamp(16px, 2.2vw, 30px)',
     minWidth: 0
   };
   const rightDock = {
@@ -223,7 +226,7 @@ function SpbNavResponsive({
     fontFamily: 'inherit',
     fontWeight: 600,
     padding: '9px 15px',
-    borderRadius: 999,
+    borderRadius: 8,
     boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.06)'
   };
   const primaryButton = {
@@ -234,7 +237,7 @@ function SpbNavResponsive({
     color: spb.bg,
     background: `linear-gradient(135deg, ${spb.blue}, ${spb.blueSoft})`,
     padding: '10px 18px',
-    borderRadius: 999,
+    borderRadius: 8,
     fontFamily: 'inherit',
     boxShadow: `0 0 22px oklch(0.72 0.15 242 / 0.24)`
   };
@@ -278,16 +281,30 @@ function SpbNavResponsive({
   const pageLink = target => ({
     ...item,
     color: page === target ? spb.ink : spb.sub,
-    fontWeight: page === target ? 700 : 500
+    fontWeight: page === target ? 700 : 500,
+    borderBottomColor: page === target ? spb.blue : 'transparent'
   });
   const goPage = target => event => {
     if (!onPage) return;
     event.preventDefault();
     onPage(target);
   };
-  return React.createElement("div", {
+  return React.createElement(React.Fragment, null, React.createElement("style", null, `
+        .qi-nav-center, .qi-nav-actions { scrollbar-width: none; }
+        .qi-nav-center::-webkit-scrollbar, .qi-nav-actions::-webkit-scrollbar { display: none; }
+        @media (max-width: 680px) {
+          .qi-nav-shell { min-height: 70px !important; display: grid !important; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px !important; padding: 9px 14px !important; flex-wrap: nowrap !important; }
+          .qi-nav-logo svg { height: 44px !important; width: auto !important; }
+          .qi-nav-center { min-width: 0; overflow-x: auto; flex-wrap: nowrap !important; gap: 14px !important; }
+          .qi-nav-actions { margin-left: 0 !important; flex-wrap: nowrap !important; gap: 7px !important; }
+          .qi-nav-actions > button { padding: 8px 10px !important; font-size: 13px !important; }
+        }
+      `), React.createElement("nav", {
+    className: "qi-nav-shell",
+    "aria-label": "\u4E3B\u5BFC\u822A",
     style: navShell
   }, React.createElement("a", {
+    className: "qi-nav-logo",
     href: "#",
     onClick: goPage('home'),
     style: {
@@ -299,31 +316,38 @@ function SpbNavResponsive({
     },
     "aria-label": "Qi home"
   }, React.createElement(QiLogo, {
-    h: 82
+    h: 56
   })), React.createElement("div", {
+    className: "qi-nav-center",
     style: navCenter
   }, React.createElement("a", {
     style: item,
     href: MARKET_URL
   }, "\u884C\u60C5"), React.createElement("a", {
     style: pageLink('stanning'),
-    href: STANNING_URL
+    href: STANNING_URL,
+    "aria-current": page === 'stanning' ? 'page' : undefined
   }, "\u5A31\u4E50"), React.createElement("a", {
     style: pageLink('discover'),
-    href: EXPLORE_URL
+    href: EXPLORE_URL,
+    "aria-current": page === 'discover' ? 'page' : undefined
   }, "\u63A2\u7D22"), React.createElement("a", {
     style: pageLink('chat'),
     href: CHAT_URL,
-    onClick: goPage('chat')
+    onClick: goPage('chat'),
+    "aria-current": page === 'chat' ? 'page' : undefined
   }, "\u778E\u804A\u804A"), React.createElement("a", {
     style: pageLink('about'),
     href: "#about",
-    onClick: goPage('about')
+    onClick: goPage('about'),
+    "aria-current": page === 'about' ? 'page' : undefined
   }, "\u5173\u4E8E"), React.createElement("a", {
     style: pageLink('contact'),
     href: "#contact",
-    onClick: goPage('contact')
+    onClick: goPage('contact'),
+    "aria-current": page === 'contact' ? 'page' : undefined
   }, "\u8054\u7CFB")), React.createElement("div", {
+    className: "qi-nav-actions",
     style: rightDock
   }, user ? React.createElement("div", {
     style: accountPill
@@ -363,7 +387,7 @@ function SpbNavResponsive({
     type: "button",
     onClick: onRegister,
     style: primaryButton
-  }, "\u6CE8\u518C"))));
+  }, "\u6CE8\u518C")))));
 }
 function AuthModal({
   mode,
@@ -1326,6 +1350,62 @@ function SpbShowcase() {
     }
   }, card.sub))))));
 }
+function useDialogFocusTrap(dialogRef, isOpen, onClose) {
+  const onCloseRef = React.useRef(onClose);
+  React.useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+  React.useEffect(() => {
+    if (!isOpen || typeof document === 'undefined') return undefined;
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    const focusableSelector = ['a[href]', 'button:not([disabled])', 'textarea:not([disabled])', 'input:not([disabled])', 'select:not([disabled])', '[tabindex]:not([tabindex="-1"])'].join(',');
+    const focusableElements = () => Array.from(dialogRef.current?.querySelectorAll(focusableSelector) || []).filter(element => !element.hasAttribute('hidden') && element.getAttribute('aria-hidden') !== 'true');
+    const focusDialog = () => {
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const firstFocusable = focusableElements()[0];
+      (firstFocusable || dialog).focus();
+    };
+    const frame = window.requestAnimationFrame(focusDialog);
+    document.body.style.overflow = 'hidden';
+    const handleKeyDown = event => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onCloseRef.current?.();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const focusable = focusableElements();
+      if (!focusable.length) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const focusOutside = !dialog.contains(document.activeElement);
+      if (event.shiftKey && (document.activeElement === first || focusOutside)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || focusOutside)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus && typeof previousFocus.focus === 'function' && document.contains(previousFocus)) {
+        previousFocus.focus();
+      }
+    };
+  }, [dialogRef, isOpen]);
+}
 function SpbDiscover() {
   const [payload, setPayload] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
@@ -1333,12 +1413,13 @@ function SpbDiscover() {
   const [cityId, setCityId] = React.useState('all');
   const [category, setCategory] = React.useState('全部');
   const [selectedItem, setSelectedItem] = React.useState(null);
+  const itemDialogRef = React.useRef(null);
   React.useEffect(() => {
     let alive = true;
     setLoading(true);
     fetch(`${ADMIN_SERVER_BASE}/api/discovery?_=${Date.now()}`, {
       cache: 'no-store'
-    }).then(res => res.json().then(data => ({
+    }).then(res => res.json().catch(() => ({})).then(data => ({
       ok: res.ok,
       data
     }))).then(({
@@ -1368,27 +1449,28 @@ function SpbDiscover() {
     hour12: false
   }) : '等待首次更新';
   const shell = {
-    padding: 'clamp(52px, 7vw, 78px) clamp(20px, 4vw, 48px) 80px',
-    borderTop: `1px solid ${spb.line}`
+    padding: '64px clamp(18px, 4vw, 56px) 86px',
+    borderTop: `1px solid ${spb.line}`,
+    background: 'linear-gradient(180deg, oklch(0.155 0.013 265), oklch(0.135 0.012 265))'
   };
   const chip = active => ({
     border: `1px solid ${active ? 'oklch(0.72 0.15 242 / 0.58)' : spb.line}`,
-    background: active ? 'oklch(0.72 0.15 242 / 0.14)' : 'oklch(0.205 0.014 265 / 0.64)',
-    color: active ? spb.ink : spb.sub,
-    borderRadius: 999,
+    background: active ? spb.blue : 'oklch(0.18 0.014 265 / 0.70)',
+    color: active ? spb.bg : spb.sub,
+    borderRadius: 8,
     padding: '9px 14px',
     cursor: 'pointer',
     fontFamily: 'inherit',
     fontSize: 13.5,
     fontWeight: active ? 700 : 550,
-    boxShadow: active ? `0 0 22px oklch(0.72 0.15 242 / 0.12)` : 'none'
+    boxShadow: 'none'
   });
   const cityCard = {
-    background: 'linear-gradient(180deg, oklch(0.245 0.015 265 / 0.88), oklch(0.19 0.014 265 / 0.92))',
+    background: 'oklch(0.185 0.014 265 / 0.92)',
     border: `1px solid ${spb.line}`,
-    borderRadius: 18,
+    borderRadius: 10,
     padding: 20,
-    boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.08), 0 22px 58px rgba(0,0,0,0.22)'
+    boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.055), 0 20px 54px rgba(0,0,0,0.22)'
   };
   const shopRow = {
     padding: '15px 0',
@@ -1450,6 +1532,8 @@ function SpbDiscover() {
       photos
     });
   };
+  const closeItem = () => setSelectedItem(null);
+  useDialogFocusTrap(itemDialogRef, Boolean(selectedItem), closeItem);
   const featuredItems = visibleCities.flatMap(city => (city.items || []).map(item => ({
     ...item,
     cityName: city.name,
@@ -1505,13 +1589,23 @@ function SpbDiscover() {
   }).filter(route => route.stops.length >= 2).slice(0, 4);
   return React.createElement("section", {
     style: shell
+  }, React.createElement("style", null, `
+        .qi-discover-shell { max-width: 1320px; margin: 0 auto; }
+        .qi-discover-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 260px); gap: 28px; align-items: end; }
+        .qi-discover-title { margin: 14px 0 0; font-family: ${spb.disp}; font-size: 62px; line-height: 1.05; letter-spacing: 0; color: ${spb.ink}; font-weight: 680; }
+        .qi-discover-plan { margin-top: 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; }
+        .qi-discover-section-title { margin: 8px 0 0; font-family: ${spb.disp}; color: ${spb.ink}; font-size: 30px; line-height: 1.18; letter-spacing: 0; }
+        @media (max-width: 760px) {
+          .qi-discover-hero { grid-template-columns: 1fr; align-items: start; }
+          .qi-discover-title { font-size: 42px; }
+          .qi-discover-plan { display: flex; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x proximity; scrollbar-width: none; }
+          .qi-discover-plan::-webkit-scrollbar { display: none; }
+          .qi-discover-plan > div { flex: 0 0 min(78vw, 280px); scroll-snap-align: start; }
+        }
+      `), React.createElement("div", {
+    className: "qi-discover-shell"
   }, React.createElement("div", {
-    style: {
-      display: 'grid',
-      gridTemplateColumns: 'minmax(0, 1fr) auto',
-      gap: 24,
-      alignItems: 'end'
-    }
+    className: "qi-discover-hero"
   }, React.createElement("div", null, React.createElement("div", {
     style: {
       fontFamily: spb.mono,
@@ -1521,15 +1615,7 @@ function SpbDiscover() {
       color: spb.blueSoft
     }
   }, "Explore"), React.createElement("h1", {
-    style: {
-      margin: '14px 0 0',
-      fontFamily: spb.disp,
-      fontSize: 'clamp(38px, 6vw, 62px)',
-      lineHeight: 1.05,
-      letterSpacing: '-0.035em',
-      color: spb.ink,
-      fontWeight: 600
-    }
+    className: "qi-discover-title"
   }, "\u57CE\u5E02\u65B0\u5E97\u4E0E\u597D\u53BB\u5904"), React.createElement("p", {
     style: {
       margin: '16px 0 0',
@@ -1540,12 +1626,11 @@ function SpbDiscover() {
     }
   }, "\u628A\u8FD1\u671F\u65B0\u5F00\u3001\u9996\u5E97\u3001\u63A2\u5E97\u3001\u5C55\u89C8\u3001\u5E02\u96C6\u548C\u751F\u6D3B\u65B9\u5F0F\u7A7A\u95F4\u6574\u7406\u6210\u53EF\u9605\u8BFB\u7684\u57CE\u5E02\u8DEF\u7EBF\u3002\u5148\u770B\u662F\u5426\u503C\u5F97\u53BB\uFF0C\u518D\u51B3\u5B9A\u4EC0\u4E48\u65F6\u5019\u53BB\u3001\u548C\u54EA\u91CC\u4E00\u8D77\u901B\u3002")), React.createElement("div", {
     style: {
-      minWidth: 190,
-      justifySelf: 'end',
+      width: '100%',
       border: `1px solid ${spb.line}`,
-      borderRadius: 18,
+      borderRadius: 10,
       padding: '14px 16px',
-      background: 'oklch(0.205 0.014 265 / 0.64)'
+      background: 'oklch(0.185 0.014 265 / 0.76)'
     }
   }, React.createElement("div", {
     style: {
@@ -1567,20 +1652,15 @@ function SpbDiscover() {
       fontSize: 13
     }
   }, totalItems, " \u6761\u7AD9\u5185\u5185\u5BB9"))), React.createElement("div", {
-    style: {
-      marginTop: 28,
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 210px), 1fr))',
-      gap: 12
-    }
+    className: "qi-discover-plan"
   }, sourcePlan.map(([title, text]) => React.createElement("div", {
     key: title,
     style: {
       border: `1px solid ${spb.line}`,
-      borderRadius: 16,
+      borderRadius: 10,
       padding: '15px 16px',
-      background: 'linear-gradient(180deg, oklch(0.235 0.015 265 / 0.78), oklch(0.19 0.014 265 / 0.72))',
-      boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.07)'
+      background: 'oklch(0.185 0.014 265 / 0.76)',
+      boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.055)'
     }
   }, React.createElement("div", {
     style: {
@@ -1610,11 +1690,13 @@ function SpbDiscover() {
     }
   }, React.createElement("button", {
     type: "button",
+    "aria-pressed": cityId === 'all',
     onClick: () => setCityId('all'),
     style: chip(cityId === 'all')
   }, "\u5168\u90E8\u57CE\u5E02"), cities.map(city => React.createElement("button", {
     key: city.id,
     type: "button",
+    "aria-pressed": cityId === city.id,
     onClick: () => setCityId(city.id),
     style: chip(cityId === city.id)
   }, city.name))), React.createElement("div", {
@@ -1626,15 +1708,22 @@ function SpbDiscover() {
   }, categories.map(item => React.createElement("button", {
     key: item,
     type: "button",
+    "aria-pressed": category === item,
     onClick: () => setCategory(item),
     style: chip(category === item)
   }, item)))), error ? React.createElement("div", {
+    role: "alert",
     style: {
       marginTop: 28,
-      color: 'oklch(0.72 0.2 28)',
-      fontSize: 15
+      border: '1px solid oklch(0.68 0.15 32 / 0.38)',
+      borderRadius: 8,
+      padding: '12px 14px',
+      color: 'oklch(0.82 0.11 32)',
+      background: 'oklch(0.26 0.04 32 / 0.22)',
+      fontSize: 14
     }
   }, error) : null, loading ? React.createElement("div", {
+    "aria-live": "polite",
     style: {
       marginTop: 34,
       color: spb.sub,
@@ -1644,10 +1733,10 @@ function SpbDiscover() {
     style: {
       marginTop: 34,
       border: `1px solid ${spb.line}`,
-      borderRadius: 20,
+      borderRadius: 10,
       padding: '20px clamp(18px, 3vw, 24px)',
-      background: 'linear-gradient(180deg, oklch(0.245 0.015 265 / 0.86), oklch(0.18 0.014 265 / 0.86))',
-      boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.08)'
+      background: 'oklch(0.185 0.014 265 / 0.88)',
+      boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.055)'
     }
   }, React.createElement("div", {
     style: {
@@ -1666,14 +1755,7 @@ function SpbDiscover() {
       textTransform: 'uppercase'
     }
   }, "Weekend routes"), React.createElement("h2", {
-    style: {
-      margin: '8px 0 0',
-      fontFamily: spb.disp,
-      color: spb.ink,
-      fontSize: 30,
-      lineHeight: 1.12,
-      letterSpacing: '-0.025em'
-    }
+    className: "qi-discover-section-title"
   }, "\u5468\u672B\u53EF\u4EE5\u8FD9\u6837\u901B")), React.createElement("div", {
     style: {
       maxWidth: 360,
@@ -1692,9 +1774,9 @@ function SpbDiscover() {
     key: route.city.id,
     style: {
       border: `1px solid ${spb.line}`,
-      borderRadius: 16,
+      borderRadius: 8,
       padding: 16,
-      background: 'oklch(0.19 0.014 265 / 0.72)'
+      background: 'oklch(0.16 0.012 265 / 0.66)'
     }
   }, React.createElement("div", {
     style: {
@@ -1742,7 +1824,7 @@ function SpbDiscover() {
     style: {
       width: 38,
       height: 38,
-      borderRadius: 12,
+      borderRadius: 8,
       display: 'grid',
       placeItems: 'center',
       background: index === 1 ? spb.blueSoft : 'oklch(0.245 0.018 265)',
@@ -1808,8 +1890,8 @@ function SpbDiscover() {
       fontFamily: spb.disp,
       color: spb.ink,
       fontSize: 30,
-      lineHeight: 1.12,
-      letterSpacing: '-0.025em'
+      lineHeight: 1.16,
+      letterSpacing: 0
     }
   }, "\u6309\u4E3B\u9898\u5148\u770B")), React.createElement("div", {
     style: {
@@ -1828,7 +1910,7 @@ function SpbDiscover() {
     key: group.name,
     style: {
       border: `1px solid ${spb.line}`,
-      borderRadius: 17,
+      borderRadius: 10,
       padding: 16,
       background: 'oklch(0.205 0.014 265 / 0.68)',
       boxShadow: 'inset 0 1px 0 oklch(1 0 0 / 0.07)'
@@ -1852,7 +1934,7 @@ function SpbDiscover() {
     onClick: () => setCategory(group.name),
     style: {
       border: `1px solid ${spb.line}`,
-      borderRadius: 999,
+      borderRadius: 8,
       background: 'transparent',
       color: spb.blueSoft,
       padding: '5px 9px',
@@ -1875,7 +1957,7 @@ function SpbDiscover() {
     style: {
       textAlign: 'left',
       border: `1px solid ${spb.line}`,
-      borderRadius: 13,
+      borderRadius: 8,
       background: 'oklch(0.18 0.014 265 / 0.62)',
       padding: '10px 11px',
       cursor: 'pointer',
@@ -1939,8 +2021,8 @@ function SpbDiscover() {
       fontFamily: spb.disp,
       color: spb.ink,
       fontSize: 31,
-      lineHeight: 1.12,
-      letterSpacing: '-0.025em'
+      lineHeight: 1.16,
+      letterSpacing: 0
     }
   }, "\u4ECA\u65E5\u503C\u5F97\u5148\u770B\u7684\u53BB\u5904")), React.createElement("div", {
     style: {
@@ -1974,7 +2056,7 @@ function SpbDiscover() {
         position: 'relative',
         overflow: 'hidden',
         border: `1px solid ${spb.line}`,
-        borderRadius: 18,
+        borderRadius: 10,
         padding: 0,
         background: 'oklch(0.2 0.014 265)',
         cursor: 'pointer',
@@ -2019,7 +2101,7 @@ function SpbDiscover() {
         color: spb.ink,
         background: 'oklch(0.12 0.01 265 / 0.48)',
         border: '1px solid oklch(1 0 0 / 0.2)',
-        borderRadius: 999,
+        borderRadius: 8,
         padding: '6px 9px',
         fontSize: 12,
         fontWeight: 760,
@@ -2030,7 +2112,7 @@ function SpbDiscover() {
         color: spb.bg,
         background: spb.blueSoft,
         border: '1px solid oklch(1 0 0 / 0.16)',
-        borderRadius: 999,
+        borderRadius: 8,
         padding: '6px 9px',
         fontSize: 12,
         fontWeight: 820
@@ -2040,7 +2122,7 @@ function SpbDiscover() {
         color: spb.ink,
         background: 'oklch(0.12 0.01 265 / 0.48)',
         border: '1px solid oklch(1 0 0 / 0.2)',
-        borderRadius: 999,
+        borderRadius: 8,
         padding: '6px 9px',
         fontSize: 12,
         fontWeight: 820,
@@ -2051,9 +2133,9 @@ function SpbDiscover() {
         marginTop: 13,
         color: spb.ink,
         fontFamily: spb.disp,
-        fontSize: isLead ? 'clamp(28px, 4vw, 42px)' : 25,
-        lineHeight: 1.08,
-        letterSpacing: '-0.025em',
+        fontSize: isLead ? 38 : 25,
+        lineHeight: 1.12,
+        letterSpacing: 0,
         fontWeight: 650
       }
     }, item.name), React.createElement("div", {
@@ -2125,7 +2207,7 @@ function SpbDiscover() {
       margin: 0,
       fontFamily: spb.disp,
       fontSize: 27,
-      letterSpacing: '-0.02em',
+      letterSpacing: 0,
       color: spb.ink
     }
   }, city.name), React.createElement("span", {
@@ -2169,7 +2251,7 @@ function SpbDiscover() {
     }, React.createElement("div", {
       style: {
         height: 72,
-        borderRadius: 14,
+        borderRadius: 8,
         overflow: 'hidden',
         background: 'linear-gradient(135deg, oklch(0.34 0.05 245), oklch(0.22 0.04 292))',
         border: `1px solid ${spb.line}`,
@@ -2221,7 +2303,7 @@ function SpbDiscover() {
       style: {
         color: spb.bg,
         background: spb.blueSoft,
-        borderRadius: 999,
+        borderRadius: 8,
         padding: '4px 8px',
         fontSize: 12,
         fontWeight: 800,
@@ -2265,7 +2347,7 @@ function SpbDiscover() {
       style: {
         color: spb.faint,
         border: `1px solid ${spb.line}`,
-        borderRadius: 999,
+        borderRadius: 8,
         padding: '3px 8px',
         fontSize: 12
       }
@@ -2273,7 +2355,7 @@ function SpbDiscover() {
       style: {
         color: 'oklch(0.82 0.045 150)',
         border: '1px solid oklch(0.72 0.1 150 / 0.35)',
-        borderRadius: 999,
+        borderRadius: 8,
         padding: '3px 8px',
         fontSize: 12
       }
@@ -2281,7 +2363,7 @@ function SpbDiscover() {
       style: {
         color: spb.faint,
         border: `1px solid ${spb.line}`,
-        borderRadius: 999,
+        borderRadius: 8,
         padding: '3px 8px',
         fontSize: 12
       }
@@ -2296,7 +2378,7 @@ function SpbDiscover() {
       lineHeight: 1.7
     }
   }, "\u6682\u65E0\u65B0\u589E\uFF0C\u7B49\u5F85\u4E0B\u4E00\u6B21\u66F4\u65B0\u3002")))), selectedItem ? React.createElement("div", {
-    onClick: () => setSelectedItem(null),
+    onClick: closeItem,
     style: {
       position: 'fixed',
       inset: 0,
@@ -2309,6 +2391,11 @@ function SpbDiscover() {
       padding: 'clamp(18px, 4vw, 42px)'
     }
   }, React.createElement("article", {
+    ref: itemDialogRef,
+    role: "dialog",
+    "aria-modal": "true",
+    "aria-label": "\u63A2\u7D22\u5730\u70B9\u8BE6\u60C5",
+    tabIndex: -1,
     onClick: event => event.stopPropagation(),
     style: {
       width: 'min(820px, 100%)',
@@ -2316,7 +2403,7 @@ function SpbDiscover() {
       overflow: 'auto',
       background: 'linear-gradient(180deg, oklch(0.245 0.015 265 / 0.96), oklch(0.175 0.014 265 / 0.98))',
       border: `1px solid ${spb.line}`,
-      borderRadius: 24,
+      borderRadius: 10,
       boxShadow: '0 34px 90px rgba(0,0,0,0.52), inset 0 1px 0 oklch(1 0 0 / 0.1)'
     }
   }, React.createElement("div", {
@@ -2325,7 +2412,7 @@ function SpbDiscover() {
       minHeight: 260,
       background: 'linear-gradient(135deg, oklch(0.35 0.08 238), oklch(0.23 0.07 292))',
       overflow: 'hidden',
-      borderRadius: '24px 24px 0 0'
+      borderRadius: '10px 10px 0 0'
     }
   }, selectedItem.photo ? React.createElement("img", {
     src: photoSrc(selectedItem.photo),
@@ -2346,11 +2433,11 @@ function SpbDiscover() {
       fontFamily: spb.disp,
       fontSize: 44,
       fontWeight: 600,
-      letterSpacing: '-0.03em'
+      letterSpacing: 0
     }
   }, selectedItem.category || selectedItem.cityName || 'Discovery'), React.createElement("button", {
     type: "button",
-    onClick: () => setSelectedItem(null),
+    onClick: closeItem,
     "aria-label": "\u5173\u95ED",
     style: {
       position: 'absolute',
@@ -2382,7 +2469,7 @@ function SpbDiscover() {
       border: `1px solid oklch(1 0 0 / 0.22)`,
       background: 'oklch(0.12 0.01 265 / 0.5)',
       color: spb.ink,
-      borderRadius: 999,
+      borderRadius: 8,
       padding: '7px 11px',
       fontSize: 12.5,
       fontWeight: 750,
@@ -2416,9 +2503,9 @@ function SpbDiscover() {
     style: {
       margin: '10px 0 0',
       fontFamily: spb.disp,
-      fontSize: 'clamp(30px, 5vw, 46px)',
-      lineHeight: 1.06,
-      letterSpacing: '-0.035em',
+      fontSize: 42,
+      lineHeight: 1.1,
+      letterSpacing: 0,
       color: spb.ink
     }
   }, selectedItem.name)), React.createElement("div", {
@@ -2451,7 +2538,7 @@ function SpbDiscover() {
     key: title,
     style: {
       border: `1px solid ${spb.line}`,
-      borderRadius: 16,
+      borderRadius: 8,
       padding: '13px 14px',
       background: 'oklch(0.205 0.014 265 / 0.62)'
     }
@@ -2475,7 +2562,7 @@ function SpbDiscover() {
     style: {
       marginTop: 12,
       border: `1px solid ${spb.line}`,
-      borderRadius: 16,
+      borderRadius: 8,
       padding: '13px 15px',
       background: 'oklch(0.205 0.014 265 / 0.62)',
       color: spb.blueSoft,
@@ -2501,7 +2588,7 @@ function SpbDiscover() {
     key: item.title || item,
     style: {
       border: `1px solid ${spb.line}`,
-      borderRadius: 16,
+      borderRadius: 8,
       padding: '14px 15px',
       background: 'oklch(0.205 0.014 265 / 0.62)'
     }
@@ -2530,7 +2617,7 @@ function SpbDiscover() {
     style: {
       aspectRatio: index === 0 ? '1.25 / 1' : '1 / 1',
       gridColumn: index === 0 ? 'span 2' : 'span 1',
-      borderRadius: 16,
+      borderRadius: 8,
       overflow: 'hidden',
       background: 'linear-gradient(135deg, oklch(0.34 0.05 245), oklch(0.22 0.04 292))',
       border: `1px solid ${spb.line}`
@@ -2546,10 +2633,10 @@ function SpbDiscover() {
       objectFit: 'cover',
       display: 'block'
     }
-  })))) : null))) : null);
+  })))) : null))) : null));
 }
-const CHAT_TOPIC_PROMPTS = ['☕ 今天的第一杯咖啡/奶茶是什么？', '📷 晒一张刚拍的照片吧', '🍜 今天吃了什么好吃的？', '💭 用一句话记录现在的心情', '🎬 最近在追什么剧或电影？', '🌤 你那边今天天气怎么样？'];
-const CHAT_STARTER_CHIPS = [['☕ 日常打卡', '今日份日常打卡：'], ['📷 晒一张图', '晒一张今天拍的图：'], ['🍜 干饭报告', '今天的干饭报告：'], ['💭 碎碎念', '此刻的碎碎念：'], ['🎬 追剧安利', '最近在看的剧/电影，安利一下：']];
+const CHAT_TOPIC_PROMPTS = ['今天路上有什么小发现？', '最近拍到哪张照片想留下？', '今天吃到什么值得记一笔？', '用一句话记录现在的心情。', '最近在看什么内容？', '你那边今天是什么天气？'];
+const CHAT_STARTER_CHIPS = [['日常打卡', '今日份日常打卡：'], ['晒一张图', '晒一张今天拍的图：'], ['吃饭记录', '今天的吃饭记录：'], ['碎碎念', '此刻的碎碎念：'], ['内容安利', '最近在看的内容，安利一下：']];
 function SpbChat({
   user,
   onLogin
@@ -2570,21 +2657,22 @@ function SpbChat({
   const fileInputRef = React.useRef(null);
   const composerRef = React.useRef(null);
   const composerCardRef = React.useRef(null);
+  const postDialogRef = React.useRef(null);
   const loadPosts = React.useCallback(() => {
     setLoading(true);
     fetch(`${ADMIN_SERVER_BASE}/api/chatter/posts?_=${Date.now()}`, {
       cache: 'no-store'
-    }).then(res => res.json().then(data => ({
+    }).then(res => res.json().catch(() => ({})).then(data => ({
       ok: res.ok,
       data
     }))).then(({
       ok,
       data
     }) => {
-      if (!ok) throw new Error(data?.error || '瞎聊聊加载失败');
+      if (!ok) throw new Error(data?.error || '瞎聊聊暂时无法读取');
       setPosts(Array.isArray(data.posts) ? data.posts : []);
       setError('');
-    }).catch(err => setError(err.message || '瞎聊聊加载失败')).finally(() => setLoading(false));
+    }).catch(err => setError(err.message || '瞎聊聊暂时无法读取')).finally(() => setLoading(false));
   }, []);
   React.useEffect(() => {
     loadPosts();
@@ -2631,9 +2719,11 @@ function SpbChat({
     setDetailLoading(false);
     setReplySubmitting(false);
   };
+  useDialogFocusTrap(postDialogRef, Boolean(selectedPost), closePost);
   const openPost = async post => {
     setSelectedPost(post);
     setReplyText('');
+    setError('');
     setDetailLoading(true);
     try {
       const res = await fetch(`${ADMIN_SERVER_BASE}/api/chatter/posts/${encodeURIComponent(post.id)}?_=${Date.now()}`, {
@@ -2771,18 +2861,17 @@ function SpbChat({
       setReplySubmitting(false);
     }
   };
-  const cardStyle = {
+  const surfaceStyle = {
     border: `1px solid ${spb.line}`,
-    borderRadius: 16,
-    background: 'linear-gradient(180deg, rgba(255,255,255,0.060), rgba(255,255,255,0.022)), oklch(0.192 0.014 265 / 0.94)',
-    boxShadow: '0 18px 44px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.06)',
-    overflow: 'hidden'
+    borderRadius: 10,
+    background: 'oklch(0.185 0.014 265 / 0.94)',
+    boxShadow: '0 20px 54px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.055)'
   };
   const smallButton = {
     border: `1px solid ${spb.line}`,
-    background: 'oklch(0.225 0.014 265 / 0.76)',
+    background: 'oklch(0.215 0.014 265 / 0.78)',
     color: spb.ink,
-    borderRadius: 10,
+    borderRadius: 8,
     padding: '10px 14px',
     fontFamily: 'inherit',
     fontSize: 13.5,
@@ -2791,8 +2880,8 @@ function SpbChat({
   };
   const primary = {
     ...smallButton,
-    borderColor: 'oklch(0.72 0.15 242 / 0.36)',
-    background: `linear-gradient(135deg, ${spb.blue}, ${spb.violet})`,
+    borderColor: 'oklch(0.72 0.15 242 / 0.40)',
+    background: spb.blue,
     color: spb.bg
   };
   const avatarStyle = (name = 'Q') => ({
@@ -2805,8 +2894,8 @@ function SpbChat({
     color: spb.ink,
     fontSize: 14,
     fontWeight: 800,
-    background: 'linear-gradient(135deg, oklch(0.72 0.15 242 / 0.82), oklch(0.77 0.13 318 / 0.82))',
-    boxShadow: '0 8px 22px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.24)'
+    background: 'oklch(0.255 0.025 248)',
+    border: '1px solid oklch(0.72 0.15 242 / 0.28)'
   });
   const firstChar = name => String(name || 'Q').trim().slice(0, 1).toUpperCase() || 'Q';
   const postCountText = post => {
@@ -2816,10 +2905,12 @@ function SpbChat({
   const chatStats = React.useMemo(() => {
     const imageCount = posts.filter(post => post.imageUrl).length;
     const replyCount = posts.reduce((sum, post) => sum + Number(post.commentCount || (post.comments || []).length || 0), 0);
+    const repliedPosts = posts.filter(post => Number(post.commentCount || (post.comments || []).length || 0) > 0).length;
     return {
       posts: posts.length,
       images: imageCount,
-      replies: replyCount
+      replies: replyCount,
+      repliedPosts
     };
   }, [posts]);
   const visiblePosts = React.useMemo(() => posts.filter(post => {
@@ -2828,280 +2919,36 @@ function SpbChat({
     if (filter === 'text') return !post.imageUrl;
     return true;
   }), [posts, filter]);
-  const filterTabs = [['all', '全部', chatStats.posts], ['image', '带图', chatStats.images], ['reply', '有回复', chatStats.replies], ['text', '文字', Math.max(chatStats.posts - chatStats.images, 0)]];
+  const filterTabs = [['all', '全部', chatStats.posts], ['image', '带图', chatStats.images], ['reply', '有回复', chatStats.repliedPosts], ['text', '文字', Math.max(chatStats.posts - chatStats.images, 0)]];
   const statChip = (label, value) => React.createElement("div", {
     style: {
-      border: `1px solid ${spb.line}`,
-      borderRadius: 12,
-      padding: '12px 14px',
-      background: 'oklch(0.18 0.014 265 / 0.62)',
-      minWidth: 116
+      borderTop: `1px solid ${spb.line}`,
+      padding: '12px 0',
+      display: 'flex',
+      alignItems: 'baseline',
+      justifyContent: 'space-between',
+      gap: 14
     }
   }, React.createElement("div", {
     style: {
+      color: spb.sub,
+      fontSize: 13.5,
+      fontWeight: 650
+    }
+  }, label), React.createElement("div", {
+    style: {
       color: spb.ink,
-      fontSize: 24,
+      fontSize: 17,
       fontWeight: 780,
       lineHeight: 1
     }
-  }, value), React.createElement("div", {
-    style: {
-      marginTop: 7,
-      color: spb.faint,
-      fontSize: 12.5,
-      fontWeight: 650
-    }
-  }, label));
-  return React.createElement("section", {
-    style: {
-      padding: 'clamp(42px, 6vw, 72px) clamp(18px, 4vw, 48px) 86px',
-      borderTop: `1px solid ${spb.line}`,
-      background: 'radial-gradient(circle at 18% 0%, oklch(0.36 0.07 245 / 0.20), transparent 34%), radial-gradient(circle at 88% 12%, oklch(0.42 0.08 315 / 0.14), transparent 30%), linear-gradient(180deg, oklch(0.17 0.013 265), oklch(0.145 0.012 265))'
-    }
-  }, React.createElement("style", null, `
-        @keyframes qiChatBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
-        @keyframes qiChatFloat { 0%, 100% { transform: translateY(0) rotate(-0.6deg); } 50% { transform: translateY(-5px) rotate(0.8deg); } }
-        @keyframes qiChatTwinkle { 0%, 100% { opacity: 0.3; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.15); } }
-        @keyframes qiChatPop { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: none; } }
-        .qi-chat-card { transition: transform 0.18s ease, box-shadow 0.18s ease; }
-        .qi-chat-card:hover { transform: translateY(-3px); box-shadow: 0 26px 56px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.06); }
-        .qi-chat-chip { transition: transform 0.15s ease, border-color 0.15s ease; }
-        .qi-chat-chip:hover { transform: translateY(-2px); border-color: oklch(0.72 0.15 242 / 0.45); }
-        @media (prefers-reduced-motion: reduce) {
-          .qi-chat-card, .qi-chat-chip { transition: none; }
-          .qi-chat-anim { animation: none !important; }
-        }
-      `), React.createElement("div", {
-    style: {
-      maxWidth: 1160,
-      margin: '0 auto'
-    }
-  }, React.createElement("div", {
-    style: {
-      ...cardStyle,
-      padding: 'clamp(18px, 3vw, 30px)',
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))',
-      gap: 'clamp(18px, 4vw, 34px)',
-      alignItems: 'stretch'
-    }
-  }, React.createElement("div", {
-    style: {
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'space-between',
-      gap: 28
-    }
-  }, React.createElement("div", null, React.createElement("div", {
-    style: {
-      fontFamily: spb.mono,
-      fontSize: 12.5,
-      letterSpacing: '0.1em',
-      textTransform: 'uppercase',
-      color: spb.blueSoft
-    }
-  }, "Community Board"), React.createElement("h1", {
-    style: {
-      margin: '13px 0 0',
-      fontFamily: spb.disp,
-      fontSize: 'clamp(38px, 6vw, 62px)',
-      lineHeight: 1.02,
-      color: spb.ink,
-      fontWeight: 650
-    }
-  }, "\u778E\u804A\u804A"), React.createElement("p", {
-    style: {
-      margin: '16px 0 0',
-      maxWidth: 660,
-      color: spb.sub,
-      fontSize: 16.5,
-      lineHeight: 1.75
-    }
-  }, "\u8FD9\u91CC\u662F DreamerQi \u7684\u9732\u5929\u8336\u8BDD\u4F1A\uFF1A\u6652\u56FE\u3001\u5520\u55D1\u3001\u788E\u788E\u5FF5\uFF0C\u60F3\u5230\u4EC0\u4E48\u53D1\u4EC0\u4E48\u3002\u6BCF\u6761\u5E16\u5B50\u90FD\u80FD\u76D6\u697C\u56DE\u590D\uFF0C\u6765\u665A\u4E86\u5C31\u53EA\u80FD\u8E72\u522B\u4EBA\u7684\u6C99\u53D1\u5566\uFF5E")), React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: 12,
-      flexWrap: 'wrap'
-    }
-  }, statChip('📝 帖子', chatStats.posts), statChip('🖼️ 图片', chatStats.images), statChip('💬 回复', chatStats.replies))), React.createElement("div", {
-    style: {
-      position: 'relative',
-      border: `1px solid ${spb.line}`,
-      borderRadius: 14,
-      overflow: 'hidden',
-      minHeight: 220,
-      background: 'linear-gradient(135deg, #e8f1ff 0%, #fdeef6 55%, #e9f9f0 100%)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 'clamp(14px, 3vw, 26px)',
-      padding: '24px clamp(16px, 3vw, 26px)',
-      flexWrap: 'wrap'
-    }
-  }, [['✦', '#f5a623', '7%', '10%', '3.2s', '0s'], ['✧', '#5b8def', '80%', '9%', '2.7s', '0.6s'], ['✦', '#57c48f', '11%', '78%', '3.6s', '1.1s'], ['✧', '#e86a92', '87%', '72%', '2.9s', '0.3s']].map(([glyph, color, left, top, duration, delay], idx) => React.createElement("span", {
-    key: idx,
-    "aria-hidden": "true",
-    className: "qi-chat-anim",
-    style: {
-      position: 'absolute',
-      left,
-      top,
-      color,
-      fontSize: 20,
-      animation: `qiChatTwinkle ${duration} ease-in-out ${delay} infinite`
-    }
-  }, glyph)), React.createElement("svg", {
-    viewBox: "0 0 160 150",
-    width: "132",
-    height: "124",
-    "aria-hidden": "true",
-    className: "qi-chat-anim",
-    style: {
-      flex: '0 0 auto',
-      animation: 'qiChatBob 4s ease-in-out infinite'
-    }
-  }, React.createElement("circle", {
-    cx: "42",
-    cy: "34",
-    r: "20",
-    fill: "#fdf3e7",
-    stroke: "#454b6e",
-    strokeWidth: "5"
-  }), React.createElement("circle", {
-    cx: "118",
-    cy: "34",
-    r: "20",
-    fill: "#fdf3e7",
-    stroke: "#454b6e",
-    strokeWidth: "5"
-  }), React.createElement("circle", {
-    cx: "42",
-    cy: "34",
-    r: "9",
-    fill: "#f7b8c8"
-  }), React.createElement("circle", {
-    cx: "118",
-    cy: "34",
-    r: "9",
-    fill: "#f7b8c8"
-  }), React.createElement("rect", {
-    x: "18",
-    y: "30",
-    width: "124",
-    height: "96",
-    rx: "34",
-    fill: "#fdf6ec",
-    stroke: "#454b6e",
-    strokeWidth: "5"
-  }), React.createElement("circle", {
-    cx: "60",
-    cy: "74",
-    r: "7",
-    fill: "#2f3555"
-  }), React.createElement("circle", {
-    cx: "100",
-    cy: "74",
-    r: "7",
-    fill: "#2f3555"
-  }), React.createElement("circle", {
-    cx: "62.5",
-    cy: "71.5",
-    r: "2.4",
-    fill: "#fff"
-  }), React.createElement("circle", {
-    cx: "102.5",
-    cy: "71.5",
-    r: "2.4",
-    fill: "#fff"
-  }), React.createElement("ellipse", {
-    cx: "46",
-    cy: "92",
-    rx: "10",
-    ry: "6.5",
-    fill: "#f7b8c8",
-    opacity: "0.9"
-  }), React.createElement("ellipse", {
-    cx: "114",
-    cy: "92",
-    rx: "10",
-    ry: "6.5",
-    fill: "#f7b8c8",
-    opacity: "0.9"
-  }), React.createElement("path", {
-    d: "M70 92 Q80 102 90 92",
-    fill: "none",
-    stroke: "#2f3555",
-    strokeWidth: "4.5",
-    strokeLinecap: "round"
-  }), React.createElement("rect", {
-    x: "34",
-    y: "118",
-    width: "26",
-    height: "22",
-    rx: "11",
-    fill: "#fdf6ec",
-    stroke: "#454b6e",
-    strokeWidth: "5"
-  }), React.createElement("rect", {
-    x: "100",
-    y: "118",
-    width: "26",
-    height: "22",
-    rx: "11",
-    fill: "#fdf6ec",
-    stroke: "#454b6e",
-    strokeWidth: "5"
-  })), React.createElement("div", {
-    style: {
-      display: 'grid',
-      gap: 10,
-      justifyItems: 'start',
-      minWidth: 0,
-      flex: '1 1 220px',
-      maxWidth: 320
-    }
-  }, React.createElement("div", {
-    className: "qi-chat-anim",
-    style: {
-      background: '#dbe8ff',
-      border: '1.5px solid #9db9ee',
-      borderRadius: '16px 16px 16px 4px',
-      padding: '10px 16px',
-      color: '#33406b',
-      fontSize: 16.5,
-      fontWeight: 760,
-      animation: 'qiChatFloat 5s ease-in-out infinite'
-    }
-  }, "\u4ECA\u5929\u804A\u70B9\u4EC0\u4E48\uFF1F"), React.createElement("div", {
-    key: topicIndex,
-    className: "qi-chat-anim",
-    style: {
-      background: '#fbdde8',
-      border: '1.5px solid #eaa6bf',
-      borderRadius: '16px 16px 4px 16px',
-      padding: '9px 15px',
-      color: '#7c3f58',
-      fontSize: 14,
-      fontWeight: 680,
-      animation: 'qiChatPop 0.45s ease both'
-    }
-  }, CHAT_TOPIC_PROMPTS[topicIndex]), React.createElement("div", {
-    style: {
-      background: '#dcf3e5',
-      border: '1.5px solid #93cfae',
-      borderRadius: 999,
-      padding: '7px 14px',
-      color: '#2f6b4c',
-      fontSize: 12.5,
-      fontWeight: 750
-    }
-  }, "DreamerQi Chatter \xB7 \u6BCF\u5929\u90FD\u6709\u65B0\u9C9C\u4E8B")))), React.createElement("div", {
+  }, value));
+  const composerPanel = React.createElement("div", {
     ref: composerCardRef,
+    className: "qi-chat-composer",
     style: {
-      margin: '22px auto 0',
-      maxWidth: 880,
-      ...cardStyle,
-      padding: '18px clamp(16px, 3vw, 22px)'
+      ...surfaceStyle,
+      padding: 22
     }
   }, React.createElement("div", {
     style: {
@@ -3119,63 +2966,68 @@ function SpbChat({
   }, React.createElement("div", {
     style: {
       color: spb.ink,
-      fontSize: 18,
+      fontSize: 19,
       fontWeight: 780
     }
   }, "\u53D1\u4E00\u6761\u5E16\u5B50"), React.createElement("div", {
     style: {
-      marginTop: 3,
+      marginTop: 4,
       color: spb.faint,
-      fontSize: 12.5
+      fontSize: 13
     }
-  }, user ? `当前账号：${user.name}，想到什么就聊点什么～` : '未登录也可以围观，发布和回复需要登录。'))), React.createElement("div", {
-    style: {
-      marginTop: 14,
-      display: 'flex',
-      gap: 8,
-      flexWrap: 'wrap',
-      alignItems: 'center'
-    }
-  }, React.createElement("span", {
-    style: {
-      color: spb.faint,
-      fontSize: 12.5
-    }
-  }, "\u6CA1\u7075\u611F\uFF1F\u8BD5\u8BD5\uFF1A"), CHAT_STARTER_CHIPS.map(([label, starter]) => React.createElement("button", {
-    key: label,
-    type: "button",
-    className: "qi-chat-chip",
-    onClick: () => applyStarter(starter),
-    style: {
-      ...smallButton,
-      borderRadius: 999,
-      padding: '7px 13px',
-      fontSize: 12.5
-    }
-  }, label))), React.createElement("textarea", {
+  }, user ? `当前账号：${user.name}` : '登录后可以发布文字和图片。'))), React.createElement("textarea", {
     ref: composerRef,
+    "aria-label": "\u5E16\u5B50\u5185\u5BB9",
+    className: "qi-chat-input",
     value: text,
     onChange: event => setText(event.target.value.slice(0, 1200)),
-    placeholder: user ? `今天想发点什么？比如：${CHAT_TOPIC_PROMPTS[topicIndex]}` : '登录后可以发布文字和图片',
+    placeholder: user ? `说点什么... 比如：${CHAT_TOPIC_PROMPTS[topicIndex]}` : '登录后可以发布文字和图片',
     style: {
-      marginTop: 14,
+      marginTop: 16,
       width: '100%',
-      minHeight: 112,
+      minHeight: 118,
       resize: 'vertical',
-      borderRadius: 14,
+      borderRadius: 8,
       border: `1px solid ${spb.line}`,
-      background: 'oklch(0.145 0.012 265 / 0.72)',
+      background: 'oklch(0.125 0.011 265 / 0.72)',
       color: spb.ink,
       padding: 14,
       font: 'inherit',
       lineHeight: 1.65,
       outline: 'none'
     }
-  }), imageData ? React.createElement("div", {
+  }), React.createElement("div", {
+    style: {
+      marginTop: 12,
+      display: 'flex',
+      gap: 7,
+      flexWrap: 'nowrap',
+      alignItems: 'center',
+      overflowX: 'auto',
+      scrollbarWidth: 'none'
+    }
+  }, React.createElement("span", {
+    style: {
+      color: spb.faint,
+      fontSize: 12.5,
+      flex: '0 0 auto'
+    }
+  }, "\u63D0\u793A\uFF1A"), CHAT_STARTER_CHIPS.slice(0, 4).map(([label, starter]) => React.createElement("button", {
+    key: label,
+    type: "button",
+    className: "qi-chat-chip qi-chat-action",
+    onClick: () => applyStarter(starter),
+    style: {
+      ...smallButton,
+      padding: '6px 8px',
+      fontSize: 12,
+      flex: '0 0 auto'
+    }
+  }, label))), imageData ? React.createElement("div", {
     style: {
       marginTop: 12,
       position: 'relative',
-      borderRadius: 14,
+      borderRadius: 8,
       overflow: 'hidden',
       border: `1px solid ${spb.line}`,
       background: spb.panel
@@ -3185,7 +3037,7 @@ function SpbChat({
     alt: imageName || '预览图',
     style: {
       width: '100%',
-      maxHeight: 340,
+      maxHeight: 260,
       objectFit: 'contain',
       display: 'block',
       background: 'oklch(0.12 0.01 265)'
@@ -3193,12 +3045,13 @@ function SpbChat({
   }), React.createElement("button", {
     type: "button",
     onClick: clearImage,
+    className: "qi-chat-action",
     style: {
       ...smallButton,
       position: 'absolute',
       top: 10,
       right: 10,
-      background: 'oklch(0.12 0.01 265 / 0.72)'
+      background: 'oklch(0.12 0.01 265 / 0.78)'
     }
   }, "\u79FB\u9664")) : null, React.createElement("input", {
     ref: fileInputRef,
@@ -3210,258 +3063,329 @@ function SpbChat({
     }
   }), React.createElement("div", {
     style: {
-      marginTop: 13,
+      marginTop: 14,
       display: 'flex',
       gap: 10,
       justifyContent: 'space-between',
       alignItems: 'center',
       flexWrap: 'wrap'
-    }
-  }, React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: 10,
-      flexWrap: 'wrap',
-      alignItems: 'center'
     }
   }, React.createElement("button", {
     type: "button",
     onClick: () => fileInputRef.current?.click(),
+    className: "qi-chat-action",
     style: smallButton
-  }, "\u9009\u62E9\u56FE\u7247"), React.createElement("span", {
-    style: {
-      color: error ? 'oklch(0.72 0.2 28)' : spb.faint,
-      fontSize: 12.5
-    }
-  }, error || '支持 JPG、PNG、WebP、GIF，图片不超过 5MB。')), React.createElement("button", {
+  }, "\u9009\u62E9\u56FE\u7247"), React.createElement("button", {
     type: "button",
     onClick: submitPost,
     disabled: submitting,
+    className: "qi-chat-action",
     style: {
       ...primary,
       opacity: submitting ? 0.62 : 1
     }
-  }, user ? submitting ? '发布中...' : '发布帖子' : '登录后发布'))), React.createElement("div", {
+  }, user ? submitting ? '发布中...' : '发一条帖子' : '登录后发布')));
+  return React.createElement("section", {
     style: {
-      marginTop: 30,
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      gap: 18,
-      flexWrap: 'wrap'
+      padding: '34px clamp(18px, 4vw, 56px) 86px',
+      borderTop: `1px solid ${spb.line}`,
+      background: 'linear-gradient(180deg, oklch(0.155 0.013 265), oklch(0.135 0.012 265))'
     }
-  }, React.createElement("div", null, React.createElement("div", {
+  }, React.createElement("style", null, `
+        .qi-chat-shell { max-width: 1320px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 28px; align-items: start; }
+        .qi-chat-main-column { min-width: 0; display: grid; gap: 24px; }
+        .qi-chat-intro { grid-column: 1; grid-row: 1; }
+        .qi-chat-title { margin: 12px 0 0; font-family: ${spb.disp}; font-size: 64px; line-height: 1.02; color: ${spb.ink}; font-weight: 680; letter-spacing: 0; }
+        .qi-chat-feed { grid-column: 1; grid-row: 2; min-width: 0; }
+        .qi-chat-post-row { display: grid; grid-template-columns: 42px minmax(0, 1fr) 128px 58px; gap: 16px; align-items: center; width: 100%; padding: 18px; border: 0; border-top: 1px solid ${spb.line}; background: transparent; color: inherit; text-align: left; cursor: pointer; font-family: inherit; }
+        .qi-chat-post-row:first-of-type { border-top: 0; }
+        .qi-chat-post-row:hover { background: oklch(0.215 0.014 265 / 0.72); }
+        .qi-chat-image-thumb { width: 128px; height: 92px; object-fit: cover; border-radius: 8px; border: 1px solid ${spb.line}; background: oklch(0.13 0.01 265); }
+        .qi-chat-chip:hover, .qi-chat-post-row:focus-visible, .qi-chat-action:focus-visible, .qi-chat-input:focus-visible { outline: 2px solid ${spb.blue}; outline-offset: 2px; }
+        .qi-chat-aside { position: sticky; top: 18px; display: grid; gap: 16px; }
+        @media (max-width: 1020px) {
+          .qi-chat-shell { grid-template-columns: 1fr; grid-template-rows: auto; }
+          .qi-chat-main-column, .qi-chat-aside { display: contents; }
+          .qi-chat-intro { grid-column: 1; grid-row: 1; }
+          .qi-chat-composer { grid-column: 1; grid-row: 2; }
+          .qi-chat-feed { grid-column: 1; grid-row: 3; }
+          .qi-chat-stats { grid-column: 1; grid-row: 4; }
+          .qi-chat-tips { grid-column: 1; grid-row: 5; }
+        }
+        @media (max-width: 680px) {
+          .qi-chat-title { font-size: 44px; }
+          .qi-chat-post-row { grid-template-columns: 38px minmax(0, 1fr); gap: 12px; }
+          .qi-chat-image-thumb, .qi-chat-comment-count { display: none; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .qi-chat-post-row { transition: none; }
+        }
+      `), React.createElement("div", {
+    className: "qi-chat-shell"
+  }, React.createElement("div", {
+    className: "qi-chat-main-column"
+  }, React.createElement("div", {
+    className: "qi-chat-intro"
+  }, React.createElement("div", {
     style: {
       fontFamily: spb.mono,
-      fontSize: 12,
-      color: spb.blueSoft,
-      letterSpacing: '0.08em',
-      textTransform: 'uppercase'
+      fontSize: 12.5,
+      letterSpacing: '0.1em',
+      textTransform: 'uppercase',
+      color: spb.blueSoft
     }
-  }, "Recent posts"), React.createElement("h2", {
+  }, "Community Board"), React.createElement("h1", {
+    className: "qi-chat-title"
+  }, "\u778E\u804A\u804A"), React.createElement("p", {
     style: {
-      margin: '8px 0 0',
-      fontFamily: spb.disp,
-      color: spb.ink,
-      fontSize: 31,
-      lineHeight: 1.12
+      margin: '18px 0 0',
+      maxWidth: 720,
+      color: spb.sub,
+      fontSize: 16.5,
+      lineHeight: 1.72
     }
-  }, "\u5E16\u5B50\u5E7F\u573A")), React.createElement("div", {
+  }, "\u8FD9\u91CC\u662F DreamerQi \u7684\u9732\u5929\u8336\u8BDD\u4F1A\uFF1A\u6652\u56FE\u3001\u5520\u55D1\u3001\u788E\u788E\u5FF5\uFF0C\u60F3\u5230\u4EC0\u4E48\u53D1\u4EC0\u4E48\u3002\u672A\u767B\u5F55\u4E5F\u80FD\u56F4\u89C2\uFF0C\u53D1\u5E03\u548C\u56DE\u590D\u9700\u8981\u767B\u5F55\u3002")), React.createElement("div", {
+    className: "qi-chat-feed"
+  }, error ? React.createElement("div", {
+    role: "alert",
+    style: {
+      marginBottom: 14,
+      border: '1px solid oklch(0.68 0.15 32 / 0.38)',
+      borderRadius: 8,
+      padding: '12px 14px',
+      color: 'oklch(0.82 0.11 32)',
+      background: 'oklch(0.26 0.04 32 / 0.22)',
+      fontSize: 14
+    }
+  }, error) : null, React.createElement("main", {
+    style: {
+      ...surfaceStyle,
+      overflow: 'hidden'
+    }
+  }, React.createElement("div", {
+    style: {
+      padding: '13px 14px',
+      display: 'flex',
+      justifyContent: 'space-between',
+      gap: 14,
+      alignItems: 'center',
+      flexWrap: 'wrap'
+    }
+  }, React.createElement("h2", {
+    style: {
+      position: 'absolute',
+      width: 1,
+      height: 1,
+      padding: 0,
+      margin: -1,
+      overflow: 'hidden',
+      clip: 'rect(0, 0, 0, 0)',
+      whiteSpace: 'nowrap',
+      border: 0
+    }
+  }, "\u5E16\u5B50\u5E7F\u573A"), React.createElement("div", {
     style: {
       display: 'flex',
-      gap: 10,
-      flexWrap: 'wrap',
-      alignItems: 'center'
+      gap: 8,
+      flexWrap: 'wrap'
     }
   }, filterTabs.map(([key, label, count]) => React.createElement("button", {
     key: key,
     type: "button",
+    className: "qi-chat-chip qi-chat-action",
+    "aria-pressed": filter === key,
     onClick: () => setFilter(key),
     style: {
       ...smallButton,
+      padding: '8px 12px',
       color: filter === key ? spb.bg : spb.sub,
-      borderColor: filter === key ? 'oklch(0.72 0.15 242 / 0.42)' : spb.line,
-      background: filter === key ? spb.blue : 'oklch(0.205 0.014 265 / 0.70)'
+      borderColor: filter === key ? 'oklch(0.72 0.15 242 / 0.44)' : spb.line,
+      background: filter === key ? spb.blue : 'oklch(0.18 0.014 265 / 0.72)'
     }
-  }, label, count ? ` ${count}` : '')), React.createElement("button", {
+  }, label, count ? ` ${count}` : ''))), React.createElement("button", {
     type: "button",
     onClick: loadPosts,
+    className: "qi-chat-action",
     style: smallButton
-  }, "\u5237\u65B0"))), loading ? React.createElement("div", {
+  }, "\u5237\u65B0")), loading ? React.createElement("div", {
     style: {
-      marginTop: 28,
+      borderTop: `1px solid ${spb.line}`,
+      padding: 20,
       color: spb.sub,
-      fontSize: 15.5
+      fontSize: 15
     }
   }, "\u6B63\u5728\u8BFB\u53D6\u5E16\u5B50...") : null, !loading && !posts.length ? React.createElement("div", {
     style: {
-      marginTop: 22,
-      ...cardStyle,
-      padding: '30px 24px',
-      textAlign: 'center'
+      borderTop: `1px solid ${spb.line}`,
+      padding: 28
     }
   }, React.createElement("div", {
     style: {
-      fontSize: 40,
-      lineHeight: 1
-    }
-  }, "\uD83D\uDECB\uFE0F"), React.createElement("div", {
-    style: {
-      marginTop: 12,
       color: spb.ink,
-      fontSize: 17,
+      fontSize: 18,
       fontWeight: 760
     }
-  }, "\u6C99\u53D1\u8FD8\u7A7A\u7740\uFF01"), React.createElement("div", {
+  }, "\u73B0\u5728\u8FD8\u6CA1\u6709\u5E16\u5B50\u3002"), React.createElement("div", {
     style: {
       marginTop: 8,
       color: spb.sub,
       fontSize: 14.5,
       lineHeight: 1.7
     }
-  }, "\u7B2C\u4E00\u6761\u5E16\u5B50\u7684\u4F4D\u7F6E\u865A\u4F4D\u4EE5\u5F85\uFF0C\u53D1\u5F20\u56FE\u6216\u5199\u53E5\u8BDD\uFF0C\u8BA9\u5E7F\u573A\u70ED\u95F9\u8D77\u6765\uFF5E"), React.createElement("button", {
+  }, "\u7B2C\u4E00\u6761\u5185\u5BB9\u53EF\u4EE5\u662F\u4E00\u53E5\u8BDD\uFF0C\u4E5F\u53EF\u4EE5\u662F\u4E00\u5F20\u56FE\u3002\u767B\u5F55\u540E\u5C31\u80FD\u53D1\u5E03\u3002"), React.createElement("button", {
     type: "button",
     onClick: goCompose,
+    className: "qi-chat-action",
     style: {
       ...primary,
       marginTop: 16
     }
-  }, user ? '抢下第一帖' : '登录后抢第一帖')) : null, !loading && posts.length > 0 && !visiblePosts.length ? React.createElement("div", {
+  }, user ? '发第一条帖子' : '登录后发帖')) : null, !loading && posts.length > 0 && !visiblePosts.length ? React.createElement("div", {
     style: {
-      marginTop: 22,
-      ...cardStyle,
+      borderTop: `1px solid ${spb.line}`,
       padding: 24,
       color: spb.sub,
       lineHeight: 1.7
     }
-  }, "\u8FD9\u4E2A\u5206\u7C7B\u8FD8\u6CA1\u6709\u5E16\u5B50\uFF0C\u6362\u4E2A\u6807\u7B7E\u901B\u901B\uFF0C\u6216\u8005\u81EA\u5DF1\u6765\u8865\u4E00\u6761\uFF5E") : null, React.createElement("div", {
+  }, "\u8FD9\u4E2A\u5206\u7C7B\u6682\u65F6\u6CA1\u6709\u5E16\u5B50\uFF0C\u6362\u4E2A\u6807\u7B7E\u770B\u770B\uFF0C\u6216\u8005\u81EA\u5DF1\u8865\u4E00\u6761\u3002") : null, visiblePosts.map(post => {
+    const commentCount = Number(post.commentCount || (post.comments || []).length || 0);
+    return React.createElement("button", {
+      key: post.id,
+      type: "button",
+      className: "qi-chat-post-row",
+      onClick: () => openPost(post)
+    }, React.createElement("div", {
+      style: avatarStyle(post.author || 'Q')
+    }, firstChar(post.author || 'Q')), React.createElement("div", {
+      style: {
+        minWidth: 0
+      }
+    }, React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        flexWrap: 'wrap'
+      }
+    }, React.createElement("span", {
+      style: {
+        color: spb.ink,
+        fontSize: 14.5,
+        fontWeight: 780
+      }
+    }, post.author || '用户', post.authorRole === 'admin' ? ' · 管理员' : ''), React.createElement("span", {
+      style: {
+        color: spb.faint,
+        fontSize: 12.5
+      }
+    }, formatTime(post.createdAt) || '刚刚')), React.createElement("div", {
+      style: {
+        marginTop: 7,
+        color: spb.ink,
+        fontSize: 18,
+        lineHeight: 1.45,
+        fontWeight: 700,
+        display: '-webkit-box',
+        WebkitLineClamp: 2,
+        WebkitBoxOrient: 'vertical',
+        overflow: 'hidden',
+        whiteSpace: 'pre-wrap'
+      }
+    }, post.text || '分享了一张图片'), (post.comments || []).slice(-1).map(comment => React.createElement("div", {
+      key: comment.id,
+      style: {
+        marginTop: 9,
+        color: spb.sub,
+        fontSize: 13.5,
+        lineHeight: 1.5,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+      }
+    }, React.createElement("span", {
+      style: {
+        color: spb.blueSoft,
+        fontWeight: 750
+      }
+    }, comment.author || '用户', "\uFF1A"), comment.text))), post.imageUrl ? React.createElement("img", {
+      className: "qi-chat-image-thumb",
+      src: chatterImageSrc(post.imageUrl),
+      alt: "",
+      loading: "lazy",
+      decoding: "async"
+    }) : React.createElement("div", {
+      className: "qi-chat-image-thumb",
+      style: {
+        display: 'grid',
+        placeItems: 'center',
+        color: spb.faint,
+        fontFamily: spb.mono,
+        fontSize: 11
+      }
+    }, "TEXT"), React.createElement("div", {
+      className: "qi-chat-comment-count",
+      style: {
+        color: spb.faint,
+        fontSize: 13,
+        textAlign: 'right'
+      }
+    }, commentCount ? `${commentCount} 条` : '打开'));
+  })))), React.createElement("aside", {
+    className: "qi-chat-aside"
+  }, composerPanel, React.createElement("div", {
+    className: "qi-chat-stats",
     style: {
-      margin: '18px auto 0',
+      ...surfaceStyle,
+      padding: 20
+    }
+  }, React.createElement("div", {
+    style: {
+      color: spb.ink,
+      fontSize: 18,
+      fontWeight: 780
+    }
+  }, "\u793E\u533A\u52A8\u6001"), React.createElement("div", {
+    style: {
+      marginTop: 10
+    }
+  }, statChip('帖子', chatStats.posts), statChip('图片', chatStats.images), statChip('回复', chatStats.replies))), React.createElement("div", {
+    className: "qi-chat-tips",
+    style: {
+      ...surfaceStyle,
+      padding: 20
+    }
+  }, React.createElement("div", {
+    style: {
+      color: spb.ink,
+      fontSize: 18,
+      fontWeight: 780
+    }
+  }, "\u53D1\u5E16\u5C0F\u8D34\u58EB"), React.createElement("div", {
+    style: {
+      marginTop: 14,
       display: 'grid',
-      gap: 16,
-      maxWidth: 880
+      gap: 14
     }
-  }, visiblePosts.map(post => React.createElement("button", {
-    key: post.id,
-    type: "button",
-    className: "qi-chat-card",
-    onClick: () => openPost(post),
+  }, [['想到什么发什么', '记录生活、分享观点、求助答疑，真诚表达最重要。'], ['图文会更受欢迎', '带图的帖子更容易获得关注和回复。'], ['尊重与友善', '一起维护社区氛围，让每个人都能自在交流。']].map(([title, body]) => React.createElement("div", {
+    key: title,
     style: {
-      ...cardStyle,
-      width: '100%',
-      padding: 0,
-      textAlign: 'left',
-      cursor: 'pointer',
-      fontFamily: 'inherit',
-      color: 'inherit',
-      animation: 'qiChatPop 0.4s ease both'
-    }
-  }, React.createElement("div", {
-    style: {
-      padding: '15px 18px 13px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: 11,
-      borderBottom: post.imageUrl ? `1px solid ${spb.line}` : 'none'
-    }
-  }, React.createElement("div", {
-    style: avatarStyle(post.author || 'Q')
-  }, firstChar(post.author || 'Q')), React.createElement("div", {
-    style: {
-      minWidth: 0,
-      flex: 1
+      borderTop: `1px solid ${spb.line}`,
+      paddingTop: 12
     }
   }, React.createElement("div", {
     style: {
       color: spb.ink,
       fontSize: 14.5,
-      fontWeight: 780,
-      overflow: 'hidden',
-      textOverflow: 'ellipsis',
-      whiteSpace: 'nowrap'
-    }
-  }, post.author || '用户', post.authorRole === 'admin' ? ' · 管理员' : ''), React.createElement("div", {
-    style: {
-      marginTop: 3,
-      color: spb.faint,
-      fontSize: 12.2
-    }
-  }, formatTime(post.createdAt) || '刚刚')), React.createElement("span", {
-    style: {
-      color: spb.blueSoft,
-      fontSize: 12.5,
       fontWeight: 760
     }
-  }, "\u5E16\u5B50")), post.imageUrl ? React.createElement("div", {
+  }, title), React.createElement("div", {
     style: {
-      margin: '0 18px 16px',
-      border: `1px solid ${spb.line}`,
-      borderRadius: 14,
-      overflow: 'hidden',
-      background: 'oklch(0.12 0.01 265)'
-    }
-  }, React.createElement("img", {
-    src: chatterImageSrc(post.imageUrl),
-    alt: "",
-    loading: "lazy",
-    decoding: "async",
-    style: {
-      width: '100%',
-      height: 'auto',
-      maxHeight: 520,
-      objectFit: 'contain',
-      display: 'block'
-    }
-  })) : null, React.createElement("div", {
-    style: {
-      padding: post.imageUrl ? '0 18px 17px' : '17px 18px'
-    }
-  }, React.createElement("div", {
-    style: {
-      color: spb.ink,
-      fontSize: 15.5,
-      lineHeight: 1.72,
-      whiteSpace: 'pre-wrap'
-    }
-  }, post.text || '分享了一张图片'), post.commentCount || (post.comments || []).length ? React.createElement("div", {
-    style: {
-      marginTop: 14,
-      borderTop: `1px solid ${spb.line}`,
-      paddingTop: 12,
-      display: 'grid',
-      gap: 8
-    }
-  }, (post.comments || []).slice(-2).map(comment => React.createElement("div", {
-    key: comment.id,
-    style: {
+      marginTop: 5,
       color: spb.sub,
       fontSize: 13.5,
-      lineHeight: 1.58,
-      background: 'oklch(0.155 0.012 265 / 0.54)',
-      borderRadius: 10,
-      padding: '8px 10px'
+      lineHeight: 1.55
     }
-  }, React.createElement("span", {
-    style: {
-      color: spb.blueSoft,
-      fontWeight: 750
-    }
-  }, comment.author || '用户', "\uFF1A"), comment.text))) : null, React.createElement("div", {
-    style: {
-      marginTop: 16,
-      display: 'flex',
-      justifyContent: 'space-between',
-      gap: 10,
-      color: spb.faint,
-      fontSize: 12.5,
-      alignItems: 'center'
-    }
-  }, React.createElement("span", null, postCountText(post)), React.createElement("span", {
-    style: {
-      color: spb.blueSoft,
-      fontWeight: 760
-    }
-  }, "\u67E5\u770B"))))))), selectedPost ? React.createElement("div", {
+  }, body))))))), selectedPost ? React.createElement("div", {
     onClick: closePost,
     style: {
       position: 'fixed',
@@ -3474,12 +3398,17 @@ function SpbChat({
       padding: 'clamp(18px, 4vw, 42px)'
     }
   }, React.createElement("article", {
+    ref: postDialogRef,
+    role: "dialog",
+    "aria-modal": "true",
+    "aria-label": "\u5E16\u5B50\u8BE6\u60C5",
+    tabIndex: -1,
     onClick: event => event.stopPropagation(),
     style: {
       width: 'min(860px, 100%)',
       maxHeight: '88vh',
       overflow: 'auto',
-      ...cardStyle
+      ...surfaceStyle
     }
   }, selectedPost.imageUrl ? React.createElement("div", {
     style: {
@@ -3537,6 +3466,7 @@ function SpbChat({
   }, formatTime(selectedPost.createdAt)))), React.createElement("button", {
     type: "button",
     onClick: closePost,
+    className: "qi-chat-action",
     style: smallButton
   }, "\u5173\u95ED")), React.createElement("div", {
     style: {
@@ -3546,7 +3476,18 @@ function SpbChat({
       lineHeight: 1.88,
       whiteSpace: 'pre-wrap'
     }
-  }, selectedPost.text || '分享了一张图片'), React.createElement("div", {
+  }, selectedPost.text || '分享了一张图片'), error ? React.createElement("div", {
+    role: "alert",
+    style: {
+      marginTop: 16,
+      border: '1px solid oklch(0.68 0.15 32 / 0.38)',
+      borderRadius: 8,
+      padding: '11px 13px',
+      color: 'oklch(0.82 0.11 32)',
+      background: 'oklch(0.26 0.04 32 / 0.22)',
+      fontSize: 14
+    }
+  }, error) : null, React.createElement("div", {
     style: {
       marginTop: 24,
       borderTop: `1px solid ${spb.line}`,
@@ -3565,7 +3506,7 @@ function SpbChat({
       fontFamily: spb.disp,
       color: spb.ink,
       fontSize: 24,
-      letterSpacing: '-0.02em'
+      letterSpacing: 0
     }
   }, "\u8BC4\u8BBA\u4E92\u52A8"), React.createElement("span", {
     style: {
@@ -3582,7 +3523,7 @@ function SpbChat({
     key: comment.id,
     style: {
       border: `1px solid ${spb.line}`,
-      borderRadius: 14,
+      borderRadius: 8,
       padding: '13px 14px',
       background: 'oklch(0.195 0.014 265 / 0.68)'
     }
@@ -3621,6 +3562,8 @@ function SpbChat({
       gap: 10
     }
   }, React.createElement("textarea", {
+    "aria-label": "\u56DE\u590D\u5185\u5BB9",
+    className: "qi-chat-input",
     value: replyText,
     onChange: event => setReplyText(event.target.value.slice(0, 600)),
     placeholder: user ? '写一条回复...' : '登录后可以评论互动',
@@ -3628,7 +3571,7 @@ function SpbChat({
       width: '100%',
       minHeight: 92,
       resize: 'vertical',
-      borderRadius: 14,
+      borderRadius: 8,
       border: `1px solid ${spb.line}`,
       background: 'oklch(0.145 0.012 265 / 0.72)',
       color: spb.ink,
@@ -3654,6 +3597,7 @@ function SpbChat({
     type: "button",
     onClick: submitReply,
     disabled: replySubmitting,
+    className: "qi-chat-action",
     style: {
       ...primary,
       opacity: replySubmitting ? 0.62 : 1
@@ -3777,24 +3721,40 @@ function SpbInfoPage({
   pageKey
 }) {
   const data = INFO_PAGE_DATA[pageKey] || INFO_PAGE_DATA.about;
-  const showSummaryCard = pageKey !== 'about';
+  const isAbout = pageKey === 'about';
+  const isContact = pageKey === 'contact';
+  const isPolicy = pageKey === 'privacy' || pageKey === 'terms';
+  const visibleCards = isContact ? (data.cards || []).filter(card => !card.mail) : data.cards || [];
+  const aboutIndex = ['01', '02', '03', '04'];
+  const aboutSummary = [['行情', '看清变化'], ['娱乐', '保留热爱'], ['探索', '走进生活'], ['文档', '长期沉淀']];
   return React.createElement("section", {
     style: {
-      padding: 'clamp(64px, 8vw, 96px) clamp(20px, 4vw, 48px) 94px',
-      borderTop: `1px solid ${spb.line}`
+      padding: '64px clamp(18px, 4vw, 56px) 94px',
+      borderTop: `1px solid ${spb.line}`,
+      background: 'linear-gradient(180deg, oklch(0.155 0.013 265), oklch(0.135 0.012 265))'
     }
+  }, React.createElement("style", null, `
+        .qi-info-shell { max-width: 1240px; margin: 0 auto; }
+        .qi-info-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(290px, 360px); gap: 52px; align-items: start; }
+        .qi-info-title { margin: 14px 0 0; font-family: ${spb.disp}; font-size: 64px; line-height: 1.04; color: ${spb.ink}; letter-spacing: 0; font-weight: 680; }
+        .qi-info-card-grid { margin-top: 42px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 245px), 1fr)); gap: 12px; }
+        .qi-info-story-row { display: grid; grid-template-columns: 58px minmax(190px, 0.38fr) minmax(0, 1fr); gap: 22px; padding: 24px 0; border-top: 1px solid ${spb.line}; }
+        .qi-contact-grid { margin-top: 36px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+        .qi-info-link:focus-visible { outline: 2px solid ${spb.blue}; outline-offset: 3px; }
+        @media (max-width: 820px) {
+          .qi-info-hero { grid-template-columns: 1fr; gap: 28px; }
+          .qi-info-story-row { grid-template-columns: 46px minmax(0, 1fr); }
+          .qi-info-story-copy { grid-column: 2; }
+        }
+        @media (max-width: 620px) {
+          .qi-info-title { font-size: 44px; }
+          .qi-contact-grid { grid-template-columns: 1fr; }
+          .qi-info-story-row { gap: 14px; }
+        }
+      `), React.createElement("div", {
+    className: "qi-info-shell"
   }, React.createElement("div", {
-    style: {
-      maxWidth: 1120,
-      margin: '0 auto'
-    }
-  }, React.createElement("div", {
-    style: {
-      display: 'grid',
-      gridTemplateColumns: showSummaryCard ? 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))' : 'minmax(0, 900px)',
-      gap: 'clamp(28px, 6vw, 72px)',
-      alignItems: 'start'
-    }
+    className: "qi-info-hero"
   }, React.createElement("div", null, React.createElement("div", {
     style: {
       fontFamily: spb.mono,
@@ -3804,141 +3764,240 @@ function SpbInfoPage({
       fontSize: 12.5
     }
   }, data.eyebrow), React.createElement("h1", {
-    style: {
-      margin: '16px 0 0',
-      fontFamily: spb.disp,
-      fontSize: 'clamp(40px, 6vw, 68px)',
-      lineHeight: 1.06,
-      color: spb.ink,
-      letterSpacing: '-0.035em',
-      fontWeight: 650
-    }
+    className: "qi-info-title"
   }, data.title), React.createElement("p", {
     style: {
-      marginTop: 22,
+      margin: '20px 0 0',
       color: spb.sub,
-      fontSize: 18,
+      fontSize: 17.5,
       lineHeight: 1.82,
-      maxWidth: 780
+      maxWidth: 760
     }
-  }, data.intro), React.createElement("p", {
+  }, data.intro), !isContact ? React.createElement("p", {
     style: {
-      marginTop: 18,
+      margin: '16px 0 0',
       color: spb.ink,
-      fontSize: 17,
+      fontSize: 16.5,
       lineHeight: 1.78,
-      maxWidth: 780
+      maxWidth: 760
     }
-  }, data.lead)), showSummaryCard ? React.createElement("div", {
+  }, data.lead) : null), isAbout ? React.createElement("aside", {
     style: {
       border: `1px solid ${spb.line}`,
-      borderRadius: 18,
+      borderRadius: 10,
       padding: 22,
-      background: 'linear-gradient(180deg, oklch(0.225 0.018 265 / 0.9), oklch(0.18 0.014 265 / 0.9))',
-      boxShadow: '0 18px 55px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.06)'
+      background: 'oklch(0.185 0.014 265 / 0.92)',
+      boxShadow: '0 20px 54px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.055)'
     }
   }, React.createElement("div", {
     style: {
       fontFamily: spb.mono,
-      fontSize: 12,
-      color: spb.faint,
+      fontSize: 11.5,
+      color: spb.blueSoft,
       letterSpacing: '0.08em',
       textTransform: 'uppercase'
     }
-  }, "DreamerQi"), React.createElement("div", {
+  }, "One place, four modes"), React.createElement("div", {
     style: {
-      marginTop: 14,
+      marginTop: 10,
       color: spb.ink,
-      fontSize: 23,
-      lineHeight: 1.35,
       fontFamily: spb.disp,
-      fontWeight: 650
+      fontSize: 24,
+      lineHeight: 1.35,
+      fontWeight: 680
     }
-  }, "\u628A\u590D\u6742\u4FE1\u606F\u6574\u7406\u6210\u53EF\u7406\u89E3\u3001\u53EF\u590D\u76D8\u3001\u53EF\u7EE7\u7EED\u6539\u8FDB\u7684\u9875\u9762\u3002"), React.createElement("div", {
+  }, "\u4E00\u5904\u5165\u53E3\uFF0C\u627F\u63A5\u56DB\u79CD\u65E5\u5E38\u72B6\u6001\u3002"), React.createElement("div", {
     style: {
-      marginTop: 20,
-      height: 1,
-      background: spb.line
+      marginTop: 19
     }
-  }), React.createElement("div", {
+  }, aboutSummary.map(([title, body], index) => React.createElement("div", {
+    key: title,
     style: {
-      marginTop: 18,
       display: 'grid',
-      gap: 11,
-      color: spb.sub,
+      gridTemplateColumns: '34px minmax(0, 1fr) auto',
+      gap: 10,
+      alignItems: 'baseline',
+      padding: '12px 0',
+      borderTop: `1px solid ${spb.line}`
+    }
+  }, React.createElement("span", {
+    style: {
+      fontFamily: spb.mono,
+      color: spb.faint,
+      fontSize: 11
+    }
+  }, aboutIndex[index]), React.createElement("span", {
+    style: {
+      color: spb.ink,
       fontSize: 14.5,
-      lineHeight: 1.65
+      fontWeight: 780
     }
-  }, React.createElement("span", null, "\u5B9E\u65F6\u89C2\u5BDF"), React.createElement("span", null, "\u6765\u6E90\u7559\u75D5"), React.createElement("span", null, "\u7B56\u7565\u5F52\u7EB3"), React.createElement("span", null, "\u957F\u671F\u6C89\u6DC0"))) : null), React.createElement("div", {
+  }, title), React.createElement("span", {
     style: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))',
-      gap: 16,
-      marginTop: 44
+      color: spb.sub,
+      fontSize: 13
     }
-  }, (data.cards || []).map(card => React.createElement("article", {
-    key: card.title,
+  }, body))))) : isContact ? React.createElement("aside", {
     style: {
-      minHeight: 190,
       border: `1px solid ${spb.line}`,
-      borderRadius: 18,
-      padding: 24,
-      background: spb.panel,
-      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)'
+      borderRadius: 10,
+      padding: 22,
+      background: 'oklch(0.185 0.014 265 / 0.92)',
+      boxShadow: '0 20px 54px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.055)'
     }
   }, React.createElement("div", {
     style: {
-      fontFamily: spb.disp,
-      fontSize: 22,
-      color: spb.ink,
-      fontWeight: 650,
-      letterSpacing: '-0.01em'
+      fontFamily: spb.mono,
+      fontSize: 11.5,
+      color: spb.blueSoft,
+      letterSpacing: '0.08em',
+      textTransform: 'uppercase'
     }
-  }, card.title), card.mail ? React.createElement("a", {
-    href: `mailto:${SERVICE_EMAIL}`,
+  }, "Primary contact"), React.createElement("div", {
     style: {
-      display: 'inline-flex',
-      marginTop: 16,
+      marginTop: 10,
+      color: spb.ink,
+      fontSize: 15,
+      fontWeight: 760
+    }
+  }, "\u670D\u52A1\u90AE\u7BB1"), React.createElement("a", {
+    href: `mailto:${SERVICE_EMAIL}`,
+    className: "qi-info-link",
+    style: {
+      display: 'block',
+      marginTop: 8,
       color: spb.blueSoft,
       fontSize: 19,
-      fontWeight: 750,
+      fontWeight: 780,
+      lineHeight: 1.45,
       textDecoration: 'none',
       wordBreak: 'break-all'
     }
-  }, card.body) : React.createElement("p", {
+  }, SERVICE_EMAIL), React.createElement("div", {
     style: {
-      margin: '14px 0 0',
-      color: spb.sub,
-      fontSize: 15.5,
-      lineHeight: 1.78
-    }
-  }, card.body)))), React.createElement("div", {
-    style: {
-      marginTop: 46,
-      display: 'grid',
-      gap: 18
-    }
-  }, (data.sections || []).map(section => React.createElement("section", {
-    key: section.title,
-    style: {
+      marginTop: 18,
       borderTop: `1px solid ${spb.line}`,
-      paddingTop: 22
+      paddingTop: 16,
+      color: spb.sub,
+      fontSize: 13.5,
+      lineHeight: 1.68
     }
-  }, React.createElement("h2", {
+  }, "\u8BF7\u5728\u4E3B\u9898\u91CC\u5199\u660E\u201C\u8D26\u53F7 / \u9875\u9762 / \u5408\u4F5C\u201D\uFF0C\u6B63\u6587\u9644\u4E0A\u53D1\u751F\u65F6\u95F4\u4E0E\u9875\u9762\u540D\u79F0\uFF0C\u80FD\u66F4\u5FEB\u8FDB\u5165\u5BF9\u5E94\u5904\u7406\u8DEF\u5F84\u3002"), React.createElement("a", {
+    href: `mailto:${SERVICE_EMAIL}`,
+    className: "qi-info-link",
+    style: {
+      marginTop: 18,
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: '100%',
+      minHeight: 44,
+      borderRadius: 8,
+      background: spb.blue,
+      color: spb.bg,
+      fontSize: 14,
+      fontWeight: 820,
+      textDecoration: 'none'
+    }
+  }, "\u5199\u90AE\u4EF6\u8054\u7CFB\u6211\u4EEC")) : React.createElement("aside", {
+    style: {
+      border: `1px solid ${spb.line}`,
+      borderRadius: 10,
+      padding: 22,
+      background: 'oklch(0.185 0.014 265 / 0.92)'
+    }
+  }, React.createElement("div", {
+    style: {
+      fontFamily: spb.mono,
+      fontSize: 11.5,
+      color: spb.blueSoft,
+      letterSpacing: '0.08em',
+      textTransform: 'uppercase'
+    }
+  }, "DreamerQi policy"), React.createElement("div", {
+    style: {
+      marginTop: 12,
+      color: spb.ink,
+      fontFamily: spb.disp,
+      fontSize: 23,
+      lineHeight: 1.38,
+      fontWeight: 680
+    }
+  }, "\u6E05\u6670\u8BF4\u660E\u670D\u52A1\u8FB9\u754C\uFF0C\u4E5F\u8BA4\u771F\u4FDD\u62A4\u6BCF\u4E00\u6B21\u4F7F\u7528\u3002"), React.createElement("div", {
+    style: {
+      marginTop: 18,
+      borderTop: `1px solid ${spb.line}`,
+      paddingTop: 16,
+      color: spb.sub,
+      fontSize: 13.5,
+      lineHeight: 1.68
+    }
+  }, data.lead))), visibleCards.length ? React.createElement("div", {
+    className: isContact ? 'qi-contact-grid' : 'qi-info-card-grid'
+  }, visibleCards.map((card, index) => React.createElement("article", {
+    key: card.title,
+    style: {
+      minHeight: isAbout ? 224 : 178,
+      border: `1px solid ${spb.line}`,
+      borderRadius: 10,
+      padding: 22,
+      background: 'oklch(0.185 0.014 265 / 0.78)',
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.045)'
+    }
+  }, isAbout ? React.createElement("div", {
+    style: {
+      fontFamily: spb.mono,
+      fontSize: 11,
+      color: spb.blueSoft
+    }
+  }, aboutIndex[index] || String(index + 1).padStart(2, '0')) : null, React.createElement("div", {
+    style: {
+      marginTop: isAbout ? 24 : 0,
+      fontFamily: spb.disp,
+      fontSize: 22,
+      color: spb.ink,
+      fontWeight: 680,
+      letterSpacing: 0
+    }
+  }, card.title), React.createElement("p", {
+    style: {
+      margin: '13px 0 0',
+      color: spb.sub,
+      fontSize: 15,
+      lineHeight: 1.75
+    }
+  }, card.body)))) : null, React.createElement("div", {
+    style: {
+      marginTop: isAbout ? 48 : 42
+    }
+  }, (data.sections || []).map((section, index) => React.createElement("section", {
+    key: section.title,
+    className: "qi-info-story-row"
+  }, React.createElement("div", {
+    style: {
+      fontFamily: spb.mono,
+      color: isContact && index === 1 ? 'oklch(0.82 0.11 32)' : spb.blueSoft,
+      fontSize: 12,
+      paddingTop: 4
+    }
+  }, String(index + 1).padStart(2, '0')), React.createElement("h2", {
     style: {
       margin: 0,
       color: spb.ink,
       fontFamily: spb.disp,
-      fontSize: 'clamp(23px, 3vw, 31px)',
-      letterSpacing: '-0.02em'
+      fontSize: 28,
+      lineHeight: 1.28,
+      letterSpacing: 0,
+      fontWeight: 680
     }
   }, section.title), React.createElement("p", {
+    className: "qi-info-story-copy",
     style: {
-      margin: '12px 0 0',
+      margin: 0,
       color: spb.sub,
-      fontSize: 16.5,
-      lineHeight: 1.85,
-      maxWidth: 900
+      fontSize: 16,
+      lineHeight: 1.84,
+      maxWidth: isPolicy ? 820 : 760
     }
   }, section.body))))));
 }
