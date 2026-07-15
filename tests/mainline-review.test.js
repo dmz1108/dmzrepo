@@ -248,6 +248,25 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   A(t10.star.sealStatus === 'pending' && t10.star.sealedSameDay === null, '①当日盘中明星封板 → pending/null');
   A(out2.stats.mainlineTotal === 1, '①当日盘中不计命中分母(仅 07-09 计入)');
 
+  // ---------- 三审 P1:东财空 + 同花顺有预测 → 该日不被跳过,同花顺分母/命中被统计 ----------
+  TODAY = '2026-07-14'; TODAY_CLOSED = true;
+  TRADING_DAYS = ['2026-07-10', '2026-07-13'];
+  PREDICTS['2026-07-13'] = { sessionPhase: '早盘', confirmedKey: '', schemaVersion: 3, top: [], candidates: [], starTransitions: [],
+    bySource: {
+      eastmoney: { top: [], candidates: [], starTransitions: [] },   // 东财当日有效零结果:顶层兼容 top 也为空
+      ths: { top: [{ key: '算力', theme: '算力', l2VerificationStatus: 'qi', star: null, leader: null }],
+             candidates: [{ key: '算力', l2VerificationStatus: 'qi' }], starTransitions: [] },
+    } };
+  LIMIT_UP['2026-07-13'] = finalLimitDb(['600020']);
+  MAIN_REASON['2026-07-13'] = reasonDb([{ code: '600020', name: 'X', finalBoardTopic: '算力' }]);
+  const out3 = await getStrategyMainlineReview(10);
+  const r13 = out3.days.find(r => r.day === '2026-07-13');
+  A(!!r13, '三审P1:东财空+同花顺有预测,该日仍进入回看(不被顶层空 top 跳过)');
+  A(!!(r13 && r13.bySource) && r13.bySource.eastmoney.noMainline === true, '三审P1:东财该日无主线(noMainline)');
+  A(!!(r13 && r13.bySource) && r13.bySource.ths.mainlineHitTop1 === true, '三审P1:同花顺预判算力=当日实际第一 → top1 命中');
+  A(out3.stats.bySource.ths.mainlineTotal >= 1 && out3.stats.bySource.ths.mainlineTop1Hits >= 1, '三审P1:同花顺命中进入 stats.bySource 分母/命中(不系统性漏样本)');
+  A(out3.stats.bySource.eastmoney.mainlineTotal === 0, '三审P1:东财该日无主线,不计东财分母(不借同花顺凑数)');
+
   if (process.exitCode) console.error('\nSOME MAINLINE-REVIEW CHECKS FAILED');
   else console.log('\nALL MAINLINE-REVIEW CHECKS PASSED');
 })().catch(e => { console.error(e); process.exitCode = 1; });

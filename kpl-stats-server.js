@@ -23921,7 +23921,11 @@ async function getStrategyMainlineReview(days = 10) {
     const nextDay = i + 1 < tradingDays.length ? tradingDays[i + 1] : null;
     const thirdDay = i + 3 < tradingDays.length ? tradingDays[i + 3] : null;
     const predict = await readMainlinePredict(day);
-    if (!predict || !Array.isArray(predict.top) || !predict.top.length) continue;
+    // 两套独立预测(schema v3):入口不能只看兼容顶层 top——东财空、同花顺有预测时顶层为空,
+    // 否则整天被跳过、同花顺样本系统性漏统计(Codex 三审 P1)。任一 bySource.top 非空即处理该日。
+    const hasAnyPredictTop = (Array.isArray(predict?.top) && predict.top.length) ||
+      (predict?.bySource && ((predict.bySource.eastmoney?.top?.length) || (predict.bySource.ths?.top?.length)));
+    if (!predict || !hasAnyPredictTop) continue;
     const phase = String(predict.sessionPhase || '');
     const sampleValid = STRATEGY_MAINLINE_INTRADAY_PHASES.has(phase);
     const sampleInvalidReason = sampleValid ? '' : (phase ? `phase:${phase}` : 'phase:unknown');
@@ -24563,8 +24567,13 @@ function strategyMainlineAssembleBySource(em, th) {
   }
   return { eastmoney, ths, dualResonanceThemes: [...dualKeys] };
 }
-// 载体口径(缓存/确认/AI 兼容):两套 mainlines 的并集,各带 source 标签、保留各自 rank 为 sourceRank。
-// 仅用于承载,不做跨源重打分;页面按 mainlinesBySource 分「东财/同花顺」两栏展示。
+// 顶层 mainlines 是「兼容载体」,不是正式预测真值:两套 mainlines 的并集,各带 source 标签、
+// 保留各自 rank 为 sourceRank,并按 score 排一个「展示/缓存用」的顺序(非跨源重打分预测)。
+// 契约(Codex 三审澄清):
+//   - 正式盘中预测真值 = writeMainlinePredictBySource 的 bySource 两块(各源独立,不跨源混排);
+//   - 页面预测 = mainlinesBySource 双栏(各源独立);
+//   - 顶层 union 仅供缓存可用性判定、AI 兼容、以及盘后「共同证据层」(Owner 允许)消费,
+//     不得据其顶层名次断言两套预测已被合并/重打分。
 function strategyMainlineComposeBySourcePayload(em, th) {
   const bySource = strategyMainlineAssembleBySource(em, th);
   const carrier = (em && em.ok) ? em : ((th && th.ok) ? th : (em || th || null));
@@ -24600,14 +24609,27 @@ async function buildStrategyMainlinesLive(day, options = {}) {
   // 两次都不写盘中预测,由本函数用并集写一次,保持 writeMainlinePredict 原有回看语义。
   // 配对运行期内共享「按日只读」缓存:东财[6]/同花顺[5] 两遍引擎对同一天的涨停库/主因库/收盘库/
   // 主线确认只读一次(结果字节一致,不改预测口径);来源相关的取板/富化/评分/排序仍各跑各的。
+  // 两套 impl 都 deferAutoScan:各自不派发 L2 扫描,交回本函数用两源合并候选统一协调一次,
+  // 按既有跨源字典序排序——避免异步完成顺序(而非市场强度)决定 L2 优先级(Codex 三审 P1)。
   const [em, th] = await strategyMainlineReadCache.run(new Map(), () => Promise.all([
-    buildStrategyMainlinesLiveImpl(day, { ...options, boardZsTypes: [6], writePredict: false }, null).catch(() => null),
-    buildStrategyMainlinesLiveImpl(day, { ...options, boardZsTypes: [5], writePredict: false }, null).catch(() => null),
+    buildStrategyMainlinesLiveImpl(day, { ...options, boardZsTypes: [6], writePredict: false, deferAutoScan: true }, null).catch(() => null),
+    buildStrategyMainlinesLiveImpl(day, { ...options, boardZsTypes: [5], writePredict: false, deferAutoScan: true }, null).catch(() => null),
   ]));
-  const composed = strategyMainlineComposeBySourcePayload(em, th);
-  if (!composed) return em || th || strategyMainlineEmptyPayload(isoFromCompactDate(day || chinaNowParts().day), isoFromCompactDate(day || chinaNowParts().day), 'strategy-mainline-unavailable', '今日主线榜暂不可用。', '');
   const today = isoFromCompactDate(chinaNowParts().day);
   const requestedDay = isoFromCompactDate(day || chinaNowParts().day);
+  // 统一 L2 自动扫描:两源候选板合并成一批(各带自己的 zsType),交给 strategyMainlineMaybeAutoScan
+  // 一次性按跨源字典序(补选>净流入>大涨)挑选并派发;99亿的同花顺板不会被 9亿的东财板抢先。
+  if (!options.leaderDebug && requestedDay === today) {
+    const scanBoards = [...((em && em.__autoScanBoards) || []), ...((th && th.__autoScanBoards) || [])];
+    const scanPrior = new Map([...((em && em.__autoScanPriorByCode) || []), ...((th && th.__autoScanPriorByCode) || [])]);
+    const now = chinaNowParts();
+    const sessionPhaseNow = requestedDay === isoFromCompactDate(now.day) ? strategyMainlineSessionPhase(now) : '';
+    strategyMainlineMaybeAutoScan(scanBoards, requestedDay, true, sessionPhaseNow, scanPrior);
+  }
+  // 临时字段用后即删,绝不进入缓存/合并载体。
+  for (const p of [em, th]) { if (p) { delete p.__autoScanBoards; delete p.__autoScanPriorByCode; } }
+  const composed = strategyMainlineComposeBySourcePayload(em, th);
+  if (!composed) return em || th || strategyMainlineEmptyPayload(isoFromCompactDate(day || chinaNowParts().day), isoFromCompactDate(day || chinaNowParts().day), 'strategy-mainline-unavailable', '今日主线榜暂不可用。', '');
   if (composed.ok && requestedDay === today && options.writePredict !== false) {
     const confirm = await readMainlineConfirm(requestedDay).catch(() => null);
     // 按来源分别落库(不把跨源并集当预测真值);顶层兼容层为东财单源。
@@ -25090,7 +25112,9 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
   const isTodayQuery = isoDay === chinaTodayIso;
   const sessionPhaseNow = isTodayQuery ? strategyMainlineSessionPhase(chinaNow) : '';
   // 诊断模式严格只读:不派发扫描任务(也不写预测,见下方 writePredict 条件)。
-  if (!options.leaderDebug) {
+  // deferAutoScan(两套独立预测配对构建):本 impl 不各自派发,由外层用两源合并候选统一协调一次,
+  // 按既有跨源字典序排序,避免异步完成顺序决定 L2 优先级(Codex 三审 P1)。
+  if (!options.leaderDebug && !options.deferAutoScan) {
     strategyMainlineMaybeAutoScan(boardPayload?.boards || [], isoDay, isTodayQuery, sessionPhaseNow, priorReason?.byCode);
   }
   const mainlineConfirm = await readMainlineConfirm(isoDay).catch(() => null);
@@ -25234,6 +25258,8 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
       ...(t.risingStocks || []).map(s => s.code).filter(Boolean),
     ])).size,
     mainlines,
+    // deferAutoScan:把本源富化后的候选板(含 zsType/memberRows)交给外层统一派发;外层用后即删,不入缓存。
+    ...(options.deferAutoScan ? { __autoScanBoards: boardPayload?.boards || [], __autoScanPriorByCode: priorReason?.byCode || null } : {}),
   };
 }
 

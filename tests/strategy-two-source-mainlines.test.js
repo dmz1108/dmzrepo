@@ -124,6 +124,42 @@ A(sharedTrend && Number(sharedTrend.inflowDelta) < 0, '反证:共用键时第二
 A(/trendKeyPrefix = 'zs' \+ activeBoardZsTypes\.join\('-'\)/.test(src), '调用点按 zs+activeBoardZsTypes 组装来源前缀');
 A(/strategyMainlineTrackTrend\(trendKey,/.test(src) && /trendKeyPrefix \? String\(trendKeyPrefix\) \+ '::'/.test(src), 'augmentPrediction 用来源前缀化的 trendKey 采样');
 
+// ---- 5c. 统一 L2 自动扫描:两源合并候选按跨源字典序,高净流入源不被低净流入源抢先(Codex 三审 P1) ----
+const STRATEGY_MAINLINE_BIG_GAIN_PCT = 5;
+const STRATEGY_MAINLINE_AUTO_SCAN_WINDOW_MS = 5 * 60 * 1000;
+const STRATEGY_MAINLINE_AUTO_SCAN_MAX_PER_WINDOW = 2;
+const STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW = 5e8;
+const STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT = 2;
+const STRATEGY_MAINLINE_AUTO_SCAN_HIGH_INFLOW_OVERRIDE = 10e8;
+const STRATEGY_MAINLINE_AUTO_SCAN_LIMIT_STOCKS = 50;
+const strategyMainlineAutoScanState = { windowStart: 0, dispatched: 0, lastJobId: '' };
+const strategyMainlineFamilyInfo = (x) => ({ key: 'group:' + String(x && x.theme || '') });
+const strategyMainlineScanPriorityCodes = () => [];
+const l2jobs = {};
+let l2seq = 0;
+const dispatched = [];
+const localL2TaskQueue = {
+  configured: () => true,
+  get: (id) => l2jobs[id] || null,
+  latest: () => null,   // 无既有任务
+  start: (job) => { const jobId = 'J' + (++l2seq); const rec = { jobId, ...job, status: 'queued' }; l2jobs[jobId] = rec; dispatched.push(rec); return rec; },
+};
+eval(extractFn('strategyMainlineMaybeAutoScan'));
+// 东财板列在前(9亿),同花顺板在后(99亿);跨源字典序应让同花顺 99亿 先被派发
+const scanBoards = [
+  { plateId: 'E1', name: '东财板', netInflow: 9e8, zt: 2, zsType: 6, scanChannel: '', memberRows: [{ code: '600001', gain: 6 }] },
+  { plateId: 'T1', name: '同花顺板', netInflow: 99e8, zt: 2, zsType: 5, scanChannel: '', memberRows: [{ code: '600002', gain: 6 }] },
+];
+strategyMainlineMaybeAutoScan(scanBoards, '2026-07-15', true, '早盘', null);
+A(dispatched.length === 1, '统一扫描:一次只派发一个任务(限流不变)');
+A(dispatched[0].plateId === 'T1' && Number(dispatched[0].zsType) === 5, '统一扫描:同花顺 99亿板先于东财 9亿板被派发(跨源按净流入排序,非完成顺序)');
+// 再来一次:上一个任务仍 queued(单任务在飞)→ 不再派发,单一来源无法独占两个名额
+strategyMainlineMaybeAutoScan(scanBoards, '2026-07-15', true, '早盘', null);
+A(dispatched.length === 1 && strategyMainlineAutoScanState.dispatched === 1, '统一扫描:上一任务在飞时不再派发,五分钟两名额不被单源无意独占');
+// 调用点接线:两 impl deferAutoScan,外层合并候选统一派发
+A(/deferAutoScan: true/.test(src) && /!options\.leaderDebug && !options\.deferAutoScan/.test(src), 'impl 支持 deferAutoScan,两源配对时各自不派发');
+A(/const scanBoards = \[\.\.\.\(\(em && em\.__autoScanBoards\)/.test(src) && /strategyMainlineMaybeAutoScan\(scanBoards, requestedDay, true/.test(src), '外层用两源合并候选统一派发一次');
+
 // ---- 6. 性能优化:配对运行期「按日只读」缓存去重且结果一致(不改口径) ----
 const { AsyncLocalStorage } = require('async_hooks');
 const strategyMainlineReadCache = new AsyncLocalStorage();
