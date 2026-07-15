@@ -21507,6 +21507,22 @@ function strategyMainlineRepresentativeBoardInflow(boards) {
     zsType: board?.zsType ?? null,
   };
 }
+// R2 同源配对(Owner 2026-07-15):按源(东财6/同花顺5)各取净流入最大的板,净流入与卡片涨幅取自
+// 同一个板,绝不跨源拼。KPL(7)已在取板层剔除,这里天然只会有 6/5。缺某源即该组为 null。
+function strategyMainlineSourcePairs(boards) {
+  const pick = (zs) => {
+    const lead = (Array.isArray(boards) ? boards : [])
+      .filter(b => Number(b?.zsType) === zs && isFiniteNumeric(b?.netInflow))
+      .sort((a, b) => Number(b.netInflow) - Number(a.netInflow))[0];
+    if (!lead) return null;
+    return {
+      board: String(lead?.name || ''),
+      netInflow: Number(lead.netInflow),
+      gainPct: isFiniteNumeric(lead?.gainPct) ? Number(lead.gainPct) : null,
+    };
+  };
+  return { eastmoney: pick(6), ths: pick(5) };
+}
 function strategyMainlineNormalizeRisingStock(row) {
   const code = normalizeReasonSourceCode(row?.code || row?.dm || row?.stockCode);
   if (!code) return null;
@@ -21752,6 +21768,7 @@ function strategyMergeMainlineFamilies(rawMainlines) {
       netInflowBoard: netSelection.boardName,
       netInflowZsType: netSelection.zsType,
       netInflowAggregation: 'representative-board-max',
+      sourcePairs: strategyMainlineSourcePairs(uniqueBoardsForStats),   // R2:东财/同花顺 各自同源净流入+涨幅配对
       boardGainPct: isFiniteNumeric(gainLead.gainPct) ? Number(gainLead.gainPct) : null,
       boardGainName: gainLead.name || '',
       recentHeat,
@@ -24818,6 +24835,7 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
       netInflowBoard: t.netInflowBoard || '',
       netInflowZsType: t.netInflowZsType ?? null,
       netInflowAggregation: 'representative-board-max',
+      sourcePairs: strategyMainlineSourcePairs(boards),   // R2:东财/同花顺 各自同源净流入+涨幅配对
       boardGainPct,
       boardGainName: t.boardGainName || '',
       recentHeat,
@@ -25386,6 +25404,7 @@ function aiCompactMainline(mainline) {
     netInflowBoard: mainline.netInflowBoard || '',
     netInflowZsType: mainline.netInflowZsType ?? null,
     netInflowAggregation: mainline.netInflowAggregation || '',
+    sourcePairs: mainline.sourcePairs || null,   // R2:东财/同花顺 各自同源净流入+涨幅配对
     boardGainPct: aiNum(mainline.boardGainPct),
     boardGainName: mainline.boardGainName || '',
     explain: mainline.explain || '',

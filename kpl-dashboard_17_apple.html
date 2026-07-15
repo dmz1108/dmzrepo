@@ -3462,6 +3462,25 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  body.view-strategy .ml-srcpairs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    margin-top: 3px;
+    font-size: 12px;
+    line-height: 1.3;
+  }
+  body.view-strategy .ml-srcpair em {
+    font-style: normal;
+    color: var(--text-faint);
+    margin-right: 4px;
+  }
+  body.view-strategy .ml-srcpair i {
+    font-style: normal;
+    margin-left: 4px;
+  }
+  body.view-strategy .ml-srcpair i.up { color: var(--up); }
+  body.view-strategy .ml-srcpair i.down { color: #3a9d6b; }
   body.view-strategy .ml-merged-themes {
     display: flex;
     flex-wrap: wrap;
@@ -11587,6 +11606,21 @@ function strategyBoardSourceLabel(zsType) {
   if (source === 7) return 'KPL';
   return '';
 }
+// R2(Owner 2026-07-15):卡片显示东财、同花顺两组,每组的净流入与涨幅取自同一个板(同源一一对应)。
+function strategyMainlineSourcePairsHTML(m) {
+  const sp = m && m.sourcePairs;
+  if (!sp) return '';
+  const one = (label, p) => {
+    if (!p || p.netInflow == null || p.netInflow === '' || !Number.isFinite(Number(p.netInflow))) return '';
+    const infCls = Number(p.netInflow) < 0 ? 'down' : 'up';
+    const g = Number(p.gainPct);
+    const gTxt = Number.isFinite(g) ? `${g > 0 ? '+' : ''}${g.toFixed(2)}%` : '--';
+    return `<span class="ml-srcpair"><em>${label}</em>${escapeHTML(p.board || '')} <i class="${infCls}">${fmtInflow(Number(p.netInflow))}</i> <i>${gTxt}</i></span>`;
+  };
+  const parts = [one('东财', sp.eastmoney), one('同花顺', sp.ths)].filter(Boolean);
+  if (!parts.length) return '';
+  return `<div class="ml-srcpairs" title="东财/同花顺 各取净流入最大板,该组净流入与涨幅同板一一对应,不跨源拼">${parts.join('')}</div>`;
+}
 function strategyMainlineDisplayInflow(mainline) {
   const rows = (Array.isArray(mainline && mainline.resonanceBoards) ? mainline.resonanceBoards : [])
     .filter(board => board && board.netInflow != null && board.netInflow !== '' && Number.isFinite(Number(board.netInflow)))
@@ -11755,6 +11789,7 @@ function renderStrategyMainlinesHTML(d) {
             ${newThemeBadge}
           </div>
           <div class="ml-sub" title="重叠概念板块的资金不相加，采用单个代表板块值">${escapeHTML(driver.label)} · ${Number(m.boardCount) || 0}个共振板块${inflowTrace}</div>
+          ${strategyMainlineSourcePairsHTML(m)}
         </div>
         <div class="ml-score-wrap">
           ${m.predictScore != null ? `<div class="ml-score" title="只含前瞻信号:大涨扩散/冲板/普涨广度/动能/历史主因/资金"><b>${Number(m.predictScore || 0).toFixed(0)}</b><span>预判分</span></div>` : ''}

@@ -5539,3 +5539,29 @@ Deployment:
 Notes for next agent:
 - 2026-07-15 四个正式复盘源现均为 71/71。后续每日继续同一 SOP，不能用自动视觉结果、同花顺图、摘要重复区或炸板区覆盖人工正式库。
 - 默认 `/api/after-close-status` 仍按 previous-trading-day 展示上一交易日；验证当天人工重折结果时应显式使用 `mainReasonMode=same-day`，正式 `source-view?day=2026-07-15&force=1` 已确认当天五个标签均为 71。
+## 2026-07-15 - Claude - 策略页剔除 KPL + 卡片 R2 同源配对(Owner 定稿)
+
+Changed(Owner 2026-07-15 两部分,一个 PR):
+- KPL 剔除:新增 `STRATEGY_ZS_TYPES = [6, 5]`,`getStrategyBoardsForDay`(快照+实时两处)与 `collectStrategyQiCodes` 改用它——策略主线的候选识别、共振、板块数、净流入、涨幅、明星判定、QI 新晋基线全部只用东财(6)+ 同花顺(5),KPL(7)不统计不展示。(`getStrategyBoardStocks` 的逐 plateId 查表保留 [6,5,7],因策略已不传 KPL plateId,无副作用。)
+- R2 同源配对:新增 `strategyMainlineSourcePairs(boards)`——按源各取净流入最大板,`{board, netInflow, gainPct}` 三项取自同一个板(同源一一对应,绝不跨源拼)。合并路径 + seeds 路径 + AI 只读证据 均输出 `sourcePairs:{eastmoney, ths}`。
+- 前端 `kpl-dashboard_17_apple.html`:新增 `strategyMainlineSourcePairsHTML(m)`,卡片在原「资金口径 单板」行下并列显示东财、同花顺两组(缺一源只显示有的那组);配套 `.ml-srcpairs` 样式。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/strategy-source-pairs.test.js`(新增:配对逻辑 + KPL 剔除 + 前后端静态断言)
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check` 通过(server + 内联脚本);全仓 **31 个测试文件全绿**;`git diff --check` 通过。
+- 配对单测:东财组取净流入最大的东财板且涨幅同板(不取涨幅更高的另一东财板);同花顺同理;KPL 板即便钱最大也不成组;缺源该组 null。
+
+Deployment:
+- 未部署;策略核心+展示改动,合并 main 后经受保护生产工作流部署 `kpl-stats-server.js` + `kpl-dashboard_17_apple.html`,重启主服务(HTML 静态但后端同改,需重启)。等 Codex 复核。
+
+Notes for next agent(Codex 复核重点):
+- KPL 剔除是否彻底(候选/共振/净流入/涨幅/明星/新晋 均不含 7);`getStrategyBoardStocks` 保留 [6,5,7] 是否可接受。
+- R2:每组净流入与涨幅是否严格同板;`sourcePairs` 是否随合并/seeds/AI 三条路径都透出(响应经 `...mainline` 展开透传)。
+- 卡片两组并列展示与旧「资金口径 单板」行共存;如需去掉旧行 Owner 再定。
+- 与 PR #87(星标门槛 + 自动扫描)相互独立,合并顺序无依赖。
+
