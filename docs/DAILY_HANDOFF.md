@@ -5078,3 +5078,27 @@ Deployment:
 Notes for next agent:
 - 同花顺性能任务已完成。后续不要恢复 30 秒阻塞式全 39 页刷新，也不要把并发提高到 4 以上。
 - 监控以 `/api/ths-concepts/status` 的 `realtime` 为准；若 `lastError` 非空，保留同日完整缓存并检查上游，不得用昨日指标冒充今日。
+
+## 2026-07-15 - Codex - 修复 L2 完成后仍显示待验证旧主线
+
+Changed:
+- 将“构建成功但 0 条主线”视为已完成的有效结果，使 L2 排除全部候选后能够覆盖先前的正数缓存，而不是继续展示旧卡片和 `L2 待验证`。
+- 保温任务对有效空结果恢复正常 150 秒刷新，不再按失败退避到 15 分钟；空结果带明确原因与用户可见说明。
+- 收盘快照允许保存有效的“今日无主线”，历史回看不会因为没有主线卡片而丢失当日结论。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/mainline-empty-state.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 云端 2026-07-15 `细胞免疫治疗` 自动 L2 任务已完成 50/50；按正式明星规则重算，没有 `expected`/`confirmed`，5 只涨停股均为 `sealedWeak`，因此正确结论是今日暂无通过 L2 明星闸的主线。
+- `node --check kpl-stats-server.js`、新增空状态测试、主线三态/预测记录/盘后回看专项测试通过。
+- `tests/*.test.js` 共 29 套全部通过，`git diff --check` 通过。
+
+Deployment:
+- 尚未部署；需合并至 `main` 后通过受保护生产工作流部署 `kpl-stats-server.js` 并重启主服务。
+
+Notes for next agent:
+- 数据未准备或读取失败仍为 `ok:false`，不会写缓存；只有构建契约完整的 `ok:true + mainlines:[]` 才代表真实“无主线”。
+- 部署后确认今日接口返回 `count=0`、`reason=no-l2-qualified-mainline`，且不再返回旧的 `细胞免疫治疗 · L2 待验证`。
