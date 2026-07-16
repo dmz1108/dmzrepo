@@ -8633,7 +8633,370 @@
     }
   }
 
-	  body.view-strategy .sc-pick-pair em {
+  /* ===== Strategy mainline card refinement 2026-07-16: title pulse + compact detail hierarchy ===== */
+  body.view-strategy .ml-card {
+    gap: 8px !important;
+  }
+
+  body.view-strategy .ml-name-row {
+    display: flex !important;
+    align-items: baseline !important;
+    flex-wrap: wrap !important;
+    gap: 6px 10px !important;
+  }
+
+  body.view-strategy .ml-name {
+    flex: 0 1 auto !important;
+    max-width: 100% !important;
+    font-size: 17px !important;
+    line-height: 1.2 !important;
+  }
+
+  body.view-strategy .ml-head-pulse {
+    min-width: 0;
+    display: inline-flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 5px 10px;
+  }
+
+  body.view-strategy .ml-head-stat {
+    min-width: 0;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    padding-left: 10px;
+    border-left: 1px solid rgba(174,190,214,.16);
+    white-space: nowrap;
+  }
+
+  body.view-strategy .ml-head-stat:first-child {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  body.view-strategy .ml-head-stat i {
+    max-width: 108px;
+    overflow: hidden;
+    color: rgba(174,190,214,.68);
+    font-size: 10px;
+    font-style: normal;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.view-strategy .ml-head-stat b {
+    color: #eaf2ff;
+    font-size: 13px;
+    font-weight: 820;
+    line-height: 1;
+  }
+
+  body.view-strategy .ml-head-stat.up b { color: var(--up); }
+  body.view-strategy .ml-head-stat.down b { color: var(--down); }
+  body.view-strategy .ml-head-stat.flat b,
+  body.view-strategy .ml-head-stat.empty b { color: var(--flat); }
+
+  body.view-strategy .ml-name-flags {
+    min-height: 22px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 6px;
+  }
+
+  body.view-strategy .ml-sub {
+    margin-top: 5px !important;
+    -webkit-line-clamp: 1 !important;
+  }
+
+  body.view-strategy .ml-signal-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+  }
+
+  body.view-strategy .ml-signal-cell,
+  body.view-strategy .ml-signal-cell.support {
+    min-height: 34px !important;
+    flex-direction: row !important;
+    align-items: baseline;
+    justify-content: center;
+    gap: 5px !important;
+    padding: 5px 7px !important;
+    background: rgba(255,255,255,.024) !important;
+  }
+
+  body.view-strategy .ml-signal-cell i {
+    font-size: 10px !important;
+  }
+
+  body.view-strategy .ml-signal-cell b {
+    font-size: 13px !important;
+  }
+
+  body.view-strategy .ml-card .ml-details {
+    margin-top: 3px !important;
+    padding-top: 12px;
+    border-top: 1px solid rgba(174,190,214,.12);
+  }
+
+  body.view-strategy .ml-detail-section {
+    min-width: 0;
+  }
+
+  body.view-strategy .ml-detail-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  body.view-strategy .ml-detail-section-title {
+    display: block;
+    color: #aebad0;
+    font-size: 11px;
+    font-weight: 760;
+    line-height: 1.35;
+  }
+
+  body.view-strategy .ml-detail-strength .strategy-score-parts {
+    margin-top: 8px;
+  }
+
+  body.view-strategy .ml-detail-strength .ml-merged-themes {
+    margin-top: 7px;
+  }
+
+  body.view-strategy .ml-detail-grid {
+    display: grid;
+    grid-template-columns: minmax(0, .88fr) minmax(0, 1.12fr);
+    gap: 14px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(174,190,214,.10);
+  }
+
+  body.view-strategy .ml-detail-leader {
+    padding-right: 14px;
+    border-right: 1px solid rgba(174,190,214,.10);
+  }
+
+  body.view-strategy .ml-detail-leader .ml-leader {
+    min-height: 30px;
+    display: flex !important;
+    grid-template-columns: none !important;
+    align-items: baseline !important;
+    gap: 7px;
+    margin-top: 6px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  body.view-strategy .ml-detail-leader .ml-leader b {
+    font-size: 16px;
+  }
+
+  body.view-strategy .ml-detail-leader .ml-leader em {
+    margin-left: auto;
+  }
+
+  body.view-strategy .ml-detail-leader .ml-leader-trend {
+    margin-top: 7px;
+  }
+
+  body.view-strategy .ml-detail-leader .ml-basis {
+    margin-top: 7px;
+  }
+
+  body.view-strategy .ml-details .strategy-explain {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  body.view-strategy .ml-details .strategy-explain-title {
+    margin-bottom: 7px;
+    font-weight: 760;
+  }
+
+  body.view-strategy .ml-details .strategy-explain ul {
+    gap: 4px;
+  }
+
+  body.view-strategy .ml-details .strategy-explain li {
+    font-size: 11px;
+    line-height: 1.42;
+  }
+
+  body.view-strategy .ml-leader-list {
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+  }
+
+  body.view-strategy .ml-leader-list-title {
+    min-width: 0;
+  }
+
+  body.view-strategy .ml-leader-list-title small {
+    color: rgba(174,190,214,.58);
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  body.view-strategy .ml-leader-list-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  body.view-strategy .ml-leader-mini {
+    grid-template-columns: 20px minmax(0, 1fr) !important;
+    gap: 6px !important;
+    min-height: 74px;
+    padding: 7px !important;
+  }
+
+  body.view-strategy .ml-leader-mini > em {
+    grid-column: 2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  body.view-strategy .ml-leader-mini .ml-leader-trend {
+    grid-column: 1 / -1;
+    gap: 4px;
+    margin-top: 1px;
+  }
+
+  body.view-strategy .ml-leader-mini .ml-trend-pill {
+    min-height: 20px;
+    padding: 0 6px;
+    font-size: 10px;
+    line-height: 18px;
+  }
+
+  body.view-strategy .ml-detail-evidence {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(174,190,214,.10);
+  }
+
+  body.view-strategy .ml-detail-evidence .ml-proof {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px 14px;
+    margin-top: 8px;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  body.view-strategy .ml-detail-evidence .ml-proof-row {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    align-items: start;
+    gap: 5px;
+  }
+
+  body.view-strategy .ml-detail-evidence .ml-proof-row > :not(.ml-proof-lbl) {
+    grid-column: 2;
+  }
+
+  body.view-strategy .ml-detail-evidence .ml-proof-lbl {
+    grid-column: 1;
+    grid-row: 1 / span 4;
+  }
+
+  @media (max-width: 760px) {
+    body.view-strategy .ml-card {
+      padding: 12px !important;
+    }
+
+    body.view-strategy .ml-name-row {
+      gap: 5px 8px !important;
+    }
+
+    body.view-strategy .ml-name {
+      font-size: 16px !important;
+    }
+
+    body.view-strategy .ml-head-pulse {
+      gap: 4px 8px;
+    }
+
+    body.view-strategy .ml-head-stat {
+      gap: 3px;
+      padding-left: 8px;
+    }
+
+    body.view-strategy .ml-head-stat i {
+      max-width: 82px;
+      font-size: 9px;
+    }
+
+    body.view-strategy .ml-head-stat b {
+      font-size: 12px;
+    }
+
+    body.view-strategy .ml-signal-strip {
+      grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+      gap: 4px !important;
+    }
+
+    body.view-strategy .ml-signal-cell,
+    body.view-strategy .ml-signal-cell.support {
+      min-height: 42px !important;
+      flex-direction: column !important;
+      align-items: center;
+      gap: 2px !important;
+      padding: 5px 3px !important;
+    }
+
+    body.view-strategy .ml-detail-grid {
+      grid-template-columns: 1fr;
+      gap: 11px;
+    }
+
+    body.view-strategy .ml-detail-leader {
+      padding-right: 0;
+      padding-bottom: 11px;
+      border-right: 0;
+      border-bottom: 1px solid rgba(174,190,214,.10);
+    }
+
+    body.view-strategy .ml-leader-list-title {
+      display: flex !important;
+      align-items: baseline !important;
+      flex-direction: row !important;
+      justify-content: space-between !important;
+      gap: 8px !important;
+    }
+
+    body.view-strategy .ml-leader-list-title small {
+      max-width: 62%;
+      text-align: right !important;
+      white-space: normal !important;
+    }
+
+    body.view-strategy .ml-leader-list-grid {
+      grid-template-columns: 1fr;
+    }
+
+    body.view-strategy .ml-leader-mini {
+      min-height: 64px;
+    }
+
+    body.view-strategy .ml-detail-evidence .ml-proof {
+      grid-template-columns: 1fr;
+    }
+  }
+
+		  body.view-strategy .sc-pick-pair em {
     min-width: 0 !important;
     overflow: hidden !important;
     font-style: normal !important;
@@ -11634,13 +11997,13 @@ function strategyScorePartChips(parts) {
     `<span class="strategy-score-part"><i>${escapeHTML(labels[row.key] || row.key)}</i><b>${row.value.toFixed(0)}</b></span>`
   ).join('')}</div>`;
 }
-function strategyMainlineExplainHTML(m) {
+function strategyMainlineExplainHTML(m, includeScoreParts = true) {
   const list = strategyMainlineExplainList(m);
   if (!list.length) return '';
   return `<div class="strategy-explain ml-explain">
     <div class="strategy-explain-title">为什么上榜</div>
     <ul>${list.map(item => `<li>${escapeHTML(item)}</li>`).join('')}</ul>
-    ${strategyScorePartChips(m && m.scoreParts)}
+    ${includeScoreParts ? strategyScorePartChips(m && m.scoreParts) : ''}
   </div>`;
 }
 function strategyMainlineTopScorePart(parts) {
@@ -11701,8 +12064,8 @@ function strategyMainlineLeadersHTML(m) {
   const leaders = Array.isArray(m?.leaders) ? m.leaders.slice(0, 3) : [];
   if (!leaders.length) return '';
   return `<div class="ml-leader-list">
-    <div class="ml-leader-list-title">龙头候选 <small>按10日涨停次数 × 10/30日涨幅综合排序 · 盘中含当日实时，盘后含当日收盘；每次涨停14分不封顶，未板涨幅≥5%加6分</small></div>
-    ${leaders.map((leader, idx) => {
+    <div class="ml-leader-list-title" title="按10日涨停次数 × 10/30日涨幅综合排序；盘中含当日实时，盘后含当日收盘；每次涨停14分不封顶，未板涨幅≥5%加6分">龙头候选 <small>10日涨停与10/30日涨幅综合排序</small></div>
+    <div class="ml-leader-list-grid">${leaders.map((leader, idx) => {
       const meta = [
         Number(leader.lianban) >= 2 ? `${Number(leader.lianban)}板` : '',
         strategySealAmountText(leader.sealAmount) || (leader.firstLimitTime ? `封${String(leader.firstLimitTime).slice(0, 5)}` : ''),
@@ -11718,7 +12081,7 @@ function strategyMainlineLeadersHTML(m) {
         ${meta ? `<em>${escapeHTML(meta)}</em>` : ''}
         ${strategyLeaderTrendBadgesHTML(leader)}
       </div>`;
-    }).join('')}
+    }).join('')}</div>
   </div>`;
 }
 function strategyDeltaText(value, unit = '') {
@@ -11947,24 +12310,26 @@ function renderStrategyMainlinesHTML(d) {
     const fundMetricLabel = Number(displayInflow.zsType) === 5
       ? (displayInflow.metric === 'ths-dde-big-order-amount' ? '同花顺 DDE' : '同花顺净流入')
       : (Number(displayInflow.zsType) === 6
-        ? (displayInflow.legacy ? '东财旧主力' : '东财超大单')
+        ? (displayInflow.legacy ? '东财主力（旧口径）' : '东财超大单')
         : (Number(displayInflow.zsType) === 7 ? 'KPL 净流入' : '资金净流入'));
-    const metricCell = (label, value, cls = '', kind = 'support', title = '') => `<span class="ml-signal-cell ${escapeHTML(kind)} ${escapeHTML(cls)}"${title ? ` title="${escapeHTML(title)}"` : ''}><i>${escapeHTML(label)}</i><b>${escapeHTML(value)}</b></span>`;
-    const signalStrip = `<div class="ml-signal-strip">
-      ${metricCell('板块涨幅', Number.isFinite(gainValue) ? `${gainValue > 0 ? '+' : ''}${gainValue.toFixed(2)}%` : '--', gainClass, 'primary', m.boardGainName || m.theme || '')}
-      ${metricCell(fundMetricLabel, displayInflow.value != null ? fmtInflow(displayInflow.value) : '--', inflowClass, 'primary', displayInflow.boardName || '')}
-      ${metricCell('涨停', String(Number(m.count) || 0), '', 'support')}
-      ${metricCell('大涨 / 冲板', `${Number(m.bigGainCount) || 0} / ${Number(m.nearLimitCount) || 0}`, '', 'support')}
-    </div>`;
-    const driver = strategyMainlineTopScorePart(m.scoreParts);
     const inflowSource = strategyBoardSourceLabel(displayInflow.zsType);
     const inflowMetric = Number(displayInflow.zsType) === 6
-      ? (displayInflow.legacy ? '旧主力净流入' : '超大单净流入')
+      ? (displayInflow.legacy ? '旧口径主力净流入' : '超大单净流入')
       : '净流入';
-    const inflowTrace = displayInflow.boardName
-      ? ` · 资金口径 ${escapeHTML(displayInflow.boardName)}${inflowSource ? `·${escapeHTML(inflowSource)}` : ''}·${escapeHTML(inflowMetric)}（单板）`
-      : '';
-    const scoreMeta = strategyMainlineScoreMetaHTML(m);
+    const fundTrace = `资金口径 ${displayInflow.boardName || m.theme || ''}${inflowSource ? `·${inflowSource}` : ''}·${inflowMetric}（单板）`;
+    const headMetric = (label, value, cls = '', title = '') => `<span class="ml-head-stat ${escapeHTML(cls)}"${title ? ` title="${escapeHTML(title)}"` : ''}><i>${escapeHTML(label)}</i><b>${escapeHTML(value)}</b></span>`;
+    const marketPulse = `<div class="ml-head-pulse" aria-label="板块涨幅与资金净流入">
+      ${headMetric('涨幅', Number.isFinite(gainValue) ? `${gainValue > 0 ? '+' : ''}${gainValue.toFixed(2)}%` : '--', gainClass, m.boardGainName || m.theme || '')}
+      ${headMetric(fundMetricLabel, displayInflow.value != null ? fmtInflow(displayInflow.value) : '--', inflowClass, `${fundTrace} · 重叠板块资金不相加，采用单个代表板块值`)}
+    </div>`;
+    const metricCell = (label, value, cls = '', kind = 'support', title = '') => `<span class="ml-signal-cell ${escapeHTML(kind)} ${escapeHTML(cls)}"${title ? ` title="${escapeHTML(title)}"` : ''}><i>${escapeHTML(label)}</i><b>${escapeHTML(value)}</b></span>`;
+    const signalStrip = `<div class="ml-signal-strip">
+      ${metricCell('涨停', String(Number(m.count) || 0), '', 'support')}
+      ${metricCell('大涨', String(Number(m.bigGainCount) || 0), '', 'support')}
+      ${metricCell('冲板', String(Number(m.nearLimitCount) || 0), '', 'support')}
+      ${metricCell('共振', String(Number(m.boardCount) || 0), '', 'support')}
+    </div>`;
+    const driver = strategyMainlineTopScorePart(m.scoreParts);
     const leadersHtml = strategyMainlineLeadersHTML(m);
     const nearRows = Array.isArray(m.nearLimitStocks) && m.nearLimitStocks.length ? m.nearLimitStocks : (m.risingStocks || []);
     const rising = nearRows.slice(0, 3).map(s =>
@@ -12083,12 +12448,15 @@ function renderStrategyMainlinesHTML(d) {
         <div class="ml-namebox">
           <div class="ml-name-row">
             <div class="ml-name" title="${escapeHTML(m.theme || '')}">${escapeHTML(m.theme || '')}</div>
+            ${marketPulse}
+          </div>
+          <div class="ml-name-flags">
             ${qiBadge}${confirmedBadge}
             ${combinedBadge}
             ${newThemeBadge}
             ${m.dualResonance ? `<span class="ml-dual" title="该题材在东财与同花顺两套独立预测里都排进前列（各自独立评分，未合并）">🔗双源共振</span>` : ''}
           </div>
-          <div class="ml-sub" title="重叠概念板块的资金不相加，采用单个代表板块值">${escapeHTML(driver.label)} · ${Number(m.boardCount) || 0}个共振板块${inflowTrace}</div>
+          <div class="ml-sub">${escapeHTML(driver.label)} · ${Number(m.boardCount) || 0}个共振板块</div>
           ${strategyMainlineSourcePairsHTML(m)}
         </div>
         <div class="ml-score-wrap">
@@ -12106,33 +12474,37 @@ function renderStrategyMainlinesHTML(d) {
         ${confirmBtn}
       </div>
       <div class="ml-details">
-        <div class="ml-details-head">
-          <span class="ml-driver ml-driver-${escapeHTML(driver.key)}">${escapeHTML(driver.label)}</span>
-          ${scoreMeta}
+        <section class="ml-detail-section ml-detail-strength">
+          <div class="ml-detail-section-head">
+            <span class="ml-detail-section-title">强度拆解</span>
+            <span class="ml-driver ml-driver-${escapeHTML(driver.key)}">${escapeHTML(driver.label)}</span>
+          </div>
+          ${strategyScorePartChips(m.scoreParts)}
+          ${strategyMergedThemesHTML(m)}
+        </section>
+        <div class="ml-detail-grid">
+          <section class="ml-detail-section ml-detail-leader">
+            <div class="ml-detail-section-title">今日龙头</div>
+            <div class="ml-leader">
+              <b>${escapeHTML(leaderName)}</b>
+              ${Number.isFinite(leaderScore) ? `<em>${leaderScore.toFixed(0)}</em>` : ''}
+              ${leaderMeta ? `<i>${escapeHTML(leaderMeta)}</i>` : ''}
+            </div>
+            ${strategyLeaderTrendBadgesHTML(leader)}
+            ${basis ? `<div class="ml-basis">${basis}</div>` : ''}
+          </section>
+          ${strategyMainlineExplainHTML(m, false)}
         </div>
-        ${strategyMergedThemesHTML(m)}
-        <div class="ml-metrics">
-          <div><b>${Number(m.count) || 0}</b><span>涨停数</span></div>
-          <div><b>${Number(m.bigGainCount) || 0}</b><span>大涨股</span></div>
-          <div><b>${Number(m.nearLimitCount) || 0}</b><span>冲板股</span></div>
-          <div><b>${Number(m.boardCount) || 0}</b><span>共振板块</span></div>
-        </div>
-        <div class="ml-leader">
-          <span class="ml-label">今日龙头</span>
-          <b>${escapeHTML(leaderName)}</b>
-          ${Number.isFinite(leaderScore) ? `<em>${leaderScore.toFixed(0)}</em>` : ''}
-          ${leaderMeta ? `<i>${escapeHTML(leaderMeta)}</i>` : ''}
-        </div>
-        ${strategyLeaderTrendBadgesHTML(leader)}
-        ${basis ? `<div class="ml-basis">${basis}</div>` : ''}
-        ${strategyMainlineExplainHTML(m)}
         ${leadersHtml}
-        <div class="ml-proof">
-          ${rising ? `<div class="ml-proof-row"><span class="ml-proof-lbl">候选</span>${rising}</div>` : ''}
-          ${breadthHtml || trendHtml ? `<div class="ml-proof-row"><span class="ml-proof-lbl">强度</span>${breadthHtml}${trendHtml}</div>` : ''}
-          ${boards ? `<div class="ml-proof-row"><span class="ml-proof-lbl">共振</span>${boards}</div>` : ''}
-          ${recent ? `<div class="ml-proof-row"><span class="ml-proof-lbl">活跃</span>${recent}</div>` : ''}
-        </div>
+        ${rising || breadthHtml || trendHtml || boards || recent ? `<section class="ml-detail-section ml-detail-evidence">
+          <div class="ml-detail-section-title">盘面证据</div>
+          <div class="ml-proof">
+            ${rising ? `<div class="ml-proof-row"><span class="ml-proof-lbl">候选</span>${rising}</div>` : ''}
+            ${breadthHtml || trendHtml ? `<div class="ml-proof-row"><span class="ml-proof-lbl">强度</span>${breadthHtml}${trendHtml}</div>` : ''}
+            ${boards ? `<div class="ml-proof-row"><span class="ml-proof-lbl">共振</span>${boards}</div>` : ''}
+            ${recent ? `<div class="ml-proof-row"><span class="ml-proof-lbl">活跃</span>${recent}</div>` : ''}
+          </div>
+        </section>` : ''}
       </div>
     </article>`;
   };
