@@ -22,15 +22,17 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
 
 // 1. 按源各取净流入最大板,净流入与涨幅取自同一板
 const boards = [
-  { name: '东财板A', zsType: 6, netInflow: 8e8, gainPct: 3.1 },
-  { name: '东财板B', zsType: 6, netInflow: 14e8, gainPct: 2.2 },   // 东财净流入最大 → 应取它,涨幅 2.2(它自己的)
+  { name: '东财板A', zsType: 6, netInflow: 8e8, netInflowMetric: 'eastmoney-super-large-net-inflow', gainPct: 3.1 },
+  { name: '东财板B', zsType: 6, netInflow: 14e8, netInflowMetric: 'eastmoney-super-large-net-inflow', gainPct: 2.2 },   // 东财超大单净流入最大 → 应取它,涨幅 2.2(它自己的)
   { name: '同花顺板X', zsType: 5, netInflow: 5e8, gainPct: 6.6 },
   { name: '同花顺板Y', zsType: 5, netInflow: 9e8, gainPct: 4.4 },   // 同花顺净流入最大 → 取它,涨幅 4.4
   { name: 'KPL板Z', zsType: 7, netInflow: 99e8, gainPct: 9.9 },     // KPL 不参与,即便钱最大也不出现
 ];
 const sp = strategyMainlineSourcePairs(boards);
 A(sp.eastmoney && sp.eastmoney.board === '东财板B' && sp.eastmoney.netInflow === 14e8 && sp.eastmoney.gainPct === 2.2,
-  '东财组=净流入最大的东财板,净流入与涨幅同板(14亿/2.2%,不取涨幅更高的东财板A)');
+  '东财组=超大单净流入最大的东财板,资金与涨幅同板(14亿/2.2%,不取涨幅更高的东财板A)');
+A(sp.eastmoney.metric === 'eastmoney-super-large-net-inflow' && sp.eastmoney.legacy === false,
+  '东财组向接口保留超大单资金口径元数据');
 A(sp.ths && sp.ths.board === '同花顺板Y' && sp.ths.netInflow === 9e8 && sp.ths.gainPct === 4.4,
   '同花顺组=净流入最大的同花顺板,净流入与涨幅同板(9亿/4.4%)');
 
@@ -60,6 +62,7 @@ A(src.includes('sourcePairs: mainline.sourcePairs || null'), 'AI 只读证据携
 // 6. 静态:前端渲染两组同源配对
 A(html.includes('function strategyMainlineSourcePairsHTML(m)'), '前端存在 sourcePairs 渲染函数');
 A(html.includes('${strategyMainlineSourcePairsHTML(m)}'), '卡片模板调用 sourcePairs 渲染');
-A(html.includes("one('东财', sp.eastmoney)") && html.includes("one('同花顺', sp.ths)"), '前端渲染东财与同花顺两组');
+A(html.includes("one(eastmoneyLabel, sp.eastmoney)") && html.includes("one('同花顺', sp.ths)"), '前端渲染东财与同花顺两组');
+A(html.includes("'东财·超大单'") && html.includes("'东财·旧主力'"), '前端区分东财超大单新口径与旧主力快照');
 
 console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL STRATEGY-SOURCE-PAIRS CHECKS PASSED');

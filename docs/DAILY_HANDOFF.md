@@ -6122,3 +6122,32 @@ Deployment:
 Notes for next agent:
 - PR #111 已完成审查、合并和生产发布，无需再次部署。
 - 下一交易时段只需做真实验收：合格板应出现 L2 queued/running/done；低于净流入或涨停门槛的板不得派发。
+
+## 2026-07-16 - Codex - 策略页东财资金改用超大单净流入
+
+Changed:
+- 东财板块接口同时读取并保留 `f62` 主力净流入、`f66` 超大单净流入、`f69` 超大单净占比、`f72` 大单净流入和 `f75` 大单净占比。
+- 今日实时仍使用原有 `f62`，只在策略取板、主线评分、双源配对及策略证据中把东财资金切换为 `f66`；同花顺口径不变。
+- 策略输出新增 `netInflowMetric/netInflowLegacy`。字段上线前的东财历史快照允许读取 `f62`，但明确标成“旧主力”，不冒充超大单；实时响应缺 `f66` 时保持缺失。
+- 策略卡片、来源配对和资金追溯文案明确显示“东财·超大单”；首页/今日实时展示及原有 `netInflow` 字段没有被替换。
+- 前端实时预览和人工快照保存链路透传东财四个新增分档字段，后续快照可稳定复现该口径。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/strategy-eastmoney-superlarge-flow.test.js`
+- `tests/strategy-kpl-exclusion.test.js`
+- `tests/strategy-source-pairs.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js` 通过。
+- 东财超大单、策略来源配对、KPL 剔除、同花顺策略专项测试通过。
+- 全仓 39 个 `tests/*.test.js` 全部通过；行情页内联脚本编译通过。
+
+Deployment:
+- 本条记录提交时尚未部署；未修改云端运行时文件或数据库，未重启服务。
+
+Notes for next agent:
+- 生产发布需同时部署 `kpl-stats-server.js` 与 `kpl-dashboard_17_apple.html`，并重启主服务。
+- 旧冻结快照不会被改写，页面会如实显示“旧主力”；新生成快照开始携带 `f66` 并显示“超大单净流入”。
