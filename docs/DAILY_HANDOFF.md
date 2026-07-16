@@ -6349,6 +6349,37 @@ Deployment:
 Notes for next agent:
 - PR#117(THS DDE)仍等 Codex 对三项修复的复审;PR#123 等 Owner 对 P2 拍板。
 
+## 2026-07-16 - Codex - 手工补录 2026-07-16 TGB 湖南人复盘
+
+Changed:
+- 按 `docs/ops/TGB_HUNAN_DAILY_SOP.md` 强制刷新当天淘股吧官方原文和 17 张原始图片，只采用标题、日期、白底表格和 `@TGB湖南人` 水印均匹配的 `image-01-06.png`。
+- Codex 对官方原图按题材块逐行、逐字段人工转录并进行第二遍人工复核；未调用 OCR、Qwen 或其他自动视觉识别，排除了顶部重复“市场连板股”、底部“涨停炸板”、同花顺红图、回帖图、头像、二维码和广告。
+- 云端前置闸通过后写入 40 行正式 `review/tgb-hunan-structured`，并只强制重折 `2026-07-16` 综合主因库。
+- 两份云端运维日志均已追加安全记录；首次生产脚本因 Windows PowerShell 编码解析在任何写入前停止，转为 UTF-16 后同一脚本成功完成，未留下部分写入。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 仅云端运行时：`C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-07-16.json`
+- 仅云端运行时：`C:\PandaDashboard\kpl-limitup-main-reason-db\2026-07-16.json`
+- 云端 `panda-cloud-ops-2026-06-19.md` 与 `_cloud-change-log-20260705.md`
+
+Validated:
+- 官方文章：`https://www.tgb.cn/a/2ttP1slRNKP`，标题 `7.16湖南人涨停复盘+晚间消息汇总`；使用图片 `image-01-06.png`。
+- 题材块：医药 8、AI手机 5、大消费 3、国产芯片 3、机器人 3、影视 3、云计算数据中心 3、其他热点 4、其他个股 8，合计 40。
+- 当日终盘原始池 41，按统一口径剔除北交所 `920701 豪声电子` 后基准 40；正式 40、`missingCodes=[]`、`extraCodes=[]`、重复 0、`weakCount=0`、名称差异 0，题材块计数和等于 40。
+- 正式 TGB 源 SHA-256：`b38dd5d04961e1a16a295396ed8ecd1bd9f64a303fddfd93e6fdfc180d6f96cc`；重折后综合主因库 SHA-256：`e5f9a62b9814169b3147c3799fbfddf217a4c651b77a4ecd679a7baa2daf04d8`。
+- 公网强制刷新 `source-view` 显示综合归纳 40、复盘啦 40、选股宝 40、韭研 0、淘股吧 40；TGB 覆盖和主因覆盖均 100%、低置信 0、`sourceErrors` 为空。韭研当日仍缺失，属于本任务之外的既有来源缺口，未伪报四源全健康。
+- 同日 `after-close-status?mainReasonMode=same-day` 确认交易日且已收盘，涨停库、主因库、收盘价、东财概念和同花顺概念均正常，主因库 40、复盘覆盖 100%；公网 `/health` 为 HTTP 200 且 `ok=true`。
+
+Deployment:
+- 生产运行时数据已更新；未部署应用代码，未重启任何服务。
+- 回退备份：`C:\PandaDashboard\backups\tgb-hunan-manual-20260716-20260716-213559`，包含写入前正式文件（如存在）、重折前综合主因库、raw manifest、官方图片和两份云端日志。
+- Git 交接 PR：`https://github.com/dmz1108/dmzrepo/pull/124`。
+
+Notes for next agent:
+- 2026-07-16 TGB 正式来源已完成官方证据、双遍人工转录、终盘池对账、备份、写入、综合主因重折与公网验收，无需再次覆盖或重启服务。
+- 当前四源中只有韭研为 0；若要补齐四源健康，应按韭研自己的正式来源流程单独修复，不能改写或回退本次已健康的 TGB 文件。
+
 ## 2026-07-16 - Codex - 准备同花顺 DDE 与严格 QI 主线门槛生产部署
 
 Changed:
