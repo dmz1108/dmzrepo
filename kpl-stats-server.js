@@ -25440,7 +25440,11 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
       .map(item => strategyMainlineAugmentPrediction(item, isTodayQuery, isoDay, !diagMode, trendKeyPrefix)),
     mainlineConfirm
   );
-  const l2Gate = strategyMainlineApplyL2StarGate(inflowGate.kept);
+  // 管理员/AI 诊断需要保留完整候选池来解释「为什么没上榜」；严格 QI 门槛只作用于
+  // 正式构建和正式页面返回，不得裁掉复核、归属追踪与回放证据。
+  const l2Gate = options?.leaderDebug
+    ? { kept: inflowGate.kept, excluded: [] }
+    : strategyMainlineApplyL2StarGate(inflowGate.kept);
   const mainlines = l2Gate.kept
     .sort((a, b) =>
       (Number(b.score) || 0) - (Number(a.score) || 0) ||
@@ -25480,7 +25484,7 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
   const emptyMainlineState = mainlines.length ? null : (l2Gate.excluded.length
     ? {
         reason: 'no-l2-qualified-mainline',
-        message: '当前候选方向已完成 L2 扫描，但没有出现预期明星或明星确认，今日暂不确认主线。',
+        message: '当前尚无通过 L2 明星验证的方向。未扫描、等待、扫描中、覆盖不足或扫描无明星的候选不会进入正式主线榜。',
       }
     : (inflowGate.excluded.length
       ? {
@@ -25563,7 +25567,7 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     realtimeSource: boardPayload.source || 'snapshot',
     inflowGate: { rule: 'net-inflow-required', excluded: inflowGate.excluded.slice(0, 10) },
     l2Gate: {
-      rule: 'completed-scan-requires-expected-or-confirmed-star',
+      rule: 'visible-mainline-requires-expected-or-confirmed-star',
       excluded: l2Gate.excluded.slice(0, 10),
     },
     recentWindow: history.recentWindow || 15,
@@ -25605,24 +25609,44 @@ function strategyMainlineApplyInflowGate(items, mainlineConfirm) {
   return { kept, excluded };
 }
 
-// Owner 规则(2026-07-13):真正的当日主线必须至少包含一只 L2 预期明星或明星确认。
-// 未扫描/仍在扫描/覆盖不足时保持候选,避免任务尚未结束就误杀；只有相关扫描已完成且覆盖达标、
-// 状态明确为 scanned-no-star 时才硬排除。资金活跃(active)不等于明星,不能让板块过闸。
+// Owner 规则(2026-07-16):正式主线榜只显示已经取得 L2 正证据的方向。
+// 未扫描/等待/扫描中/覆盖不足仍可作为内部候选继续参与调度和诊断,但不能进入正式榜；
+// 只有预期明星(expected)或明星确认(confirmed)才能过闸。资金活跃(active)不等于明星。
+function strategyMainlineHasQiStarEvidence(item) {
+  return String(item?.l2VerificationStatus || '') === 'qi' &&
+    (Array.isArray(item?.starStocks) ? item.starStocks : [])
+      .some(star => star?.level === 'expected' || star?.level === 'confirmed');
+}
+
+function strategyMainlineL2RejectReason(item) {
+  const verification = String(item?.l2VerificationStatus || '');
+  const scanState = String(item?.l2ScanState || '');
+  if (verification === 'scanned-no-star' || scanState === 'scanned-no-star') return 'completed-scan-without-star';
+  if (verification === 'qi') return 'qi-status-without-star-evidence';
+  if (scanState === 'not-eligible') return 'not-eligible-for-l2-scan';
+  if (scanState === 'waiting-worker') return 'l2-scan-waiting-worker';
+  if (scanState === 'running') return 'l2-scan-running';
+  if (scanState === 'coverage-insufficient') return 'l2-scan-coverage-insufficient';
+  return 'l2-star-evidence-missing';
+}
+
 function strategyMainlineApplyL2StarGate(items) {
   const kept = [];
   const excluded = [];
   for (const item of (Array.isArray(items) ? items : [])) {
-    if (item?.l2VerificationStatus === 'scanned-no-star') {
-      excluded.push({
-        theme: String(item?.theme || ''),
-        familyKey: String(item?.familyKey || item?.key || ''),
-        count: Number(item?.count) || 0,
-        boardCount: Number(item?.boardCount) || 0,
-        reason: 'completed-scan-without-star',
-      });
+    if (strategyMainlineHasQiStarEvidence(item)) {
+      kept.push(item);
       continue;
     }
-    kept.push(item);
+    excluded.push({
+      theme: String(item?.theme || ''),
+      familyKey: String(item?.familyKey || item?.key || ''),
+      count: Number(item?.count) || 0,
+      boardCount: Number(item?.boardCount) || 0,
+      l2VerificationStatus: String(item?.l2VerificationStatus || ''),
+      l2ScanState: String(item?.l2ScanState || ''),
+      reason: strategyMainlineL2RejectReason(item),
+    });
   }
   return { kept, excluded };
 }
@@ -25865,6 +25889,72 @@ function strategyMainlineMatchesConfirm(mainline, confirm) {
   const mainlineKey = String(mainline.familyKey || mainline.key || '').trim();
   const mainlineTheme = String(mainline.theme || '').trim();
   return !!((confirmKey && mainlineKey === confirmKey) || (confirmTheme && mainlineTheme === confirmTheme));
+}
+
+// 统一返回层再执行一次严格 QI 过滤：未来实时构建本身已经过闸，这里负责拦住旧内存缓存、
+// 旧文件缓存和已冻结收盘快照中的历史候选，避免部署新规则后页面仍展示旧的未验证卡片。
+function strategyMainlineRestrictToQiPayload(payload) {
+  if (!payload || typeof payload !== 'object') return payload;
+  const excluded = [];
+  const filterList = (list, source = '') => {
+    const gate = strategyMainlineApplyL2StarGate(Array.isArray(list) ? list : []);
+    excluded.push(...gate.excluded.map(row => source ? { ...row, source } : row));
+    return gate.kept.map((row, index) => ({ ...row, rank: index + 1 }));
+  };
+  const originalMainlines = Array.isArray(payload.mainlines) ? payload.mainlines : [];
+  const mainlines = filterList(originalMainlines);
+  const restrictSource = (sourcePayload, source) => {
+    if (!sourcePayload || typeof sourcePayload !== 'object') return sourcePayload;
+    const original = Array.isArray(sourcePayload.mainlines) ? sourcePayload.mainlines : [];
+    const strict = filterList(original, source);
+    const removedCandidates = original.length > strict.length;
+    return {
+      ...sourcePayload,
+      mainlines: strict,
+      count: strict.length,
+      hasMainlines: strict.length > 0,
+      mainLeaderTheme: strict[0] ? String(strict[0].theme || '') : '',
+      ...(removedCandidates && !strict.length ? {
+        reason: 'no-l2-qualified-mainline',
+        message: '该来源当前没有出现 L2 预期明星或明星确认，候选方向不进入正式主线榜。',
+      } : {}),
+    };
+  };
+  const mainlinesBySource = payload.mainlinesBySource
+    ? {
+        ...payload.mainlinesBySource,
+        eastmoney: restrictSource(payload.mainlinesBySource.eastmoney, 'eastmoney'),
+        ths: restrictSource(payload.mainlinesBySource.ths, 'ths'),
+      }
+    : payload.mainlinesBySource;
+  const existingExcluded = Array.isArray(payload?.l2Gate?.excluded) ? payload.l2Gate.excluded : [];
+  const seen = new Set();
+  const combinedExcluded = [...existingExcluded, ...excluded].filter(row => {
+    const key = `${row?.source || ''}:${row?.familyKey || row?.theme || ''}:${row?.reason || ''}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const removedCandidates = originalMainlines.length > mainlines.length || excluded.length > 0;
+  return {
+    ...payload,
+    mainlines,
+    count: mainlines.length,
+    stockCount: new Set(mainlines.flatMap(item => [
+      ...(Array.isArray(item?.todayCodes) ? item.todayCodes : []),
+      ...(Array.isArray(item?.risingStocks) ? item.risingStocks.map(stock => stock?.code) : []),
+    ].filter(Boolean))).size,
+    ...(mainlinesBySource ? { mainlinesBySource } : {}),
+    l2Gate: {
+      ...(payload.l2Gate || {}),
+      rule: 'visible-mainline-requires-expected-or-confirmed-star',
+      excluded: combinedExcluded.slice(0, 20),
+    },
+    ...(payload.ok && removedCandidates && !mainlines.length ? {
+      reason: 'no-l2-qualified-mainline',
+      message: '当前尚无通过 L2 明星验证的方向，候选方向不会进入正式主线榜。',
+    } : {}),
+  };
 }
 
 async function getStrategyMainlinesWithConfirm(day) {
@@ -26809,7 +26899,9 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/limit-up-main-reason-db/recent-universe') return await getLimitUpMainReasonRecentUniverse(url, req, res);
     if (url.pathname === '/api/limit-up-main-reason-db/pending') return await getLimitUpMainReasonPending(url, req, res);
     if (url.pathname === '/api/limit-up-main-reason-db/hot-themes') return await getLimitUpMainReasonHotThemes(url, req, res);
-    if (url.pathname === '/api/strategy-mainlines') return send(res, 200, await getStrategyMainlinesWithConfirm(url.searchParams.get('day') || chinaNowParts().day).catch(e => ({ ok: false, error: String(e && e.message || e) })));
+    if (url.pathname === '/api/strategy-mainlines') return send(res, 200, await getStrategyMainlinesWithConfirm(url.searchParams.get('day') || chinaNowParts().day)
+      .then(strategyMainlineRestrictToQiPayload)
+      .catch(e => ({ ok: false, error: String(e && e.message || e) })));
     if (url.pathname === '/api/admin/strategy-daily-events') return await getStrategyDailyEventsApi(url, req, res);
     if (url.pathname === '/api/detail-evidence-index') return await getDetailEvidenceIndexApi(url, req, res);
     if (url.pathname === '/api/strategy-mainline-review') {

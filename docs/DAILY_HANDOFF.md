@@ -6236,3 +6236,30 @@ Deployment:
 Notes for next agent:
 - 7 月 16 日冻结快照早于本次部署，因此接口本身没有新六态字段；页面已用只读兼容逻辑正确显示，不要回写该快照。
 - 下一个交易日的新实时响应应原生带 `l2ScanState/l2ScanDetail`；按六态迁移表做一次实盘抽查即可。
+
+## 2026-07-16 - Codex - 正式主线榜严格启用 L2 明星门槛
+
+Changed:
+- 正式主线榜只保留 `l2VerificationStatus=qi` 且明星证据包含 `expected` 或 `confirmed` 的方向。
+- 未达扫描条件、等待公司端、扫描中、覆盖不足及扫描无明星的方向继续保留为内部候选并照常参与 L2 调度，但不再进入正式榜。
+- 正式接口在返回旧缓存和旧冻结快照时再次执行同一门槛，避免历史候选绕过新规则。
+- 管理员复核、AI 证据接口和龙头归属回放继续保留完整候选池及排除原因，不被正式榜过滤影响。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/inflow-gate.test.js`
+- `tests/mainline-empty-state.test.js`
+- `tests/qi-mainline-states.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js` 通过。
+- 严格 QI 门槛、旧快照返回过滤、自动扫描先于展示门槛、有效空状态及管理员/AI 诊断隔离测试通过。
+- 全仓 39 个 `tests/*.test.js` 全部通过；`git diff --check` 通过。
+
+Deployment:
+- 本条记录提交时尚未部署；未修改云端运行时文件、业务数据库、历史快照或公司端 L2 worker，未重启服务。
+
+Notes for next agent:
+- 5 亿元且至少 2 只涨停的自动扫描资格未改变；本次只收紧“什么能显示为正式主线”。
+- 发布后，旧日期若没有可核验的 expected/confirmed 明星证据，会显示有效的“今日无主线”，但管理员诊断仍可查看被排除候选。
