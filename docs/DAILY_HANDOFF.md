@@ -6371,3 +6371,23 @@ Deployment:
 Notes for next agent:
 - 部署后验证公开策略接口从 2026-07-16 起只返回带 expected/confirmed 明星证据的主线；2026-07-15 及以前保持原历史口径。
 - 同花顺 DDE 只覆盖当日策略链，历史日、今日实时看板、复盘和默认三源调用不变。
+
+## 2026-07-16 - Codex - 修复云端 DDE Cookie 启动依赖
+
+Changed:
+- 首次部署后线上发现：云服务器无法及时访问 `raw.githubusercontent.com` 的同花顺 Cookie 脚本，DDE overlay 因此跑满 8 秒并回退旧 `zjjlr`。
+- 已验证 `d.10jqka.com.cn/v6/realhead/...` 在云端无需 Cookie 可直接访问，改为直连，避免无关 GitHub 依赖。
+- HTTP 200 但缺少 `527198` 时不再缓存 `null`，后续调用可以立即重试恢复。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/strategy-ths-dde-netinflow.test.js`
+- `ops/production/manifests/strategy-ths-dde-direct-20260716.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 云端无 Cookie 请求 realhead 返回 HTTP 200，耗时约 0.2 秒；Cookie 脚本源请求超时。
+- DDE 专项测试、`node --check`、全仓 40 个测试文件、部署工作流测试与 `git diff --check` 全部通过。
+
+Deployment:
+- 本条提交时尚未执行；部署只更新 `kpl-stats-server.js` 并重启主服务。
