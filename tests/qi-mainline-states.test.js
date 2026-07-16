@@ -22,6 +22,11 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
 // 1. certainty 封顶:已扫无明星时最高降到中等;未扫不惩罚
 const isFiniteNumeric = v => Number.isFinite(Number(v)) && v !== null && v !== '';
 const normalizeReasonSourceCode = v => String(v || '').replace(/\D/g, '').trim();
+const isoFromCompactDate = v => {
+  const s = String(v || '').trim();
+  return /^\d{8}$/.test(s) ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : s.slice(0, 10);
+};
+const STRATEGY_MAINLINE_STRICT_QI_START_DAY = '2026-07-16';
 const STRATEGY_MAINLINE_STAR_LEVEL_ORDER = { confirmed: 0, expected: 1, active: 2 };
 eval(extractFn('strategyMainlineCertainty'));
 const richItem = { count: 3, maxLianban: 2, bigGainCount: 5, nearLimitCount: 2, priorReasonCount: 3, netInflow: 5e8, boardCount: 3 };
@@ -45,8 +50,11 @@ A(src.includes("scannedNoStar: l2VerificationStatus === 'scanned-no-star'"), 'ce
 A(!src.includes('isConfirmedMainline = l2') && src.includes('const l2VerificationStatus'), '独立字段,不复用 isConfirmedMainline');
 A(src.includes(': strategyMainlineApplyL2StarGate(inflowGate.kept);')
   && src.includes("rule: 'visible-mainline-requires-expected-or-confirmed-star'"), '正式主线榜严格要求 L2 预期明星或明星确认');
+A(src.includes("const STRATEGY_MAINLINE_STRICT_QI_START_DAY = '2026-07-16'")
+  && src.includes('options?.leaderDebug || !strategyMainlineUsesStrictQi(isoDay)')
+  && src.includes('if (!strategyMainlineUsesStrictQi(predictDay)) return payload;'), '严格 QI 门槛仅从 2026-07-16 起在构建层和返回层生效,不倒溯清空旧历史');
 A(src.includes('getStrategyMainlinesVisible(url.searchParams.get') && src.includes('strategyMainlineAttachExpectedHistoryPayload(payload, predict)'), '正式页面接口对旧缓存与冻结快照补历史预期证据后再执行严格 QI 过滤');
-A(src.includes("options?.leaderDebug\n    ? { kept: inflowGate.kept, excluded: [] }"), '管理员复核保留完整候选池,可解释板块为何未上榜');
+A(src.includes("options?.leaderDebug || !strategyMainlineUsesStrictQi(isoDay)\n    ? { kept: inflowGate.kept, excluded: [] }"), '管理员复核保留完整候选池,旧历史日期也不受新门槛影响');
 const autoScanAt = src.indexOf('strategyMainlineMaybeAutoScan(boardPayload?.boards || []');
 const strictGateAt = src.indexOf(': strategyMainlineApplyL2StarGate(inflowGate.kept);');
 A(autoScanAt >= 0 && strictGateAt > autoScanAt, '后台先派发符合条件的 L2 扫描，再执行用户可见主线硬闸');
@@ -129,6 +137,9 @@ A(gated.excluded.some(x => x.theme === '消费' && x.reason === 'qi-status-witho
 // 6a. 盘中一旦出现预期明星，当日资格不可逆；收盘未确认只标“未兑现”，不删除主线卡。
 eval(extractFn('strategyMainlineExpectedTransitionMap'));
 eval(extractFn('strategyMainlineAttachExpectedHistory'));
+eval(extractFn('strategyMainlineUsesStrictQi'));
+A(!strategyMainlineUsesStrictQi('2026-07-15') && strategyMainlineUsesStrictQi('2026-07-16')
+  && strategyMainlineUsesStrictQi('20260717'), '旧日期保留旧口径,实施日及以后启用严格 QI 门槛');
 const expectedMap = strategyMainlineExpectedTransitionMap({ starTransitions: [{
   mainlineKey: 'group:医药', mainlineTheme: '医药', code: '600001', name: '预期股',
   firstExpectedAt: '2026-07-16T02:00:00.000Z', confirmedAt: null, lastLevel: 'active',
@@ -155,6 +166,9 @@ A(stickyExpected.hadExpectedStarToday && stickyExpected.l2VerificationStatus ===
 A(stickyExpected.starStocks[0].level === 'expected' && stickyExpected.starStocks[0].label === '预期明星·未兑现'
   && stickyExpected.starStocks[0].expectedOutcome === 'not-confirmed', '最终未成为明星时保留预期股并明确标为未兑现');
 A(strategyMainlineApplyL2StarGate([stickyExpected]).kept.length === 1, '预期未兑现板块仍保留在当日正式主线榜');
+const stickyExpectedAgain = strategyMainlineAttachExpectedHistory(stickyExpected, expectedMap, '已收盘');
+A(stickyExpectedAgain.l2CurrentVerificationStatus === 'scanned-no-star', '二次挂载不覆盖真实的当前 L2 状态');
+A(stickyExpectedAgain.explain.filter(line => String(line).startsWith('盘中曾出现预期明星')).length === 1, '历史预期证据重复挂载保持幂等,说明不重复');
 
 // 6b. 旧收盘快照/文件缓存也必须在返回时收紧，不能绕过新生成器硬闸。
 eval(extractFn('strategyMainlineRestrictToQiPayload'));

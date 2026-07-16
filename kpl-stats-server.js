@@ -23563,18 +23563,23 @@ function strategyMainlineAttachExpectedHistory(item, transitionMap, sessionPhase
       String(a?.firstExpectedAt || '').localeCompare(String(b?.firstExpectedAt || '')))
     .slice(0, 4);
   const names = historicalStars.map(star => star.name || star.code).filter(Boolean);
+  const currentVerificationStatus = item?.hadExpectedStarToday
+    ? String(item?.l2CurrentVerificationStatus || '')
+    : String(item?.l2VerificationStatus || '');
+  const existingExplain = (Array.isArray(item?.explain) ? item.explain : [])
+    .filter(line => !String(line || '').startsWith('盘中曾出现预期明星'));
   return {
     ...item,
     starStocks,
     hadExpectedStarToday: true,
-    l2CurrentVerificationStatus: String(item?.l2VerificationStatus || ''),
+    l2CurrentVerificationStatus: currentVerificationStatus,
     l2VerificationStatus: 'qi',
     l2ScanState: 'qi',
     l2QualifiedBy: 'expected-star-observed-today',
     expectedStarHistory: historicalStars,
     explain: [
       `盘中曾出现预期明星${names.length ? `：${names.join('、')}` : ''}；该信号作为当日主线证据保留${settled ? '，未兑现者已标明' : ''}。`,
-      ...(Array.isArray(item?.explain) ? item.explain : []),
+      ...existingExplain,
     ].slice(0, 9),
   };
 }
@@ -25539,7 +25544,7 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
   );
   // 管理员/AI 诊断需要保留完整候选池来解释「为什么没上榜」；严格 QI 门槛只作用于
   // 正式构建和正式页面返回，不得裁掉复核、归属追踪与回放证据。
-  const l2Gate = options?.leaderDebug
+  const l2Gate = options?.leaderDebug || !strategyMainlineUsesStrictQi(isoDay)
     ? { kept: inflowGate.kept, excluded: [] }
     : strategyMainlineApplyL2StarGate(inflowGate.kept);
   const mainlines = l2Gate.kept
@@ -25704,6 +25709,14 @@ function strategyMainlineApplyInflowGate(items, mainlineConfirm) {
     kept.push(item);
   }
   return { kept, excluded };
+}
+
+const STRATEGY_MAINLINE_STRICT_QI_START_DAY = '2026-07-16';
+
+// 新门槛从实施日起生效，不倒溯清空以前已冻结的历史主线。
+function strategyMainlineUsesStrictQi(day) {
+  const isoDay = isoFromCompactDate(day);
+  return !!isoDay && isoDay >= STRATEGY_MAINLINE_STRICT_QI_START_DAY;
 }
 
 // Owner 规则(2026-07-16):正式主线榜只显示已经取得 L2 正证据的方向。
@@ -26118,6 +26131,7 @@ async function getStrategyMainlinesVisible(day) {
   const payload = await getStrategyMainlinesWithConfirm(day);
   if (!payload || typeof payload !== 'object') return payload;
   const predictDay = isoFromCompactDate(payload.day || day || chinaNowParts().day);
+  if (!strategyMainlineUsesStrictQi(predictDay)) return payload;
   const predict = await readMainlinePredict(predictDay).catch(() => null);
   return strategyMainlineRestrictToQiPayload(
     strategyMainlineAttachExpectedHistoryPayload(payload, predict)
