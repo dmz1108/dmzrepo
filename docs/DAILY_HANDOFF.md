@@ -5877,3 +5877,27 @@ Deployment:
 Notes for next agent:
 - 合入 `main` 后使用 `ops/production/manifests/yule-home-teaser-consistency-20260715.json` 受保护发布；`restart=none`。
 - 公网验收应同时读取首页 teaser ID 与娱乐页默认“今日值得看”主卡 ID，二者必须一致；再抽查一个单频道仍展示自己的榜首。
+
+## 2026-07-15 - Codex - 首页与娱乐“今日值得看”一致性完成生产发布
+
+Changed:
+- PR #106 已以 squash commit `222a4583f018310df2ab7c050586c497766d2ff5` 合入 `main`。
+- 受保护生产工作流从固定 `main@222a458` 原子替换云端 `yule.html`，娱乐页默认“全部”频道现与首页复用同一 `home-teaser` 对象。
+
+Files:
+- 云端 `C:\PandaDashboard\yule.html`
+- 云端两份运维日志（部署器自动追加）
+- Git `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 工作流 `29463485735` 成功，返回 `health=ok`；生产与 `main` 的 `yule.html` SHA-256 均为 `bb4caed894c07294c8a1a356951ec79b96ee06a7a7ebf4586a0635acf8c3012a`。
+- 公网首页代理与娱乐服务的 `home-teaser` ID 均为 `a7f0f922fb00c3d8`，标题均为“哈哈哈哈哈第6季”；该 ID 存在于公开列表，生产页面源码已包含同对象置顶和按 ID 去重逻辑。
+- 公网主页、娱乐页、行情页和后台均为 HTTP 200；娱乐 `/health` 返回 `ok=true`，登录/注册/忘记密码入口仍在。
+
+Deployment:
+- 工作流：`https://github.com/dmz1108/dmzrepo/actions/runs/29463485735`；备份：`C:\PandaDashboard\_deploy-backups\github-29463485735-1`。
+- `restart=none`；未重启娱乐服务、主服务、Caddy、Consistency Gate 或公司端 L2 worker，未修改娱乐数据库、账号、会话、采集配置、行情或策略数据。
+
+Notes for next agent:
+- 本次展示一致性问题已完成代码、测试、Git 合并、生产发布和公网接口/文件验收；无需再次部署或重启。
+- 若页面会话首次请求 `home-teaser` 失败，会按设计回退原排行；刷新页面会重新请求。后续若要会话内自动重试，应单独评估，不要改动本次推荐口径。
