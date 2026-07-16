@@ -6236,6 +6236,40 @@ Deployment:
 Notes for next agent:
 - 7 月 16 日冻结快照早于本次部署，因此接口本身没有新六态字段；页面已用只读兼容逻辑正确显示，不要回写该快照。
 - 下一个交易日的新实时响应应原生带 `l2ScanState/l2ScanDetail`；按六态迁移表做一次实盘抽查即可。
+
+## 2026-07-16 - Codex - 正式主线榜严格启用 L2 明星门槛
+
+Changed:
+- 正式主线榜只保留 `l2VerificationStatus=qi` 且明星证据包含 `expected` 或 `confirmed` 的方向。
+- 未达扫描条件、等待公司端、扫描中、覆盖不足及扫描无明星的方向继续保留为内部候选并照常参与 L2 调度，但不再进入正式榜。
+- 正式接口在返回旧缓存和旧冻结快照时再次执行同一门槛，避免历史候选绕过新规则。
+- 管理员复核、AI 证据接口和龙头归属回放继续保留完整候选池及排除原因，不被正式榜过滤影响。
+- 预期明星首次出现后写入当日不可逆轨迹；后续 L2 变弱或资金转弱不再删除该主线，收盘未转为明星确认时明确显示“预期明星·未兑现”。
+- 卡片醒目展示盘中预期明星；首次涨幅、L2 比值和最大档证据随轨迹保存，供当日复盘解释。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/inflow-gate.test.js`
+- `tests/mainline-confirm.test.js`
+- `tests/mainline-empty-state.test.js`
+- `tests/predict-records.test.js`
+- `tests/qi-mainline-states.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js` 通过。
+- 严格 QI 门槛、预期明星资格不可逆、未兑现标签、旧快照轨迹恢复、自动扫描先于展示门槛、有效空状态及管理员/AI 诊断隔离测试通过。
+- 全仓 39 个 `tests/*.test.js` 全部通过；`git diff --check` 通过。
+
+Deployment:
+- 本条记录提交时尚未部署；未修改云端运行时文件、业务数据库、历史快照或公司端 L2 worker，未重启服务。
+
+Notes for next agent:
+- 5 亿元且至少 2 只涨停的自动扫描资格未改变；本次只收紧“什么能显示为正式主线”。
+- 严格 QI 门槛从 2026-07-16 实施日起生效；之前已冻结的历史主线保持原口径，不倒溯清空。实施日起若没有可核验的 expected/confirmed 明星证据，会显示有效的“今日无主线”；若同日预测轨迹记录过 expected，则保留该主线并展示最终是否兑现。管理员诊断仍可查看全部被排除候选。
+- 历史预期证据挂载已改为幂等：同一响应被再次收紧时不会重复说明，也不会把真实当前 L2 状态覆盖为 `qi`。
+
 ## 2026-07-16 - Claude - 策略页同花顺资金口径切换为 DDE 大单金额(Owner 定稿)
 
 Changed:
@@ -6345,3 +6379,75 @@ Deployment:
 Notes for next agent:
 - 2026-07-16 TGB 正式来源已完成官方证据、双遍人工转录、终盘池对账、备份、写入、综合主因重折与公网验收，无需再次覆盖或重启服务。
 - 当前四源中只有韭研为 0；若要补齐四源健康，应按韭研自己的正式来源流程单独修复，不能改写或回退本次已健康的 TGB 文件。
+
+## 2026-07-16 - Codex - 准备同花顺 DDE 与严格 QI 主线门槛生产部署
+
+Changed:
+- 独立复核 PR #117：真实同花顺 `527198` 响应、单请求超时、8 秒总预算、in-flight 去重、失败重试、历史日防穿越和口径来源标记均通过；PR 已合并。
+- 修正并复核 PR #123：严格 QI 门槛只从 2026-07-16 起生效，不倒溯清空旧历史；预期明星轨迹重复挂载保持幂等；PR 已合并。
+- 新增受保护部署清单，同时发布主服务与策略页，确保后端字段和前端展示原子切换。
+
+Files:
+- `ops/production/manifests/strategy-ths-dde-strict-qi-20260716.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- PR #117 专项测试及全仓 40 个测试文件通过；真实 `bk_885977` 响应含 `527198=1041518380.000`。
+- PR #123 合并最新 main 后，`node --check`、全仓 40 个测试文件和 `git diff --check` 通过。
+- 部署清单仅包含 `kpl-stats-server.js`、`kpl-dashboard_17_apple.html`，`restart=main`。
+
+Deployment:
+- 本条提交时尚未执行；待清单合入 main 后通过 `production-ops.yml` 执行。
+
+Notes for next agent:
+- 部署后验证公开策略接口从 2026-07-16 起只返回带 expected/confirmed 明星证据的主线；2026-07-15 及以前保持原历史口径。
+- 同花顺 DDE 只覆盖当日策略链，历史日、今日实时看板、复盘和默认三源调用不变。
+
+## 2026-07-16 - Codex - 修复云端 DDE Cookie 启动依赖
+
+Changed:
+- 首次部署后线上发现：云服务器无法及时访问 `raw.githubusercontent.com` 的同花顺 Cookie 脚本，DDE overlay 因此跑满 8 秒并回退旧 `zjjlr`。
+- 已验证 `d.10jqka.com.cn/v6/realhead/...` 在云端无需 Cookie 可直接访问，改为直连，避免无关 GitHub 依赖。
+- HTTP 200 但缺少 `527198` 时不再缓存 `null`，后续调用可以立即重试恢复。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/strategy-ths-dde-netinflow.test.js`
+- `ops/production/manifests/strategy-ths-dde-direct-20260716.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 云端无 Cookie 请求 realhead 返回 HTTP 200，耗时约 0.2 秒；Cookie 脚本源请求超时。
+- DDE 专项测试、`node --check`、全仓 40 个测试文件、部署工作流测试与 `git diff --check` 全部通过。
+
+Deployment:
+- 本条提交时尚未执行；部署只更新 `kpl-stats-server.js` 并重启主服务。
+
+## 2026-07-16 - Codex - 同花顺 DDE 与严格 QI 主线门槛已部署
+
+Changed:
+- PR #117、#123 及云端直连补丁 PR #126 均已合并到 main 并完成生产发布。
+- 正式主线从 2026-07-16 起必须有 L2 预期明星或明星确认；盘中出现过的预期明星当日资格保留，收盘未兑现会明确标记。
+- 同花顺策略资金使用板块 DDE 大单金额 `527198`；东财仍使用超大单净流入，历史快照与今日实时看板不改口径。
+
+Files:
+- 云端 `C:\PandaDashboard\kpl-stats-server.js`
+- 云端 `C:\PandaDashboard\kpl-dashboard_17_apple.html`
+- 云端运维日志（部署器自动追加）
+- Git `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 初次原子部署工作流 `29503523748` 成功，主服务健康；备份 `C:\PandaDashboard\_deploy-backups\github-29503523748-1`。
+- DDE 直连补丁工作流 `29505412388` 成功，主服务健康；备份 `C:\PandaDashboard\_deploy-backups\github-29505412388-1`。
+- 云端后端与 HTML 的 SHA-256 均和获批 main 文件一致。
+- 公网 `/health` 返回 `ok=true`；2026-07-16 正式策略接口返回 0 条并明确 `no-l2-qualified-mainline`，符合当日没有 L2 明星证据的事实。
+- 2026-07-15 历史接口仍保留 6 条旧口径主线，证明实施日前历史没有被倒溯清空。
+- 同花顺策略链“短剧游戏”资金为 `1,891,366,300` 元，与同花顺 raw `527198` 完全一致；接口总耗时约 `0.236s`，修复前为约 `8.2s` 且回退 `zjjlr=3,313,000,000` 元。
+
+Deployment:
+- 工作流：`https://github.com/dmz1108/dmzrepo/actions/runs/29503523748`、`https://github.com/dmz1108/dmzrepo/actions/runs/29505412388`。
+- 两次均只重启主服务；未修改业务数据库、冻结快照、公司端 L2 worker、Caddy 或娱乐服务。
+
+Notes for next agent:
+- 下一交易日抽查同花顺主线卡 `netInflowMetric=ths-dde-big-order-amount`，并观察 DDE 口径放大后自动 L2 派发密度；现有限流不变。
+- Git 记录与云端两份运维日志均已补齐，不需要手工再写云端日志。

@@ -98,12 +98,16 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
   const firstSnapshot = [{ familyKey: 'fam-t', key: 'k-t', theme: '事件主线', rank: 1,
     starStocks: [
       { code: '600010', name: '已确认星', level: 'confirmed' },
-      { code: '600011', name: '预期星', level: 'expected' },
+      { code: '600011', name: '预期星', level: 'expected', gain: 6.8,
+        ratios: { activeRatio: 1.9, passiveRatio: 0.8, supportRatio: 1.2 },
+        maxBucket: { amount: 10000000, activeBuy: 180000000 } },
     ] }];
   await writeMainlinePredict(transitionDay, '早盘', firstSnapshot, null);
   const firstWritten = written['/fake/mainline-predict-' + transitionDay + '.json'];
   A(firstWritten.starTransitions.length === 1 && firstWritten.starTransitions[0].code === '600011', '记录非首位 expected 明星事件');
   A(firstWritten.starTransitions[0].firstExpectedAt && !firstWritten.starTransitions[0].confirmedAt, '首次 expected 保存时间且尚未确认');
+  A(firstWritten.starTransitions[0].firstGain === 6.8 && firstWritten.starTransitions[0].ratios.activeRatio === 1.9
+    && firstWritten.starTransitions[0].maxBucket.activeBuy === 180000000, '首次 expected 同步保存盘中涨幅与最大档 L2 证据供复盘展示');
   const firstExpectedAt = firstWritten.starTransitions[0].firstExpectedAt;
 
   existingPredict = firstWritten;

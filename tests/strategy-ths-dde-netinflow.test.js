@@ -94,6 +94,8 @@ eval(extractFn('strategyApplyThsDdeFundFlow'));
   A(/THS_DDE_AMOUNT_FIELD = '527198'/.test(src), '静态:字段号 527198 常量化(校准记录见合同文档)');
   A(/signal: AbortSignal\.timeout\(THS_DDE_FETCH_TIMEOUT_MS\)/.test(src), '静态:realhead 单请求带 AbortSignal 截止(悬挂请求被真正中止,不留后台占用)');
   A(/const deadline = Date\.now\(\) \+ THS_DDE_OVERLAY_BUDGET_MS/.test(src), '静态:overlay 设总预算截止线,超预算板保持 zjjlr');
+  const realFetchSource = extractFn('fetchThsBoardDdeAmount');
+  A(!realFetchSource.includes('await getThsCookieV') && !realFetchSource.includes('Cookie:'), '静态:DDE realhead 直连,不依赖云端可能超时的 GitHub Cookie 脚本');
 
   // ---- 5. [Codex P1] 真实 fetchThsBoardDdeAmount:in-flight 去重 / 失败可重试(独立作用域,不与上方 stub 冲突) ----
   await (async function realFetchScope() {
@@ -102,14 +104,15 @@ eval(extractFn('strategyApplyThsDdeFundFlow'));
     const THS_DDE_FETCH_TIMEOUT_MS = 4000;
     const thsDdeAmountCache = new Map();
     const thsDdePendingFetch = new Map();
-    const getThsCookieV = async () => 'test-v';
     let fetchCalls = 0;
     let failNext = false;
+    let missingNext = false;
     const payload = 'quotebridge_v6_realhead_bk_885977_defer_last({"items":{"527198":"1041518380.000"},"o":1})';
     const fetch = async () => {
       fetchCalls++;
       await new Promise((r) => setTimeout(r, 20));   // 模拟网络延迟,让并发窗口真实存在
       if (failNext) { failNext = false; throw new Error('socket hang up'); }
+      if (missingNext) { missingNext = false; return { ok: true, text: async () => 'callback({"items":{"10":"1.0"}})' }; }
       return { ok: true, text: async () => payload };
     };
     eval(extractFn('fetchThsBoardDdeAmount'));
@@ -125,6 +128,12 @@ eval(extractFn('strategyApplyThsDdeFundFlow'));
     A(firstErr != null && fetchCalls === 2, '失败:异常如实上抛,失败结果不写缓存');
     const r4 = await fetchThsBoardDdeAmount('885956');
     A(fetchCalls === 3 && r4 === 1041518380, '失败后重试:pending 已清理,下一次重新发请求并成功(失败不污染重试)');
+    // HTTP 200 但字段缺失也不能缓存 null；下一次应重新请求。
+    missingNext = true;
+    const missing = await fetchThsBoardDdeAmount('885955');
+    const callsAfterMissing = fetchCalls;
+    const recovered = await fetchThsBoardDdeAmount('885955');
+    A(missing === null && fetchCalls === callsAfterMissing + 1 && recovered === 1041518380, '字段缺失不缓存 null,下一次可重新请求并恢复');
   })();
 
   console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL STRATEGY-THS-DDE-NETINFLOW CHECKS PASSED');
