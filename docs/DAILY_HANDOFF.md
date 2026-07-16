@@ -6152,3 +6152,29 @@ Deployment:
 Notes for next agent:
 - 生产发布需同时部署 `kpl-stats-server.js` 与 `kpl-dashboard_17_apple.html`，并重启主服务。
 - 旧冻结快照不会被改写，页面会如实显示“旧主力”；新生成快照开始携带 `f66` 并显示“超大单净流入”。
+
+## 2026-07-16 - Codex - 策略页东财超大单资金口径已部署
+
+Changed:
+- PR #115 已合并到 `main`（`0c1d9771225bf91375f6946a4f407546ba4165a8`）。
+- 通过受保护生产工作流发布 `kpl-stats-server.js` 与 `kpl-dashboard_17_apple.html`，主服务已重启。
+- 生产东财目录接口已确认同时返回 `netInflow(f62)`、`superLargeNetInflow(f66)` 和 `largeNetInflow(f72)`；策略页静态资源已包含新口径与旧快照标签。
+
+Files:
+- 云端 `C:\PandaDashboard\kpl-stats-server.js`
+- 云端 `C:\PandaDashboard\kpl-dashboard_17_apple.html`
+- 云端两份运维日志（部署器自动追加）
+- Git `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 工作流 `29485428952` 成功，主服务重启完成且返回 `health=ok`；备份目录为 `C:\PandaDashboard\_deploy-backups\github-29485428952-1`。
+- 公网 `https://market.dreamerqi.com/health` 返回 `{"ok":true}`，`/kpl` 返回 HTTP 200。
+- 公网东财板块接口返回当日实时分档资金；线上行情页包含“东财超大单/同花顺资金净流入”“东财·旧主力”和口径标签函数。
+
+Deployment:
+- 工作流：`https://github.com/dmz1108/dmzrepo/actions/runs/29485428952`；`restart=main`。
+- 未修改业务数据库、历史快照、Caddy、娱乐服务或公司端 L2 worker。
+
+Notes for next agent:
+- 2026-07-16 的策略主线快照在本次部署前已冻结，继续保留原数据并按旧主力口径展示；不要为了新口径回写历史冻结快照。
+- 下一交易日盘中抽查一张东财策略卡：接口 `netInflowMetric` 应为 `eastmoney-super-large-net-inflow`，页面应显示“超大单净流入/流出”。
