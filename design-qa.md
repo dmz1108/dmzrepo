@@ -73,3 +73,55 @@ No actionable P0, P1, or P2 findings remain.
 ## Final result
 
 passed
+
+# DreamerQi Strategy Mainline Card Refinement QA - 2026-07-16
+
+## Comparison target
+
+- Source visual truth: the pre-change `kpl-dashboard_17_apple.html` mainline card rendered with the same realistic two-source strategy fixture used for the implementation capture.
+- Browser-rendered implementation: the refined `kpl-dashboard_17_apple.html` mainline card.
+- Desktop viewport: `1440 × 1100`.
+- Mobile viewport: `390 × 844`.
+- State: strategy view, admin controls visible, two source columns present, first card expanded, second card collapsed.
+- Implementation path: `kpl-dashboard_17_apple.html`.
+
+## Evidence
+
+- Baseline desktop: `/tmp/strategy-card-before-desktop.png`.
+- Final desktop: `/tmp/strategy-card-after-desktop.png`.
+- Desktop same-state comparison: `/tmp/strategy-card-compare-desktop.png`.
+- Baseline mobile: `/tmp/strategy-card-before-mobile.png`.
+- Final mobile: `/tmp/strategy-card-after-mobile.png`.
+- Mobile same-state comparison: `/tmp/strategy-card-compare-mobile.png`.
+
+## Findings
+
+No actionable P0, P1, or P2 findings remain.
+
+- Header hierarchy: board name, board gain, and source-specific fund flow now form one scan line. Source labels remain explicit, and legacy Eastmoney values are named `东财主力（旧口径）` rather than the ambiguous former label.
+- Supporting metrics: the former mixed four-cell strip is now a compact and stable `涨停 / 大涨 / 冲板 / 共振` row; gain and fund flow are not duplicated there.
+- Expanded hierarchy: detail content is grouped into strength breakdown, current leader, listing rationale, leader candidates, and market evidence. Repeated summary metrics were removed from the expanded state.
+- Candidate comparison: desktop candidate rows use a three-column grid; mobile keeps one candidate per row. The full scoring definition remains available in the title while visible helper copy is shorter.
+- Density: expanded details reduced from `775 px` to `630 px` on desktop and from `1181 px` to `1019 px` on mobile with the same fixture and state.
+- Responsive behavior: both viewports report no horizontal overflow and no title overflow. Long board names and fund labels can wrap without resizing the score controls.
+- Data transparency: the compact fund metric retains the representative board, source, metric, and single-board aggregation definition in its tooltip.
+- Logic safety: no strategy calculation, ranking, L2 state, confirmation action, permissions, API request, or source-selection behavior changed.
+
+## Iteration history
+
+1. Captured the current desktop and mobile card states before implementation.
+2. Moved gain and fund flow beside the board name, compressed support metrics, and reorganized expanded details.
+3. Compared before and after screenshots side by side at matching viewports and states.
+4. Restored the source and single-board fund-flow explanation in the compact metric tooltip after a data-transparency regression check.
+
+## Validation
+
+- Inline dashboard script compilation: passed.
+- Focused strategy tests: passed.
+- Full repository suite: `40/40` test files passed.
+- `git diff --check`: passed.
+- Local isolated preview returned expected unrelated `404` requests because only strategy endpoints were mocked; card rendering, interaction, layout, and script execution were unaffected.
+
+## Final result
+
+passed
