@@ -6527,3 +6527,28 @@ Deployment:
 Notes for next agent:
 - 首行资金标签继续跟随来源口径，不能改回无来源的“净流入”；详细资金口径保留在悬停说明中。
 - 本轮是纯展示优化，后续代码不得借此改变主线榜、明星股或 L2 的业务判断。
+
+## 2026-07-16 - Codex - 今日主线卡第二轮视觉精修已部署
+
+Changed:
+- PR #130 已合并到 `main`，板块名旁的涨幅与资金、紧凑次级指标和重组后的展开详情已发布到生产。
+- 线上静态文件与获批 `main` 内容一致，没有改动后端、数据文件或运行时配置。
+
+Files:
+- 云端 `C:\PandaDashboard\kpl-dashboard_17_apple.html`
+- 云端两份运维日志（受保护部署器自动追加）
+- Git `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 生产工作流 `29516810519` 成功，批准提交为 `4c991135ca801c774db84481f86a18047fbf63d7`。
+- 公网 `/health` 返回 `ok=true`；`https://market.dreamerqi.com/?view=strategy` 返回 HTTP 200。
+- 线上页面包含 `ml-head-pulse`、`ml-detail-grid`、`ml-leader-list-grid` 和“东财主力（旧口径）”标记。
+- 线上 HTML SHA-256 `7dc9dd826cce6f4881350a6eb80909dde3178a931882509a6a1fa17389fd6bf0`，与获批 `main` 文件完全一致。
+
+Deployment:
+- 仅更新静态 `kpl-dashboard_17_apple.html`，`restart=none`，未重启任何服务。
+- 自动备份：`C:\PandaDashboard\_deploy-backups\github-29516810519-1`。
+- 工作流：`https://github.com/dmz1108/dmzrepo/actions/runs/29516810519`。
+
+Notes for next agent:
+- 本次上线已完成且云端与 `main` 一致，不需要再次部署或重启。
