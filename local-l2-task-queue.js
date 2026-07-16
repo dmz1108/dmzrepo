@@ -116,6 +116,12 @@ function isIsoDay(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
 }
 
+function chinaIsoDay(nowMs = Date.now()) {
+  const numericNow = Number(nowMs);
+  const safeNow = Number.isFinite(numericNow) ? numericNow : Date.now();
+  return new Date(safeNow + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 function atomicWriteJson(file, value) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.tmp-${process.pid}-${Date.now()}`;
@@ -141,6 +147,27 @@ function normalizeRestoredJob(job) {
   copy.scanChannel = String(copy.scanChannel || '');
   copy.claimedBy = '';
   return copy;
+}
+
+function hasCompletePersistedResult(job) {
+  const total = Number(job?.total || 0);
+  const scanned = Number(job?.scanned || 0);
+  const expectedCodes = new Set((Array.isArray(job?.stocks) ? job.stocks : [])
+    .map(stock => String(stock?.code || '').replace(/\D/g, '').slice(0, 6))
+    .filter(Boolean));
+  const results = Array.isArray(job?.results) ? job.results : [];
+  const resultCodes = new Set(results
+    .map(row => String(row?.code || row?.dm || row?.symbol || '').replace(/\D/g, '').slice(0, 6))
+    .filter(Boolean));
+  const metrics = job?.metrics || {};
+  return total > 0 &&
+    scanned >= total &&
+    expectedCodes.size >= total &&
+    [...expectedCodes].every(code => resultCodes.has(code)) &&
+    results.length >= total &&
+    Number(metrics.resultRows || 0) >= total &&
+    Number(metrics.rowsWithPrice || 0) >= total &&
+    Number(metrics.rowsWithAllBuckets || 0) >= total;
 }
 
 function workerJob(job) {
@@ -177,10 +204,13 @@ class LocalL2TaskQueue {
     this.queue = [];
     this.persistDir = String(options.persistDir || options.dataDir || '').trim();
     this.persistDays = Math.max(1, Number(options.persistDays || options.cleanupDays || DEFAULT_PERSIST_DAYS));
+    this.restoreNowMs = Number.isFinite(Number(options.nowMs)) ? Number(options.nowMs) : Date.now();
+    this.resumeDay = isIsoDay(options.currentDay) ? String(options.currentDay) : chinaIsoDay(this.restoreNowMs);
     this.persistence = {
       enabled: !!this.persistDir,
       dir: this.persistDir,
       days: this.persistDays,
+      resumeDay: this.resumeDay,
       restoredJobs: 0,
       lastPersistAt: '',
       lastPersistError: '',
@@ -224,6 +254,7 @@ class LocalL2TaskQueue {
         enabled: this.persistence.enabled,
         dir: this.persistence.dir,
         days: this.persistence.days,
+        resumeDay: this.persistence.resumeDay,
         restoredJobs: this.persistence.restoredJobs,
         lastPersistAt: this.persistence.lastPersistAt,
         lastPersistError: this.persistence.lastPersistError,
@@ -301,14 +332,38 @@ class LocalL2TaskQueue {
           if (!job) continue;
           const existing = this.jobs.get(job.jobId);
           if (existing && String(existing.updatedAt || '') > String(job.updatedAt || '')) continue;
-          if (job.status === 'queued' || job.status === 'running') {
-            job.note = `${job.note || '本机计算任务'}；服务重启后已从落盘结果恢复，等待重新发起扫描`;
+          const unfinished = job.status === 'queued' || job.status === 'running';
+          const resumeEligible = unfinished && job.day === this.resumeDay;
+          if (unfinished && hasCompletePersistedResult(job)) {
+            job.status = 'done';
+            job.scanned = job.total;
+            job.endedAt = job.endedAt || job.updatedAt || payload?.savedAt || new Date().toISOString();
+            job.error = '';
+            job.note = '本机计算结果已完整落盘；服务重启时自动恢复为完成';
+          } else if (resumeEligible) {
+            job.status = 'queued';
+            job.startedAt = '';
+            job.endedAt = '';
+            job.error = '';
+            job.note = '服务重启后已从落盘结果恢复并重新排队';
+          } else if (unfinished) {
+            // L2 是实时盘口，只能续扫中国时区当天任务。30 天仅是记录保留期，
+            // 绝不能把今天的数据写进历史 job，也不能让历史积压挤占当天队列。
+            job.status = 'error';
+            job.startedAt = '';
+            job.endedAt = job.endedAt || payload?.savedAt || new Date().toISOString();
+            job.error = '历史未完成任务不会重新扫描';
+            job.note = '历史未完成任务仅恢复供查看；未使用当前盘口补扫';
           }
           this.jobs.set(job.jobId, job);
           const key = latestJobKey(job.plateId, job.day);
           const existingLatest = this.jobs.get(this.latestByPlate.get(key));
           if (!existingLatest || String(job.createdAt || job.updatedAt || '') >= String(existingLatest.createdAt || existingLatest.updatedAt || '')) {
             this.latestByPlate.set(key, job.jobId);
+          }
+          if (unfinished) {
+            if (resumeEligible && job.status === 'queued' && !this.queue.includes(job.jobId)) this.queue.push(job.jobId);
+            this.persistJob(job);
           }
           restored += 1;
         }
@@ -324,7 +379,7 @@ class LocalL2TaskQueue {
     if (!this.persistence.enabled) return;
     try {
       if (!fs.existsSync(this.persistDir)) return;
-      const cutoff = Date.now() - this.persistDays * 24 * 60 * 60 * 1000;
+      const cutoff = this.restoreNowMs - this.persistDays * 24 * 60 * 60 * 1000;
       for (const entry of fs.readdirSync(this.persistDir, { withFileTypes: true })) {
         if (!entry.isDirectory() || !isIsoDay(entry.name)) continue;
         const dayMs = Date.parse(`${entry.name}T00:00:00Z`);
@@ -535,4 +590,4 @@ function createLocalL2TaskQueue(options = {}) {
   return new LocalL2TaskQueue(options);
 }
 
-module.exports = { createLocalL2TaskQueue, DEFAULT_THRESHOLDS };
+module.exports = { createLocalL2TaskQueue, DEFAULT_THRESHOLDS, isExcludedL2StockCode };
