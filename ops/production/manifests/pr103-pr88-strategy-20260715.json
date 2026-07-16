@@ -1,0 +1,17 @@
+{
+  "files": [
+    {
+      "source": "kpl-stats-server.js",
+      "destination": "kpl-stats-server.js"
+    },
+    {
+      "source": "local-l2-task-queue.js",
+      "destination": "local-l2-task-queue.js"
+    },
+    {
+      "source": "kpl-dashboard_17_apple.html",
+      "destination": "kpl-dashboard_17_apple.html"
+    }
+  ],
+  "restart": "main"
+}
