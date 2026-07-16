@@ -6023,3 +6023,56 @@ Deployment:
 Notes for next agent:
 - PR #110 已完成代码审查、合并、生产发布与线上业务验收，无需再次部署。
 - PR #111 是独立的 L2 补全任务，仍按其自己的评审结论处理，不属于本次发布。
+## 2026-07-16 - Claude - 板级涨停数成份股精确回填(修「全员L2待验证」根因)
+
+Changed:
+- 现象(Owner 报告):2026-07-16 策略页两栏所有主线卡都显示「L2待验证」。只读诊断:worker 在线、
+  pending=0,但当日无任何主线家族的板被派发——盘中实时板块榜 ztCount 普遍为 null,旧行为
+  Number(null)=0 使自动扫描门槛「涨停≥2」腿盘中形同虚设,实际只剩 ≥10亿直通;医药代表板
+  9.67亿(<10亿)+ zt unknown → 不派发 → 全员待验证。昨日肝炎24.69亿/CAR-T13.93亿 均过直通线
+  所以能扫,印证该缺口。
+- Owner 定稿:不是把 unknown 当 0 或绕过门槛,而是用成份股逐只精确统计是否涨停。
+- 新增 strategyMainlineBackfillBoardZt:仅当板 zt 为 null 时回填——成份 ∩ 当日涨停底库(权威)
+  为主;底库没有该股时用实时涨幅 ≥ limitUpThreshold(code,name)(主板9.75/创业科创北交19.5/ST4.75)
+  兜底;两路并集去重;标 ztSource='member-join'。已知 zt(快照/来源自带,含 0)绝不覆盖;无成份行
+  保持 null 不伪造 0。
+- impl 在涨停底库建好后、种子/统一扫描前调用;回填结果同时供派发门槛、种子 countFallback 与展示。
+
+Files:
+- `kpl-stats-server.js`(strategyMainlineBackfillBoardZt + impl 调用)
+- `tests/strategy-board-zt-backfill.test.js`(新增:底库为主/阈值兜底/ST/去重/不覆盖已知/不伪造0
+  + 端到端复现今日医药 9.67亿 zt-null 不派发→回填后派发)
+
+Validated:
+- `node --check` 通过;全仓 37 个测试文件全绿。
+- 生产只读实证:2026-07-16 13:56 实时榜 160 板 ztCount 全 unknown(limitUpLeaders 空),
+  两栏主线卡全部 unscanned,队列 pending=0——与根因推断一致。
+
+Deployment:
+- 未部署;合并后经 production-ops.yml 部署 kpl-stats-server.js 并重启主服务。
+- 与 PR #110(catalog 跨源过滤,Codex 已 Approved 待合并)相互独立,同文件不同函数。
+
+Notes for next agent:
+- 部署后盘中验证:5~10亿 区间、成份有 ≥2 只涨停的主线板应能被派发(不再全员待验证);
+  快照日(盘后)行为不变。
+- 本修复不改门槛数值(5亿/涨停2/10亿直通均保持 Owner 定稿),只把「涨停数未知」变成「精确统计」。
+
+## 2026-07-16 - Claude - 自动扫描门槛去豁免(Owner 定稿:5亿 且 涨停≥2,无任何豁免)
+
+Changed:
+- Owner 2026-07-16 定稿:自动 L2 扫描门槛只有一条——板净流入≥5亿 且 板内涨停≥2,不需要豁免。
+- 移除 10亿高流入直通(STRATEGY_MAINLINE_AUTO_SCAN_HIGH_INFLOW_OVERRIDE,原为救"钱多涨停少"而设;
+  涨停数缺失已由成份股精确回填解决,不再需要金额直通绕过涨停腿)。
+- 移除补选板豁免涨停≥2(补选板同样过门槛;补选仅保留派发排序优先级,非门槛豁免)。
+
+Files:
+- kpl-stats-server.js(auto-scan filter + 常量与注释)
+- tests/scan-priority.test.js(静态断言:门槛无豁免、两豁免已移除;补选第一键仅为排序)
+- tests/strategy-board-zt-backfill.test.js(行为:99亿 zt=1 不派发、补选板 zt=1 不派发)
+- tests/strategy-two-source-mainlines.test.js(清理已删常量)
+
+Validated:
+- node --check 通过;全仓 37 个测试文件全绿。
+
+Notes for next agent:
+- 与本分支的板级涨停回填同属 PR #111,一起复核部署;门槛金额线 5亿/涨停 2 保持 Owner 原定值。

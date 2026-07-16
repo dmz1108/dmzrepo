@@ -196,7 +196,6 @@ const STRATEGY_MAINLINE_AUTO_SCAN_WINDOW_MS = 5 * 60 * 1000;
 const STRATEGY_MAINLINE_AUTO_SCAN_MAX_PER_WINDOW = 2;
 const STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW = 5e8;
 const STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT = 2;
-const STRATEGY_MAINLINE_AUTO_SCAN_HIGH_INFLOW_OVERRIDE = 10e8;
 const STRATEGY_MAINLINE_AUTO_SCAN_LIMIT_STOCKS = 50;
 const strategyMainlineAutoScanState = { windowStart: 0, dispatched: 0, lastJobId: '' };
 const strategyMainlineFamilyInfo = (x) => ({ key: 'group:' + String(x && x.theme || '') });

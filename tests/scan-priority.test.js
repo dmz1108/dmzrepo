@@ -83,10 +83,11 @@ eval(extractFn('strategyNormRealtimeStocks'));
   A(codesTheme[0] === '600006' && codesTheme[1] === '600001', '无关题材10次计0,相关题材1次胜出;多题材只累计同题材次数(无关5次不叠加)');
   A(src.includes('strategyMainlineBoardThemeRelated(board?.name, t?.theme)'), '第三键题材过滤复用 strategyMainlineBoardThemeRelated');
 
-  // 2. 板块级字典序与豁免 + 调用点接线(静态断言)
-  A(src.includes("b?.scanChannel === 'supplement' || Number(b?.zt) >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT"), '补选板块豁免涨停>=2门槛');
-  A(src.includes('Number(b?.netInflow) >= STRATEGY_MAINLINE_AUTO_SCAN_HIGH_INFLOW_OVERRIDE'), '高流入直通:净流入≥阈值无视涨停数');
-  A(src.includes("((a?.scanChannel === 'supplement') ? 0 : 1) - ((b?.scanChannel === 'supplement') ? 0 : 1)"), '板块级第一键=补选来源');
+  // 2. 板块级字典序与门槛(Owner 2026-07-16:净流入≥5亿 且 涨停≥2,无任何豁免)+ 调用点接线(静态断言)
+  A(src.includes('Number(b?.netInflow) >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW &&\n        Number(b?.zt) >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT'), '门槛=净流入≥5亿 且 涨停≥2(无豁免)');
+  A(!src.includes("b?.scanChannel === 'supplement' || Number(b?.zt)"), '补选豁免已移除(补选板同样过涨停门槛)');
+  A(!src.includes('Number(b?.netInflow) >= STRATEGY_MAINLINE_AUTO_SCAN_HIGH_INFLOW_OVERRIDE'), '10亿高流入直通已移除');
+  A(src.includes("((a?.scanChannel === 'supplement') ? 0 : 1) - ((b?.scanChannel === 'supplement') ? 0 : 1)"), '板块级第一键=补选来源(仅派发优先级,非门槛豁免)');
   A(src.includes('bigGainOf(b) - bigGainOf(a)'), '板块级第三键=大涨数');
   A(src.includes('strategyMainlineScanPriorityCodes(board, priorByCode)'), '派发时传入真实主因上下文');
   A(src.includes('sessionPhaseNow, priorReason?.byCode)'), '调用点接线 priorReason.byCode');

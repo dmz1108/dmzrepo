@@ -18,6 +18,7 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
 
 // ---- stub 真实函数的依赖(仅替换磁盘 IO 与无关辅助;合并/归一逻辑走真实代码) ----
 const isoFromCompactDate = d => d;
+const numOrNull = v => { const n = Number(v); return Number.isFinite(n) ? n : null; };   // absorbPayload 未知涨停数规范为 null
 const resolveStrategySnapshotDay = async d => d;
 const getPermanentHiddenSet = async () => new Set();
 const normalizeReasonSourceCode = c => String(c || '').replace(/\D/g, '').slice(0, 6);

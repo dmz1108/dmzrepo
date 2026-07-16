@@ -21204,7 +21204,9 @@ async function getDayBoardsWithMembers(day, options = {}) {
       if (!name) continue;
       const plateId = String(b?.plateId || b?.id || '');
       if (plateId && hidden.has(plateId)) continue;   // 看板永久删除的板块,共振榜也不出现
-      const zt = Number(b?.ztCount ?? b?.zt ?? NaN);
+      // 未知涨停数规范为 null(不是 NaN):下游 numOrNull/回填守卫按 null 语义处理;
+      // Codex #111 复核 P1——旧 Number(...??NaN) 产出 NaN,回填守卫 b.zt!=null 会把它当"已有值"跳过。
+      const zt = numOrNull(b?.ztCount ?? b?.zt);
       const netInflow = Number(b?.netInflow ?? b?.mainInflow ?? b?.inflow ?? NaN);
       const gainPct = Number(b?.gainPct ?? b?.gain ?? b?.zf ?? b?.changePct ?? b?.涨幅 ?? NaN);
       const ztList = Array.isArray(cardData[plateId]?.ztList) ? cardData[plateId].ztList : [];
@@ -21345,12 +21347,13 @@ const STRATEGY_MAINLINE_STAR_BUCKETS = [500000, 3000000, 8000000];
 const STRATEGY_MAINLINE_STAR_PRE_RATIO = 1.5;
 const STRATEGY_MAINLINE_STAR_SEAL_RATIO = 2;
 // 自动 L2 扫描：只在交易时段、每 5 分钟窗口最多派 2 个板块、串行（上一个没跑完不派下一个）、无合格目标不扫。
-// 合格目标 = 今日实时里 净流入≥5亿 且 (板内涨停≥2 或 净流入≥10亿高流入直通) 的前排板块，当天已扫过的不重复。
+// 合格目标 = 今日实时里 净流入≥5亿 且 板内涨停≥2 的前排板块(Owner 2026-07-16:无任何豁免)，当天已扫过的不重复。
 const STRATEGY_MAINLINE_AUTO_SCAN_WINDOW_MS = 5 * 60 * 1000;
 const STRATEGY_MAINLINE_AUTO_SCAN_MAX_PER_WINDOW = 2;
 const STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW = 5e8;   // Owner 2026-07-15:8亿→5亿(救钱不够8亿的中小主线)
 const STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT = 2;
-const STRATEGY_MAINLINE_AUTO_SCAN_HIGH_INFLOW_OVERRIDE = 10e8;  // 净流入≥此值无视涨停数直接排队验证(高流入直通,救钱多涨停少的主线如大消费)
+// (已移除)高流入直通 STRATEGY_MAINLINE_AUTO_SCAN_HIGH_INFLOW_OVERRIDE:Owner 2026-07-16 定稿
+// 门槛无豁免——净流入≥5亿 且 涨停≥2;涨停数缺失由成份股精确回填解决,不再用金额直通绕过涨停腿。
 const STRATEGY_MAINLINE_AUTO_SCAN_LIMIT_STOCKS = 50;
 const strategyMainlineAutoScanState = { windowStart: 0, dispatched: 0, lastJobId: '' };
 function strategyResonanceTopicKey(raw) {
@@ -22752,7 +22755,7 @@ function strategyMainlineDeriveL2Status(l2Stars, hasQiStar, themeCodes) {
   return 'unscanned';
 }
 
-// 自动派发 L2 扫描：净流入≥8亿且板内涨停≥2 的前排板块；5 分钟窗口最多 2 个、串行、当天扫过不重复、无目标不扫。
+// 自动派发 L2 扫描：净流入≥5亿 且 板内涨停≥2(Owner 2026-07-16:无任何豁免);5 分钟窗口最多 2 个、串行、当天扫过不重复、无目标不扫。
 // 个股优先扫描列表(SD v1 第5条):猎场 = 板内涨幅 5% ~ 涨停前(Owner 定义的预期明星候选区);
 // 字典序:距板距离近 > 当日涨幅高 > 历史主因命中多(行上无 priorReason 时按 0 处理),上限 20 只。
 function strategyMainlineScanPriorityCodes(board, priorByCode) {
@@ -22790,6 +22793,29 @@ function strategyMainlineScanPriorityCodes(board, priorByCode) {
     .slice(0, 20);
 }
 
+// 板级涨停数精确回填:仅当 board.zt 为 null(盘中实时榜常见)时,用成份股逐只判定——
+// ①成份 code ∈ 当日涨停底库(权威);②底库没有该股时,实时涨幅 ≥ limitUpThreshold(code,name) 兜底。
+// 两路 code 集合取并去重;标 ztSource='member-join' 供审计。已知 zt(快照/来源自带)绝不覆盖。
+function strategyMainlineBackfillBoardZt(boards, limitUpByCode) {
+  for (const b of (Array.isArray(boards) ? boards : [])) {
+    // 只把「有限数值」当已有值(含真实 0);null/undefined/NaN 一律视为未知需回填——
+    // 生产 unknown 曾以 NaN 形态出现(Codex #111 复核 P1),!=null 守卫会漏掉它。
+    if (!b || isFiniteNumeric(b.zt)) continue;
+    const rows = Array.isArray(b.memberRows) ? b.memberRows : [];
+    if (!rows.length) continue;
+    const ztCodes = new Set();
+    for (const r of rows) {
+      const code = normalizeReasonSourceCode(r?.code);
+      if (!code) continue;
+      if (limitUpByCode && limitUpByCode.has(code)) { ztCodes.add(code); continue; }
+      const gain = Number(r?.gain);
+      if (Number.isFinite(gain) && gain >= limitUpThreshold(code, r?.name)) ztCodes.add(code);
+    }
+    b.zt = ztCodes.size;
+    b.ztSource = 'member-join';
+  }
+}
+
 function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase, priorByCode) {
   try {
     if (!isToday) return;
@@ -22807,13 +22833,14 @@ function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase, prior
       if (last && (last.status === 'queued' || last.status === 'running')) return;
     }
     // 板块级字典序(SD v1 第5条):补选来源 > 净流入 > 大涨数;不做加权公式。
-    // 补选板块豁免"涨停>=2"门槛——新发方向涨停本来就少,正是最需要 L2 验证的对象。
+    // 门槛(Owner 2026-07-16 定稿):净流入≥5亿 且 板内涨停≥2,无任何豁免——
+    // 10亿高流入直通与补选豁免均已按 Owner 指示移除;涨停数缺失由成份股精确回填
+    // (strategyMainlineBackfillBoardZt)解决,而非放宽门槛。补选板同样按此门槛,仅保留派发优先级。
     const bigGainOf = b => (Array.isArray(b?.memberRows) ? b.memberRows.filter(r => Number(r?.gain) >= STRATEGY_MAINLINE_BIG_GAIN_PCT).length : 0);
     const candidates = (Array.isArray(boards) ? boards : [])
       .filter(b => String(b?.plateId || '') &&
         Number(b?.netInflow) >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW &&
-        (b?.scanChannel === 'supplement' || Number(b?.zt) >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT
-          || Number(b?.netInflow) >= STRATEGY_MAINLINE_AUTO_SCAN_HIGH_INFLOW_OVERRIDE) &&
+        Number(b?.zt) >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT &&
         Array.isArray(b?.memberRows) && b.memberRows.length)
       .sort((a, b) =>
         ((a?.scanChannel === 'supplement') ? 0 : 1) - ((b?.scanChannel === 'supplement') ? 0 : 1) ||
@@ -24821,6 +24848,12 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     const code = normalizeReasonSourceCode(s?.code);
     if (code) limitUpByCode.set(code, s);
   }
+  // 板级涨停数精确回填(Owner 2026-07-16):盘中实时板块榜的 ztCount 经常未知(null),旧行为
+  // Number(null)=0 会让自动扫描门槛的「涨停≥2」腿盘中形同虚设——5~10亿 区间的主线板(如医药
+  // 9.67亿)永远不被 L2 验证。Owner 定稿:不是把 unknown 当 0 或绕过门槛,而是用成份股逐只
+  // 精确统计:成份 ∩ 当日涨停底库(权威口径)为主;底库尚无该股时,用实时涨幅 ≥ 该股涨停阈值
+  // (limitUpThreshold,含 ST/创业板差异)兜底。仅在板 zt 为 null 时回填,快照/已知值不改。
+  strategyMainlineBackfillBoardZt(boardPayload?.boards || [], limitUpByCode);
   const seedByKey = new Map();
   const risingStockByCode = new Map();
   const nearLimitStockByCode = new Map();
