@@ -21118,11 +21118,109 @@ function strategyBoardFundFlowForSource(board, zsType, options = {}) {
       legacy: legacyValue != null,
     };
   }
+  if (source === 5) {
+    // Owner 2026-07-16:策略页同花顺侧资金 = DDE 大单金额(realhead 527198,单位元)。
+    // 该值由 strategyApplyThsDdeFundFlow 盘中按板实时覆盖到 ddeBigOrderAmount;
+    // 未覆盖(历史日/DDE 暂缺)时回退 zjjlr 并如实标 metric,绝不冒充 DDE。
+    const dde = numOrNull(board?.ddeBigOrderAmount);
+    if (dde != null) {
+      return { value: dde, metric: 'ths-dde-big-order-amount', legacy: false };
+    }
+    return {
+      value: numOrNull(board?.netInflow ?? board?.mainInflow ?? board?.inflow),
+      metric: 'ths-net-inflow',
+      legacy: false,
+    };
+  }
   return {
     value: numOrNull(board?.netInflow ?? board?.mainInflow ?? board?.inflow),
-    metric: source === 5 ? 'ths-net-inflow' : 'source-net-inflow',
+    metric: 'source-net-inflow',
     legacy: false,
   };
+}
+
+// ===== 同花顺板块 DDE 大单金额(Owner 2026-07-16 定稿:仅策略页同花顺侧资金口径) =====
+// 来源:d.10jqka.com.cn quotebridge realhead,字段 527198,单位:元(实测校准:2026-07-16 收盘
+// 国资云 bk_885977=10.415亿、智慧政务 bk_885956=20.375亿,与 Owner 同花顺 APP「DDE大单金额」
+// 读数一致;同日 zjjlr 分别为 1.79亿/0亿,口径显著不同)。板块指数代码取自 THS 概念目录
+// thsPlateCode(gn plateId → 885xxx)。合同要求:两口径绝不混同一列,metric 字段全程可溯。
+const THS_DDE_AMOUNT_FIELD = '527198';
+const THS_DDE_CACHE_MS = 90 * 1000;
+const thsDdeAmountCache = new Map();   // indexCode -> { value, at }
+let thsDdeIndexMapCache = null;        // { at, map: Map(plateId -> thsPlateCode) }
+function thsParseRealheadField(text, field) {
+  const m = String(text || '').match(/\{"items":\{([\s\S]*?)\}\s*[,}]/);
+  if (!m) return null;
+  const mm = m[1].match(new RegExp(`"${field}":"([-\\d.]+)"`));
+  return mm ? numOrNull(mm[1]) : null;
+}
+async function thsDdeIndexCodeMap() {
+  const now = Date.now();
+  if (thsDdeIndexMapCache && now - thsDdeIndexMapCache.at < 10 * 60 * 1000) return thsDdeIndexMapCache.map;
+  const catalog = await readThsConceptCatalog().catch(() => null);
+  const map = new Map();
+  for (const b of (catalog?.boards || [])) {
+    const plateId = String(b?.plateId || '').trim();
+    const idx = String(b?.thsPlateCode || '').trim();
+    if (plateId && idx) map.set(plateId, idx);
+  }
+  thsDdeIndexMapCache = { at: now, map };
+  return map;
+}
+async function fetchThsBoardDdeAmount(indexCode) {
+  const code = String(indexCode || '').trim();
+  if (!code) return null;
+  const now = Date.now();
+  const hit = thsDdeAmountCache.get(code);
+  if (hit && now - hit.at < THS_DDE_CACHE_MS) return hit.value;
+  const v = await getThsCookieV();
+  const res = await fetch(`https://d.10jqka.com.cn/v6/realhead/bk_${code}/defer/last.js`, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/89.0.4389.90 Safari/537.36',
+      Referer: 'https://q.10jqka.com.cn/gn/',
+      Cookie: `v=${v}`,
+    },
+  });
+  if (!res.ok) throw new Error(`THS realhead ${res.status}: bk_${code}`);
+  const value = thsParseRealheadField(await res.text(), THS_DDE_AMOUNT_FIELD);
+  thsDdeAmountCache.set(code, { value, at: now });
+  return value;
+}
+// 把同花顺侧(zsType=5 的主板 + 每块板的 bySource[5])的 netInflow 覆盖为当日 DDE 大单金额。
+// 仅当 useDay=中国今天(realhead 是"现在"的值,历史日覆盖=数据穿越,绝不做);
+// DDE 拿不到的板保持 zjjlr(metric 维持 ths-net-inflow,如实可辨,不冒充 DDE)。
+async function strategyApplyThsDdeFundFlow(boards, useDay) {
+  if (isoFromCompactDate(useDay) !== isoFromCompactDate(chinaNowParts().day)) return;
+  const list = Array.isArray(boards) ? boards : [];
+  const targets = [];
+  for (const b of list) {
+    if (Number(b?.zsType) === 5) targets.push({ kind: 'board', ref: b, plateId: String(b?.plateId || '') });
+    const s5 = b?.bySource && b.bySource[5];
+    if (s5 && s5 !== b) targets.push({ kind: 'bySource', ref: s5, plateId: String(s5?.plateId || '') });
+  }
+  if (!targets.length) return;
+  const idxMap = await thsDdeIndexCodeMap();
+  const byPlate = new Map();
+  for (const t of targets) {
+    if (!t.plateId || !idxMap.has(t.plateId)) continue;
+    if (!byPlate.has(t.plateId)) byPlate.set(t.plateId, []);
+    byPlate.get(t.plateId).push(t.ref);
+  }
+  await mapLimit([...byPlate.entries()], 3, async ([plateId, refs]) => {
+    try {
+      const dde = await fetchThsBoardDdeAmount(idxMap.get(plateId));
+      if (dde == null) return;
+      for (const ref of refs) {
+        ref.netInflowZjjlr = numOrNull(ref.netInflow);   // 原 zjjlr 留档供审计/对照
+        ref.ddeBigOrderAmount = dde;
+        ref.netInflow = dde;
+        ref.netInflowMetric = 'ths-dde-big-order-amount';
+        ref.netInflowLegacy = false;
+      }
+    } catch (err) {
+      strategyMainlineDiagNoteRead(`ths-dde bk ${plateId}`, err);   // 失败可观测,不吞;该板保持 zjjlr
+    }
+  });
 }
 
 async function getStrategyBoardsForDay(day, options = {}) {
@@ -21328,6 +21426,16 @@ async function getDayBoardsWithMembers(day, options = {}) {
         } catch (err) { strategyMainlineDiagNoteRead(`board-rank-live zs${z} ${requestedDay}`, err); }   // 七审:实时回退失败不再空吞
       });
       if (bmap.size) source = 'live';
+    }
+  }
+  // 策略口径(显式传 zsTypes 且不含 KPL)且含同花顺:当日把同花顺侧资金覆盖为 DDE 大单金额
+  // (Owner 2026-07-16「只针对策略页的同花顺资金净流入」)。复盘/看板等默认三源调用不覆盖;
+  // 历史日在 strategyApplyThsDdeFundFlow 内部拒绝(realhead 是当前值,回填历史=数据穿越)。
+  const strategyScopedZs = Array.isArray(options.zsTypes) && options.zsTypes.length
+    && !options.zsTypes.map(Number).includes(7);
+  if (strategyScopedZs && zsTypes.map(Number).includes(5)) {
+    try { await strategyApplyThsDdeFundFlow([...bmap.values()], useDay); } catch (err) {
+      strategyMainlineDiagNoteRead(`ths-dde overlay ${useDay}`, err);
     }
   }
   return { useDay, boards: [...bmap.values()], source, requestedDay };

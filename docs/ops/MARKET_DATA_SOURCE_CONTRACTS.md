@@ -32,6 +32,14 @@ If `sourceDay !== targetDay`, the record must not masquerade as today's fact. A 
 - `data.10jqka.com.cn/funds/gnzjl/` is the dedicated concept-fund ranking page. It can be developed as a verification or fallback source only after date, coverage, unit, and plate-mapping checks.
 - `data.10jqka.com.cn/funds/ddzz/` is stock-level large-order tracking. It is not a sector DDE value and must not directly replace board net inflow.
 
+Strategy-page THS money metric (Owner decision 2026-07-16): **DDE big-order amount**, not `zjjlr`.
+
+- Source: `https://d.10jqka.com.cn/v6/realhead/bk_{indexCode}/defer/last.js`, field `527198`, unit = yuan. `indexCode` is the THS block-index code (`thsPlateCode`, `885xxx`) mapped from the gn plate id via the THS concept catalog.
+- Calibration record (2026-07-16 after close, cross-checked against the owner's THS app "DDE大单金额"): 国资云 `bk_885977` = 10.415亿, 智慧政务 `bk_885956` = 20.375亿; same-day `zjjlr` was 1.79亿 / 0亿 — a different metric family entirely.
+- Field family observed on the same payload: `526792` behaves like DDE 大单净量(%) on stocks; buy/sell-looking pairs `223/224`, `225/226`, `237/238`, `259/260` remain undecoded — do not use them without their own calibration.
+- Scope: strategy-page chain only (`getDayBoardsWithMembers` calls that pass an explicit KPL-free `zsTypes`). Kanban, review, and default three-source callers keep `zjjlr`. Overlay applies only when `useDay` is the current China trading day — realhead is a *current* value, so backfilling historical days with it is data leakage and is refused in code.
+- Provenance: overlaid boards carry `netInflowMetric='ths-dde-big-order-amount'`, the raw DDE in `ddeBigOrderAmount`, and the displaced `zjjlr` in `netInflowZjjlr`. Boards whose DDE fetch fails keep `zjjlr` with `netInflowMetric='ths-net-inflow'` — the two metrics are never silently mixed as one column without the metric tag.
+
 For a strategy family that maps to several overlapping THS concepts, use one representative board value and expose its identity. Current metadata is:
 
 ```text

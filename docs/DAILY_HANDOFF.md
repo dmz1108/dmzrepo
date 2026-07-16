@@ -6236,3 +6236,33 @@ Deployment:
 Notes for next agent:
 - 7 月 16 日冻结快照早于本次部署，因此接口本身没有新六态字段；页面已用只读兼容逻辑正确显示，不要回写该快照。
 - 下一个交易日的新实时响应应原生带 `l2ScanState/l2ScanDetail`；按六态迁移表做一次实盘抽查即可。
+## 2026-07-16 - Claude - 策略页同花顺资金口径切换为 DDE 大单金额(Owner 定稿)
+
+Changed:
+- 发现并校准同花顺板块级 DDE 大单金额数据源:d.10jqka realhead 字段 527198(单位元)。
+  收盘校准 国资云 10.415亿/智慧政务 20.375亿,Owner 用 APP「DDE大单金额」逐板对照一致
+  (同日 zjjlr 仅 1.79亿/0亿)。
+- strategyBoardFundFlowForSource zsType=5 分支:ddeBigOrderAmount 优先(metric
+  ths-dde-big-order-amount),未覆盖回退 zjjlr(metric 如实,不冒充)。
+- 新增 fetchThsBoardDdeAmount(90s 缓存)/thsDdeIndexCodeMap(THS 目录 plateId→885xxx,
+  10min 缓存)/strategyApplyThsDdeFundFlow(覆盖 zsType5 主板 + 塌板 bySource[5])。
+- getDayBoardsWithMembers 返回前接线:仅显式策略口径(zsTypes 不含 7)且含 5 时覆盖;
+  仅当日(历史日在函数内拒绝——realhead 是当前值,回填历史=数据穿越);单板失败记诊断、保持 zjjlr。
+- 看板/复盘/默认三源调用与 zs5 快照文件不动;原 zjjlr 留档 netInflowZjjlr 供审计。
+
+Files:
+- kpl-stats-server.js(选择器 5 分支 + DDE 抓取/映射/覆盖三函数 + getDayBoardsWithMembers 接线)
+- tests/strategy-ths-dde-netinflow.test.js(新增:解析/选择器/覆盖行为/历史拒绝/失败保持/静态接线)
+- docs/ops/MARKET_DATA_SOURCE_CONTRACTS.md(THS 节新增 DDE 口径契约与校准记录)
+- docs/strategy/discussions/2026-07-16-ths-dde-netinflow.md(讨论定稿)
+
+Validated:
+- node --check 通过;全仓 40 个测试文件全绿。
+- 与东财超大单口径(Codex 同日改)互不影响(选择器分支隔离,专项断言覆盖)。
+
+Deployment:
+- 未部署;合并后经 production-ops.yml 部署 kpl-stats-server.js 并重启主服务。
+
+Notes for next agent:
+- 次交易日 14:59 验收重点:同花顺主线卡资金应为 DDE 量级(对照 APP),netInflowMetric 可溯;
+  L2 扫描同花顺侧达标板会因口径变大而变多,限流不变,观察派发密度。
