@@ -46,6 +46,8 @@ A(src.includes('const l2Gate = strategyMainlineApplyL2StarGate(inflowGate.kept);
 
 // 3. 接线静态断言(前端)
 A(['未达扫描条件','等待公司端','扫描中','覆盖不足','L2未见明星','QI主线'].every(label => html.includes(label)), '前端六态徽章齐备');
+A(html.includes("Number(board?.netInflow) >= 5e8 && Number(board?.ztCount) >= 2")
+  && html.includes("legacyL2Eligible ? 'coverage-insufficient' : 'not-eligible'"), '旧冻结快照按同一5亿+2涨停门槛区分未达条件/历史覆盖不足');
 A(html.includes('${qiBadge}${confirmedBadge}'), 'QI 徽章与 Owner 确认徽章并列独立');
 A(html.includes(".filter(s => s.level === 'confirmed' || s.level === 'expected').slice(0, 3)"), '明星行只显确认/预期,至多3只');
 A(!html.includes('>潜力</span>'), '潜力行已退役(Owner 定稿:预期明星取代)');
