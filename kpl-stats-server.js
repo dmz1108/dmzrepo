@@ -21204,7 +21204,9 @@ async function getDayBoardsWithMembers(day, options = {}) {
       if (!name) continue;
       const plateId = String(b?.plateId || b?.id || '');
       if (plateId && hidden.has(plateId)) continue;   // 看板永久删除的板块,共振榜也不出现
-      const zt = Number(b?.ztCount ?? b?.zt ?? NaN);
+      // 未知涨停数规范为 null(不是 NaN):下游 numOrNull/回填守卫按 null 语义处理;
+      // Codex #111 复核 P1——旧 Number(...??NaN) 产出 NaN,回填守卫 b.zt!=null 会把它当"已有值"跳过。
+      const zt = numOrNull(b?.ztCount ?? b?.zt);
       const netInflow = Number(b?.netInflow ?? b?.mainInflow ?? b?.inflow ?? NaN);
       const gainPct = Number(b?.gainPct ?? b?.gain ?? b?.zf ?? b?.changePct ?? b?.涨幅 ?? NaN);
       const ztList = Array.isArray(cardData[plateId]?.ztList) ? cardData[plateId].ztList : [];
@@ -21345,7 +21347,7 @@ const STRATEGY_MAINLINE_STAR_BUCKETS = [500000, 3000000, 8000000];
 const STRATEGY_MAINLINE_STAR_PRE_RATIO = 1.5;
 const STRATEGY_MAINLINE_STAR_SEAL_RATIO = 2;
 // 自动 L2 扫描：只在交易时段、每 5 分钟窗口最多派 2 个板块、串行（上一个没跑完不派下一个）、无合格目标不扫。
-// 合格目标 = 今日实时里 净流入≥5亿 且 (板内涨停≥2 或 净流入≥10亿高流入直通) 的前排板块，当天已扫过的不重复。
+// 合格目标 = 今日实时里 净流入≥5亿 且 板内涨停≥2 的前排板块(Owner 2026-07-16:无任何豁免)，当天已扫过的不重复。
 const STRATEGY_MAINLINE_AUTO_SCAN_WINDOW_MS = 5 * 60 * 1000;
 const STRATEGY_MAINLINE_AUTO_SCAN_MAX_PER_WINDOW = 2;
 const STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW = 5e8;   // Owner 2026-07-15:8亿→5亿(救钱不够8亿的中小主线)
@@ -22796,7 +22798,9 @@ function strategyMainlineScanPriorityCodes(board, priorByCode) {
 // 两路 code 集合取并去重;标 ztSource='member-join' 供审计。已知 zt(快照/来源自带)绝不覆盖。
 function strategyMainlineBackfillBoardZt(boards, limitUpByCode) {
   for (const b of (Array.isArray(boards) ? boards : [])) {
-    if (!b || b.zt != null) continue;
+    // 只把「有限数值」当已有值(含真实 0);null/undefined/NaN 一律视为未知需回填——
+    // 生产 unknown 曾以 NaN 形态出现(Codex #111 复核 P1),!=null 守卫会漏掉它。
+    if (!b || isFiniteNumeric(b.zt)) continue;
     const rows = Array.isArray(b.memberRows) ? b.memberRows : [];
     if (!rows.length) continue;
     const ztCodes = new Set();

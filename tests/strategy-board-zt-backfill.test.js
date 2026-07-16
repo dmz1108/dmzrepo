@@ -18,6 +18,7 @@ function extractFn(name) {
 const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.exitCode = 1; } else console.log('ok: ' + msg); };
 
 const normalizeReasonSourceCode = c => String(c || '').replace(/\D/g, '').slice(0, 6);
+eval(extractFn('isFiniteNumeric'));           // 回填守卫依赖:有限数值(含0)=已有值
 eval(extractFn('limitUpThreshold'));          // 真实阈值:主板9.75/创业板科创北交19.5/ST 4.75
 eval(extractFn('strategyMainlineBackfillBoardZt'));
 
@@ -59,6 +60,17 @@ strategyMainlineBackfillBoardZt([b5, b6, b7], dbCodes);
 A(b5.zt === 3 && !b5.ztSource, '快照/来源自带的 zt=3 不被覆盖');
 A(b6.zt === null && !b6.ztSource, '无成份行 → 保持 null(不伪造 0,不装有数据)');
 A(b7.zt === 0 && !b7.ztSource, 'zt=0 是已知值(真没涨停),不回填');
+
+// ---- 5b. 生产真实 unknown 形态(Codex #111 复核 P1):NaN / undefined 也必须回填 ----
+// 旧上游 Number(...??NaN) 产出 NaN;守卫 b.zt!=null 会把 NaN 当"已有值"跳过 → 核心修复不执行。
+const bNaN = { zt: NaN, memberRows: [{ code: '600001', name: 'A', gain: 10.02 }, { code: '600002', name: 'B', gain: 9.99 }] };
+const bUndef = { memberRows: [{ code: '600001', name: 'A', gain: 10.02 }] };   // zt 字段缺失(undefined)
+strategyMainlineBackfillBoardZt([bNaN, bUndef], dbCodes);
+A(bNaN.zt === 2 && bNaN.ztSource === 'member-join', '生产形态 zt=NaN → 视为未知,正常回填(2 只在底库)');
+A(bUndef.zt === 1 && bUndef.ztSource === 'member-join', 'zt=undefined(字段缺失)→ 同样回填');
+// 边界规范化:absorbPayload 未知涨停数产出 null 而非 NaN(numOrNull)
+A(src.includes('const zt = numOrNull(b?.ztCount ?? b?.zt);'), '静态:getDayBoardsWithMembers 边界用 numOrNull 规范未知涨停数(不再产出 NaN)');
+A(/if \(!b \|\| isFiniteNumeric\(b\.zt\)\) continue;/.test(src), '静态:回填守卫只认有限数值(含0)为已有值,null/NaN/undefined 均回填');
 
 // ---- 6. 端到端:9.67亿 + zt unknown 的板,回填后进自动扫描门槛(真实 strategyMainlineMaybeAutoScan) ----
 const STRATEGY_MAINLINE_BIG_GAIN_PCT = 5;
