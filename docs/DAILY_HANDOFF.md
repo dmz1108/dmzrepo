@@ -5539,6 +5539,173 @@ Deployment:
 Notes for next agent:
 - 2026-07-15 四个正式复盘源现均为 71/71。后续每日继续同一 SOP，不能用自动视觉结果、同花顺图、摘要重复区或炸板区覆盖人工正式库。
 - 默认 `/api/after-close-status` 仍按 previous-trading-day 展示上一交易日；验证当天人工重折结果时应显式使用 `mainReasonMode=same-day`，正式 `source-view?day=2026-07-15&force=1` 已确认当天五个标签均为 71。
+## 2026-07-15 - Claude - 策略页剔除 KPL + 卡片 R2 同源配对(Owner 定稿)
+
+Changed(Owner 2026-07-15 两部分,一个 PR):
+- KPL 剔除:新增 `STRATEGY_ZS_TYPES = [6, 5]`,`getStrategyBoardsForDay`(快照+实时两处)与 `collectStrategyQiCodes` 改用它——策略主线的候选识别、共振、板块数、净流入、涨幅、明星判定、QI 新晋基线全部只用东财(6)+ 同花顺(5),KPL(7)不统计不展示。(`getStrategyBoardStocks` 的逐 plateId 查表保留 [6,5,7],因策略已不传 KPL plateId,无副作用。)
+- R2 同源配对:新增 `strategyMainlineSourcePairs(boards)`——按源各取净流入最大板,`{board, netInflow, gainPct}` 三项取自同一个板(同源一一对应,绝不跨源拼)。合并路径 + seeds 路径 + AI 只读证据 均输出 `sourcePairs:{eastmoney, ths}`。
+- 前端 `kpl-dashboard_17_apple.html`:新增 `strategyMainlineSourcePairsHTML(m)`,卡片在原「资金口径 单板」行下并列显示东财、同花顺两组(缺一源只显示有的那组);配套 `.ml-srcpairs` 样式。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/strategy-source-pairs.test.js`(新增:配对逻辑 + KPL 剔除 + 前后端静态断言)
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check` 通过(server + 内联脚本);全仓 **31 个测试文件全绿**;`git diff --check` 通过。
+- 配对单测:东财组取净流入最大的东财板且涨幅同板(不取涨幅更高的另一东财板);同花顺同理;KPL 板即便钱最大也不成组;缺源该组 null。
+
+Deployment:
+- 未部署;策略核心+展示改动,合并 main 后经受保护生产工作流部署 `kpl-stats-server.js` + `kpl-dashboard_17_apple.html`,重启主服务(HTML 静态但后端同改,需重启)。等 Codex 复核。
+
+Notes for next agent(Codex 复核重点):
+- KPL 剔除是否彻底(候选/共振/净流入/涨幅/明星/新晋 均不含 7);`getStrategyBoardStocks` 保留 [6,5,7] 是否可接受。
+- R2:每组净流入与涨幅是否严格同板;`sourcePairs` 是否随合并/seeds/AI 三条路径都透出(响应经 `...mainline` 展开透传)。
+- 卡片两组并列展示与旧「资金口径 单板」行共存;如需去掉旧行 Owner 再定。
+- 与 PR #87(星标门槛 + 自动扫描)相互独立,合并顺序无依赖。
+
+## 2026-07-15 - Claude - 修正 #88 P1:KPL 剔除挪到真实主线取板链路(Codex 复核发现)
+
+Changed:
+- Codex 复核指出前一版把 `STRATEGY_ZS_TYPES` 只加在 `getStrategyBoardsForDay`/`collectStrategyQiCodes`,而真实主线链路是 `buildStrategyMainlinesLiveImpl → getDayBoardsWithMembers`(仍固定 [6,5,7])——KPL 实际未被剔除。**属实,已修**。
+- `getDayBoardsWithMembers` 新增 `options.zsTypes`(默认 [6,5,7],看板/复盘等共享调用者不变、不误伤);`buildStrategyMainlinesLiveImpl` 的取板调用传 `zsTypes: STRATEGY_ZS_TYPES`,主线候选/板块数/资金/涨幅/排序/L2 的板源现在真实剔除 KPL。
+- 新增 `tests/strategy-kpl-exclusion.test.js`:**贯穿真实 `getDayBoardsWithMembers`**(仅 stub 磁盘 IO),断言 zsTypes=[6,5] 时 KPL 独有板+同名 KPL 板均不进候选、同名“医药”取自东财;默认口径 KPL 仍在(不误伤)。
+
+Files:
+- `kpl-stats-server.js`(getDayBoardsWithMembers + buildStrategyMainlinesLiveImpl 取板调用)
+- `tests/strategy-kpl-exclusion.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check` 通过;全仓 33 个测试文件全绿;`git diff --check` 通过。
+
+尚未处理(按 Owner「先只修 P1」决定,留后续):
+- Codex 点 2:`getDayBoardsWithMembers` 按板名跨源去重(`bmap.get(name)`)会让同名东财/同花顺板塌成一条,R2 `sourcePairs` 仍常拿不到两源——需改 source-aware 身份(zsType+name/plateId)+ 贯穿上游的行为测试。
+- 点 3 snapshot-day 可用性把 KPL-only 快照算数;点 4 冻结历史快照不受本次影响、PR 文案勿称历史已完全剔除;点 5 证据包 + 讨论组记录。
+- getStrategyStrongResonance / getDayThemeBoardStats / getStrongThemeMap 等其它策略面板仍走默认 [6,5,7](本次只修主线 P1)。
+
+## 2026-07-15 - Claude - #88 点2:同源塌板保留 bySource,R2 配对可靠成对
+
+Changed:
+- Codex 复核点2 属实:`getDayBoardsWithMembers` 按板名去重会让同名东财/同花顺板塌成一条,`strategyMainlineSourcePairs` 之后按板自身 zsType 过滤往往只剩胜出源一组。
+- 去重仍按板名(板块数/排名口径不动),但每源各留一份净流入/涨幅到 `winner.bySource[zsType]`;`strategyMainlineSourcePairs` 优先读 `bySource[zs]`(塌板后仍同源还原),无则回退板自身 zsType,绝不跨源拼。
+- `seed.boards` 与 `resonanceBoards` 映射透传 `bySource`,合并与种子两条路径均可用。
+
+Files:
+- `kpl-stats-server.js`(getDayBoardsWithMembers 去重 + strategyMainlineSourcePairs + seed/resonance 透传)
+- `tests/strategy-kpl-exclusion.test.js`(扩充:塌成一条的“医药”仍能同源还原东财 8亿/3% 与同花顺 6亿/4%;KPL zt20/50亿 不进策略口径不污染配对)
+
+Validated:
+- `node --check` 通过;全仓 33 个测试文件全绿。
+
+尚未处理(按 Owner 分阶段决定,留后续):
+- 点 3 snapshot-day 可用性把 KPL-only 快照算数;点 4 冻结历史快照 PR 文案勿称历史已完全剔除;点 5 证据包 + 讨论组记录。
+
+## 2026-07-15 - Claude - #88 点3/4/5:快照日可用性 + 历史边界澄清 + 生产证据/讨论组
+
+Changed:
+- 点3(代码):`strategySnapshotDayHasSnap` 从遍历 `[6,5,7]` 改为 `STRATEGY_ZS_TYPES`——仅有 KPL(7) 快照、缺 zs5/zs6 的日期对策略页视为空板日不可用,避免 `resolveStrategySnapshotDay` 选到策略板块为空的日子。三处调用(getStrategyBoardsForDay / getDayBoardsWithMembers 策略路径 / getStrategyQiBoard)均策略口径,不误伤看板/复盘。
+- 点4(文案边界):明确本改动仅影响新生成快照 + 实时 live 口径,不改历史冻结快照;PR 文案与讨论记录不宣称历史展示已完全剔除 KPL。历史迁移/重建另起经审核方案。
+- 点5(证据+讨论组):按 AI_PRODUCTION_READ.md 抓取标准证据包并回放校验,新增讨论组收敛记录。
+
+Files:
+- `kpl-stats-server.js`(strategySnapshotDayHasSnap)
+- `tests/strategy-kpl-exclusion.test.js`(新增点3断言:有东财/同花顺快照的日可用、仅 KPL 的日不可用、无快照日不可用)
+- `docs/strategy/discussions/2026-07-15-strategy-kpl-exclusion-r2-pairing.md`(新增讨论组记录)
+
+Validated:
+- 生产证据包:`day=2026-07-15 codes=002396,000566 themes=算力AI,大消费 window=30`,`bundleSha256=c5acd5e9779b91044795248c103793f399fc9b7501c0ba38706883f2f654f60c`,`complete=true`,`missingSources=[]`,`sourceErrors=[]`;`replay --require-complete --expect-sha` 通过。
+- 快照对照:KPL(7) 今日 8 板板名全部不在东财∪同花顺(21 名)集合内→证实旧口径把 8 个 KPL 独有板算进策略。
+- `node --check` 通过;全仓 33 个测试文件全绿。
+- Token 仅由安全环境注入,未写入任何文件/命令参数/PR/文档;证据 JSON 留在 tmp 未入 Git,仅记录参数、哈希与结论。
+
+Notes for next agent:
+- #88 P1/点2/点3 已修并测,点4 边界已澄清,点5 证据+讨论组已补;等 Codex 重新复核。
+- 历史冻结快照仍含 KPL(本 PR 不动);`getStrategyBoardStocks` 逐 plateId 保留 [6,5,7](策略不传 KPL plateId,无副作用)——是否统一待 Owner 定。
+
+## 2026-07-15 - Claude - #88 v2:东财/同花顺两套独立主线预测(Owner 取代 R2)
+
+Changed:
+- Owner 最终口径:策略页拆两套独立预测,各只用本源数据,绝不跨源借资金/涨幅/板块数;KPL 不进任一边,也不进策略辅助指标(热点/共振)。
+- 后端:`buildStrategyMainlinesLiveImpl` 增 `options.boardZsTypes`;`buildStrategyMainlinesLive` 正常页面路径并行跑东财[6]/同花顺[5],composed `mainlinesBySource:{eastmoney,ths}`(各带 available/count/mainLeaderTheme/mainlines,缺源 available=false 不借值;dualResonance 标双源共振不合并卡)。顶层 mainlines 保留为两套并集(带 source/sourceRank,不跨源重打分)供缓存/确认/AI 兼容;盘中预测用并集写一次。诊断/盘后复核路径口径不变。
+- 确认标记落到东财/同花顺各自 mainlines;AI live 证据链输出 strategy.mainlinesBySource。
+- 策略辅助指标剔除 KPL:共振榜(已改)+ 今日热点榜资金/涨幅补充 getDayThemeBoardStats 传 STRATEGY_ZS_TYPES(题材列表仍源自四源复盘主因库)。
+- 前端:今日主线榜「东财主线预测 | 同花顺主线预测」两栏(桌面并列 ≤900px 上下),缺源显示暂缺,🔗双源共振标;旧冻结快照无 mainlinesBySource 时回退单列。
+
+Files:
+- `kpl-stats-server.js`(buildStrategyMainlinesLiveImpl/Live + compose/assemble/slim + getStrategyMainlinesWithConfirm + AI live + getDayThemeBoardStats)
+- `kpl-dashboard_17_apple.html`(renderStrategyMainlinesHTML 两栏 + CSS)
+- `tests/strategy-two-source-mainlines.test.js`(新增:5 条必测行为——A#1/B#1 分列、源独有题材不串、同名不交叉取值、缺源不借值、KPL 不进任一边)
+- `tests/strategy-kpl-exclusion.test.js`(增热点榜剔除 KPL 静态断言)
+- `docs/strategy/discussions/2026-07-15-strategy-kpl-exclusion-r2-pairing.md`(v2 Shared Decision + 生产证据)
+
+Validated:
+- 生产证据:`bundleSha256=c5acd5e9779b91044795248c103793f399fc9b7501c0ba38706883f2f654f60c`,`complete=true`;`replay --expect-sha` 通过。两源净流入前5不同(东财第1=创新药76.56亿,同花顺第1=仿制药一致性评价43.08亿)——实证两套独立预测的必要性;KPL 8 板全为独有,两套均不含。
+- `node --check` 通过;前端内联脚本可编译;全仓 36 个测试文件全绿。
+- Token 仅环境注入,证据 JSON 留 tmp,均未入 Git。
+
+Deployment:
+- 未部署。核心策略引擎 + 前端结构变更,合并后经 production-ops.yml 部署 kpl-stats-server.js + kpl-dashboard_17_apple.html 并重启主服务。等 Codex 复核。
+
+Notes for next agent:
+- 两套预测目前实现为「并行各跑一遍 impl」;性能上两源板块盘约各半、总量与旧合并相近,但共享证据读取翻倍——如盘中压力大可后续抽公共佐证层单读。
+- 历史冻结快照无 mainlinesBySource → 前端回退单列(与 Codex 点4「不动历史」一致)。
+- getStrongThemeMap(复盘💪强势标)仍默认三源——属复盘页非策略辅助指标,不误伤。
+
+## 2026-07-15 - Claude - #88 v2 性能:配对运行期「按日只读」共享缓存
+
+Changed:
+- 两套独立预测并行各跑一遍引擎时,「按日、与板块来源无关」的磁盘读取会被读两遍。新增
+  `strategyMainlineReadCache`(AsyncLocalStorage)+ `strategyMainlineReadCachedCall`:仅在
+  `buildStrategyMainlinesLive` 成对构建两套预测的 run() 作用域内生效,把同一天的
+  涨停库/主因库/收盘库/主线确认只读一次(缓存 Promise,天然去重并发)。
+- 四个按日只读函数(readLimitUpDbDay / readEastmoneyCloseDbDay / readLimitUpMainReasonDbDay /
+  readMainlineConfirm)拆成公开薄壳 + `...Impl`;壳走缓存,Impl 是原逻辑。其它任何调用者
+  (不在该作用域)一律绕过缓存,行为零变化;带非默认 options 的读取也绕过。
+- 关键:只共享「与来源无关」的按日读取,来源相关的取板/富化/评分/排序仍各跑各的——两套预测
+  结果字节不变,不改任何口径。主因上下文的 30 日读取(经 readLimitUpMainReasonDbDay)因此
+  从「两源×30 天」降到「30 天」。
+
+Files:
+- `kpl-stats-server.js`(ReadCache/CachedCall + 四个 reader 薄壳 + buildStrategyMainlinesLive 包 run 作用域)
+- `tests/strategy-two-source-mainlines.test.js`(增缓存去重/结果一致/options 绕过/kind 不串键)
+- `tests/leader-pool-debug.test.js`(EACCES/ENOENT 诊断改测 ...Impl 真身)
+
+Validated:
+- `node --check` 通过;全仓 36 个测试文件全绿。缓存结果与真读字节一致(测试断言),预测口径不变。
+
+Notes for next agent:
+- 缓存作用域仅限成对构建;历史/诊断/盘后复核路径不进该作用域,不受影响。
+- 若未来把两套预测拆到不同请求(非并行),该缓存自然失效退回真读,无副作用。
+
+## 2026-07-15 - Claude - #88 二审三项修复(动能隔离/预测按源/暂缺语义)
+
+Changed(Codex 二审 head b2b9eba 提出,已逐项修复并同步最新 main):
+- P1 动能采样按来源隔离:strategyMainlineTrackTrend 之前按 familyKey 存全局采样,东财/同花顺
+  同题材共用键→先跑一边写基线、另一边拿它算假 delta,串改两套分数排名。augmentPrediction 增
+  trendKeyPrefix,调用点按 'zs'+activeBoardZsTypes 组装(zs6::/zs5:: 各一套)。
+- P1 盘中预测/回看按来源落库:不再把跨源并集当预测真值。writeMainlinePredictBySource 存
+  bySource 两块(schema v3),同题材两份分块不互相覆盖、各源第2名保留;顶层兼容层=东财单源。
+  getStrategyMainlineReview 按 bySource 分源评各自第1主线命中,row.bySource + stats.bySource。
+- P2 区分"源不可用"与"源可用但无合格主线":slim available=ok(含有效零结果),新增
+  hasMainlines;前端有 mainlinesBySource 不走单列空态早退,双栏三态(有主线/无合格主线/暂缺)。
+
+Files:
+- kpl-stats-server.js(trackTrend 键/augment/两套预测落库+回看/slim 语义/AI compact)
+- kpl-dashboard_17_apple.html(空态早退守卫 + renderColumn 三态)
+- tests/strategy-two-source-mainlines.test.js(动能隔离真实回归 + 有效零结果 + 前端三态)
+- tests/predict-records.test.js(同题材双源重复 + 两边第2名)
+- tests/leader-pool-debug.test.js(augment 新签名)
+
+Validated:
+- node --check 通过;前端内联脚本可编译;全仓 36 个测试文件全绿。
+- 已 rebase 到最新 main(2f45121),DAILY_HANDOFF 冲突按时间线保留双方。
+
+Notes for next agent:
+- 回看 star/leader 封板胜率暂仍走主口径(顶层=东财单源);per-source 的封板胜率数据已在
+  bySource.*.starTransitions 落库,如需分源封板统计可后续扩展 reader。
+- 生产证据 bundleSha256=c5acd5e9…f654f60c(2026-07-15)不变。等 Codex 三审。
 
 ## 2026-07-15 - Codex - 追踪并修复 L2 已扫描仍显示未扫描
 
@@ -5599,3 +5766,35 @@ Deployment:
 Notes for next agent:
 - 复核重点是 `persistDays` 与 `resumeDay` 已完全解耦；历史完整任务只做状态修正，历史残缺任务永不入队。
 - 本次没有改变 L2 明星阈值、自动扫描门槛、策略评分、主线排名或冻结快照。
+
+## 2026-07-15 - Codex - PR88 四审收敛并同步 PR103
+
+Changed:
+- 将 PR88 merge 同步到已包含 PR103 的最新 `main`（`d27a350`）；`DAILY_HANDOFF` 冲突按时间线保留 Claude 的 PR88 记录与 Codex 的 PR103 记录，没有丢弃任一方内容。
+- 修正两套预测的源码注释与契约：东财/同花顺 impl 都不直接落库，外层按 `bySource` 两块写 schema v3；顶层仅为东财单源兼容层，跨源并集不作为预测真值。
+- “预判回看”改为逐日分别显示东财/同花顺主题、无主线状态、命中/前三结果，并分别显示 `stats.bySource`；旧 schema v1/v2 继续走原单来源展示。
+- schema v3 在盘中待验证或盘后主因不完整时仍返回两源 `theme/noMainline`，命中保持 `null` 且不进入分母；修复“东财空、同花顺有预测，页面却整体显示今日无主线”。
+- schema v3 各来源块新增落库 `available/hasMainlines/reason/message/zsType`，永久区分“来源暂缺”和“来源可用但无正式主线”；早期 v3 空块无元数据时显示“历史状态未知”，不猜测。
+- 分源行的明星/龙头收益仍只有东财兼容字段，因此行内显式标注“东财”；跨日期聚合可能同时含旧 schema，统一标为“历史兼容口径”，不把旧样本误冠名为东财。
+- 数据不足、来源暂缺、历史状态未知均改为可见文字；两源一边命中、一边脱靶时整行使用中性强调，避免只取最好结果显示绿色。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/mainline-review.test.js`
+- `tests/strategy-two-source-mainlines.test.js`
+- `docs/strategy/discussions/2026-07-15-strategy-kpl-exclusion-r2-pairing.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`、`node --check local-l2-task-queue.js`、前端回看渲染行为测试与 `git diff --check` 通过。
+- 全仓 `node --test tests/*.test.js` 为 36/36 通过；新增覆盖东财空+同花顺有预测、来源暂缺落库/回看、早期 v3 未知态、两源统计芯片、旧 schema 回退、混合 schema 聚合标签、双源混合命中强调、盘后主因不完整仍保留两源主题。
+- 标准生产证据回放通过：`bundleSha256=c5acd5e9779b91044795248c103793f399fc9b7501c0ba38706883f2f654f60c`，`complete=true`，`missingSources=[]`，`sourceErrors=[]`；证据 JSON 仍只在忽略目录，未进入 Git。
+
+Deployment:
+- 尚未部署生产、未修改生产运行时数据或配置、未重启服务；先等待 PR88 最新 head 复核并合入 `main`。
+
+Notes for next agent:
+- PR88 合并后，需用新 manifest 从最新 `main` 一次部署 `kpl-stats-server.js`、`local-l2-task-queue.js`、`kpl-dashboard_17_apple.html` 并重启主服务；现有 manifest 均不完整，不能复用。
+- 部署后重点验证：策略主线两栏、两源回看、东财空/同花顺有预测边界、L2 完整任务恢复 `done`、仅当天残缺任务可续扫且历史残缺任务不重新派发。
+- 同花顺明星/龙头收益明细尚未分源返回；如后续扩展必须读取同花顺自己的预测块与收益，不能借东财兼容值补齐。

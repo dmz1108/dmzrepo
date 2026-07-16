@@ -36,6 +36,20 @@ const {
 // 无论调用方是否 .catch 吞掉,都把真实错误写进当前诊断上下文;正常缺文件(ENOENT)只记 missing。
 // 每次诊断构建用 strategyMainlineDiagStore.run() 严格包住(七审:不用 enterWith),并发互不串写。
 const strategyMainlineDiagStore = new AsyncLocalStorage();
+// 两套独立预测(v2)性能:东财[6]/同花顺[5] 并行各跑一遍引擎时,「按日、与板块来源无关」的
+// 磁盘读取(涨停库/主因库/收盘库/主线确认)本会被读两遍。这里用一个「配对运行期作用域」的 memo
+// 缓存把同一天的读取去重:仅当处于 strategyMainlineReadCache.run() 作用域(即成对构建两套预测时)
+// 才生效,其它任何调用者一律绕过、行为零变化。结果字节一致(同一天同一文件),不改任何预测口径。
+const strategyMainlineReadCache = new AsyncLocalStorage();
+function strategyMainlineReadCachedCall(kind, impl, day, options) {
+  const store = strategyMainlineReadCache.getStore();
+  // 带非默认 options 的读取不缓存(可能改变返回);无作用域时直接透传。
+  if (!store || (options && Object.keys(options).length)) return impl(day, options);
+  const key = kind + '|' + String(day);
+  let hit = store.get(key);
+  if (hit === undefined) { hit = impl(day, options); store.set(key, hit); }   // 缓存 Promise,天然去重并发
+  return hit;
+}
 function strategyMainlineDiagScrubPath(text) {
   return String(text || '')
     .replace(/[A-Za-z]:\\[^\s"']+/g, '[path]')
@@ -178,6 +192,8 @@ const EASTMONEY_ZS_TYPE = '6';
 const THS_ZS_TYPE = '5';
 const DISABLED_ZS_TYPES = new Set([]);
 const AUTO_SNAPSHOT_ZS_TYPES = [DEFAULT_ZS_TYPE, EASTMONEY_ZS_TYPE, THS_ZS_TYPE];
+// 策略页只用 东财(6) + 同花顺(5) 两个源;KPL(7) 不进策略统计与展示(Owner 2026-07-15)。
+const STRATEGY_ZS_TYPES = [6, 5];
 const BOARD_COUNT = 8;
 const BOARD_INITIAL_CANDIDATE_COUNT = 15;
 const MIN_VISIBLE_BOARD_COUNT = 4;
@@ -4898,6 +4914,9 @@ function normalizeLimitUpRow(row, day) {
 
 const limitUpDbDayTimedCache = new Map();
 async function readLimitUpDbDay(day, options = {}) {
+  return strategyMainlineReadCachedCall('limitUpDb', readLimitUpDbDayImpl, day, options);
+}
+async function readLimitUpDbDayImpl(day, options = {}) {
   const key = String(day || '');
   const timed = options.force ? null : limitUpDbDayTimedCache.get(key);
   if (timed && Date.now() - timed.at < 60 * 1000) return timed.payload;
@@ -7629,6 +7648,9 @@ async function getEastmoneyConceptBoardForDisplay(plateId, day) {
 }
 
 async function readEastmoneyCloseDbDay(day) {
+  return strategyMainlineReadCachedCall('closeDb', readEastmoneyCloseDbDayImpl, day, undefined);
+}
+async function readEastmoneyCloseDbDayImpl(day) {
   const normalizedDay = isoFromCompactDate(compactDate(day));
   if (closeDbDayCache.has(normalizedDay)) return closeDbDayCache.get(normalizedDay);
   try {
@@ -18351,6 +18373,9 @@ function applyMainReasonOverridesToPayload(payload, overrides) {
 const mainReasonDbDayTimedCache = new Map();
 const DAY_FILE_CACHE_TTL_MS = 60 * 1000;
 async function readLimitUpMainReasonDbDay(day, options = {}) {
+  return strategyMainlineReadCachedCall('mainReason', readLimitUpMainReasonDbDayImpl, day, options);
+}
+async function readLimitUpMainReasonDbDayImpl(day, options = {}) {
   const isoDay = isoFromCompactDate(day);
   const timed = options.force ? null : mainReasonDbDayTimedCache.get(isoDay);
   if (timed && Date.now() - timed.at < DAY_FILE_CACHE_TTL_MS) return timed.payload;
@@ -21006,7 +21031,9 @@ function computeBoardQiLeaders(card) {
   return (qi10.length || qi30.length) ? { qi10, qi30 } : null;
 }
 async function strategySnapshotDayHasSnap(d) {
-  for (const z of [6, 5, 7]) { try { await fs.access(snapshotPath(d, String(z))); return true; } catch {} }
+  // Codex #88 点3:策略日可用性只按策略来源集(东财6/同花顺5)判断——仅有 KPL(7) 快照的日期
+  // 对策略页是「空板日」,不能算可用,否则会选到 zs5/zs6 缺失、策略板块为空的日子。
+  for (const z of STRATEGY_ZS_TYPES) { try { await fs.access(snapshotPath(d, String(z))); return true; } catch {} }
   return false;
 }
 // 请求日(通常=今天盘中、快照15:30才生成)无快照时，回退到最近一个有快照的交易日，避免策略页空白
@@ -21036,7 +21063,7 @@ async function prevStrategySnapshotDay(useDay) {
 // 收集某快照日「全部板块」的 QI 龙头代码集合（10日∪30日），用于新晋对比
 async function collectStrategyQiCodes(snapDay) {
   const set = new Set();
-  for (const zsType of [6, 5, 7]) {
+  for (const zsType of STRATEGY_ZS_TYPES) {   // Owner 2026-07-15:策略只用东财+同花顺,剔除 KPL(7)
     try {
       const payload = JSON.parse(await fs.readFile(snapshotPath(snapDay, String(zsType)), 'utf8'));
       const cardData = payload?.cardData || {};
@@ -21058,7 +21085,7 @@ async function getStrategyBoardsForDay(day, options = {}) {
     .map((b) => `${String(b?.zsType ?? '')}:${String(b?.plateId ?? '').trim()}`)
     .filter((key) => !key.endsWith(':')));
   const shouldHydrateIncluded = (board, zsType) => includeKeys.has(`${String(zsType)}:${String(board?.plateId ?? '')}`);
-  for (const zsType of [6, 5, 7]) {
+  for (const zsType of STRATEGY_ZS_TYPES) {   // Owner 2026-07-15:剔除 KPL(7),策略只用东财+同花顺
     let hidden; try { hidden = await getPermanentHiddenSet(zsType); } catch { hidden = new Set(); }
     try {
       const payload = JSON.parse(await fs.readFile(snapshotPath(useDay, String(zsType)), 'utf8'));
@@ -21088,7 +21115,7 @@ async function getStrategyBoardsForDay(day, options = {}) {
     const apiKey = await readSavedApiKey().catch(() => '');
     if (apiKey) {
       const liveOutByKey = new Map(out.map(board => [`${String(board?.zsType ?? '')}:${String(board?.plateId ?? '')}`, board]));
-      for (const zsType of [6, 5, 7]) {
+      for (const zsType of STRATEGY_ZS_TYPES) {   // Owner 2026-07-15:剔除 KPL(7)
         const scopedPrefix = `${String(zsType)}:`;
         const includedForType = [...includeKeys].filter(key => key.startsWith(scopedPrefix));
         if (out.length && includeKeys.size && !includedForType.length) continue;
@@ -21166,6 +21193,8 @@ async function getDayBoardsWithMembers(day, options = {}) {
   const requestedDay = isoFromCompactDate(day);
   const allowFallback = options.allowFallback !== false;
   const useDay = allowFallback ? await resolveStrategySnapshotDay(requestedDay) : requestedDay;
+  // 默认三源 [6,5,7](看板/复盘等页面仍需 KPL);策略主线传 STRATEGY_ZS_TYPES=[6,5] 以剔除 KPL,避免误伤其它页面。
+  const zsTypes = Array.isArray(options.zsTypes) && options.zsTypes.length ? options.zsTypes : [6, 5, 7];
   const bmap = new Map();
   const absorbPayload = async (payload, z) => {
     let hidden; try { hidden = await getPermanentHiddenSet(z); } catch { hidden = new Set(); }
@@ -21180,11 +21209,19 @@ async function getDayBoardsWithMembers(day, options = {}) {
       const gainPct = Number(b?.gainPct ?? b?.gain ?? b?.zf ?? b?.changePct ?? b?.涨幅 ?? NaN);
       const ztList = Array.isArray(cardData[plateId]?.ztList) ? cardData[plateId].ztList : [];
       const codes = ztList.map(x => normalizeReasonSourceCode(x?.code ?? x)).filter(Boolean);
+      // 按板名去重(同名跨源塌成一条,取涨停最高者作主板→板块数/排名口径不变);
+      // 但每源各留一份到 bySource,供 R2 同源配对可靠拿到东财/同花顺两组(Codex #88 点2)。
       const cur = bmap.get(name);
-      if (!cur || (Number(zt) || 0) > (Number(cur.zt) || 0)) bmap.set(name, { name, plateId, zsType: z, zt, netInflow, gainPct, codes });
+      const bySource = (cur && cur.bySource) || {};
+      bySource[z] = { zsType: z, plateId, netInflow, gainPct, zt };
+      const winner = (!cur || (Number(zt) || 0) > (Number(cur.zt) || 0))
+        ? { name, plateId, zsType: z, zt, netInflow, gainPct, codes }
+        : cur;
+      winner.bySource = bySource;
+      bmap.set(name, winner);
     }
   };
-  for (const z of [6, 5, 7]) {
+  for (const z of zsTypes) {
     try {
       const p = JSON.parse(await fs.readFile(snapshotPath(useDay, String(z)), 'utf8'));
       await absorbPayload(p, z);
@@ -21194,7 +21231,7 @@ async function getDayBoardsWithMembers(day, options = {}) {
   if (!bmap.size && options.liveIfMissing && isChinaMarketTradingDay(requestedDay)) {
     const apiKey = await readSavedApiKey().catch(() => '');
     if (apiKey) {
-      await mapLimit([6, 5, 7], 3, async z => {
+      await mapLimit(zsTypes, 3, async z => {
         try {
           let hidden; try { hidden = await getPermanentHiddenSet(z); } catch { hidden = new Set(); }
           const rankBoards = await fetchBoardRankingForSnapshot(String(z), apiKey, {
@@ -21215,7 +21252,9 @@ async function getDayBoardsWithMembers(day, options = {}) {
 }
 
 async function getDayThemeBoardStats(day) {
-  const { useDay, boards } = await getDayBoardsWithMembers(day);
+  // Owner 2026-07-15 v2:KPL(7) 不进策略辅助指标——今日热点榜每张题材卡的资金/涨幅补充值只用东财+同花顺。
+  // 题材列表本身仍来自四源复盘主因库(不受此影响),这里只约束板块来源的资金/涨幅补充。
+  const { useDay, boards } = await getDayBoardsWithMembers(day, { zsTypes: STRATEGY_ZS_TYPES });
   const dbPayload = await readLimitUpMainReasonDbDay(isoFromCompactDate(useDay)).catch(() => null);
   const recByCode = new Map((dbPayload?.stocks || []).map(s => [normalizeReasonSourceCode(s.code), s]).filter(([c]) => c));
   const out = new Map();
@@ -21329,7 +21368,9 @@ function strategyBoardTopicAligned(boardName, mainTheme) {
 // 强势板块共振榜:看板硬闸(涨停家数≥2 且 净流入>0)选出强势板块,用「成员股 code」关节。
 // 严格口径:只统计「个股最终主因」与「板块名称」同题材的成员股;仅属板块成分但主因不符的不算共振。
 async function getStrategyStrongResonance(day) {
-  const { useDay, boards } = await getDayBoardsWithMembers(day);
+  // Codex #88 二审 P1:强势板块共振榜属策略页(/api/strong-board-resonance + AI live/review 证据链),
+  // 必须只用东财(6)+同花顺(5),否则 KPL 独有板会进共振榜——违反 Owner「策略页不统计不展示 KPL」定稿。
+  const { useDay, boards } = await getDayBoardsWithMembers(day, { zsTypes: STRATEGY_ZS_TYPES });
   const strong = boards.filter(b => Number.isFinite(b.zt) && b.zt >= 2 && Number.isFinite(b.netInflow) && b.netInflow > 0);
   const { payload } = await buildDaySourceViewWithConsensus(useDay, {}).catch(() => ({ payload: null }));
   const finalRows = ((payload?.tabs || []).find(t => t.key === 'final') || {}).rows || [];
@@ -21504,6 +21545,26 @@ function strategyMainlineRepresentativeBoardInflow(boards) {
     boardName: String(board?.name || ''),
     zsType: board?.zsType ?? null,
   };
+}
+// R2 同源配对(Owner 2026-07-15):按源(东财6/同花顺5)各取净流入最大的板,净流入与卡片涨幅取自
+// 同一个板,绝不跨源拼。KPL(7)已在取板层剔除,这里天然只会有 6/5。缺某源即该组为 null。
+function strategyMainlineSourcePairs(boards) {
+  // 每块板优先读 bySource[zs](同名跨源塌板时仍能拿到该源的净流入/涨幅);无 bySource 时回退按板自身 zsType。
+  const pick = (zs) => {
+    let best = null;
+    for (const b of (Array.isArray(boards) ? boards : [])) {
+      const s = b && b.bySource && b.bySource[zs];
+      const inflow = s ? Number(s.netInflow)
+        : (Number(b?.zsType) === zs && isFiniteNumeric(b?.netInflow) ? Number(b.netInflow) : NaN);
+      if (!Number.isFinite(inflow)) continue;
+      const gainPct = s
+        ? (isFiniteNumeric(s.gainPct) ? Number(s.gainPct) : null)
+        : (isFiniteNumeric(b?.gainPct) ? Number(b.gainPct) : null);
+      if (!best || inflow > best.netInflow) best = { board: String(b?.name || ''), netInflow: inflow, gainPct };
+    }
+    return best;
+  };
+  return { eastmoney: pick(6), ths: pick(5) };
 }
 function strategyMainlineNormalizeRisingStock(row) {
   const code = normalizeReasonSourceCode(row?.code || row?.dm || row?.stockCode);
@@ -21750,6 +21811,7 @@ function strategyMergeMainlineFamilies(rawMainlines) {
       netInflowBoard: netSelection.boardName,
       netInflowZsType: netSelection.zsType,
       netInflowAggregation: 'representative-board-max',
+      sourcePairs: strategyMainlineSourcePairs(uniqueBoardsForStats),   // R2:东财/同花顺 各自同源净流入+涨幅配对
       boardGainPct: isFiniteNumeric(gainLead.gainPct) ? Number(gainLead.gainPct) : null,
       boardGainName: gainLead.name || '',
       recentHeat,
@@ -22910,6 +22972,9 @@ function strategyMainlineAttachResponseMeta(payload, options = {}) {
   };
 }
 async function readMainlineConfirm(day) {
+  return strategyMainlineReadCachedCall('confirm', readMainlineConfirmImpl, day, undefined);
+}
+async function readMainlineConfirmImpl(day) {
   try { return JSON.parse(await fs.readFile(strategyMainlineConfirmPath(day), 'utf8')); } catch { return null; }
 }
 async function writeMainlineConfirm(day, data) {
@@ -23195,44 +23260,101 @@ function strategyPredictStarTransitions(existingRows, mainlines, observedAt) {
       String(a.mainlineKey).localeCompare(String(b.mainlineKey)) || String(a.code).localeCompare(String(b.code)))
     .slice(0, 100);
 }
+function strategyPredictPickTop(m) {
+  return m ? {
+    key: m.familyKey || m.key || '', theme: m.theme || '', rank: m.rank || 0,
+    score: m.score ?? null, predictScore: m.predictScore ?? null,
+    stage: m.stage?.label || '', certainty: m.certainty?.label || '',
+    l2VerificationStatus: m.l2VerificationStatus || '',
+    leader: m.mainLeader ? { code: m.mainLeader.code, name: m.mainLeader.name } : null,
+    // 保存预测时点前两名龙头候选。leader 继续保留第一名以兼容旧记录/旧页面。
+    leaders: (Array.isArray(m.leaders) && m.leaders.length ? m.leaders : (m.mainLeader ? [m.mainLeader] : []))
+      .slice(0, 2)
+      .map(stock => ({
+        code: stock.code || '',
+        name: stock.name || '',
+        leadScore: isFiniteNumeric(stock.leadScore) ? Number(stock.leadScore) : null,
+      })),
+    // level=预测时点的明星等级(expected=预期明星未封/confirmed=当时已封/active=仅资金活跃),
+    // 回看的"预期明星→当日封板"验证只统计 expected;旧记录无此字段 → 等级未知,不进统计。
+    star: (m.starStocks || [])[0]
+      ? { code: m.starStocks[0].code, name: m.starStocks[0].name, level: String(m.starStocks[0].level || '') || null }
+      : null,
+  } : null;
+}
+// 一套预测(单来源或旧合并口径)的落库块:top3 / candidates12 / 明星轨迹。各来源独立成块,同题材不跨源覆盖。
+function strategyPredictBuildBlock(mainlines, existingStarTransitions, savedAt) {
+  return {
+    top: (mainlines || []).slice(0, 3).map(strategyPredictPickTop).filter(Boolean),
+    candidates: (mainlines || []).slice(0, 12).map(strategyPredictCandidateRecord).filter(Boolean),
+    starTransitions: strategyPredictStarTransitions(existingStarTransitions, mainlines, savedAt),
+  };
+}
 async function writeMainlinePredict(day, sessionPhase, mainlines, confirm) {
   try {
     // 已收盘阶段既不覆盖也不首次创建(Codex 复审 PR#25:旧逻辑只挡覆盖,盘后首次生成会把
     // 收盘后答案写成"盘中预测",污染回看命中率——7-08 的 sessionPhase=已收盘 文件即此来源)。
     if (sessionPhase === '已收盘') return;
-    const pick = m => m ? {
-      key: m.familyKey || m.key || '', theme: m.theme || '', rank: m.rank || 0,
-      score: m.score ?? null, predictScore: m.predictScore ?? null,
-      stage: m.stage?.label || '', certainty: m.certainty?.label || '',
-      l2VerificationStatus: m.l2VerificationStatus || '',
-      leader: m.mainLeader ? { code: m.mainLeader.code, name: m.mainLeader.name } : null,
-      // 保存预测时点前两名龙头候选。leader 继续保留第一名以兼容旧记录/旧页面。
-      leaders: (Array.isArray(m.leaders) && m.leaders.length ? m.leaders : (m.mainLeader ? [m.mainLeader] : []))
-        .slice(0, 2)
-        .map(stock => ({
-          code: stock.code || '',
-          name: stock.name || '',
-          leadScore: isFiniteNumeric(stock.leadScore) ? Number(stock.leadScore) : null,
-        })),
-      // level=预测时点的明星等级(expected=预期明星未封/confirmed=当时已封/active=仅资金活跃),
-      // 回看的"预期明星→当日封板"验证只统计 expected;旧记录无此字段 → 等级未知,不进统计。
-      star: (m.starStocks || [])[0]
-        ? { code: m.starStocks[0].code, name: m.starStocks[0].name, level: String(m.starStocks[0].level || '') || null }
-        : null,
-    } : null;
-    const top = (mainlines || []).slice(0, 3).map(pick).filter(Boolean);
-    if (!top.length) return;
     const savedAt = new Date().toISOString();
     const existing = await readMainlinePredict(day);
-    const starTransitions = strategyPredictStarTransitions(existing?.starTransitions, mainlines, savedAt);
-    const candidates = (mainlines || []).slice(0, 12).map(strategyPredictCandidateRecord).filter(Boolean);
+    const block = strategyPredictBuildBlock(mainlines, existing?.starTransitions, savedAt);
+    if (!block.top.length) return;
     await fs.mkdir(STRATEGY_MAINLINE_DATA_DIR, { recursive: true });
     await fs.writeFile(strategyMainlinePredictPath(day), JSON.stringify({
       day, savedAt, sessionPhase: sessionPhase || '',
-      confirmedKey: confirm?.key || '', top,
-      schemaVersion: 2, candidates, starTransitions,
+      confirmedKey: confirm?.key || '', top: block.top,
+      schemaVersion: 2, candidates: block.candidates, starTransitions: block.starTransitions,
     }, null, 2), 'utf8');
     await recordStrategyDailyIntradayObservation(day, sessionPhase, mainlines, savedAt);
+  } catch {}
+}
+// 两套独立预测落库(Owner v2 / Codex 二审 P1):东财、同花顺各存一块(top/candidates/transitions),
+// 绝不把跨源并集当正式预测真值——同题材两份不再互相覆盖,任一源自己的第 2 名不会被另一源顶掉。
+// 顶层 top/candidates/starTransitions 保留为"东财单源"(非跨源并集)供旧回看兼容,真值以 bySource 为准。
+async function writeMainlinePredictBySource(day, sessionPhase, mainlinesBySource, confirm) {
+  try {
+    if (sessionPhase === '已收盘') return;
+    const savedAt = new Date().toISOString();
+    const existing = await readMainlinePredict(day);
+    const sourceBlock = (source, existingTransitions, fallbackZsType) => {
+      const list = (source && Array.isArray(source.mainlines)) ? source.mainlines : [];
+      const block = strategyPredictBuildBlock(list, existingTransitions, savedAt);
+      // availability/reason 必须随预测块落库；否则“来源暂缺”和“来源可用但无正式主线”都会
+      // 退化成同一个空 top，历史回看无法区分。旧调用未传 available 时按存在 source 兼容为可用。
+      const available = typeof source?.available === 'boolean' ? source.available : !!source;
+      const hasMainlines = typeof source?.hasMainlines === 'boolean' ? source.hasMainlines : block.top.length > 0;
+      return {
+        ...block,
+        available,
+        hasMainlines,
+        reason: String(source?.reason || ''),
+        message: String(source?.message || ''),
+        zsType: Number(source?.zsType) || fallbackZsType,
+      };
+    };
+    const emSource = mainlinesBySource && mainlinesBySource.eastmoney;
+    const thSource = mainlinesBySource && mainlinesBySource.ths;
+    const emList = (emSource && Array.isArray(emSource.mainlines)) ? emSource.mainlines : [];
+    const thList = (thSource && Array.isArray(thSource.mainlines)) ? thSource.mainlines : [];
+    const eastBlock = sourceBlock(emSource, existing?.bySource?.eastmoney?.starTransitions, 6);
+    const thBlock = sourceBlock(thSource, existing?.bySource?.ths?.starTransitions, 5);
+    if (!eastBlock.top.length && !thBlock.top.length) return;
+    await fs.mkdir(STRATEGY_MAINLINE_DATA_DIR, { recursive: true });
+    await fs.writeFile(strategyMainlinePredictPath(day), JSON.stringify({
+      day, savedAt, sessionPhase: sessionPhase || '',
+      confirmedKey: confirm?.key || '', schemaVersion: 3,
+      bySource: { eastmoney: eastBlock, ths: thBlock },
+      // 兼容层:东财单源(不跨源混排),供旧回看/旧页面;真值在 bySource。
+      top: eastBlock.top, candidates: eastBlock.candidates, starTransitions: eastBlock.starTransitions,
+    }, null, 2), 'utf8');
+    // 盘中观测:按 family 去重的两源并集(mergeIntradayObservation 本身按 familyKey 聚合,东财优先)。
+    const seen = new Set();
+    const obsList = [];
+    for (const m of [...emList, ...thList]) {
+      const k = String(m?.familyKey || m?.key || m?.theme || '');
+      if (k && !seen.has(k)) { seen.add(k); obsList.push(m); }
+    }
+    await recordStrategyDailyIntradayObservation(day, sessionPhase, obsList, savedAt);
   } catch {}
 }
 
@@ -23810,6 +23932,8 @@ async function getStrategyMainlineReview(days = 10) {
   let starWins = 0, starTotal = 0, leaderWins = 0, leaderTotal = 0;
   let mainlineTop1Hits = 0, mainlineTop3Hits = 0, mainlineTotal = 0;
   let expectedSealWins = 0, expectedSealTotal = 0;
+  // 两套独立预测(Owner v2)的按来源主线命中统计——各自评各自的第 1 主线是否命中当日真实第一家族。
+  const srcStat = { eastmoney: { total: 0, top1: 0, top3: 0 }, ths: { total: 0, top1: 0, top3: 0 } };
   // 从最新交易日开始(修复:旧循环从 length-2 起,最新收盘日因无次日收盘价被整行丢弃,
   // 连当日主线命中与封板结果也不展示;现在无次日数据只置 nextCloseGain=null)。
   for (let i = tradingDays.length - 1; i >= 0 && rows.length < days; i -= 1) {
@@ -23817,7 +23941,11 @@ async function getStrategyMainlineReview(days = 10) {
     const nextDay = i + 1 < tradingDays.length ? tradingDays[i + 1] : null;
     const thirdDay = i + 3 < tradingDays.length ? tradingDays[i + 3] : null;
     const predict = await readMainlinePredict(day);
-    if (!predict || !Array.isArray(predict.top) || !predict.top.length) continue;
+    // 两套独立预测(schema v3):入口不能只看兼容顶层 top——东财空、同花顺有预测时顶层为空,
+    // 否则整天被跳过、同花顺样本系统性漏统计(Codex 三审 P1)。任一 bySource.top 非空即处理该日。
+    const hasAnyPredictTop = (Array.isArray(predict?.top) && predict.top.length) ||
+      (predict?.bySource && ((predict.bySource.eastmoney?.top?.length) || (predict.bySource.ths?.top?.length)));
+    if (!predict || !hasAnyPredictTop) continue;
     const phase = String(predict.sessionPhase || '');
     const sampleValid = STRATEGY_MAINLINE_INTRADAY_PHASES.has(phase);
     const sampleInvalidReason = sampleValid ? '' : (phase ? `phase:${phase}` : 'phase:unknown');
@@ -23935,6 +24063,51 @@ async function getStrategyMainlineReview(days = 10) {
         if (mainlineHitTop3) mainlineTop3Hits += 1;
       }
     }
+    // 两套独立预测(schema v3):分别评东财/同花顺各自第 1 主线的命中,共享当日真实第一家族;
+    // 各源用自己的 bySource 块(不跨源),回看按来源解释(Codex 二审 P1)。
+    let reviewBySource = null;
+    if (predict.bySource) {
+      // schema v3 的两套预测无论盘后主因是否已完整，都要把各来源的主题/无主线状态返回给前端；
+      // 只有命中判定与统计分母依赖完整 actualRanking。否则盘中或数据不足时会退回东财兼容层，
+      // 出现“东财无主线、同花顺有预测，页面却只显示今日无主线”的错误表达。
+      const tiedFirstFamilies = actualRanking.length ? tier1.map(f => f.familyKey) : [];
+      reviewBySource = {};
+      for (const skey of ['eastmoney', 'ths']) {
+        const block = predict.bySource[skey] || {};
+        const blockPredict = { top: block.top || [], candidates: block.candidates || [], starTransitions: block.starTransitions || [], confirmedKey: predict.confirmedKey, schemaVersion: predict.schemaVersion };
+        const fTop = strategyMainlineReviewFormalTop(blockPredict);
+        const sMain = fTop.find(t => predict.confirmedKey && t.key === predict.confirmedKey) || fTop[0] || null;
+        // 新 schema v3 明确保存 available；早期 v3 没有该字段，空块只能诚实标为 unknown，
+        // 不能猜成“无主线”或“来源暂缺”。有正式主线时即使旧记录缺元数据，主题本身仍可展示。
+        const sourceAvailable = typeof block.available === 'boolean' ? block.available : null;
+        const sourceStatus = sourceAvailable === false ? 'unavailable'
+          : sMain ? 'mainline'
+            : sourceAvailable === true ? 'no-mainline' : 'unknown';
+        let hitTop1 = null, hitTop3 = null;
+        if (sourceStatus === 'mainline' && actualRanking.length) {
+          const predFams = fTop.slice(0, 3).map(t => strategyMainlineFamilyInfo({ theme: t?.theme || '', key: t?.key || '' }).key).filter(Boolean);
+          const mFam = strategyMainlineFamilyInfo({ theme: sMain.theme || '', key: sMain.key || '' }).key;
+          hitTop1 = tiedFirstFamilies.includes(mFam);
+          hitTop3 = tiedFirstFamilies.some(f => predFams.includes(f));
+          if (sampleValid && !pendingReview) {
+            srcStat[skey].total += 1;
+            if (hitTop1) srcStat[skey].top1 += 1;
+            if (hitTop3) srcStat[skey].top3 += 1;
+          }
+        }
+        reviewBySource[skey] = {
+          available: sourceAvailable,
+          hasMainlines: typeof block.hasMainlines === 'boolean' ? block.hasMainlines : (sourceStatus === 'mainline' ? true : sourceStatus === 'no-mainline' ? false : null),
+          status: sourceStatus,
+          reason: String(block.reason || ''),
+          message: String(block.message || ''),
+          theme: sourceStatus === 'mainline' ? String(sMain?.theme || '') : '',
+          noMainline: sourceStatus === 'no-mainline',
+          mainlineHitTop1: hitTop1,
+          mainlineHitTop3: hitTop3,
+        };
+      }
+    }
     rows.push({
       day, nextDay, thirdDay,
       theme: main?.theme || '', confirmed: !!(main && predict.confirmedKey && main.key === predict.confirmedKey),
@@ -23944,6 +24117,7 @@ async function getStrategyMainlineReview(days = 10) {
       phase, sampleValid, sampleInvalidReason, pendingReview,
       actualTop, actualFirstTied, mainlineHitTop1, mainlineHitTop3, mainReasonMissingCount,
       star, expectedStars, leader, leaders,
+      ...(reviewBySource ? { bySource: reviewBySource } : {}),
     });
   }
   return {
@@ -23957,19 +24131,31 @@ async function getStrategyMainlineReview(days = 10) {
       mainlineTop3Rate: mainlineTotal ? Number((mainlineTop3Hits / mainlineTotal * 100).toFixed(1)) : null,
       expectedSealWins, expectedSealTotal,
       expectedSealRate: expectedSealTotal ? Number((expectedSealWins / expectedSealTotal * 100).toFixed(1)) : null,
+      // 两套独立预测各自的主线命中率(schema v3 起有 bySource 记录才累计;旧记录不参与)。
+      bySource: {
+        eastmoney: { mainlineTotal: srcStat.eastmoney.total, mainlineTop1Hits: srcStat.eastmoney.top1, mainlineTop3Hits: srcStat.eastmoney.top3,
+          mainlineTop1Rate: srcStat.eastmoney.total ? Number((srcStat.eastmoney.top1 / srcStat.eastmoney.total * 100).toFixed(1)) : null,
+          mainlineTop3Rate: srcStat.eastmoney.total ? Number((srcStat.eastmoney.top3 / srcStat.eastmoney.total * 100).toFixed(1)) : null },
+        ths: { mainlineTotal: srcStat.ths.total, mainlineTop1Hits: srcStat.ths.top1, mainlineTop3Hits: srcStat.ths.top3,
+          mainlineTop1Rate: srcStat.ths.total ? Number((srcStat.ths.top1 / srcStat.ths.total * 100).toFixed(1)) : null,
+          mainlineTop3Rate: srcStat.ths.total ? Number((srcStat.ths.top3 / srcStat.ths.total * 100).toFixed(1)) : null },
+      },
     },
     note: '回看只将存在L2预期明星或明星确认正证据的方向认定为正式主线；未扫描、覆盖不足或已扫描无明星的候选显示为今日无主线且不计命中率。回看同时统计次日最高涨幅、次日收盘涨幅和第三个后续交易日收盘涨跌幅；收盘指标来自每日收盘价库，次日最高来自复权日K。',
   };
 }
 
 // 最终输出前的预判增强：广度分、动能分、潜力个股、明星股、首日题材、确定性分级都在这一处挂载。
-function strategyMainlineAugmentPrediction(item, isToday, day, recordTrend = true) {
+// trendKeyPrefix(Owner v2 两套独立预测):盘中动能采样必须按来源隔离,否则东财/同花顺同题材共用
+// 同一趋势键,先跑的一边写入基线后,另一边会拿它当基线算 delta,串改两边分数与排名(Codex 二审 P1)。
+function strategyMainlineAugmentPrediction(item, isToday, day, recordTrend = true, trendKeyPrefix = '') {
   const breadth = strategyMainlineBestBreadth(item?.resonanceBoards);
   const scoreParts = { ...(item?.scoreParts || {}) };
   const breadthScore = strategyMainlineBreadthScore(breadth);
   if (breadthScore > 0) scoreParts.breadth = breadthScore;
+  const trendKey = (trendKeyPrefix ? String(trendKeyPrefix) + '::' : '') + String(item?.familyKey || item?.key || '');
   const trend = isToday
-    ? strategyMainlineTrackTrend(item?.familyKey || item?.key, {
+    ? strategyMainlineTrackTrend(trendKey, {
         netInflow: isFiniteNumeric(item?.netInflow) ? Number(item.netInflow) : null,
         bigGainCount: Number(item?.bigGainCount) || 0,
         nearLimitCount: Number(item?.nearLimitCount) || 0,
@@ -24097,6 +24283,7 @@ function strategyMainlineAddRealtimeBoardSeed(seedByKey, board) {
     confirmedCount: codes.length || (zt != null ? zt : 0),
     bigGainCount: risingStocks.length,
     nearLimitCount: nearLimitStocks.length,
+    bySource: board?.bySource || null,   // R2:保留每源净流入/涨幅,供 strategyMainlineSourcePairs 同源配对
   });
   return seed;
 }
@@ -24387,15 +24574,118 @@ async function buildStrategyMainlineHistoryContext(endDay, themeKeys, days = 15,
 
 // 七审:诊断构建用 strategyMainlineDiagStore.run() 严格包住单次执行(不用 enterWith),
 // run() 天然按异步上下文隔离——并发诊断请求各自的 store 不串写,诊断结束后普通请求无残留。
+// 两套独立主线预测(Owner 2026-07-15 v2)——把某一源的 impl 结果收敛成精简展示体。
+// source='eastmoney'(zsType 6) / 'ths'(zsType 5)。available=false 即「该源暂缺」,前端显示暂缺、绝不借另一源。
+function strategyMainlineSlimSourcePayload(payload, source, zsType) {
+  const ok = !!(payload && payload.ok);
+  const mainlines = ok && Array.isArray(payload.mainlines) ? payload.mainlines : [];
+  const hasMainlines = ok && mainlines.length > 0;
+  // available=源可用(已完成有效结果,含"已完成但无合格主线"的有效零结果——资金闸/L2闸排除全部候选);
+  // 与 hasMainlines 区分开(Codex 二审 P2)。ok=true+[] 是有效零结果,不能当"该源暂缺"。
+  return {
+    source, zsType, ok,
+    available: ok,
+    hasMainlines,
+    reason: String((payload && payload.reason) || (ok ? '' : 'source-unavailable')),
+    message: String((payload && payload.message) || ''),
+    count: mainlines.length,
+    mainLeaderTheme: mainlines[0] ? String(mainlines[0].theme || '') : '',
+    mainlines: mainlines.map(m => ({ ...m, source })),
+  };
+}
+// 两套独立结果 + 双源共振标记(题材归一后两边都进各自前 N)。绝不塌成一张共享卡:各留各的分数/排序。
+function strategyMainlineAssembleBySource(em, th) {
+  const eastmoney = strategyMainlineSlimSourcePayload(em, 'eastmoney', 6);
+  const ths = strategyMainlineSlimSourcePayload(th, 'ths', 5);
+  const topKeys = (src, n = 5) => new Set((src.mainlines || []).slice(0, n)
+    .map(m => strategyResonanceTopicKey(m.theme)).filter(Boolean));
+  const emTop = topKeys(eastmoney), thTop = topKeys(ths);
+  const dualKeys = new Set([...emTop].filter(k => thTop.has(k)));
+  for (const src of [eastmoney, ths]) {
+    for (const m of src.mainlines) m.dualResonance = dualKeys.has(strategyResonanceTopicKey(m.theme));
+  }
+  return { eastmoney, ths, dualResonanceThemes: [...dualKeys] };
+}
+// 顶层 mainlines 是「兼容载体」,不是正式预测真值:两套 mainlines 的并集,各带 source 标签、
+// 保留各自 rank 为 sourceRank,并按 score 排一个「展示/缓存用」的顺序(非跨源重打分预测)。
+// 契约(Codex 三审澄清):
+//   - 正式盘中预测真值 = writeMainlinePredictBySource 的 bySource 两块(各源独立,不跨源混排);
+//   - 页面预测 = mainlinesBySource 双栏(各源独立);
+//   - 顶层 union 仅供缓存可用性判定、AI 兼容、以及盘后「共同证据层」(Owner 允许)消费,
+//     不得据其顶层名次断言两套预测已被合并/重打分。
+function strategyMainlineComposeBySourcePayload(em, th) {
+  const bySource = strategyMainlineAssembleBySource(em, th);
+  const carrier = (em && em.ok) ? em : ((th && th.ok) ? th : (em || th || null));
+  if (!carrier) return em || th || null;
+  const union = [];
+  for (const src of [bySource.eastmoney, bySource.ths]) {
+    for (const m of (src.mainlines || [])) union.push({ ...m, sourceRank: m.rank });
+  }
+  union.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0) || (Number(b.count) || 0) - (Number(a.count) || 0));
+  union.forEach((m, i) => { m.rank = i + 1; });
+  return {
+    ...carrier,
+    ok: !!(em?.ok || th?.ok),
+    mainlinesBySource: bySource,
+    mainlines: union,
+    count: union.length,
+    stockCount: new Set(union.flatMap(m => [
+      ...(m.todayCodes || []),
+      ...((m.risingStocks || []).map(s => s.code).filter(Boolean)),
+    ])).size,
+  };
+}
 async function buildStrategyMainlinesLive(day, options = {}) {
-  if (!options.leaderDebug) return buildStrategyMainlinesLiveImpl(day, options, null);
-  const diagStore = { readErrors: [], timeouts: [], missing: [] };
-  return strategyMainlineDiagStore.run(diagStore, () => buildStrategyMainlinesLiveImpl(day, options, diagStore));
+  if (options.leaderDebug) {
+    const diagStore = { readErrors: [], timeouts: [], missing: [] };
+    return strategyMainlineDiagStore.run(diagStore, () => buildStrategyMainlinesLiveImpl(day, options, diagStore));
+  }
+  // 盘后归属复核(诊断对照)或显式关闭时保持单一(合并)口径,不产两套。
+  if (options.postCloseReview || options.bySource === false) {
+    return buildStrategyMainlinesLiveImpl(day, options, null);
+  }
+  // 正常页面路径:东财[6]/同花顺[5] 各自独立跑整套引擎(取板→富化→评分→排序),绝不跨源借值。
+  // 两次 impl 都不直接写盘中预测；外层在 compose 后按 bySource 两块写一次 schema v3，
+  // 顶层仅保留东财单源兼容层，不把跨源并集当预测真值。
+  // 配对运行期内共享「按日只读」缓存:东财[6]/同花顺[5] 两遍引擎对同一天的涨停库/主因库/收盘库/
+  // 主线确认只读一次(结果字节一致,不改预测口径);来源相关的取板/富化/评分/排序仍各跑各的。
+  // 两套 impl 都 deferAutoScan:各自不派发 L2 扫描,交回本函数用两源合并候选统一协调一次,
+  // 按既有跨源字典序排序——避免异步完成顺序(而非市场强度)决定 L2 优先级(Codex 三审 P1)。
+  const [em, th] = await strategyMainlineReadCache.run(new Map(), () => Promise.all([
+    buildStrategyMainlinesLiveImpl(day, { ...options, boardZsTypes: [6], writePredict: false, deferAutoScan: true }, null).catch(() => null),
+    buildStrategyMainlinesLiveImpl(day, { ...options, boardZsTypes: [5], writePredict: false, deferAutoScan: true }, null).catch(() => null),
+  ]));
+  const today = isoFromCompactDate(chinaNowParts().day);
+  const requestedDay = isoFromCompactDate(day || chinaNowParts().day);
+  // 统一 L2 自动扫描:两源候选板合并成一批(各带自己的 zsType),交给 strategyMainlineMaybeAutoScan
+  // 一次性按跨源字典序(补选>净流入>大涨)挑选并派发;99亿的同花顺板不会被 9亿的东财板抢先。
+  if (!options.leaderDebug && requestedDay === today) {
+    const scanBoards = [...((em && em.__autoScanBoards) || []), ...((th && th.__autoScanBoards) || [])];
+    const scanPrior = new Map([...((em && em.__autoScanPriorByCode) || []), ...((th && th.__autoScanPriorByCode) || [])]);
+    const now = chinaNowParts();
+    const sessionPhaseNow = requestedDay === isoFromCompactDate(now.day) ? strategyMainlineSessionPhase(now) : '';
+    strategyMainlineMaybeAutoScan(scanBoards, requestedDay, true, sessionPhaseNow, scanPrior);
+  }
+  // 临时字段用后即删,绝不进入缓存/合并载体。
+  for (const p of [em, th]) { if (p) { delete p.__autoScanBoards; delete p.__autoScanPriorByCode; } }
+  const composed = strategyMainlineComposeBySourcePayload(em, th);
+  if (!composed) return em || th || strategyMainlineEmptyPayload(isoFromCompactDate(day || chinaNowParts().day), isoFromCompactDate(day || chinaNowParts().day), 'strategy-mainline-unavailable', '今日主线榜暂不可用。', '');
+  if (composed.ok && requestedDay === today && options.writePredict !== false) {
+    const confirm = await readMainlineConfirm(requestedDay).catch(() => null);
+    // 按来源分别落库(不把跨源并集当预测真值);顶层兼容层为东财单源。
+    await writeMainlinePredictBySource(requestedDay, composed.sessionPhase || '', composed.mainlinesBySource, confirm).catch(() => {});
+  }
+  return composed;
 }
 
 async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = null) {
   const requestedDay = isoFromCompactDate(day || chinaNowParts().day);
   const diagMode = !!options.leaderDebug;
+  // 两套独立主线预测(Owner 2026-07-15 v2):boardZsTypes 指定本次预测只用哪些板块来源。
+  // 传 [6] 只用东财、[5] 只用同花顺,各自独立取板/评分/排序,绝不跨源借值;不传则沿用 STRATEGY_ZS_TYPES=[6,5]。
+  const activeBoardZsTypes = Array.isArray(options.boardZsTypes) && options.boardZsTypes.length
+    ? options.boardZsTypes.map(Number)
+    : STRATEGY_ZS_TYPES;
   // 仅测试用途:诊断"今天"判定的日期覆盖。NODE_ENV !== test 时硬禁用。
   // 存在的唯一目的:让端点测试能在非交易日的机器上确定性触发"今日实时补水超时"路径(八审第3点)。
   const diagTodayIso = (diagMode && process.env.NODE_ENV === 'test' && process.env.STRATEGY_MAINLINE_DIAG_TODAY)
@@ -24414,7 +24704,7 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
   };
   const isIntradayToday = requestedDay === diagTodayIso && !isAfterMarketClose(requestedDay);
   const requiredLabelSet = (() => {
-    const set = new Set([5, 6, 7].map(z => `snapshot-zs${z} ${requestedDay}`));
+    const set = new Set(activeBoardZsTypes.map(z => `snapshot-zs${z} ${requestedDay}`));
     const win31 = strategyMainlineOfflineTradingDays(requestedDay, 31);
     const near10 = win31.slice(-10);
     for (const d of near10) { set.add(`limit-up ${d}`); set.add(`main-reason ${d}`); }
@@ -24457,6 +24747,7 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     liveIfMissing: !diagHistoricalBoards,
     boardPool: STRATEGY_MAINLINE_LIVE_BOARD_POOL + STRATEGY_MAINLINE_SUPPLEMENT_BOARDS,
     liveRankCount: 80,
+    zsTypes: activeBoardZsTypes,   // Owner 2026-07-15 v2:按本次预测的来源取板(东财[6]/同花顺[5] 各自独立;默认[6,5]剔除KPL)
   }), diagStore?.readErrors || null, { useDay: requestedDay, boards: [], source: 'none' });
   const isoDay = requestedDay;
   if (!Array.isArray(boardPayload?.boards) || !boardPayload.boards.length) {
@@ -24818,6 +25109,7 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
       netInflowBoard: t.netInflowBoard || '',
       netInflowZsType: t.netInflowZsType ?? null,
       netInflowAggregation: 'representative-board-max',
+      sourcePairs: strategyMainlineSourcePairs(boards),   // R2:东财/同花顺 各自同源净流入+涨幅配对
       boardGainPct,
       boardGainName: t.boardGainName || '',
       recentHeat,
@@ -24848,6 +25140,7 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
         bigGainCount: Number(b.bigGainCount) || 0,
         nearLimitCount: Number(b.nearLimitCount) || 0,
         breadth: b.breadth || null,
+        bySource: b.bySource || null,   // R2:合并路径经 resonanceBoards 取同源配对时需保留
       })),
       mainLeader: leaders[0] || null,
       leaders,
@@ -24859,13 +25152,17 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
   const isTodayQuery = isoDay === chinaTodayIso;
   const sessionPhaseNow = isTodayQuery ? strategyMainlineSessionPhase(chinaNow) : '';
   // 诊断模式严格只读:不派发扫描任务(也不写预测,见下方 writePredict 条件)。
-  if (!options.leaderDebug) {
+  // deferAutoScan(两套独立预测配对构建):本 impl 不各自派发,由外层用两源合并候选统一协调一次,
+  // 按既有跨源字典序排序,避免异步完成顺序决定 L2 优先级(Codex 三审 P1)。
+  if (!options.leaderDebug && !options.deferAutoScan) {
     strategyMainlineMaybeAutoScan(boardPayload?.boards || [], isoDay, isTodayQuery, sessionPhaseNow, priorReason?.byCode);
   }
   const mainlineConfirm = await readMainlineConfirm(isoDay).catch(() => null);
+  // 动能采样按本次预测来源隔离(东财 zs6 / 同花顺 zs5 各自一套基线序列),两套独立预测不互相串改。
+  const trendKeyPrefix = 'zs' + activeBoardZsTypes.join('-');
   const inflowGate = strategyMainlineApplyInflowGate(
     strategyMergeMainlineFamilies(rawMainlines)
-      .map(item => strategyMainlineAugmentPrediction(item, isTodayQuery, isoDay, !diagMode)),
+      .map(item => strategyMainlineAugmentPrediction(item, isTodayQuery, isoDay, !diagMode, trendKeyPrefix)),
     mainlineConfirm
   );
   const l2Gate = strategyMainlineApplyL2StarGate(inflowGate.kept);
@@ -25001,6 +25298,8 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
       ...(t.risingStocks || []).map(s => s.code).filter(Boolean),
     ])).size,
     mainlines,
+    // deferAutoScan:把本源富化后的候选板(含 zsType/memberRows)交给外层统一派发;外层用后即删,不入缓存。
+    ...(options.deferAutoScan ? { __autoScanBoards: boardPayload?.boards || [], __autoScanPriorByCode: priorReason?.byCode || null } : {}),
   };
 }
 
@@ -25298,15 +25597,26 @@ async function getStrategyMainlinesWithConfirm(day) {
   if (!payload || typeof payload !== 'object') return payload;
   const confirmDay = isoFromCompactDate(payload.day || day || chinaNowParts().day);
   const confirm = await readMainlineConfirm(confirmDay).catch(() => null);
+  const withConfirm = list => Array.isArray(list)
+    ? list.map(mainline => ({ ...mainline, isConfirmedMainline: strategyMainlineMatchesConfirm(mainline, confirm) }))
+    : list;
+  // 两套独立预测:确认标记同样落到东财/同花顺各自的 mainlines(各自独立,不交叉)。
+  const bySource = payload.mainlinesBySource
+    ? {
+        ...payload.mainlinesBySource,
+        eastmoney: payload.mainlinesBySource.eastmoney
+          ? { ...payload.mainlinesBySource.eastmoney, mainlines: withConfirm(payload.mainlinesBySource.eastmoney.mainlines) }
+          : payload.mainlinesBySource.eastmoney,
+        ths: payload.mainlinesBySource.ths
+          ? { ...payload.mainlinesBySource.ths, mainlines: withConfirm(payload.mainlinesBySource.ths.mainlines) }
+          : payload.mainlinesBySource.ths,
+      }
+    : payload.mainlinesBySource;
   return {
     ...payload,
     confirmedMainline: confirm || null,
-    mainlines: Array.isArray(payload.mainlines)
-      ? payload.mainlines.map(mainline => ({
-          ...mainline,
-          isConfirmedMainline: strategyMainlineMatchesConfirm(mainline, confirm),
-        }))
-      : payload.mainlines,
+    mainlines: withConfirm(payload.mainlines),
+    ...(bySource ? { mainlinesBySource: bySource } : {}),
   };
 }
 
@@ -25386,6 +25696,7 @@ function aiCompactMainline(mainline) {
     netInflowBoard: mainline.netInflowBoard || '',
     netInflowZsType: mainline.netInflowZsType ?? null,
     netInflowAggregation: mainline.netInflowAggregation || '',
+    sourcePairs: mainline.sourcePairs || null,   // R2:东财/同花顺 各自同源净流入+涨幅配对
     boardGainPct: aiNum(mainline.boardGainPct),
     boardGainName: mainline.boardGainName || '',
     explain: mainline.explain || '',
@@ -25499,6 +25810,23 @@ async function buildAiStrategyLivePayload(url) {
   const byZt = realtimeBoards.filter(board => board.ztCount != null)
     .sort((a, b) => Number(b.ztCount) - Number(a.ztCount)).slice(0, 30);
   const mainlines = (strategyPayload?.mainlines || []).map(aiCompactMainline).filter(Boolean);
+  // 两套独立预测(v2):AI 证据链按东财/同花顺各自输出,不跨源合并成一个预测分。
+  const aiCompactSourcePrediction = (src) => src ? {
+    source: src.source || '',
+    zsType: src.zsType ?? null,
+    available: !!src.available,
+    hasMainlines: !!src.hasMainlines,
+    reason: src.reason || '',
+    message: src.message || '',
+    count: Number(src.count || 0),
+    mainLeaderTheme: src.mainLeaderTheme || '',
+    mainlines: (src.mainlines || []).map(aiCompactMainline).filter(Boolean),
+  } : null;
+  const mainlinesBySource = strategyPayload?.mainlinesBySource ? {
+    eastmoney: aiCompactSourcePrediction(strategyPayload.mainlinesBySource.eastmoney),
+    ths: aiCompactSourcePrediction(strategyPayload.mainlinesBySource.ths),
+    dualResonanceThemes: strategyPayload.mainlinesBySource.dualResonanceThemes || [],
+  } : null;
   const reviewPayload = reviewBundle?.payload || null;
   const mainReasonDb = reviewBundle?.dbPayload || await readLimitUpMainReasonDbDay(reviewDay).catch(() => null);
   const sourceStats = aiReviewSourceSummary(reviewPayload);
@@ -25570,6 +25898,7 @@ async function buildAiStrategyLivePayload(url) {
       count: mainlines.length,
       stockCount: Number(strategyPayload?.stockCount || 0),
       mainlines,
+      mainlinesBySource,   // v2:东财/同花顺 两套独立预测(证据链)
       strongResonance: resonance ? {
         day: resonance.day,
         strongCount: Number(resonance.strongCount || 0),

@@ -347,7 +347,7 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   // 11. 接线静态断言(四审)
   A(src.includes('if (opts.historicalOnly) return getStrategyBoardSnapshotStocks(plateId, day, info);'), '历史成分改走快照还原(不再一刀切返回空)');
   A(src.includes('snapshotStats: await collectSnapshotCardStatsForCode(isoDay, code)'), 'debugTrace 带快照 cardData 三表携带证据');
-  A(src.includes('strategyMainlineAugmentPrediction(item, isTodayQuery, isoDay, !diagMode)') && src.includes('}, recordTrend)'), '诊断今天不写 strategyMainlineTrendSamples(recordTrend 贯通)');
+  A(src.includes('strategyMainlineAugmentPrediction(item, isTodayQuery, isoDay, !diagMode, trendKeyPrefix)') && src.includes('}, recordTrend)'), '诊断今天不写 strategyMainlineTrendSamples(recordTrend 贯通,来源前缀化)');
   A(src.includes('const debugErrors = diagStore ? diagStore.readErrors : null;') && src.includes('|| requiredMissing.length > 0'), 'debugMeta.complete 由 ok + 读错误 + 超时 + 必要缺失共同决定');
   A(src.includes('return strategyMainlineDiagStore.run(diagStore, () => buildStrategyMainlinesLiveImpl'), '诊断构建用 run() 严格包住单次执行(七审:不用 enterWith)');
   A(!src.includes('strategyMainlineDiagStore.enterWith'), 'enterWith 已移除');
@@ -432,7 +432,8 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
     // 权限错误(EACCES):非 ENOENT,必须入 readErrors
     const permErr = Object.assign(new Error('permission denied'), { code: 'EACCES' });
     const fs = { readFile: async () => { throw permErr; } };
-    eval(extractFn('readLimitUpMainReasonDbDay').replace('readLimitUpMainReasonDbDay(', 'readMainReasonEacces('));
+    // v2 性能优化后:诊断读取逻辑在 ...Impl 里,公开名只是「配对运行期只读缓存」的透传壳。
+    eval(extractFn('readLimitUpMainReasonDbDayImpl').replace('readLimitUpMainReasonDbDayImpl(', 'readMainReasonEacces('));
     const store = { readErrors: [], timeouts: [], missing: [] };
     // 关键:调用方按现网写法 .catch(()=>null) 吞掉——底层的 note-before-throw 仍已记录
     const got = await strategyMainlineDiagStore.run(store, () => readMainReasonEacces('2026-07-08').catch(() => null));
@@ -450,7 +451,7 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
       const store2 = { readErrors: [], timeouts: [], missing: [] };
       const enoErr = Object.assign(new Error('no such file'), { code: 'ENOENT' });
       const fs = { readFile: async () => { throw enoErr; } };
-      eval(extractFn('readLimitUpMainReasonDbDay').replace('readLimitUpMainReasonDbDay(', 'readMainReasonEnoent('));
+      eval(extractFn('readLimitUpMainReasonDbDayImpl').replace('readLimitUpMainReasonDbDayImpl(', 'readMainReasonEnoent('));
       const got2 = await strategyMainlineDiagStore.run(store2, () => readMainReasonEnoent('2026-07-09').catch(() => null));
       A(got2 === null && store2.readErrors.length === 0 && store2.missing[0] === 'main-reason 2026-07-09', 'ENOENT 缺文件只记 missing,不使 complete=false');
     }
