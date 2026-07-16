@@ -19,7 +19,9 @@ assert(context.matchesConfirm({ familyKey: 'group:其他', theme: 'PCB' }, { key
 assert(!context.matchesConfirm({ familyKey: 'group:医药', theme: '医药' }, { key: 'group:PCB与连接', theme: 'PCB' }), '无关主线不会误标确认');
 
 assert(server.includes('async function getStrategyMainlinesWithConfirm(day)'), '主线响应经过动态确认叠加器');
-assert(server.includes("url.pathname === '/api/strategy-mainlines') return send(res, 200, await getStrategyMainlinesWithConfirm"), '公开主线接口使用动态确认响应');
+assert(server.includes('async function getStrategyMainlinesVisible(day)')
+  && server.includes('const payload = await getStrategyMainlinesWithConfirm(day);')
+  && server.includes("url.pathname === '/api/strategy-mainlines') return send(res, 200, await getStrategyMainlinesVisible"), '公开主线接口在动态确认后补预期轨迹并执行正式榜过滤');
 assert(server.includes('strategyMainlineWithTimeout(getStrategyMainlinesWithConfirm(requestedDay)'), 'AI只读策略响应使用同一确认口径');
 
 assert(dashboard.includes('async function confirmMainlineTheme(key, theme)'), '确认主线操作改为可捕获错误的异步流程');

@@ -23455,6 +23455,9 @@ function strategyPredictStarTransitions(existingRows, mainlines, observedAt) {
       lastSeenAt: String(raw?.lastSeenAt || firstExpectedAt).trim(),
       confirmedAt: String(raw?.confirmedAt || '').trim() || null,
       lastLevel: String(raw?.lastLevel || 'expected').trim() || 'expected',
+      firstGain: isFiniteNumeric(raw?.firstGain) ? Number(raw.firstGain) : null,
+      ratios: raw?.ratios && typeof raw.ratios === 'object' ? raw.ratios : null,
+      maxBucket: raw?.maxBucket && typeof raw.maxBucket === 'object' ? raw.maxBucket : null,
     });
   }
   for (const m of (Array.isArray(mainlines) ? mainlines.slice(0, 12) : [])) {
@@ -23477,6 +23480,9 @@ function strategyPredictStarTransitions(existingRows, mainlines, observedAt) {
         lastSeenAt: observedAt,
         confirmedAt: null,
         lastLevel: 'expected',
+        firstGain: isFiniteNumeric(star?.gain) ? Number(star.gain) : null,
+        ratios: star?.ratios && typeof star.ratios === 'object' ? star.ratios : null,
+        maxBucket: star?.maxBucket && typeof star.maxBucket === 'object' ? star.maxBucket : null,
       };
       next.mainlineTheme = String(m?.theme || next.mainlineTheme || '').trim();
       next.name = String(star?.name || next.name || '').trim();
@@ -23491,6 +23497,88 @@ function strategyPredictStarTransitions(existingRows, mainlines, observedAt) {
       String(a.mainlineKey).localeCompare(String(b.mainlineKey)) || String(a.code).localeCompare(String(b.code)))
     .slice(0, 100);
 }
+
+// 预期明星是盘中已经发生过的信号，不因后续买盘减弱或最终未封板而被抹掉。
+// 轨迹按来源独立读取；正常双来源预测各用自己的 block，旧 schema 则沿用顶层兼容块。
+function strategyMainlineExpectedTransitionMap(predict, source = '') {
+  const sourceBlock = source && predict?.bySource?.[source] ? predict.bySource[source] : null;
+  const rows = Array.isArray(sourceBlock?.starTransitions)
+    ? sourceBlock.starTransitions
+    : (Array.isArray(predict?.starTransitions) ? predict.starTransitions : []);
+  const byMainline = new Map();
+  for (const raw of rows) {
+    const mainlineKey = String(raw?.mainlineKey || '').trim();
+    const code = normalizeReasonSourceCode(raw?.code);
+    const firstExpectedAt = String(raw?.firstExpectedAt || '').trim();
+    if (!mainlineKey || !code || !firstExpectedAt) continue;
+    if (!byMainline.has(mainlineKey)) byMainline.set(mainlineKey, []);
+    byMainline.get(mainlineKey).push({
+      mainlineKey,
+      mainlineTheme: String(raw?.mainlineTheme || '').trim(),
+      code,
+      name: String(raw?.name || '').trim(),
+      firstExpectedAt,
+      lastSeenAt: String(raw?.lastSeenAt || firstExpectedAt).trim(),
+      confirmedAt: String(raw?.confirmedAt || '').trim() || null,
+      lastLevel: String(raw?.lastLevel || 'expected').trim() || 'expected',
+      firstGain: isFiniteNumeric(raw?.firstGain) ? Number(raw.firstGain) : null,
+      ratios: raw?.ratios && typeof raw.ratios === 'object' ? raw.ratios : null,
+      maxBucket: raw?.maxBucket && typeof raw.maxBucket === 'object' ? raw.maxBucket : null,
+    });
+  }
+  return byMainline;
+}
+
+function strategyMainlineAttachExpectedHistory(item, transitionMap, sessionPhase = '') {
+  if (!item || !(transitionMap instanceof Map)) return item;
+  const mainlineKey = String(item?.familyKey || item?.key || '').trim();
+  const history = mainlineKey ? (transitionMap.get(mainlineKey) || []) : [];
+  if (!history.length) return item;
+  const currentStars = Array.isArray(item?.starStocks) ? item.starStocks : [];
+  const currentByCode = new Map(currentStars
+    .map(star => [normalizeReasonSourceCode(star?.code), star])
+    .filter(([code]) => code));
+  const historyCodes = new Set(history.map(row => row.code));
+  const settled = sessionPhase === '已收盘';
+  const historicalStars = history.map(row => {
+    const current = currentByCode.get(row.code) || {};
+    const confirmed = !!row.confirmedAt || current?.level === 'confirmed';
+    return {
+      ...current,
+      code: row.code,
+      name: row.name || current?.name || row.code,
+      gain: isFiniteNumeric(current?.gain) ? Number(current.gain) : row.firstGain,
+      level: confirmed ? 'confirmed' : 'expected',
+      label: confirmed ? '明星确认' : (settled ? '预期明星·未兑现' : '预期明星·盘中出现'),
+      ratios: row.ratios || current?.ratios || null,
+      maxBucket: row.maxBucket || current?.maxBucket || null,
+      historicalExpected: true,
+      firstExpectedAt: row.firstExpectedAt,
+      confirmedAt: row.confirmedAt,
+      expectedOutcome: confirmed ? 'confirmed' : (settled ? 'not-confirmed' : 'pending'),
+    };
+  });
+  const starStocks = [...historicalStars, ...currentStars.filter(star => !historyCodes.has(normalizeReasonSourceCode(star?.code)))]
+    .sort((a, b) => (STRATEGY_MAINLINE_STAR_LEVEL_ORDER[a?.level] ?? 9) - (STRATEGY_MAINLINE_STAR_LEVEL_ORDER[b?.level] ?? 9) ||
+      String(a?.firstExpectedAt || '').localeCompare(String(b?.firstExpectedAt || '')))
+    .slice(0, 4);
+  const names = historicalStars.map(star => star.name || star.code).filter(Boolean);
+  return {
+    ...item,
+    starStocks,
+    hadExpectedStarToday: true,
+    l2CurrentVerificationStatus: String(item?.l2VerificationStatus || ''),
+    l2VerificationStatus: 'qi',
+    l2ScanState: 'qi',
+    l2QualifiedBy: 'expected-star-observed-today',
+    expectedStarHistory: historicalStars,
+    explain: [
+      `盘中曾出现预期明星${names.length ? `：${names.join('、')}` : ''}；该信号作为当日主线证据保留${settled ? '，未兑现者已标明' : ''}。`,
+      ...(Array.isArray(item?.explain) ? item.explain : []),
+    ].slice(0, 9),
+  };
+}
+
 function strategyPredictPickTop(m) {
   return m ? {
     key: m.familyKey || m.key || '', theme: m.theme || '', rank: m.rank || 0,
@@ -25435,9 +25523,18 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
   const mainlineConfirm = await readMainlineConfirm(isoDay).catch(() => null);
   // 动能采样按本次预测来源隔离(东财 zs6 / 同花顺 zs5 各自一套基线序列),两套独立预测不互相串改。
   const trendKeyPrefix = 'zs' + activeBoardZsTypes.join('-');
+  const predictSource = activeBoardZsTypes.length === 1
+    ? (Number(activeBoardZsTypes[0]) === 6 ? 'eastmoney' : (Number(activeBoardZsTypes[0]) === 5 ? 'ths' : ''))
+    : '';
+  const priorPredict = (!options?.leaderDebug && !options?.postCloseReview)
+    ? await readMainlinePredict(isoDay).catch(() => null)
+    : null;
+  const expectedTransitionMap = strategyMainlineExpectedTransitionMap(priorPredict, predictSource);
+  const augmentedMainlines = strategyMergeMainlineFamilies(rawMainlines)
+    .map(item => strategyMainlineAugmentPrediction(item, isTodayQuery, isoDay, !diagMode, trendKeyPrefix))
+    .map(item => strategyMainlineAttachExpectedHistory(item, expectedTransitionMap, sessionPhaseNow));
   const inflowGate = strategyMainlineApplyInflowGate(
-    strategyMergeMainlineFamilies(rawMainlines)
-      .map(item => strategyMainlineAugmentPrediction(item, isTodayQuery, isoDay, !diagMode, trendKeyPrefix)),
+    augmentedMainlines,
     mainlineConfirm
   );
   // 管理员/AI 诊断需要保留完整候选池来解释「为什么没上榜」；严格 QI 门槛只作用于
@@ -25583,8 +25680,8 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
 }
 
 // Owner 规则(2026-07-10):主线当天资金必须净流入——净流出/零流入的板块不是当天主线。
-// 两条保护:netInflow 为 null(数据缺失)不视为流出,不误杀(缺数据不得造假);
-// owner 已确认的主线不被自动规则移除(人工确认优先于自动规则)。
+// 三条保护:netInflow 为 null(数据缺失)不视为流出,不误杀(缺数据不得造假);
+// owner 已确认的主线不被自动规则移除；盘中曾出现预期明星的主线也作为当日预判保留。
 // 被排除项记入 excluded 供观测(响应 inflowGate 字段),不悄悄消失。
 function strategyMainlineApplyInflowGate(items, mainlineConfirm) {
   const list = Array.isArray(items) ? items : [];
@@ -25594,7 +25691,7 @@ function strategyMainlineApplyInflowGate(items, mainlineConfirm) {
   const excluded = [];
   for (const item of list) {
     const v = numOrNull(item?.netInflow);
-    if (v != null && v <= 0 && !isConfirmed(item)) {
+    if (v != null && v <= 0 && !isConfirmed(item) && !item?.hadExpectedStarToday) {
       excluded.push({
         theme: String(item?.theme || ''),
         netInflow: v,
@@ -25957,6 +26054,38 @@ function strategyMainlineRestrictToQiPayload(payload) {
   };
 }
 
+// 正式接口可能命中部署前写下的内存/文件缓存或冻结快照；返回前用同日预测轨迹补回
+// “盘中曾出现预期明星”证据。只补展示资格和证据标签，不改写原缓存/快照文件。
+function strategyMainlineAttachExpectedHistoryPayload(payload, predict) {
+  if (!payload || typeof payload !== 'object' || !predict) return payload;
+  const sessionPhase = String(payload?.sessionPhase || '');
+  const maps = {
+    root: strategyMainlineExpectedTransitionMap(predict, ''),
+    eastmoney: strategyMainlineExpectedTransitionMap(predict, 'eastmoney'),
+    ths: strategyMainlineExpectedTransitionMap(predict, 'ths'),
+  };
+  const attachList = (list, source = '') => (Array.isArray(list) ? list : []).map(item => {
+    const itemSource = String(item?.source || source || '');
+    return strategyMainlineAttachExpectedHistory(item, maps[itemSource] || maps.root, sessionPhase);
+  });
+  const mainlinesBySource = payload.mainlinesBySource
+    ? {
+        ...payload.mainlinesBySource,
+        eastmoney: payload.mainlinesBySource.eastmoney
+          ? { ...payload.mainlinesBySource.eastmoney, mainlines: attachList(payload.mainlinesBySource.eastmoney.mainlines, 'eastmoney') }
+          : payload.mainlinesBySource.eastmoney,
+        ths: payload.mainlinesBySource.ths
+          ? { ...payload.mainlinesBySource.ths, mainlines: attachList(payload.mainlinesBySource.ths.mainlines, 'ths') }
+          : payload.mainlinesBySource.ths,
+      }
+    : payload.mainlinesBySource;
+  return {
+    ...payload,
+    mainlines: attachList(payload.mainlines),
+    ...(mainlinesBySource ? { mainlinesBySource } : {}),
+  };
+}
+
 async function getStrategyMainlinesWithConfirm(day) {
   const payload = await getStrategyMainlines(day);
   if (!payload || typeof payload !== 'object') return payload;
@@ -25983,6 +26112,16 @@ async function getStrategyMainlinesWithConfirm(day) {
     mainlines: withConfirm(payload.mainlines),
     ...(bySource ? { mainlinesBySource: bySource } : {}),
   };
+}
+
+async function getStrategyMainlinesVisible(day) {
+  const payload = await getStrategyMainlinesWithConfirm(day);
+  if (!payload || typeof payload !== 'object') return payload;
+  const predictDay = isoFromCompactDate(payload.day || day || chinaNowParts().day);
+  const predict = await readMainlinePredict(predictDay).catch(() => null);
+  return strategyMainlineRestrictToQiPayload(
+    strategyMainlineAttachExpectedHistoryPayload(payload, predict)
+  );
 }
 
 async function readAiReadOnlyToken() {
@@ -26899,8 +27038,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/limit-up-main-reason-db/recent-universe') return await getLimitUpMainReasonRecentUniverse(url, req, res);
     if (url.pathname === '/api/limit-up-main-reason-db/pending') return await getLimitUpMainReasonPending(url, req, res);
     if (url.pathname === '/api/limit-up-main-reason-db/hot-themes') return await getLimitUpMainReasonHotThemes(url, req, res);
-    if (url.pathname === '/api/strategy-mainlines') return send(res, 200, await getStrategyMainlinesWithConfirm(url.searchParams.get('day') || chinaNowParts().day)
-      .then(strategyMainlineRestrictToQiPayload)
+    if (url.pathname === '/api/strategy-mainlines') return send(res, 200, await getStrategyMainlinesVisible(url.searchParams.get('day') || chinaNowParts().day)
       .catch(e => ({ ok: false, error: String(e && e.message || e) })));
     if (url.pathname === '/api/admin/strategy-daily-events') return await getStrategyDailyEventsApi(url, req, res);
     if (url.pathname === '/api/detail-evidence-index') return await getDetailEvidenceIndexApi(url, req, res);

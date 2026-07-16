@@ -43,6 +43,10 @@ A(r1.kept.some(i => i.key === 'd'), 'netInflow=null 不视为流出');
 const r2 = strategyMainlineApplyInflowGate(items, { key: 'e', theme: '已确认流出主线' });
 A(r2.kept.some(i => i.key === 'e'), 'owner 已确认主线不被自动规则移除');
 A(!r2.excluded.some(e => e.theme === '已确认流出主线'), '确认主线不入排除清单');
+const rExpected = strategyMainlineApplyInflowGate([
+  { key: 'f', theme: '盘中预期主线', netInflow: -2e8, hadExpectedStarToday: true },
+], null);
+A(rExpected.kept.length === 1 && rExpected.excluded.length === 0, '盘中曾出现预期明星后,资金转弱不删除当日复盘主线');
 
 // 4. 接线静态断言
 A(src.includes('strategyMainlineApplyInflowGate(') && src.includes("inflowGate: { rule: 'net-inflow-required'"), '构建管线已接门槛且响应带 inflowGate 观测字段');

@@ -6244,17 +6244,22 @@ Changed:
 - 未达扫描条件、等待公司端、扫描中、覆盖不足及扫描无明星的方向继续保留为内部候选并照常参与 L2 调度，但不再进入正式榜。
 - 正式接口在返回旧缓存和旧冻结快照时再次执行同一门槛，避免历史候选绕过新规则。
 - 管理员复核、AI 证据接口和龙头归属回放继续保留完整候选池及排除原因，不被正式榜过滤影响。
+- 预期明星首次出现后写入当日不可逆轨迹；后续 L2 变弱或资金转弱不再删除该主线，收盘未转为明星确认时明确显示“预期明星·未兑现”。
+- 卡片醒目展示盘中预期明星；首次涨幅、L2 比值和最大档证据随轨迹保存，供当日复盘解释。
 
 Files:
 - `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
 - `tests/inflow-gate.test.js`
+- `tests/mainline-confirm.test.js`
 - `tests/mainline-empty-state.test.js`
+- `tests/predict-records.test.js`
 - `tests/qi-mainline-states.test.js`
 - `docs/DAILY_HANDOFF.md`
 
 Validated:
 - `node --check kpl-stats-server.js` 通过。
-- 严格 QI 门槛、旧快照返回过滤、自动扫描先于展示门槛、有效空状态及管理员/AI 诊断隔离测试通过。
+- 严格 QI 门槛、预期明星资格不可逆、未兑现标签、旧快照轨迹恢复、自动扫描先于展示门槛、有效空状态及管理员/AI 诊断隔离测试通过。
 - 全仓 39 个 `tests/*.test.js` 全部通过；`git diff --check` 通过。
 
 Deployment:
@@ -6262,4 +6267,4 @@ Deployment:
 
 Notes for next agent:
 - 5 亿元且至少 2 只涨停的自动扫描资格未改变；本次只收紧“什么能显示为正式主线”。
-- 发布后，旧日期若没有可核验的 expected/confirmed 明星证据，会显示有效的“今日无主线”，但管理员诊断仍可查看被排除候选。
+- 发布后，旧日期若没有可核验的 expected/confirmed 明星证据，会显示有效的“今日无主线”；若同日预测轨迹记录过 expected，则保留该主线并展示最终是否兑现。管理员诊断仍可查看全部被排除候选。
