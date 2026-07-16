@@ -11820,12 +11820,16 @@ function renderStrategyMainlinesHTML(d) {
       .join('');
     const starRow = starChips ? `<div class="ml-proof-row"><span class="ml-proof-lbl" title="纯当日L2数据判定:涨停前主动/被动比≥1.5=资金活跃,涨停后三比值2个≥2=明星确认;👑=同时是龙头">明星</span>${starChips}</div>` : '';
     const l2Detail = m.l2ScanDetail || {};
-    // 旧冻结快照没有 l2ScanState，只能知道“未得出结论”；保守归为覆盖不足，避免伪装成正在排队。
+    // 旧冻结快照没有 l2ScanState：能从卡片已有指标确认未达门槛的显示“未达扫描条件”；
+    // 达标但过程未知的保守显示“覆盖不足”，绝不伪装成公司端正在排队。
+    const legacyL2Eligible = (Array.isArray(m.resonanceBoards) ? m.resonanceBoards : []).some(board =>
+      String(board?.plateId || '') && Number(board?.netInflow) >= 5e8 && Number(board?.ztCount) >= 2
+    );
     const l2State = m.l2ScanState || (m.l2VerificationStatus === 'qi'
       ? 'qi'
       : (m.l2VerificationStatus === 'scanned-no-star'
         ? 'scanned-no-star'
-        : (m.l2VerificationStatus === 'unscanned' ? 'coverage-insufficient' : '')));
+        : (m.l2VerificationStatus === 'unscanned' ? (legacyL2Eligible ? 'coverage-insufficient' : 'not-eligible') : '')));
     const l2Actual = [];
     if (l2Detail.maxNetInflow != null) l2Actual.push(`最高净流入${fmtInflow(l2Detail.maxNetInflow)}`);
     if (l2Detail.maxZt != null) l2Actual.push(`最多涨停${Number(l2Detail.maxZt)}只`);
