@@ -1,0 +1,13 @@
+{
+  "files": [
+    {
+      "source": "kpl-stats-server.js",
+      "destination": "kpl-stats-server.js"
+    },
+    {
+      "source": "kpl-dashboard_17_apple.html",
+      "destination": "kpl-dashboard_17_apple.html"
+    }
+  ],
+  "restart": "main"
+}

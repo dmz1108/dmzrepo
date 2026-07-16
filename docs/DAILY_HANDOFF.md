@@ -6348,3 +6348,26 @@ Deployment:
 
 Notes for next agent:
 - PR#117(THS DDE)仍等 Codex 对三项修复的复审;PR#123 等 Owner 对 P2 拍板。
+
+## 2026-07-16 - Codex - 准备同花顺 DDE 与严格 QI 主线门槛生产部署
+
+Changed:
+- 独立复核 PR #117：真实同花顺 `527198` 响应、单请求超时、8 秒总预算、in-flight 去重、失败重试、历史日防穿越和口径来源标记均通过；PR 已合并。
+- 修正并复核 PR #123：严格 QI 门槛只从 2026-07-16 起生效，不倒溯清空旧历史；预期明星轨迹重复挂载保持幂等；PR 已合并。
+- 新增受保护部署清单，同时发布主服务与策略页，确保后端字段和前端展示原子切换。
+
+Files:
+- `ops/production/manifests/strategy-ths-dde-strict-qi-20260716.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- PR #117 专项测试及全仓 40 个测试文件通过；真实 `bk_885977` 响应含 `527198=1041518380.000`。
+- PR #123 合并最新 main 后，`node --check`、全仓 40 个测试文件和 `git diff --check` 通过。
+- 部署清单仅包含 `kpl-stats-server.js`、`kpl-dashboard_17_apple.html`，`restart=main`。
+
+Deployment:
+- 本条提交时尚未执行；待清单合入 main 后通过 `production-ops.yml` 执行。
+
+Notes for next agent:
+- 部署后验证公开策略接口从 2026-07-16 起只返回带 expected/confirmed 明星证据的主线；2026-07-15 及以前保持原历史口径。
+- 同花顺 DDE 只覆盖当日策略链，历史日、今日实时看板、复盘和默认三源调用不变。
