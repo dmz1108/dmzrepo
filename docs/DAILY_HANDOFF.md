@@ -6266,3 +6266,28 @@ Deployment:
 Notes for next agent:
 - 次交易日 14:59 验收重点:同花顺主线卡资金应为 DDE 量级(对照 APP),netInflowMetric 可溯;
   L2 扫描同花顺侧达标板会因口径变大而变多,限流不变,观察派发密度。
+
+## 2026-07-16 - Claude - PR#117 Codex 复审两项 P1 修复(DDE 请求纪律)
+
+Changed:
+- [P1] realhead 单请求加 AbortSignal 截止(4s,悬挂请求真正被中止);strategyApplyThsDdeFundFlow
+  加 8s 总预算截止线(thsDdeRaceBudget + deadline),超预算板按已定规则保持 zjjlr——DDE overlay
+  任何情况下不再卡住 getDayBoardsWithMembers/策略构建。
+- [P1] fetchThsBoardDdeAmount 加 in-flight Promise 去重(thsDdePendingFetch):并发消费者冷启动
+  同板只发一次网络请求;成功/失败都清理 pending,仅成功写 90s 缓存(失败不污染重试)。
+- 补确定性测试:悬挂请求预算内回退、并发同 code 单请求、失败后可重试(真实函数贯穿,非整体 stub)。
+- 讨论文档措辞修正:「策略候选板」→「策略板块池」(覆盖对象是策略口径调用中的板池,不止最终卡片)。
+
+Files:
+- kpl-stats-server.js(超时/预算/去重)
+- tests/strategy-ths-dde-netinflow.test.js(24 项断言)
+- docs/strategy/discussions/2026-07-16-ths-dde-netinflow.md
+
+Validated:
+- node --check 通过;全仓 40 个测试文件全绿。
+
+Deployment:
+- 未部署;仍走 PR #117,等 Codex 复审通过后 Owner 合并、production-ops.yml 发布。
+
+Notes for next agent:
+- 预算定时器是 unref 的(不阻服务退出);测试进程自带保活,新增用例时注意。

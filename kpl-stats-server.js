@@ -21146,7 +21146,10 @@ function strategyBoardFundFlowForSource(board, zsType, options = {}) {
 // thsPlateCode(gn plateId → 885xxx)。合同要求:两口径绝不混同一列,metric 字段全程可溯。
 const THS_DDE_AMOUNT_FIELD = '527198';
 const THS_DDE_CACHE_MS = 90 * 1000;
-const thsDdeAmountCache = new Map();   // indexCode -> { value, at }
+const THS_DDE_FETCH_TIMEOUT_MS = 4000;      // 单请求截止(AbortSignal,悬挂请求真正被中止,不留后台占用)
+const THS_DDE_OVERLAY_BUDGET_MS = 8000;     // 整个 DDE overlay 总预算(超过即整体回退 zjjlr,不卡策略构建)
+const thsDdeAmountCache = new Map();   // indexCode -> { value, at }(仅成功响应写入,失败不污染重试)
+const thsDdePendingFetch = new Map();  // indexCode -> Promise(in-flight 去重:并发同板只发一次网络请求)
 let thsDdeIndexMapCache = null;        // { at, map: Map(plateId -> thsPlateCode) }
 function thsParseRealheadField(text, field) {
   const m = String(text || '').match(/\{"items":\{([\s\S]*?)\}\s*[,}]/);
@@ -21170,21 +21173,42 @@ async function thsDdeIndexCodeMap() {
 async function fetchThsBoardDdeAmount(indexCode) {
   const code = String(indexCode || '').trim();
   if (!code) return null;
-  const now = Date.now();
   const hit = thsDdeAmountCache.get(code);
-  if (hit && now - hit.at < THS_DDE_CACHE_MS) return hit.value;
-  const v = await getThsCookieV();
-  const res = await fetch(`https://d.10jqka.com.cn/v6/realhead/bk_${code}/defer/last.js`, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/89.0.4389.90 Safari/537.36',
-      Referer: 'https://q.10jqka.com.cn/gn/',
-      Cookie: `v=${v}`,
-    },
+  if (hit && Date.now() - hit.at < THS_DDE_CACHE_MS) return hit.value;
+  const pending = thsDdePendingFetch.get(code);
+  if (pending) return pending;   // 并发消费者(主线/热点/共振)冷启动同板只发一次请求
+  const p = (async () => {
+    const v = await getThsCookieV();
+    const res = await fetch(`https://d.10jqka.com.cn/v6/realhead/bk_${code}/defer/last.js`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/89.0.4389.90 Safari/537.36',
+        Referer: 'https://q.10jqka.com.cn/gn/',
+        Cookie: `v=${v}`,
+      },
+      signal: AbortSignal.timeout(THS_DDE_FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) throw new Error(`THS realhead ${res.status}: bk_${code}`);
+    const value = thsParseRealheadField(await res.text(), THS_DDE_AMOUNT_FIELD);
+    thsDdeAmountCache.set(code, { value, at: Date.now() });   // 仅成功写缓存,失败不污染下次重试
+    return value;
+  })();
+  thsDdePendingFetch.set(code, p);
+  try {
+    return await p;
+  } finally {
+    thsDdePendingFetch.delete(code);   // 成功/失败都清理 pending,失败后下一次可立即重试
+  }
+}
+// overlay 级超时竞速:budget 到期即 reject(底层 fetch 自带 AbortSignal 会自行中止,不留悬挂)。
+function thsDdeRaceBudget(promise, ms, label) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`ths-dde budget exceeded (${ms}ms): ${label}`)), Math.max(1, ms));
+    if (typeof t.unref === 'function') t.unref();
+    promise.then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); },
+    );
   });
-  if (!res.ok) throw new Error(`THS realhead ${res.status}: bk_${code}`);
-  const value = thsParseRealheadField(await res.text(), THS_DDE_AMOUNT_FIELD);
-  thsDdeAmountCache.set(code, { value, at: now });
-  return value;
 }
 // 把同花顺侧(zsType=5 的主板 + 每块板的 bySource[5])的 netInflow 覆盖为当日 DDE 大单金额。
 // 仅当 useDay=中国今天(realhead 是"现在"的值,历史日覆盖=数据穿越,绝不做);
@@ -21206,9 +21230,16 @@ async function strategyApplyThsDdeFundFlow(boards, useDay) {
     if (!byPlate.has(t.plateId)) byPlate.set(t.plateId, []);
     byPlate.get(t.plateId).push(t.ref);
   }
+  // 总预算截止线:超预算的板直接跳过(保持 zjjlr),绝不让 DDE overlay 卡住整次策略构建。
+  const deadline = Date.now() + THS_DDE_OVERLAY_BUDGET_MS;
   await mapLimit([...byPlate.entries()], 3, async ([plateId, refs]) => {
+    const remain = deadline - Date.now();
+    if (remain <= 0) {
+      strategyMainlineDiagNoteRead(`ths-dde bk ${plateId}`, new Error('overlay budget exhausted'));
+      return;   // 该板保持 zjjlr,metric 如实
+    }
     try {
-      const dde = await fetchThsBoardDdeAmount(idxMap.get(plateId));
+      const dde = await thsDdeRaceBudget(fetchThsBoardDdeAmount(idxMap.get(plateId)), remain, `bk ${plateId}`);
       if (dde == null) return;
       for (const ref of refs) {
         ref.netInflowZjjlr = numOrNull(ref.netInflow);   // 原 zjjlr 留档供审计/对照

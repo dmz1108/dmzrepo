@@ -28,7 +28,7 @@ Owner 2026-07-16:**只针对策略页的同花顺资金净流入**,切换为 DDE
 1. 仅策略口径调用(显式 zsTypes 且不含 KPL)触发;看板/复盘/默认三源不动,zjjlr 在这些页保持原样。
 2. 仅当日实时覆盖;历史日拒绝(realhead 是当前值,回填历史=数据穿越)。历史冻结快照不重建。
 3. 口径全程可溯:`netInflowMetric='ths-dde-big-order-amount'`,原 zjjlr 留档 `netInflowZjjlr`;DDE 拿不到的板保持 zjjlr 且 metric 如实,绝不冒充。
-4. 请求纪律:仅对策略候选板按板拉取,90 秒 TTL 缓存 + mapLimit(3) 并发;不拉全 382 板。
+4. 请求纪律:仅对策略板块池(`getDayBoardsWithMembers` 策略口径调用中的 zsType=5 板与塌板 bySource[5],不止最终 5–8 张卡)按板拉取,90 秒 TTL 缓存 + in-flight 去重 + mapLimit(3) 并发;不拉全 382 板。单请求 4s AbortSignal 截止,整个 overlay 8s 总预算,超时按板回退 zjjlr。
 
 未选方案:
 - 自建聚合(Σ成分股个股 DDE):请求量大,且已有原生板块级字段,不需要。
