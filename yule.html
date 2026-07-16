@@ -526,11 +526,22 @@ function catMeta(key){
 function itemScore(it){
   return Number(it.rankScore || 0) || Number(it.hotScore || 0) || Date.parse(it.createdAt || '') || 0;
 }
+function itemDayKey(it){
+  const day = String(it&&it.day||'').replace(/\D/g,'');
+  if(/^\d{8}$/.test(day)) return day;
+  const timestamp = Date.parse(String(it&&it.createdAt||''));
+  if(!Number.isFinite(timestamp)) return '';
+  return new Date(timestamp + 8*3600000).toISOString().slice(0,10).replace(/\D/g,'');
+}
 function sortedItems(items){
-  return items.slice().sort((a,b)=>itemScore(b)-itemScore(a));
+  return items.slice().filter(Boolean).sort((a,b)=>
+    itemDayKey(b).localeCompare(itemDayKey(a)) ||
+    itemScore(b)-itemScore(a) ||
+    Number(b.hotScore||0)-Number(a.hotScore||0) ||
+    String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
 }
 function rankedTodayItems(items, preferredLead=null){
-  const ranked = sortedItems(items).filter(Boolean);
+  const ranked = sortedItems(items);
   const preferredId = String(preferredLead&&preferredLead.id||'');
   if(!preferredId) return ranked;
   return [preferredLead, ...ranked.filter(item=>String(item&&item.id||'')!==preferredId)];
@@ -620,7 +631,7 @@ function todayHTML(items, preferredLead=null){
   const cat = catMeta(lead.category);
   return `<section class="today">
     <div class="today-head">
-      <div><div class="section-kicker">Top stories</div><h2>今日值得看</h2><span>按娱乐相关度、热度与更新时间排序</span></div>
+      <div><div class="section-kicker">Top stories</div><h2>今日值得看</h2><span>最新日期优先 · 同日按热度排序</span></div>
       <span>${ranked.length} 条站内内容</span>
     </div>
     <div class="feature-grid">
@@ -638,14 +649,15 @@ function todayHTML(items, preferredLead=null){
   </section>`;
 }
 function sectionHTML(cat, items){
+  const ranked = sortedItems(items);
   const jumpTarget = activeCat === 'all' ? cat.key : 'all';
   const jumpLabel = activeCat === 'all' ? '只看此频道' : '返回全部频道';
   return `<section class="section" data-sec="${esc(cat.key)}">
     <div class="section-head">
-      <div><div class="section-kicker">Channel edit</div><h2>${esc(cat.label)}</h2><div class="sub">热度优先 · ${items.length} 条</div></div>
+      <div><div class="section-kicker">Channel edit</div><h2>${esc(cat.label)}</h2><div class="sub">日期优先 · 同日热度排序 · ${ranked.length} 条</div></div>
       <button class="section-jump" type="button" data-category="${esc(jumpTarget)}">${jumpLabel}</button>
     </div>
-    ${items.length ? `<div class="grid">${items.map(cardHTML).join('')}</div>` : '<div class="empty">该板块暂无内容，采集后自动出现</div>'}
+    ${ranked.length ? `<div class="grid">${ranked.map(cardHTML).join('')}</div>` : '<div class="empty">该板块暂无内容，采集后自动出现</div>'}
   </section>`;
 }
 function visibleCategories(){
