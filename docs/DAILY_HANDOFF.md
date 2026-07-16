@@ -5952,3 +5952,29 @@ Deployment:
 Notes for next agent:
 - 本次日期优先问题已完成代码、测试、独立复核、Git 合并、生产发布和公网验收，无需再次部署。
 - 后续一旦采集到 2026-07-16 的明星热点，页面会自动改为展示该日期中综合热度最高的内容；无需再改页面。
+## 2026-07-16 - Claude - 修复两套预测的 catalog 跨源泄漏(boardCount/共振板/分数/净流入)
+
+Changed:
+- 开盘后在线验收(2026-07-16 早盘)发现:同花顺主线(如 AI手机、MLOps)boardCount=2,resonanceBoards
+  混进同名东财板(AI手机 BK1162 zsType6),违反 Owner「两边不能交叉借…板块数量」。
+- 根因:`getStrategyMainlineRealtimeCatalogBoards` 返回东财(6)+同花顺(5)全源概念榜,
+  `strategyMainlineAttachBestCatalogBoard` 按题材贴最优板给 seed 而不看来源→同花顺 seed 被贴东财板,
+  经 resonance 评分分与 recordNetInflow 还会污染分数/净流入。
+- 修复:`buildStrategyMainlinesLiveImpl` 在贴 catalog 前按 `activeBoardZsTypes` 过滤
+  (`catalogBoardsForSource`);单源 [6]/[5] 只贴本源,默认合并 [6,5] 仍两源(看板/诊断/合并路径不变)。
+
+Files:
+- `kpl-stats-server.js`(catalog 贴板前按来源过滤)
+- `tests/strategy-source-catalog-boards.test.js`(新增:贯穿真实 attach 复现缺陷 + 证明修复 + 静态断言)
+
+Validated:
+- `node --check` 通过;全仓 37 个测试文件全绿。
+- 生产实证(只读 `/api/ai/strategy-live?day=2026-07-16`):修复前同花顺 AI手机/MLOps boardCount=2 含 zsType6 板;
+  其余核心口径本来就干净(netInflowZsType 同花顺全 5、东财全 6,KPL 全无,两源第1主线不同=算力 vs 智能音箱)。
+
+Deployment:
+- 未部署。#88 已上生产,本修复需另经受保护工作流部署 `kpl-stats-server.js` 并重启主服务。
+- 影响范围:仅两套独立预测(单源)路径;合并/诊断/看板口径不变。
+
+Notes for next agent:
+- 部署后在线复核同花顺 AI手机/MLOps 的 boardCount 应只计同花顺板(不再含 zsType6);两源第1主线不受影响。
