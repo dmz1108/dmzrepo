@@ -5999,3 +5999,27 @@ Deployment:
 Notes for next agent:
 - 清单合入 `main` 后，使用 `ops/production/deploy-from-main.ps1` 和该清单运行受保护生产流程。
 - 部署后检查主服务健康，并确认同花顺单源结果不再包含 `zsType=6` 的共振板，东财单源不再包含 `zsType=5`。
+
+## 2026-07-16 - Codex - PR #110 跨源过滤已部署并验收
+
+Changed:
+- PR #110 与部署清单 PR #112 均已合并至 `main`；受保护生产流程按精确提交 `9bca6f0b570e8012d2cf9704052169d4bc267ab5` 完成发布。
+- 本次只更新主服务 `kpl-stats-server.js`，修复东财、同花顺两套独立预测的共振板、板块数量、分数和净流入跨来源污染。
+
+Files:
+- 云端 `C:\\PandaDashboard\\kpl-stats-server.js`
+- 云端两份运维日志（部署器自动追加）
+- Git `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 工作流 `29477564908` 成功，主服务重启完成且返回 `health=ok`；备份目录为 `C:\\PandaDashboard\\_deploy-backups\\github-29477564908-1`。
+- 公网 `/health`、`/kpl` 与主页均为 HTTP 200。
+- 线上 2026-07-16 独立预测复核：东财 5 条主线、3 个共振板，错误来源板 0、错误净流入来源 0；同花顺 4 条主线、3 个共振板，错误来源板 0、错误净流入来源 0。
+
+Deployment:
+- 工作流：`https://github.com/dmz1108/dmzrepo/actions/runs/29477564908`；`restart=main`。
+- 未修改数据库、前端、娱乐服务、Caddy、公司端 L2 worker 或运行时业务数据。
+
+Notes for next agent:
+- PR #110 已完成代码审查、合并、生产发布与线上业务验收，无需再次部署。
+- PR #111 是独立的 L2 补全任务，仍按其自己的评审结论处理，不属于本次发布。
