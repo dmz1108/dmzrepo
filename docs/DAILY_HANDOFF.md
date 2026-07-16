@@ -5798,3 +5798,25 @@ Notes for next agent:
 - PR88 合并后，需用新 manifest 从最新 `main` 一次部署 `kpl-stats-server.js`、`local-l2-task-queue.js`、`kpl-dashboard_17_apple.html` 并重启主服务；现有 manifest 均不完整，不能复用。
 - 部署后重点验证：策略主线两栏、两源回看、东财空/同花顺有预测边界、L2 完整任务恢复 `done`、仅当天残缺任务可续扫且历史残缺任务不重新派发。
 - 同花顺明星/龙头收益明细尚未分源返回；如后续扩展必须读取同花顺自己的预测块与收益，不能借东财兼容值补齐。
+
+## 2026-07-15 - Codex - 准备 PR103 + PR88 受保护生产部署清单
+
+Changed:
+- PR103 与 PR88 已按顺序合入 `main`：PR103=`d27a350`，PR88=`71d9919`。
+- 新增单次生产部署 manifest，明确只发布 `kpl-stats-server.js`、`local-l2-task-queue.js`、`kpl-dashboard_17_apple.html`，重启目标仅为 `main`。
+- 未复用旧 manifest，避免漏发 PR103 的队列恢复修复或 PR88 的双来源后端/前端改动。
+
+Files:
+- `ops/production/manifests/pr103-pr88-strategy-20260715.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- manifest 为合法 JSON；3 个 source 均为 Git 跟踪的普通文件，destination 无绝对路径、父目录跳转或重复项；`restart=main` 在受保护脚本允许列表内。
+- `production-ops.yml` 将从触发时锁定的最新 `main` 归档 manifest 与 3 个源码文件，部署前校验两个 JavaScript 文件语法，部署后校验文件哈希和本机主服务健康；失败自动回滚。
+
+Deployment:
+- 本条仅准备清单，尚未触发生产工作流、未修改生产文件或数据、未重启服务。
+
+Notes for next agent:
+- 清单合入 `main` 后重新计算 `ops/production/deploy-from-main.ps1` 的 SHA-256，再以 `RUN_PRODUCTION` 触发受保护工作流；不得沿用本地或旧提交的哈希。
+- 工作流完成后验证公网健康、主页/行情/后台、两源主线与回看、L2 完整/残缺/历史任务恢复边界，并把实际 run URL、部署提交、备份目录、重启与验证结果再次写入 Git handoff。
