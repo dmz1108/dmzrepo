@@ -6098,3 +6098,27 @@ Deployment:
 Notes for next agent:
 - 清单进入 `main` 后通过受保护生产工作流发布。
 - 部署后核对主服务健康，并确认满足“净流入≥5亿且板内涨停≥2”的未知涨停板块可进入 L2 自动扫描，任一门槛不满足时不派发。
+
+## 2026-07-16 - Codex - PR #111 板级涨停回填已部署
+
+Changed:
+- PR #111 已合并（`563714a2944b83278d170744c11b6f3b71109898`），部署清单随 `main` 提交 `3d8c9991fa7e7c45faf4a53f1a469698bf72b034` 发布。
+- 本次只更新主服务 `kpl-stats-server.js`：未知板级涨停数由成分股与当日涨停底库回填；L2 自动扫描严格执行“净流入≥5亿且板内涨停≥2”，无高资金或补选豁免。
+
+Files:
+- 云端 `C:\\PandaDashboard\\kpl-stats-server.js`
+- 云端两份运维日志（部署器自动追加）
+- Git `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 工作流 `29479237471` 成功，主服务重启完成且返回 `health=ok`；备份目录为 `C:\\PandaDashboard\\_deploy-backups\\github-29479237471-1`。
+- 公网 `/health`、`/kpl` 与主页均为 HTTP 200；`/api/strategy-mainlines?day=2026-07-16` 返回 200。
+- 部署时市场已经收盘，当前结果中没有同时满足“净流入≥5亿且板内涨停≥2”的新候选，因此本次不能制造盘中任务来冒充实盘验收；自动派发留待下一交易时段按真实行情确认。
+
+Deployment:
+- 工作流：`https://github.com/dmz1108/dmzrepo/actions/runs/29479237471`；`restart=main`。
+- 未修改数据库、前端、娱乐服务、Caddy、公司端 L2 worker 或运行时业务数据。
+
+Notes for next agent:
+- PR #111 已完成审查、合并和生产发布，无需再次部署。
+- 下一交易时段只需做真实验收：合格板应出现 L2 queued/running/done；低于净流入或涨停门槛的板不得派发。
