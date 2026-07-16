@@ -6076,3 +6076,23 @@ Validated:
 
 Notes for next agent:
 - 与本分支的板级涨停回填同属 PR #111,一起复核部署;门槛金额线 5亿/涨停 2 保持 Owner 原定值。
+
+## 2026-07-16 - Claude - 准备 PR #111 生产部署清单
+
+Changed:
+- PR #111(板级涨停数成份股精确回填 + 扫描门槛去豁免 + NaN 形态修复)已合并 main(merge 563714a)。
+- 新增单次部署 manifest:仅发布 kpl-stats-server.js,restart=main。#110 已由 #112/#113 部署,本次不重复发前端。
+
+Files:
+- ops/production/manifests/strategy-zt-backfill-gate-20260716.json
+- docs/DAILY_HANDOFF.md
+
+Validated:
+- manifest 为合法 JSON;source 为 Git 跟踪普通文件;restart=main 在受保护脚本允许列表内。
+
+Deployment:
+- 本条仅准备清单,未触发工作流、未改生产。
+
+Notes for next agent:
+- 清单合入 main 后按流程重算 deploy-from-main.ps1 SHA-256,以 RUN_PRODUCTION 触发受保护工作流(Owner 审批)。
+- 部署后验证:盘中满足「净流入≥5亿 且 涨停≥2」的板产生 L2 任务(如今日医药 9.67亿场景);低于任一门槛不派发;99亿但涨停<2 不派发(直通已移除);主线卡不再全员「待验证」。
