@@ -6391,3 +6391,32 @@ Validated:
 
 Deployment:
 - 本条提交时尚未执行；部署只更新 `kpl-stats-server.js` 并重启主服务。
+
+## 2026-07-16 - Codex - 同花顺 DDE 与严格 QI 主线门槛已部署
+
+Changed:
+- PR #117、#123 及云端直连补丁 PR #126 均已合并到 main 并完成生产发布。
+- 正式主线从 2026-07-16 起必须有 L2 预期明星或明星确认；盘中出现过的预期明星当日资格保留，收盘未兑现会明确标记。
+- 同花顺策略资金使用板块 DDE 大单金额 `527198`；东财仍使用超大单净流入，历史快照与今日实时看板不改口径。
+
+Files:
+- 云端 `C:\PandaDashboard\kpl-stats-server.js`
+- 云端 `C:\PandaDashboard\kpl-dashboard_17_apple.html`
+- 云端运维日志（部署器自动追加）
+- Git `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 初次原子部署工作流 `29503523748` 成功，主服务健康；备份 `C:\PandaDashboard\_deploy-backups\github-29503523748-1`。
+- DDE 直连补丁工作流 `29505412388` 成功，主服务健康；备份 `C:\PandaDashboard\_deploy-backups\github-29505412388-1`。
+- 云端后端与 HTML 的 SHA-256 均和获批 main 文件一致。
+- 公网 `/health` 返回 `ok=true`；2026-07-16 正式策略接口返回 0 条并明确 `no-l2-qualified-mainline`，符合当日没有 L2 明星证据的事实。
+- 2026-07-15 历史接口仍保留 6 条旧口径主线，证明实施日前历史没有被倒溯清空。
+- 同花顺策略链“短剧游戏”资金为 `1,891,366,300` 元，与同花顺 raw `527198` 完全一致；接口总耗时约 `0.236s`，修复前为约 `8.2s` 且回退 `zjjlr=3,313,000,000` 元。
+
+Deployment:
+- 工作流：`https://github.com/dmz1108/dmzrepo/actions/runs/29503523748`、`https://github.com/dmz1108/dmzrepo/actions/runs/29505412388`。
+- 两次均只重启主服务；未修改业务数据库、冻结快照、公司端 L2 worker、Caddy 或娱乐服务。
+
+Notes for next agent:
+- 下一交易日抽查同花顺主线卡 `netInflowMetric=ths-dde-big-order-amount`，并观察 DDE 口径放大后自动 L2 派发密度；现有限流不变。
+- Git 记录与云端两份运维日志均已补齐，不需要手工再写云端日志。
