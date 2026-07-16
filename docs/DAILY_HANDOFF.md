@@ -6138,6 +6138,7 @@ Files:
 - `tests/strategy-eastmoney-superlarge-flow.test.js`
 - `tests/strategy-kpl-exclusion.test.js`
 - `tests/strategy-source-pairs.test.js`
+- `ops/production/manifests/strategy-eastmoney-superlarge-flow-20260716.json`
 - `docs/DAILY_HANDOFF.md`
 
 Validated:
