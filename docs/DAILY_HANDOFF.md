@@ -6209,3 +6209,30 @@ Deployment:
 Notes for next agent:
 - 生产发布需同时部署 `kpl-stats-server.js` 与 `kpl-dashboard_17_apple.html` 并重启主服务。
 - 下一交易时段验收六态迁移：不达门槛→未达扫描条件；queued→等待公司端；running→扫描中；done 但相关股覆盖不足→覆盖不足；done 且覆盖达标无明星→L2未见明星；出现 expected/confirmed 明星→QI主线。
+
+## 2026-07-16 - Codex - 策略卡 L2 六态已部署
+
+Changed:
+- PR #118 已合并并发布后端六态字段与策略页六态徽章；PR #120 补充旧冻结快照的门槛兼容判断。
+- 生产主服务与行情页已更新；旧冻结快照保持只读，前端根据已有板块指标区分“未达扫描条件”和“覆盖不足”。
+
+Files:
+- 云端 `C:\PandaDashboard\kpl-stats-server.js`
+- 云端 `C:\PandaDashboard\kpl-dashboard_17_apple.html`
+- 云端两份运维日志（部署器自动追加）
+- Git `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 功能发布工作流 `29489400735` 成功，主服务重启并返回 `health=ok`；备份 `C:\PandaDashboard\_deploy-backups\github-29489400735-1`。
+- 旧快照前端兼容工作流 `29490357804` 成功，仅更新静态行情页、未重启；备份 `C:\PandaDashboard\_deploy-backups\github-29490357804-1`。
+- 公网 `/health` 返回正常；`/kpl` 已包含六种状态文案和 `legacyL2Eligible` 兼容逻辑。
+- 发布前本地 `node --check`、行情页内联脚本编译及全仓 39 个测试文件全部通过。
+
+Deployment:
+- 功能工作流：`https://github.com/dmz1108/dmzrepo/actions/runs/29489400735`，`restart=main`。
+- 兼容工作流：`https://github.com/dmz1108/dmzrepo/actions/runs/29490357804`，`restart=none`。
+- 未修改业务数据库、历史快照、Caddy、娱乐服务或公司端 L2 worker。
+
+Notes for next agent:
+- 7 月 16 日冻结快照早于本次部署，因此接口本身没有新六态字段；页面已用只读兼容逻辑正确显示，不要回写该快照。
+- 下一个交易日的新实时响应应原生带 `l2ScanState/l2ScanDetail`；按六态迁移表做一次实盘抽查即可。
