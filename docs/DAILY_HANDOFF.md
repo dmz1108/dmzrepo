@@ -6477,3 +6477,27 @@ Deployment:
 Notes for next agent:
 - 本次只优化展示层；不要把已移除的 L2 五档逐股展开卡重新加回扫描历史，详细金额仍由重点关注的正式扫描视图承担。
 - 主线卡的资金标签必须继续跟随来源口径：同花顺 DDE、东财超大单或旧主力、KPL 净流入，不能合并成无来源的“净流入”。
+
+## 2026-07-16 - Codex - 今日策略视觉优化已部署
+
+Changed:
+- PR #128 已合并到 `main`，静态策略页视觉优化已通过受保护生产流程发布。
+- 线上今日主线卡已采用新的指标层级和明星状态表达，L2 扫描历史已改为不可展开的紧凑记录。
+
+Files:
+- 云端 `C:\PandaDashboard\kpl-dashboard_17_apple.html`
+- 云端两份运维日志（部署器自动追加）
+- Git `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 生产工作流 `29513525185` 成功，批准提交为 `8f53019a1e359a7f778a3bc2287cb6b3a8202b93`。
+- 公网 `/health` 返回 `ok=true`，`https://market.dreamerqi.com/?view=strategy` 返回 HTTP 200。
+- 线上页面包含新的 L2 紧凑记录、明星信号和来源资金标签；线上 HTML SHA-256 `8ac96c314adc4c9e88990c7964054d33a5cbaa6d86c963867d1c915e2e9421f6`，与获批 `main` 文件一致。
+
+Deployment:
+- 仅更新静态 `kpl-dashboard_17_apple.html`，未重启任何服务。
+- 自动备份：`C:\PandaDashboard\_deploy-backups\github-29513525185-1`。
+- 工作流：`https://github.com/dmz1108/dmzrepo/actions/runs/29513525185`。
+
+Notes for next agent:
+- 本次上线已完成且云端与 `main` 一致，不需要再次部署或重启。
