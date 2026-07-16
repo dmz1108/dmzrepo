@@ -20979,7 +20979,7 @@ async function runAutoThsConceptSyncIfDue() {
 // ====================== 策略页后端(挂载 strategy-backend.js) ======================
 const { createStrategyBackend } = require('./strategy-backend');
 const { createL2FocusScanner } = require('./l2-focus-scanner');
-const { createLocalL2TaskQueue } = require('./local-l2-task-queue');
+const { createLocalL2TaskQueue, isExcludedL2StockCode } = require('./local-l2-task-queue');
 
 function readLocalL2WorkerConfig() {
   let fileConfig = {};
@@ -22741,7 +22741,9 @@ function strategyMainlineDeriveL2Status(l2Stars, hasQiStar, themeCodes) {
   if (!l2Stars || !l2Stars.completedPlates || !l2Stars.completedPlates.size) return 'unscanned';
   // 相关板块仍有排队/运行中的任务:结论未定,不判负(评审二修)
   if (l2Stars.pendingPlates && l2Stars.pendingPlates.size) return 'unscanned';
-  const codes = [...(themeCodes || [])];
+  // L2 worker 明确排除科创板及北交所；这些代码不能进入覆盖率分母，
+  // 否则“可扫描股票已全部覆盖”的小主题仍会永久停在 unscanned。
+  const codes = [...(themeCodes || [])].filter(code => !isExcludedL2StockCode(code));
   if (!codes.length) return 'unscanned';
   // 判负覆盖只认 done 任务产生的代码,running 分批结果不给判负凑数(评审二修)
   const doneCovered = l2Stars.completedCoveredCodes || new Set();

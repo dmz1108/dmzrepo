@@ -3,6 +3,7 @@ const fsReal = require('fs');
 const pathReal = require('path');
 const src = fsReal.readFileSync(pathReal.join(__dirname, '..', 'kpl-stats-server.js'), 'utf8');
 const html = fsReal.readFileSync(pathReal.join(__dirname, '..', 'kpl-dashboard_17_apple.html'), 'utf8');
+const { isExcludedL2StockCode } = require(pathReal.join(__dirname, '..', 'local-l2-task-queue.js'));
 
 function extractFn(name) {
   const sig = new RegExp(`(?:async )?function ${name}\\(`);
