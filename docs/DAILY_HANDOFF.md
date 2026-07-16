@@ -6340,6 +6340,7 @@ Validated:
 Deployment:
 - 生产运行时数据已更新；未部署应用代码，未重启任何服务。
 - 回退备份：`C:\PandaDashboard\backups\tgb-hunan-manual-20260716-20260716-213559`，包含写入前正式文件（如存在）、重折前综合主因库、raw manifest、官方图片和两份云端日志。
+- Git 交接 PR：`https://github.com/dmz1108/dmzrepo/pull/124`。
 
 Notes for next agent:
 - 2026-07-16 TGB 正式来源已完成官方证据、双遍人工转录、终盘池对账、备份、写入、综合主因重折与公网验收，无需再次覆盖或重启服务。
