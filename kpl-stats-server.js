@@ -21442,6 +21442,61 @@ const STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT = 2;
 // 门槛无豁免——净流入≥5亿 且 涨停≥2;涨停数缺失由成份股精确回填解决,不再用金额直通绕过涨停腿。
 const STRATEGY_MAINLINE_AUTO_SCAN_LIMIT_STOCKS = 50;
 const strategyMainlineAutoScanState = { windowStart: 0, dispatched: 0, lastJobId: '' };
+function strategyMainlineBoardAutoScanEligibility(board, options = {}) {
+  const plateId = String(board?.plateId || '');
+  const netInflow = numOrNull(board?.netInflow);
+  const zt = numOrNull(board?.zt ?? board?.ztCount);
+  const hasMembers = Array.isArray(board?.memberRows) && board.memberRows.length > 0;
+  const requireMembers = options.requireMembers === true;
+  const inflowPass = netInflow != null && netInflow >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW;
+  const ztPass = zt != null && zt >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT;
+  return {
+    eligible: !!plateId && inflowPass && ztPass && (!requireMembers || hasMembers),
+    plateId,
+    boardName: String(board?.name || ''),
+    netInflow,
+    zt,
+    inflowPass,
+    ztPass,
+    hasMembers,
+  };
+}
+function strategyMainlineAutoScanEligibilitySummary(boards) {
+  const rows = (Array.isArray(boards) ? boards : [])
+    .map(board => strategyMainlineBoardAutoScanEligibility(board))
+    .filter(row => row.plateId);
+  const eligibleRows = rows.filter(row => row.eligible);
+  const dispatchableRows = eligibleRows.filter(row => row.hasMembers);
+  const inflows = rows.map(row => row.netInflow).filter(Number.isFinite);
+  const ztCounts = rows.map(row => row.zt).filter(Number.isFinite);
+  return {
+    eligible: eligibleRows.length > 0,
+    dispatchable: dispatchableRows.length > 0,
+    qualifyingCount: eligibleRows.length,
+    qualifyingPlateIds: eligibleRows.map(row => row.plateId).slice(0, 8),
+    qualifyingBoards: eligibleRows.map(row => row.boardName).filter(Boolean).slice(0, 8),
+    maxNetInflow: inflows.length ? Math.max(...inflows) : null,
+    maxZt: ztCounts.length ? Math.max(...ztCounts) : null,
+  };
+}
+function strategyMainlineMergeAutoScanEligibility(items) {
+  const summaries = (Array.isArray(items) ? items : [])
+    .map(item => item?.autoScanEligibility)
+    .filter(Boolean);
+  const qualifyingPlateIds = [...new Set(summaries.flatMap(summary => summary.qualifyingPlateIds || []))].slice(0, 8);
+  const qualifyingBoards = [...new Set(summaries.flatMap(summary => summary.qualifyingBoards || []))].slice(0, 8);
+  const inflows = summaries.map(summary => summary.maxNetInflow).filter(Number.isFinite);
+  const ztCounts = summaries.map(summary => summary.maxZt).filter(Number.isFinite);
+  return {
+    eligible: summaries.some(summary => summary.eligible),
+    dispatchable: summaries.some(summary => summary.dispatchable),
+    qualifyingCount: qualifyingPlateIds.length,
+    qualifyingPlateIds,
+    qualifyingBoards,
+    maxNetInflow: inflows.length ? Math.max(...inflows) : null,
+    maxZt: ztCounts.length ? Math.max(...ztCounts) : null,
+  };
+}
 function strategyResonanceTopicKey(raw) {
   return consensusKey(raw) || canonicalTopicName(raw) || String(raw || '').replace(/概念$/u, '').trim();
 }
@@ -21930,6 +21985,7 @@ function strategyMergeMainlineFamilies(rawMainlines) {
       boardCount,
       resonanceStockCount,
       resonanceBoards,
+      autoScanEligibility: strategyMainlineMergeAutoScanEligibility(sorted),
       mainLeader: leaders[0] || null,
       leaders,
     });
@@ -22767,6 +22823,9 @@ function strategyMainlineCollectStars(boards, day, options = {}) {
   const scannedPlates = new Set();         // 当日有 L2 扫描结果的板块(含运行中分批回传)
   const completedPlates = new Set();       // 扫描已完成(job done)的板块
   const pendingPlates = new Set();         // 仍在排队/运行的板块——存在即不允许判负(结论未定)
+  const queuedPlates = new Set();          // 已派发但公司端尚未领取
+  const runningPlates = new Set();         // 公司端正在计算
+  const errorPlates = new Set();           // 最近相关任务失败,等待自动重试
   const coveredCodes = new Set();          // 全部结果行覆盖到的股票(含 running 分批,仅供观测)
   const completedCoveredCodes = new Set(); // 仅 done 任务结果覆盖的股票——判负只认这份(评审二修)
   const boardRows = Array.isArray(boards) ? boards : [];
@@ -22820,6 +22879,9 @@ function strategyMainlineCollectStars(boards, day, options = {}) {
     const plateId = String(job?.plateId || '');
     const jobStatus = String(job.status || '');
     if (jobStatus === 'queued' || jobStatus === 'running') pendingPlates.add(plateId);
+    if (jobStatus === 'queued') queuedPlates.add(plateId);
+    if (jobStatus === 'running') runningPlates.add(plateId);
+    if (jobStatus === 'error') errorPlates.add(plateId);
     if (!Array.isArray(job.results) || !job.results.length) continue;
     scannedPlates.add(plateId);
     const jobDone = jobStatus === 'done';
@@ -22839,7 +22901,17 @@ function strategyMainlineCollectStars(boards, day, options = {}) {
       });
     }
   }
-  return { byCode, scannedPlates, completedPlates, pendingPlates, coveredCodes, completedCoveredCodes };
+  return {
+    byCode,
+    scannedPlates,
+    completedPlates,
+    pendingPlates,
+    queuedPlates,
+    runningPlates,
+    errorPlates,
+    coveredCodes,
+    completedCoveredCodes,
+  };
 }
 
 // QI 三态推导(PR#18 评审修正):发现预期明星/明星确认 → 立即 QI;
@@ -22859,6 +22931,34 @@ function strategyMainlineDeriveL2Status(l2Stars, hasQiStar, themeCodes) {
   const covered = codes.filter(code => doneCovered.has(code));
   if (covered.length > 0 && covered.length >= Math.min(3, codes.length)) return 'scanned-no-star';
   return 'unscanned';
+}
+
+function strategyMainlineL2CoverageSummary(l2Stars, themeCodes) {
+  const codes = [...(themeCodes || [])].filter(code => !isExcludedL2StockCode(code));
+  const doneCovered = l2Stars?.completedCoveredCodes || new Set();
+  const coveredCount = codes.filter(code => doneCovered.has(code)).length;
+  const requiredCount = codes.length ? Math.min(3, codes.length) : 0;
+  return {
+    eligibleCodeCount: codes.length,
+    coveredCodeCount: coveredCount,
+    requiredCount,
+    sufficient: requiredCount > 0 && coveredCount >= requiredCount,
+  };
+}
+
+// 页面解释六态不参与主线评分和硬闸。旧 l2VerificationStatus 继续作为正式判定口径，
+// 这里仅拆开“为什么还没得到 L2 结论”，避免所有情况都显示成含糊的“待验证”。
+function strategyMainlineDeriveL2ScanState(l2Stars, hasQiStar, themeCodes, autoScanEligibility) {
+  if (hasQiStar) return 'qi';
+  if (l2Stars?.runningPlates?.size) return 'running';
+  if (l2Stars?.queuedPlates?.size) return 'waiting-worker';
+  const coverage = strategyMainlineL2CoverageSummary(l2Stars, themeCodes);
+  if (l2Stars?.completedPlates?.size) {
+    return coverage.sufficient ? 'scanned-no-star' : 'coverage-insufficient';
+  }
+  if (l2Stars?.errorPlates?.size) return 'coverage-insufficient';
+  if (autoScanEligibility?.eligible && autoScanEligibility?.dispatchable === false) return 'coverage-insufficient';
+  return autoScanEligibility?.eligible ? 'waiting-worker' : 'not-eligible';
 }
 
 // 自动派发 L2 扫描：净流入≥5亿 且 板内涨停≥2(Owner 2026-07-16:无任何豁免);5 分钟窗口最多 2 个、串行、当天扫过不重复、无目标不扫。
@@ -22944,10 +23044,7 @@ function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase, prior
     // (strategyMainlineBackfillBoardZt)解决,而非放宽门槛。补选板同样按此门槛,仅保留派发优先级。
     const bigGainOf = b => (Array.isArray(b?.memberRows) ? b.memberRows.filter(r => Number(r?.gain) >= STRATEGY_MAINLINE_BIG_GAIN_PCT).length : 0);
     const candidates = (Array.isArray(boards) ? boards : [])
-      .filter(b => String(b?.plateId || '') &&
-        Number(b?.netInflow) >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW &&
-        Number(b?.zt) >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT &&
-        Array.isArray(b?.memberRows) && b.memberRows.length)
+      .filter(b => strategyMainlineBoardAutoScanEligibility(b, { requireMembers: true }).eligible)
       .sort((a, b) =>
         ((a?.scanChannel === 'supplement') ? 0 : 1) - ((b?.scanChannel === 'supplement') ? 0 : 1) ||
         (Number(b?.netInflow) || 0) - (Number(a?.netInflow) || 0) ||
@@ -23313,6 +23410,7 @@ function strategyPredictCandidateRecord(m) {
     certainty: m.certainty?.label || '',
     isNewTheme: !!m.isNewTheme,
     l2VerificationStatus: m.l2VerificationStatus || '',
+    l2ScanState: m.l2ScanState || '',
     lowConfidence: null,                   // 低置信通道未上线,先记 null 占位(false=成熟,true=低置信)
     netInflow: isFiniteNumeric(m.netInflow) ? Number(m.netInflow) : null,
     boardCount: Number(m.boardCount) || 0,
@@ -23399,6 +23497,7 @@ function strategyPredictPickTop(m) {
     score: m.score ?? null, predictScore: m.predictScore ?? null,
     stage: m.stage?.label || '', certainty: m.certainty?.label || '',
     l2VerificationStatus: m.l2VerificationStatus || '',
+    l2ScanState: m.l2ScanState || '',
     leader: m.mainLeader ? { code: m.mainLeader.code, name: m.mainLeader.name } : null,
     // 保存预测时点前两名龙头候选。leader 继续保留第一名以兼容旧记录/旧页面。
     leaders: (Array.isArray(m.leaders) && m.leaders.length ? m.leaders : (m.mainLeader ? [m.mainLeader] : []))
@@ -24320,6 +24419,26 @@ function strategyMainlineAugmentPrediction(item, isToday, day, recordTrend = tru
   // scanned-no-star=相关扫描完成且无合格明星,会在最终主线硬闸中排除。
   const hasQiStar = starStocks.some(star => star.level === 'confirmed' || star.level === 'expected');
   const l2VerificationStatus = strategyMainlineDeriveL2Status(l2Stars, hasQiStar, themeCodes);
+  const autoScanEligibility = item?.autoScanEligibility || strategyMainlineAutoScanEligibilitySummary(item?.resonanceBoards);
+  const l2Coverage = strategyMainlineL2CoverageSummary(l2Stars, themeCodes);
+  const l2ScanState = strategyMainlineDeriveL2ScanState(l2Stars, hasQiStar, themeCodes, autoScanEligibility);
+  const l2ScanDetail = {
+    eligible: !!autoScanEligibility?.eligible,
+    dispatchable: autoScanEligibility?.dispatchable !== false,
+    minNetInflow: STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW,
+    minZt: STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT,
+    maxNetInflow: numOrNull(autoScanEligibility?.maxNetInflow),
+    maxZt: numOrNull(autoScanEligibility?.maxZt),
+    qualifyingCount: Number(autoScanEligibility?.qualifyingCount) || 0,
+    qualifyingBoards: Array.isArray(autoScanEligibility?.qualifyingBoards) ? autoScanEligibility.qualifyingBoards.slice(0, 5) : [],
+    queuedCount: l2Stars?.queuedPlates?.size || 0,
+    runningCount: l2Stars?.runningPlates?.size || 0,
+    completedCount: l2Stars?.completedPlates?.size || 0,
+    errorCount: l2Stars?.errorPlates?.size || 0,
+    eligibleCodeCount: l2Coverage.eligibleCodeCount,
+    coveredCodeCount: l2Coverage.coveredCodeCount,
+    requiredCount: l2Coverage.requiredCount,
+  };
   if (starStocks.length) {
     scoreParts.star = Number(Math.min(40, starStocks.reduce((sum, star) => sum + (star.level === 'confirmed' ? 15 : 8), 0)).toFixed(1));
   }
@@ -24370,6 +24489,8 @@ function strategyMainlineAugmentPrediction(item, isToday, day, recordTrend = tru
     starStocks,
     isNewTheme,
     l2VerificationStatus,
+    l2ScanState,
+    l2ScanDetail,
     certainty,
     stage,
     explain: explain.slice(0, 9),
@@ -25280,6 +25401,7 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
       gainBaseDay: gainLeaders.baseDay || null,
       boardCount,
       resonanceStockCount,
+      autoScanEligibility: strategyMainlineAutoScanEligibilitySummary(boards),
       resonanceBoards: boards.slice(0, 5).map(b => ({
         name: b.name,
         plateId: String(b.plateId || ''),

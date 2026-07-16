@@ -82,6 +82,11 @@ const STRATEGY_MAINLINE_AUTO_SCAN_LIMIT_STOCKS = 50;
 const strategyMainlineAutoScanState = { windowStart: 0, dispatched: 0, lastJobId: '' };
 const strategyMainlineFamilyInfo = (x) => ({ key: 'group:' + String(x && x.theme || '') });
 const strategyMainlineScanPriorityCodes = () => [];
+eval(extractFn('numOrNull'));
+eval(extractFn('strategyMainlineBoardAutoScanEligibility'));
+eval(extractFn('strategyMainlineAutoScanEligibilitySummary'));
+const noMemberSummary = strategyMainlineAutoScanEligibilitySummary([{ plateId: 'BKNOM', name: '成分未就绪', netInflow: 6e8, zt: 2, memberRows: [] }]);
+A(noMemberSummary.eligible === true && noMemberSummary.dispatchable === false, '门槛达标但成分未就绪:资格保留,执行前置条件明确不足');
 const dispatched = [];
 const localL2TaskQueue = {
   configured: () => true, get: () => null, latest: () => null,

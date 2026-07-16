@@ -1,4 +1,4 @@
-// QI 主线三态测试(node tests/qi-mainline-states.test.js)——Shared Decision v1 第3条实施验证。
+// QI 主线判定与页面六态测试(node tests/qi-mainline-states.test.js)。
 const fsReal = require('fs');
 const pathReal = require('path');
 const src = fsReal.readFileSync(pathReal.join(__dirname, '..', 'kpl-stats-server.js'), 'utf8');
@@ -33,17 +33,19 @@ const mid = strategyMainlineCertainty({ count: 1, bigGainCount: 3, nearLimitCoun
 A(mid.level !== 'high', '中等及以下不再额外降(只封顶不叠罚)');
 
 // 2. 接线静态断言(后端)
-A(src.includes('return { byCode, scannedPlates, completedPlates, pendingPlates, coveredCodes, completedCoveredCodes };'), 'collectStars 返回扫描/完成/待定/覆盖/done覆盖集合');
+A(src.includes('queuedPlates,') && src.includes('runningPlates,') && src.includes('errorPlates,'), 'collectStars 返回排队/运行/失败细分集合');
 A(src.includes('strategyMainlineDeriveL2Status(l2Stars, hasQiStar, themeCodes)'), '三态推导走独立函数(含完成与覆盖门槛)');
+A(src.includes('strategyMainlineDeriveL2ScanState(l2Stars, hasQiStar, themeCodes, autoScanEligibility)'), '页面六态走独立推导函数,不改变正式三态');
 A(src.includes("star.level === 'confirmed' || star.level === 'expected'"), 'QI 判定=预期明星或明星确认(L2 全方位符合)');
 A(src.includes("l2VerificationStatus: m.l2VerificationStatus || ''"), 'P1-C 预测记录携带 QI 状态');
+A(src.includes("l2ScanState: m.l2ScanState || ''"), '预测记录携带页面六态,支持回看解释');
 A(src.includes("scannedNoStar: l2VerificationStatus === 'scanned-no-star'"), 'certainty 接收已扫无明星标志');
 A(!src.includes('isConfirmedMainline = l2') && src.includes('const l2VerificationStatus'), '独立字段,不复用 isConfirmedMainline');
 A(src.includes('const l2Gate = strategyMainlineApplyL2StarGate(inflowGate.kept);')
   && src.includes("rule: 'completed-scan-requires-expected-or-confirmed-star'"), '最终主线接入 L2 明星硬闸并返回排除原因');
 
 // 3. 接线静态断言(前端)
-A(html.includes('QI 主线') && html.includes('L2 未见明星') && html.includes('L2 待验证'), '前端三态徽章齐备');
+A(['未达扫描条件','等待公司端','扫描中','覆盖不足','L2未见明星','QI主线'].every(label => html.includes(label)), '前端六态徽章齐备');
 A(html.includes('${qiBadge}${confirmedBadge}'), 'QI 徽章与 Owner 确认徽章并列独立');
 A(html.includes(".filter(s => s.level === 'confirmed' || s.level === 'expected').slice(0, 3)"), '明星行只显确认/预期,至多3只');
 A(!html.includes('>潜力</span>'), '潜力行已退役(Owner 定稿:预期明星取代)');
@@ -58,9 +60,12 @@ A(ok, '前端内联脚本可编译');
 
 // 5. 评审修正:三态推导行为测试(分批回传不判负/完成+覆盖才判负/预期明星立即QI)
 eval(extractFn('strategyMainlineDeriveL2Status'));
-const mk = (completed, covered, pending = [], runningCovered = []) => ({
+const mk = (completed, covered, pending = [], runningCovered = [], queue = [], running = [], errors = []) => ({
   completedPlates: new Set(completed),
   pendingPlates: new Set(pending),
+  queuedPlates: new Set(queue),
+  runningPlates: new Set(running),
+  errorPlates: new Set(errors),
   completedCoveredCodes: new Set(covered),                    // done 任务覆盖
   coveredCodes: new Set([...covered, ...runningCovered]),     // 全部覆盖(含 running 分批)
   scannedPlates: new Set(completed.length ? completed : ['p1']),
@@ -79,6 +84,20 @@ A(strategyMainlineDeriveL2Status(mk(['p1'], ['A1'], ['p2'], ['A2', 'A3']), false
 A(strategyMainlineDeriveL2Status(mk(['p1'], ['A1', 'A2', 'A3'], ['p2'], []), false, theme5) === 'unscanned', 'done 覆盖已够但相关任务仍在运行:保持待验证');
 A(strategyMainlineDeriveL2Status(mk(['p1'], ['A1', 'A2', 'A3'], [], ['A4', 'A5']), false, theme5) === 'scanned-no-star', '无 pending 且 done 覆盖达标:可判负(历史 running 残留覆盖不影响)');
 A(strategyMainlineDeriveL2Status(mk(['p1'], ['A1'], [], ['A2', 'A3']), false, theme5) === 'unscanned', '无 pending 但 done 只覆盖1只(running 残留 A2/A3 不计):不判负');
+
+// 5b. 页面六态:不参与评分,只解释任务究竟停在哪一层。
+eval(extractFn('strategyMainlineL2CoverageSummary'));
+eval(extractFn('strategyMainlineDeriveL2ScanState'));
+const eligible = { eligible: true };
+const ineligible = { eligible: false };
+A(strategyMainlineDeriveL2ScanState(mk([], []), false, theme5, ineligible) === 'not-eligible', '未达5亿且2涨停门槛:未达扫描条件');
+A(strategyMainlineDeriveL2ScanState(mk([], []), false, theme5, eligible) === 'waiting-worker', '已达门槛但尚无任务:等待公司端');
+A(strategyMainlineDeriveL2ScanState(mk([], []), false, theme5, { eligible: true, dispatchable: false }) === 'coverage-insufficient', '门槛达标但成分股未取到:覆盖不足,不伪装成公司端排队');
+A(strategyMainlineDeriveL2ScanState(mk([], [], ['p1'], [], ['p1']), false, theme5, eligible) === 'waiting-worker', '任务 queued:等待公司端');
+A(strategyMainlineDeriveL2ScanState(mk([], [], ['p1'], [], [], ['p1']), false, theme5, eligible) === 'running', '任务 running:扫描中');
+A(strategyMainlineDeriveL2ScanState(mk(['p1'], ['A1']), false, theme5, eligible) === 'coverage-insufficient', '任务完成但覆盖不足:覆盖不足');
+A(strategyMainlineDeriveL2ScanState(mk(['p1'], ['A1', 'A2', 'A3']), false, theme5, eligible) === 'scanned-no-star', '任务完成且覆盖达标无明星:L2未见明星');
+A(strategyMainlineDeriveL2ScanState(mk([], []), true, theme5, eligible) === 'qi', '出现预期明星/明星确认:QI主线');
 
 // 6. Owner 规则:已完整扫描且无预期/确认明星的板块不能继续成为当日主线。
 eval(extractFn('strategyMainlineApplyL2StarGate'));

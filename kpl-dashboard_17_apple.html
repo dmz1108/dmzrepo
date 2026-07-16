@@ -11819,13 +11819,29 @@ function renderStrategyMainlinesHTML(d) {
       .map(s => `<span class="ml-stock ml-starstock${s.level === 'confirmed' ? ' confirmed' : ''}" title="${escapeHTML(`L2:主动比${s.ratios?.activeRatio ?? '-'} 被动比${s.ratios?.passiveRatio ?? '-'} 合计比${s.ratios?.supportRatio ?? '-'}` + starMaxBucketAdminInfo(s))}">⭐${leaderCodeSet.has(String(s.code || '')) ? '👑' : ''}${escapeHTML(s.name || s.code || '')}<i>${escapeHTML(s.label || '')} 主${s.ratios?.activeRatio ?? '-'}/被${s.ratios?.passiveRatio ?? '-'}</i></span>`)
       .join('');
     const starRow = starChips ? `<div class="ml-proof-row"><span class="ml-proof-lbl" title="纯当日L2数据判定:涨停前主动/被动比≥1.5=资金活跃,涨停后三比值2个≥2=明星确认;👑=同时是龙头">明星</span>${starChips}</div>` : '';
-    const qiBadge = m.l2VerificationStatus === 'qi'
-      ? `<span class="ml-confirmed" style="background:rgba(74,155,255,.16);color:#4a9bff;" title="QI 主线:已扫描且至少 1 只 L2 全方位符合的明星股(预期明星或明星确认)">QI 主线</span>`
+    const l2Detail = m.l2ScanDetail || {};
+    // 旧冻结快照没有 l2ScanState，只能知道“未得出结论”；保守归为覆盖不足，避免伪装成正在排队。
+    const l2State = m.l2ScanState || (m.l2VerificationStatus === 'qi'
+      ? 'qi'
       : (m.l2VerificationStatus === 'scanned-no-star'
-        ? `<span class="ml-newtheme" title="已完成 L2 扫描但未见预期明星/明星确认,确定性封顶中等">L2 未见明星</span>`
-        : (m.l2VerificationStatus === 'unscanned'
-          ? `<span class="ml-newtheme" style="opacity:.65;" title="尚未进行 L2 扫描,不作惩罚,待扫描验证">L2 待验证</span>`
-          : ''));
+        ? 'scanned-no-star'
+        : (m.l2VerificationStatus === 'unscanned' ? 'coverage-insufficient' : '')));
+    const l2Actual = [];
+    if (l2Detail.maxNetInflow != null) l2Actual.push(`最高净流入${fmtInflow(l2Detail.maxNetInflow)}`);
+    if (l2Detail.maxZt != null) l2Actual.push(`最多涨停${Number(l2Detail.maxZt)}只`);
+    const l2GateTip = `自动扫描门槛:单个板块净流入≥5亿元且板内涨停≥2只${l2Actual.length ? `；当前${l2Actual.join('、')}` : ''}`;
+    const l2CoverageTip = l2Detail.eligibleCodeCount != null
+      ? `；完成覆盖${Number(l2Detail.coveredCodeCount) || 0}/${Number(l2Detail.eligibleCodeCount) || 0}只相关可扫描股票，至少需要${Number(l2Detail.requiredCount) || 0}只`
+      : '';
+    const l2BadgeByState = {
+      'not-eligible': `<span class="ml-newtheme" style="background:rgba(148,163,184,.10);color:#94a3b8;" title="未达到自动扫描门槛，不会勉强派发。${escapeHTML(l2GateTip)}">未达扫描条件</span>`,
+      'waiting-worker': `<span class="ml-newtheme" style="background:rgba(245,158,11,.14);color:#d89a28;" title="已达到门槛，任务正在等待派发或等待公司端计算助手领取。${escapeHTML(l2GateTip)}">等待公司端</span>`,
+      'running': `<span class="ml-newtheme" style="background:rgba(59,130,246,.14);color:#4a9bff;" title="公司端计算助手正在扫描，完成前不下结论。">扫描中</span>`,
+      'coverage-insufficient': `<span class="ml-newtheme" style="background:rgba(249,115,22,.13);color:#ef8d32;" title="相关任务、成分股或旧快照证据不完整，暂不能判定无明星${escapeHTML(l2CoverageTip)}。">覆盖不足</span>`,
+      'scanned-no-star': `<span class="ml-newtheme" title="相关 L2 扫描已完成且覆盖达标，但未见预期明星/明星确认，不能成为 QI 主线。">L2未见明星</span>`,
+      'qi': `<span class="ml-confirmed" style="background:rgba(74,155,255,.16);color:#4a9bff;" title="已扫描且至少 1 只股票满足 L2 预期明星或明星确认标准。">QI主线</span>`,
+    };
+    const qiBadge = l2BadgeByState[l2State] || '';
     const confirmedBadge = m.isConfirmedMainline ? `<span class="ml-confirmed">✔ 当日主线</span>` : '';
     const confirmBtn = state.adminLoggedIn
       ? (m.isConfirmedMainline

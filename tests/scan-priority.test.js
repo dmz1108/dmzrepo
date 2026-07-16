@@ -84,7 +84,10 @@ eval(extractFn('strategyNormRealtimeStocks'));
   A(src.includes('strategyMainlineBoardThemeRelated(board?.name, t?.theme)'), '第三键题材过滤复用 strategyMainlineBoardThemeRelated');
 
   // 2. 板块级字典序与门槛(Owner 2026-07-16:净流入≥5亿 且 涨停≥2,无任何豁免)+ 调用点接线(静态断言)
-  A(src.includes('Number(b?.netInflow) >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW &&\n        Number(b?.zt) >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT'), '门槛=净流入≥5亿 且 涨停≥2(无豁免)');
+  A(src.includes('function strategyMainlineBoardAutoScanEligibility(board, options = {})')
+    && src.includes('netInflow >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW')
+    && src.includes('zt >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT'), '共享门槛=净流入≥5亿 且 涨停≥2(无豁免)');
+  A(src.includes('.filter(b => strategyMainlineBoardAutoScanEligibility(b, { requireMembers: true }).eligible)'), '自动派发复用共享门槛并要求真实成分股');
   A(!src.includes("b?.scanChannel === 'supplement' || Number(b?.zt)"), '补选豁免已移除(补选板同样过涨停门槛)');
   A(!src.includes('Number(b?.netInflow) >= STRATEGY_MAINLINE_AUTO_SCAN_HIGH_INFLOW_OVERRIDE'), '10亿高流入直通已移除');
   A(src.includes("((a?.scanChannel === 'supplement') ? 0 : 1) - ((b?.scanChannel === 'supplement') ? 0 : 1)"), '板块级第一键=补选来源(仅派发优先级,非门槛豁免)');
