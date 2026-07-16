@@ -5978,3 +5978,24 @@ Deployment:
 
 Notes for next agent:
 - 部署后在线复核同花顺 AI手机/MLOps 的 boardCount 应只计同花顺板(不再含 zsType6);两源第1主线不受影响。
+
+## 2026-07-16 - Codex - 准备 PR #110 跨源过滤生产部署
+
+Changed:
+- PR #110 已完成独立复核并合并至 `main`（`c996d874722b80418b8430170ade715d271f8759`）。
+- 新增受保护生产清单，只发布已审核的 `kpl-stats-server.js` 并仅重启主服务。
+
+Files:
+- `ops/production/manifests/pr110-source-catalog-filter-20260716.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- PR #110 合并前通过语法检查、来源过滤专项测试及全仓 37 个测试文件；`git diff --check` 通过。
+- 清单只包含主服务文件，未包含数据库、前端、娱乐服务、Caddy 或公司端 L2 worker 文件。
+
+Deployment:
+- 本条记录提交时尚未部署；未修改云端文件或运行时数据，未重启任何服务。
+
+Notes for next agent:
+- 清单合入 `main` 后，使用 `ops/production/deploy-from-main.ps1` 和该清单运行受保护生产流程。
+- 部署后检查主服务健康，并确认同花顺单源结果不再包含 `zsType=6` 的共振板，东财单源不再包含 `zsType=5`。
