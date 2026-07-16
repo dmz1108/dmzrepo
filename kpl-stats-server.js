@@ -22790,6 +22790,27 @@ function strategyMainlineScanPriorityCodes(board, priorByCode) {
     .slice(0, 20);
 }
 
+// 板级涨停数精确回填:仅当 board.zt 为 null(盘中实时榜常见)时,用成份股逐只判定——
+// ①成份 code ∈ 当日涨停底库(权威);②底库没有该股时,实时涨幅 ≥ limitUpThreshold(code,name) 兜底。
+// 两路 code 集合取并去重;标 ztSource='member-join' 供审计。已知 zt(快照/来源自带)绝不覆盖。
+function strategyMainlineBackfillBoardZt(boards, limitUpByCode) {
+  for (const b of (Array.isArray(boards) ? boards : [])) {
+    if (!b || b.zt != null) continue;
+    const rows = Array.isArray(b.memberRows) ? b.memberRows : [];
+    if (!rows.length) continue;
+    const ztCodes = new Set();
+    for (const r of rows) {
+      const code = normalizeReasonSourceCode(r?.code);
+      if (!code) continue;
+      if (limitUpByCode && limitUpByCode.has(code)) { ztCodes.add(code); continue; }
+      const gain = Number(r?.gain);
+      if (Number.isFinite(gain) && gain >= limitUpThreshold(code, r?.name)) ztCodes.add(code);
+    }
+    b.zt = ztCodes.size;
+    b.ztSource = 'member-join';
+  }
+}
+
 function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase, priorByCode) {
   try {
     if (!isToday) return;
@@ -24821,6 +24842,12 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     const code = normalizeReasonSourceCode(s?.code);
     if (code) limitUpByCode.set(code, s);
   }
+  // 板级涨停数精确回填(Owner 2026-07-16):盘中实时板块榜的 ztCount 经常未知(null),旧行为
+  // Number(null)=0 会让自动扫描门槛的「涨停≥2」腿盘中形同虚设——5~10亿 区间的主线板(如医药
+  // 9.67亿)永远不被 L2 验证。Owner 定稿:不是把 unknown 当 0 或绕过门槛,而是用成份股逐只
+  // 精确统计:成份 ∩ 当日涨停底库(权威口径)为主;底库尚无该股时,用实时涨幅 ≥ 该股涨停阈值
+  // (limitUpThreshold,含 ST/创业板差异)兜底。仅在板 zt 为 null 时回填,快照/已知值不改。
+  strategyMainlineBackfillBoardZt(boardPayload?.boards || [], limitUpByCode);
   const seedByKey = new Map();
   const risingStockByCode = new Map();
   const nearLimitStockByCode = new Map();
