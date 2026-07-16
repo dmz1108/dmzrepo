@@ -174,11 +174,15 @@ A((html.match(/starMaxBucketAdminInfo\(s\)/g) || []).length >= 2, '两处明星 
 A(html.includes('最大档字段在但无大单:非明星') && html.includes('最大档字段缺失:需检查worker采集')
   && html.includes('现价缺失:无法确认该股允许最大档'), 'empty/dataMissing/priceMissing 三种状态文案齐备');
 A(html.includes('id="strategy-l2-history"') && html.includes('function loadStrategyL2History(day)'), '管理员策略页包含每日L2扫描记录入口');
-A(html.includes("if (!canUseL2AdminTools()) return ''") && html.includes('管理员可见 · 同板块优先展示最近一次有效结果'), 'L2任务明细只在管理员工具权限下渲染');
-A(html.includes('function strategyL2HistoryBucket(label, bucket)')
-  && html.includes("moneyPair('主动', b.activeBuy, b.activeSell")
-  && html.includes("moneyPair('被动', b.passiveBuy, b.passiveSell")
-  && html.includes('主动按单笔成交统计；被动按同一挂单订单号累计统计'), 'L2任务明细展示五档主动/被动买卖金额与统计口径');
+A(html.includes("if (!canUseL2AdminTools()) return ''") && html.includes('管理员可见 · 板块、状态与入选结果'), 'L2扫描记录只在管理员工具权限下渲染');
+const l2HistoryRenderer = html.slice(html.indexOf('function renderStrategyL2History(data)'), html.indexOf('async function loadStrategyL2History(day)'));
+A(l2HistoryRenderer.includes('ml-l2-pick-list')
+  && l2HistoryRenderer.includes('ml-l2-pick')
+  && l2HistoryRenderer.includes('picked.slice(0, 6)')
+  && l2HistoryRenderer.includes('ml-l2-more'), 'L2扫描记录紧凑展示任务统计与入选股票');
+A(!l2HistoryRenderer.includes('<details')
+  && !l2HistoryRenderer.includes('strategyL2HistoryBucket(')
+  && !html.includes('function strategyL2HistoryBucket('), 'L2扫描记录不再提供逐股展开卡片');
 const backend = fsReal.readFileSync(pathReal.join(__dirname, '..', 'strategy-backend.js'), 'utf8');
 A(backend.includes("url.searchParams.get('history') === '1'") && backend.includes("if (!adminViewer) { sendJson(res, 403, { error: 'admin required' })"), 'L2历史接口有管理员门控');
 let htmlCompiled = true;

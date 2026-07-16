@@ -8441,6 +8441,198 @@
 	    }
 	  }
 
+  /* ===== Strategy hierarchy pass 2026-07-16: market pulse + explicit star states ===== */
+  body.view-strategy .ml-col-title {
+    align-items: center;
+    min-height: 34px;
+    margin-bottom: 10px;
+    padding: 0 2px 8px;
+    border-bottom: 1px solid rgba(174,190,214,.10);
+  }
+
+  body.view-strategy .ml-col-title small {
+    color: rgba(174,190,214,.68);
+    opacity: 1;
+  }
+
+  body.view-strategy .ml-card {
+    padding: 14px !important;
+    border-left-width: 3px !important;
+    border-left-color: rgba(174,190,214,.16) !important;
+  }
+
+  body.view-strategy .ml-card.has-expected-star {
+    border-left-color: rgba(255,190,75,.78) !important;
+  }
+
+  body.view-strategy .ml-card.has-confirmed-star,
+  body.view-strategy .ml-card.confirmed-mainline {
+    border-left-color: rgba(255,91,82,.86) !important;
+    background:
+      linear-gradient(180deg, rgba(255,91,82,.075), rgba(255,255,255,.018) 45%),
+      rgba(0,0,0,.126) !important;
+  }
+
+  body.view-strategy .ml-signal-strip {
+    grid-template-columns: minmax(0, 1.12fr) minmax(0, 1.35fr) minmax(0, .7fr) minmax(0, .9fr) !important;
+    gap: 7px !important;
+  }
+
+  body.view-strategy .ml-signal-cell {
+    padding: 6px 8px !important;
+  }
+
+  body.view-strategy .ml-signal-cell.primary {
+    min-height: 49px;
+    border-color: rgba(174,190,214,.14);
+    background: rgba(255,255,255,.042);
+  }
+
+  body.view-strategy .ml-signal-cell.primary i {
+    color: rgba(190,203,223,.78);
+    font-size: 10.5px;
+    font-weight: 650;
+  }
+
+  body.view-strategy .ml-signal-cell.primary b {
+    font-size: 16px;
+    line-height: 1.15;
+  }
+
+  body.view-strategy .ml-signal-cell.primary.up {
+    border-color: rgba(255,91,82,.20);
+    background: rgba(255,91,82,.065);
+  }
+
+  body.view-strategy .ml-signal-cell.primary.down {
+    border-color: rgba(47,207,118,.20);
+    background: rgba(47,207,118,.058);
+  }
+
+  body.view-strategy .ml-signal-cell.support {
+    min-height: 49px;
+    background: rgba(255,255,255,.022);
+  }
+
+  body.view-strategy .ml-star-proof {
+    display: grid !important;
+    grid-template-columns: 58px minmax(0, 1fr);
+    align-items: start;
+    gap: 7px !important;
+  }
+
+  body.view-strategy .ml-star-proof > .ml-proof-lbl {
+    line-height: 34px;
+  }
+
+  body.view-strategy .ml-star-list {
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+
+  body.view-strategy .ml-stock.ml-starstock {
+    min-width: min(210px, 100%);
+    min-height: 38px;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 2px 6px;
+    padding: 5px 8px !important;
+    border-color: rgba(255,190,75,.34);
+    background: rgba(255,190,75,.075);
+  }
+
+  body.view-strategy .ml-star-name {
+    min-width: 0;
+    overflow: hidden;
+    color: #f2f5fa;
+    font-size: 12px;
+    font-weight: 780;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.view-strategy .ml-star-role {
+    padding: 1px 5px;
+    border: 1px solid rgba(74,155,255,.25);
+    border-radius: 5px;
+    background: rgba(74,155,255,.09);
+    color: #83bcff;
+    font-size: 9px;
+    font-style: normal;
+    font-weight: 760;
+  }
+
+  body.view-strategy .ml-star-state {
+    padding: 1px 6px;
+    border-radius: 5px;
+    background: rgba(255,190,75,.14);
+    color: #ffd486;
+    font-size: 9.5px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  body.view-strategy .ml-stock.ml-starstock > i {
+    grid-column: 1 / -1;
+    color: rgba(225,205,160,.72);
+    font-size: 10px;
+  }
+
+  body.view-strategy .ml-stock.ml-starstock.confirmed {
+    border-color: rgba(255,91,82,.44);
+    background: rgba(255,91,82,.11);
+    box-shadow: inset 3px 0 0 rgba(255,91,82,.82);
+  }
+
+  body.view-strategy .ml-stock.ml-starstock.confirmed .ml-star-state {
+    background: rgba(255,91,82,.18);
+    color: #ff9b94;
+  }
+
+  body.view-strategy .ml-stock.ml-starstock.confirmed > i {
+    color: rgba(255,174,168,.76);
+  }
+
+  body.view-strategy .ml-stock.ml-starstock.missed {
+    border-style: dashed;
+    border-color: rgba(174,190,214,.24);
+    background: rgba(174,190,214,.045);
+    box-shadow: none;
+  }
+
+  body.view-strategy .ml-stock.ml-starstock.missed .ml-star-state {
+    background: rgba(174,190,214,.10);
+    color: rgba(190,203,223,.76);
+  }
+
+  @media (max-width: 760px) {
+    body.view-strategy .ml-signal-strip {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    body.view-strategy .ml-star-proof {
+      grid-template-columns: 1fr;
+      gap: 4px !important;
+    }
+
+    body.view-strategy .ml-star-proof > .ml-proof-lbl {
+      line-height: 20px;
+    }
+
+    body.view-strategy .ml-star-list {
+      display: grid;
+      grid-template-columns: 1fr;
+    }
+
+    body.view-strategy .ml-stock.ml-starstock {
+      min-width: 0;
+      width: 100%;
+    }
+  }
+
 	  body.view-strategy .sc-pick-pair em {
     min-width: 0 !important;
     overflow: hidden !important;
@@ -8491,36 +8683,45 @@
   }
 
   body.view-strategy .ml-l2-history .strategy-section-head {
-    margin-bottom: 10px !important;
+    margin-bottom: 8px !important;
   }
 
   body.view-strategy .ml-l2-job-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
   }
 
   body.view-strategy .ml-l2-job {
     min-width: 0;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--bg-card);
-    overflow: hidden;
+    display: grid;
+    grid-template-columns: minmax(230px, .8fr) minmax(190px, .55fr) minmax(0, 1.65fr);
+    align-items: center;
+    gap: 16px;
+    padding: 10px 4px;
+    border-bottom: 1px solid var(--border);
+    background: transparent;
+  }
+
+  body.view-strategy .ml-l2-job:last-child {
+    border-bottom: 0;
   }
 
   body.view-strategy .ml-l2-job-head {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto auto;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 14px 8px;
-  }
-
-  body.view-strategy .ml-l2-job-head > div {
     min-width: 0;
     display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+  }
+
+  body.view-strategy .ml-l2-job-name {
+    min-width: 0;
+    display: flex;
+    flex: 1 1 auto;
     align-items: baseline;
-    gap: 7px;
+    gap: 6px;
   }
 
   body.view-strategy .ml-l2-job-head b {
@@ -8567,78 +8768,89 @@
   }
 
   body.view-strategy .ml-l2-job-meta {
-    padding: 0 14px 10px;
-  }
-
-  body.view-strategy .ml-l2-stock-list {
-    max-height: 360px;
-    overflow: auto;
-    border-top: 1px solid var(--border);
-  }
-
-  body.view-strategy .ml-l2-stock {
-    border-bottom: 1px solid var(--border);
-  }
-
-  body.view-strategy .ml-l2-stock:last-child {
-    border-bottom: 0;
-  }
-
-  body.view-strategy .ml-l2-stock summary {
     display: grid;
-    grid-template-columns: 58px minmax(0, 1fr) auto auto;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+    padding: 0;
+  }
+
+  body.view-strategy .ml-l2-job-meta span {
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 4px;
+    min-height: 30px;
+    padding: 5px 6px;
+    border: 1px solid rgba(174,190,214,.10);
+    border-radius: 6px;
+    background: rgba(255,255,255,.025);
+  }
+
+  body.view-strategy .ml-l2-job-meta i {
+    color: var(--text-faint);
+    font-size: 10px;
+    font-style: normal;
+  }
+
+  body.view-strategy .ml-l2-job-meta b {
+    color: var(--text);
+    font-size: 11px;
+    font-weight: 760;
+  }
+
+  body.view-strategy .ml-l2-pick-list {
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
-    padding: 9px 14px;
-    cursor: pointer;
-    list-style: none;
+    gap: 6px;
   }
 
-  body.view-strategy .ml-l2-stock summary::-webkit-details-marker {
-    display: none;
+  body.view-strategy .ml-l2-pick {
+    min-width: 148px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 2px 8px;
+    padding: 5px 8px;
+    border: 1px solid rgba(174,190,214,.11);
+    border-radius: 6px;
+    background: rgba(255,255,255,.028);
   }
 
-  body.view-strategy .ml-l2-stock summary b {
+  body.view-strategy .ml-l2-pick b {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 13px;
+    color: var(--text);
+    font-size: 12px;
   }
 
-  body.view-strategy .ml-l2-stock summary i,
-  body.view-strategy .ml-l2-stock summary em,
-  body.view-strategy .ml-l2-code {
+  body.view-strategy .ml-l2-pick i,
+  body.view-strategy .ml-l2-pick em {
     color: var(--text-faint);
-    font-size: 11px;
+    font-size: 10px;
     font-style: normal;
     white-space: nowrap;
   }
 
-  body.view-strategy .ml-l2-stock summary i.up { color: var(--up); }
-  body.view-strategy .ml-l2-stock summary i.down { color: var(--down); }
-
-  body.view-strategy .ml-l2-buckets {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
-    padding: 0 14px 10px 80px;
-  }
-
-  body.view-strategy .ml-l2-buckets .sc-pick-detail-group {
-    min-width: 0;
-  }
-
-  body.view-strategy .ml-l2-detail-note {
+  body.view-strategy .ml-l2-pick em {
     grid-column: 1 / -1;
+  }
+
+  body.view-strategy .ml-l2-pick i.up { color: var(--up); }
+  body.view-strategy .ml-l2-pick i.down { color: var(--down); }
+  body.view-strategy .ml-l2-pick i.flat { color: var(--flat); }
+
+  body.view-strategy .ml-l2-more {
     color: var(--text-faint);
-    font-size: 10px;
-    line-height: 1.45;
+    font-size: 11px;
   }
 
   body.view-strategy .ml-l2-empty {
-    padding: 12px 14px;
-    border-top: 1px solid var(--border);
+    padding: 5px 0;
     color: var(--text-faint);
     font-size: 12px;
   }
@@ -8685,23 +8897,21 @@
       grid-template-columns: 48px minmax(0, 1fr) minmax(0, 1fr) !important;
     }
     body.view-strategy .ml-l2-job-grid {
-      grid-template-columns: 1fr;
+      border-top-color: rgba(174,190,214,.10);
     }
-    body.view-strategy .ml-l2-job-head {
-      grid-template-columns: minmax(0, 1fr) auto auto;
+    body.view-strategy .ml-l2-job {
+      grid-template-columns: 1fr;
+      gap: 8px;
+      padding: 11px 0;
     }
     body.view-strategy .ml-l2-job-head time {
       display: none;
     }
-    body.view-strategy .ml-l2-stock summary {
-      grid-template-columns: 54px minmax(0, 1fr) auto;
+    body.view-strategy .ml-l2-job-meta {
+      max-width: 280px;
     }
-    body.view-strategy .ml-l2-stock summary em {
-      grid-column: 2 / -1;
-    }
-    body.view-strategy .ml-l2-buckets {
-      grid-template-columns: 1fr;
-      padding-left: 14px;
+    body.view-strategy .ml-l2-pick {
+      flex: 1 1 148px;
     }
   }
 </style>
@@ -11285,30 +11495,6 @@ function strategyL2HistoryTime(value) {
     });
   } catch (_) { return ''; }
 }
-function strategyL2HistoryRatio(buy, sell) {
-  const b = Number(buy) || 0;
-  const s = Number(sell) || 0;
-  if (s > 0) return (b / s).toFixed(2);
-  return b > 0 ? '∞' : '0.00';
-}
-function strategyL2HistoryBucket(label, bucket) {
-  const b = bucket || {};
-  const activeRatio = strategyL2HistoryRatio(b.activeBuy, b.activeSell);
-  const passiveRatio = strategyL2HistoryRatio(b.passiveBuy, b.passiveSell);
-  const moneyPair = (name, buy, sell, ratio, cls) => `<div class="sc-pick-pair ${cls}">
-    <span>${name}<b>${ratio}</b></span>
-    <em>买 ${fmtMoneyWan(buy)}</em>
-    <em>卖 ${fmtMoneyWan(sell)}</em>
-  </div>`;
-  return `<div class="sc-pick-detail-group">
-    <div class="sc-pick-detail-title">
-      <span>${escapeHTML(label)}</span>
-      <em>主动比 ${activeRatio} · 被动比 ${passiveRatio}</em>
-    </div>
-    ${moneyPair('主动', b.activeBuy, b.activeSell, activeRatio, 'active')}
-    ${moneyPair('被动', b.passiveBuy, b.passiveSell, passiveRatio, 'passive')}
-  </div>`;
-}
 function renderStrategyL2History(data) {
   if (!canUseL2AdminTools()) return '';
   const allJobs = Array.isArray(data?.jobs) ? data.jobs : [];
@@ -11329,44 +11515,38 @@ function renderStrategyL2History(data) {
     const trigger = job?.trigger === 'strategy-auto' ? '自动' : (job?.trigger === 'manual' ? '手动' : '扫描');
     const status = String(job?.status || '');
     const statusText = status === 'done' ? '完成' : (status === 'running' ? '计算中' : (status === 'queued' ? '排队中' : '失败'));
-    const rows = picked.map(row => {
+    const rows = picked.slice(0, 6).map(row => {
       const gain = Number(row?.gainPct);
-      const thresholds = row?.thresholds || {};
-      return `<details class="ml-l2-stock">
-        <summary>
-          <span class="ml-l2-code">${escapeHTML(String(row?.code || ''))}</span>
-          <b>${escapeHTML(String(row?.name || ''))}</b>
-          <i class="${Number.isFinite(gain) && gain >= 0 ? 'up' : 'down'}">${Number.isFinite(gain) ? `${gain >= 0 ? '+' : ''}${gain.toFixed(2)}%` : '--'}</i>
-          <em>主${row?.activeRatio ?? '--'} · 被${row?.passiveRatio ?? '--'}</em>
-        </summary>
-        <div class="ml-l2-buckets">
-          ${strategyL2HistoryBucket('≥50万', thresholds['500000'] || row)}
-          ${strategyL2HistoryBucket('≥300万', thresholds['3000000'])}
-          ${strategyL2HistoryBucket('≥500万', thresholds['5000000'])}
-          ${strategyL2HistoryBucket('≥800万', thresholds['8000000'])}
-          ${strategyL2HistoryBucket('≥1000万', thresholds['10000000'])}
-          <span class="ml-l2-detail-note">主动按单笔成交统计；被动按同一挂单订单号累计统计</span>
-        </div>
-      </details>`;
+      const gainClass = !Number.isFinite(gain) ? 'flat' : (gain >= 0 ? 'up' : 'down');
+      return `<span class="ml-l2-pick" title="${escapeHTML(`${row?.code || ''} · 主动比${row?.activeRatio ?? '--'} · 被动比${row?.passiveRatio ?? '--'}`)}">
+        <b>${escapeHTML(String(row?.name || row?.code || ''))}</b>
+        <i class="${gainClass}">${Number.isFinite(gain) ? `${gain >= 0 ? '+' : ''}${gain.toFixed(2)}%` : '--'}</i>
+        <em>主${row?.activeRatio ?? '--'} · 被${row?.passiveRatio ?? '--'}</em>
+      </span>`;
     }).join('');
+    const remaining = Math.max(0, picked.length - 6);
     const empty = status === 'done' && resultCount > 0 && !picked.length
       ? '<div class="ml-l2-empty">扫描完成，没有达到当前筛选阈值的股票。</div>'
       : (status === 'done' && !resultCount ? '<div class="ml-l2-empty">任务未取得可用成分股结果。</div>' : '');
     return `<article class="ml-l2-job">
       <div class="ml-l2-job-head">
-        <div><b>${escapeHTML(String(job?.boardName || job?.plateId || 'L2任务'))}</b><small>${escapeHTML(String(job?.plateId || ''))}</small></div>
+        <div class="ml-l2-job-name"><b>${escapeHTML(String(job?.boardName || job?.plateId || 'L2任务'))}</b><small>${escapeHTML(String(job?.plateId || ''))}</small></div>
         <span class="ml-l2-trigger ${job?.trigger === 'strategy-auto' ? 'auto' : ''}">${trigger}</span>
         <span class="ml-l2-status ${escapeHTML(status)}">${statusText}</span>
         <time>${escapeHTML(strategyL2HistoryTime(job?.createdAt))}</time>
       </div>
-      <div class="ml-l2-job-meta">扫描 ${Number(job?.scanned || 0)}/${Number(job?.total || 0)} · 结果 ${resultCount} · 入选 ${picked.length}</div>
-      ${rows ? `<div class="ml-l2-stock-list">${rows}</div>` : empty}
+      <div class="ml-l2-job-meta">
+        <span><i>扫描</i><b>${Number(job?.scanned || 0)}/${Number(job?.total || 0)}</b></span>
+        <span><i>结果</i><b>${resultCount}</b></span>
+        <span><i>入选</i><b>${picked.length}</b></span>
+      </div>
+      ${rows ? `<div class="ml-l2-pick-list">${rows}${remaining ? `<span class="ml-l2-more">+${remaining}</span>` : ''}</div>` : empty}
     </article>`;
   }).join('');
   return `<section class="strategy-section ml-l2-history">
     <div class="strategy-section-head">
       <span class="strategy-section-title">今日 L2 扫描记录</span>
-      <span class="strategy-section-sub">管理员可见 · 同板块优先展示最近一次有效结果</span>
+      <span class="strategy-section-sub">管理员可见 · 板块、状态与入选结果</span>
     </div>
     <div class="ml-l2-job-grid">${cards}</div>
   </section>`;
@@ -11761,14 +11941,20 @@ function renderStrategyMainlinesHTML(d) {
     // 不改写冻结文件，也不把多个概念的资金再次相加。
     const displayInflow = strategyMainlineDisplayInflow(m);
     const inflowClass = displayInflow.value == null ? 'empty' : (displayInflow.value > 0 ? 'up' : (displayInflow.value < 0 ? 'down' : 'flat'));
-    const gainValue = Number(m.boardGainPct);
+    const rawGainValue = m.boardGainPct;
+    const gainValue = rawGainValue === null || rawGainValue === undefined || rawGainValue === '' ? NaN : Number(rawGainValue);
     const gainClass = !Number.isFinite(gainValue) ? 'empty' : (gainValue > 0 ? 'up' : (gainValue < 0 ? 'down' : 'flat'));
-    const metricCell = (label, value, cls = '') => `<span class="ml-signal-cell ${escapeHTML(cls)}"><i>${escapeHTML(label)}</i><b>${escapeHTML(value)}</b></span>`;
+    const fundMetricLabel = Number(displayInflow.zsType) === 5
+      ? (displayInflow.metric === 'ths-dde-big-order-amount' ? '同花顺 DDE' : '同花顺净流入')
+      : (Number(displayInflow.zsType) === 6
+        ? (displayInflow.legacy ? '东财旧主力' : '东财超大单')
+        : (Number(displayInflow.zsType) === 7 ? 'KPL 净流入' : '资金净流入'));
+    const metricCell = (label, value, cls = '', kind = 'support', title = '') => `<span class="ml-signal-cell ${escapeHTML(kind)} ${escapeHTML(cls)}"${title ? ` title="${escapeHTML(title)}"` : ''}><i>${escapeHTML(label)}</i><b>${escapeHTML(value)}</b></span>`;
     const signalStrip = `<div class="ml-signal-strip">
-      ${metricCell('涨停', String(Number(m.count) || 0))}
-      ${metricCell('大涨/冲板', `${Number(m.bigGainCount) || 0}/${Number(m.nearLimitCount) || 0}`)}
-      ${metricCell(m.boardGainName ? String(m.boardGainName).slice(0, 6) : '板块涨幅', Number.isFinite(gainValue) ? `${gainValue > 0 ? '+' : ''}${gainValue.toFixed(2)}%` : '--', gainClass)}
-      ${metricCell(strategyMainlineFundLabel(displayInflow, Number(displayInflow.value) < 0), displayInflow.value != null ? fmtInflow(displayInflow.value) : '--', inflowClass)}
+      ${metricCell('板块涨幅', Number.isFinite(gainValue) ? `${gainValue > 0 ? '+' : ''}${gainValue.toFixed(2)}%` : '--', gainClass, 'primary', m.boardGainName || m.theme || '')}
+      ${metricCell(fundMetricLabel, displayInflow.value != null ? fmtInflow(displayInflow.value) : '--', inflowClass, 'primary', displayInflow.boardName || '')}
+      ${metricCell('涨停', String(Number(m.count) || 0), '', 'support')}
+      ${metricCell('大涨 / 冲板', `${Number(m.bigGainCount) || 0} / ${Number(m.nearLimitCount) || 0}`, '', 'support')}
     </div>`;
     const driver = strategyMainlineTopScorePart(m.scoreParts);
     const inflowSource = strategyBoardSourceLabel(displayInflow.zsType);
@@ -11826,10 +12012,20 @@ function renderStrategyMainlinesHTML(d) {
       : (m.leaderNote ? `<div class="ml-proof-row"><span class="ml-proof-lbl">龙头</span><span class="ml-leader-none">${escapeHTML(m.leaderNote)}</span></div>` : '');
     const visibleStars = (m.starStocks || []).filter(s => s.level === 'confirmed' || s.level === 'expected').slice(0, 3);
     const starChips = visibleStars
-      .map(s => `<span class="ml-stock ml-starstock${s.level === 'confirmed' ? ' confirmed' : ''}${s.historicalExpected ? ' historical' : ''}${s.expectedOutcome === 'not-confirmed' ? ' missed' : ''}" title="${escapeHTML(`${s.firstExpectedAt ? `首次预期 ${s.firstExpectedAt} · ` : ''}L2:主动比${s.ratios?.activeRatio ?? '-'} 被动比${s.ratios?.passiveRatio ?? '-'} 合计比${s.ratios?.supportRatio ?? '-'}` + starMaxBucketAdminInfo(s))}">⭐${leaderCodeSet.has(String(s.code || '')) ? '👑' : ''}${escapeHTML(s.name || s.code || '')}<i>${escapeHTML(s.label || '')} 主${s.ratios?.activeRatio ?? '-'}/被${s.ratios?.passiveRatio ?? '-'}</i></span>`)
+      .map(s => {
+        const missed = s.expectedOutcome === 'not-confirmed';
+        const stateText = missed ? '未兑现' : (s.level === 'confirmed' ? '已确认' : '预期');
+        const stateClass = s.level === 'confirmed' ? 'confirmed' : 'expected';
+        const missedClass = s.expectedOutcome === 'not-confirmed' ? ' missed' : '';
+        const leaderMark = leaderCodeSet.has(String(s.code || '')) ? '<em class="ml-star-role">龙头</em>' : '';
+        return `<span class="ml-stock ml-starstock ${stateClass}${s.historicalExpected ? ' historical' : ''}${missedClass}" title="${escapeHTML(`${s.firstExpectedAt ? `首次预期 ${s.firstExpectedAt} · ` : ''}L2:主动比${s.ratios?.activeRatio ?? '-'} 被动比${s.ratios?.passiveRatio ?? '-'} 合计比${s.ratios?.supportRatio ?? '-'}` + starMaxBucketAdminInfo(s))}">
+          <b class="ml-star-name">${escapeHTML(s.name || s.code || '')}</b>${leaderMark}
+          <strong class="ml-star-state">${stateText}</strong>
+          <i>主${s.ratios?.activeRatio ?? '-'} · 被${s.ratios?.passiveRatio ?? '-'}</i>
+        </span>`;
+      })
       .join('');
-    const starRowLabel = visibleStars.some(s => s.level === 'confirmed') ? '明星' : '预期明星';
-    const starRow = starChips ? `<div class="ml-proof-row"><span class="ml-proof-lbl" title="纯当日 L2 判定:最大可统计档主动买入累计>1.5亿且主动买卖比>1.65；未封大涨为预期明星，封板后为明星确认；盘中出现过的预期信号会保留用于复盘。👑=同时是龙头">${starRowLabel}</span>${starChips}</div>` : '';
+    const starRow = starChips ? `<div class="ml-proof-row ml-star-proof"><span class="ml-proof-lbl" title="纯当日 L2 判定:最大可统计档主动买入累计>1.5亿且主动买卖比>1.65；未封大涨为预期明星，封板后为明星确认；盘中出现过的预期信号会保留用于复盘。">明星信号</span><div class="ml-star-list">${starChips}</div></div>` : '';
     const l2Detail = m.l2ScanDetail || {};
     // 旧冻结快照没有 l2ScanState：能从卡片已有指标确认未达门槛的显示“未达扫描条件”；
     // 达标但过程未知的保守显示“覆盖不足”，绝不伪装成公司端正在排队。
@@ -11879,7 +12075,9 @@ function renderStrategyMainlinesHTML(d) {
       }
     }
     const trendHtml = trendParts.length && m.trend ? `<span class="ml-trend">▲ ${Number(m.trend.minutes)}分钟 ${escapeHTML(trendParts.join(' '))}</span>` : '';
-    return `<article class="ml-card${i === 0 ? ' lead' : ''}">
+    const hasConfirmedStar = visibleStars.some(s => s.level === 'confirmed');
+    const hasExpectedStar = !hasConfirmedStar && visibleStars.some(s => s.level === 'expected');
+    return `<article class="ml-card${i === 0 ? ' lead' : ''}${m.isConfirmedMainline ? ' confirmed-mainline' : ''}${hasConfirmedStar ? ' has-confirmed-star' : (hasExpectedStar ? ' has-expected-star' : '')}">
       <div class="ml-top">
         <span class="ml-rank">${Number(m.rank) || i + 1}</span>
         <div class="ml-namebox">
@@ -11968,13 +12166,13 @@ function renderStrategyMainlinesHTML(d) {
     return `<section class="mainline-wrap">
       <div class="ml-title">
         <span>今日主线榜</span>
-        <small>东财 / 同花顺 各自独立预测（各只用本源板块、成员、涨幅、净流入；KPL 不参与）${sourceSuffix}${dayNote}</small>
+        <small title="东财与同花顺各自使用本源板块、成员、涨幅和资金，不跨源拼接；KPL 不参与主线预测">实时强度 × 资金 × 成分股 × 历史主因 · L2 明星验证${sourceSuffix}${dayNote}</small>
       </div>
       ${statusHtml}
       ${dualNote}
       <div class="ml-cols">
-        ${renderColumn('东财主线预测', bs.eastmoney, '仅东财 zsType6')}
-        ${renderColumn('同花顺主线预测', bs.ths, '仅同花顺 zsType5')}
+        ${renderColumn('东财主线预测', bs.eastmoney, '超大单净流入')}
+        ${renderColumn('同花顺主线预测', bs.ths, 'DDE 大单金额')}
       </div>
     </section>`;
   }
