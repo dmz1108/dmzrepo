@@ -21178,18 +21178,18 @@ async function fetchThsBoardDdeAmount(indexCode) {
   const pending = thsDdePendingFetch.get(code);
   if (pending) return pending;   // 并发消费者(主线/热点/共振)冷启动同板只发一次请求
   const p = (async () => {
-    const v = await getThsCookieV();
+    // realhead 对公开板块指数无需 Cookie。这里不复用 getThsCookieV：云端访问其 GitHub
+    // 脚本源可能超时，反而会让本来可直连的 DDE 请求整体回退到 zjjlr。
     const res = await fetch(`https://d.10jqka.com.cn/v6/realhead/bk_${code}/defer/last.js`, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/89.0.4389.90 Safari/537.36',
         Referer: 'https://q.10jqka.com.cn/gn/',
-        Cookie: `v=${v}`,
       },
       signal: AbortSignal.timeout(THS_DDE_FETCH_TIMEOUT_MS),
     });
     if (!res.ok) throw new Error(`THS realhead ${res.status}: bk_${code}`);
     const value = thsParseRealheadField(await res.text(), THS_DDE_AMOUNT_FIELD);
-    thsDdeAmountCache.set(code, { value, at: Date.now() });   // 仅成功写缓存,失败不污染下次重试
+    if (value != null) thsDdeAmountCache.set(code, { value, at: Date.now() });
     return value;
   })();
   thsDdePendingFetch.set(code, p);
