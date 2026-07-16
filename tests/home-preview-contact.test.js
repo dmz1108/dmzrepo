@@ -61,6 +61,7 @@ const yuleContext = {};
 vm.createContext(yuleContext);
 vm.runInContext([
   extractFunction(yuleSrc, 'itemScore'),
+  extractFunction(yuleSrc, 'itemDayKey'),
   extractFunction(yuleSrc, 'sortedItems'),
   extractFunction(yuleSrc, 'rankedTodayItems'),
   `this.preferredFromList = rankedTodayItems([
@@ -74,6 +75,12 @@ vm.runInContext([
     { id: 'low', rankScore: 100 },
     { id: 'high', rankScore: 200 }
   ], null);`,
+  `this.latestDayFirst = rankedTodayItems([
+    { id: 'older-hottest', day: '20260714', rankScore: 999 },
+    { id: 'latest-lower', day: '20260715', rankScore: 100 },
+    { id: 'latest-hottest', day: '20260715', rankScore: 200 }
+  ], null);`,
+  `this.beijingDayFallback = itemDayKey({ createdAt: '2026-07-15T16:30:00.000Z' });`,
 ].join('\n'), yuleContext);
 assert(
   Array.from(yuleContext.preferredFromList, item => item.id).join(',') === 'today-teaser,global-top',
@@ -86,11 +93,17 @@ assert(
 );
 assert(
   Array.from(yuleContext.fallback, item => item.id).join(',') === 'high,low',
-  '推荐接口失败或为空时回退娱乐页原有排行第一名',
+  '推荐接口失败或为空且无日期字段时仍按热度回退',
 );
+assert(
+  Array.from(yuleContext.latestDayFirst, item => item.id).join(',') === 'latest-hottest,latest-lower,older-hottest',
+  '分类内容最新日期优先，同一天再按热度排序；当天为空时自然回退前一可用日',
+);
+assert(yuleContext.beijingDayFallback === '20260716', '缺少 day 时按北京时间从 createdAt 推导日期');
 assert(yuleSrc.includes("getJSON(`${API}/home-teaser?_=${Date.now()}`)"), '娱乐页读取与主页相同的今日推荐接口');
 assert(yuleSrc.includes('return todayHTML(allItems, preferredLead)'), '娱乐页全部频道把同一推荐传入今日值得看');
 assert(yuleSrc.includes('content.innerHTML = todayHTML(items) + sectionHTML(c, items);'), '单频道仍使用该频道自身榜首');
+assert(yuleSrc.includes('const ranked = sortedItems(items);') && yuleSrc.includes('ranked.map(cardHTML)'), '分类主卡与下方列表共用日期优先排序');
 assert(jsx.includes("label: '今日值得看'"), '首页娱乐卡文案改为今日值得看');
 assert(!jsx.includes('娱乐热榜第一'), '首页不再显示旧的娱乐热榜第一文案');
 assert(jsx.includes('YULE_CATEGORY_LABELS'), '首页娱乐卡显示可读频道名称');
