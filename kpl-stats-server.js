@@ -24904,8 +24904,14 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
         STRATEGY_MAINLINE_CATALOG_TIMEOUT_MS,
         []
       ));
+  // 两套独立预测(Owner v2):catalog 榜是东财(6)+同花顺(5)全源实时概念榜,必须按本次预测来源过滤——
+  // 否则同花顺 seed 会被贴上同名东财板(如"AI手机"BK1162 zsType6),虚增 boardCount/共振板,
+  // 并经 resonance 评分分与 recordNetInflow 污染分数/净流入,违反 Owner「不借板块数量」。
+  // 默认合并口径 activeBoardZsTypes=[6,5] 仍保留两源,行为不变;单源 [6]/[5] 只贴本源。
+  const catalogBoardsForSource = (Array.isArray(catalogBoards) ? catalogBoards : [])
+    .filter(b => activeBoardZsTypes.includes(Number(b?.zsType)));
   for (const seed of seedByKey.values()) {
-    strategyMainlineAttachBestCatalogBoard(seed, catalogBoards);
+    strategyMainlineAttachBestCatalogBoard(seed, catalogBoardsForSource);
   }
   const history = await strategyMainlineDiagAwait('history-context',
     buildStrategyMainlineHistoryContext(isoDay, seedByKey.keys(), 15, 4),
