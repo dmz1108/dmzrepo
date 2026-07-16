@@ -66,7 +66,6 @@ const STRATEGY_MAINLINE_AUTO_SCAN_WINDOW_MS = 5 * 60 * 1000;
 const STRATEGY_MAINLINE_AUTO_SCAN_MAX_PER_WINDOW = 2;
 const STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW = 5e8;
 const STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT = 2;
-const STRATEGY_MAINLINE_AUTO_SCAN_HIGH_INFLOW_OVERRIDE = 10e8;
 const STRATEGY_MAINLINE_AUTO_SCAN_LIMIT_STOCKS = 50;
 const strategyMainlineAutoScanState = { windowStart: 0, dispatched: 0, lastJobId: '' };
 const strategyMainlineFamilyInfo = (x) => ({ key: 'group:' + String(x && x.theme || '') });
@@ -84,7 +83,12 @@ const medBoard = { plateId: 'BK1146', name: '减肥药', netInflow: 9.67e8, zt: 
   { code: '600003', name: 'C', gain: 6.0 },
 ] };
 strategyMainlineMaybeAutoScan([medBoard], '2026-07-16', true, '午后', null);
-A(dispatched.length === 0, '复现:zt=null 未回填时,9.67亿(<10亿直通)不派发——今日医药待验证的根因');
+A(dispatched.length === 0, '复现:zt=null 未回填时,9.67亿不派发——今日医药待验证的根因');
+// Owner 2026-07-16:无任何豁免——99亿高流入但涨停<2 不派发;补选板同样过涨停门槛
+const noExempt1 = { plateId: 'BKHI', name: '高流入板', netInflow: 99e8, zt: 1, zsType: 6, scanChannel: '', memberRows: [{ code: '600030', name: 'H', gain: 6 }] };
+const noExempt2 = { plateId: 'BKSU', name: '补选板', netInflow: 6e8, zt: 1, zsType: 6, scanChannel: 'supplement', memberRows: [{ code: '600031', name: 'S', gain: 6 }] };
+strategyMainlineMaybeAutoScan([noExempt1, noExempt2], '2026-07-16', true, '午后', null);
+A(dispatched.length === 0, '无豁免:99亿高流入 zt=1 不派发;补选板 zt=1 也不派发(门槛=5亿 且 涨停≥2)');
 // 回填(两只在底库)后 → zt=2 → 过门槛派发
 strategyMainlineBackfillBoardZt([medBoard], new Map([['600001', {}], ['600002', {}]]));
 strategyMainlineAutoScanState.windowStart = 0; strategyMainlineAutoScanState.dispatched = 0; strategyMainlineAutoScanState.lastJobId = '';

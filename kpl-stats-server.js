@@ -21350,7 +21350,8 @@ const STRATEGY_MAINLINE_AUTO_SCAN_WINDOW_MS = 5 * 60 * 1000;
 const STRATEGY_MAINLINE_AUTO_SCAN_MAX_PER_WINDOW = 2;
 const STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW = 5e8;   // Owner 2026-07-15:8亿→5亿(救钱不够8亿的中小主线)
 const STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT = 2;
-const STRATEGY_MAINLINE_AUTO_SCAN_HIGH_INFLOW_OVERRIDE = 10e8;  // 净流入≥此值无视涨停数直接排队验证(高流入直通,救钱多涨停少的主线如大消费)
+// (已移除)高流入直通 STRATEGY_MAINLINE_AUTO_SCAN_HIGH_INFLOW_OVERRIDE:Owner 2026-07-16 定稿
+// 门槛无豁免——净流入≥5亿 且 涨停≥2;涨停数缺失由成份股精确回填解决,不再用金额直通绕过涨停腿。
 const STRATEGY_MAINLINE_AUTO_SCAN_LIMIT_STOCKS = 50;
 const strategyMainlineAutoScanState = { windowStart: 0, dispatched: 0, lastJobId: '' };
 function strategyResonanceTopicKey(raw) {
@@ -22752,7 +22753,7 @@ function strategyMainlineDeriveL2Status(l2Stars, hasQiStar, themeCodes) {
   return 'unscanned';
 }
 
-// 自动派发 L2 扫描：净流入≥8亿且板内涨停≥2 的前排板块；5 分钟窗口最多 2 个、串行、当天扫过不重复、无目标不扫。
+// 自动派发 L2 扫描：净流入≥5亿 且 板内涨停≥2(Owner 2026-07-16:无任何豁免);5 分钟窗口最多 2 个、串行、当天扫过不重复、无目标不扫。
 // 个股优先扫描列表(SD v1 第5条):猎场 = 板内涨幅 5% ~ 涨停前(Owner 定义的预期明星候选区);
 // 字典序:距板距离近 > 当日涨幅高 > 历史主因命中多(行上无 priorReason 时按 0 处理),上限 20 只。
 function strategyMainlineScanPriorityCodes(board, priorByCode) {
@@ -22828,13 +22829,14 @@ function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase, prior
       if (last && (last.status === 'queued' || last.status === 'running')) return;
     }
     // 板块级字典序(SD v1 第5条):补选来源 > 净流入 > 大涨数;不做加权公式。
-    // 补选板块豁免"涨停>=2"门槛——新发方向涨停本来就少,正是最需要 L2 验证的对象。
+    // 门槛(Owner 2026-07-16 定稿):净流入≥5亿 且 板内涨停≥2,无任何豁免——
+    // 10亿高流入直通与补选豁免均已按 Owner 指示移除;涨停数缺失由成份股精确回填
+    // (strategyMainlineBackfillBoardZt)解决,而非放宽门槛。补选板同样按此门槛,仅保留派发优先级。
     const bigGainOf = b => (Array.isArray(b?.memberRows) ? b.memberRows.filter(r => Number(r?.gain) >= STRATEGY_MAINLINE_BIG_GAIN_PCT).length : 0);
     const candidates = (Array.isArray(boards) ? boards : [])
       .filter(b => String(b?.plateId || '') &&
         Number(b?.netInflow) >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW &&
-        (b?.scanChannel === 'supplement' || Number(b?.zt) >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT
-          || Number(b?.netInflow) >= STRATEGY_MAINLINE_AUTO_SCAN_HIGH_INFLOW_OVERRIDE) &&
+        Number(b?.zt) >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT &&
         Array.isArray(b?.memberRows) && b.memberRows.length)
       .sort((a, b) =>
         ((a?.scanChannel === 'supplement') ? 0 : 1) - ((b?.scanChannel === 'supplement') ? 0 : 1) ||

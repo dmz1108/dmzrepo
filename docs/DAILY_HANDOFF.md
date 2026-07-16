@@ -6056,3 +6056,23 @@ Notes for next agent:
 - 部署后盘中验证:5~10亿 区间、成份有 ≥2 只涨停的主线板应能被派发(不再全员待验证);
   快照日(盘后)行为不变。
 - 本修复不改门槛数值(5亿/涨停2/10亿直通均保持 Owner 定稿),只把「涨停数未知」变成「精确统计」。
+
+## 2026-07-16 - Claude - 自动扫描门槛去豁免(Owner 定稿:5亿 且 涨停≥2,无任何豁免)
+
+Changed:
+- Owner 2026-07-16 定稿:自动 L2 扫描门槛只有一条——板净流入≥5亿 且 板内涨停≥2,不需要豁免。
+- 移除 10亿高流入直通(STRATEGY_MAINLINE_AUTO_SCAN_HIGH_INFLOW_OVERRIDE,原为救"钱多涨停少"而设;
+  涨停数缺失已由成份股精确回填解决,不再需要金额直通绕过涨停腿)。
+- 移除补选板豁免涨停≥2(补选板同样过门槛;补选仅保留派发排序优先级,非门槛豁免)。
+
+Files:
+- kpl-stats-server.js(auto-scan filter + 常量与注释)
+- tests/scan-priority.test.js(静态断言:门槛无豁免、两豁免已移除;补选第一键仅为排序)
+- tests/strategy-board-zt-backfill.test.js(行为:99亿 zt=1 不派发、补选板 zt=1 不派发)
+- tests/strategy-two-source-mainlines.test.js(清理已删常量)
+
+Validated:
+- node --check 通过;全仓 37 个测试文件全绿。
+
+Notes for next agent:
+- 与本分支的板级涨停回填同属 PR #111,一起复核部署;门槛金额线 5亿/涨停 2 保持 Owner 原定值。
