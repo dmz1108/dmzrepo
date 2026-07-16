@@ -9999,6 +9999,10 @@ function writePreviewCache(boards = state.boards, day = state.date, zsType = sta
         turnover: board.turnover,
         amount: board.amount,
         netInflow: board.netInflow,
+        superLargeNetInflow: board.superLargeNetInflow,
+        superLargeNetInflowRatio: board.superLargeNetInflowRatio,
+        largeNetInflow: board.largeNetInflow,
+        largeNetInflowRatio: board.largeNetInflowRatio,
         ztCount: board.ztCount,
       })),
     };
@@ -10021,6 +10025,12 @@ function saveHiddenBoard(boardOrId, zsType = state.zsType) {
   saveDeletedBoardMeta(meta, zsType);
 }
 
+function rankingOptionalNumber(value) {
+  if (value == null || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
 function rankingRowsToBoards(rankingList) {
   return (rankingList || []).map(row => ({
     plateId: row[0],
@@ -10030,6 +10040,10 @@ function rankingRowsToBoards(rankingList) {
     turnover: row[4],
     amount: row[5],
     netInflow: parseFloat(row[6]),
+    superLargeNetInflow: rankingOptionalNumber(row[7]),
+    superLargeNetInflowRatio: rankingOptionalNumber(row[8]),
+    largeNetInflow: rankingOptionalNumber(row[9]),
+    largeNetInflowRatio: rankingOptionalNumber(row[10]),
   }));
 }
 
@@ -10374,6 +10388,10 @@ async function fetchBoardRanking(zsType, count = BOARD_COUNT) {
         null,
         null,
         board.netInflow,
+        board.superLargeNetInflow,
+        board.superLargeNetInflowRatio,
+        board.largeNetInflow,
+        board.largeNetInflowRatio,
       ])),
     };
   }
@@ -11643,9 +11661,12 @@ function strategyMainlineSourcePairsHTML(m) {
     const gTxt = Number.isFinite(g) ? `${g > 0 ? '+' : ''}${g.toFixed(2)}%` : '--';
     return `<span class="ml-srcpair"><em>${label}</em>${escapeHTML(p.board || '')} <i class="${infCls}">${fmtInflow(Number(p.netInflow))}</i> <i>${gTxt}</i></span>`;
   };
-  const parts = [one('东财', sp.eastmoney), one('同花顺', sp.ths)].filter(Boolean);
+  const eastmoneyMetric = sp.eastmoney && sp.eastmoney.metric;
+  const eastmoneyLegacy = !!(sp.eastmoney && (sp.eastmoney.legacy || eastmoneyMetric !== 'eastmoney-super-large-net-inflow'));
+  const eastmoneyLabel = eastmoneyLegacy ? '东财·旧主力' : '东财·超大单';
+  const parts = [one(eastmoneyLabel, sp.eastmoney), one('同花顺', sp.ths)].filter(Boolean);
   if (!parts.length) return '';
-  return `<div class="ml-srcpairs" title="东财/同花顺 各取净流入最大板,该组净流入与涨幅同板一一对应,不跨源拼">${parts.join('')}</div>`;
+  return `<div class="ml-srcpairs" title="东财使用超大单净流入,同花顺使用其净流入口径;各组资金与涨幅同板一一对应,不跨源拼">${parts.join('')}</div>`;
 }
 function strategyMainlineDisplayInflow(mainline) {
   const rows = (Array.isArray(mainline && mainline.resonanceBoards) ? mainline.resonanceBoards : [])
@@ -11658,6 +11679,8 @@ function strategyMainlineDisplayInflow(mainline) {
       value: Number(board.netInflow),
       boardName: String(board.name || ''),
       zsType: board.zsType ?? null,
+      metric: String(board.netInflowMetric || ''),
+      legacy: !!board.netInflowLegacy || (Number(board.zsType) === 6 && board.netInflowMetric !== 'eastmoney-super-large-net-inflow'),
     };
   }
   const rawValue = mainline && mainline.netInflow;
@@ -11665,7 +11688,19 @@ function strategyMainlineDisplayInflow(mainline) {
     value: rawValue != null && rawValue !== '' && Number.isFinite(Number(rawValue)) ? Number(rawValue) : null,
     boardName: String((mainline && mainline.netInflowBoard) || ''),
     zsType: mainline && mainline.netInflowZsType != null ? mainline.netInflowZsType : null,
+    metric: String((mainline && mainline.netInflowMetric) || ''),
+    legacy: !!(mainline && mainline.netInflowLegacy) || (Number(mainline && mainline.netInflowZsType) === 6 && mainline && mainline.netInflowMetric !== 'eastmoney-super-large-net-inflow'),
   };
+}
+
+function strategyMainlineFundLabel(displayInflow, negative = false) {
+  if (Number(displayInflow?.zsType) === 6) {
+    if (displayInflow?.legacy || displayInflow?.metric !== 'eastmoney-super-large-net-inflow') {
+      return negative ? '旧主力净流出' : '旧主力净流入';
+    }
+    return negative ? '超大单净流出' : '超大单净流入';
+  }
+  return negative ? '净流出' : '净流入';
 }
 function renderStrategyMainlinesHTML(d) {
   const lines = (d && d.mainlines) || [];
@@ -11689,7 +11724,7 @@ function renderStrategyMainlinesHTML(d) {
     return `<section class="mainline-wrap">
       <div class="ml-title">
         <span>今日主线榜</span>
-        <small>实时板块涨幅 × 资金净流入 × 成分股大涨/普涨广度 × 冲板候选 × 盘中动能 × 历史四源主因预判${sourceSuffix}${dayNote}</small>
+        <small>实时板块涨幅 × 东财超大单/同花顺资金净流入 × 成分股大涨/普涨广度 × 冲板候选 × 盘中动能 × 历史四源主因预判${sourceSuffix}${dayNote}</small>
       </div>
       ${statusHtml}
       <div class="rht-loading">${escapeHTML(emptyText)}</div>
@@ -11724,12 +11759,15 @@ function renderStrategyMainlinesHTML(d) {
       ${metricCell('涨停', String(Number(m.count) || 0))}
       ${metricCell('大涨/冲板', `${Number(m.bigGainCount) || 0}/${Number(m.nearLimitCount) || 0}`)}
       ${metricCell(m.boardGainName ? String(m.boardGainName).slice(0, 6) : '板块涨幅', Number.isFinite(gainValue) ? `${gainValue > 0 ? '+' : ''}${gainValue.toFixed(2)}%` : '--', gainClass)}
-      ${metricCell(Number(displayInflow.value) < 0 ? '净流出' : '净流入', displayInflow.value != null ? fmtInflow(displayInflow.value) : '--', inflowClass)}
+      ${metricCell(strategyMainlineFundLabel(displayInflow, Number(displayInflow.value) < 0), displayInflow.value != null ? fmtInflow(displayInflow.value) : '--', inflowClass)}
     </div>`;
     const driver = strategyMainlineTopScorePart(m.scoreParts);
     const inflowSource = strategyBoardSourceLabel(displayInflow.zsType);
+    const inflowMetric = Number(displayInflow.zsType) === 6
+      ? (displayInflow.legacy ? '旧主力净流入' : '超大单净流入')
+      : '净流入';
     const inflowTrace = displayInflow.boardName
-      ? ` · 资金口径 ${escapeHTML(displayInflow.boardName)}${inflowSource ? `·${escapeHTML(inflowSource)}` : ''}（单板）`
+      ? ` · 资金口径 ${escapeHTML(displayInflow.boardName)}${inflowSource ? `·${escapeHTML(inflowSource)}` : ''}·${escapeHTML(inflowMetric)}（单板）`
       : '';
     const scoreMeta = strategyMainlineScoreMetaHTML(m);
     const leadersHtml = strategyMainlineLeadersHTML(m);
@@ -11802,7 +11840,12 @@ function renderStrategyMainlinesHTML(d) {
       if (Number(m.trend.bigGainDelta) > 0) trendParts.push(`大涨+${Number(m.trend.bigGainDelta)}`);
       if (Number(m.trend.nearLimitDelta) > 0) trendParts.push(`冲板+${Number(m.trend.nearLimitDelta)}`);
       if (Number(m.trend.limitUpDelta) > 0) trendParts.push(`涨停+${Number(m.trend.limitUpDelta)}`);
-      if (m.trend.inflowDelta != null && Number(m.trend.inflowDelta) > 0) trendParts.push(`净流入${fmtInflow(m.trend.inflowDelta)}`);
+      if (m.trend.inflowDelta != null && Number(m.trend.inflowDelta) > 0) {
+        const trendMetric = Number(m.netInflowZsType) === 6 && m.netInflowMetric === 'eastmoney-super-large-net-inflow'
+          ? '超大单净流入'
+          : '净流入';
+        trendParts.push(`${trendMetric}${fmtInflow(m.trend.inflowDelta)}`);
+      }
     }
     const trendHtml = trendParts.length && m.trend ? `<span class="ml-trend">▲ ${Number(m.trend.minutes)}分钟 ${escapeHTML(trendParts.join(' '))}</span>` : '';
     return `<article class="ml-card${i === 0 ? ' lead' : ''}">
@@ -11909,7 +11952,7 @@ function renderStrategyMainlinesHTML(d) {
   return `<section class="mainline-wrap">
     <div class="ml-title">
       <span>今日主线榜</span>
-      <small>实时板块涨幅 × 资金净流入 × 成分股大涨/普涨广度 × 冲板候选 × 盘中动能 × 历史四源主因预判 · ${Number(d.count) || lines.length} 条${sourceSuffix}${dayNote}</small>
+      <small>实时板块涨幅 × 东财超大单/同花顺资金净流入 × 成分股大涨/普涨广度 × 冲板候选 × 盘中动能 × 历史四源主因预判 · ${Number(d.count) || lines.length} 条${sourceSuffix}${dayNote}</small>
     </div>
     ${statusHtml}
     ${strategyMainlineQuickReadHTML(lines, d)}
@@ -14863,6 +14906,10 @@ async function loadBoards() {
         turnover: row[4],
         amount: row[5],
         netInflow: parseFloat(row[6]),
+        superLargeNetInflow: rankingOptionalNumber(row[7]),
+        superLargeNetInflowRatio: rankingOptionalNumber(row[8]),
+        largeNetInflow: rankingOptionalNumber(row[9]),
+        largeNetInflowRatio: rankingOptionalNumber(row[10]),
         ztCount: cachedBoardMap.get(String(row[0]))?.ztCount ?? '--',
       }));
       const lastLoadedGain = rankingAll.length ? Number(rankingAll[rankingAll.length - 1].gainPct) : null;

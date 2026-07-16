@@ -28,8 +28,8 @@ const snapshotPath = (day, z) => `${day}|${z}`;
 // 每源快照:zs7(KPL)有独有板 + 一个和东财同名但涨停更高的“医药”(旧逻辑按名去重会让它顶掉东财医药)
 const SNAP = {
   '2026-07-15|6': { boards: [
-    { name: '医药', plateId: 'BK6M', ztCount: 2, netInflow: 8e8, gainPct: 3 },
-    { name: '东财独有板', plateId: 'BKE', ztCount: 1, netInflow: 5e8, gainPct: 2 },
+    { name: '医药', plateId: 'BK6M', ztCount: 2, netInflow: 8e8, superLargeNetInflow: 3e8, gainPct: 3 },
+    { name: '东财独有板', plateId: 'BKE', ztCount: 1, netInflow: 5e8, superLargeNetInflow: 2e8, gainPct: 2 },
   ] },
   '2026-07-15|5': { boards: [
     { name: '医药', plateId: 'TH5M', ztCount: 1, netInflow: 6e8, gainPct: 4 },
@@ -41,7 +41,7 @@ const SNAP = {
   // 点3:仅有 KPL(7) 快照的日期——对策略页是空板日,不应被判为可用
   '2026-07-14|7': { boards: [ { name: 'KPL独有板', plateId: 'BK7B', ztCount: 3, netInflow: 20e8, gainPct: 6 } ] },
   // 二审 P1:强势板块共振榜——KPL 强板即使涨停/净流入最高也不能进榜(仅 stub 每源快照,带 cardData 成员码)
-  '2026-07-11|6': { boards: [ { name: '东财强板', plateId: 'E1', ztCount: 3, netInflow: 10e8, gainPct: 5 } ],
+  '2026-07-11|6': { boards: [ { name: '东财强板', plateId: 'E1', ztCount: 3, netInflow: 10e8, superLargeNetInflow: 4e8, gainPct: 5 } ],
     cardData: { E1: { ztList: [{ code: '600001' }, { code: '600002' }] } } },
   '2026-07-11|7': { boards: [ { name: 'KPL强板', plateId: 'K1', ztCount: 9, netInflow: 99e8, gainPct: 9 } ],
     cardData: { K1: { ztList: [{ code: '600003' }, { code: '600004' }] } } },
@@ -53,6 +53,7 @@ const fsStub = {
 };
 // 在 eval 作用域内把标识符 fs 指向 stub(getDayBoardsWithMembers 内部用 fs.readFile)
 const fs2 = fsStub; // eslint 占位
+eval(extractFn('strategyBoardFundFlowForSource'));
 eval(extractFn('getDayBoardsWithMembers').replace(/\bfs\.readFile\b/g, 'fsStub.readFile'));
 // R2 同源配对(点2):真实 strategyMainlineSourcePairs + isFiniteNumeric,验证塌板后仍能同源拿两组。
 eval(extractFn('isFiniteNumeric'));
@@ -87,12 +88,14 @@ eval(extractFn('getStrategyStrongResonance'));
   // 点2:塌板后 bySource 仍分别保留东财(6)与同花顺(5),且不含 KPL(7)
   A(yy && yy.bySource && yy.bySource[6] && yy.bySource[5], '点2:同名“医药”塌板后 bySource 同时保留东财(6)与同花顺(5)');
   A(yy && yy.bySource && !yy.bySource[7], '点2:策略口径下 bySource 不含 KPL(7)');
-  A(yy.bySource[6].netInflow === 8e8 && Number(yy.bySource[6].gainPct) === 3, '点2:bySource[6] 是东财自己的净流入/涨幅(8亿/3%)');
+  A(yy.bySource[6].netInflow === 3e8 && Number(yy.bySource[6].gainPct) === 3, '点2:bySource[6] 是东财自己的超大单净流入/涨幅(3亿/3%),未使用 f62 的8亿');
+  A(yy.bySource[6].netInflowMetric === 'eastmoney-super-large-net-inflow' && yy.bySource[6].netInflowLegacy === false,
+    '点2:东财同源记录携带超大单口径且不是旧快照');
   A(yy.bySource[5].netInflow === 6e8 && Number(yy.bySource[5].gainPct) === 4, '点2:bySource[5] 是同花顺自己的净流入/涨幅(6亿/4%)');
 
   // 点2 端到端:strategyMainlineSourcePairs 从塌成一条的“医药”里同源还原东财/同花顺两组
   const pairs = strategyMainlineSourcePairs(strat.boards);
-  A(pairs.eastmoney && pairs.eastmoney.netInflow === 8e8 && Number(pairs.eastmoney.gainPct) === 3, '点2:sourcePairs 东财组=8亿/3%(取自 bySource[6],非跨源拼)');
+  A(pairs.eastmoney && pairs.eastmoney.netInflow === 3e8 && Number(pairs.eastmoney.gainPct) === 3, '点2:sourcePairs 东财组=超大单3亿/3%(取自 bySource[6],非 f62/非跨源拼)');
   A(pairs.ths && pairs.ths.netInflow === 6e8 && Number(pairs.ths.gainPct) === 4, '点2:sourcePairs 同花顺组=6亿/4%(取自 bySource[5],非跨源拼)');
   A(pairs.eastmoney.board === '医药' && pairs.ths.board === '医药', '点2:两组均落在“医药”板(塌板后仍成对)');
 
@@ -104,7 +107,7 @@ eval(extractFn('getStrategyStrongResonance'));
   // 二审 P1:强势板块共振榜(/api/strong-board-resonance)——贯穿真实 getStrategyStrongResonance
   const reso = await getStrategyStrongResonance('2026-07-11');
   const resoNames = (reso.boards || []).map(b => b.name);
-  A(resoNames.includes('东财强板'), '二审P1:东财强板(zt3/10亿)进共振榜——证明测试口径能正常surface强板');
+  A(resoNames.includes('东财强板'), '二审P1:东财强板(zt3/超大单4亿)进共振榜——证明测试口径能正常surface强板');
   A(!resoNames.includes('KPL强板'), '二审P1:KPL强板即便 zt9/99亿(最高)也不进共振榜——策略页按来源剔除');
   A(!(reso.boards || []).some(b => Number(b.netInflow) === 99e8), '二审P1:共振榜净流入不含 KPL 的 99亿(未被 KPL 值污染)');
 

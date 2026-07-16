@@ -7495,6 +7495,10 @@ function normalizeEastmoneyConceptBoard(row, index = 0) {
     rank: index + 1,
     gain: numOrNull(row?.f3),
     netInflow: numOrNull(row?.f62),
+    superLargeNetInflow: numOrNull(row?.f66),
+    superLargeNetInflowRatio: numOrNull(row?.f69),
+    largeNetInflow: numOrNull(row?.f72),
+    largeNetInflowRatio: numOrNull(row?.f75),
     upCount: numOrNull(row?.f104),
     downCount: numOrNull(row?.f105),
     leadStockName: String(row?.f128 || '').trim(),
@@ -7534,6 +7538,11 @@ function persistEastmoneyConceptBoard(board, stockCount = null) {
     name: board.name,
     rank: board.rank,
     stockCount,
+    netInflow: numOrNull(board.netInflow),
+    superLargeNetInflow: numOrNull(board.superLargeNetInflow),
+    superLargeNetInflowRatio: numOrNull(board.superLargeNetInflowRatio),
+    largeNetInflow: numOrNull(board.largeNetInflow),
+    largeNetInflowRatio: numOrNull(board.largeNetInflowRatio),
   };
 }
 
@@ -7546,6 +7555,10 @@ function publicEastmoneyConceptBoard(board, quote = null) {
     stockCount: board.stockCount,
     gain: numOrNull(quote?.gain ?? board.gain),
     netInflow: numOrNull(quote?.netInflow ?? board.netInflow),
+    superLargeNetInflow: numOrNull(quote?.superLargeNetInflow ?? board.superLargeNetInflow),
+    superLargeNetInflowRatio: numOrNull(quote?.superLargeNetInflowRatio ?? board.superLargeNetInflowRatio),
+    largeNetInflow: numOrNull(quote?.largeNetInflow ?? board.largeNetInflow),
+    largeNetInflowRatio: numOrNull(quote?.largeNetInflowRatio ?? board.largeNetInflowRatio),
     upCount: numOrNull(quote?.upCount ?? board.upCount),
     downCount: numOrNull(quote?.downCount ?? board.downCount),
     leadStockName: String(quote?.leadStockName ?? board.leadStockName ?? '').trim(),
@@ -7563,7 +7576,7 @@ function persistEastmoneyConceptStock(stock) {
 }
 
 async function fetchEastmoneyConceptBoards() {
-  const fields = 'f12,f14,f3,f62,f104,f105,f128,f140,f141';
+  const fields = 'f12,f14,f3,f62,f66,f69,f72,f75,f104,f105,f128,f140,f141';
   const rows = await eastmoneyClist('m:90+t:3', fields, { pageSize: 500, fid: 'f3', po: 1 });
   return rows.map(normalizeEastmoneyConceptBoard).filter(Boolean);
 }
@@ -20146,6 +20159,10 @@ async function fetchBoardRankingForSnapshot(zsType, apiKey, options = {}) {
         turnover: null,
         amount: null,
         netInflow: numOrNull(view.netInflow),
+        superLargeNetInflow: numOrNull(view.superLargeNetInflow),
+        superLargeNetInflowRatio: numOrNull(view.superLargeNetInflowRatio),
+        largeNetInflow: numOrNull(view.largeNetInflow),
+        largeNetInflowRatio: numOrNull(view.largeNetInflowRatio),
         upCount: view.upCount,
         downCount: view.downCount,
         leadStockName: view.leadStockName,
@@ -21076,6 +21093,38 @@ async function collectStrategyQiCodes(snapDay) {
   }
   return set;
 }
+
+// 策略页资金口径：东财只使用 f66「超大单净流入」；今日实时仍保留 f62「主力净流入」。
+// 历史快照在该字段上线前只有 f62，允许读取但必须携带 legacy 标记，前端不得误称为超大单。
+function strategyBoardFundFlowForSource(board, zsType, options = {}) {
+  const source = Number(zsType);
+  if (source === 6) {
+    const superLarge = numOrNull(board?.superLargeNetInflow);
+    if (superLarge != null) {
+      return {
+        value: superLarge,
+        metric: 'eastmoney-super-large-net-inflow',
+        legacy: false,
+      };
+    }
+    const legacyValue = options.allowLegacyEastmoney
+      ? numOrNull(board?.netInflow ?? board?.mainInflow ?? board?.inflow)
+      : null;
+    return {
+      value: legacyValue,
+      metric: legacyValue == null
+        ? 'eastmoney-super-large-net-inflow'
+        : 'eastmoney-main-net-inflow-legacy',
+      legacy: legacyValue != null,
+    };
+  }
+  return {
+    value: numOrNull(board?.netInflow ?? board?.mainInflow ?? board?.inflow),
+    metric: source === 5 ? 'ths-net-inflow' : 'source-net-inflow',
+    legacy: false,
+  };
+}
+
 async function getStrategyBoardsForDay(day, options = {}) {
   const requestedDay = isoFromCompactDate(day);
   const allowFallback = options.allowFallback !== false;
@@ -21097,12 +21146,15 @@ async function getStrategyBoardsForDay(day, options = {}) {
         const plateId = String(b?.plateId ?? b?.id ?? b?.code ?? '');
         if (!plateId) continue;
         if (hidden.has(plateId)) continue;   // 看板永久删除(删两次)的板块,策略候选/强势板块也排除
+        const fundFlow = strategyBoardFundFlowForSource(b, zsType, { allowLegacyEastmoney: true });
         out.push({
           plateId,
           name: String(b?.name ?? b?.plateName ?? ''),
           gainPct: Number(b?.gainPct ?? b?.gain ?? NaN),
           ztCount: Number(b?.ztCount ?? b?.zt ?? NaN),
-          netInflow: Number(b?.netInflow ?? b?.mainInflow ?? b?.inflow ?? NaN),
+          netInflow: fundFlow.value,
+          netInflowMetric: fundFlow.metric,
+          netInflowLegacy: fundFlow.legacy,
           zsType,
           qiLeaders: computeBoardQiLeaders(cardData[plateId]),
           sourceDay: declaredDay,  // P1 防跨日污染:优先 payload 内部声明日期,回退/错标时 ≠ requestedDay
@@ -21134,12 +21186,15 @@ async function getStrategyBoardsForDay(day, options = {}) {
               const hydrated = await hydrateBoardForSnapshot({ ...board }, apiKey, String(zsType), requestedDay).catch(() => null);
               if (hydrated?.board) board = { ...board, ...hydrated.board };
             }
+            const fundFlow = strategyBoardFundFlowForSource(board, zsType);
             const liveItem = {
               plateId,
               name: String(board?.name ?? board?.plateName ?? ''),
               gainPct: Number(board?.gainPct ?? board?.gain ?? NaN),
               ztCount: Number(board?.ztCount ?? board?.zt ?? NaN),
-              netInflow: Number(board?.netInflow ?? board?.mainInflow ?? board?.inflow ?? NaN),
+              netInflow: fundFlow.value,
+              netInflowMetric: fundFlow.metric,
+              netInflowLegacy: fundFlow.legacy,
               zsType,
               qiLeaders: null,
               sourceDay: requestedDay,   // P1:实时行情属于请求日本身,非回退
@@ -21150,7 +21205,11 @@ async function getStrategyBoardsForDay(day, options = {}) {
               if (liveItem.name) existing.name = liveItem.name;
               if (Number.isFinite(liveItem.gainPct)) existing.gainPct = liveItem.gainPct;
               if (Number.isFinite(liveItem.ztCount)) existing.ztCount = liveItem.ztCount;
-              if (Number.isFinite(liveItem.netInflow)) existing.netInflow = liveItem.netInflow;
+              if (Number.isFinite(liveItem.netInflow)) {
+                existing.netInflow = liveItem.netInflow;
+                existing.netInflowMetric = liveItem.netInflowMetric;
+                existing.netInflowLegacy = liveItem.netInflowLegacy;
+              }
             } else {
               out.push(liveItem);
               liveOutByKey.set(liveKey, liveItem);
@@ -21196,7 +21255,7 @@ async function getDayBoardsWithMembers(day, options = {}) {
   // 默认三源 [6,5,7](看板/复盘等页面仍需 KPL);策略主线传 STRATEGY_ZS_TYPES=[6,5] 以剔除 KPL,避免误伤其它页面。
   const zsTypes = Array.isArray(options.zsTypes) && options.zsTypes.length ? options.zsTypes : [6, 5, 7];
   const bmap = new Map();
-  const absorbPayload = async (payload, z) => {
+  const absorbPayload = async (payload, z, sourceKind = 'snapshot') => {
     let hidden; try { hidden = await getPermanentHiddenSet(z); } catch { hidden = new Set(); }
     const cardData = payload?.cardData || {};
     for (const b of (Array.isArray(payload?.boards) ? payload.boards : [])) {
@@ -21207,7 +21266,10 @@ async function getDayBoardsWithMembers(day, options = {}) {
       // 未知涨停数规范为 null(不是 NaN):下游 numOrNull/回填守卫按 null 语义处理;
       // Codex #111 复核 P1——旧 Number(...??NaN) 产出 NaN,回填守卫 b.zt!=null 会把它当"已有值"跳过。
       const zt = numOrNull(b?.ztCount ?? b?.zt);
-      const netInflow = Number(b?.netInflow ?? b?.mainInflow ?? b?.inflow ?? NaN);
+      const fundFlow = strategyBoardFundFlowForSource(b, z, {
+        allowLegacyEastmoney: sourceKind === 'snapshot',
+      });
+      const netInflow = fundFlow.value;
       const gainPct = Number(b?.gainPct ?? b?.gain ?? b?.zf ?? b?.changePct ?? b?.涨幅 ?? NaN);
       const ztList = Array.isArray(cardData[plateId]?.ztList) ? cardData[plateId].ztList : [];
       const codes = ztList.map(x => normalizeReasonSourceCode(x?.code ?? x)).filter(Boolean);
@@ -21215,9 +21277,27 @@ async function getDayBoardsWithMembers(day, options = {}) {
       // 但每源各留一份到 bySource,供 R2 同源配对可靠拿到东财/同花顺两组(Codex #88 点2)。
       const cur = bmap.get(name);
       const bySource = (cur && cur.bySource) || {};
-      bySource[z] = { zsType: z, plateId, netInflow, gainPct, zt };
+      bySource[z] = {
+        zsType: z,
+        plateId,
+        netInflow,
+        netInflowMetric: fundFlow.metric,
+        netInflowLegacy: fundFlow.legacy,
+        gainPct,
+        zt,
+      };
       const winner = (!cur || (Number(zt) || 0) > (Number(cur.zt) || 0))
-        ? { name, plateId, zsType: z, zt, netInflow, gainPct, codes }
+        ? {
+            name,
+            plateId,
+            zsType: z,
+            zt,
+            netInflow,
+            netInflowMetric: fundFlow.metric,
+            netInflowLegacy: fundFlow.legacy,
+            gainPct,
+            codes,
+          }
         : cur;
       winner.bySource = bySource;
       bmap.set(name, winner);
@@ -21226,7 +21306,7 @@ async function getDayBoardsWithMembers(day, options = {}) {
   for (const z of zsTypes) {
     try {
       const p = JSON.parse(await fs.readFile(snapshotPath(useDay, String(z)), 'utf8'));
-      await absorbPayload(p, z);
+      await absorbPayload(p, z, 'snapshot');
     } catch (err) { strategyMainlineDiagNoteRead(`snapshot-zs${z} ${useDay}`, err); }
   }
   let source = bmap.size ? 'snapshot' : 'none';
@@ -21244,7 +21324,7 @@ async function getDayBoardsWithMembers(day, options = {}) {
             .filter(isBoardGainAllowed)
             .slice(0, Number(options.boardPool || 0) || STRATEGY_MAINLINE_RISING_BOARD_LIMIT);
           const hydrated = await hydrateStrategyLiveBoardsForMembers(boards, apiKey, z, requestedDay);
-          await absorbPayload(hydrated, z);
+          await absorbPayload(hydrated, z, 'live');
         } catch (err) { strategyMainlineDiagNoteRead(`board-rank-live zs${z} ${requestedDay}`, err); }   // 七审:实时回退失败不再空吞
       });
       if (bmap.size) source = 'live';
@@ -21277,6 +21357,8 @@ async function getDayThemeBoardStats(day) {
       boards: [],
       netInflow: null,
       netInflowBoard: '',
+      netInflowMetric: '',
+      netInflowLegacy: false,
       gainPct: null,
       gainBoard: '',
     };
@@ -21287,11 +21369,15 @@ async function getDayThemeBoardStats(day) {
       zsType: b.zsType,
       zt: Number(b.zt) || 0,
       netInflow: Number.isFinite(Number(b.netInflow)) ? Number(b.netInflow) : null,
+      netInflowMetric: b.netInflowMetric || '',
+      netInflowLegacy: !!b.netInflowLegacy,
       gainPct: Number.isFinite(Number(b.gainPct)) ? Number(b.gainPct) : null,
     });
     if (Number.isFinite(Number(b.netInflow)) && (e.netInflow == null || Number(b.netInflow) > Number(e.netInflow))) {
       e.netInflow = Number(b.netInflow);
       e.netInflowBoard = b.name;
+      e.netInflowMetric = b.netInflowMetric || '';
+      e.netInflowLegacy = !!b.netInflowLegacy;
     }
     if (Number.isFinite(Number(b.gainPct)) && (e.gainPct == null || Number(b.gainPct) > Number(e.gainPct))) {
       e.gainPct = Number(b.gainPct);
@@ -21507,6 +21593,8 @@ function strategyCreateMainlineSeed(theme, key) {
     netInflowBoard: '',
     netInflowBest: null,
     netInflowZsType: null,
+    netInflowMetric: '',
+    netInflowLegacy: false,
     boardKeySet: new Set(),
   };
 }
@@ -21533,6 +21621,8 @@ function strategyMainlineRecordNetInflow(seed, board, value) {
     seed.netInflowBest = netInflow;
     seed.netInflowBoard = String(board?.name || '');
     seed.netInflowZsType = board?.zsType ?? null;
+    seed.netInflowMetric = String(board?.netInflowMetric || '');
+    seed.netInflowLegacy = !!board?.netInflowLegacy;
   }
   seed.netInflowSeen = true;
   return true;
@@ -21547,6 +21637,8 @@ function strategyMainlineRepresentativeBoardInflow(boards) {
     value: board ? Number(board.netInflow) : null,
     boardName: String(board?.name || ''),
     zsType: board?.zsType ?? null,
+    metric: String(board?.netInflowMetric || ''),
+    legacy: !!board?.netInflowLegacy,
   };
 }
 // R2 同源配对(Owner 2026-07-15):按源(东财6/同花顺5)各取净流入最大的板,净流入与卡片涨幅取自
@@ -21557,13 +21649,17 @@ function strategyMainlineSourcePairs(boards) {
     let best = null;
     for (const b of (Array.isArray(boards) ? boards : [])) {
       const s = b && b.bySource && b.bySource[zs];
-      const inflow = s ? Number(s.netInflow)
+      const inflow = s && isFiniteNumeric(s.netInflow) ? Number(s.netInflow)
         : (Number(b?.zsType) === zs && isFiniteNumeric(b?.netInflow) ? Number(b.netInflow) : NaN);
       if (!Number.isFinite(inflow)) continue;
       const gainPct = s
         ? (isFiniteNumeric(s.gainPct) ? Number(s.gainPct) : null)
         : (isFiniteNumeric(b?.gainPct) ? Number(b.gainPct) : null);
-      if (!best || inflow > best.netInflow) best = { board: String(b?.name || ''), netInflow: inflow, gainPct };
+      const metric = String((s && s.netInflowMetric) || (Number(b?.zsType) === zs ? b?.netInflowMetric : '') || '');
+      const legacy = !!((s && s.netInflowLegacy) || (Number(b?.zsType) === zs && b?.netInflowLegacy));
+      if (!best || inflow > best.netInflow) {
+        best = { board: String(b?.name || ''), netInflow: inflow, gainPct, metric, legacy };
+      }
     }
     return best;
   };
@@ -21813,6 +21909,8 @@ function strategyMergeMainlineFamilies(rawMainlines) {
       netInflow,
       netInflowBoard: netSelection.boardName,
       netInflowZsType: netSelection.zsType,
+      netInflowMetric: netSelection.metric,
+      netInflowLegacy: netSelection.legacy,
       netInflowAggregation: 'representative-board-max',
       sourcePairs: strategyMainlineSourcePairs(uniqueBoardsForStats),   // R2:东财/同花顺 各自同源净流入+涨幅配对
       boardGainPct: isFiniteNumeric(gainLead.gainPct) ? Number(gainLead.gainPct) : null,
@@ -22178,12 +22276,15 @@ async function getStrategyMainlineRealtimeCatalogBoards(day) {
   ]);
   const eastmoneyBoards = (eastmoneyQuoteBoards || []).map(board => {
     const view = publicEastmoneyConceptBoard(board, board);
+    const fundFlow = strategyBoardFundFlowForSource(view, 6);
     return {
       plateId: view.plateId,
       name: view.name,
       memberCount: view.stockCount,
       gainPct: numOrNull(view.gain),
-      netInflow: numOrNull(view.netInflow),
+      netInflow: fundFlow.value,
+      netInflowMetric: fundFlow.metric,
+      netInflowLegacy: fundFlow.legacy,
       ztCount: null,
       source: 'eastmoney',
       zsType: 6,
@@ -22192,12 +22293,15 @@ async function getStrategyMainlineRealtimeCatalogBoards(day) {
   const thsSourceBoards = thsQuoteBoards.length ? thsQuoteBoards : (thsCatalog?.boards || []);
   const thsBoards = thsSourceBoards.map(board => {
     const view = publicThsConceptBoard(board, board);
+    const fundFlow = strategyBoardFundFlowForSource(view, 5);
     return {
       plateId: view.plateId,
       name: view.name,
       memberCount: view.stockCount,
       gainPct: numOrNull(view.gain),
-      netInflow: numOrNull(view.netInflow),
+      netInflow: fundFlow.value,
+      netInflowMetric: fundFlow.metric,
+      netInflowLegacy: fundFlow.legacy,
       ztCount: null,
       source: 'ths',
       zsType: 5,
@@ -22359,6 +22463,8 @@ function strategyMainlineAttachRealtimeBoardToSeed(seed, board, matchedCodes = n
     zsType: board?.zsType,
     ztCount: zt != null ? zt : (sourceLimitCodes.length ? sourceLimitCodes.length : null),
     netInflow,
+    netInflowMetric: String(board?.netInflowMetric || ''),
+    netInflowLegacy: !!board?.netInflowLegacy,
     gainPct,
     confirmedCount: codes.length || (zt != null ? zt : 0),
     bigGainCount: risingStocks.length,
@@ -22968,7 +23074,7 @@ function strategyMainlineStaleness(payload, sessionPhase = '', nowMs = Date.now(
 const STRATEGY_MAINLINE_METRIC_PROFILE = {
   leaderGain: { fields: ['gain10', 'gain30', 'targetDayGain'], source: 'eastmoney-close-db+target-day-live', basis: 'target-day-inclusive', note: '龙头10/30个交易日累计收益均包含目标日,以窗口首日前收盘为基准;盘中使用目标日实时价,盘后使用目标日最终收盘价' },
   leaderZt: { fields: ['zt10Count', 'mainZt10Count'], source: 'limit-up-db', basis: 'daily', note: '涨停次数按涨停底库交易日统计' },
-  realtimeBoard: { fields: ['gainPct', 'netInflow', 'zt'], source: 'live-board-rank', basis: 'intraday-live', note: '板块涨幅/净流入/涨停数在 realtimeSource=live 时为盘中实时,snapshot 时为快照口径' },
+  realtimeBoard: { fields: ['gainPct', 'netInflow', 'netInflowMetric', 'zt'], source: 'eastmoney-f66+ths-live-board-rank', basis: 'intraday-live', note: '策略东财资金使用f66超大单净流入,同花顺保留其净流入口径;字段上线前的东财旧快照明确标记legacy,不冒充超大单' },
   cardKlineGain: { fields: ['cardData.gain10', 'cardData.gain30', 'qiLeaders'], source: 'board-snapshot-kline', basis: 'intraday-kline', note: '实时卡展开与QI龙头的10/30日涨幅为K线口径,含快照日盘中涨幅' },
 };
 function strategyMainlineAttachResponseMeta(payload, options = {}) {
@@ -24306,6 +24412,8 @@ function strategyMainlineAddRealtimeBoardSeed(seedByKey, board) {
     zsType: board?.zsType,
     ztCount: zt != null ? zt : codes.length,
     netInflow,
+    netInflowMetric: String(board?.netInflowMetric || ''),
+    netInflowLegacy: !!board?.netInflowLegacy,
     gainPct,
     confirmedCount: codes.length || (zt != null ? zt : 0),
     bigGainCount: risingStocks.length,
@@ -25012,6 +25120,8 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
       netInflow: seed.netInflowSeen ? Number(seed.netInflowTotal) : null,
       netInflowBoard: seed.netInflowBoard || '',
       netInflowZsType: seed.netInflowZsType ?? null,
+      netInflowMetric: seed.netInflowMetric || '',
+      netInflowLegacy: !!seed.netInflowLegacy,
       boardGainPct: seed.maxGainPct == null ? null : Number(seed.maxGainPct),
       boardGainName: seed.gainBoard || '',
       boards: seed.boards,
@@ -25147,6 +25257,8 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
       netInflow: t.netInflow ?? null,
       netInflowBoard: t.netInflowBoard || '',
       netInflowZsType: t.netInflowZsType ?? null,
+      netInflowMetric: t.netInflowMetric || '',
+      netInflowLegacy: !!t.netInflowLegacy,
       netInflowAggregation: 'representative-board-max',
       sourcePairs: strategyMainlineSourcePairs(boards),   // R2:东财/同花顺 各自同源净流入+涨幅配对
       boardGainPct,
@@ -25174,6 +25286,8 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
         zsType: b.zsType,
         ztCount: numOrNull(b.ztCount),
         netInflow: b.netInflow,
+        netInflowMetric: b.netInflowMetric || '',
+        netInflowLegacy: !!b.netInflowLegacy,
         gainPct: b.gainPct,
         confirmedCount: Number(b.confirmedCount) || 0,
         bigGainCount: Number(b.bigGainCount) || 0,
@@ -25696,6 +25810,8 @@ function aiCompactBoard(board) {
     gainPct: aiNum(board.gainPct),
     ztCount: aiNum(board.ztCount, 0),
     netInflow: aiNum(board.netInflow, 0),
+    netInflowMetric: board.netInflowMetric || '',
+    netInflowLegacy: !!board.netInflowLegacy,
     qiLeaders: board.qiLeaders || null,
   };
 }
@@ -25734,6 +25850,8 @@ function aiCompactMainline(mainline) {
     netInflow: aiNum(mainline.netInflow, 0),
     netInflowBoard: mainline.netInflowBoard || '',
     netInflowZsType: mainline.netInflowZsType ?? null,
+    netInflowMetric: mainline.netInflowMetric || '',
+    netInflowLegacy: !!mainline.netInflowLegacy,
     netInflowAggregation: mainline.netInflowAggregation || '',
     sourcePairs: mainline.sourcePairs || null,   // R2:东财/同花顺 各自同源净流入+涨幅配对
     boardGainPct: aiNum(mainline.boardGainPct),
@@ -25754,6 +25872,8 @@ function aiCompactMainline(mainline) {
       ztCount: aiNum(board.ztCount, 0),
       gainPct: aiNum(board.gainPct),
       netInflow: aiNum(board.netInflow, 0),
+      netInflowMetric: board.netInflowMetric || '',
+      netInflowLegacy: !!board.netInflowLegacy,
       bigGainCount: aiNum(board.bigGainCount, 0),
       nearLimitCount: aiNum(board.nearLimitCount, 0),
       breadth: board.breadth || null,
