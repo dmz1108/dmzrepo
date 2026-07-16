@@ -5928,3 +5928,27 @@ Deployment:
 Notes for next agent:
 - 合入 `main` 后使用 `ops/production/manifests/yule-latest-day-first-20260715.json` 发布，`restart=none`。
 - 公网验收明星热点首卡应为最新可用日期 2026-07-15 的最高热度内容；若后续采集到 2026-07-16 明星内容，应自动切换到 2026-07-16。
+
+## 2026-07-15 - Codex - 娱乐日期优先规则已部署
+
+Changed:
+- PR #108 已合并到 `main`（`a156d910b7d93304b9727084dc420abfb626cf12`），并通过受保护生产流程只发布 `yule.html`。
+- 生产部署器已自动把本次变更追加到云端两份运维日志。
+
+Files:
+- 云端 `C:\PandaDashboard\yule.html`
+- 云端两份运维日志（部署器自动追加）
+- Git `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 工作流 `29465292464` 成功并返回 `health=ok`；线上与 `main` 的 `yule.html` SHA-256 均为 `dcd3030bbf71ea1ae13f851c48e9298e8f7730e885a24de9f23f47cc46e946c6`。
+- 公网页面和明星热点 API 均为 HTTP 200，页面源码已包含“最新日期优先 · 同日按热度排序”和北京时间日期回退逻辑。
+- 当前明星热点尚无 2026-07-16 新条目，因此按规则回退到最新可用日期 2026-07-15，首条为“都说了在肖战剧组不要谈恋爱”（ID `5e76c512a3d82e32`）。
+
+Deployment:
+- 工作流：`https://github.com/dmz1108/dmzrepo/actions/runs/29465292464`；备份：`C:\PandaDashboard\_deploy-backups\github-29465292464-1`。
+- `restart=none`；未重启娱乐服务、主服务或其他服务，未修改娱乐数据库、采集配置、账号、行情或策略数据。
+
+Notes for next agent:
+- 本次日期优先问题已完成代码、测试、独立复核、Git 合并、生产发布和公网验收，无需再次部署。
+- 后续一旦采集到 2026-07-16 的明星热点，页面会自动改为展示该日期中综合热度最高的内容；无需再改页面。
