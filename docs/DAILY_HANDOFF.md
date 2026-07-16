@@ -6291,3 +6291,26 @@ Deployment:
 
 Notes for next agent:
 - 预算定时器是 unref 的(不阻服务退出);测试进程自带保活,新增用例时注意。
+
+## 2026-07-16 - Claude - 复核 Codex PR#123(正式主线榜严格 QI 门槛)
+
+Changed:
+- 仅复核,未改代码。结论:无阻断 bug;一项需 Owner 拍板(P2)+ 两项 P3,已评论在 PR#123。
+- P2:/api/strategy-mainlines 历史日查询也走严格闸,07-13 前的冻结快照无 qi/轨迹字段
+  会被追溯清空主线展示——需 Owner 决定按实施日切还是接受追溯。
+- P3:实时构建+统一返回层双重 attach 导致 explain 首行重复、l2CurrentVerificationStatus
+  被二次覆盖;预期明星首现恰逢流出周期会丢资格(低概率,备查)。
+- 核过并通过:跨源轨迹隔离(bySource 恒带 starTransitions 数组,回退仅旧 schema)、
+  自动扫描派发独立于硬闸、缓存/快照先补证据后过滤且不改写文件、leaderDebug 保留完整池。
+
+Files:
+- docs/DAILY_HANDOFF.md(本条)
+
+Validated:
+- 在独立 worktree 对 PR#123 分支跑 node --check + 39 个测试文件全绿。
+
+Deployment:
+- 无。
+
+Notes for next agent:
+- PR#117(THS DDE)仍等 Codex 对三项修复的复审;PR#123 等 Owner 对 P2 拍板。
