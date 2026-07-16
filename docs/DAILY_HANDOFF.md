@@ -5820,3 +5820,33 @@ Deployment:
 Notes for next agent:
 - 清单合入 `main` 后重新计算 `ops/production/deploy-from-main.ps1` 的 SHA-256，再以 `RUN_PRODUCTION` 触发受保护工作流；不得沿用本地或旧提交的哈希。
 - 工作流完成后验证公网健康、主页/行情/后台、两源主线与回看、L2 完整/残缺/历史任务恢复边界，并把实际 run URL、部署提交、备份目录、重启与验证结果再次写入 Git handoff。
+
+## 2026-07-15 - Codex - PR103 + PR88 生产部署与只读验收完成
+
+Changed:
+- 按顺序完成并合入 PR103（merge `d27a350`）、PR88（merge `71d9919`）和生产清单 PR104（merge `9b32ef8`）。
+- 从受保护的 `main@9b32ef8512153f75b6cd840b8af2111720763bd4` 一次发布 PR103 的 L2 重启归并修复与 PR88 的东财/同花顺双来源策略、回看前后端改动。
+- 部署后的只读 L2 证据确认 2026-07-15 共 15 个自动任务全部为 `done`；此前卡在 `running` 的肝炎同花顺 `308915` 已恢复为 `done`，其 50 条结果均含现价和完整五档。
+
+Files:
+- `kpl-stats-server.js`（生产发布）
+- `local-l2-task-queue.js`（生产发布）
+- `kpl-dashboard_17_apple.html`（生产发布）
+- `docs/DAILY_HANDOFF.md`（本次验收记录）
+
+Validated:
+- 生产部署工作流 `29461921089` 成功；锁定提交、脚本 SHA、manifest 和部署后文件哈希校验均通过，云端本机健康检查为 `ok`。
+- 公网 `https://market.dreamerqi.com/health` 返回 `{"ok":true}`；行情主页、`/kpl`、`/admin` 和 `https://dreamerqi.com/` 均返回 HTTP 200。
+- 只读 L2 审计工作流 `29462278151` 成功：15/15 任务均为 `done`，627 条结果全部含现价和完整五档；肝炎同花顺为 50/50/50，肝炎东财为 45/45/45，CAR-T 东财为 18/18/18。全量等级为 `active=51`、`none=547`、`sealedWeak=29`、`confirmed=0`；因此“没有 L2 确认主线”符合完整证据，继续显示“L2 未扫描”则不符合实际任务状态。
+- 中国交易日 2026-07-16 检查时仍为盘前，策略接口正确返回 `market-not-open`；回看接口可返回 `stats.bySource`，但现有 6 个历史日仍全是旧 schema，东财/同花顺来源样本均为 0。因此双来源实时榜和新 schema 回看需在开盘并形成首个新预测日后再做最终在线验收，当前不能伪称已有生产样本。
+- 本次 Git 变更仅为安全交接文字；未加入令牌、Cookie、运行数据库、原始 L2 明细或其他敏感运行文件。
+
+Deployment:
+- 工作流：`https://github.com/dmz1108/dmzrepo/actions/runs/29461921089`；备份：`C:\PandaDashboard\_deploy-backups\github-29461921089-1`。
+- 仅重启主服务 `main`；未重启 Caddy、娱乐服务、Consistency Gate 或公司端 L2 worker。部署脚本已自动更新两份云端运维日志。
+- L2 审计工作流 `https://github.com/dmz1108/dmzrepo/actions/runs/29462278151` 使用受审脚本 `ops/production/requests/2026-07-15-medical-l2-star-evidence.ps1`（SHA-256 `977c90b0ab39ca25ec74da8799985a3264cb4fa9eb68f79ecf153153b86bd1fa`）只读执行，未改生产配置、任务数据、行情数据库或服务状态。
+
+Notes for next agent:
+- 下一个交易时段优先验证 `/api/strategy-mainlines` 同时返回 `mainlinesBySource.eastmoney` 与 `mainlinesBySource.ths`，并检查“来源暂缺”和“可用但无主线”两种状态不会混淆。
+- 首个 schema v3 预测落盘后，再验证 `/api/strategy-mainline-review` 的逐日双栏与 `stats.bySource` 分母/命中；旧 schema 继续显示兼容口径属于预期。
+- 2026-07-15 的 L2 恢复验收已完成，无需再重启服务或改写冻结主线快照。
