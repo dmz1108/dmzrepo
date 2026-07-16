@@ -5850,3 +5850,30 @@ Notes for next agent:
 - 下一个交易时段优先验证 `/api/strategy-mainlines` 同时返回 `mainlinesBySource.eastmoney` 与 `mainlinesBySource.ths`，并检查“来源暂缺”和“可用但无主线”两种状态不会混淆。
 - 首个 schema v3 预测落盘后，再验证 `/api/strategy-mainline-review` 的逐日双栏与 `stats.bySource` 分母/命中；旧 schema 继续显示兼容口径属于预期。
 - 2026-07-15 的 L2 恢复验收已完成，无需再重启服务或改写冻结主线快照。
+
+## 2026-07-15 - Codex - 统一首页娱乐预览与“今日值得看”主卡
+
+Changed:
+- 生产只读复现确认不是缓存问题：首页 `/api/yule/home-teaser` 为北京时间当天且有图的“哈哈哈哈哈第6季”，娱乐页“今日值得看”却从多日全局榜取到“灿如繁星”。
+- 保留既定的“北京时间当天、跨频道、优先有图”推荐规则；娱乐页默认“全部”频道改为读取同一个 `/api/yule/home-teaser`，按内容 ID 置顶并从侧栏去重。
+- 推荐接口失败或返回空时继续回退娱乐页原排行第一名；切换单独频道时仍使用该频道自身榜首，不被全站推荐覆盖。
+- 新增仅发布 `yule.html`、无需重启服务的受保护生产清单。
+
+Files:
+- `yule.html`
+- `tests/home-preview-contact.test.js`
+- `ops/production/manifests/yule-home-teaser-consistency-20260715.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 新增覆盖同一推荐置顶、按 ID 去重、分类列表尚未出现新推荐、接口失败回退和单频道不受影响；专项测试通过。
+- `yule.html` 内联脚本可编译；`node Qi/build-home.js` 后首页构建产物无差异，首页源文件和缓存版本无需改动。
+- 全仓 `node --test tests/*.test.js` 为 36/36 通过；`git diff --check` 通过。
+- 本次不改娱乐数据库、采集调度、账号权限、行情或策略，不需要 AI 讨论组协议。
+
+Deployment:
+- 本条记录提交时尚未部署生产、未改云端文件或数据、未重启任何服务。
+
+Notes for next agent:
+- 合入 `main` 后使用 `ops/production/manifests/yule-home-teaser-consistency-20260715.json` 受保护发布；`restart=none`。
+- 公网验收应同时读取首页 teaser ID 与娱乐页默认“今日值得看”主卡 ID，二者必须一致；再抽查一个单频道仍展示自己的榜首。

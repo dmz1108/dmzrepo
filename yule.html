@@ -273,6 +273,8 @@ let CATS = [];
 let activeCat = 'all';
 const LIST_CACHE = new Map();
 let renderRunId = 0;
+let HOME_TEASER = null;
+let homeTeaserPromise = null;
 let authReturnFocus = null;
 let modalReturnFocus = null;
 
@@ -527,6 +529,12 @@ function itemScore(it){
 function sortedItems(items){
   return items.slice().sort((a,b)=>itemScore(b)-itemScore(a));
 }
+function rankedTodayItems(items, preferredLead=null){
+  const ranked = sortedItems(items).filter(Boolean);
+  const preferredId = String(preferredLead&&preferredLead.id||'');
+  if(!preferredId) return ranked;
+  return [preferredLead, ...ranked.filter(item=>String(item&&item.id||'')!==preferredId)];
+}
 function imageClass(it){
   const w = Number(it.imageWidth || 0), h = Number(it.imageHeight || 0);
   return w && h && h > w * 1.08 ? 'poster' : 'landscape';
@@ -604,8 +612,8 @@ function storyHTML(it,rank){
     </div>
   </a>`;
 }
-function todayHTML(items){
-  const ranked = sortedItems(items).filter(Boolean);
+function todayHTML(items, preferredLead=null){
+  const ranked = rankedTodayItems(items, preferredLead);
   if(!ranked.length) return '';
   const lead = ranked[0];
   const side = ranked.slice(1,5);
@@ -650,9 +658,18 @@ async function listForCategory(key){
   LIST_CACHE.set(key, items);
   return items;
 }
-function groupsHTML(groups){
+function loadHomeTeaser(){
+  if(!homeTeaserPromise){
+    homeTeaserPromise = getJSON(`${API}/home-teaser?_=${Date.now()}`).then(data=>{
+      HOME_TEASER = data&&data.teaser||null;
+      return HOME_TEASER;
+    });
+  }
+  return homeTeaserPromise;
+}
+function groupsHTML(groups, preferredLead=HOME_TEASER){
   const allItems = groups.flatMap(g => g.items);
-  return todayHTML(allItems) + groups.map(g => sectionHTML(g.cat, g.items)).join('');
+  return todayHTML(allItems, preferredLead) + groups.map(g => sectionHTML(g.cat, g.items)).join('');
 }
 
 function bindSectionJumps(){
@@ -677,10 +694,13 @@ async function renderContent(){
       bindSectionJumps();
     }
     else content.innerHTML = '<div class="empty skeleton">正在加载内容…</div>';
-    const groups = await Promise.all(cats.map(async c => ({ cat:c, items:await listForCategory(c.key) })));
+    const [groups, preferredLead] = await Promise.all([
+      Promise.all(cats.map(async c => ({ cat:c, items:await listForCategory(c.key) }))),
+      loadHomeTeaser(),
+    ]);
     if(runId !== renderRunId || activeCat !== 'all') return;
     if(groups.some(g => g.items.length)){
-      content.innerHTML = groupsHTML(groups);
+      content.innerHTML = groupsHTML(groups, preferredLead);
       bindSectionJumps();
     } else {
       content.innerHTML = '<div class="empty">暂时没有可显示的内容，请稍后刷新</div>';
