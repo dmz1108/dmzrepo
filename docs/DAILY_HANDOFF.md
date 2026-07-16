@@ -6076,3 +6076,25 @@ Validated:
 
 Notes for next agent:
 - 与本分支的板级涨停回填同属 PR #111,一起复核部署;门槛金额线 5亿/涨停 2 保持 Owner 原定值。
+
+## 2026-07-16 - Codex - 准备 PR #111 板级涨停回填生产部署
+
+Changed:
+- PR #111 已完成独立复核并合并至 `main`（`563714a`）。
+- 新增受保护生产清单，只发布已审核的 `kpl-stats-server.js` 并仅重启主服务。
+
+Files:
+- `ops/production/manifests/pr111-board-zt-backfill-20260716.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 前次 `NaN` 阻断已修复；未知涨停数规范为 `null`，真实 `zt=0` 保持不覆盖，`NaN/undefined` 均有回归。
+- `node --check`、相关专项及全仓 38 个测试文件通过；与最新 `main` 合并无业务代码冲突。
+- 清单只包含主服务文件，未包含数据库、前端、娱乐服务、Caddy 或公司端 L2 worker。
+
+Deployment:
+- 本条记录提交时尚未部署；未修改云端文件或运行时数据，未重启任何服务。
+
+Notes for next agent:
+- 清单进入 `main` 后通过受保护生产工作流发布。
+- 部署后核对主服务健康，并确认满足“净流入≥5亿且板内涨停≥2”的未知涨停板块可进入 L2 自动扫描，任一门槛不满足时不派发。
