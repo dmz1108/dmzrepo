@@ -7370,7 +7370,7 @@
     font-family: "IBM Plex Mono", ui-monospace, monospace; letter-spacing: 0;
     min-width: 38px;
   }
-  body.view-strategy .mlr-pred { display: inline-flex; align-items: baseline; gap: 5px; }
+  body.view-strategy .mlr-pred { display: inline-flex; align-items: baseline; gap: 5px; flex-wrap: wrap; min-width: 0; }
   body.view-strategy .mlr-theme { color: #eaf2ff; font-weight: 780; }
   body.view-strategy .mlr-theme i { font-style: normal; color: #ffd78a; margin-left: 3px; }
   body.view-strategy .mlr-arrow { color: rgba(174,190,214,0.4); font-size: 12px; margin: 0 -2px; }
@@ -12005,11 +12005,32 @@ function renderMainlineReviewHTML(d) {
     if (r.mainlineHitTop1 == null) {
       const miss = Number(r.mainReasonMissingCount);
       const why = Number.isFinite(miss) && miss > 0 ? `盘后主因库缺 ${miss} 只涨停股` : '盘后主因库未生成或不完整';
-      return `<span class="mlr-hit na" title="${why},不计命中率">—</span>`;
+      return `<span class="mlr-hit na" title="${why},不计命中率" aria-label="${why}，不计命中率">数据不足</span>`;
     }
     if (r.mainlineHitTop1) return `<span class="mlr-hit ok" title="预判主线命中盘后涨停主因${r.actualFirstTied ? '并列' : ''}第一家族">✓命中</span>`;
     if (r.mainlineHitTop3) return '<span class="mlr-hit near" title="盘后第一家族在预判前三内">△前三</span>';
     return '<span class="mlr-hit miss" title="盘后第一家族不在预判前三">✗脱靶</span>';
+  };
+  const sourceReviewHTML = (r) => {
+    if (!r || !r.bySource) return '';
+    return [['eastmoney', '东财'], ['ths', '同花顺']].map(([key, label]) => {
+      const src = r.bySource[key] || {};
+      const status = String(src.status || '') || (src.available === false ? 'unavailable'
+        : String(src.theme || '').trim() ? 'mainline'
+          : (src.available === true && src.noMainline === true) ? 'no-mainline' : 'unknown');
+      const noMainline = status === 'no-mainline';
+      const sourceRow = { ...r, ...src, noMainline };
+      const stateText = status === 'unavailable' ? '来源暂缺'
+        : status === 'unknown' ? '历史状态未知'
+          : noMainline ? '无主线' : escapeHTML(src.theme);
+      const reason = escapeHTML(src.message || src.reason || (status === 'unavailable' ? '该来源当时不可用' : '早期记录未保存来源可用性'));
+      const result = status === 'unavailable'
+        ? `<span class="mlr-hit na" title="${reason}" aria-label="${label}来源暂缺：${reason}">暂缺</span>`
+        : status === 'unknown'
+          ? `<span class="mlr-hit na" title="${reason}" aria-label="${label}历史状态未知：${reason}">状态未知</span>`
+          : hitCell(sourceRow);
+      return `<span class="mlr-slot"><span class="mlr-label">${label}</span> <span class="mlr-theme">${stateText}</span>${result}</span>`;
+    }).join('');
   };
   const actualCell = (r) => {
     const top = Array.isArray(r.actualTop) ? r.actualTop : [];
@@ -12043,6 +12064,14 @@ function renderMainlineReviewHTML(d) {
   };
   // 行级结果配色(与 hitCell 同口径):驱动左侧强调条颜色,一眼可扫命中/前三/脱靶/待验证
   const rowHitClass = (r) => {
+    if (r.bySource) {
+      if (r.sampleValid === false) return 'hit-invalid';
+      if (r.pendingReview) return 'hit-wait';
+      const sourceRows = Object.values(r.bySource).filter(src => src && src.status !== 'unavailable' && src.status !== 'unknown' && !src.noMainline && src.mainlineHitTop1 != null);
+      const outcomes = new Set(sourceRows.map(src => src.mainlineHitTop1 === true ? 'ok' : src.mainlineHitTop3 === true ? 'near' : 'miss'));
+      if (outcomes.size !== 1) return 'hit-na';
+      return outcomes.has('ok') ? 'hit-ok' : outcomes.has('near') ? 'hit-near' : 'hit-miss';
+    }
     if (r.noMainline) return 'hit-na';
     if (r.sampleValid === false) return 'hit-invalid';
     if (r.pendingReview) return 'hit-wait';
@@ -12054,36 +12083,51 @@ function renderMainlineReviewHTML(d) {
   const body = rows.map(r => {
     const leaders = Array.isArray(r.leaders) && r.leaders.length ? r.leaders : (r.leader ? [r.leader] : []);
     const leaderCells = leaders.slice(0, 2).map((leader, index) =>
-      `<span class="mlr-slot"><span class="mlr-label">龙头${index + 1}</span> ${gainCell(leader, false)}</span>`
+      `<span class="mlr-slot"><span class="mlr-label">${r.bySource ? '东财' : ''}龙头${index + 1}</span> ${gainCell(leader, false)}</span>`
     ).join('');
+    const sourceReview = sourceReviewHTML(r);
+    const prediction = sourceReview
+      ? `<span class="mlr-pred">${sourceReview}${r.phase ? `<em class="mlr-phase" title="预判冻结时点">${escapeHTML(r.phase)}</em>` : ''}</span>`
+      : `<span class="mlr-pred"><span class="mlr-theme">${r.noMainline ? '今日无主线' : `${escapeHTML(r.theme || '')}${r.confirmed ? '<i title="管理员确认的当日主线">✔</i>' : ''}`}</span>${r.phase ? `<em class="mlr-phase" title="预判冻结时点">${escapeHTML(r.phase)}</em>` : ''}</span>`;
+    const detail = r.bySource
+      ? (!r.noMainline ? `<div class="mlr-l2">
+      <span class="mlr-slot"><span class="mlr-label">东财明星</span> ${gainCell(r.star, true)}</span>
+      ${leaderCells || '<span class="mlr-slot"><span class="mlr-label">东财龙头</span><span class="mlr-na">—</span></span>'}
+      ${expectedCell(r)}</div>` : '')
+      : `<div class="mlr-l2">${r.noMainline ? '<span class="mlr-na" title="盘中候选仍保留在预测档案中">候选未通过 L2 明星验证，不计正式主线</span>' : `
+      <span class="mlr-slot"><span class="mlr-label">明星</span> ${gainCell(r.star, true)}</span>
+      ${leaderCells || '<span class="mlr-slot"><span class="mlr-label">龙头</span><span class="mlr-na">—</span></span>'}
+      ${expectedCell(r)}`}</div>`;
     return `<div class="mlr-row ${rowHitClass(r)}${r.sampleValid === false ? ' invalid' : ''}">
     <div class="mlr-l1">
       <span class="mlr-day">${escapeHTML(String(r.day || '').slice(5))}</span>
-      <span class="mlr-pred"><span class="mlr-theme">${r.noMainline ? '今日无主线' : `${escapeHTML(r.theme || '')}${r.confirmed ? '<i title="管理员确认的当日主线">✔</i>' : ''}`}</span>${r.phase ? `<em class="mlr-phase" title="预判冻结时点">${escapeHTML(r.phase)}</em>` : ''}</span>
+      ${prediction}
       <span class="mlr-arrow" aria-hidden="true">→</span>
-      <span class="mlr-result">${hitCell(r)}${actualCell(r)}</span>
+      <span class="mlr-result">${sourceReview ? '' : hitCell(r)}${actualCell(r)}</span>
       ${sampleTag(r)}
     </div>
-    <div class="mlr-l2">${r.noMainline ? '<span class="mlr-na" title="盘中候选仍保留在预测档案中">候选未通过 L2 明星验证，不计正式主线</span>' : `
-      <span class="mlr-slot"><span class="mlr-label">明星</span> ${gainCell(r.star, true)}</span>
-      ${leaderCells || '<span class="mlr-slot"><span class="mlr-label">龙头</span><span class="mlr-na">—</span></span>'}
-      ${expectedCell(r)}`}
-    </div>
+    ${detail}
   </div>`;
   }).join('');
   const rate = (wins, total, pct) => total ? `${wins}/${total}${pct != null ? `(${pct}%)` : ''}` : '--';
-  const mlChips = stats.mainlineTotal
-    ? `<b class="mlr-chip">主线命中 ${rate(stats.mainlineTop1Hits, stats.mainlineTotal, stats.mainlineTop1Rate)}</b><b class="mlr-chip near">前三 ${rate(stats.mainlineTop3Hits, stats.mainlineTotal, stats.mainlineTop3Rate)}</b>`
-    : '';
+  const sourceStats = stats.bySource || {};
+  const hasSourceReview = rows.some(r => r && r.bySource)
+    || Number(sourceStats.eastmoney?.mainlineTotal) > 0 || Number(sourceStats.ths?.mainlineTotal) > 0;
+  const sourceStatChip = (label, s, cls = '') => `<b class="mlr-chip${cls ? ` ${cls}` : ''}">${label} 命中 ${rate(s?.mainlineTop1Hits, s?.mainlineTotal, s?.mainlineTop1Rate)} · 前三 ${rate(s?.mainlineTop3Hits, s?.mainlineTotal, s?.mainlineTop3Rate)}</b>`;
+  const mlChips = hasSourceReview
+    ? `${sourceStatChip('东财', sourceStats.eastmoney)}${sourceStatChip('同花顺', sourceStats.ths, 'near')}`
+    : (stats.mainlineTotal
+      ? `<b class="mlr-chip">主线命中 ${rate(stats.mainlineTop1Hits, stats.mainlineTotal, stats.mainlineTop1Rate)}</b><b class="mlr-chip near">前三 ${rate(stats.mainlineTop3Hits, stats.mainlineTotal, stats.mainlineTop3Rate)}</b>`
+      : '');
   const sealChipStat = stats.expectedSealTotal
-    ? `<b class="mlr-chip near">预期明星封板 ${rate(stats.expectedSealWins, stats.expectedSealTotal, stats.expectedSealRate)}</b>`
+    ? `<b class="mlr-chip near">预期明星封板${hasSourceReview ? '（兼容口径）' : ''} ${rate(stats.expectedSealWins, stats.expectedSealTotal, stats.expectedSealRate)}</b>`
     : '';
   return `<section class="ml-review">
     <div class="mlr-head">
       <div class="mlr-title"><span class="mlr-ic">📋</span>预判回看</div>
       <div class="mlr-stats">${mlChips}${sealChipStat}</div>
     </div>
-    <div class="mlr-sub"><small>回看主线命中、预期明星转封，以及明星/前两名龙头的次日最高、次日收盘和3日收盘表现。明星次日胜率 ${rate(stats.starWins, stats.starTotal, stats.starWinRate)} · 龙头1次日胜率 ${rate(stats.leaderWins, stats.leaderTotal, stats.leaderWinRate)} · 盘前/集合竞价/已收盘记录不计样本</small></div>
+    <div class="mlr-sub"><small>回看主线命中、预期明星转封，以及明星/前两名龙头的次日最高、次日收盘和3日收盘表现。明星次日胜率 ${rate(stats.starWins, stats.starTotal, stats.starWinRate)} · 龙头1次日胜率 ${rate(stats.leaderWins, stats.leaderTotal, stats.leaderWinRate)}${hasSourceReview ? ' · 收益统计沿用历史兼容口径（v3 为东财，旧记录按原口径）' : ''} · 盘前/集合竞价/已收盘记录不计样本</small></div>
     <div class="mlr-list">${body}</div>
   </section>`;
 }

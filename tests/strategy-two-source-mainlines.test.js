@@ -14,7 +14,19 @@ function extractFn(name) {
   for (; i < src.length; i++) { if (src[i] === '{') depth++; else if (src[i] === '}') { depth--; if (depth === 0) break; } }
   return src.slice(m.index, i + 1);
 }
+function extractHtmlFn(name) {
+  const sig = new RegExp(`(?:async )?function ${name}\\(`);
+  const m = html.match(sig);
+  if (!m) throw new Error('not found in html: ' + name);
+  const bb = html.indexOf('{', html.indexOf(')', m.index));
+  let depth = 0, i = bb;
+  for (; i < html.length; i++) { if (html[i] === '{') depth++; else if (html[i] === '}') { depth--; if (depth === 0) break; } }
+  return html.slice(m.index, i + 1);
+}
 const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.exitCode = 1; } else console.log('ok: ' + msg); };
+const escapeHTML = value => String(value == null ? '' : value)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+eval(extractHtmlFn('renderMainlineReviewHTML'));
 
 // 题材归一 key 的两个依赖 stub 成空,使 key 退回「题材名去『概念』后 trim」——按题材名精确匹配双源共振即可。
 const consensusKey = () => '';
@@ -89,6 +101,60 @@ A(composedBothZero.mainlinesBySource.ths.reason === 'no-l2-qualified-mainline', 
 // 前端:有 mainlinesBySource 不走单列空态早退;双栏区分"无合格主线"与"暂缺"
 A(html.includes('!lines.length && !(d && d.mainlinesBySource)'), 'P2 前端:有 mainlinesBySource 时不走单列空态早退(双栏仍展示)');
 A(html.includes('src.available && src.hasMainlines') && html.includes('无合格主线') && html.includes('暂缺'), 'P2 前端:双栏三态区分(有主线/无合格主线/暂缺)');
+const bySourceReviewHTML = renderMainlineReviewHTML({
+  days: [{
+    day: '2026-07-13', phase: '早盘', sampleValid: true, pendingReview: false,
+    noMainline: true, theme: '', leaders: [], expectedStars: [], actualTop: [{ theme: '算力', count: 3, rankTier: 1 }],
+    bySource: {
+      eastmoney: { available: true, status: 'no-mainline', theme: '', noMainline: true, mainlineHitTop1: null, mainlineHitTop3: null },
+      ths: { available: true, status: 'mainline', theme: '算力', noMainline: false, mainlineHitTop1: true, mainlineHitTop3: true },
+    },
+  }],
+  stats: { bySource: {
+    eastmoney: { mainlineTotal: 0, mainlineTop1Hits: 0, mainlineTop3Hits: 0, mainlineTop1Rate: null, mainlineTop3Rate: null },
+    ths: { mainlineTotal: 1, mainlineTop1Hits: 1, mainlineTop3Hits: 1, mainlineTop1Rate: 100, mainlineTop3Rate: 100 },
+  } },
+});
+A(bySourceReviewHTML.includes('<span class="mlr-label">东财</span>') && bySourceReviewHTML.includes('<span class="mlr-theme">无主线</span>'), 'P2 回看页:东财明确显示无主线');
+A(bySourceReviewHTML.includes('<span class="mlr-label">同花顺</span>') && bySourceReviewHTML.includes('<span class="mlr-theme">算力</span>'), 'P2 回看页:同花顺独立显示算力主线');
+A(bySourceReviewHTML.includes('同花顺 命中 1/1(100%) · 前三 1/1(100%)'), 'P2 回看统计:同花顺独立显示命中/前三数据');
+A(!bySourceReviewHTML.includes('<span class="mlr-theme">今日无主线</span>') && !bySourceReviewHTML.includes('候选未通过 L2'), 'P2 回看页:东财空+同花顺有预测时不再输出无来源的整体“今日无主线”误导');
+const unavailableReviewHTML = renderMainlineReviewHTML({
+  days: [{
+    day: '2026-07-14', phase: '早盘', sampleValid: true, pendingReview: false,
+    noMainline: true, leaders: [], expectedStars: [], actualTop: [], mainReasonMissingCount: 2,
+    bySource: {
+      eastmoney: { available: false, status: 'unavailable', reason: 'source-unavailable', message: '东财当时暂不可用', theme: '', noMainline: false, mainlineHitTop1: null, mainlineHitTop3: null },
+      ths: { available: true, status: 'mainline', theme: '算力', noMainline: false, mainlineHitTop1: null, mainlineHitTop3: null },
+    },
+  }],
+  stats: { bySource: { eastmoney: { mainlineTotal: 0 }, ths: { mainlineTotal: 0 } } },
+});
+A(unavailableReviewHTML.includes('<span class="mlr-theme">来源暂缺</span>') && unavailableReviewHTML.includes('>暂缺</span>'), '终审P2 回看页:来源不可用明确显示“来源暂缺/暂缺”，不冒充无主线');
+A(unavailableReviewHTML.includes('<span class="mlr-theme">算力</span>') && unavailableReviewHTML.includes('>数据不足</span>'), '终审P3 回看页:另一源主题保留，真实家族不完整时可见显示“数据不足”');
+A(!unavailableReviewHTML.includes('<span class="mlr-theme">无主线</span>'), '终审P2 回看页:暂缺源不被写成无主线');
+const mixedReviewHTML = renderMainlineReviewHTML({
+  days: [
+    { day: '2026-07-10', phase: '尾盘', sampleValid: true, noMainline: false, theme: '医药', star: null, leaders: [], expectedStars: [], actualTop: [], mainlineHitTop1: null },
+    { day: '2026-07-13', phase: '早盘', sampleValid: true, noMainline: false, theme: '算力', star: null, leaders: [], expectedStars: [], actualTop: [],
+      bySource: { eastmoney: { available: true, status: 'mainline', theme: '算力', noMainline: false, mainlineHitTop1: null }, ths: { available: true, status: 'no-mainline', theme: '', noMainline: true, mainlineHitTop1: null } } },
+  ],
+  stats: { starWins: 1, starTotal: 2, starWinRate: 50, leaderWins: 1, leaderTotal: 2, leaderWinRate: 50, expectedSealWins: 1, expectedSealTotal: 2, expectedSealRate: 50,
+    bySource: { eastmoney: { mainlineTotal: 0 }, ths: { mainlineTotal: 0 } } },
+});
+A(mixedReviewHTML.includes('预期明星封板（兼容口径）') && mixedReviewHTML.includes('收益统计沿用历史兼容口径（v3 为东财，旧记录按原口径）'), '终审P2:混合旧/新 schema 的聚合收益明确标为兼容口径');
+A(!mixedReviewHTML.includes('东财明星次日胜率') && !mixedReviewHTML.includes('东财龙头1次日胜率'), '终审P2:混合窗口不把旧 schema 聚合收益错误冠名为东财');
+const mixedOutcomeHTML = renderMainlineReviewHTML({
+  days: [{ day: '2026-07-13', phase: '尾盘', sampleValid: true, noMainline: false, theme: '算力', leaders: [], expectedStars: [], actualTop: [{ theme: '算力', count: 2 }],
+    bySource: { eastmoney: { available: true, status: 'mainline', theme: '算力', noMainline: false, mainlineHitTop1: true, mainlineHitTop3: true }, ths: { available: true, status: 'mainline', theme: '医药', noMainline: false, mainlineHitTop1: false, mainlineHitTop3: false } } }],
+  stats: { bySource: { eastmoney: { mainlineTotal: 1 }, ths: { mainlineTotal: 1 } } },
+});
+A(mixedOutcomeHTML.includes('<div class="mlr-row hit-na'), '终审P3:一源命中一源脱靶时整行用中性强调，不用“最好结果”绿色误导');
+const legacyReviewHTML = renderMainlineReviewHTML({
+  days: [{ day: '2026-07-10', phase: '尾盘', sampleValid: true, noMainline: true, leaders: [], expectedStars: [], actualTop: [] }],
+  stats: { mainlineTotal: 0 },
+});
+A(legacyReviewHTML.includes('<span class="mlr-theme">今日无主线</span>'), '旧 schema 回看继续使用原单来源展示,不破坏历史兼容');
 
 // ---- 5. 静态锁定:每源只用自己的 zsType 取板;KPL(7) 不进任一边,也不进策略辅助指标 ----
 A(/boardZsTypes:\s*\[6\]/.test(src) && /boardZsTypes:\s*\[5\]/.test(src), '正常路径按 boardZsTypes:[6] 与 [5] 各自独立跑引擎(从不传 7)');

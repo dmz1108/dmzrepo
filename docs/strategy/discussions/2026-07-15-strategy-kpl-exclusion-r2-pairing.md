@@ -159,3 +159,25 @@ Owner PR #88 定稿：策略页明确分成两套**独立**预测，不是「合
 - 策略辅助指标剔除 KPL:共振榜(getStrategyStrongResonance)、今日热点榜资金/涨幅(getDayThemeBoardStats)。
 - 前端:今日主线榜「东财 | 同花顺」两栏(桌面并列、移动上下),缺源显示暂缺。
 - 回归:`tests/strategy-two-source-mainlines.test.js`(5 条必测行为全覆盖)+ `tests/strategy-kpl-exclusion.test.js`(含共振榜/热点榜剔除);全仓 34 用例全绿。
+
+---
+
+## 2026-07-15 Codex 四审收敛：回看页也必须按来源解释
+
+### Challenge
+
+后端 schema v3 已把盘中预测与命中统计拆成 `bySource.eastmoney` / `bySource.ths`，但前端“预判回看”仍只读顶层东财兼容字段。边界样本“东财无正式主线、同花顺有正式主线”因此会在页面上被整体写成“今日无主线”，与真实记录冲突；盘中待验证或盘后主因库不完整时，后端又因没有 `actualRanking` 而不返回 `row.bySource`，进一步放大了回退问题。
+
+### Revised Shared Decision
+
+1. 两套 impl 都不直接写盘中预测；外层 compose 完成后由 `writeMainlinePredictBySource` 一次写入 schema v3 的两块真值。顶层 `top/candidates/starTransitions` 仅为东财单源兼容层，跨源 union 只用于响应兼容与展示载体，不作为落库预测真值，也不用于跨源命中判定。
+2. schema v3 每个来源块同时落库 `available/hasMainlines/reason/message/zsType`，永久区分“来源暂缺”与“来源可用但无正式主线”。早期 v3 空块没有该元数据时诚实返回 `status=unknown`，不猜成任一状态。
+3. `getStrategyMainlineReview` 只要读取到 schema v3 `predict.bySource`，就始终返回两源的状态与主题；盘后真实家族不完整时命中字段保持 `null`，绝不伪造命中或进入统计分母。
+4. 前端按来源显示每天的“东财/同花顺”主题与命中徽标，并分别显示 `stats.bySource` 命中率；暂缺、无主线、历史状态未知、数据不足均使用可见文字。只有旧 schema v1/v2 没有 `bySource` 时才回退原单来源展示。
+5. 明星/龙头收益明细的顶层兼容字段在 v3 代表东财、旧 schema 仍按旧口径。分源行只有东财存在正式主线时才展示并显式加“东财”标签；跨日期聚合统一标为“历史兼容口径”，不能把混合窗口全部冠名为东财。后续若需要同花顺明星/龙头收益明细，应扩展 reader 的分源收益结构，不能借东财值补齐。
+
+### Validation Update
+
+- 生产证据仍使用已完成标准包：`bundleSha256=c5acd5e9779b91044795248c103793f399fc9b7501c0ba38706883f2f654f60c`，`complete=true`；本次只修解释层与回看返回契约，不改变生产证据内容或历史冻结快照。
+- 新增回归覆盖：东财空+同花顺有预测、来源暂缺落库与回看、早期 v3 未知态、两源统计芯片、旧 schema 回退、混合 schema 聚合口径、双源一中一脱的中性强调，以及盘后主因不完整时仍返回两源主题且命中为 `null`。
+- PR103 已先合入 `main`（`d27a350`）；PR88 采用 merge 同步，双方 `DAILY_HANDOFF` 记录均保留，完整回归通过后方可批准合并。

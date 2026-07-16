@@ -5766,3 +5766,35 @@ Deployment:
 Notes for next agent:
 - 复核重点是 `persistDays` 与 `resumeDay` 已完全解耦；历史完整任务只做状态修正，历史残缺任务永不入队。
 - 本次没有改变 L2 明星阈值、自动扫描门槛、策略评分、主线排名或冻结快照。
+
+## 2026-07-15 - Codex - PR88 四审收敛并同步 PR103
+
+Changed:
+- 将 PR88 merge 同步到已包含 PR103 的最新 `main`（`d27a350`）；`DAILY_HANDOFF` 冲突按时间线保留 Claude 的 PR88 记录与 Codex 的 PR103 记录，没有丢弃任一方内容。
+- 修正两套预测的源码注释与契约：东财/同花顺 impl 都不直接落库，外层按 `bySource` 两块写 schema v3；顶层仅为东财单源兼容层，跨源并集不作为预测真值。
+- “预判回看”改为逐日分别显示东财/同花顺主题、无主线状态、命中/前三结果，并分别显示 `stats.bySource`；旧 schema v1/v2 继续走原单来源展示。
+- schema v3 在盘中待验证或盘后主因不完整时仍返回两源 `theme/noMainline`，命中保持 `null` 且不进入分母；修复“东财空、同花顺有预测，页面却整体显示今日无主线”。
+- schema v3 各来源块新增落库 `available/hasMainlines/reason/message/zsType`，永久区分“来源暂缺”和“来源可用但无正式主线”；早期 v3 空块无元数据时显示“历史状态未知”，不猜测。
+- 分源行的明星/龙头收益仍只有东财兼容字段，因此行内显式标注“东财”；跨日期聚合可能同时含旧 schema，统一标为“历史兼容口径”，不把旧样本误冠名为东财。
+- 数据不足、来源暂缺、历史状态未知均改为可见文字；两源一边命中、一边脱靶时整行使用中性强调，避免只取最好结果显示绿色。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/mainline-review.test.js`
+- `tests/strategy-two-source-mainlines.test.js`
+- `docs/strategy/discussions/2026-07-15-strategy-kpl-exclusion-r2-pairing.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`、`node --check local-l2-task-queue.js`、前端回看渲染行为测试与 `git diff --check` 通过。
+- 全仓 `node --test tests/*.test.js` 为 36/36 通过；新增覆盖东财空+同花顺有预测、来源暂缺落库/回看、早期 v3 未知态、两源统计芯片、旧 schema 回退、混合 schema 聚合标签、双源混合命中强调、盘后主因不完整仍保留两源主题。
+- 标准生产证据回放通过：`bundleSha256=c5acd5e9779b91044795248c103793f399fc9b7501c0ba38706883f2f654f60c`，`complete=true`，`missingSources=[]`，`sourceErrors=[]`；证据 JSON 仍只在忽略目录，未进入 Git。
+
+Deployment:
+- 尚未部署生产、未修改生产运行时数据或配置、未重启服务；先等待 PR88 最新 head 复核并合入 `main`。
+
+Notes for next agent:
+- PR88 合并后，需用新 manifest 从最新 `main` 一次部署 `kpl-stats-server.js`、`local-l2-task-queue.js`、`kpl-dashboard_17_apple.html` 并重启主服务；现有 manifest 均不完整，不能复用。
+- 部署后重点验证：策略主线两栏、两源回看、东财空/同花顺有预测边界、L2 完整任务恢复 `done`、仅当天残缺任务可续扫且历史残缺任务不重新派发。
+- 同花顺明星/龙头收益明细尚未分源返回；如后续扩展必须读取同花顺自己的预测块与收益，不能借东财兼容值补齐。

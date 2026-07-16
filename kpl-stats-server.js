@@ -23316,10 +23316,28 @@ async function writeMainlinePredictBySource(day, sessionPhase, mainlinesBySource
     if (sessionPhase === '已收盘') return;
     const savedAt = new Date().toISOString();
     const existing = await readMainlinePredict(day);
-    const emList = (mainlinesBySource && mainlinesBySource.eastmoney && mainlinesBySource.eastmoney.mainlines) || [];
-    const thList = (mainlinesBySource && mainlinesBySource.ths && mainlinesBySource.ths.mainlines) || [];
-    const eastBlock = strategyPredictBuildBlock(emList, existing?.bySource?.eastmoney?.starTransitions, savedAt);
-    const thBlock = strategyPredictBuildBlock(thList, existing?.bySource?.ths?.starTransitions, savedAt);
+    const sourceBlock = (source, existingTransitions, fallbackZsType) => {
+      const list = (source && Array.isArray(source.mainlines)) ? source.mainlines : [];
+      const block = strategyPredictBuildBlock(list, existingTransitions, savedAt);
+      // availability/reason 必须随预测块落库；否则“来源暂缺”和“来源可用但无正式主线”都会
+      // 退化成同一个空 top，历史回看无法区分。旧调用未传 available 时按存在 source 兼容为可用。
+      const available = typeof source?.available === 'boolean' ? source.available : !!source;
+      const hasMainlines = typeof source?.hasMainlines === 'boolean' ? source.hasMainlines : block.top.length > 0;
+      return {
+        ...block,
+        available,
+        hasMainlines,
+        reason: String(source?.reason || ''),
+        message: String(source?.message || ''),
+        zsType: Number(source?.zsType) || fallbackZsType,
+      };
+    };
+    const emSource = mainlinesBySource && mainlinesBySource.eastmoney;
+    const thSource = mainlinesBySource && mainlinesBySource.ths;
+    const emList = (emSource && Array.isArray(emSource.mainlines)) ? emSource.mainlines : [];
+    const thList = (thSource && Array.isArray(thSource.mainlines)) ? thSource.mainlines : [];
+    const eastBlock = sourceBlock(emSource, existing?.bySource?.eastmoney?.starTransitions, 6);
+    const thBlock = sourceBlock(thSource, existing?.bySource?.ths?.starTransitions, 5);
     if (!eastBlock.top.length && !thBlock.top.length) return;
     await fs.mkdir(STRATEGY_MAINLINE_DATA_DIR, { recursive: true });
     await fs.writeFile(strategyMainlinePredictPath(day), JSON.stringify({
@@ -24048,16 +24066,25 @@ async function getStrategyMainlineReview(days = 10) {
     // 两套独立预测(schema v3):分别评东财/同花顺各自第 1 主线的命中,共享当日真实第一家族;
     // 各源用自己的 bySource 块(不跨源),回看按来源解释(Codex 二审 P1)。
     let reviewBySource = null;
-    if (predict.bySource && actualRanking.length) {
-      const tiedFirstFamilies = tier1.map(f => f.familyKey);
+    if (predict.bySource) {
+      // schema v3 的两套预测无论盘后主因是否已完整，都要把各来源的主题/无主线状态返回给前端；
+      // 只有命中判定与统计分母依赖完整 actualRanking。否则盘中或数据不足时会退回东财兼容层，
+      // 出现“东财无主线、同花顺有预测，页面却只显示今日无主线”的错误表达。
+      const tiedFirstFamilies = actualRanking.length ? tier1.map(f => f.familyKey) : [];
       reviewBySource = {};
       for (const skey of ['eastmoney', 'ths']) {
         const block = predict.bySource[skey] || {};
         const blockPredict = { top: block.top || [], candidates: block.candidates || [], starTransitions: block.starTransitions || [], confirmedKey: predict.confirmedKey, schemaVersion: predict.schemaVersion };
         const fTop = strategyMainlineReviewFormalTop(blockPredict);
         const sMain = fTop.find(t => predict.confirmedKey && t.key === predict.confirmedKey) || fTop[0] || null;
+        // 新 schema v3 明确保存 available；早期 v3 没有该字段，空块只能诚实标为 unknown，
+        // 不能猜成“无主线”或“来源暂缺”。有正式主线时即使旧记录缺元数据，主题本身仍可展示。
+        const sourceAvailable = typeof block.available === 'boolean' ? block.available : null;
+        const sourceStatus = sourceAvailable === false ? 'unavailable'
+          : sMain ? 'mainline'
+            : sourceAvailable === true ? 'no-mainline' : 'unknown';
         let hitTop1 = null, hitTop3 = null;
-        if (sMain) {
+        if (sourceStatus === 'mainline' && actualRanking.length) {
           const predFams = fTop.slice(0, 3).map(t => strategyMainlineFamilyInfo({ theme: t?.theme || '', key: t?.key || '' }).key).filter(Boolean);
           const mFam = strategyMainlineFamilyInfo({ theme: sMain.theme || '', key: sMain.key || '' }).key;
           hitTop1 = tiedFirstFamilies.includes(mFam);
@@ -24068,7 +24095,17 @@ async function getStrategyMainlineReview(days = 10) {
             if (hitTop3) srcStat[skey].top3 += 1;
           }
         }
-        reviewBySource[skey] = { theme: sMain ? String(sMain.theme || '') : '', noMainline: !sMain, mainlineHitTop1: hitTop1, mainlineHitTop3: hitTop3 };
+        reviewBySource[skey] = {
+          available: sourceAvailable,
+          hasMainlines: typeof block.hasMainlines === 'boolean' ? block.hasMainlines : (sourceStatus === 'mainline' ? true : sourceStatus === 'no-mainline' ? false : null),
+          status: sourceStatus,
+          reason: String(block.reason || ''),
+          message: String(block.message || ''),
+          theme: sourceStatus === 'mainline' ? String(sMain?.theme || '') : '',
+          noMainline: sourceStatus === 'no-mainline',
+          mainlineHitTop1: hitTop1,
+          mainlineHitTop3: hitTop3,
+        };
       }
     }
     rows.push({
@@ -24608,7 +24645,8 @@ async function buildStrategyMainlinesLive(day, options = {}) {
     return buildStrategyMainlinesLiveImpl(day, options, null);
   }
   // 正常页面路径:东财[6]/同花顺[5] 各自独立跑整套引擎(取板→富化→评分→排序),绝不跨源借值。
-  // 两次都不写盘中预测,由本函数用并集写一次,保持 writeMainlinePredict 原有回看语义。
+  // 两次 impl 都不直接写盘中预测；外层在 compose 后按 bySource 两块写一次 schema v3，
+  // 顶层仅保留东财单源兼容层，不把跨源并集当预测真值。
   // 配对运行期内共享「按日只读」缓存:东财[6]/同花顺[5] 两遍引擎对同一天的涨停库/主因库/收盘库/
   // 主线确认只读一次(结果字节一致,不改预测口径);来源相关的取板/富化/评分/排序仍各跑各的。
   // 两套 impl 都 deferAutoScan:各自不派发 L2 扫描,交回本函数用两源合并候选统一协调一次,

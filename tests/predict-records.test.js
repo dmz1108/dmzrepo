@@ -136,16 +136,32 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
     mainLeader: { code: over.lead, name: over.lead }, leaders: [{ code: over.lead, name: over.lead, leadScore: 10 }], starStocks: [] });
   const emList = [mkM({ key: 'k-ai', theme: '算力AI', rank: 1, score: 90, lead: '600001' }), mkM({ key: 'k-yy', theme: '医药', rank: 2, score: 40, lead: '600002' })];
   const thList = [mkM({ key: 'k-ai', theme: '算力AI', rank: 1, score: 88, lead: '600003' }), mkM({ key: 'k-xf', theme: '大消费', rank: 2, score: 50, lead: '600004' })];
-  await writeMainlinePredictBySource('2026-07-14', '早盘', { eastmoney: { mainlines: emList }, ths: { mainlines: thList } }, { key: '' });
+  await writeMainlinePredictBySource('2026-07-14', '早盘', {
+    eastmoney: { available: true, hasMainlines: true, zsType: 6, mainlines: emList },
+    ths: { available: true, hasMainlines: true, zsType: 5, mainlines: thList },
+  }, { key: '' });
   const p = written['/fake/mainline-predict-2026-07-14.json'];
   A(p && p.schemaVersion === 3 && p.bySource, 'schema v3 + bySource 两套独立预测块');
   A(p.bySource.eastmoney.top.map(t => t.theme).join(',') === '算力AI,医药', '东财块保留自己 top:算力AI+医药(第2名医药未被顶掉)');
   A(p.bySource.ths.top.map(t => t.theme).join(',') === '算力AI,大消费', '同花顺块保留自己 top:算力AI+大消费(第2名大消费未被顶掉)');
   // 同题材"算力AI"在两块各存一份,龙头取各自来源(不互相覆盖)
   A(p.bySource.eastmoney.top[0].leader.code === '600001' && p.bySource.ths.top[0].leader.code === '600003', '同题材算力AI两边各存自己的龙头(600001 vs 600003,不跨源覆盖)');
+  A(p.bySource.eastmoney.available === true && p.bySource.eastmoney.hasMainlines === true && p.bySource.eastmoney.zsType === 6, '东财块落库来源可用性/主线状态/zsType');
+  A(p.bySource.ths.available === true && p.bySource.ths.hasMainlines === true && p.bySource.ths.zsType === 5, '同花顺块落库来源可用性/主线状态/zsType');
   // 顶层兼容层=东财单源(非跨源并集),不出现"算力AI×2"的重复占位
   A(p.top.map(t => t.theme).join(',') === '算力AI,医药', '顶层兼容层=东财单源,不是跨源并集(无同题材重复占位)');
   A(p.top.length === 2 && !p.top.some((t, i) => p.top.findIndex(x => x.theme === t.theme) !== i), '顶层无重复题材占位');
+
+  // 5. 来源暂缺必须与“来源可用但无主线”分开落库，供回看永久解释。
+  existingPredict = null;
+  await writeMainlinePredictBySource('2026-07-15', '早盘', {
+    eastmoney: { available: false, hasMainlines: false, reason: 'source-unavailable', message: '东财当时暂不可用', zsType: 6, mainlines: [] },
+    ths: { available: true, hasMainlines: true, zsType: 5, mainlines: thList },
+  }, { key: '' });
+  const unavailable = written['/fake/mainline-predict-2026-07-15.json'];
+  A(unavailable.bySource.eastmoney.available === false && unavailable.bySource.eastmoney.reason === 'source-unavailable', '来源暂缺的 available=false/reason 随 schema v3 落库');
+  A(unavailable.bySource.eastmoney.top.length === 0 && unavailable.bySource.ths.top.length === 2, '暂缺源保持空块，另一源预测不受影响');
+  A(unavailable.bySource.ths.available === true && unavailable.bySource.ths.hasMainlines === true, '另一来源可用状态独立保存，不借值');
 
   console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL P1-C CHECKS PASSED');
 })();

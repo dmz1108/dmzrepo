@@ -253,8 +253,8 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   TRADING_DAYS = ['2026-07-10', '2026-07-13'];
   PREDICTS['2026-07-13'] = { sessionPhase: '早盘', confirmedKey: '', schemaVersion: 3, top: [], candidates: [], starTransitions: [],
     bySource: {
-      eastmoney: { top: [], candidates: [], starTransitions: [] },   // 东财当日有效零结果:顶层兼容 top 也为空
-      ths: { top: [{ key: '算力', theme: '算力', l2VerificationStatus: 'qi', star: null, leader: null }],
+      eastmoney: { available: true, hasMainlines: false, top: [], candidates: [], starTransitions: [] },   // 东财当日有效零结果:顶层兼容 top 也为空
+      ths: { available: true, hasMainlines: true, top: [{ key: '算力', theme: '算力', l2VerificationStatus: 'qi', star: null, leader: null }],
              candidates: [{ key: '算力', l2VerificationStatus: 'qi' }], starTransitions: [] },
     } };
   LIMIT_UP['2026-07-13'] = finalLimitDb(['600020']);
@@ -266,6 +266,31 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   A(!!(r13 && r13.bySource) && r13.bySource.ths.mainlineHitTop1 === true, '三审P1:同花顺预判算力=当日实际第一 → top1 命中');
   A(out3.stats.bySource.ths.mainlineTotal >= 1 && out3.stats.bySource.ths.mainlineTop1Hits >= 1, '三审P1:同花顺命中进入 stats.bySource 分母/命中(不系统性漏样本)');
   A(out3.stats.bySource.eastmoney.mainlineTotal === 0, '三审P1:东财该日无主线,不计东财分母(不借同花顺凑数)');
+
+  // ---------- 四审 P2:盘后主因不完整时仍返回两源主题,仅命中保持 null ----------
+  MAIN_REASON['2026-07-13'] = reasonDb([]);
+  const out4 = await getStrategyMainlineReview(10);
+  const incomplete13 = out4.days.find(r => r.day === '2026-07-13');
+  A(!!incomplete13?.bySource, '四审P2:主因库不完整时仍返回 row.bySource,前端不退回东财兼容字段');
+  A(incomplete13.bySource.eastmoney.noMainline === true && incomplete13.bySource.ths.theme === '算力', '四审P2:东财无主线/同花顺算力的两源状态均保留');
+  A(incomplete13.bySource.ths.mainlineHitTop1 === null && incomplete13.bySource.ths.mainlineHitTop3 === null, '四审P2:真实家族不完整时同花顺命中保持 null,不伪造结果');
+
+  // ---------- 四审终审 P2:来源暂缺与有效无主线不能混写；早期 v3 空块诚实标未知 ----------
+  PREDICTS['2026-07-13'].bySource.eastmoney = {
+    available: false, hasMainlines: false, reason: 'source-unavailable', message: '东财当时暂不可用',
+    top: [], candidates: [], starTransitions: [],
+  };
+  const out5 = await getStrategyMainlineReview(10);
+  const unavailable13 = out5.days.find(r => r.day === '2026-07-13');
+  A(unavailable13.bySource.eastmoney.status === 'unavailable' && unavailable13.bySource.eastmoney.available === false, '终审P2:来源暂缺返回 unavailable/available=false');
+  A(unavailable13.bySource.eastmoney.noMainline === false && unavailable13.bySource.eastmoney.reason === 'source-unavailable', '终审P2:来源暂缺不冒充“无主线”，并保留原因');
+  A(unavailable13.bySource.ths.status === 'mainline' && unavailable13.bySource.ths.theme === '算力', '终审P2:另一来源继续独立返回主线');
+
+  delete PREDICTS['2026-07-13'].bySource.eastmoney.available;
+  delete PREDICTS['2026-07-13'].bySource.eastmoney.hasMainlines;
+  const out6 = await getStrategyMainlineReview(10);
+  const oldV3 = out6.days.find(r => r.day === '2026-07-13');
+  A(oldV3.bySource.eastmoney.status === 'unknown' && oldV3.bySource.eastmoney.noMainline === false, '终审P2:早期 v3 空块缺可用性元数据时标 unknown，不猜成无主线/暂缺');
 
   if (process.exitCode) console.error('\nSOME MAINLINE-REVIEW CHECKS FAILED');
   else console.log('\nALL MAINLINE-REVIEW CHECKS PASSED');
