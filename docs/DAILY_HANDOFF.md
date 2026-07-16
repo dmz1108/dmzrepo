@@ -6269,3 +6269,82 @@ Notes for next agent:
 - 5 亿元且至少 2 只涨停的自动扫描资格未改变；本次只收紧“什么能显示为正式主线”。
 - 严格 QI 门槛从 2026-07-16 实施日起生效；之前已冻结的历史主线保持原口径，不倒溯清空。实施日起若没有可核验的 expected/confirmed 明星证据，会显示有效的“今日无主线”；若同日预测轨迹记录过 expected，则保留该主线并展示最终是否兑现。管理员诊断仍可查看全部被排除候选。
 - 历史预期证据挂载已改为幂等：同一响应被再次收紧时不会重复说明，也不会把真实当前 L2 状态覆盖为 `qi`。
+
+## 2026-07-16 - Claude - 策略页同花顺资金口径切换为 DDE 大单金额(Owner 定稿)
+
+Changed:
+- 发现并校准同花顺板块级 DDE 大单金额数据源:d.10jqka realhead 字段 527198(单位元)。
+  收盘校准 国资云 10.415亿/智慧政务 20.375亿,Owner 用 APP「DDE大单金额」逐板对照一致
+  (同日 zjjlr 仅 1.79亿/0亿)。
+- strategyBoardFundFlowForSource zsType=5 分支:ddeBigOrderAmount 优先(metric
+  ths-dde-big-order-amount),未覆盖回退 zjjlr(metric 如实,不冒充)。
+- 新增 fetchThsBoardDdeAmount(90s 缓存)/thsDdeIndexCodeMap(THS 目录 plateId→885xxx,
+  10min 缓存)/strategyApplyThsDdeFundFlow(覆盖 zsType5 主板 + 塌板 bySource[5])。
+- getDayBoardsWithMembers 返回前接线:仅显式策略口径(zsTypes 不含 7)且含 5 时覆盖;
+  仅当日(历史日在函数内拒绝——realhead 是当前值,回填历史=数据穿越);单板失败记诊断、保持 zjjlr。
+- 看板/复盘/默认三源调用与 zs5 快照文件不动;原 zjjlr 留档 netInflowZjjlr 供审计。
+
+Files:
+- kpl-stats-server.js(选择器 5 分支 + DDE 抓取/映射/覆盖三函数 + getDayBoardsWithMembers 接线)
+- tests/strategy-ths-dde-netinflow.test.js(新增:解析/选择器/覆盖行为/历史拒绝/失败保持/静态接线)
+- docs/ops/MARKET_DATA_SOURCE_CONTRACTS.md(THS 节新增 DDE 口径契约与校准记录)
+- docs/strategy/discussions/2026-07-16-ths-dde-netinflow.md(讨论定稿)
+
+Validated:
+- node --check 通过;全仓 40 个测试文件全绿。
+- 与东财超大单口径(Codex 同日改)互不影响(选择器分支隔离,专项断言覆盖)。
+
+Deployment:
+- 未部署;合并后经 production-ops.yml 部署 kpl-stats-server.js 并重启主服务。
+
+Notes for next agent:
+- 次交易日 14:59 验收重点:同花顺主线卡资金应为 DDE 量级(对照 APP),netInflowMetric 可溯;
+  L2 扫描同花顺侧达标板会因口径变大而变多,限流不变,观察派发密度。
+
+## 2026-07-16 - Claude - PR#117 Codex 复审两项 P1 修复(DDE 请求纪律)
+
+Changed:
+- [P1] realhead 单请求加 AbortSignal 截止(4s,悬挂请求真正被中止);strategyApplyThsDdeFundFlow
+  加 8s 总预算截止线(thsDdeRaceBudget + deadline),超预算板按已定规则保持 zjjlr——DDE overlay
+  任何情况下不再卡住 getDayBoardsWithMembers/策略构建。
+- [P1] fetchThsBoardDdeAmount 加 in-flight Promise 去重(thsDdePendingFetch):并发消费者冷启动
+  同板只发一次网络请求;成功/失败都清理 pending,仅成功写 90s 缓存(失败不污染重试)。
+- 补确定性测试:悬挂请求预算内回退、并发同 code 单请求、失败后可重试(真实函数贯穿,非整体 stub)。
+- 讨论文档措辞修正:「策略候选板」→「策略板块池」(覆盖对象是策略口径调用中的板池,不止最终卡片)。
+
+Files:
+- kpl-stats-server.js(超时/预算/去重)
+- tests/strategy-ths-dde-netinflow.test.js(24 项断言)
+- docs/strategy/discussions/2026-07-16-ths-dde-netinflow.md
+
+Validated:
+- node --check 通过;全仓 40 个测试文件全绿。
+
+Deployment:
+- 未部署;仍走 PR #117,等 Codex 复审通过后 Owner 合并、production-ops.yml 发布。
+
+Notes for next agent:
+- 预算定时器是 unref 的(不阻服务退出);测试进程自带保活,新增用例时注意。
+
+## 2026-07-16 - Claude - 复核 Codex PR#123(正式主线榜严格 QI 门槛)
+
+Changed:
+- 仅复核,未改代码。结论:无阻断 bug;一项需 Owner 拍板(P2)+ 两项 P3,已评论在 PR#123。
+- P2:/api/strategy-mainlines 历史日查询也走严格闸,07-13 前的冻结快照无 qi/轨迹字段
+  会被追溯清空主线展示——需 Owner 决定按实施日切还是接受追溯。
+- P3:实时构建+统一返回层双重 attach 导致 explain 首行重复、l2CurrentVerificationStatus
+  被二次覆盖;预期明星首现恰逢流出周期会丢资格(低概率,备查)。
+- 核过并通过:跨源轨迹隔离(bySource 恒带 starTransitions 数组,回退仅旧 schema)、
+  自动扫描派发独立于硬闸、缓存/快照先补证据后过滤且不改写文件、leaderDebug 保留完整池。
+
+Files:
+- docs/DAILY_HANDOFF.md(本条)
+
+Validated:
+- 在独立 worktree 对 PR#123 分支跑 node --check + 39 个测试文件全绿。
+
+Deployment:
+- 无。
+
+Notes for next agent:
+- PR#117(THS DDE)仍等 Codex 对三项修复的复审;PR#123 等 Owner 对 P2 拍板。
