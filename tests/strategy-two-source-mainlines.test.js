@@ -200,6 +200,8 @@ const STRATEGY_MAINLINE_AUTO_SCAN_LIMIT_STOCKS = 50;
 const strategyMainlineAutoScanState = { windowStart: 0, dispatched: 0, lastJobId: '' };
 const strategyMainlineFamilyInfo = (x) => ({ key: 'group:' + String(x && x.theme || '') });
 const strategyMainlineScanPriorityCodes = () => [];
+eval(extractFn('numOrNull'));
+eval(extractFn('strategyMainlineBoardAutoScanEligibility'));
 const l2jobs = {};
 let l2seq = 0;
 const dispatched = [];

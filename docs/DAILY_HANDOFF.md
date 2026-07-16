@@ -6178,3 +6178,33 @@ Deployment:
 Notes for next agent:
 - 2026-07-16 的策略主线快照在本次部署前已冻结，继续保留原数据并按旧主力口径展示；不要为了新口径回写历史冻结快照。
 - 下一交易日盘中抽查一张东财策略卡：接口 `netInflowMetric` 应为 `eastmoney-super-large-net-inflow`，页面应显示“超大单净流入/流出”。
+
+## 2026-07-16 - Codex - 策略卡拆分 L2 扫描六态
+
+Changed:
+- 自动 L2 扫描门槛保持不变：单个板块净流入必须达到 5 亿元且板内涨停至少 2 只；不合格卡片不会勉强派发扫描。
+- 将原先含糊的“L2 待验证”拆成六种页面状态：未达扫描条件、等待公司端、扫描中、覆盖不足、L2未见明星、QI主线。
+- 新增 `l2ScanState/l2ScanDetail` 解释字段；原 `l2VerificationStatus` 继续独立负责评分、确定性封顶和主线硬闸，本次不改变主线计算结果。
+- 自动派发和页面资格提示复用同一个门槛函数，防止以后两处条件漂移；预测记录同步保存六态，便于回看。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/qi-mainline-states.test.js`
+- `tests/scan-priority.test.js`
+- `tests/predict-records.test.js`
+- `tests/strategy-board-zt-backfill.test.js`
+- `tests/strategy-two-source-mainlines.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js` 通过；行情页内联脚本编译通过。
+- 六态行为、门槛、预测记录、涨停回填和双来源统一派发专项测试通过。
+- 全仓 39 个 `tests/*.test.js` 全部通过。
+
+Deployment:
+- 本条记录提交时尚未部署；未修改云端运行时文件、业务数据库或公司端 L2 worker，未重启服务。
+
+Notes for next agent:
+- 生产发布需同时部署 `kpl-stats-server.js` 与 `kpl-dashboard_17_apple.html` 并重启主服务。
+- 下一交易时段验收六态迁移：不达门槛→未达扫描条件；queued→等待公司端；running→扫描中；done 但相关股覆盖不足→覆盖不足；done 且覆盖达标无明星→L2未见明星；出现 expected/confirmed 明星→QI主线。
