@@ -23802,11 +23802,17 @@ async function writeMainlinePredictBySource(day, sessionPhase, mainlinesBySource
     const thList = (thSource && Array.isArray(thSource.mainlines)) ? thSource.mainlines : [];
     const eastBlock = sourceBlock(emSource, existing?.bySource?.eastmoney?.starTransitions, 6);
     const thBlock = sourceBlock(thSource, existing?.bySource?.ths?.starTransitions, 5);
-    if (!eastBlock.top.length && !thBlock.top.length) return;
+    // “来源成功返回零结果”是有效结论，必须持久化供回看显示“今日无主线”。
+    // 两源都不可用时仍不写，避免把取数故障冒充无主线。
+    const hasResolvedSource = [eastBlock, thBlock].some(block => block.available === true);
+    if (!hasResolvedSource) return;
+    const hasMainlines = eastBlock.top.length > 0 || thBlock.top.length > 0;
     await fs.mkdir(STRATEGY_MAINLINE_DATA_DIR, { recursive: true });
     await fs.writeFile(strategyMainlinePredictPath(day), JSON.stringify({
       day, savedAt, sessionPhase: sessionPhase || '',
       confirmedKey: confirm?.key || '', schemaVersion: 3,
+      hasMainlines,
+      recordState: hasMainlines ? 'mainline' : 'no-mainline',
       bySource: { eastmoney: eastBlock, ths: thBlock },
       // 兼容层:东财单源(不跨源混排),供旧回看/旧页面;真值在 bySource。
       top: eastBlock.top, candidates: eastBlock.candidates, starTransitions: eastBlock.starTransitions,
@@ -24354,6 +24360,21 @@ function strategyMainlineReviewFormalTop(predict) {
     return status === 'qi' || levels.some(level => positiveLevels.has(level)) || hadExpectedTransition;
   });
 }
+// 回看记录不只包含“有主线”的 top。schema v3 会把来源正常但零主线明确保存为
+// available=true + hasMainlines=false；这种记录必须入列为“今日无主线”。旧的空壳文件
+// 没有可用性元数据，继续跳过，避免把来源故障或损坏文件猜成无主线。
+function strategyMainlineReviewHasRecord(predict) {
+  if (!predict || typeof predict !== 'object') return false;
+  if (Array.isArray(predict.top) && predict.top.length) return true;
+  const sourceBlocks = ['eastmoney', 'ths'].map(key => predict?.bySource?.[key]).filter(Boolean);
+  if (sourceBlocks.some(block => Array.isArray(block.top) && block.top.length)) return true;
+  // 明确无主线必须同时具备“至少一个来源可用”的证据。两源都不可用、只有空块的
+  // 历史文件仍跳过，不能把抓取故障解释成市场没有主线。
+  const hasResolvedSource = sourceBlocks.some(block => block.available === true);
+  if (!hasResolvedSource) return false;
+  if (predict.hasMainlines === false || predict.recordState === 'no-mainline') return true;
+  return sourceBlocks.some(block => typeof block.hasMainlines === 'boolean');
+}
 // 只有真实盘中阶段生成的预测才是"预判"(Codex 复审 PR#25 二审):
 // 盘前/集合竞价没有盘面信号、已收盘是答案不是预测——这三类记录展示但不计任何命中率分母。
 const STRATEGY_MAINLINE_INTRADAY_PHASES = new Set(['早盘', '上午盘', '午间休市', '午后', '尾盘']);
@@ -24405,11 +24426,9 @@ async function getStrategyMainlineReview(days = 10) {
     const nextDay = i + 1 < tradingDays.length ? tradingDays[i + 1] : null;
     const thirdDay = i + 3 < tradingDays.length ? tradingDays[i + 3] : null;
     const predict = await readMainlinePredict(day);
-    // 两套独立预测(schema v3):入口不能只看兼容顶层 top——东财空、同花顺有预测时顶层为空,
-    // 否则整天被跳过、同花顺样本系统性漏统计(Codex 三审 P1)。任一 bySource.top 非空即处理该日。
-    const hasAnyPredictTop = (Array.isArray(predict?.top) && predict.top.length) ||
-      (predict?.bySource && ((predict.bySource.eastmoney?.top?.length) || (predict.bySource.ths?.top?.length)));
-    if (!predict || !hasAnyPredictTop) continue;
+    // 两套独立预测(schema v3):有主题与明确“来源可用但无主线”都属于有效回看记录。
+    // 不能再用 top 非空作日期门槛，否则双源都无主线的交易日会整天消失。
+    if (!strategyMainlineReviewHasRecord(predict)) continue;
     const phase = String(predict.sessionPhase || '');
     const sampleValid = STRATEGY_MAINLINE_INTRADAY_PHASES.has(phase);
     const sampleInvalidReason = sampleValid ? '' : (phase ? `phase:${phase}` : 'phase:unknown');

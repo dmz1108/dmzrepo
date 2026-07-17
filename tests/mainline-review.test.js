@@ -60,6 +60,7 @@ const STRATEGY_MAINLINE_INTRADAY_PHASES = extractSet('STRATEGY_MAINLINE_INTRADAY
 eval(extractFn('strategyMainlineActualFamilyRanking'));
 eval(extractFn('strategyMainlineExpectedStarTransitions'));
 eval(extractFn('strategyMainlineReviewFormalTop'));
+eval(extractFn('strategyMainlineReviewHasRecord'));
 
 let TODAY = '2026-07-14';           // 次日:全部夹具交易日都算已收盘
 let TODAY_CLOSED = true;            // 仅当 day===TODAY 时用
@@ -67,7 +68,7 @@ const readSavedApiKey = async () => 'k';
 const chinaNowParts = () => ({ day: TODAY, hour: 16, minute: 0 });
 const isoFromCompactDate = d => String(d);
 const isAfterMarketClose = (day) => day < TODAY ? true : (day > TODAY ? false : TODAY_CLOSED);
-let TRADING_DAYS = ['2026-07-02', '2026-07-03', '2026-07-06', '2026-07-07', '2026-07-08', '2026-07-09', '2026-07-10', '2026-07-13'];
+let TRADING_DAYS = ['2026-07-02', '2026-07-03', '2026-07-06', '2026-07-07', '2026-07-08', '2026-07-09', '2026-07-10', '2026-07-13', '2026-07-14'];
 const getRecentTradingDays = async () => TRADING_DAYS.slice();
 const CLOSE = {};
 const readEastmoneyCloseDbDay = async d => CLOSE[d]
@@ -178,18 +179,33 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
       { key: 'theme:特色药', theme: '特色药', l2VerificationStatus: 'unscanned', stars: [] }],
     starTransitions: [] };
 
+  // 07-14(schema v3):两源都正常完成，但均没有通过 L2 明星验证的正式主线。
+  // 即使 top 全空，也必须保留日期并显示“今日无主线”。
+  PREDICTS['2026-07-14'] = { schemaVersion: 3, sessionPhase: '尾盘', confirmedKey: '',
+    hasMainlines: false, recordState: 'no-mainline', top: [], candidates: [], starTransitions: [],
+    bySource: {
+      eastmoney: { available: true, hasMainlines: false, top: [], candidates: [], starTransitions: [] },
+      ths: { available: true, hasMainlines: false, top: [], candidates: [], starTransitions: [] },
+    } };
+  A(strategyMainlineReviewHasRecord({ schemaVersion: 3, top: [], bySource: {
+    eastmoney: { available: false, hasMainlines: false, top: [] },
+    ths: { available: false, hasMainlines: false, top: [] },
+  } }) === false, '⓪两源都不可用的空档案不得冒充今日无主线');
+
   const out = await getStrategyMainlineReview(10);
   const byDay = new Map(out.days.map(r => [r.day, r]));
-  A(out.ok === true && out.days.length === 8, '八天预判记录全部入列(含无正式主线日、最新收盘日与无效样本日)');
+  A(out.ok === true && out.days.length === 9, '九天预判记录全部入列(含双源空 top 的明确无主线日)');
 
   const d2 = byDay.get('2026-07-02'), d3 = byDay.get('2026-07-03'), d6 = byDay.get('2026-07-06');
   const d7 = byDay.get('2026-07-07'), d8 = byDay.get('2026-07-08'), d9 = byDay.get('2026-07-09'), d10 = byDay.get('2026-07-10');
-  const d13 = byDay.get('2026-07-13');
+  const d13 = byDay.get('2026-07-13'), d14 = byDay.get('2026-07-14');
 
   // ⓪ schema v2 无明星正证据:保留日期行,但不产生正式主线、明星或龙头。
   A(d13?.noMainline === true && d13.theme === '' && d13.noMainlineReason === 'no-l2-star-evidence', '⓪07-13 医药未通过L2明星验证 → 今日无主线');
   A(d13.star === null && d13.leader === null && d13.leaders.length === 0, '⓪无正式主线不回看候选明星/龙头');
   A(d13.mainlineHitTop1 === null && d13.mainlineHitTop3 === null, '⓪无正式主线不进入命中判断');
+  A(d14?.noMainline === true && d14.theme === '' && d14.bySource?.eastmoney?.noMainline === true
+    && d14.bySource?.ths?.noMainline === true, '⓪双源有效零结果即使 top 全空也保留为今日无主线');
 
   // ① 下一交易日已知但收盘价尚缺
   A(!!d10 && d10.nextDay === '2026-07-13', '①07-10 正确锚定下一交易日 07-13');

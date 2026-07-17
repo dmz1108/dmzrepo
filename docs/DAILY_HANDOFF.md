@@ -6754,3 +6754,28 @@ Validated:
 Deployment:
 - 仅更新静态 `kpl-dashboard_17_apple.html`，`restart=none`，未重启任何服务。
 - 自动回退备份：`C:\PandaDashboard\_deploy-backups\github-29551159628-1`。
+
+## 2026-07-17 - Codex - 预判回看保留无主线交易日
+
+Changed:
+- 修复双源均正常但正式主线为空时不写预测档案的问题：schema v3 现在会保存 `recordState=no-mainline`、两源 `available=true/hasMainlines=false`，来源故障仍禁止冒充无主线。
+- 回看接口不再以 `top` 非空作为日期门槛；明确的无主线档案会入列，前端在东财与同花顺都无主线时合并显示「今日无主线」。
+- 新增受保护的一次性修复任务，从 2026-07-16 冻结收盘快照恢复缺失的无主线回看记录；保留 `sessionPhase=已收盘`，因此可见但不计预测命中率。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/predict-records.test.js`
+- `tests/mainline-review.test.js`
+- `tests/strategy-two-source-mainlines.test.js`
+- `ops/production/requests/2026-07-17-review-no-mainline-backfill.ps1`
+- `ops/production/manifests/strategy-no-mainline-review-20260717.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `tests/*.test.js` 共 40 个测试文件全部通过；后端语法、部署清单 JSON 与 `git diff --check` 通过。
+- 回填任务模拟验证首次原子生成、第二次幂等 no-op；任一来源不可用时会中止，不能误写无主线。
+- 公网 2026-07-16 冻结快照已核验：东财、同花顺均 `available=true`、`hasMainlines=false`、`mainlines=[]`。
+
+Deployment:
+- 本条提交时尚未部署；合并后先部署后端与前端并重启主服务，再单独运行 2026-07-16 回填任务（回填本身无需重启）。
