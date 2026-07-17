@@ -144,3 +144,7 @@ Before any consumer migrates from v2/snapshots to this context:
 4. Confirm no reconstructed or stale record becomes score eligible.
 5. Review source mapping and cross-source disagreements.
 6. Obtain Owner approval in the strategy discussion record.
+7. Reconfirm the KPL boundary before promotion: KPL facts may be retained for
+   diagnostics, but they must not enter strategy scoring, ranking, page-level
+   corroboration, or any other strategy auxiliary indicator without a new,
+   explicit Owner decision.
