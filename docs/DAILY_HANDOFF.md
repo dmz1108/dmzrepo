@@ -6692,3 +6692,28 @@ Validated:
 
 Deployment:
 - 本条提交时修复后的生产操作尚未重跑，云端两份预测记录仍保持原状。
+
+## 2026-07-16 - Codex - 7月8日与7月9日回看明星已回填
+
+Changed:
+- 按 Owner 指定修正云端两份历史预测记录：2026-07-09 半导体的明星改为长电科技（600584），2026-07-08 算力AI的明星改为紫光股份（000938），两者均保存为 `confirmed`。
+- 修正仅作用于 `strategy-data/mainline-predict-2026-07-09.json` 和 `strategy-data/mainline-predict-2026-07-08.json`，并在预测记录中保留前值和人工校正元数据。
+
+Files:
+- 云端 `C:\PandaDashboard\strategy-data\mainline-predict-2026-07-09.json`
+- 云端 `C:\PandaDashboard\strategy-data\mainline-predict-2026-07-08.json`
+- 云端两份运维日志（脚本自动追加）
+- Git `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 受保护生产工作流 `29548383458` 成功，批准提交为 `fe36905284004eb189e549a4e2e83bfd75cb3f45`。
+- 2026-07-09 文件 SHA-256 从 `e7b489038d27bba512fca331c2cc5548821c0583a922fe8aac54aef5ec8c72c4` 变为 `9e299c7d9920fb47667e22ee6e26b2f64b68e967407379fb255e6b1f4ef02a61`。
+- 2026-07-08 文件 SHA-256 从 `33ae267e9426e2dedf0b5f37fda7e66c6081034085f270b5ebf2651027a9f3b2` 变为 `bc72f0cc2b55744340b47493798c809b89d59d1c00604a389935e5768e6d15bf`。
+- 公网回看接口已返回长电科技 `predictLevel=confirmed`与紫光股份 `predictLevel=confirmed`；公网 `/health` 仍为 `ok=true`。
+
+Deployment:
+- 回滚备份位于 `C:\PandaDashboard\_deploy-backups\review-star-backfill-20260708-09-20260717014925`。
+- 未部署应用代码，未重启任何服务。
+
+Notes for next agent:
+- 这两条是 Owner 指定的历史回看人工校正，不是系统依现行 L2 规则自动重算的结果。
