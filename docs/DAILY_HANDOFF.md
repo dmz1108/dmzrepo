@@ -6603,3 +6603,31 @@ Deployment:
 
 Notes for next agent:
 - 本次上线已完成且云端与 `main` 一致，不需要再次部署或重启。
+
+## 2026-07-16 - Codex - 明星证据与预判命中视觉层级精修
+
+Changed:
+- 今日主线榜的明星证据改为独立标题层，汇总确认/预期数量，并直接展示每只明星股的主动比、被动比和合计比。
+- 明星确认继续使用红色确认态，预期明星使用琥珀色观察态；两种阶段不再挤在普通标签中。
+- 预判回看将“主线命中/进入前三”改为卡片内部的独立结论徽标，整张卡片的红/金底色只表达明星确认/预期证据；没有明星证据的命中记录保持中性。
+- 仅优化展示层，没有改动主线、明星、L2、命中率、收益、权限、接口或数据源逻辑。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `tests/strategy-two-source-mainlines.test.js`
+- `tests/qi-mainline-states.test.js`
+- `design-qa.md`
+- `ops/production/manifests/strategy-star-review-visual-20260716.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 使用相同数据完成今日主线榜与预判回看的桌面、手机前后并排对照；确认态、预期态、仅命中态均无横向溢出或状态混淆。
+- 新增回归断言，锁定明星证据标题、三项 L2 比值、确认/预期数量汇总和独立“主线命中”文案。
+- 前端内联脚本编译、`git diff --check`、专项测试及全仓 `40/40` 个测试文件全部通过。
+
+Deployment:
+- 本条提交时尚未部署；清单仅更新静态策略页，`restart=none`，不重启任何服务。
+
+Notes for next agent:
+- “明星确认/预期明星”是预测时的 L2 证据阶段；“主线命中/进入前三”是盘后结果，必须继续独立表达。
+- 不能因为某日盘后命中就把整张无明星证据的历史卡片改成确认态。

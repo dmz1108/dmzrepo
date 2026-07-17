@@ -66,6 +66,8 @@ A(html.includes("Number(board?.netInflow) >= 5e8 && Number(board?.ztCount) >= 2"
 A(html.includes('${qiBadge}${confirmedBadge}'), 'QI 徽章与 Owner 确认徽章并列独立');
 A(html.includes("const visibleStars = (m.starStocks || []).filter(s => s.level === 'confirmed' || s.level === 'expected').slice(0, 3)"), '明星行只显确认/预期,至多3只');
 A(html.includes("s.expectedOutcome === 'not-confirmed' ? ' missed' : ''") && src.includes('预期明星·未兑现'), '盘中预期未转为明星时使用醒目的未兑现复盘样式');
+A(html.includes('ml-star-proof-head') && html.includes('ml-star-ratios'), '明星证据区包含独立标题层与主动/被动/合计三项可见比值');
+A(html.includes('confirmedStarCount') && html.includes('expectedStarCount') && html.includes('只确认') && html.includes('只预期'), '明星证据标题汇总确认与预期数量');
 A(!html.includes('>潜力</span>'), '潜力行已退役(Owner 定稿:预期明星取代)');
 A(src.includes('focusStocks,'), 'focusStocks 后端数据保留(供调度用)');
 
