@@ -142,12 +142,30 @@ jobs:
           REMOTE_ARCHIVE: ${{ steps.validate.outputs.remote_archive }}
         run: |
           set -euo pipefail
-          scp -q -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+          scp_with_retry() {
+            local attempt status delay
+            status=255
+            for attempt in 1 2 3 4; do
+              if scp "$@"; then
+                return 0
+              else
+                status=$?
+              fi
+              if [[ "$status" -ne 255 || "$attempt" -ge 4 ]]; then
+                return "$status"
+              fi
+              delay=$((attempt * 10))
+              echo "SCP connection failed (attempt $attempt/4); retrying in ${delay}s."
+              sleep "$delay"
+            done
+            return "$status"
+          }
+          scp_with_retry -q -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             -i "$HOME/.ssh/dreamerqi_ops" -P "$PORT" "$SCRIPT_PATH" \
             "$USER@$HOST:C:/Windows/Temp/$REMOTE_SCRIPT"
           if [[ -n "$MANIFEST_PATH" ]]; then
             [[ -n "$REMOTE_ARCHIVE" ]] || { echo "Validated deployment archive is missing" >&2; exit 1; }
-            scp -q -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            scp_with_retry -q -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
               -i "$HOME/.ssh/dreamerqi_ops" -P "$PORT" "$RUNNER_TEMP/$REMOTE_ARCHIVE" \
               "$USER@$HOST:C:/Windows/Temp/$REMOTE_ARCHIVE"
           fi
@@ -157,7 +175,7 @@ jobs:
             remote_payload="dreamerqi-tgb-payload-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.b64"
             printf '%s' "$TGB_20260717_PAYLOAD_B64" > "$RUNNER_TEMP/$remote_payload"
             chmod 600 "$RUNNER_TEMP/$remote_payload"
-            scp -q -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            scp_with_retry -q -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
               -i "$HOME/.ssh/dreamerqi_ops" -P "$PORT" "$RUNNER_TEMP/$remote_payload" \
               "$USER@$HOST:C:/Windows/Temp/$remote_payload"
           fi

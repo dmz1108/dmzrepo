@@ -6958,3 +6958,23 @@ Deployment:
 
 Notes for next agent:
 - 输入 Secret 只在本次受保护运行存在；成功或失败后都应从 GitHub `production` 环境删除。
+
+## 2026-07-17 - Codex - 生产工作流 SCP 上传增加限流重试
+
+Changed:
+- 为生产脚本、部署清单压缩包和日期绑定 TGB payload 三类 SCP 上传统一增加最多 4 次的 10/20/30 秒退避。
+- 只对 SCP 退出码 `255` 重试；文件/权限/参数等非传输错误立即返回，不放宽脚本哈希、主机指纹、身份或环境审批。
+
+Files:
+- `.github/workflows/production-ops.yml`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 前一正式入库运行 `29579126115` 在 SCP 上传阶段因连接关闭退出 255，远程执行步骤被跳过，日期绑定写入脚本没有启动，正式库和综合主因库未改变。
+- Ruby YAML 解析和全部 Bash `run` 块 `bash -n` 均通过；实际上传重试仍待下一次受保护运行验证。
+
+Deployment:
+- 本条提交时没有生产写入或服务重启；一次性加密 payload Secret 保持待用。
+
+Notes for next agent:
+- 上传重试与执行重试分别处理；两者均只覆盖 SSH 传输层 255，不能掩盖生产脚本业务闸失败。
