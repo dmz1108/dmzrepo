@@ -9714,6 +9714,12 @@
     background: linear-gradient(108deg, rgba(255,200,87,.075), rgba(255,200,87,.018) 42%, rgba(255,255,255,.012) 76%);
   }
 
+  /* “不计样本”只是统计口径，不应把已存在的明星证据整行变灰。 */
+  body.view-strategy .mlr-row.star-confirmed.invalid,
+  body.view-strategy .mlr-row.star-expected.invalid {
+    opacity: 1;
+  }
+
   body.view-strategy .mlr-row.star-confirmed:hover {
     border-color: rgba(255,91,82,.38);
     background: linear-gradient(108deg, rgba(255,91,82,.135), rgba(255,91,82,.034) 44%, rgba(255,255,255,.022) 78%);

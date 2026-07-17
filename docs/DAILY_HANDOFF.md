@@ -6800,3 +6800,22 @@ Deployment:
 - 生产工作流更新后端与策略页，`restart=main`，主服务已重启且健康检查通过。
 - 自动回退备份由生产工作流保存在 `C:\PandaDashboard\_deploy-backups\github-29553240472-1`。
 - `2026-07-17-review-no-mainline-backfill.ps1` 未运行；只作为将来在原档案真正缺失时的受保护修复工具。
+
+## 2026-07-17 - Codex - 7月8日回看恢复明星确认高亮
+
+Changed:
+- 预判回看中，已存在明星确认或预期明星证据的记录不再因 `sampleValid=false` 整行变灰。
+- 2026-07-08 继续保留「不计样本·已收盘」的真实口径，但「明星确认·紫光股份」视觉强调与 2026-07-09、2026-07-14 一致。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `tests/strategy-two-source-mainlines.test.js`
+- `ops/production/manifests/strategy-review-star-highlight-20260717.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 公网回看接口确认 2026-07-08 的紫光股份为 `predictLevel=confirmed`，差异仅来自旧的 `invalid { opacity: 0.5 }` 样式。
+- 前端回归测试覆盖 `hit-invalid star-confirmed invalid`：高亮恢复但不计样本标签仍保留。
+
+Deployment:
+- 本条提交时尚未部署；静态页发布使用 `restart=none`，不重启服务。
