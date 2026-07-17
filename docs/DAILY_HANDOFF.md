@@ -6934,3 +6934,27 @@ Deployment:
 
 Notes for next agent:
 - 若下一次运行失败，先区分 SSH 255 与 PowerShell/业务错误；后者不得以传输重试掩盖。
+
+## 2026-07-17 - Codex - 准备受保护写入当日 TGB 正式库
+
+Changed:
+- 新增日期绑定的生产写入脚本：从一次性加密环境 Secret 接收已人工复核的 32 行 JSON，避免把正式市场运行时数据库提交 Git。
+- 脚本固定校验输入 SHA-256、官方文章/`image-01-06.png` raw manifest 证据、终盘池 32 股、缺失/多余/重复/弱字段/名称差异、四个题材块计数；通过后才备份、原子写正式 TGB、重折当日综合主因并验证公网 source-view。
+- 工作流仅当脚本路径精确等于 `2026-07-17-tgb-hunan-write.ps1` 时上传对应 Secret 临时文件；执行后无论成功失败都从云端临时目录清理。
+
+Files:
+- `ops/production/requests/2026-07-17-tgb-hunan-write.ps1`
+- `.github/workflows/production-ops.yml`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 本地正式行对公网终盘池：32/32，`missingCodes=[]`、`extraCodes=[]`、重复 0、`weakCount=0`、名称差异 0；题材计数为电力 9、算力 5、其他热点 8、其他个股 10，合计 32。
+- 正式行由 Codex 对官方原图逐块逐行逐字段人工录入并二次人工复核；未使用 OCR、Qwen 或自动视觉结果生成、补全、猜测或校验。
+- 生产脚本 15,758 字节全部为 ASCII，内嵌 Node 程序通过 `node --check`；Ruby YAML 解析和全部 Bash `run` 块 `bash -n` 均通过。
+- 实际生产写入、重折和公网验证仍待合并后的受保护运行。
+
+Deployment:
+- 本条提交时正式库尚未写入、综合主因尚未重折、服务未重启。
+
+Notes for next agent:
+- 输入 Secret 只在本次受保护运行存在；成功或失败后都应从 GitHub `production` 环境删除。
