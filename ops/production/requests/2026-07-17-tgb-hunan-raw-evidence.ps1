@@ -19,6 +19,15 @@ $rawDir = Join-Path $rawRoot $day
 $manifestFile = Join-Path $rawDir 'manifest.json'
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $backupDir = Join-Path $project ('backups\tgb-hunan-raw-' + $day.Replace('-', '') + '-' + $stamp)
+$requiredTitle = -join @(
+  [char]0x6E56,
+  [char]0x5357,
+  [char]0x4EBA,
+  [char]0x6DA8,
+  [char]0x505C,
+  [char]0x590D,
+  [char]0x76D8
+)
 
 if (-not (Test-Path -LiteralPath (Join-Path $project 'kpl-stats-server.js'))) {
   throw 'Production server entry file is missing.'
@@ -56,7 +65,9 @@ foreach ($article in $articles) {
   $articleUrl = [string]$article.url
   $articleTitle = [string]$article.title
   if ($articleUrl -notmatch '^https://www\.tgb\.cn/a/') { throw ('Unexpected article URL: ' + $articleUrl) }
-  if ($articleTitle -notmatch ([regex]::Escape('湖南人涨停复盘'))) { throw ('Unexpected article title: ' + $articleTitle) }
+  if ($articleTitle.IndexOf($requiredTitle, [System.StringComparison]::Ordinal) -lt 0) {
+    throw ('Unexpected article title: ' + $articleTitle)
+  }
   $safeImages = @()
   foreach ($image in @($article.images)) {
     if ($image.saved -eq $true -and -not [string]$image.error) { $downloadedCount += 1 }
