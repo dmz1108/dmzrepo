@@ -74,6 +74,58 @@ No actionable P0, P1, or P2 findings remain.
 
 passed
 
+# DreamerQi Strategy Review Star Card QA - 2026-07-16
+
+## Comparison target
+
+- Source visual truth: the pre-change `kpl-dashboard_17_apple.html` prediction-review rows rendered from the same three-row strategy fixture.
+- Browser-rendered implementation: the refined prediction-review rows in `kpl-dashboard_17_apple.html`.
+- Desktop viewport: `1440 × 1000`.
+- Mobile viewport: `390 × 844`.
+- State: one confirmed-star row, one expected-star row, and one neutral row, with identical dates, themes, hit states, stocks, and return metrics before and after.
+
+## Evidence
+
+- Baseline desktop: `/tmp/strategy-review-star-before-desktop.png`.
+- Final desktop: `/tmp/strategy-review-star-after-desktop.png`.
+- Desktop same-state comparison: `/tmp/strategy-review-star-compare-desktop.png`.
+- Baseline mobile: `/tmp/strategy-review-star-before-mobile.png`.
+- Final mobile: `/tmp/strategy-review-star-after-mobile.png`.
+- Mobile same-state comparison: `/tmp/strategy-review-star-compare-mobile.png`.
+
+## Findings
+
+No actionable P0, P1, or P2 findings remain.
+
+- Confirmed stars use a restrained red rail, surface tint, and grouped `明星确认 + 股票名` signal so the final state is immediately identifiable without relying on the smaller detail label.
+- Expected stars use a separate amber rail, surface tint, and grouped `预期明星 + 股票名` signal; the treatment remains visibly provisional and cannot be confused with confirmation.
+- The existing hit result, actual after-market family, next-day high/close, three-day return, and expected-to-sealed result retain their original positions and meanings.
+- Neutral rows remain visually unchanged, so emphasis is limited to records that actually contain confirmed or expected star evidence.
+- On mobile, date and star stage form the first scan line, while the prediction result and performance metrics wrap below without horizontal overflow.
+- The card uses the existing strategy palette, typography, 6–8 px radii, borders, and compact density; no new asset, icon system, or nested card structure was introduced.
+- Strategy data, ranking, hit determination, expected-star conversion, return calculations, permissions, and API behavior are unchanged.
+
+## Iteration history
+
+1. Captured matching desktop and mobile baselines before implementation.
+2. Added row-level confirmed/expected states and a compact stock-aware stage signal.
+3. Compared before and after screenshots side by side using identical content and viewport sizes.
+4. Verified the signal grouping, responsive wrapping, and unchanged neutral row before running the complete regression suite.
+
+## Validation
+
+- Desktop: `3` rows, confirmed rows `1`, expected rows `1`, no page or review overflow.
+- Mobile: `3` rows, confirmed rows `1`, expected rows `1`, no page or review overflow.
+- Inline dashboard script compilation: passed.
+- Focused review and two-source strategy tests: passed.
+- Full repository suite: `40/40` test files passed.
+- `git diff --check`: passed.
+- The isolated preview reported six expected unrelated static-asset `404` requests; review rendering and layout were unaffected.
+
+## Final result
+
+passed
+
 # DreamerQi Strategy Mainline Card Refinement QA - 2026-07-16
 
 ## Comparison target
