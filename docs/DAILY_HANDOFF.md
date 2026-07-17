@@ -6978,3 +6978,23 @@ Deployment:
 
 Notes for next agent:
 - 上传重试与执行重试分别处理；两者均只覆盖 SSH 传输层 255，不能掩盖生产脚本业务闸失败。
+
+## 2026-07-17 - Codex - 准备发布策略实时事实层与每日质量观察
+
+Changed:
+- 为已合并并经 Claude 独立复核通过的 PR #146 新增原子生产发布清单。
+- 清单固定从最新 `main` 同时发布主服务、每日事件模块、两个新数据/观察模块和东财历史重建工具，避免主服务先于依赖模块落地。
+
+Files:
+- `ops/production/manifests/strategy-realtime-data-observation-20260717.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- PR #146 的 42 个测试文件和全部语法检查已通过；Claude 复核结论为无阻断项。
+- 发布清单仅引用仓库内普通文件，目标路径互不重复，`restart=main`；正式 v2 评分、排序和冻结快照仍不使用新 resolver。
+
+Deployment:
+- 本条提交时尚未执行生产发布、尚未重启服务，也未生成任何生产事实或观察报告。
+
+Notes for next agent:
+- 发布后核对主服务健康、五个文件哈希和管理员诊断端点；新事实层只开始积累诊断数据，不得据此切换正式 v2 消费链路。
