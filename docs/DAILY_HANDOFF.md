@@ -6779,3 +6779,24 @@ Validated:
 
 Deployment:
 - 本条提交时尚未部署；合并后先部署后端与前端并重启主服务，再单独运行 2026-07-16 回填任务（回填本身无需重启）。
+
+## 2026-07-17 - Codex - 无主线回看修复已发布
+
+Changed:
+- PR #142 已合并并发布，云端回看现在会保留来源可用但没有通过 L2 明星验证的交易日。
+- 发布重启后现有 2026-07-16 运行时档案已被新逻辑正确识别，因此没有执行一次性回填任务，也没有覆盖任何运行时数据。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `ops/production/manifests/strategy-no-mainline-review-20260717.json`
+
+Validated:
+- 受保护生产工作流 `29553240472` 成功，批准提交为 `79e3abd70a2f101f9e287ca3181768ca44e94019`。
+- 公网 `/health` 返回 `ok=true`，策略页已包含双源「今日无主线」展示逻辑。
+- 公网 `/api/strategy-mainline-review?days=10` 最新一条为 `2026-07-16`：`noMainline=true`，东财与同花顺均为 `status=no-mainline`。
+
+Deployment:
+- 生产工作流更新后端与策略页，`restart=main`，主服务已重启且健康检查通过。
+- 自动回退备份由生产工作流保存在 `C:\PandaDashboard\_deploy-backups\github-29553240472-1`。
+- `2026-07-17-review-no-mainline-backfill.ps1` 未运行；只作为将来在原档案真正缺失时的受保护修复工具。
