@@ -6819,3 +6819,21 @@ Validated:
 
 Deployment:
 - 本条提交时尚未部署；静态页发布使用 `restart=none`，不重启服务。
+
+## 2026-07-17 - Codex - 7月8日明星高亮已发布
+
+Changed:
+- 将 PR #144 的预判回看明星高亮优先级发布到云端策略页。
+
+Files:
+- `kpl-dashboard_17_apple.html`（生产发布）
+- `ops/production/manifests/strategy-review-star-highlight-20260717.json`
+
+Validated:
+- 受保护生产工作流 `29553693936` 成功，批准提交为 `f3ba3c21593ad2673b634199cd212dbde05b4656`。
+- 公网策略页与 `main` 文件 SHA-256 一致：`3733d491f2be0e5adb48a60e143a857d336cb69747e5712f0e2f55a67968a4ad`。
+- 公网页面已包含 `star-confirmed.invalid { opacity: 1 }`，`/health` 返回 `ok=true`。
+
+Deployment:
+- 仅更新静态 `kpl-dashboard_17_apple.html`，`restart=none`，未重启任何服务。
+- 自动回退备份：`C:\PandaDashboard\_deploy-backups\github-29553693936-1`。
