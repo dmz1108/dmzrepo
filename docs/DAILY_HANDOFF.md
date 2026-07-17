@@ -6979,6 +6979,37 @@ Deployment:
 Notes for next agent:
 - 上传重试与执行重试分别处理；两者均只覆盖 SSH 传输层 255，不能掩盖生产脚本业务闸失败。
 
+## 2026-07-17 - Codex - 当日 TGB 湖南人复盘已入库
+
+Changed:
+- 按 `docs/ops/TGB_HUNAN_DAILY_SOP.md` 通过受保护生产流程强制刷新 `@TGB湖南人` 官方原文与 19 张原始图片，只采用标题、日期、白底表格和水印均匹配的 `image-01-06.png`。
+- 排除顶部“市场连板股”重复摘要、底部 9 行“涨停炸板”、同花顺红色可视化图、头像和其他非表格图片；Codex 对原图逐题材块、逐行、逐字段人工录入并二次人工复核，全程未使用 OCR、Qwen 或自动视觉结果。
+- 写入 32 行正式 `review/tgb-hunan-structured`，随后只强制重折 2026-07-17 综合主因库；两份云端运维日志已由受保护脚本追加。
+- 一次性加密 payload Secret 在成功后已从 GitHub `production` 环境删除，正式运行时 JSON 未进入 Git。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 仅云端运行时：`C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-07-17.json`
+- 仅云端运行时：`C:\PandaDashboard\kpl-limitup-main-reason-db\2026-07-17.json`
+- 云端两份运维日志（受保护脚本追加）
+
+Validated:
+- 官方文章：`https://www.tgb.cn/a/2tvqJaeEJcg`，标题 `7.17湖南人涨停复盘+晚间消息汇总`；使用图片 `image-01-06.png`。
+- 题材计数：电力 9、算力 5、其他热点 8、其他个股 10，合计 32。
+- 云端终盘池与正式行均为 32；唯一代码 32，`missingCodes=[]`、`extraCodes=[]`、重复 0、`weakCount=0`、名称差异 0，题材计数之和等于总数。
+- 正式 TGB SHA-256：`35ed81d66ac28742bf002186f8f89ecdda4b0e7e85a07fae72e43f74db306b3d`；重折后综合主因 SHA-256：`163491ac0fd42bd0b6b28ac9109e1f4972bc5a53293f78413467bc82acb2022b`。
+- 公网强制刷新 `source-view`：综合归纳/复盘啦/选股宝/韭研/淘股吧均为 32；四源覆盖和主因覆盖均为 100%，低置信均为 0，`sourceErrors=[]`；公网 `/health` 返回 `ok=true`。
+- raw 强刷工作流 `29578470061` 与正式写入/重折工作流 `29579363718` 成功；较早失败均发生在脚本启动前或 PowerShell 解析前，没有部分生产写入。
+
+Deployment:
+- raw 旧证据备份：`C:\PandaDashboard\backups\tgb-hunan-raw-20260717-20260717-195608`。
+- 正式写入回退备份：`C:\PandaDashboard\backups\tgb-hunan-manual-20260717-20260717121215`，包含写入前相关正式/综合/证据/质量/auto 文件（如存在）、raw manifest/原图和云端日志。
+- 未部署应用代码，未重启任何服务；只变更生产运行时复盘数据、综合主因和云端日志。
+
+Notes for next agent:
+- 生产工作流现只对 SSH/SCP 退出码 255 做退避；业务闸错误立即停止。日期绑定 TGB 写入脚本仍保留审计用途，但对应 payload Secret 已删除，不能无意重跑。
+- 本次操作 PR：`#147`（raw 强刷）、`#148`（SSH 退避）、`#149`（Windows 编码）、`#150`（正式写入）、`#151`（SCP 退避）；最终交接 PR：`https://github.com/dmz1108/dmzrepo/pull/152`。
+
 ## 2026-07-17 - Codex - 准备发布策略实时事实层与每日质量观察
 
 Changed:
