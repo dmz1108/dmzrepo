@@ -6578,3 +6578,28 @@ Deployment:
 Notes for next agent:
 - 红色只表示预测时已经确认的明星股，琥珀色只表示预测时仍是预期明星；不能把两者合并成同一种“明星”视觉状态。
 - 本轮仅改变回看展示，不得借此改变明星判定、主线命中或收益统计口径。
+
+## 2026-07-16 - Codex - 预判回看明星状态卡已部署
+
+Changed:
+- PR #132 已合并到 `main`，明星确认红色阶段态与预期明星琥珀色观察态已发布到生产。
+- 线上仅替换策略静态页面，没有修改后端程序、业务数据、运行时配置或评分规则。
+
+Files:
+- 云端 `C:\PandaDashboard\kpl-dashboard_17_apple.html`
+- 云端两份运维日志（受保护部署器自动追加）
+- Git `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 生产工作流 `29544905096` 成功，批准提交为 `dedf922dd5bc2751611118ea67951eb067f1e7af`。
+- 公网 `/health` 返回 `ok=true`；`https://market.dreamerqi.com/?view=strategy` 返回 HTTP 200。
+- 线上页面包含 `mlr-star-signal`、`star-confirmed` 和 `star-expected` 标记。
+- 线上 HTML SHA-256 `34b3763c7668ef6e65087d2b5ff82cba34ff5a691f8a9b0b0e214d83f9aef809`，与获批 `main` 文件完全一致。
+
+Deployment:
+- 仅更新静态 `kpl-dashboard_17_apple.html`，`restart=none`，未重启任何服务。
+- 自动备份：`C:\PandaDashboard\_deploy-backups\github-29544905096-1`。
+- 工作流：`https://github.com/dmz1108/dmzrepo/actions/runs/29544905096`。
+
+Notes for next agent:
+- 本次上线已完成且云端与 `main` 一致，不需要再次部署或重启。
