@@ -1,8 +1,8 @@
 # DreamerQi production repair: backfill two Owner-confirmed historical review stars.
 #
 # Scope:
-# - 2026-07-09 / 半导体: 长电科技 (600584) -> confirmed
-# - 2026-07-08 / 算力AI: 紫光股份 (000938) -> confirmed
+# - 2026-07-09 / semiconductor family: 600584 -> confirmed
+# - 2026-07-08 / AI-compute family: 000938 -> confirmed
 #
 # This edits only the two persisted mainline prediction files used by the review
 # endpoint. It does not modify frozen strategy snapshots, L2 jobs, score logic,
@@ -29,8 +29,8 @@ const operationRunId = process.argv[5] || '';
 const correctedAt = new Date().toISOString();
 const operationId = 'review-star-backfill-20260708-09';
 const targets = [
-  { day: '2026-07-09', familyName: '半导体', code: '600584', name: '长电科技' },
-  { day: '2026-07-08', familyName: '算力AI', code: '000938', name: '紫光股份' },
+  { day: '2026-07-09', familyName: '\u534a\u5bfc\u4f53', code: '600584', name: '\u957f\u7535\u79d1\u6280' },
+  { day: '2026-07-08', familyName: '\u7b97\u529bAI', code: '000938', name: '\u7d2b\u5149\u80a1\u4efd' },
 ];
 
 const sha256 = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -97,7 +97,7 @@ function upsertCandidateStar(candidate, target) {
     code: target.code,
     name: target.name,
     level: 'confirmed',
-    label: '明星确认',
+    label: '\u660e\u661f\u786e\u8ba4',
     manualCorrection: true,
     correctedAt,
   };

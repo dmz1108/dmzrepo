@@ -6676,3 +6676,19 @@ Deployment:
 
 Notes for next agent:
 - 两条确认状态属于 Owner 对历史回看的人工校正，脚本会写入 `manualCorrection/reviewCorrection` 元数据，后续不得误称为自动重算所得。
+
+## 2026-07-16 - Codex - 修复历史回看脚本的 Windows 编码兼容性
+
+Changed:
+- 将受保护生产脚本可执行区内的中文常量改为 Unicode 转义，使脚本在 Windows PowerShell 5.1 按本地代码页读取时仍能生成正确的 UTF-8 Node 修复程序。
+
+Files:
+- `ops/production/requests/2026-07-16-review-star-backfill.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 生产工作流 `29548147348` 在 Node 解析阶段因中文常量被 Windows 代码页破坏而退出；失败发生在读取预测文件之前，未产生数据写入、日志追加或服务重启。
+- 修复后脚本的可执行内容不再包含非 ASCII 字符，避免同类编码故障。
+
+Deployment:
+- 本条提交时修复后的生产操作尚未重跑，云端两份预测记录仍保持原状。
