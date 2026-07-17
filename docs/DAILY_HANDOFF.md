@@ -6892,3 +6892,23 @@ Deployment:
 
 Notes for next agent:
 - raw evidence 成功不代表 TGB 完成；正式行仍必须由 Codex 对匹配的官方白底表格原图逐行人工转录、二次人工复核并与终盘涨停池完整对账。
+
+## 2026-07-17 - Codex - 生产工作流增加 SSH 限流重试
+
+Changed:
+- 生产工作流在远程脚本执行和临时文件清理阶段遇到 SSH 连接失败时，按 10/20/30 秒退避重试；固定 `main`、脚本 SHA-256、环境审批、主机指纹和命令内容均保持不变。
+- 修复来源于 TGB raw evidence 工作流连续三次在脚本启动前被云端 `kex_exchange_identification` 重置；三次均已完成脚本哈希校验和上传，但没有进入 PowerShell 脚本执行。
+
+Files:
+- `.github/workflows/production-ops.yml`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Ruby YAML 解析通过，工作流 7 个步骤结构完整；所有 Bash `run` 块均通过 `bash -n`。
+- 生产 TGB 强刷仍需在本改动合并后重新触发并由实际工作流验证。
+
+Deployment:
+- 本条提交时仅修改 GitHub Actions 工作流，尚未再次执行生产脚本；生产数据、应用代码和服务进程均未变更。
+
+Notes for next agent:
+- 重试只处理传输层退出，不改变脚本幂等、备份或业务校验；远程脚本若已开始并返回业务失败，重复执行仍由日期绑定脚本自身的安全闸负责。
