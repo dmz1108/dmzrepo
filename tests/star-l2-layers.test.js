@@ -174,15 +174,22 @@ A((html.match(/starMaxBucketAdminInfo\(s\)/g) || []).length >= 2, '两处明星 
 A(html.includes('最大档字段在但无大单:非明星') && html.includes('最大档字段缺失:需检查worker采集')
   && html.includes('现价缺失:无法确认该股允许最大档'), 'empty/dataMissing/priceMissing 三种状态文案齐备');
 A(html.includes('id="strategy-l2-history"') && html.includes('function loadStrategyL2History(day)'), '管理员策略页包含每日L2扫描记录入口');
-A(html.includes("if (!canUseL2AdminTools()) return ''") && html.includes('管理员可见 · 板块、状态与入选结果'), 'L2扫描记录只在管理员工具权限下渲染');
+A(html.includes("if (!canUseL2AdminTools()) return ''") && html.includes('管理员可见 · 默认看最大档'), 'L2扫描记录只在管理员工具权限下渲染');
 const l2HistoryRenderer = html.slice(html.indexOf('function renderStrategyL2History(data)'), html.indexOf('async function loadStrategyL2History(day)'));
-A(l2HistoryRenderer.includes('ml-l2-pick-list')
-  && l2HistoryRenderer.includes('ml-l2-pick')
-  && l2HistoryRenderer.includes('picked.slice(0, 6)')
-  && l2HistoryRenderer.includes('ml-l2-more'), 'L2扫描记录紧凑展示任务统计与入选股票');
-A(!l2HistoryRenderer.includes('<details')
-  && !l2HistoryRenderer.includes('strategyL2HistoryBucket(')
-  && !html.includes('function strategyL2HistoryBucket('), 'L2扫描记录不再提供逐股展开卡片');
+A(l2HistoryRenderer.includes('job?.results')
+  && l2HistoryRenderer.includes('strategyL2HistoryStarStatus(row)')
+  && l2HistoryRenderer.includes('selectedRows.slice(0, 8)')
+  && l2HistoryRenderer.includes('ml-l2-stock-list'), 'L2扫描记录从完整结果补入明星证据，不只依赖旧picked列表');
+A(html.includes('const STRATEGY_L2_HISTORY_BUCKETS = [500000, 3000000, 5000000, 8000000, 10000000]')
+  && html.includes('function strategyL2HistoryMaxBucket(row)')
+  && html.includes('function strategyL2HistoryBucketRow(row, amount, maxAmount)'), 'L2扫描记录支持50万至1000万五档及个股最大档摘要');
+A(html.includes('<details class="ml-l2-stock')
+  && html.includes('点击查看该股全部L2档位')
+  && html.includes('ml-l2-max-money')
+  && html.includes('ml-l2-buckets'), 'L2个股默认显示最大档金额，点击展开全部档位');
+A(html.includes("return { level: 'expected', label: '预期明星', maxBucket }")
+  && html.includes('ml-l2-star ${star.level}')
+  && html.includes('.ml-l2-stock.is-expected'), '预期明星在折叠状态优先入列并高亮');
 const backend = fsReal.readFileSync(pathReal.join(__dirname, '..', 'strategy-backend.js'), 'utf8');
 A(backend.includes("url.searchParams.get('history') === '1'") && backend.includes("if (!adminViewer) { sendJson(res, 403, { error: 'admin required' })"), 'L2历史接口有管理员门控');
 let htmlCompiled = true;

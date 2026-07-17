@@ -9248,52 +9248,228 @@
     font-weight: 760;
   }
 
-  body.view-strategy .ml-l2-pick-list {
+  body.view-strategy .ml-l2-stock-list {
     min-width: 0;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(270px, 1fr));
+    align-items: start;
     gap: 6px;
   }
 
-  body.view-strategy .ml-l2-pick {
-    min-width: 148px;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 2px 8px;
-    padding: 5px 8px;
-    border: 1px solid rgba(174,190,214,.11);
-    border-radius: 6px;
-    background: rgba(255,255,255,.028);
-  }
-
-  body.view-strategy .ml-l2-pick b {
+  body.view-strategy .ml-l2-stock {
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--text);
-    font-size: 12px;
+    border: 1px solid rgba(174,190,214,.12);
+    border-radius: 6px;
+    background: rgba(255,255,255,.025);
+    transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
   }
 
-  body.view-strategy .ml-l2-pick i,
-  body.view-strategy .ml-l2-pick em {
+  body.view-strategy .ml-l2-stock[open] {
+    grid-column: 1 / -1;
+    border-color: rgba(74,155,255,.28);
+    background: rgba(15,22,32,.92);
+    box-shadow: 0 12px 30px -27px rgba(0,0,0,.9);
+  }
+
+  body.view-strategy .ml-l2-stock.is-expected {
+    border-color: rgba(246,193,76,.48);
+    background: rgba(246,193,76,.075);
+    box-shadow: inset 3px 0 0 rgba(246,193,76,.8);
+  }
+
+  body.view-strategy .ml-l2-stock.is-confirmed {
+    border-color: rgba(255,83,105,.46);
+    background: rgba(255,83,105,.065);
+    box-shadow: inset 3px 0 0 rgba(255,83,105,.78);
+  }
+
+  body.view-strategy .ml-l2-stock-summary {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto 16px;
+    align-items: center;
+    gap: 4px 8px;
+    padding: 7px 8px;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  body.view-strategy .ml-l2-stock-summary::-webkit-details-marker { display: none; }
+
+  body.view-strategy .ml-l2-stock-id {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  body.view-strategy .ml-l2-stock-id > b {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.view-strategy .ml-l2-stock-id small {
     color: var(--text-faint);
+    font-size: 9px;
+    white-space: nowrap;
+  }
+
+  body.view-strategy .ml-l2-star {
+    flex: 0 0 auto;
+    padding: 1px 5px;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1.45;
+    white-space: nowrap;
+  }
+
+  body.view-strategy .ml-l2-star.expected { color: #f6c14c; background: rgba(246,193,76,.09); }
+  body.view-strategy .ml-l2-star.confirmed { color: #ff6578; background: rgba(255,83,105,.09); }
+
+  body.view-strategy .ml-l2-stock-gain {
+    font-size: 11px;
+    font-weight: 780;
+    white-space: nowrap;
+  }
+
+  body.view-strategy .ml-l2-stock-gain.up { color: var(--up); }
+  body.view-strategy .ml-l2-stock-gain.down { color: var(--down); }
+  body.view-strategy .ml-l2-stock-gain.flat { color: var(--text-faint); }
+
+  body.view-strategy .ml-l2-max-name {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: #a9c8f4;
     font-size: 10px;
+    font-weight: 760;
+  }
+
+  body.view-strategy .ml-l2-max-name i {
+    overflow: hidden;
+    color: var(--text-faint);
+    font-size: 9px;
+    font-style: normal;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.view-strategy .ml-l2-max-ratios {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    color: var(--text-faint);
+    font-size: 9px;
+    white-space: nowrap;
+  }
+
+  body.view-strategy .ml-l2-max-ratios i,
+  body.view-strategy .ml-l2-max-money i,
+  body.view-strategy .ml-l2-bucket-ratios i,
+  body.view-strategy .ml-l2-bucket-money i {
+    font-style: normal;
+  }
+
+  body.view-strategy .ml-l2-max-ratios b,
+  body.view-strategy .ml-l2-bucket-ratios b { color: #c6d8f1; font-weight: 760; }
+
+  body.view-strategy .ml-l2-max-money {
+    grid-column: 1 / 3;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    padding-top: 2px;
+  }
+
+  body.view-strategy .ml-l2-max-money i {
+    min-width: 0;
+    color: var(--text-faint);
+    font-size: 9px;
+    white-space: nowrap;
+  }
+
+  body.view-strategy .ml-l2-max-money b {
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  body.view-strategy .ml-l2-stock-toggle {
+    grid-column: 3;
+    grid-row: 1 / 4;
+    width: 7px;
+    height: 7px;
+    justify-self: center;
+    border-right: 1px solid #7f98ba;
+    border-bottom: 1px solid #7f98ba;
+    transform: rotate(45deg) translateY(-2px);
+    transition: transform .16s ease;
+  }
+
+  body.view-strategy .ml-l2-stock[open] .ml-l2-stock-toggle {
+    transform: rotate(225deg) translate(-1px, -1px);
+  }
+
+  body.view-strategy .ml-l2-buckets {
+    padding: 0 8px 7px;
+    border-top: 1px solid rgba(174,190,214,.10);
+  }
+
+  body.view-strategy .ml-l2-bucket-row {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 82px minmax(170px, .65fr) minmax(260px, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 2px;
+    border-bottom: 1px solid rgba(174,190,214,.075);
+  }
+
+  body.view-strategy .ml-l2-bucket-row:last-child { border-bottom: 0; }
+  body.view-strategy .ml-l2-bucket-row.is-max { background: rgba(74,155,255,.055); }
+
+  body.view-strategy .ml-l2-bucket-name {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  body.view-strategy .ml-l2-bucket-name b { color: var(--text); font-size: 11px; }
+  body.view-strategy .ml-l2-bucket-name i {
+    padding: 1px 4px;
+    border-radius: 999px;
+    color: #78aef6;
+    background: rgba(74,155,255,.10);
+    font-size: 8px;
     font-style: normal;
     white-space: nowrap;
   }
 
-  body.view-strategy .ml-l2-pick em {
-    grid-column: 1 / -1;
+  body.view-strategy .ml-l2-bucket-ratios,
+  body.view-strategy .ml-l2-bucket-money {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+    color: var(--text-faint);
+    font-size: 9px;
   }
 
-  body.view-strategy .ml-l2-pick i.up { color: var(--up); }
-  body.view-strategy .ml-l2-pick i.down { color: var(--down); }
-  body.view-strategy .ml-l2-pick i.flat { color: var(--flat); }
+  body.view-strategy .ml-l2-bucket-money { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  body.view-strategy .ml-l2-bucket-money b { color: var(--text-muted); font-size: 10px; font-weight: 700; }
+  body.view-strategy .ml-l2-bucket-state { color: #d29a55; font-size: 9px; white-space: nowrap; }
 
   body.view-strategy .ml-l2-more {
+    grid-column: 1 / -1;
+    padding: 3px 2px;
     color: var(--text-faint);
     font-size: 11px;
   }
@@ -9689,8 +9865,24 @@
     body.view-strategy .ml-l2-job-meta {
       max-width: 280px;
     }
-    body.view-strategy .ml-l2-pick {
-      flex: 1 1 148px;
+    body.view-strategy .ml-l2-stock-list {
+      grid-template-columns: 1fr;
+    }
+    body.view-strategy .ml-l2-max-ratios {
+      gap: 5px;
+    }
+    body.view-strategy .ml-l2-bucket-row {
+      grid-template-columns: minmax(76px, auto) minmax(0, 1fr);
+      gap: 5px 8px;
+    }
+    body.view-strategy .ml-l2-bucket-ratios {
+      grid-column: 2;
+    }
+    body.view-strategy .ml-l2-bucket-money {
+      grid-column: 1 / -1;
+    }
+    body.view-strategy .ml-l2-bucket-state {
+      grid-column: 1 / -1;
     }
   }
 </style>
@@ -12274,6 +12466,116 @@ function strategyL2HistoryTime(value) {
     });
   } catch (_) { return ''; }
 }
+const STRATEGY_L2_HISTORY_BUCKETS = [500000, 3000000, 5000000, 8000000, 10000000];
+function strategyL2HistoryNum(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+function strategyL2HistoryRatioValue(buy, sell) {
+  if (buy == null || sell == null) return null;
+  if (sell > 0) return buy / sell;
+  return buy > 0 ? Infinity : 0;
+}
+function strategyL2HistoryRatioText(value) {
+  if (value == null) return '--';
+  if (value === Infinity) return '∞';
+  return Number(value).toFixed(2);
+}
+function strategyL2HistoryBucketLabel(amount) {
+  const value = Number(amount);
+  return Number.isFinite(value) && value > 0 ? `≥${Math.round(value / 10000)}万` : '--';
+}
+function strategyL2HistoryBucket(row, amount) {
+  const raw = row?.thresholds?.[String(amount)];
+  const available = !!raw && typeof raw === 'object';
+  const value = key => available ? strategyL2HistoryNum(raw[key]) : null;
+  const activeBuy = value('activeBuy');
+  const activeSell = value('activeSell');
+  const passiveBuy = value('passiveBuy');
+  const passiveSell = value('passiveSell');
+  const values = [activeBuy, activeSell, passiveBuy, passiveSell];
+  const complete = available && values.every(v => v != null);
+  const hasAny = complete && values.some(v => v > 0);
+  return {
+    amount,
+    available,
+    complete,
+    hasAny,
+    activeBuy,
+    activeSell,
+    passiveBuy,
+    passiveSell,
+    activeRatio: complete ? strategyL2HistoryRatioValue(activeBuy, activeSell) : null,
+    passiveRatio: complete ? strategyL2HistoryRatioValue(passiveBuy, passiveSell) : null,
+    supportRatio: complete ? strategyL2HistoryRatioValue(activeBuy + passiveBuy, activeSell + passiveSell) : null,
+  };
+}
+function strategyL2HistoryMaxBucket(row) {
+  const price = strategyL2HistoryNum(row?.price ?? row?.close ?? row?.lastPrice);
+  const code = String(row?.code || '').replace(/\D/g, '').slice(0, 6);
+  if (price != null && price > 0) {
+    const shareCap = code.startsWith('30') ? 300000 : (code.startsWith('68') ? 100000 : 1000000);
+    const allowed = STRATEGY_L2_HISTORY_BUCKETS.filter(amount => amount <= price * shareCap);
+    const amount = allowed.length ? allowed[allowed.length - 1] : STRATEGY_L2_HISTORY_BUCKETS[0];
+    return { ...strategyL2HistoryBucket(row, amount), priceKnown: true };
+  }
+  const observed = STRATEGY_L2_HISTORY_BUCKETS
+    .map(amount => strategyL2HistoryBucket(row, amount))
+    .filter(bucket => bucket.hasAny);
+  const fallback = observed.length ? observed[observed.length - 1] : null;
+  return fallback ? { ...fallback, priceKnown: false } : { amount: null, available: false, complete: false, hasAny: false, priceKnown: false };
+}
+function strategyL2HistoryStarStatus(row) {
+  const maxBucket = strategyL2HistoryMaxBucket(row);
+  if (!maxBucket.amount || !maxBucket.priceKnown || !maxBucket.complete || !maxBucket.hasAny) return null;
+  const gain = strategyL2HistoryNum(row?.gainPct ?? row?.gain);
+  if (gain == null || maxBucket.activeBuy <= 1.5e8 || !(maxBucket.activeRatio > 1.65)) return null;
+  if (gain >= limitUpThreshold(row?.code, row?.name)) return { level: 'confirmed', label: '明星确认', maxBucket };
+  if (gain >= 5) return { level: 'expected', label: '预期明星', maxBucket };
+  return null;
+}
+function strategyL2HistoryMoney(value, available) {
+  if (!available || value == null) return '--';
+  return strategyPlainMoney(value) || '0';
+}
+function strategyL2HistoryBucketRow(row, amount, maxAmount) {
+  const bucket = strategyL2HistoryBucket(row, amount);
+  const state = !bucket.available ? '数据缺失' : (!bucket.complete ? '字段不完整' : (!bucket.hasAny ? '无大单' : ''));
+  return `<div class="ml-l2-bucket-row${amount === maxAmount ? ' is-max' : ''}">
+    <span class="ml-l2-bucket-name"><b>${strategyL2HistoryBucketLabel(amount)}</b>${amount === maxAmount ? '<i>最大档</i>' : ''}</span>
+    <span class="ml-l2-bucket-ratios"><i>主比 <b>${strategyL2HistoryRatioText(bucket.activeRatio)}</b></i><i>被比 <b>${strategyL2HistoryRatioText(bucket.passiveRatio)}</b></i><i>合比 <b>${strategyL2HistoryRatioText(bucket.supportRatio)}</b></i></span>
+    <span class="ml-l2-bucket-money"><i>主买 <b>${strategyL2HistoryMoney(bucket.activeBuy, bucket.available)}</b></i><i>主卖 <b>${strategyL2HistoryMoney(bucket.activeSell, bucket.available)}</b></i><i>被买 <b>${strategyL2HistoryMoney(bucket.passiveBuy, bucket.available)}</b></i><i>被卖 <b>${strategyL2HistoryMoney(bucket.passiveSell, bucket.available)}</b></i></span>
+    ${state ? `<span class="ml-l2-bucket-state">${state}</span>` : ''}
+  </div>`;
+}
+function strategyL2HistoryStockRow(row) {
+  const gain = strategyL2HistoryNum(row?.gainPct ?? row?.gain);
+  const gainClass = gain == null ? 'flat' : (gain >= 0 ? 'up' : 'down');
+  const maxBucket = strategyL2HistoryMaxBucket(row);
+  const star = strategyL2HistoryStarStatus(row);
+  const starChip = star ? `<span class="ml-l2-star ${star.level}">${star.label}</span>` : '';
+  const maxName = maxBucket.amount
+    ? `${maxBucket.priceKnown ? '最大档' : '最高有数据档'} ${strategyL2HistoryBucketLabel(maxBucket.amount)}`
+    : '最大档未知';
+  const maxState = !maxBucket.amount ? '无档位数据'
+    : (!maxBucket.available ? '档位数据缺失'
+      : (!maxBucket.complete ? '档位字段不完整' : (!maxBucket.hasAny ? '该档无大单' : '')));
+  const amountAvailable = !!maxBucket.amount && maxBucket.available;
+  const bucketRows = STRATEGY_L2_HISTORY_BUCKETS
+    .map(amount => strategyL2HistoryBucketRow(row, amount, maxBucket.amount))
+    .join('');
+  return `<details class="ml-l2-stock${star ? ` is-${star.level}` : ''}">
+    <summary class="ml-l2-stock-summary" title="点击查看该股全部L2档位">
+      <span class="ml-l2-stock-id"><b>${escapeHTML(String(row?.name || row?.code || ''))}</b><small>${escapeHTML(String(row?.code || ''))}</small>${starChip}</span>
+      <span class="ml-l2-stock-gain ${gainClass}">${gain == null ? '--' : `${gain >= 0 ? '+' : ''}${gain.toFixed(2)}%`}</span>
+      <span class="ml-l2-max-name">${escapeHTML(maxName)}${maxState ? `<i>${maxState}</i>` : ''}</span>
+      <span class="ml-l2-max-ratios"><i>主比 <b>${strategyL2HistoryRatioText(maxBucket.activeRatio)}</b></i><i>被比 <b>${strategyL2HistoryRatioText(maxBucket.passiveRatio)}</b></i><i>合比 <b>${strategyL2HistoryRatioText(maxBucket.supportRatio)}</b></i></span>
+      <span class="ml-l2-max-money"><i>主买 <b>${strategyL2HistoryMoney(maxBucket.activeBuy, amountAvailable)}</b></i><i>主卖 <b>${strategyL2HistoryMoney(maxBucket.activeSell, amountAvailable)}</b></i><i>被买 <b>${strategyL2HistoryMoney(maxBucket.passiveBuy, amountAvailable)}</b></i><i>被卖 <b>${strategyL2HistoryMoney(maxBucket.passiveSell, amountAvailable)}</b></i></span>
+      <span class="ml-l2-stock-toggle" aria-hidden="true"></span>
+    </summary>
+    <div class="ml-l2-buckets" aria-label="${escapeHTML(String(row?.name || row?.code || ''))} L2全档明细">${bucketRows}</div>
+  </details>`;
+}
 function renderStrategyL2History(data) {
   if (!canUseL2AdminTools()) return '';
   const allJobs = Array.isArray(data?.jobs) ? data.jobs : [];
@@ -12290,20 +12592,32 @@ function renderStrategyL2History(data) {
   if (!jobs.length) return '';
   const cards = jobs.map(job => {
     const picked = Array.isArray(job?.picked) ? job.picked : [];
-    const resultCount = Array.isArray(job?.results) ? job.results.length : 0;
+    const results = Array.isArray(job?.results) ? job.results : [];
+    const resultCount = results.length;
     const trigger = job?.trigger === 'strategy-auto' ? '自动' : (job?.trigger === 'manual' ? '手动' : '扫描');
     const status = String(job?.status || '');
     const statusText = status === 'done' ? '完成' : (status === 'running' ? '计算中' : (status === 'queued' ? '排队中' : '失败'));
-    const rows = picked.slice(0, 6).map(row => {
-      const gain = Number(row?.gainPct);
-      const gainClass = !Number.isFinite(gain) ? 'flat' : (gain >= 0 ? 'up' : 'down');
-      return `<span class="ml-l2-pick" title="${escapeHTML(`${row?.code || ''} · 主动比${row?.activeRatio ?? '--'} · 被动比${row?.passiveRatio ?? '--'}`)}">
-        <b>${escapeHTML(String(row?.name || row?.code || ''))}</b>
-        <i class="${gainClass}">${Number.isFinite(gain) ? `${gain >= 0 ? '+' : ''}${gain.toFixed(2)}%` : '--'}</i>
-        <em>主${row?.activeRatio ?? '--'} · 被${row?.passiveRatio ?? '--'}</em>
-      </span>`;
-    }).join('');
-    const remaining = Math.max(0, picked.length - 6);
+    const resultByCode = new Map(results.map(row => [String(row?.code || ''), row]));
+    const pickedOrder = new Map(picked.map((row, index) => [String(row?.code || ''), index]));
+    const selected = new Map();
+    for (const row of results) {
+      if (strategyL2HistoryStarStatus(row)) selected.set(String(row?.code || ''), row);
+    }
+    for (const row of picked) {
+      const code = String(row?.code || '');
+      if (code) selected.set(code, resultByCode.get(code) || row);
+    }
+    const selectedRows = [...selected.values()].sort((a, b) => {
+      const aLevel = strategyL2HistoryStarStatus(a)?.level;
+      const bLevel = strategyL2HistoryStarStatus(b)?.level;
+      const priority = level => level === 'confirmed' ? 0 : (level === 'expected' ? 1 : 2);
+      return priority(aLevel) - priority(bLevel)
+        || (pickedOrder.get(String(a?.code || '')) ?? 999) - (pickedOrder.get(String(b?.code || '')) ?? 999)
+        || (Number(b?.gainPct) || -999) - (Number(a?.gainPct) || -999);
+    });
+    const shownRows = selectedRows.slice(0, 8);
+    const rows = shownRows.map(strategyL2HistoryStockRow).join('');
+    const remaining = Math.max(0, selectedRows.length - shownRows.length);
     const empty = status === 'done' && resultCount > 0 && !picked.length
       ? '<div class="ml-l2-empty">扫描完成，没有达到当前筛选阈值的股票。</div>'
       : (status === 'done' && !resultCount ? '<div class="ml-l2-empty">任务未取得可用成分股结果。</div>' : '');
@@ -12319,13 +12633,13 @@ function renderStrategyL2History(data) {
         <span><i>结果</i><b>${resultCount}</b></span>
         <span><i>入选</i><b>${picked.length}</b></span>
       </div>
-      ${rows ? `<div class="ml-l2-pick-list">${rows}${remaining ? `<span class="ml-l2-more">+${remaining}</span>` : ''}</div>` : empty}
+      ${rows ? `<div class="ml-l2-stock-list">${rows}${remaining ? `<span class="ml-l2-more">其余 ${remaining} 只保留在原始结果中</span>` : ''}</div>` : empty}
     </article>`;
   }).join('');
   return `<section class="strategy-section ml-l2-history">
     <div class="strategy-section-head">
       <span class="strategy-section-title">今日 L2 扫描记录</span>
-      <span class="strategy-section-sub">管理员可见 · 板块、状态与入选结果</span>
+      <span class="strategy-section-sub">管理员可见 · 默认看最大档，点击个股查看全部五档</span>
     </div>
     <div class="ml-l2-job-grid">${cards}</div>
   </section>`;
