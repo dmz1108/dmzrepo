@@ -129,11 +129,13 @@ jobs:
             -i "$HOME/.ssh/dreamerqi_ops" -p "$PORT" "$USER@$HOST" whoami
 
       - name: Upload approved script and source archive
+        id: upload
         shell: bash
         env:
           HOST: ${{ secrets.DREAMERQI_CLOUD_HOST }}
           PORT: ${{ secrets.DREAMERQI_CLOUD_PORT }}
           USER: ${{ secrets.DREAMERQI_CLOUD_USER }}
+          TGB_20260717_PAYLOAD_B64: ${{ secrets.DREAMERQI_TGB_20260717_PAYLOAD_B64 }}
           SCRIPT_PATH: ${{ inputs.script_path }}
           MANIFEST_PATH: ${{ inputs.manifest_path }}
           REMOTE_SCRIPT: ${{ steps.validate.outputs.remote_script }}
@@ -149,6 +151,17 @@ jobs:
               -i "$HOME/.ssh/dreamerqi_ops" -P "$PORT" "$RUNNER_TEMP/$REMOTE_ARCHIVE" \
               "$USER@$HOST:C:/Windows/Temp/$REMOTE_ARCHIVE"
           fi
+          remote_payload=''
+          if [[ "$SCRIPT_PATH" == 'ops/production/requests/2026-07-17-tgb-hunan-write.ps1' ]]; then
+            [[ -n "$TGB_20260717_PAYLOAD_B64" ]] || { echo "Date-bound TGB payload secret is missing" >&2; exit 1; }
+            remote_payload="dreamerqi-tgb-payload-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.b64"
+            printf '%s' "$TGB_20260717_PAYLOAD_B64" > "$RUNNER_TEMP/$remote_payload"
+            chmod 600 "$RUNNER_TEMP/$remote_payload"
+            scp -q -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              -i "$HOME/.ssh/dreamerqi_ops" -P "$PORT" "$RUNNER_TEMP/$remote_payload" \
+              "$USER@$HOST:C:/Windows/Temp/$remote_payload"
+          fi
+          echo "remote_payload=$remote_payload" >> "$GITHUB_OUTPUT"
 
       - name: Execute approved production operation
         shell: bash
@@ -158,6 +171,7 @@ jobs:
           USER: ${{ secrets.DREAMERQI_CLOUD_USER }}
           REMOTE_SCRIPT: ${{ steps.validate.outputs.remote_script }}
           REMOTE_ARCHIVE: ${{ steps.validate.outputs.remote_archive }}
+          REMOTE_PAYLOAD: ${{ steps.upload.outputs.remote_payload }}
           SCRIPT_SHA: ${{ steps.validate.outputs.script_sha }}
           MANIFEST_PATH: ${{ inputs.manifest_path }}
         run: |
@@ -165,6 +179,10 @@ jobs:
           source_archive=''
           if [[ -n "$REMOTE_ARCHIVE" ]]; then
             source_archive="C:/Windows/Temp/${REMOTE_ARCHIVE}"
+          fi
+          payload_file=''
+          if [[ -n "$REMOTE_PAYLOAD" ]]; then
+            payload_file="C:/Windows/Temp/${REMOTE_PAYLOAD}"
           fi
           launcher="$RUNNER_TEMP/launcher.ps1"
           cat > "$launcher" <<EOF
@@ -175,6 +193,7 @@ jobs:
           \$env:DREAMERQI_OPS_SCRIPT_SHA256 = '$SCRIPT_SHA'
           \$env:DREAMERQI_OPS_MANIFEST_PATH = '$MANIFEST_PATH'
           \$env:DREAMERQI_OPS_SOURCE_ARCHIVE = '$source_archive'
+          \$env:DREAMERQI_TGB_MANUAL_PAYLOAD_FILE = '$payload_file'
           & 'C:/Windows/Temp/${REMOTE_SCRIPT}'
           EOF
           encoded=$(iconv -f UTF-8 -t UTF-16LE "$launcher" | base64 -w 0)
@@ -208,11 +227,15 @@ jobs:
           USER: ${{ secrets.DREAMERQI_CLOUD_USER }}
           REMOTE_SCRIPT: ${{ steps.validate.outputs.remote_script }}
           REMOTE_ARCHIVE: ${{ steps.validate.outputs.remote_archive }}
+          REMOTE_PAYLOAD: ${{ steps.upload.outputs.remote_payload }}
         run: |
           set +e
           cleanup_command="Remove-Item -LiteralPath 'C:/Windows/Temp/${REMOTE_SCRIPT}' -Force -ErrorAction SilentlyContinue"
           if [[ -n "$REMOTE_ARCHIVE" ]]; then
             cleanup_command="$cleanup_command; Remove-Item -LiteralPath 'C:/Windows/Temp/${REMOTE_ARCHIVE}' -Force -ErrorAction SilentlyContinue"
+          fi
+          if [[ -n "$REMOTE_PAYLOAD" ]]; then
+            cleanup_command="$cleanup_command; Remove-Item -LiteralPath 'C:/Windows/Temp/${REMOTE_PAYLOAD}' -Force -ErrorAction SilentlyContinue"
           fi
           for attempt in 1 2 3; do
             if ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
