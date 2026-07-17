@@ -9892,6 +9892,7 @@
     }
   }
 </style>
+<link href="/vendor/strategy-workbench.css?v=20260717" rel="stylesheet">
 </head>
 <body>
 
@@ -15924,7 +15925,7 @@ function renderStrategyPage() {
     const focusBody = focus.length ? grid(focus) : `<div class="strategy-empty">${focusEmpty}</div>`;
     bodyHtml = `
       <section class="strategy-section strategy-focus-section">
-        <div class="strategy-section-head"><span class="strategy-section-title">⭐ 重点关注</span></div>
+        <div class="strategy-section-head"><span class="strategy-section-title">重点关注</span></div>
         ${focusBody}
       </section>
     `;
@@ -15932,17 +15933,23 @@ function renderStrategyPage() {
 
   const minAmtSelect = '';
   root.innerHTML = `
-    <div class="strategy-hero">
-      <div class="strategy-kicker">实时主线与选股</div>
-      <div class="strategy-title">今日策略</div>
-      <div class="strategy-subtitle">
-        <input type="date" class="strategy-date-input" value="${escapeHTML(state.date)}" max="${escapeHTML(today)}" onchange="onStrategyDateChange(this.value)">
-        ${canUseL2AdminTools() ? `<span class="strategy-threshold"><span class="st-lbl">L2阈值 主动买/主动卖 ≥</span><input type="number" class="sc-threshold-input" min="0.1" step="0.1" value="${state.smartPickThreshold || 1.5}" onchange="onSmartThresholdChange(this.value)"></span>` : ''}
-        ${minAmtSelect}
+    <header class="strategy-hero">
+      <div class="strategy-hero-head">
+        <div class="strategy-hero-heading">
+          <div class="strategy-kicker">实时主线与选股</div>
+          <div class="strategy-title">今日策略</div>
+        </div>
+        <div class="strategy-subtitle">
+          <input type="date" class="strategy-date-input" value="${escapeHTML(state.date)}" max="${escapeHTML(today)}" onchange="onStrategyDateChange(this.value)">
+          ${canUseL2AdminTools() ? `<span class="strategy-threshold"><span class="st-lbl">L2阈值 主动买/主动卖 ≥</span><input type="number" class="sc-threshold-input" min="0.1" step="0.1" value="${state.smartPickThreshold || 1.5}" onchange="onSmartThresholdChange(this.value)"></span>` : ''}
+          ${minAmtSelect}
+        </div>
       </div>
-      ${banner ? `<div class="strategy-snapshot-banner">${banner}</div>` : ''}
-      ${canUseL2AdminTools() ? renderStrategyBoardSearchHTML() : ''}
-    </div>
+      ${(banner || canUseL2AdminTools()) ? `<div class="strategy-hero-utility">
+        ${banner ? `<div class="strategy-snapshot-banner">${banner}</div>` : ''}
+        ${canUseL2AdminTools() ? renderStrategyBoardSearchHTML() : ''}
+      </div>` : ''}
+    </header>
     ${canUseL2AdminTools() ? renderStrategyBoardSearchResultsHTML() : ''}
     <div id="strategy-mainlines" class="strategy-mainlines"></div>
     ${canUseL2AdminTools() ? '<div id="strategy-l2-history"></div>' : ''}
@@ -15952,11 +15959,10 @@ function renderStrategyPage() {
       <div id="strategy-strong-resonance" class="strategy-strong-resonance"></div>
     </div>
     ${bodyHtml}
-    ${canUseL2AdminTools() ? '<div class="strategy-note">重点关注板块按实时涨幅快照排序后分批 L2 扫描；主动按逐笔成交统计，被动按挂单订单号累计统计。</div>' : ''}
     ${state.adminLoggedIn ? `
     <section class="strategy-section theme-calib">
       <div class="strategy-section-head tc-head" onclick="toggleThemeCalib()">
-        <span class="strategy-section-title">🏷️ 题材校准 · 未归类新词 ${state.themeCalibOpen ? '▾' : '▸'}</span>
+        <span class="strategy-section-title">题材校准 · 未归类新词 ${state.themeCalibOpen ? '▾' : '▸'}</span>
         <span class="strategy-section-sub">把没归类的新热点词归入标准题材，即时生效</span>
       </div>
       ${state.themeCalibOpen ? '<div id="theme-calib-body" class="tc-body">加载中…</div>' : ''}
