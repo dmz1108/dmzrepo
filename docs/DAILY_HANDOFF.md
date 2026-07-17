@@ -6631,3 +6631,27 @@ Deployment:
 Notes for next agent:
 - “明星确认/预期明星”是预测时的 L2 证据阶段；“主线命中/进入前三”是盘后结果，必须继续独立表达。
 - 不能因为某日盘后命中就把整张无明星证据的历史卡片改成确认态。
+
+## 2026-07-16 - Codex - 明星证据与预判命中视觉精修已部署
+
+Changed:
+- PR #134 已合并到 `main`，今日主线榜明星证据层和预判回看独立命中结论已发布到生产。
+- 线上只替换策略静态页面，没有修改后端程序、策略逻辑、业务数据、运行时配置或评分规则。
+
+Files:
+- 云端 `C:\PandaDashboard\kpl-dashboard_17_apple.html`
+- 云端两份运维日志（受保护部署器自动追加）
+- Git `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 生产工作流 `29546908609` 成功，批准提交为 `010cd2b6eac64914a3b5701de747780e94997713`。
+- 公网 `/health` 返回 `ok=true`；`https://market.dreamerqi.com/?view=strategy` 返回 HTTP 200。
+- 线上页面包含 `ml-star-proof-head`、`ml-star-ratios`、“主线命中”和“进入前三”标记。
+- 线上 HTML SHA-256 `28094d847f2922d3da713c8414de552d27c9a64d61ea49a831398d6fb11d71d7`，与获批 `main` 文件完全一致。
+
+Deployment:
+- 仅更新静态 `kpl-dashboard_17_apple.html`，`restart=none`，未重启任何服务。
+- 工作流：`https://github.com/dmz1108/dmzrepo/actions/runs/29546908609`。
+
+Notes for next agent:
+- 本次上线已完成且云端与 `main` 一致，不需要再次部署或重启。
