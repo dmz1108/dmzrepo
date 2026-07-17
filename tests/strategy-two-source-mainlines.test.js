@@ -119,6 +119,20 @@ A(bySourceReviewHTML.includes('<span class="mlr-label">东财</span>') && bySour
 A(bySourceReviewHTML.includes('<span class="mlr-label">同花顺</span>') && bySourceReviewHTML.includes('<span class="mlr-theme">算力</span>'), 'P2 回看页:同花顺独立显示算力主线');
 A(bySourceReviewHTML.includes('同花顺 命中 1/1(100%) · 前三 1/1(100%)'), 'P2 回看统计:同花顺独立显示命中/前三数据');
 A(!bySourceReviewHTML.includes('<span class="mlr-theme">今日无主线</span>') && !bySourceReviewHTML.includes('候选未通过 L2'), 'P2 回看页:东财空+同花顺有预测时不再输出无来源的整体“今日无主线”误导');
+const bothNoMainlineReviewHTML = renderMainlineReviewHTML({
+  days: [{
+    day: '2026-07-16', phase: '尾盘', sampleValid: true, pendingReview: false,
+    noMainline: true, leaders: [], expectedStars: [], actualTop: [],
+    bySource: {
+      eastmoney: { available: true, status: 'no-mainline', theme: '', noMainline: true, mainlineHitTop1: null, mainlineHitTop3: null },
+      ths: { available: true, status: 'no-mainline', theme: '', noMainline: true, mainlineHitTop1: null, mainlineHitTop3: null },
+    },
+  }],
+  stats: { bySource: { eastmoney: { mainlineTotal: 0 }, ths: { mainlineTotal: 0 } } },
+});
+A(bothNoMainlineReviewHTML.includes('<span class="mlr-label">双源</span>')
+  && bothNoMainlineReviewHTML.includes('<span class="mlr-theme">今日无主线</span>')
+  && bothNoMainlineReviewHTML.includes('>未形成</span>'), '双源都有效无主线时合并显示“今日无主线”');
 const unavailableReviewHTML = renderMainlineReviewHTML({
   days: [{
     day: '2026-07-14', phase: '早盘', sampleValid: true, pendingReview: false,

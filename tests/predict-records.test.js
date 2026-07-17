@@ -167,5 +167,20 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
   A(unavailable.bySource.eastmoney.top.length === 0 && unavailable.bySource.ths.top.length === 2, '暂缺源保持空块，另一源预测不受影响');
   A(unavailable.bySource.ths.available === true && unavailable.bySource.ths.hasMainlines === true, '另一来源可用状态独立保存，不借值');
 
+  // 6. 双源均正常返回但没有通过 L2 明星门槛的主线：必须显式保存“今日无主线”，
+  // 不能因 top 为空让整个交易日从预判回看消失。
+  existingPredict = null;
+  await writeMainlinePredictBySource('2026-07-16', '尾盘', {
+    eastmoney: { available: true, hasMainlines: false, reason: 'no-l2-qualified-mainline', zsType: 6, mainlines: [] },
+    ths: { available: true, hasMainlines: false, reason: 'no-l2-qualified-mainline', zsType: 5, mainlines: [] },
+  }, { key: '' });
+  const noMainline = written['/fake/mainline-predict-2026-07-16.json'];
+  A(noMainline && noMainline.schemaVersion === 3 && noMainline.hasMainlines === false
+    && noMainline.recordState === 'no-mainline', '双源有效零结果落为明确 no-mainline 档案');
+  A(noMainline.top.length === 0 && noMainline.bySource.eastmoney.available === true
+    && noMainline.bySource.eastmoney.hasMainlines === false
+    && noMainline.bySource.ths.available === true
+    && noMainline.bySource.ths.hasMainlines === false, '无主线档案保留两源可用性，不借值也不伪造主题');
+
   console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL P1-C CHECKS PASSED');
 })();
