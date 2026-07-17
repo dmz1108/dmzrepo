@@ -6655,3 +6655,24 @@ Deployment:
 
 Notes for next agent:
 - 本次上线已完成且云端与 `main` 一致，不需要再次部署或重启。
+
+## 2026-07-16 - Codex - 准备回填7月8日与7月9日回看明星
+
+Changed:
+- 新增受保护生产修复脚本，按 Owner 指定将 2026-07-09 半导体主线的长电科技（600584）与 2026-07-08 算力AI主线的紫光股份（000938）写为历史回看“明星确认”。
+- 修复目标是两天的 `strategy-data/mainline-predict-*.json`；不在前端硬编码股票，不修改冻结快照、L2任务、评分逻辑或来源数据库。
+- 脚本会先校验日期和主线族，备份两个原文件，再同步修正兼容顶层、来源块与候选块；原明星保存在审计元数据中，失败自动恢复备份。
+
+Files:
+- `ops/production/requests/2026-07-16-review-star-backfill.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 嵌入式修复程序通过语法检查，并用包含兼容顶层、来源块和候选块的本地样本验证修复、审计保留、回滚结构与二次运行幂等性。
+- 实际运行结果、前后哈希、备份目录和公网回看结果需在受保护生产工作流完成后补记。
+
+Deployment:
+- 本条提交时尚未执行生产修复；运行该脚本不部署代码、不重启服务。
+
+Notes for next agent:
+- 两条确认状态属于 Owner 对历史回看的人工校正，脚本会写入 `manualCorrection/reviewCorrection` 元数据，后续不得误称为自动重算所得。
