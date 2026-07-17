@@ -6912,3 +6912,25 @@ Deployment:
 
 Notes for next agent:
 - 重试只处理传输层退出，不改变脚本幂等、备份或业务校验；远程脚本若已开始并返回业务失败，重复执行仍由日期绑定脚本自身的安全闸负责。
+
+## 2026-07-17 - Codex - 修复 TGB 强刷脚本 Windows 编码兼容
+
+Changed:
+- 将 TGB 强刷脚本的中文标题闸改为 ASCII Unicode 码点构造，避免 Windows PowerShell 5.1 按本地代码页读取 UTF-8 脚本时破坏引号与解析结构。
+- 将生产工作流执行/清理重试收紧为仅在 SSH 退出码 `255` 时退避；PowerShell 解析或业务闸失败会立即停止，不再重复远程业务命令。
+
+Files:
+- `ops/production/requests/2026-07-17-tgb-hunan-raw-evidence.ps1`
+- `.github/workflows/production-ops.yml`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 前一运行 `29578173593` 已证明 SSH 退避能进入远程 PowerShell；随后在脚本解析阶段因中文字面量停止，未执行任何脚本语句或生产写入。
+- 修复后脚本 4,593 字节全部为 ASCII；Ruby YAML 解析和全部 Bash `run` 块 `bash -n` 均通过。
+- 实际 raw evidence 仍待下一次受保护生产运行。
+
+Deployment:
+- 本条提交时未再次执行生产脚本；正式 TGB、综合主因库和服务进程均未改变。
+
+Notes for next agent:
+- 若下一次运行失败，先区分 SSH 255 与 PowerShell/业务错误；后者不得以传输重试掩盖。

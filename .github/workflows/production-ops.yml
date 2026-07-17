@@ -188,6 +188,9 @@ jobs:
             else
               remote_status=$?
             fi
+            if [[ "$remote_status" -ne 255 || "$attempt" -ge 4 ]]; then
+              break
+            fi
             if [[ "$attempt" -lt 4 ]]; then
               delay=$((attempt * 10))
               echo "Remote execution connection failed (attempt $attempt/4); retrying in ${delay}s."
@@ -215,6 +218,11 @@ jobs:
             if ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
               -i "$HOME/.ssh/dreamerqi_ops" -p "$PORT" "$USER@$HOST" \
               "powershell -NoProfile -Command \"$cleanup_command\""; then
+              break
+            else
+              remote_status=$?
+            fi
+            if [[ "$remote_status" -ne 255 ]]; then
               break
             fi
             if [[ "$attempt" -lt 3 ]]; then
