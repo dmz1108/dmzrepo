@@ -81,6 +81,36 @@ function compactIntradayFamily(mainline, familyInfo) {
   };
 }
 
+function compactRealtimeDataQuality(value) {
+  if (!value || typeof value !== 'object') return null;
+  const sourceStatus = {};
+  for (const source of ['eastmoney', 'ths', 'kpl']) {
+    const status = value?.sourceStatus?.[source] || {};
+    sourceStatus[source] = {
+      available: !!status.available,
+      complete: !!status.complete,
+      stale: status.stale === true,
+      reconstructed: !!status.reconstructed,
+      scoreEligible: !!status.scoreEligible,
+      sourceDay: text(status.sourceDay) || null,
+      asOf: text(status.asOf) || null,
+      rowCount: Math.max(0, Number(status.rowCount) || 0),
+      expectedRowCount: num(status.expectedRowCount),
+      coveragePct: num(status.coveragePct),
+    };
+  }
+  return {
+    schemaVersion: Math.max(1, Number(value.schemaVersion) || 1),
+    day: text(value.day) || null,
+    asOf: text(value.asOf) || null,
+    complete: !!value.complete,
+    partial: !!value.partial,
+    readyFor: value.readyFor && typeof value.readyFor === 'object' ? { ...value.readyFor } : {},
+    sourceStatus,
+    missingFields: Array.isArray(value.missingFields) ? value.missingFields.map(text).filter(Boolean).slice(0, 20) : [],
+  };
+}
+
 function emptyDailyRecord(day, generatedAt) {
   return {
     schemaVersion: STRATEGY_DAILY_EVENT_SCHEMA_VERSION,
@@ -95,6 +125,13 @@ function emptyDailyRecord(day, generatedAt) {
       sampleCount: 0,
       samples: [],
       families: [],
+      dataQuality: {
+        status: 'not-recorded',
+        firstObservedAt: null,
+        lastObservedAt: null,
+        sampleCount: 0,
+        last: null,
+      },
     },
     postCloseConfirmed: null,
     stockEvents: null,
@@ -119,18 +156,40 @@ function mergeIntradayObservation(existing, input = {}) {
     .map(row => compactIntradayFamily(row, input.familyInfo))
     .filter(Boolean)
     .slice(0, 10);
-  if (!families.length) return base;
+  const realtimeData = compactRealtimeDataQuality(input.realtimeContext || input.realtimeData);
+  if (!families.length && !realtimeData) return base;
 
   const observation = base.intradayObservation || emptyDailyRecord(day, observedAt).intradayObservation;
   const samples = Array.isArray(observation.samples) ? observation.samples : [];
-  if (!samples.some(sample => sample.observedAt === observedAt)) {
-    samples.push({ observedAt, sessionPhase: phase, families });
+  const existingSample = samples.find(sample => sample.observedAt === observedAt);
+  if (existingSample) {
+    if (families.length) existingSample.families = families;
+    if (realtimeData) existingSample.realtimeData = realtimeData;
+  } else {
+    samples.push({
+      observedAt,
+      sessionPhase: phase,
+      families,
+      ...(realtimeData ? { realtimeData } : {}),
+    });
   }
   observation.samples = samples.slice(-STRATEGY_DAILY_EVENT_MAX_SAMPLES);
   observation.status = 'observed';
   observation.firstObservedAt = observation.firstObservedAt || observedAt;
   observation.lastObservedAt = observedAt;
   observation.sampleCount = observation.samples.length;
+
+  if (realtimeData) {
+    const quality = observation.dataQuality && typeof observation.dataQuality === 'object'
+      ? { ...observation.dataQuality }
+      : emptyDailyRecord(day, observedAt).intradayObservation.dataQuality;
+    quality.status = 'observed';
+    quality.firstObservedAt = quality.firstObservedAt || observedAt;
+    quality.lastObservedAt = observedAt;
+    quality.sampleCount = observation.samples.filter(sample => sample?.realtimeData).length;
+    quality.last = realtimeData;
+    observation.dataQuality = quality;
+  }
 
   const summaries = new Map((Array.isArray(observation.families) ? observation.families : [])
     .map(row => [text(row?.familyKey), { ...row }]).filter(([key]) => key));

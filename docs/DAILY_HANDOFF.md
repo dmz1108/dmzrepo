@@ -6837,3 +6837,37 @@ Validated:
 Deployment:
 - 仅更新静态 `kpl-dashboard_17_apple.html`，`restart=none`，未重启任何服务。
 - 自动回退备份：`C:\PandaDashboard\_deploy-backups\github-29553693936-1`。
+
+## 2026-07-17 - Codex - 策略实时事实层与每日质量观察
+
+Changed:
+- 完成策略数据层 P2-P5 的旁路实现：新增东财、同花顺、KPL 三源独立板块资金事实库，所有记录携带目标日/来源日/时间点/获取方式/完整度/哈希；禁止跨日值、旧时间点和失败刷新覆盖有效事实。
+- 新增统一策略实时上下文：东财是唯一规范计分源，同花顺/KPL 仅作方向佐证，三源资金永不相加；上下文组合涨停库、四源主因库、收盘价库、候选板块成员和 L2 任务，并按用途分别输出完整度。
+- 交易时段每 3 分钟运行独立观察旁路，把来源质量接入现有 `strategy-daily-events` 盘中时间线，并生成每日 JSON/Markdown 质量报告，覆盖 L2 扫描率、预期明星转化、主线出现速度及无主线合理性。
+- 新增东财历史板块资金重建工具，读取已验证的历史超大单净流入与板块涨幅；重建文件独立保存、默认 `scoreEligible=false`，不覆盖原始事实/冻结快照。同花顺和 KPL 没有已验证历史接口，继续保持缺失，不造数据。
+- 新增管理员只读诊断入口 `/api/admin/strategy-realtime-context`。正式 v2 主线取数、评分、排序与页面响应没有改用新上下文。
+
+Files:
+- `kpl-stats-server.js`
+- `strategy-daily-events.js`
+- `strategy-realtime-data.js`
+- `strategy-observation-report.js`
+- `tools/reconstruct-board-fund-flow.js`
+- `tests/strategy-realtime-data.test.js`
+- `tests/strategy-observation-report.test.js`
+- `docs/ops/STRATEGY_REALTIME_DATA_LAYER.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 新增测试覆盖跨日/未知日剔除、休市日拒写、时间单调、质量防倒退、双哈希校验、三源不相加、来源成员与涨停/L2 交集、历史重建隔离、盘中质量时间线、明星转化和异常空榜诊断。
+- `node --check` 覆盖主服务、两个新模块、每日事件模块及重建工具；`git diff --check` 通过。
+- 全仓 `tests/*.test.js` 共 42 个测试文件全部通过，包含真实 HTTP 端点、权限、策略 v2/v3、L2 和现有页面回归。
+- Claude 已独立复核 PR #146，结论为通过且无阻断项；按其建议在晋级清单中补充 KPL 只可保留诊断事实、不得进入策略评分/排序/页面辅助指标的边界。
+
+Deployment:
+- GitHub only；尚未部署云端、未重启服务、未生成或改写任何生产运行时事实/报告/快照。
+
+Notes for next agent:
+- 部署后新数据层只开始积累诊断事实与观察样本，不会改变正式榜。先观察数个交易日并做 golden diff，Owner 批准后才能讨论迁移任何正式消费者。
+- 后台程序同步必须原子包含两个新模块；运行事实仍由现有 `strategy-data` 数据库同步范围携带。
+- 历史重建只能对东财执行；任何把 THS/KPL 当前数据写入历史日、或让 reconstructed 数据直接参与评分的改动都应阻断。

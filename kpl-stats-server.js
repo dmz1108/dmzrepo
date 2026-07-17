@@ -31,6 +31,17 @@ const {
 const {
   loadStrategySnapshotForDailyEvents,
 } = require('./strategy-daily-event-quality');
+const {
+  BOARD_FUND_FLOW_SOURCES,
+  buildBoardFundFlowPayload,
+  buildStrategyRealtimeContext,
+  compactRealtimeContextQuality,
+  createBoardFundFlowStore,
+} = require('./strategy-realtime-data');
+const {
+  buildStrategyObservationReport,
+  writeStrategyObservationReport,
+} = require('./strategy-observation-report');
 
 // 只读诊断的环境级错误/超时收集器(六审):低层读取函数在遭遇 JSON 损坏/权限/网络错误时,
 // 无论调用方是否 .catch 吞掉,都把真实错误写进当前诊断上下文;正常缺文件(ENOENT)只记 missing。
@@ -388,7 +399,10 @@ const SITE_SYNC_BACKEND_ENTRIES = [
   'strategy-evidence.js',
   'strategy-daily-events.js',
   'strategy-daily-event-quality.js',
+  'strategy-realtime-data.js',
+  'strategy-observation-report.js',
   'strategy-leader-scoring-v3.js',
+  'tools/reconstruct-board-fund-flow.js',
   'wind-close-db-sync.py',
   'winrt-ocr.ps1',
   'package.json',
@@ -455,6 +469,8 @@ const SITE_SYNC_FRONTEND_AUTO_EXCLUDED_FILES = new Set([
   'strategy-evidence.js',
   'strategy-daily-events.js',
   'strategy-daily-event-quality.js',
+  'strategy-realtime-data.js',
+  'strategy-observation-report.js',
   'strategy-leader-scoring-v3.js',
   'wind-close-db-sync.py',
 ]);
@@ -20615,6 +20631,11 @@ async function cleanupOldLocalData(options = {}) {
     results.push(await cleanupDateNamedEntries(path.join(SNAPSHOT_DIR, scope.name), retentionDays, nowDay, dateCleanupOptions));
   }
   results.push(await cleanupDateNamedEntries(STRATEGY_MAINLINE_DATA_DIR, retentionDays, nowDay, dateCleanupOptions));
+  for (const source of Object.keys(BOARD_FUND_FLOW_SOURCES)) {
+    results.push(await cleanupDateNamedEntries(path.join(STRATEGY_BOARD_FUND_FLOW_DIR, source), retentionDays, nowDay, dateCleanupOptions));
+    results.push(await cleanupDateNamedEntries(path.join(STRATEGY_BOARD_FUND_FLOW_RECONSTRUCTED_DIR, source), retentionDays, nowDay, dateCleanupOptions));
+  }
+  results.push(await cleanupDateNamedEntries(STRATEGY_OBSERVATION_REPORT_DIR, retentionDays, nowDay, dateCleanupOptions));
   results.push(await cleanupOldFilesByMtime(PERSIST_CACHE_DIR, cacheRetentionDays));
   results.push(await cleanupDateNamedEntries(JIUYANGONGSHE_STRUCTURED_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));
   results.push(await cleanupDateNamedEntries(JIUYANGONGSHE_DIAGRAM_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));
@@ -23217,6 +23238,180 @@ function strategyMainlinePredictPath(day) { return path.join(STRATEGY_MAINLINE_D
 function strategyMainlineSnapshotPath(day) { return path.join(STRATEGY_MAINLINE_DATA_DIR, `strategy-mainline-snapshot-${day}.json`); }
 function strategyMainlineLiveCachePath(day) { return path.join(STRATEGY_MAINLINE_DATA_DIR, `mainline-live-cache-${day}.json`); }
 function strategyDailyEventsPath(day) { return path.join(STRATEGY_MAINLINE_DATA_DIR, `strategy-daily-events-${day}.json`); }
+const STRATEGY_BOARD_FUND_FLOW_DIR = path.join(STRATEGY_MAINLINE_DATA_DIR, 'board-fund-flow');
+const STRATEGY_BOARD_FUND_FLOW_RECONSTRUCTED_DIR = path.join(STRATEGY_MAINLINE_DATA_DIR, 'board-fund-flow-reconstructed');
+const STRATEGY_OBSERVATION_REPORT_DIR = path.join(STRATEGY_MAINLINE_DATA_DIR, 'quality-reports');
+const strategyBoardFundFlowStore = createBoardFundFlowStore({
+  rootDir: STRATEGY_BOARD_FUND_FLOW_DIR,
+  reconstructedRootDir: STRATEGY_BOARD_FUND_FLOW_RECONSTRUCTED_DIR,
+  isTradingDay: isChinaMarketTradingDay,
+});
+const STRATEGY_REALTIME_FACT_SOURCE_CONFIG = Object.freeze([
+  Object.freeze({ source: 'eastmoney', zsType: 6, minExpectedRows: 20 }),
+  Object.freeze({ source: 'ths', zsType: 5, minExpectedRows: 20 }),
+  Object.freeze({ source: 'kpl', zsType: 7, minExpectedRows: 10, requiresApiKey: true }),
+]);
+const STRATEGY_REALTIME_OBSERVATION_INTERVAL_MINUTES = 3;
+let strategyRealtimeObservationLastSlot = '';
+let strategyRealtimeObservationJob = null;
+
+function strategyRealtimeFactRow(raw, config, day, asOf) {
+  const fundFlow = strategyBoardFundFlowForSource(raw, config.zsType);
+  return {
+    plateId: String(raw?.plateId ?? raw?.id ?? raw?.code ?? '').trim(),
+    name: String(raw?.name ?? raw?.plateName ?? '').trim(),
+    gainPct: numOrNull(raw?.gainPct ?? raw?.gain ?? raw?.changePct),
+    netInflow: fundFlow.value,
+    netInflowMetric: fundFlow.metric,
+    ztCount: numOrNull(raw?.ztCount ?? raw?.zt),
+    memberCount: numOrNull(raw?.memberCount ?? raw?.stockCount),
+    sourceDay: day,
+    asOf,
+    complete: true,
+    stale: false,
+  };
+}
+
+async function strategyRealtimeExpectedBoardCount(config) {
+  if (config.source === 'eastmoney') {
+    const catalog = await readEastmoneyConceptCatalog().catch(() => null);
+    return Array.isArray(catalog?.boards) ? catalog.boards.length : null;
+  }
+  if (config.source === 'ths') {
+    const catalog = await readThsConceptCatalog().catch(() => null);
+    return Array.isArray(catalog?.boards) ? catalog.boards.length : null;
+  }
+  return null;
+}
+
+async function captureStrategyBoardFundFlowFacts(day, options = {}) {
+  const targetDay = isoFromCompactDate(day);
+  const today = isoFromCompactDate(chinaNowParts().day);
+  if (!isChinaMarketTradingDay(targetDay)) {
+    return { ok: true, skipped: true, reason: 'market-closed', day: targetDay, sources: {} };
+  }
+  // 这些都是当前时点接口；历史日只能走单独的 reconstructed 工具，禁止拿今天数据回填历史。
+  if (targetDay !== today && options.allowHistoricalCurrentFeed !== true) {
+    return { ok: false, skipped: true, reason: 'current-feed-cannot-reconstruct-history', day: targetDay, sources: {} };
+  }
+  const asOf = new Date().toISOString();
+  const apiKey = options.apiKey || await readSavedApiKey().catch(() => '');
+  const sourceResults = {};
+  await mapLimit(STRATEGY_REALTIME_FACT_SOURCE_CONFIG, 3, async config => {
+    if (config.requiresApiKey && !apiKey) {
+      sourceResults[config.source] = { ok: false, skipped: true, reason: 'missing-api-key' };
+      return;
+    }
+    try {
+      const boards = await fetchBoardRankingForSnapshot(String(config.zsType), apiKey, {
+        count: Number(options.count || 500),
+      });
+      const rows = boards.map(board => strategyRealtimeFactRow(board, config, targetDay, asOf))
+        .filter(row => row.plateId && row.name);
+      const expectedRowCount = await strategyRealtimeExpectedBoardCount(config);
+      const payload = buildBoardFundFlowPayload({
+        day: targetDay,
+        source: config.source,
+        sourceDay: targetDay,
+        sourceDayBasis: 'current-session-endpoint',
+        asOf,
+        fetchedAt: asOf,
+        acquisition: 'realtime',
+        scope: 'full-market',
+        minExpectedRows: config.minExpectedRows,
+        expectedRowCount,
+        minCoveragePct: 0.85,
+        complete: rows.length >= config.minExpectedRows,
+        rows,
+      });
+      const saved = await strategyBoardFundFlowStore.write(payload);
+      sourceResults[config.source] = {
+        ok: true,
+        written: saved.written,
+        reason: saved.reason,
+        rowCount: Number(saved.payload?.rowCount || 0),
+        expectedRowCount: numOrNull(saved.payload?.expectedRowCount),
+        coveragePct: numOrNull(saved.payload?.coveragePct),
+        complete: !!saved.payload?.complete,
+        asOf: saved.payload?.asOf || null,
+        metricFamilies: [...new Set((saved.payload?.rows || [])
+          .map(row => row.netInflowMetric).filter(Boolean))],
+      };
+    } catch (error) {
+      sourceResults[config.source] = {
+        ok: false,
+        error: String(error?.message || error).slice(0, 180),
+      };
+    }
+  });
+  return {
+    ok: Object.values(sourceResults).some(result => result.ok),
+    day: targetDay,
+    asOf,
+    sources: sourceResults,
+  };
+}
+
+function strategyRealtimeCandidateMemberships(mainlines) {
+  const out = {};
+  for (const mainline of (Array.isArray(mainlines) ? mainlines : [])) {
+    for (const board of (Array.isArray(mainline?.resonanceBoards) ? mainline.resonanceBoards : [])) {
+      const plateId = String(board?.plateId || '').trim();
+      const zsType = Number(board?.zsType);
+      if (!plateId || !Number.isFinite(zsType)) continue;
+      const key = `${zsType}:${plateId}`;
+      const codes = new Set([
+        ...(Array.isArray(board?.codes) ? board.codes : []),
+        ...(Array.isArray(board?.memberRows) ? board.memberRows.map(row => row?.code) : []),
+        ...(Array.isArray(board?.risingStocks) ? board.risingStocks.map(row => row?.code) : []),
+      ].map(normalizeReasonSourceCode).filter(Boolean));
+      out[key] = {
+        source: zsType === 6 ? 'eastmoney' : (zsType === 5 ? 'ths' : 'kpl'),
+        zsType,
+        plateId,
+        name: String(board?.name || ''),
+        codes: [...codes].sort(),
+        scope: 'candidate-board-members-observed-by-mainline-build',
+      };
+    }
+  }
+  return out;
+}
+
+async function buildStrategyRealtimeContextForDay(day, options = {}) {
+  const targetDay = isoFromCompactDate(day);
+  const factEntries = await Promise.all(Object.keys(BOARD_FUND_FLOW_SOURCES).map(async source => [
+    source,
+    await strategyBoardFundFlowStore.read(source, targetDay, {
+      allowReconstructed: options.allowReconstructed === true,
+    }).catch(error => ({
+      payload: null,
+      verification: { ok: false, errors: [String(error?.message || error).slice(0, 120)] },
+    })),
+  ]));
+  const sourceFacts = Object.fromEntries(factEntries);
+  const [limitDb, mainReasonDb, closeDb, liveCache, predict] = await Promise.all([
+    readLimitUpDbDay(targetDay).catch(() => null),
+    readLimitUpMainReasonDbDay(targetDay).catch(() => null),
+    readEastmoneyCloseDbDay(targetDay).catch(() => null),
+    readStrategyMainlineLiveCache(targetDay, Number.POSITIVE_INFINITY).catch(() => null),
+    readMainlinePredict(targetDay).catch(() => null),
+  ]);
+  const candidateMainlines = Array.isArray(liveCache?.mainlines) ? liveCache.mainlines : [];
+  const l2Jobs = typeof localL2TaskQueue?.listDay === 'function' ? localL2TaskQueue.listDay(targetDay) : [];
+  return buildStrategyRealtimeContext({
+    day: targetDay,
+    asOf: new Date().toISOString(),
+    sourceFacts,
+    limitUpStocks: limitDb?.stocks || [],
+    mainReasonStocks: mainReasonDb?.stocks || [],
+    closeStocks: closeDb?.stocks || [],
+    l2Jobs,
+    candidateMainlines,
+    membersByBoard: strategyRealtimeCandidateMemberships(candidateMainlines),
+    prediction: predict,
+  });
+}
 const strategyDailyEventsUpdateJobs = new Map();
 async function readStrategyDailyEvents(day) {
   try {
@@ -23258,13 +23453,14 @@ function strategyDailyFamilyInfo(theme) {
   const family = strategyMainlineFamilyInfo({ theme: raw });
   return family?.key ? { key: family.key, label: family.label || raw } : null;
 }
-async function recordStrategyDailyIntradayObservation(day, sessionPhase, mainlines, observedAt = new Date().toISOString()) {
+async function recordStrategyDailyIntradayObservation(day, sessionPhase, mainlines, observedAt = new Date().toISOString(), realtimeContext = null) {
   return updateStrategyDailyEvents(day, existing => mergeIntradayObservation(existing, {
     day: isoFromCompactDate(day),
     observedAt,
     sessionPhase,
     mainlines,
     familyInfo: strategyDailyFamilyInfo,
+    realtimeContext: realtimeContext ? compactRealtimeContextQuality(realtimeContext) : null,
   }));
 }
 function strategyMainlineSavedAt(payload) {
@@ -25977,6 +26173,65 @@ async function finalizeStrategyDailyEvents(day, snapshotOverride = null) {
 
 let autoStrategyDailyEventsDay = '';
 let autoStrategyDailyEventsLastTryMs = 0;
+
+function strategyRealtimeObservationWindow(now) {
+  const minute = Number(now?.hour) * 60 + Number(now?.minute);
+  return (minute >= 9 * 60 + 15 && minute <= 11 * 60 + 35) ||
+    (minute >= 12 * 60 + 55 && minute <= 15 * 60 + 35);
+}
+
+async function runAutoStrategyRealtimeObservationIfDue() {
+  const now = chinaNowParts();
+  const day = isoFromCompactDate(now.day);
+  if (!isChinaMarketTradingDay(day) || !strategyRealtimeObservationWindow(now)) {
+    return { skipped: true, reason: 'outside-market-observation-window', day };
+  }
+  const minute = now.hour * 60 + now.minute;
+  const slot = `${day}:${Math.floor(minute / STRATEGY_REALTIME_OBSERVATION_INTERVAL_MINUTES)}`;
+  if (strategyRealtimeObservationLastSlot === slot) return { skipped: true, reason: 'slot-already-recorded', day };
+  if (strategyRealtimeObservationJob) return strategyRealtimeObservationJob;
+  strategyRealtimeObservationLastSlot = slot;
+  strategyRealtimeObservationJob = (async () => {
+    const capture = await captureStrategyBoardFundFlowFacts(day);
+    const context = await buildStrategyRealtimeContextForDay(day);
+    const live = await readStrategyMainlineLiveCache(day, Number.POSITIVE_INFINITY).catch(() => null);
+    const phase = strategyMainlineSessionPhase(now);
+    if (['早盘', '上午盘', '午间休市', '午后', '尾盘'].includes(phase)) {
+      await recordStrategyDailyIntradayObservation(
+        day,
+        phase,
+        Array.isArray(live?.mainlines) ? live.mainlines : [],
+        new Date().toISOString(),
+        context
+      );
+    }
+    const [dailyEvents, prediction] = await Promise.all([
+      readStrategyDailyEvents(day).catch(() => null),
+      readMainlinePredict(day).catch(() => null),
+    ]);
+    const l2Jobs = typeof localL2TaskQueue?.listDay === 'function' ? localL2TaskQueue.listDay(day) : [];
+    const report = buildStrategyObservationReport({
+      day,
+      generatedAt: new Date().toISOString(),
+      context,
+      dailyEvents,
+      prediction,
+      l2Jobs,
+    });
+    const saved = await writeStrategyObservationReport({ rootDir: STRATEGY_OBSERVATION_REPORT_DIR, report });
+    return {
+      ok: true,
+      day,
+      capture,
+      context: compactRealtimeContextQuality(context),
+      report: saved.report,
+    };
+  })().finally(() => {
+    strategyRealtimeObservationJob = null;
+  });
+  return strategyRealtimeObservationJob;
+}
+
 async function runAutoStrategyDailyEventsIfDue() {
   const now = chinaNowParts();
   if (now.hour < 16) return;
@@ -26000,6 +26255,45 @@ async function runAutoStrategyDailyEventsIfDue() {
     const source = result?.payload?.postCloseConfirmed?.sourceStatus || {};
     console.error(`strategy daily events ${now.day} pending: ${JSON.stringify(source)}`);
   }
+}
+
+async function getStrategyRealtimeContextApi(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  const day = isoFromCompactDate(url.searchParams.get('day') || chinaNowParts().day);
+  const capture = url.searchParams.get('capture') === '1'
+    ? await captureStrategyBoardFundFlowFacts(day).catch(error => ({
+        ok: false,
+        error: String(error?.message || error).slice(0, 180),
+      }))
+    : null;
+  const context = await buildStrategyRealtimeContextForDay(day, {
+    allowReconstructed: url.searchParams.get('allow_reconstructed') === '1',
+  });
+  const [dailyEvents, prediction] = await Promise.all([
+    readStrategyDailyEvents(day).catch(() => null),
+    readMainlinePredict(day).catch(() => null),
+  ]);
+  const l2Jobs = typeof localL2TaskQueue?.listDay === 'function' ? localL2TaskQueue.listDay(day) : [];
+  const report = buildStrategyObservationReport({
+    day,
+    generatedAt: new Date().toISOString(),
+    context,
+    dailyEvents,
+    prediction,
+    l2Jobs,
+  });
+  if (url.searchParams.get('save_report') === '1') {
+    await writeStrategyObservationReport({ rootDir: STRATEGY_OBSERVATION_REPORT_DIR, report });
+  }
+  return send(res, 200, {
+    ok: true,
+    day,
+    diagnosticOnly: true,
+    officialV2PathChanged: false,
+    capture,
+    context,
+    report,
+  });
 }
 
 async function getStrategyDailyEventsApi(url, req, res) {
@@ -27212,6 +27506,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/limit-up-main-reason-db/hot-themes') return await getLimitUpMainReasonHotThemes(url, req, res);
     if (url.pathname === '/api/strategy-mainlines') return send(res, 200, await getStrategyMainlinesVisible(url.searchParams.get('day') || chinaNowParts().day)
       .catch(e => ({ ok: false, error: String(e && e.message || e) })));
+    if (url.pathname === '/api/admin/strategy-realtime-context') return await getStrategyRealtimeContextApi(url, req, res);
     if (url.pathname === '/api/admin/strategy-daily-events') return await getStrategyDailyEventsApi(url, req, res);
     if (url.pathname === '/api/detail-evidence-index') return await getDetailEvidenceIndexApi(url, req, res);
     if (url.pathname === '/api/strategy-mainline-review') {
@@ -27560,6 +27855,9 @@ if (process.argv.includes('--refresh-zt10')) {
     runAutoDetailEvidenceIndexIfDue().catch(err => {
       console.error('detail evidence index auto build failed:', err.message);
     });
+    runAutoStrategyRealtimeObservationIfDue().catch(err => {
+      console.error('strategy realtime observation failed:', err.message);
+    });
     runAutoStrategyDailyEventsIfDue().catch(err => {
       console.error('strategy daily events auto build failed:', err.message);
     });
@@ -27589,6 +27887,9 @@ if (process.argv.includes('--refresh-zt10')) {
     });
     runAutoDetailEvidenceIndexIfDue().catch(err => {
       console.error('detail evidence index auto build failed:', err.message);
+    });
+    runAutoStrategyRealtimeObservationIfDue().catch(err => {
+      console.error('strategy realtime observation failed:', err.message);
     });
     runAutoStrategyDailyEventsIfDue().catch(err => {
       console.error('strategy daily events auto build failed:', err.message);
