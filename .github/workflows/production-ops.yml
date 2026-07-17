@@ -178,9 +178,23 @@ jobs:
           & 'C:/Windows/Temp/${REMOTE_SCRIPT}'
           EOF
           encoded=$(iconv -f UTF-8 -t UTF-16LE "$launcher" | base64 -w 0)
-          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-            -i "$HOME/.ssh/dreamerqi_ops" -p "$PORT" "$USER@$HOST" \
-            "powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand $encoded"
+          remote_status=255
+          for attempt in 1 2 3 4; do
+            if ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              -i "$HOME/.ssh/dreamerqi_ops" -p "$PORT" "$USER@$HOST" \
+              "powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand $encoded"; then
+              remote_status=0
+              break
+            else
+              remote_status=$?
+            fi
+            if [[ "$attempt" -lt 4 ]]; then
+              delay=$((attempt * 10))
+              echo "Remote execution connection failed (attempt $attempt/4); retrying in ${delay}s."
+              sleep "$delay"
+            fi
+          done
+          exit "$remote_status"
 
       - name: Remove staged production files
         if: always()
@@ -197,6 +211,15 @@ jobs:
           if [[ -n "$REMOTE_ARCHIVE" ]]; then
             cleanup_command="$cleanup_command; Remove-Item -LiteralPath 'C:/Windows/Temp/${REMOTE_ARCHIVE}' -Force -ErrorAction SilentlyContinue"
           fi
-          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-            -i "$HOME/.ssh/dreamerqi_ops" -p "$PORT" "$USER@$HOST" \
-            "powershell -NoProfile -Command \"$cleanup_command\""
+          for attempt in 1 2 3; do
+            if ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              -i "$HOME/.ssh/dreamerqi_ops" -p "$PORT" "$USER@$HOST" \
+              "powershell -NoProfile -Command \"$cleanup_command\""; then
+              break
+            fi
+            if [[ "$attempt" -lt 3 ]]; then
+              delay=$((attempt * 10))
+              echo "Remote cleanup connection failed (attempt $attempt/3); retrying in ${delay}s."
+              sleep "$delay"
+            fi
+          done
