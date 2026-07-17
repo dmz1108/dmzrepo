@@ -1,0 +1,25 @@
+{
+  "files": [
+    {
+      "source": "kpl-stats-server.js",
+      "destination": "kpl-stats-server.js"
+    },
+    {
+      "source": "strategy-daily-events.js",
+      "destination": "strategy-daily-events.js"
+    },
+    {
+      "source": "strategy-realtime-data.js",
+      "destination": "strategy-realtime-data.js"
+    },
+    {
+      "source": "strategy-observation-report.js",
+      "destination": "strategy-observation-report.js"
+    },
+    {
+      "source": "tools/reconstruct-board-fund-flow.js",
+      "destination": "tools/reconstruct-board-fund-flow.js"
+    }
+  ],
+  "restart": "main"
+}

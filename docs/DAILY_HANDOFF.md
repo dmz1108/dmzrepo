@@ -7009,3 +7009,50 @@ Deployment:
 Notes for next agent:
 - 生产工作流现只对 SSH/SCP 退出码 255 做退避；业务闸错误立即停止。日期绑定 TGB 写入脚本仍保留审计用途，但对应 payload Secret 已删除，不能无意重跑。
 - 本次操作 PR：`#147`（raw 强刷）、`#148`（SSH 退避）、`#149`（Windows 编码）、`#150`（正式写入）、`#151`（SCP 退避）；最终交接 PR：`https://github.com/dmz1108/dmzrepo/pull/152`。
+
+## 2026-07-17 - Codex - 准备发布策略实时事实层与每日质量观察
+
+Changed:
+- 为已合并并经 Claude 独立复核通过的 PR #146 新增原子生产发布清单。
+- 清单固定从最新 `main` 同时发布主服务、每日事件模块、两个新数据/观察模块和东财历史重建工具，避免主服务先于依赖模块落地。
+
+Files:
+- `ops/production/manifests/strategy-realtime-data-observation-20260717.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- PR #146 的 42 个测试文件和全部语法检查已通过；Claude 复核结论为无阻断项。
+- 发布清单仅引用仓库内普通文件，目标路径互不重复，`restart=main`；正式 v2 评分、排序和冻结快照仍不使用新 resolver。
+
+Deployment:
+- 本条提交时尚未执行生产发布、尚未重启服务，也未生成任何生产事实或观察报告。
+
+Notes for next agent:
+- 发布后核对主服务健康、五个文件哈希和管理员诊断端点；新事实层只开始积累诊断数据，不得据此切换正式 v2 消费链路。
+
+## 2026-07-17 - Codex - 策略实时事实层与每日质量观察已发布
+
+Changed:
+- 通过受保护生产工作流将 PR #146 的策略实时事实层、统一诊断上下文、盘中观察旁路和东财历史重建工具原子发布到云端。
+
+Files:
+- `kpl-stats-server.js`
+- `strategy-daily-events.js`
+- `strategy-realtime-data.js`
+- `strategy-observation-report.js`
+- `tools/reconstruct-board-fund-flow.js`
+- `ops/production/manifests/strategy-realtime-data-observation-20260717.json`
+
+Validated:
+- 受保护生产工作流 `29586712510` 成功，批准提交为 `90e300553581e2ff258066af96c69644eb87c5bc`；工作流逐文件校验部署哈希、重启主服务并通过本机健康检查。
+- 公网 `https://market.dreamerqi.com/health` 返回 `ok=true`，`/kpl` 返回 200；未登录访问新管理员诊断入口返回 403，确认路由已加载且权限闸生效。
+- 正式 v2 主线取数、评分、排序和冻结快照未切换到新数据层。
+
+Deployment:
+- 已重启 `Panda Dashboard Server` 主服务；娱乐、Caddy 和一致性任务未重启。
+- 自动回退备份：`C:\PandaDashboard\_deploy-backups\github-29586712510-1`。
+- 通用部署器已自动把本次运行追加到两份云端操作日志。
+
+Notes for next agent:
+- 发布发生在北京时间收盘后，自动观察不会补造当日盘中样本；下一个交易日 09:15 起每 3 分钟开始积累事实与质量报告。
+- 先观察数个真实交易日，再做 golden diff 和三方复核；未经 Owner 新批准，不得把诊断 resolver 接入正式 v2，也不得让 KPL 进入策略评分、排序或页面辅助指标。
