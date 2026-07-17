@@ -156,6 +156,24 @@ const legacyReviewHTML = renderMainlineReviewHTML({
 });
 A(legacyReviewHTML.includes('<span class="mlr-theme">今日无主线</span>'), '旧 schema 回看继续使用原单来源展示,不破坏历史兼容');
 
+// ---- 4c. 回看明星状态视觉:确认/预期必须成为可扫描的行级信号,普通记录不误着色 ----
+const starVisualReviewHTML = renderMainlineReviewHTML({
+  days: [
+    { day: '2026-07-15', phase: '尾盘', sampleValid: true, noMainline: false, theme: '算力AI', mainlineHitTop1: true,
+      star: { code: '000938', name: '紫光股份', predictLevel: 'confirmed' }, leaders: [], expectedStars: [], actualTop: [] },
+    { day: '2026-07-14', phase: '盘中', sampleValid: true, noMainline: false, theme: '创新药', mainlineHitTop3: true,
+      star: { code: '300760', name: '迈瑞医疗', predictLevel: 'expected', sealStatus: 'sealed' }, leaders: [],
+      expectedStars: [{ code: '300760', name: '迈瑞医疗', sealStatus: 'sealed' }], actualTop: [] },
+    { day: '2026-07-13', phase: '盘中', sampleValid: true, noMainline: false, theme: '消费电子', mainlineHitTop3: true,
+      star: null, leaders: [], expectedStars: [], actualTop: [] },
+  ],
+  stats: {},
+});
+A(starVisualReviewHTML.includes('mlr-row hit-ok star-confirmed') && starVisualReviewHTML.includes('mlr-star-signal confirmed'), '明星确认记录使用确认态行级样式与醒目信号');
+A(/mlr-row [^"\n]*star-expected/.test(starVisualReviewHTML) && starVisualReviewHTML.includes('mlr-star-signal expected'), '预期明星记录使用预期态行级样式与醒目信号');
+A(starVisualReviewHTML.includes('明星确认</i><b>紫光股份') && starVisualReviewHTML.includes('预期明星</i><b>迈瑞医疗'), '明星阶段与股票名称成组展示,可快速扫描');
+A((starVisualReviewHTML.match(/star-confirmed/g) || []).length === 1 && (starVisualReviewHTML.match(/star-expected/g) || []).length === 1, '普通回看记录不会误套明星状态样式');
+
 // ---- 5. 静态锁定:每源只用自己的 zsType 取板;KPL(7) 不进任一边,也不进策略辅助指标 ----
 A(/boardZsTypes:\s*\[6\]/.test(src) && /boardZsTypes:\s*\[5\]/.test(src), '正常路径按 boardZsTypes:[6] 与 [5] 各自独立跑引擎(从不传 7)');
 A(!/boardZsTypes:\s*\[[^\]]*7[^\]]*\]/.test(src), 'KPL(7) 从不作为任一预测的板块来源');

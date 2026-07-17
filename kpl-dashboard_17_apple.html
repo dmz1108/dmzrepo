@@ -7428,10 +7428,96 @@
   body.view-strategy .mlr-seal.wait { color: rgba(174,190,214,0.48); border-style: dashed; }
   body.view-strategy .mlr-lvl { font-style: normal; font-size: 10px; padding: 1px 6px; border-radius: 999px; color: rgba(174,190,214,0.58); border: 1px solid rgba(174,190,214,0.2); }
   body.view-strategy .mlr-lvl.exp { color: #ffd78a; border-color: rgba(255,215,138,0.35); background: rgba(255,215,138,0.07); }
+  body.view-strategy .mlr-lvl.confirmed { color: #ffaaa4; border-color: rgba(255,91,82,0.38); background: rgba(255,91,82,0.09); }
   body.view-strategy .mlr-tied { font-style: normal; font-size: 10px; padding: 1px 7px; border-radius: 999px; color: #ffd78a; border: 1px solid rgba(255,215,138,0.35); background: rgba(255,215,138,0.07); }
   body.view-strategy .mlr-invalid { font-style: normal; font-size: 10px; padding: 1px 7px; border-radius: 999px; color: rgba(174,190,214,0.5); border: 1px dashed rgba(174,190,214,0.3); }
   body.view-strategy .mlr-expected { color: #cfe0f5; font-size: 10.5px; padding: 2px 8px; border: 1px solid rgba(174,190,214,0.22); border-radius: 999px; }
   body.view-strategy .mlr-expected.on { color: #ffd78a; border-color: rgba(255,215,138,0.38); background: rgba(255,215,138,0.08); }
+  body.view-strategy .mlr-row.star-confirmed {
+    border-color: rgba(255,91,82,0.23);
+    border-left-color: rgba(255,91,82,0.94);
+    background: linear-gradient(105deg, rgba(255,91,82,0.11), rgba(255,91,82,0.026) 37%, rgba(255,255,255,0.015) 72%);
+    box-shadow: inset 0 1px 0 rgba(255,155,148,0.08), 0 7px 22px -20px rgba(255,91,82,0.9);
+  }
+  body.view-strategy .mlr-row.star-confirmed:hover {
+    border-color: rgba(255,91,82,0.34);
+    border-left-color: #ff5b52;
+    background: linear-gradient(105deg, rgba(255,91,82,0.145), rgba(255,91,82,0.04) 39%, rgba(255,255,255,0.026) 74%);
+  }
+  body.view-strategy .mlr-row.star-expected {
+    border-color: rgba(255,200,87,0.2);
+    border-left-color: rgba(255,200,87,0.84);
+    background: linear-gradient(105deg, rgba(255,200,87,0.09), rgba(255,200,87,0.02) 38%, rgba(255,255,255,0.014) 73%);
+    box-shadow: inset 0 1px 0 rgba(255,222,153,0.06), 0 7px 22px -20px rgba(255,200,87,0.78);
+  }
+  body.view-strategy .mlr-row.star-expected:hover {
+    border-color: rgba(255,200,87,0.31);
+    border-left-color: #ffc857;
+    background: linear-gradient(105deg, rgba(255,200,87,0.12), rgba(255,200,87,0.03) 40%, rgba(255,255,255,0.024) 75%);
+  }
+  body.view-strategy .mlr-star-signal {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    max-width: 100%;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  body.view-strategy .mlr-star-signal i,
+  body.view-strategy .mlr-star-signal b {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    letter-spacing: 0;
+  }
+  body.view-strategy .mlr-star-signal i {
+    padding: 0 7px;
+    border-right: 1px solid currentColor;
+    font-size: 9.5px;
+    font-style: normal;
+    font-weight: 820;
+    opacity: 0.9;
+  }
+  body.view-strategy .mlr-star-signal b {
+    min-width: 0;
+    padding: 0 8px;
+    overflow: hidden;
+    font-size: 11.5px;
+    font-weight: 820;
+    text-overflow: ellipsis;
+  }
+  body.view-strategy .mlr-star-signal.confirmed {
+    border-color: rgba(255,91,82,0.34);
+    background: rgba(255,91,82,0.12);
+    color: #ffaaa4;
+  }
+  body.view-strategy .mlr-star-signal.confirmed b { color: #fff0ee; }
+  body.view-strategy .mlr-star-signal.expected {
+    border-color: rgba(255,200,87,0.32);
+    background: rgba(255,200,87,0.09);
+    color: #ffd78a;
+  }
+  body.view-strategy .mlr-star-signal.expected b { color: #fff2c9; }
+  body.view-strategy .mlr-star-slot {
+    padding: 3px 7px;
+    border-radius: 6px;
+  }
+  body.view-strategy .mlr-star-slot.confirmed {
+    background: rgba(255,91,82,0.055);
+    box-shadow: inset 2px 0 0 rgba(255,91,82,0.42);
+  }
+  body.view-strategy .mlr-star-slot.expected {
+    background: rgba(255,200,87,0.05);
+    box-shadow: inset 2px 0 0 rgba(255,200,87,0.38);
+  }
+  @media (max-width: 760px) {
+    body.view-strategy .mlr-row.star-confirmed,
+    body.view-strategy .mlr-row.star-expected { padding-top: 10px; }
+    body.view-strategy .mlr-star-signal { max-width: calc(100% - 54px); }
+    body.view-strategy .mlr-star-slot { width: 100%; }
+  }
   body.view-strategy .ml-trend {
     display: inline-flex;
     align-items: center;
@@ -12612,7 +12698,7 @@ function renderMainlineReviewHTML(d) {
   const starLevelChip = (s) => {
     if (!s) return '';
     if (s.predictLevel === 'expected') return '<i class="mlr-lvl exp" title="预测时为预期明星(尚未封板)">预期</i>';
-    if (s.predictLevel === 'confirmed') return '<i class="mlr-lvl" title="预测时已封板,只作展示,不算预判成功">当时已确认</i>';
+    if (s.predictLevel === 'confirmed') return '<i class="mlr-lvl confirmed" title="预测时已封板,只作展示,不算预判成功">当时已确认</i>';
     if (s.predictLevel === 'active') return '<i class="mlr-lvl" title="预测时仅资金活跃,未达预期明星门槛,不进封板统计">活跃</i>';
     if (s.predictLevel === undefined) return '';
     return '<i class="mlr-lvl" title="旧记录未保存预测时等级,不进封板统计">等级未知</i>';
@@ -12706,6 +12792,18 @@ function renderMainlineReviewHTML(d) {
         : `预期明星 ${list.length}只·${noData ? '数据不足' : '待验证'}`;
     return `<span class="mlr-expected${wins ? ' on' : ''}" title="${escapeHTML(names)}">${label}</span>`;
   };
+  const reviewStarVisual = (r) => {
+    const star = r && r.star;
+    const expected = Array.isArray(r && r.expectedStars) ? r.expectedStars : [];
+    if (star && star.predictLevel === 'confirmed') {
+      return { key: 'confirmed', rowClass: 'star-confirmed', label: '明星确认', name: star.name || star.code || '' };
+    }
+    if ((star && star.predictLevel === 'expected') || expected.length) {
+      const first = star && star.predictLevel === 'expected' ? star : expected[0];
+      return { key: 'expected', rowClass: 'star-expected', label: '预期明星', name: first?.name || first?.code || '' };
+    }
+    return { key: '', rowClass: '', label: '', name: '' };
+  };
   // 行级结果配色(与 hitCell 同口径):驱动左侧强调条颜色,一眼可扫命中/前三/脱靶/待验证
   const rowHitClass = (r) => {
     if (r.bySource) {
@@ -12725,6 +12823,11 @@ function renderMainlineReviewHTML(d) {
     return 'hit-miss';
   };
   const body = rows.map(r => {
+    const starVisual = reviewStarVisual(r);
+    const starSignal = starVisual.key
+      ? `<span class="mlr-star-signal ${starVisual.key}" aria-label="${escapeHTML(`${starVisual.label} ${starVisual.name}`)}"><i>${escapeHTML(starVisual.label)}</i><b>${escapeHTML(starVisual.name)}</b></span>`
+      : '';
+    const starSlotClass = starVisual.key ? ` mlr-star-slot ${starVisual.key}` : '';
     const leaders = Array.isArray(r.leaders) && r.leaders.length ? r.leaders : (r.leader ? [r.leader] : []);
     const leaderCells = leaders.slice(0, 2).map((leader, index) =>
       `<span class="mlr-slot"><span class="mlr-label">${r.bySource ? '东财' : ''}龙头${index + 1}</span> ${gainCell(leader, false)}</span>`
@@ -12735,16 +12838,17 @@ function renderMainlineReviewHTML(d) {
       : `<span class="mlr-pred"><span class="mlr-theme">${r.noMainline ? '今日无主线' : `${escapeHTML(r.theme || '')}${r.confirmed ? '<i title="管理员确认的当日主线">✔</i>' : ''}`}</span>${r.phase ? `<em class="mlr-phase" title="预判冻结时点">${escapeHTML(r.phase)}</em>` : ''}</span>`;
     const detail = r.bySource
       ? (!r.noMainline ? `<div class="mlr-l2">
-      <span class="mlr-slot"><span class="mlr-label">东财明星</span> ${gainCell(r.star, true)}</span>
+      <span class="mlr-slot${starSlotClass}"><span class="mlr-label">东财明星</span> ${gainCell(r.star, true)}</span>
       ${leaderCells || '<span class="mlr-slot"><span class="mlr-label">东财龙头</span><span class="mlr-na">—</span></span>'}
       ${expectedCell(r)}</div>` : '')
       : `<div class="mlr-l2">${r.noMainline ? '<span class="mlr-na" title="盘中候选仍保留在预测档案中">候选未通过 L2 明星验证，不计正式主线</span>' : `
-      <span class="mlr-slot"><span class="mlr-label">明星</span> ${gainCell(r.star, true)}</span>
+      <span class="mlr-slot${starSlotClass}"><span class="mlr-label">明星</span> ${gainCell(r.star, true)}</span>
       ${leaderCells || '<span class="mlr-slot"><span class="mlr-label">龙头</span><span class="mlr-na">—</span></span>'}
       ${expectedCell(r)}`}</div>`;
-    return `<div class="mlr-row ${rowHitClass(r)}${r.sampleValid === false ? ' invalid' : ''}">
+    return `<div class="mlr-row ${rowHitClass(r)}${starVisual.rowClass ? ` ${starVisual.rowClass}` : ''}${r.sampleValid === false ? ' invalid' : ''}">
     <div class="mlr-l1">
       <span class="mlr-day">${escapeHTML(String(r.day || '').slice(5))}</span>
+      ${starSignal}
       ${prediction}
       <span class="mlr-arrow" aria-hidden="true">→</span>
       <span class="mlr-result">${sourceReview ? '' : hitCell(r)}${actualCell(r)}</span>
