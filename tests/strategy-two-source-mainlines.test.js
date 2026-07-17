@@ -173,6 +173,8 @@ A(starVisualReviewHTML.includes('mlr-row hit-ok star-confirmed') && starVisualRe
 A(/mlr-row [^"\n]*star-expected/.test(starVisualReviewHTML) && starVisualReviewHTML.includes('mlr-star-signal expected'), '预期明星记录使用预期态行级样式与醒目信号');
 A(starVisualReviewHTML.includes('明星确认</i><b>紫光股份') && starVisualReviewHTML.includes('预期明星</i><b>迈瑞医疗'), '明星阶段与股票名称成组展示,可快速扫描');
 A((starVisualReviewHTML.match(/star-confirmed/g) || []).length === 1 && (starVisualReviewHTML.match(/star-expected/g) || []).length === 1, '普通回看记录不会误套明星状态样式');
+A((starVisualReviewHTML.match(/主线命中/g) || []).length >= 2 && !starVisualReviewHTML.includes('✓命中'), '主线命中使用独立结论文案,不再与明星阶段混为同一状态');
+A(/mlr-row hit-ok star-confirmed[\s\S]*?主线命中/.test(starVisualReviewHTML), '主线命中与明星确认可在同一记录中独立共存');
 
 // ---- 5. 静态锁定:每源只用自己的 zsType 取板;KPL(7) 不进任一边,也不进策略辅助指标 ----
 A(/boardZsTypes:\s*\[6\]/.test(src) && /boardZsTypes:\s*\[5\]/.test(src), '正常路径按 boardZsTypes:[6] 与 [5] 各自独立跑引擎(从不传 7)');

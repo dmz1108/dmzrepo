@@ -9304,6 +9304,336 @@
     font-size: 12px;
   }
 
+  /* ===== Strategy visual polish 2026-07-16: star evidence + review verdict separation ===== */
+  body.view-strategy .mainline-wrap {
+    padding: 16px;
+    border-color: rgba(174,190,214,.16);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.014) 26%, rgba(0,0,0,.08)),
+      rgba(17,23,33,.82);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.045), 0 16px 36px -34px rgba(0,0,0,.95);
+  }
+
+  body.view-strategy .ml-title {
+    margin-bottom: 13px;
+    padding-bottom: 11px;
+  }
+
+  body.view-strategy .ml-col-title {
+    color: rgba(235,241,250,.94);
+  }
+
+  body.view-strategy .ml-card {
+    border-color: rgba(174,190,214,.13) !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.025), 0 10px 26px -25px rgba(0,0,0,.92);
+  }
+
+  body.view-strategy .ml-card.has-expected-star {
+    border-color: rgba(255,190,75,.30) !important;
+    border-left-color: rgba(255,190,75,.86) !important;
+    background:
+      linear-gradient(180deg, rgba(255,190,75,.06), rgba(255,190,75,.014) 38%, rgba(0,0,0,.10)),
+      rgba(15,21,30,.86) !important;
+  }
+
+  body.view-strategy .ml-card.has-confirmed-star,
+  body.view-strategy .ml-card.confirmed-mainline {
+    border-color: rgba(255,91,82,.30) !important;
+    border-left-color: rgba(255,91,82,.94) !important;
+    background:
+      linear-gradient(180deg, rgba(255,91,82,.085), rgba(255,91,82,.018) 40%, rgba(0,0,0,.10)),
+      rgba(16,21,30,.88) !important;
+    box-shadow: inset 0 1px 0 rgba(255,146,139,.065), 0 13px 30px -27px rgba(255,91,82,.70);
+  }
+
+  body.view-strategy .ml-star-proof {
+    display: block !important;
+    margin-top: 2px;
+    padding: 10px 0 1px;
+    border-top: 1px solid rgba(174,190,214,.11);
+  }
+
+  body.view-strategy .ml-star-proof-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 7px;
+  }
+
+  body.view-strategy .ml-star-proof-title {
+    color: rgba(214,224,239,.78);
+    font-size: 10.5px;
+    font-weight: 760;
+  }
+
+  body.view-strategy .ml-star-proof-summary {
+    color: rgba(174,190,214,.62);
+    font-size: 9.5px;
+    font-weight: 650;
+    white-space: nowrap;
+  }
+
+  body.view-strategy .ml-star-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(205px, 1fr));
+    gap: 7px;
+  }
+
+  body.view-strategy .ml-stock.ml-starstock {
+    width: 100%;
+    min-width: 0;
+    min-height: 62px;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 8px 10px !important;
+    border-radius: 7px;
+    overflow: hidden;
+  }
+
+  body.view-strategy .ml-star-identity {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  body.view-strategy .ml-star-name {
+    font-size: 13px;
+    font-weight: 820;
+  }
+
+  body.view-strategy .ml-star-state {
+    min-height: 22px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 7px;
+    border: 1px solid rgba(255,190,75,.24);
+    border-radius: 6px;
+    background: rgba(255,190,75,.12);
+    font-size: 10px;
+    line-height: 20px;
+  }
+
+  body.view-strategy .ml-star-ratios {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 6px 12px;
+    min-width: 0;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255,190,75,.12);
+  }
+
+  body.view-strategy .ml-star-ratios > span {
+    min-width: 0;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    white-space: nowrap;
+  }
+
+  body.view-strategy .ml-star-ratios i {
+    color: rgba(211,194,154,.60);
+    font-size: 9px;
+    font-style: normal;
+  }
+
+  body.view-strategy .ml-star-ratios b {
+    color: #f2d591;
+    font-size: 10.5px;
+    font-weight: 800;
+  }
+
+  body.view-strategy .ml-stock.ml-starstock.expected {
+    border-color: rgba(255,190,75,.34);
+    background: linear-gradient(120deg, rgba(255,190,75,.105), rgba(255,190,75,.035) 58%, rgba(255,255,255,.018));
+    box-shadow: inset 3px 0 0 rgba(255,190,75,.72);
+  }
+
+  body.view-strategy .ml-stock.ml-starstock.confirmed {
+    border-color: rgba(255,91,82,.46);
+    background: linear-gradient(120deg, rgba(255,91,82,.16), rgba(255,91,82,.045) 58%, rgba(255,255,255,.02));
+    box-shadow: inset 3px 0 0 rgba(255,91,82,.92), 0 10px 24px -22px rgba(255,91,82,.9);
+  }
+
+  body.view-strategy .ml-stock.ml-starstock.confirmed .ml-star-state {
+    border-color: rgba(255,91,82,.32);
+    background: rgba(255,91,82,.17);
+    color: #ffaaa4;
+  }
+
+  body.view-strategy .ml-stock.ml-starstock.confirmed .ml-star-ratios {
+    border-top-color: rgba(255,91,82,.14);
+  }
+
+  body.view-strategy .ml-stock.ml-starstock.confirmed .ml-star-ratios i {
+    color: rgba(255,174,168,.62);
+  }
+
+  body.view-strategy .ml-stock.ml-starstock.confirmed .ml-star-ratios b {
+    color: #ffb8b2;
+  }
+
+  body.view-strategy .ml-stock.ml-starstock.missed {
+    border-color: rgba(174,190,214,.24);
+    background: rgba(174,190,214,.045);
+    box-shadow: none;
+  }
+
+  body.view-strategy .ml-review {
+    margin-top: 16px;
+    padding: 14px 15px 15px;
+    border-color: rgba(174,190,214,.15);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.032), rgba(0,0,0,.13)),
+      rgba(15,21,30,.84);
+  }
+
+  body.view-strategy .mlr-stats {
+    gap: 5px;
+  }
+
+  body.view-strategy .mlr-chip {
+    border-radius: 6px;
+    background: rgba(255,215,138,.075);
+  }
+
+  body.view-strategy .mlr-row,
+  body.view-strategy .mlr-row.hit-ok,
+  body.view-strategy .mlr-row.hit-near,
+  body.view-strategy .mlr-row.hit-miss,
+  body.view-strategy .mlr-row.hit-wait,
+  body.view-strategy .mlr-row.hit-na,
+  body.view-strategy .mlr-row.hit-invalid {
+    padding: 10px 12px;
+    border-color: rgba(174,190,214,.105);
+    border-left-color: rgba(174,190,214,.22);
+    border-left-style: solid;
+    background: rgba(255,255,255,.014);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.018);
+  }
+
+  body.view-strategy .mlr-row:hover,
+  body.view-strategy .mlr-row.hit-ok:hover,
+  body.view-strategy .mlr-row.hit-near:hover,
+  body.view-strategy .mlr-row.hit-miss:hover {
+    border-color: rgba(174,190,214,.19);
+    background: rgba(255,255,255,.028);
+  }
+
+  body.view-strategy .mlr-row.star-confirmed {
+    border-color: rgba(255,91,82,.28);
+    border-left-color: rgba(255,91,82,.96);
+    background: linear-gradient(108deg, rgba(255,91,82,.105), rgba(255,91,82,.024) 42%, rgba(255,255,255,.012) 76%);
+    box-shadow: inset 0 1px 0 rgba(255,151,144,.06), 0 11px 26px -25px rgba(255,91,82,.72);
+  }
+
+  body.view-strategy .mlr-row.star-expected {
+    border-color: rgba(255,200,87,.23);
+    border-left-color: rgba(255,200,87,.88);
+    background: linear-gradient(108deg, rgba(255,200,87,.075), rgba(255,200,87,.018) 42%, rgba(255,255,255,.012) 76%);
+  }
+
+  body.view-strategy .mlr-row.star-confirmed:hover {
+    border-color: rgba(255,91,82,.38);
+    background: linear-gradient(108deg, rgba(255,91,82,.135), rgba(255,91,82,.034) 44%, rgba(255,255,255,.022) 78%);
+  }
+
+  body.view-strategy .mlr-row.star-expected:hover {
+    border-color: rgba(255,200,87,.33);
+    background: linear-gradient(108deg, rgba(255,200,87,.105), rgba(255,200,87,.028) 44%, rgba(255,255,255,.02) 78%);
+  }
+
+  body.view-strategy .mlr-star-signal {
+    min-height: 26px;
+    border-radius: 6px;
+  }
+
+  body.view-strategy .mlr-star-signal i,
+  body.view-strategy .mlr-star-signal b {
+    min-height: 24px;
+  }
+
+  body.view-strategy .mlr-star-signal.confirmed {
+    border-color: rgba(255,91,82,.42);
+    background: linear-gradient(180deg, rgba(255,91,82,.19), rgba(255,91,82,.10));
+    box-shadow: 0 8px 18px -17px rgba(255,91,82,.95);
+  }
+
+  body.view-strategy .mlr-star-signal.expected {
+    border-color: rgba(255,200,87,.38);
+    background: linear-gradient(180deg, rgba(255,200,87,.13), rgba(255,200,87,.07));
+  }
+
+  body.view-strategy .mlr-hit {
+    min-height: 24px;
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 6px;
+    letter-spacing: 0;
+  }
+
+  body.view-strategy .mlr-hit.ok {
+    border-color: rgba(255,207,114,.58);
+    background: linear-gradient(180deg, #ffe0a0, #f2bd59);
+    box-shadow: 0 7px 17px -15px rgba(255,207,114,.95);
+  }
+
+  body.view-strategy .mlr-hit.near,
+  body.view-strategy .mlr-hit.miss,
+  body.view-strategy .mlr-hit.na,
+  body.view-strategy .mlr-hit.wait {
+    background: rgba(174,190,214,.055);
+  }
+
+  body.view-strategy .mlr-l2 {
+    gap: 13px;
+    margin-top: 8px;
+    padding-top: 8px;
+  }
+
+  body.view-strategy .mlr-star-slot {
+    padding: 5px 8px;
+  }
+
+  @media (max-width: 760px) {
+    body.view-strategy .mainline-wrap {
+      padding: 11px;
+    }
+
+    body.view-strategy .ml-star-list {
+      grid-template-columns: 1fr;
+    }
+
+    body.view-strategy .ml-stock.ml-starstock {
+      min-height: 64px;
+    }
+
+    body.view-strategy .ml-star-ratios {
+      justify-content: space-between;
+      gap: 5px;
+    }
+
+    body.view-strategy .ml-review {
+      padding: 13px;
+    }
+
+    body.view-strategy .mlr-row,
+    body.view-strategy .mlr-row.hit-ok,
+    body.view-strategy .mlr-row.hit-near,
+    body.view-strategy .mlr-row.hit-miss,
+    body.view-strategy .mlr-row.hit-wait,
+    body.view-strategy .mlr-row.hit-na,
+    body.view-strategy .mlr-row.hit-invalid {
+      padding: 10px;
+    }
+  }
+
   @media (max-width: 860px) {
     .logo .qi-logo {
       width: 70px !important;
@@ -12462,6 +12792,12 @@ function renderStrategyMainlinesHTML(d) {
       ? `<div class="ml-proof-row"><span class="ml-proof-lbl" title="按10日涨停次数/10日30日涨幅池内排名+主因门槛综合打分,最多3个可能龙头;每次涨停14分不封顶,未板涨幅≥5%加6分,连板与早封仅展示;⭐=同时是明星;10/30日窗口盘中含当日实时、盘后含当日收盘">龙头</span>${leaderChips}</div>`
       : (m.leaderNote ? `<div class="ml-proof-row"><span class="ml-proof-lbl">龙头</span><span class="ml-leader-none">${escapeHTML(m.leaderNote)}</span></div>` : '');
     const visibleStars = (m.starStocks || []).filter(s => s.level === 'confirmed' || s.level === 'expected').slice(0, 3);
+    const confirmedStarCount = visibleStars.filter(s => s.level === 'confirmed').length;
+    const expectedStarCount = visibleStars.filter(s => s.level === 'expected').length;
+    const starSummary = [
+      confirmedStarCount ? `${confirmedStarCount}只确认` : '',
+      expectedStarCount ? `${expectedStarCount}只预期` : '',
+    ].filter(Boolean).join(' · ');
     const starChips = visibleStars
       .map(s => {
         const missed = s.expectedOutcome === 'not-confirmed';
@@ -12470,13 +12806,23 @@ function renderStrategyMainlinesHTML(d) {
         const missedClass = s.expectedOutcome === 'not-confirmed' ? ' missed' : '';
         const leaderMark = leaderCodeSet.has(String(s.code || '')) ? '<em class="ml-star-role">龙头</em>' : '';
         return `<span class="ml-stock ml-starstock ${stateClass}${s.historicalExpected ? ' historical' : ''}${missedClass}" title="${escapeHTML(`${s.firstExpectedAt ? `首次预期 ${s.firstExpectedAt} · ` : ''}L2:主动比${s.ratios?.activeRatio ?? '-'} 被动比${s.ratios?.passiveRatio ?? '-'} 合计比${s.ratios?.supportRatio ?? '-'}` + starMaxBucketAdminInfo(s))}">
-          <b class="ml-star-name">${escapeHTML(s.name || s.code || '')}</b>${leaderMark}
+          <span class="ml-star-identity"><b class="ml-star-name">${escapeHTML(s.name || s.code || '')}</b>${leaderMark}</span>
           <strong class="ml-star-state">${stateText}</strong>
-          <i>主${s.ratios?.activeRatio ?? '-'} · 被${s.ratios?.passiveRatio ?? '-'}</i>
+          <span class="ml-star-ratios">
+            <span><i>主动</i><b>${s.ratios?.activeRatio ?? '-'}</b></span>
+            <span><i>被动</i><b>${s.ratios?.passiveRatio ?? '-'}</b></span>
+            <span><i>合计</i><b>${s.ratios?.supportRatio ?? '-'}</b></span>
+          </span>
         </span>`;
       })
       .join('');
-    const starRow = starChips ? `<div class="ml-proof-row ml-star-proof"><span class="ml-proof-lbl" title="纯当日 L2 判定:最大可统计档主动买入累计>1.5亿且主动买卖比>1.65；未封大涨为预期明星，封板后为明星确认；盘中出现过的预期信号会保留用于复盘。">明星信号</span><div class="ml-star-list">${starChips}</div></div>` : '';
+    const starRow = starChips ? `<div class="ml-proof-row ml-star-proof">
+      <div class="ml-star-proof-head" title="纯当日 L2 判定:最大可统计档主动买入累计>1.5亿且主动买卖比>1.65；未封大涨为预期明星，封板后为明星确认；盘中出现过的预期信号会保留用于复盘。">
+        <span class="ml-star-proof-title">明星信号</span>
+        <span class="ml-star-proof-summary">${escapeHTML(starSummary)}</span>
+      </div>
+      <div class="ml-star-list">${starChips}</div>
+    </div>` : '';
     const l2Detail = m.l2ScanDetail || {};
     // 旧冻结快照没有 l2ScanState：能从卡片已有指标确认未达门槛的显示“未达扫描条件”；
     // 达标但过程未知的保守显示“覆盖不足”，绝不伪装成公司端正在排队。
@@ -12737,9 +13083,9 @@ function renderMainlineReviewHTML(d) {
       const why = Number.isFinite(miss) && miss > 0 ? `盘后主因库缺 ${miss} 只涨停股` : '盘后主因库未生成或不完整';
       return `<span class="mlr-hit na" title="${why},不计命中率" aria-label="${why}，不计命中率">数据不足</span>`;
     }
-    if (r.mainlineHitTop1) return `<span class="mlr-hit ok" title="预判主线命中盘后涨停主因${r.actualFirstTied ? '并列' : ''}第一家族">✓命中</span>`;
-    if (r.mainlineHitTop3) return '<span class="mlr-hit near" title="盘后第一家族在预判前三内">△前三</span>';
-    return '<span class="mlr-hit miss" title="盘后第一家族不在预判前三">✗脱靶</span>';
+    if (r.mainlineHitTop1) return `<span class="mlr-hit ok" title="预判主线命中盘后涨停主因${r.actualFirstTied ? '并列' : ''}第一家族">主线命中</span>`;
+    if (r.mainlineHitTop3) return '<span class="mlr-hit near" title="盘后第一家族在预判前三内">进入前三</span>';
+    return '<span class="mlr-hit miss" title="盘后第一家族不在预判前三">未命中</span>';
   };
   const sourceReviewHTML = (r) => {
     if (!r || !r.bySource) return '';

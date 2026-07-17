@@ -74,6 +74,55 @@ No actionable P0, P1, or P2 findings remain.
 
 passed
 
+# DreamerQi Strategy Star Evidence And Review Verdict QA - 2026-07-16
+
+## Comparison target
+
+- Source visual truth: the pre-change strategy mainline and prediction-review views rendered from matching realistic fixtures.
+- Browser-rendered implementation: the refined star evidence and review verdict hierarchy in `kpl-dashboard_17_apple.html`.
+- Desktop viewports: mainline `1440 × 1100`; review `1440 × 1000`.
+- Mobile viewport: `390 × 844`.
+- States: one expanded confirmed-star mainline, one collapsed expected-star mainline, one confirmed review row, one expected review row, and one mainline-hit row without star evidence.
+
+## Evidence
+
+- Mainline baseline desktop: `/tmp/strategy-star-overall-before-desktop.png`.
+- Mainline final desktop: `/tmp/strategy-star-overall-after-desktop.png`.
+- Mainline desktop comparison: `/tmp/strategy-star-overall-compare-desktop.png`.
+- Mainline baseline mobile: `/tmp/strategy-star-overall-before-mobile.png`.
+- Mainline final mobile: `/tmp/strategy-star-overall-after-mobile.png`.
+- Mainline mobile comparison: `/tmp/strategy-star-overall-compare-mobile.png`.
+- Review baseline desktop: `/tmp/strategy-hit-review-before-desktop.png`.
+- Review final desktop: `/tmp/strategy-hit-review-after-desktop.png`.
+- Review desktop comparison: `/tmp/strategy-hit-review-compare-desktop.png`.
+- Review baseline mobile: `/tmp/strategy-hit-review-before-mobile.png`.
+- Review final mobile: `/tmp/strategy-hit-review-after-mobile.png`.
+- Review mobile comparison: `/tmp/strategy-hit-review-compare-mobile.png`.
+
+## Findings
+
+No actionable P0, P1, or P2 findings remain.
+
+- The mainline card now groups star evidence under a dedicated header, summarizes confirmed and expected counts, and exposes each stock's active, passive, and combined L2 ratios without opening another surface.
+- Confirmed star evidence uses the existing red confirmation language; expected star evidence uses amber and remains visibly provisional. The two states are not collapsed into a generic star treatment.
+- Prediction-review card surfaces describe star evidence, while the internal gold `主线命中` / `进入前三` verdict badges describe the later after-market result. A hit without star evidence therefore stays visually neutral instead of receiving a false confirmed-star card background.
+- Confirmed-star-plus-hit and expected-star-plus-hit states remain legible as two simultaneous facts, rather than one overloaded color state.
+- Desktop and mobile captures show no page, title, star-row, or review-row horizontal overflow; long labels wrap without shifting fixed score controls.
+- Strategy ranking, L2 thresholds, expected-to-confirmed transition, mainline hit calculation, permissions, APIs, and data sources are unchanged.
+
+## Validation
+
+- Inline dashboard script compilation: passed.
+- Focused mainline review, two-source strategy, and QI mainline-state tests: passed.
+- New regression assertions lock the star evidence header, three visible L2 ratios, confirmed/expected count summary, and independent mainline-hit wording.
+- Full repository suite: `40/40` test files passed.
+- `git diff --check`: passed.
+- Isolated previews returned only expected unrelated static-asset `404` requests; strategy rendering and interaction were unaffected.
+
+## Final result
+
+passed
+
 # DreamerQi Strategy Review Star Card QA - 2026-07-16
 
 ## Comparison target
