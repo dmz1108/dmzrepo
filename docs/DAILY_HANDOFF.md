@@ -7008,4 +7008,4 @@ Deployment:
 
 Notes for next agent:
 - 生产工作流现只对 SSH/SCP 退出码 255 做退避；业务闸错误立即停止。日期绑定 TGB 写入脚本仍保留审计用途，但对应 payload Secret 已删除，不能无意重跑。
-- 本次操作 PR：`#147`（raw 强刷）、`#148`（SSH 退避）、`#149`（Windows 编码）、`#150`（正式写入）、`#151`（SCP 退避）；最终交接 PR 待创建后补记。
+- 本次操作 PR：`#147`（raw 强刷）、`#148`（SSH 退避）、`#149`（Windows 编码）、`#150`（正式写入）、`#151`（SCP 退避）；最终交接 PR：`https://github.com/dmz1108/dmzrepo/pull/152`。
