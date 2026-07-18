@@ -7520,6 +7520,29 @@ Deployment:
 Notes for next agent:
 - 此前重复 503 的根因是任务每运行满 72 小时被 Windows 自动终止且没有失败重试；本次修复后不应再按三天周期掉线。
 
+## 2026-07-18 - Codex - 收紧涨停复盘数据源选择器
+
+Changed:
+- 把复盘页横向等分的数据源按钮改为内容宽度的紧凑分段控件；桌面端不再撑满整行，390px 手机端保持单行完整显示，更窄设备可横向触控浏览。
+- 保留原数据源标签、数量、选中逻辑和复盘数据行为，仅优化尺寸、间距、计数角标及选中态。
+
+Files:
+- `Qi/vendor/review-workbench.css`
+- `kpl-dashboard_17_apple.html`
+- `tests/review-workbench-ui.test.js`
+- `design-qa.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 桌面 `1440px` 与手机 `390px` 使用同一复盘样本完成修改前后全页及聚焦对照，未发现 P0/P1/P2 视觉问题。
+- `node --check kpl-stats-server.js`、复盘工作台 UI 契约测试、完整仓库 45 套测试和 `git diff --check` 全部通过。
+
+Deployment:
+- 仅 GitHub 分支改动；尚未部署云端，未重启任何服务。
+
+Notes for next agent:
+- 复核重点是数据源按钮在桌面是否足够紧凑、手机是否保持单行可读，以及所有数据源切换逻辑是否维持原行为。
+
 ## 2026-07-18 - Codex - 策略回看未通过明星验证状态同行显示
 
 Changed:
