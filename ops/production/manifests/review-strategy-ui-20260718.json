@@ -1,0 +1,17 @@
+{
+  "files": [
+    {
+      "source": "kpl-dashboard_17_apple.html",
+      "destination": "kpl-dashboard_17_apple.html"
+    },
+    {
+      "source": "Qi/vendor/review-workbench.css",
+      "destination": "Qi/vendor/review-workbench.css"
+    },
+    {
+      "source": "Qi/vendor/strategy-workbench.css",
+      "destination": "Qi/vendor/strategy-workbench.css"
+    }
+  ],
+  "restart": "none"
+}
