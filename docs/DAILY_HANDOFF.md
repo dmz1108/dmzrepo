@@ -7245,3 +7245,27 @@ Deployment:
 Notes for next agent:
 - 发布后验证 `/kpl` 已引用 `review-workbench.css?v=20260718b`，版本化 CSS 返回 200，并核对线上文件哈希与 `main` 一致。
 - 抽查复盘页桌面布局与 390px 手机端逐股卡片；四源数据、综合归纳和权限口径不得变化。
+
+## 2026-07-18 - Codex - 复盘工作台第二轮视觉精修已发布
+
+Changed:
+- 通过受保护生产工作流把 PR #161 的复盘页 HTML 与工作台 CSS 原子发布到云端。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/review-workbench.css`
+- `ops/production/manifests/review-workbench-luxury-polish-20260718.json`
+
+Validated:
+- 生产工作流 `29627412598` 成功，批准提交为 `b6741566712a99f09fa1094417e950d2228c9891`，操作健康检查为 `ok`。
+- 公网 `https://market.dreamerqi.com/health` 返回 `ok=true`；公网行情页已引用 `/vendor/review-workbench.css?v=20260718b`。
+- 线上 HTML SHA-256 与 `main` 一致：`08baa28a7b8d5a8a88dc36f25125e49db927488802408c0b011cdca7513a92aa`。
+- 线上 CSS SHA-256 与 `main` 一致：`d3911822d27be7c45e2e06aa4753ad07b78358d7d5c00183fdfa5c9ca0a62936`。
+
+Deployment:
+- 已部署生产；按发布清单未重启任何服务。
+- 自动回退备份：`C:\PandaDashboard\_deploy-backups\github-29627412598-1`。
+- 受保护部署器已自动把本次操作追加到两份云端运维日志。
+
+Notes for next agent:
+- 本轮生产变化仅为涨停复盘页视觉、排版和无障碍语义；四源数据、综合归纳、日期、筛选、权限与交互逻辑均未改变。
