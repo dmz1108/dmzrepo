@@ -7571,3 +7571,29 @@ Deployment:
 Notes for next agent:
 - 复核时确认旧记录和双源记录均显示“今日无主线 / 未通过明星验证”，且不再出现旧长说明或无内容箭头。
 - 发布时需同步 HTML 与 `Qi/vendor/strategy-workbench.css`；CSS 缓存版本已更新为 `20260718b`，仅静态文件变化，不需要因本次改动重启主服务。
+
+## 2026-07-18 - Codex - 复盘选择器与策略无主线状态已发布
+
+Changed:
+- 通过受保护生产工作流一次原子发布 PR #175 与 PR #176 的已审核视觉调整。
+- 复盘数据源选择器改为紧凑分段控件；策略回看无主线记录同行显示“未通过明星验证”。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/review-workbench.css`
+- `Qi/vendor/strategy-workbench.css`
+- `ops/production/manifests/review-strategy-ui-20260718.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 生产运行 `29652228592` 成功，批准提交为 `d713ab598d29ea801f50d596aed76bd3be531377`，部署器返回 `health=ok`。
+- 公网 `https://market.dreamerqi.com/health` 返回 `ok=true`；`/kpl` 与两份工作台 CSS 均可正常读取。
+- 公网 HTML、复盘 CSS、策略 CSS 的 SHA-256 分别与 `main` 完全一致：`a578f695461e41e84284b1497bc6f1750025389942e5f2d702352fc33deca807`、`448470825f96be089b8d2cafaf4f9c81100783521e3c5a7b3dcdf669d1d5b1c0`、`fee37e887c2966febe9e7b2557bc0af2b265fb13101f6f51d94acc0cc42ba4bc`。
+- 公网页面包含 `review-workbench.css?v=20260718d`、`strategy-workbench.css?v=20260718b` 与“未通过明星验证”正式标记。
+
+Deployment:
+- 本次 `restart=none`，未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+- 自动回退备份：`C:\PandaDashboard\_deploy-backups\github-29652228592-1`；受保护部署器已自动追加两份云端运维日志。
+
+Notes for next agent:
+- PR #175、#176 和部署清单 PR #177 均已合并；本次视觉调整现已在云端生效。
