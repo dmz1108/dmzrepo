@@ -7473,3 +7473,25 @@ Deployment:
 
 Notes for next agent:
 - 本轮生产变化仅为今日实时页视觉层级、信息密度和响应式布局；行情数据、策略逻辑、权限、筛选、刷新和卡片交互均未改变。
+
+## 2026-07-18 - Codex - 娱乐频道恢复并准备修复72小时自动终止
+
+Changed:
+- 受保护恢复运行 `29649414655` 已重新启动独立娱乐服务；公网首页、两条健康入口和分类接口均恢复 200。
+- 新增娱乐任务自愈操作，保留原 `SYSTEM` 身份、启动触发器和 `run-yule-server.cmd` 动作，只把持续运行上限改为无限，并增加失败自动重试。
+
+Files:
+- `ops/production/harden-yule-task.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 故障前任务为 `ready`、8766 无监听、`LastTaskResult=267014 (0x41306)`；原设置为 `ExecutionTimeLimit=PT72H`、`RestartCount=0`、`StartWhenAvailable=false`。
+- 上次任务于北京时间 2026-07-15 17:11:20 启动，72 小时上限在 2026-07-18 17:11:20 到期，和本次掉线时间及“任务被终止”结果完全吻合。
+- 恢复后任务为 `running`、新监听 PID `14020`、本机和公网健康均为 200，娱乐库保持 270 条内容。
+
+Deployment:
+- 恢复运行只重启 `Panda Yule Server`，未部署网站文件、未修改娱乐数据库、未重启主服务或 Caddy。
+- 自愈设置本条提交时尚未执行；目标为 `ExecutionTimeLimit=PT0S`、每 1 分钟失败重试、最多 5 次、`StartWhenAvailable=true`。
+
+Notes for next agent:
+- 自愈操作执行后必须重新读取任务定义并逐字段验证；不允许改变任务 principal、action 或触发器。
