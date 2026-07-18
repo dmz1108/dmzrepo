@@ -294,6 +294,8 @@ const STATIC_FILES = new Map([
   ['/qi/vendor/dreamerqi-fonts.css', 'Qi/vendor/dreamerqi-fonts.css'],
   ['/vendor/strategy-workbench.css', 'Qi/vendor/strategy-workbench.css'],
   ['/qi/vendor/strategy-workbench.css', 'Qi/vendor/strategy-workbench.css'],
+  ['/vendor/review-workbench.css', 'Qi/vendor/review-workbench.css'],
+  ['/qi/vendor/review-workbench.css', 'Qi/vendor/review-workbench.css'],
   ['/kpl', 'kpl-dashboard_17_apple.html'],
   ['/kpl/', 'kpl-dashboard_17_apple.html'],
   ['/admin', 'panda-admin.html'],

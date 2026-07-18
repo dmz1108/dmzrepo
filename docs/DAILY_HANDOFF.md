@@ -7127,3 +7127,30 @@ Deployment:
 
 Notes for next agent:
 - 本轮生产变化仅为策略页视觉与结构；主线、L2、评分、排序、权限和资金口径均未改变。
+
+## 2026-07-18 - Codex - 深度统一涨停复盘页视觉与信息结构
+
+Changed:
+- 在不改变四源数据、综合归纳、筛选、日期、权限和交互逻辑的前提下，为涨停复盘建立独立的最终工作台样式层。
+- 统一标题指标、来源切换、股票查询、个股证据、主因板块卡片和完整明细表的层级、间距、状态色与信息密度。
+- 桌面端保留可扫描的完整表格，手机端改为逐股记录卡；来源、主因、细分原因、证据与时间均完整保留，无横向溢出。
+- 新增静态样式路由和视觉契约测试，确保 HTML、CSS 与主服务映射原子发布。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/review-workbench.css`
+- `kpl-stats-server.js`
+- `tests/review-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 本地真实渲染检查：桌面 1440px 与真实手机 390px；手机端页面宽度与视口一致，无控件、卡片或文字越界。
+- `node --check kpl-stats-server.js`、CSS 结构检查和 `git diff --check` 通过。
+- 仓库全部 44 套测试通过，包含来源健康、股票查询、四源主因、策略双源与同花顺正确性回归。
+
+Deployment:
+- 仅 GitHub 分支改动；尚未部署云端，未重启任何服务。
+
+Notes for next agent:
+- 本轮只优化复盘页视觉与结构；评审时不要修改来源口径、综合归纳或权限逻辑。
+- 部署时必须同时发布 HTML、CSS 和主服务静态路由；主服务需重启后新 CSS 路由才会生效。
