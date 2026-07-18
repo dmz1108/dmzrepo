@@ -7083,3 +7083,23 @@ Deployment:
 Notes for next agent:
 - 本轮是纯视觉与结构优化；评审时重点检查不同真实数据长度下的视觉表现，不要借机修改主线筛选、L2 门槛或评分逻辑。
 - 部署时必须同时发布 HTML、CSS 和主服务静态路由；主服务需重启后新 CSS 路由才会生效。
+
+## 2026-07-18 - Codex - 准备发布策略工作台视觉优化
+
+Changed:
+- 为已由 Claude 独立复核通过并合并的 PR #155 新增生产发布清单。
+- 清单把策略页 HTML、独立工作台 CSS 和主服务静态路由作为三件套原子发布，并要求重启主服务。
+
+Files:
+- `ops/production/manifests/strategy-workbench-ui-20260718.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 发布源均来自已批准的 `main`，目标路径互不重复；清单通过 JSON 结构检查。
+- PR #155 的 43 套仓库测试、桌面和手机渲染检查均已通过，Claude 复核无阻断项。
+
+Deployment:
+- 本条提交时尚未执行生产发布，未重启服务。
+
+Notes for next agent:
+- 发布后必须验证 CSS 公网路由返回 200、行情页引用版本正确、主服务健康，并抽查普通用户无管理员控件泄漏。
