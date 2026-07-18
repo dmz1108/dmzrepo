@@ -292,6 +292,8 @@ const STATIC_FILES = new Map([
   ['/qi/vendor/react-dom.production.min.js', 'Qi/vendor/react-dom.production.min.js'],
   ['/vendor/dreamerqi-fonts.css', 'Qi/vendor/dreamerqi-fonts.css'],
   ['/qi/vendor/dreamerqi-fonts.css', 'Qi/vendor/dreamerqi-fonts.css'],
+  ['/vendor/strategy-workbench.css', 'Qi/vendor/strategy-workbench.css'],
+  ['/qi/vendor/strategy-workbench.css', 'Qi/vendor/strategy-workbench.css'],
   ['/kpl', 'kpl-dashboard_17_apple.html'],
   ['/kpl/', 'kpl-dashboard_17_apple.html'],
   ['/admin', 'panda-admin.html'],
