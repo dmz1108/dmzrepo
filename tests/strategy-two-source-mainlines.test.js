@@ -118,6 +118,7 @@ const bySourceReviewHTML = renderMainlineReviewHTML({
 A(bySourceReviewHTML.includes('<span class="mlr-label">东财</span>') && bySourceReviewHTML.includes('<span class="mlr-theme">无主线</span>'), 'P2 回看页:东财明确显示无主线');
 A(bySourceReviewHTML.includes('<span class="mlr-label">同花顺</span>') && bySourceReviewHTML.includes('<span class="mlr-theme">算力</span>'), 'P2 回看页:同花顺独立显示算力主线');
 A(bySourceReviewHTML.includes('同花顺 命中 1/1(100%) · 前三 1/1(100%)'), 'P2 回看统计:同花顺独立显示命中/前三数据');
+A(bySourceReviewHTML.includes('<span class="mlr-actual"') && bySourceReviewHTML.includes('盘后 算力'), 'P2 回看页:双源有主线记录继续显示盘后实际第一家族');
 A(!bySourceReviewHTML.includes('<span class="mlr-theme">今日无主线</span>') && !bySourceReviewHTML.includes('候选未通过 L2'), 'P2 回看页:东财空+同花顺有预测时不再输出无来源的整体“今日无主线”误导');
 const bothNoMainlineReviewHTML = renderMainlineReviewHTML({
   days: [{
@@ -132,7 +133,10 @@ const bothNoMainlineReviewHTML = renderMainlineReviewHTML({
 });
 A(bothNoMainlineReviewHTML.includes('<span class="mlr-label">双源</span>')
   && bothNoMainlineReviewHTML.includes('<span class="mlr-theme">今日无主线</span>')
-  && bothNoMainlineReviewHTML.includes('>未形成</span>'), '双源都有效无主线时合并显示“今日无主线”');
+  && bothNoMainlineReviewHTML.includes('<span class="mlr-no-star"')
+  && bothNoMainlineReviewHTML.includes('>未通过明星验证</span>'), '双源都有效无主线时同行显示“今日无主线 / 未通过明星验证”');
+A(!bothNoMainlineReviewHTML.includes('候选未通过 L2 明星验证，不计正式主线')
+  && !bothNoMainlineReviewHTML.includes('<span class="mlr-arrow"'), '双源无主线状态不显示冗长说明或空箭头');
 const unavailableReviewHTML = renderMainlineReviewHTML({
   days: [{
     day: '2026-07-14', phase: '早盘', sampleValid: true, pendingReview: false,
@@ -169,6 +173,10 @@ const legacyReviewHTML = renderMainlineReviewHTML({
   stats: { mainlineTotal: 0 },
 });
 A(legacyReviewHTML.includes('<span class="mlr-theme">今日无主线</span>'), '旧 schema 回看继续使用原单来源展示,不破坏历史兼容');
+A(legacyReviewHTML.includes('<span class="mlr-no-star"')
+  && legacyReviewHTML.includes('>未通过明星验证</span>'), '旧 schema 无主线记录把明星验证状态同行显示');
+A(!legacyReviewHTML.includes('候选未通过 L2 明星验证，不计正式主线')
+  && !legacyReviewHTML.includes('<div class="mlr-l2">'), '旧 schema 无主线记录不再占用独立详情行');
 
 // ---- 4c. 回看明星状态视觉:确认/预期必须成为可扫描的行级信号,普通记录不误着色 ----
 const starVisualReviewHTML = renderMainlineReviewHTML({

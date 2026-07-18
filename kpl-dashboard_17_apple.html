@@ -9892,7 +9892,7 @@
     }
   }
 </style>
-<link href="/vendor/strategy-workbench.css?v=20260717" rel="stylesheet">
+<link href="/vendor/strategy-workbench.css?v=20260718b" rel="stylesheet">
 <link href="/vendor/review-workbench.css?v=20260718d" rel="stylesheet">
 <link href="/vendor/realtime-workbench.css?v=20260718" rel="stylesheet">
 </head>
@@ -13429,7 +13429,7 @@ function renderMainlineReviewHTML(d) {
         : (src?.available === true && src?.noMainline === true) ? 'no-mainline' : 'unknown');
     const allSourcesNoMainline = sourceEntries.every(([key]) => statusOf(r.bySource[key] || {}) === 'no-mainline');
     if (allSourcesNoMainline) {
-      return '<span class="mlr-slot"><span class="mlr-label">双源</span> <span class="mlr-theme">今日无主线</span><span class="mlr-hit na" title="东财与同花顺均未形成通过 L2 明星验证的正式主线">未形成</span></span>';
+      return '<span class="mlr-slot"><span class="mlr-label">双源</span> <span class="mlr-theme">今日无主线</span><span class="mlr-no-star" title="东财与同花顺候选均未通过 L2 明星验证，不计正式主线">未通过明星验证</span></span>';
     }
     return sourceEntries.map(([key, label]) => {
       const src = r.bySource[key] || {};
@@ -13519,25 +13519,30 @@ function renderMainlineReviewHTML(d) {
       `<span class="mlr-slot"><span class="mlr-label">${r.bySource ? '东财' : ''}龙头${index + 1}</span> ${gainCell(leader, false)}</span>`
     ).join('');
     const sourceReview = sourceReviewHTML(r);
+    const noStarStatus = r.noMainline && !sourceReview
+      ? '<span class="mlr-no-star" title="候选方向没有 L2 预期明星或明星确认，不计正式主线">未通过明星验证</span>'
+      : '';
     const prediction = sourceReview
       ? `<span class="mlr-pred">${sourceReview}${r.phase ? `<em class="mlr-phase" title="预判冻结时点">${escapeHTML(r.phase)}</em>` : ''}</span>`
-      : `<span class="mlr-pred"><span class="mlr-theme">${r.noMainline ? '今日无主线' : `${escapeHTML(r.theme || '')}${r.confirmed ? '<i title="管理员确认的当日主线">✔</i>' : ''}`}</span>${r.phase ? `<em class="mlr-phase" title="预判冻结时点">${escapeHTML(r.phase)}</em>` : ''}</span>`;
+      : `<span class="mlr-pred"><span class="mlr-theme">${r.noMainline ? '今日无主线' : `${escapeHTML(r.theme || '')}${r.confirmed ? '<i title="管理员确认的当日主线">✔</i>' : ''}`}</span>${noStarStatus}${r.phase ? `<em class="mlr-phase" title="预判冻结时点">${escapeHTML(r.phase)}</em>` : ''}</span>`;
     const detail = r.bySource
       ? (!r.noMainline ? `<div class="mlr-l2">
       <span class="mlr-slot${starSlotClass}"><span class="mlr-label">东财明星</span> ${gainCell(r.star, true)}</span>
       ${leaderCells || '<span class="mlr-slot"><span class="mlr-label">东财龙头</span><span class="mlr-na">—</span></span>'}
       ${expectedCell(r)}</div>` : '')
-      : `<div class="mlr-l2">${r.noMainline ? '<span class="mlr-na" title="盘中候选仍保留在预测档案中">候选未通过 L2 明星验证，不计正式主线</span>' : `
+      : (r.noMainline ? '' : `<div class="mlr-l2">
       <span class="mlr-slot${starSlotClass}"><span class="mlr-label">明星</span> ${gainCell(r.star, true)}</span>
       ${leaderCells || '<span class="mlr-slot"><span class="mlr-label">龙头</span><span class="mlr-na">—</span></span>'}
-      ${expectedCell(r)}`}</div>`;
+      ${expectedCell(r)}</div>`);
+    const actualResult = actualCell(r);
+    const result = sourceReview ? actualResult : `${r.noMainline ? '' : hitCell(r)}${actualResult}`;
     return `<div class="mlr-row ${rowHitClass(r)}${starVisual.rowClass ? ` ${starVisual.rowClass}` : ''}${r.sampleValid === false ? ' invalid' : ''}">
     <div class="mlr-l1">
       <span class="mlr-day">${escapeHTML(String(r.day || '').slice(5))}</span>
       ${starSignal}
       ${prediction}
-      <span class="mlr-arrow" aria-hidden="true">→</span>
-      <span class="mlr-result">${sourceReview ? '' : hitCell(r)}${actualCell(r)}</span>
+      ${result ? '<span class="mlr-arrow" aria-hidden="true">→</span>' : ''}
+      ${result ? `<span class="mlr-result">${result}</span>` : ''}
       ${sampleTag(r)}
     </div>
     ${detail}

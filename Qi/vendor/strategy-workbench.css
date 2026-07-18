@@ -734,6 +734,21 @@ body.view-strategy .mlr-invalid { grid-column: 6; }
 body.view-strategy .mlr-arrow { text-align: center; }
 body.view-strategy .mlr-result { min-width: 0; }
 
+body.view-strategy .mlr-no-star {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 1px 6px;
+  border: 1px solid var(--st-line);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--st-muted);
+  font-size: 9.5px;
+  font-weight: 650;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
 body.view-strategy .mlr-l2 {
   display: grid !important;
   grid-template-columns: repeat(3, minmax(0, 1fr));
