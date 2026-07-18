@@ -74,6 +74,45 @@ No actionable P0, P1, or P2 findings remain.
 
 passed
 
+# DreamerQi Strategy No-Mainline Status QA - 2026-07-18
+
+## Comparison target
+
+- Source visual truth: the pre-change strategy prediction-review rows rendered with one legacy no-mainline record and one current dual-source no-mainline record.
+- Browser-rendered implementation: the same dates, phases, and no-mainline states after the compact status treatment.
+- Desktop viewport: `1440 × 1000`.
+- Mobile viewport: `390 × 1600` for the full responsive strategy context.
+- Implementation paths: `kpl-dashboard_17_apple.html` and `Qi/vendor/strategy-workbench.css`.
+
+## Evidence
+
+- Baseline desktop: `/private/tmp/strategy-no-star-before-desktop.png`.
+- Final desktop: `/private/tmp/strategy-no-star-after-desktop.png`.
+- Baseline mobile: `/private/tmp/strategy-no-star-before-mobile-long.png`.
+- Final mobile: `/private/tmp/strategy-no-star-after-mobile-long.png`.
+
+## Findings
+
+No actionable P0, P1, or P2 findings remain.
+
+- Legacy and dual-source no-mainline records now use the same scan pattern: `今日无主线` followed immediately by `未通过明星验证`.
+- The former long secondary explanation row is removed, reducing each legacy record to one compact line without losing the reason for exclusion.
+- Empty result arrows and empty result cells are no longer rendered when a no-mainline row has no after-market result.
+- The compact status uses the existing strategy border, muted text, panel background, radius, and typography tokens; it does not introduce a new visual language.
+- Desktop and mobile captures show the status intact on one line without text clipping or horizontal overflow.
+- L2 qualification, formal-mainline gating, hit-rate calculation, source data, permissions, and strategy ranking are unchanged.
+
+## Validation
+
+- `node --check kpl-stats-server.js`: passed.
+- Focused mainline review, two-source strategy, and strategy workbench UI checks: passed.
+- Full repository suite: `45/45` test files passed.
+- `git diff --check`: passed.
+
+## Final result
+
+passed
+
 # DreamerQi Strategy Star Evidence And Review Verdict QA - 2026-07-16
 
 ## Comparison target

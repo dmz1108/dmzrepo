@@ -7519,3 +7519,31 @@ Deployment:
 
 Notes for next agent:
 - 此前重复 503 的根因是任务每运行满 72 小时被 Windows 自动终止且没有失败重试；本次修复后不应再按三天周期掉线。
+
+## 2026-07-18 - Codex - 策略回看未通过明星验证状态同行显示
+
+Changed:
+- 将旧记录的“候选未通过 L2 明星验证，不计正式主线”从独立详情行收拢到“今日无主线”同一行，并精简为“未通过明星验证”。
+- 双源均无正式主线的记录同步使用相同文案和视觉状态，替换含义不完整的“未形成”。
+- 无盘后结果时不再渲染空箭头或空结果容器，减少回看列表的无效视觉噪音。
+- 仅调整策略回看文案和布局，不改变 L2 明星验证、正式主线门槛、命中统计或数据源逻辑。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `tests/strategy-two-source-mainlines.test.js`
+- `tests/strategy-workbench-ui.test.js`
+- `design-qa.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 使用同一组旧 schema 与双源无主线样本完成 1440px 桌面和 390px 手机改前/改后对照，状态完整同行显示且无横向溢出。
+- `node --check kpl-stats-server.js`、相关策略测试、工作台 UI 契约测试和仓库全部 45 套测试通过。
+- `git diff --check` 通过。
+
+Deployment:
+- 仅 GitHub 分支改动；尚未部署云端，未重启任何服务。
+
+Notes for next agent:
+- 复核时确认旧记录和双源记录均显示“今日无主线 / 未通过明星验证”，且不再出现旧长说明或无内容箭头。
+- 发布时需同步 HTML 与 `Qi/vendor/strategy-workbench.css`；CSS 缓存版本已更新为 `20260718b`，仅静态文件变化，不需要因本次改动重启主服务。
