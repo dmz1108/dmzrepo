@@ -7223,3 +7223,25 @@ Deployment:
 Notes for next agent:
 - 本轮只发布 HTML 与现有静态 CSS 文件即可；主服务按请求读取这两份文件，无需重启。
 - 评审时重点核对视觉层级与移动端完整性，不要修改四源口径、综合归纳或权限逻辑。
+
+## 2026-07-18 - Codex - 准备发布复盘工作台第二轮视觉精修
+
+Changed:
+- Claude 已独立复核 PR #161，无阻断项；PR 已合并至 `main`。
+- 新增受保护生产发布清单，原子发布复盘页 HTML 与现有工作台 CSS。
+
+Files:
+- `ops/production/manifests/review-workbench-luxury-polish-20260718.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- PR #161 为可干净合并状态，Claude 独立运行 44 套测试全部通过。
+- 已确认主服务的 `sendStatic` 每次请求读取磁盘文件；本次未新增静态路由，发布无需重启服务。
+- 发布清单仅包含已合并 `main` 的 HTML 与 CSS，目标路径无重复。
+
+Deployment:
+- 本条提交时尚未执行生产发布，未重启任何服务。
+
+Notes for next agent:
+- 发布后验证 `/kpl` 已引用 `review-workbench.css?v=20260718b`，版本化 CSS 返回 200，并核对线上文件哈希与 `main` 一致。
+- 抽查复盘页桌面布局与 390px 手机端逐股卡片；四源数据、综合归纳和权限口径不得变化。
