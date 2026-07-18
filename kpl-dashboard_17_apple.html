@@ -9894,6 +9894,7 @@
 </style>
 <link href="/vendor/strategy-workbench.css?v=20260717" rel="stylesheet">
 <link href="/vendor/review-workbench.css?v=20260718c" rel="stylesheet">
+<link href="/vendor/realtime-workbench.css?v=20260718" rel="stylesheet">
 </head>
 <body>
 
@@ -17501,6 +17502,7 @@ function switchPage(page, options = {}) {
   document.body.classList.toggle('view-docs', nextPage === 'docs');
   document.body.classList.toggle('view-review', nextPage === 'review');
   document.body.classList.toggle('view-strategy', nextPage === 'strategy');
+  document.body.classList.toggle('view-dashboard', nextPage === 'dashboard');
   document.querySelectorAll('.nav-item[data-page]').forEach(item => {
     item.classList.toggle('active', item.dataset.page === nextPage);
   });
