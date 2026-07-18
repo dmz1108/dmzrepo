@@ -7077,6 +7077,25 @@ Deployment:
 Notes for next agent:
 - 恢复后根据重启前 `LastTaskResult`、任务状态与 `RestartCount` 判断重复掉线是否来自计划任务缺少失败自愈。
 
+## 2026-07-18 - Codex - 修复娱乐恢复脚本的计划任务定位
+
+Changed:
+- 将娱乐恢复脚本从固定根 `TaskPath` 查询改为枚举后按唯一任务名定位，兼容云端现有 Windows 计划任务定义。
+
+Files:
+- `ops/production/restart-yule.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 首次受保护运行 `29649170936` 在首个 `Get-ScheduledTask` 查询处退出；没有执行 `schtasks /End` 或 `/Run`，没有修改生产文件、数据或服务状态。
+- 修复保留固定任务名、固定 8766 健康检查和日志审计边界。
+
+Deployment:
+- 本条提交时尚未重跑恢复操作，娱乐频道仍返回 503。
+
+Notes for next agent:
+- 重跑成功后记录重启前任务状态、`LastTaskResult`、任务失败重启设置和新监听 PID。
+
 ## 2026-07-18 - Codex - 准备发布今日实时盘面深度优化
 
 Changed:

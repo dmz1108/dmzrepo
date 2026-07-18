@@ -1,6 +1,5 @@
 $ErrorActionPreference = 'Stop'
 
-$taskPath = '\'
 $taskName = 'Panda Yule Server'
 $taskFullName = '\Panda Yule Server'
 $healthUrl = 'http://127.0.0.1:8766/health'
@@ -30,8 +29,14 @@ function Wait-YuleHealth {
   return $false
 }
 
-$task = Get-ScheduledTask -TaskPath $taskPath -TaskName $taskName
-$beforeInfo = Get-ScheduledTaskInfo -TaskPath $taskPath -TaskName $taskName
+function Get-YuleTask {
+  $match = @(Get-ScheduledTask | Where-Object { $_.TaskName -eq $taskName }) | Select-Object -First 1
+  if (-not $match) { throw "scheduled task not found: $taskName" }
+  return $match
+}
+
+$task = Get-YuleTask
+$beforeInfo = $task | Get-ScheduledTaskInfo
 $beforeTaskState = [string]$task.State
 $beforePid = Get-ListenerPid
 $beforeHealthy = Test-YuleHealth
@@ -56,8 +61,8 @@ Start-Sleep -Seconds 1
 if ($LASTEXITCODE -ne 0) { throw 'failed to start yule scheduled task' }
 if (-not (Wait-YuleHealth)) { throw 'yule service health check failed after restart' }
 
-$afterInfo = Get-ScheduledTaskInfo -TaskPath $taskPath -TaskName $taskName
-$afterTask = Get-ScheduledTask -TaskPath $taskPath -TaskName $taskName
+$afterTask = Get-YuleTask
+$afterInfo = $afterTask | Get-ScheduledTaskInfo
 $afterPid = Get-ListenerPid
 $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss K'
 $line = "`r`n- $timestamp GitHub production run $($env:DREAMERQI_OPS_RUN_ID) actor=$($env:DREAMERQI_OPS_ACTOR) operation=restart-yule beforeState=$beforeTaskState beforeResult=$($beforeInfo.LastTaskResult) beforePid=$beforePid afterPid=$afterPid health=ok`r`n"
