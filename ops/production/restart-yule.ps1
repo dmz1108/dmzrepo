@@ -29,30 +29,52 @@ function Wait-YuleHealth {
   return $false
 }
 
+function Convert-TaskState {
+  param([int]$State)
+  switch ($State) {
+    0 { return 'unknown' }
+    1 { return 'disabled' }
+    2 { return 'queued' }
+    3 { return 'ready' }
+    4 { return 'running' }
+    default { return "state-$State" }
+  }
+}
+
+$scheduler = New-Object -ComObject 'Schedule.Service'
+$scheduler.Connect()
+$taskFolder = $scheduler.GetFolder('\')
+
 function Get-YuleTask {
-  $match = @(Get-ScheduledTask | Where-Object { $_.TaskName -eq $taskName }) | Select-Object -First 1
-  if (-not $match) { throw "scheduled task not found: $taskName" }
-  return $match
+  try {
+    return $taskFolder.GetTask($taskName)
+  } catch {
+    throw "scheduled task not found: $taskName"
+  }
 }
 
 $task = Get-YuleTask
-$beforeInfo = $task | Get-ScheduledTaskInfo
-$beforeTaskState = [string]$task.State
+$beforeTaskState = Convert-TaskState -State ([int]$task.State)
+$beforeLastRunTime = $task.LastRunTime
+$beforeLastTaskResult = [int64]$task.LastTaskResult
 $beforePid = Get-ListenerPid
 $beforeHealthy = Test-YuleHealth
-$actions = @($task.Actions | ForEach-Object {
-  [PSCustomObject]@{
-    execute = [string]$_.Execute
-    arguments = [string]$_.Arguments
-    workingDirectory = [string]$_.WorkingDirectory
+$definition = $task.Definition
+$actions = @()
+for ($i = 1; $i -le $definition.Actions.Count; $i += 1) {
+  $action = $definition.Actions.Item($i)
+  $actions += [PSCustomObject]@{
+    execute = [string]$action.Path
+    arguments = [string]$action.Arguments
+    workingDirectory = [string]$action.WorkingDirectory
   }
-})
+}
 $settings = [PSCustomObject]@{
-  restartCount = [int]$task.Settings.RestartCount
-  restartInterval = [string]$task.Settings.RestartInterval
-  executionTimeLimit = [string]$task.Settings.ExecutionTimeLimit
-  multipleInstances = [string]$task.Settings.MultipleInstances
-  startWhenAvailable = [bool]$task.Settings.StartWhenAvailable
+  restartCount = [int]$definition.Settings.RestartCount
+  restartInterval = [string]$definition.Settings.RestartInterval
+  executionTimeLimit = [string]$definition.Settings.ExecutionTimeLimit
+  multipleInstances = [int]$definition.Settings.MultipleInstances
+  startWhenAvailable = [bool]$definition.Settings.StartWhenAvailable
 }
 
 & schtasks.exe /End /TN $taskFullName *> $null
@@ -62,10 +84,9 @@ if ($LASTEXITCODE -ne 0) { throw 'failed to start yule scheduled task' }
 if (-not (Wait-YuleHealth)) { throw 'yule service health check failed after restart' }
 
 $afterTask = Get-YuleTask
-$afterInfo = $afterTask | Get-ScheduledTaskInfo
 $afterPid = Get-ListenerPid
 $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss K'
-$line = "`r`n- $timestamp GitHub production run $($env:DREAMERQI_OPS_RUN_ID) actor=$($env:DREAMERQI_OPS_ACTOR) operation=restart-yule beforeState=$beforeTaskState beforeResult=$($beforeInfo.LastTaskResult) beforePid=$beforePid afterPid=$afterPid health=ok`r`n"
+$line = "`r`n- $timestamp GitHub production run $($env:DREAMERQI_OPS_RUN_ID) actor=$($env:DREAMERQI_OPS_ACTOR) operation=restart-yule beforeState=$beforeTaskState beforeResult=$beforeLastTaskResult beforePid=$beforePid afterPid=$afterPid health=ok`r`n"
 $utf8 = [System.Text.UTF8Encoding]::new($false)
 foreach ($logName in @('panda-cloud-ops-2026-06-19.md', '_cloud-change-log-20260705.md')) {
   $logPath = Join-Path $projectRoot $logName
@@ -79,17 +100,17 @@ foreach ($logName in @('panda-cloud-ops-2026-06-19.md', '_cloud-change-log-20260
   runId = $env:DREAMERQI_OPS_RUN_ID
   before = [PSCustomObject]@{
     taskState = $beforeTaskState
-    lastRunTime = $beforeInfo.LastRunTime
-    lastTaskResult = [int64]$beforeInfo.LastTaskResult
+    lastRunTime = $beforeLastRunTime
+    lastTaskResult = $beforeLastTaskResult
     listenerPid = $beforePid
     healthy = $beforeHealthy
   }
   actions = $actions
   settings = $settings
   after = [PSCustomObject]@{
-    taskState = [string]$afterTask.State
-    lastRunTime = $afterInfo.LastRunTime
-    lastTaskResult = [int64]$afterInfo.LastTaskResult
+    taskState = Convert-TaskState -State ([int]$afterTask.State)
+    lastRunTime = $afterTask.LastRunTime
+    lastTaskResult = [int64]$afterTask.LastTaskResult
     listenerPid = $afterPid
     healthy = $true
   }
