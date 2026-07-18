@@ -7390,3 +7390,28 @@ Deployment:
 Notes for next agent:
 - 这是纯视觉与响应式改造，复核时重点检查桌面三列扫描效率、展开态四栏可读性和 390px 手机完整性。
 - 本轮新增 `/vendor/realtime-workbench.css` 静态映射，首次发布必须原子部署 HTML、主服务和 CSS，并重启主服务后再验证公网 CSS 返回 200。
+
+## 2026-07-18 - Codex - 今日实时盘面深度优化已发布
+
+Changed:
+- 通过受保护生产工作流把 PR #167 的行情 HTML、主服务静态映射和今日实时专用样式原子发布到云端。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `kpl-stats-server.js`
+- `Qi/vendor/realtime-workbench.css`
+- `ops/production/manifests/realtime-workbench-ui-20260718.json`
+
+Validated:
+- 生产工作流 `29636307038` 成功，批准提交为 `b2d3e1e71bc686a683de5c92e6a0d332d941acaa`，操作健康检查为 `ok`。
+- 公网 `https://market.dreamerqi.com/health` 返回 `ok=true`；`/kpl`、`/vendor/realtime-workbench.css` 和 `/qi/vendor/realtime-workbench.css` 均返回 200。
+- 公网 HTML SHA-256 与 `main` 一致：`11180ce734b654c5c710ae71a2d8da36ee3cd0b03251c3afb7cc1d1c0ca96c2b`。
+- 公网 CSS SHA-256 与 `main` 一致：`432da197c7b488ee41b188edb72616164c865be449491eda039eb7494fce6264`。
+
+Deployment:
+- 已重启 `Panda Dashboard Server` 主服务；娱乐、Caddy、公司端 L2 worker 和其他任务未重启。
+- 自动回退备份：`C:\PandaDashboard\_deploy-backups\github-29636307038-1`。
+- 受保护部署器已自动把本次操作追加到两份云端运维日志。
+
+Notes for next agent:
+- 本轮生产变化仅为今日实时页视觉层级、信息密度和响应式布局；行情数据、策略逻辑、权限、筛选、刷新和卡片交互均未改变。
