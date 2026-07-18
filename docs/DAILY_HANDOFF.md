@@ -7057,6 +7057,26 @@ Notes for next agent:
 - 发布发生在北京时间收盘后，自动观察不会补造当日盘中样本；下一个交易日 09:15 起每 3 分钟开始积累事实与质量报告。
 - 先观察数个真实交易日，再做 golden diff 和三方复核；未经 Owner 新批准，不得把诊断 resolver 接入正式 v2，也不得让 KPL 进入策略评分、排序或页面辅助指标。
 
+## 2026-07-18 - Codex - 准备诊断并恢复娱乐独立服务
+
+Changed:
+- 新增受保护的娱乐服务恢复操作，在重启前记录计划任务状态、上次结果、8766 监听和任务重启设置。
+- 操作仅重启 `Panda Yule Server`，健康恢复后把结果追加到两份云端操作日志；不部署网站文件、不修改娱乐数据库。
+
+Files:
+- `ops/production/restart-yule.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 公网主站和行情健康均为 200；`stanning.dreamerqi.com` 根路径及健康入口稳定返回 503 `娱乐频道暂时不可用`，确认故障边界为独立娱乐服务。
+- 脚本仅访问固定计划任务、固定本机健康地址和固定运维日志路径，不接收外部路径或命令参数。
+
+Deployment:
+- 本条提交时尚未执行恢复操作，未重启任何服务。
+
+Notes for next agent:
+- 恢复后根据重启前 `LastTaskResult`、任务状态与 `RestartCount` 判断重复掉线是否来自计划任务缺少失败自愈。
+
 ## 2026-07-18 - Codex - 准备发布今日实时盘面深度优化
 
 Changed:
