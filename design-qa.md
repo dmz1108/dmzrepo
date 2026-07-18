@@ -74,6 +74,52 @@ No actionable P0, P1, or P2 findings remain.
 
 passed
 
+# DreamerQi Review Source Selector QA - 2026-07-18
+
+## Comparison target
+
+- Source visual truth: the pre-change limit-up review source selector rendered from the existing review fixture.
+- Browser-rendered implementation: the compact segmented source selector using the same fixture and active `综合归纳` state.
+- Desktop viewport: `1440 × 1700`; focused selector capture: `1440 × 250`.
+- Mobile viewport: `390 × 1800`; focused selector capture: `390 × 330`.
+- Scope: source selector sizing, spacing, selected state, and responsive behavior only.
+
+## Evidence
+
+- Desktop baseline: `/private/tmp/review-simplicity-final-1440.png`.
+- Desktop implementation: `/private/tmp/review-source-selector-after-1440.png`.
+- Desktop focused baseline/implementation: `/private/tmp/review-source-selector-before-focus-1440.png` and `/private/tmp/review-source-selector-after-focus-1440.png`.
+- Mobile baseline: `/private/tmp/review-simplicity-final-390.png`.
+- Mobile implementation: `/private/tmp/review-source-selector-after-390.png`.
+- Mobile focused baseline/implementation: `/private/tmp/review-source-selector-before-focus-390.png` and `/private/tmp/review-source-selector-after-focus-390.png`.
+
+## Findings
+
+No actionable P0, P1, or P2 findings remain.
+
+- Spacing and layout: the five tabs no longer divide the entire content width. They occupy one compact content-width control on desktop and one complete single-row control on a 390 px viewport.
+- Typography: existing font, weight, labels, and letter spacing are unchanged; every source label remains fully visible without truncation.
+- Colors and tokens: the control reuses the review surface, line, blue-soft, and blue tokens. The active state is clear without competing with the page title or source data.
+- Responsiveness and accessibility: tabs keep a 38 px mobile tap height, remain non-shrinking, and can horizontally scroll on narrower devices. Focus semantics and reduced-motion behavior remain unchanged.
+- Images and assets: this control contains no image or icon assets, so no asset fidelity change applies.
+- Copy and behavior: source labels, counts, active source, click handlers, data requests, and review results are unchanged. Counts remain visible on desktop and are hidden on mobile to preserve the compact one-row selector.
+
+## Comparison history
+
+1. The baseline showed full-width desktop tracks and a two-row mobile grid, making each source button visually oversized.
+2. The implementation changed only the selector presentation to a compact segmented control with content-sized tabs.
+3. Matching desktop and mobile full-view and focused captures confirmed that surrounding review hierarchy, content, and spacing did not shift unexpectedly.
+
+## Validation
+
+- Focused review workbench UI contract test: passed.
+- CSS cache version advanced so production browsers cannot retain the previous selector layout.
+- No horizontal selector clipping at 1440 px or 390 px; narrower screens retain horizontal touch scrolling.
+
+## Final result
+
+passed
+
 # DreamerQi Strategy Star Evidence And Review Verdict QA - 2026-07-16
 
 ## Comparison target

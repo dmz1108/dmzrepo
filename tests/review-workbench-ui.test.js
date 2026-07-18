@@ -7,7 +7,7 @@ const html = fs.readFileSync(path.join(root, 'kpl-dashboard_17_apple.html'), 'ut
 const server = fs.readFileSync(path.join(root, 'kpl-stats-server.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'Qi/vendor/review-workbench.css'), 'utf8');
 
-assert(html.includes('<link href="/vendor/review-workbench.css?v=20260718c" rel="stylesheet">'));
+assert(html.includes('<link href="/vendor/review-workbench.css?v=20260718d" rel="stylesheet">'));
 assert(html.includes('<header class="review-hero">'));
 assert(html.includes('<nav class="review-source-tabs" role="tablist" aria-label="复盘数据来源">'));
 assert(html.includes('role="tab" aria-selected="${activeClass ? \'true\' : \'false\'}"'));
@@ -36,6 +36,10 @@ for (const selector of [
 }
 
 assert(css.includes('@media (max-width: 680px)'));
+assert(/body\.view-review\s+\.review-source-tabs\s*\{[^}]*display\s*:\s*inline-flex/s.test(css));
+assert(/body\.view-review\s+\.review-source-tabs\s*\{[^}]*width\s*:\s*fit-content/s.test(css));
+assert(/body\.view-review\s+\.review-source-tab\s*\{[^}]*flex\s*:\s*0\s+0\s+auto/s.test(css));
+assert(/@media \(max-width: 680px\)[\s\S]*?body\.view-review\s+\.review-source-tab small\s*\{[^}]*display\s*:\s*none/s.test(css));
 assert(!/body\.view-review\s+\.review-source-tabs\s*\{[^}]*display\s*:\s*none/s.test(css));
 assert(!/body\.view-review\s+\.review-topics\s*\{[^}]*display\s*:\s*none/s.test(css));
 assert(!/body\.view-review\s+\.review-table-card\s*\{[^}]*display\s*:\s*none/s.test(css));
