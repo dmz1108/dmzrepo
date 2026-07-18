@@ -7174,3 +7174,27 @@ Deployment:
 
 Notes for next agent:
 - 发布后必须验证 CSS 公网路由返回 200、行情页引用版本正确、主服务健康，并抽查桌面表格与手机逐股卡片的来源和证据字段完整性。
+
+## 2026-07-18 - Codex - 涨停复盘工作台视觉优化已发布
+
+Changed:
+- 通过受保护生产工作流把 PR #158 的复盘页 HTML、独立工作台 CSS 和主服务静态路由原子发布到云端。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/review-workbench.css`
+- `kpl-stats-server.js`
+- `ops/production/manifests/review-workbench-ui-20260718.json`
+
+Validated:
+- 生产工作流 `29625891520` 成功，批准提交为 `7f5407f25392fef8ffee31f8ab658dfd80fd5059`，操作健康检查为 `ok`。
+- 公网 `https://market.dreamerqi.com/health` 返回 `ok=true`，`/kpl` 与版本化复盘 CSS 路由均返回 200。
+- 公网 HTML 已引用 `/vendor/review-workbench.css?v=20260718`；线上 CSS SHA-256 与 `main` 一致：`2e366d4bfefcd2cb2d6241c771293f499c28d55357523e8441c3c4ed7dc07722`。
+
+Deployment:
+- 已重启 `Panda Dashboard Server` 主服务；娱乐和 Caddy 未重启。
+- 自动回退备份：`C:\PandaDashboard\_deploy-backups\github-29625891520-1`。
+- 受保护部署器已自动把本次操作追加到两份云端运维日志。
+
+Notes for next agent:
+- 本轮生产变化仅为涨停复盘页视觉与结构；四源数据、综合归纳、筛选、日期、权限和交互逻辑均未改变。
