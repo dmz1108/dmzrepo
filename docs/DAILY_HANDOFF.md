@@ -7295,3 +7295,25 @@ Deployment:
 Notes for next agent:
 - 本轮是纯视觉收敛，发布时只需原子发布 HTML 与现有 CSS，主服务无需重启。
 - 复核重点是层级是否更安静、桌面主因卡片列数是否稳定，以及 390px 手机端内容是否完整。
+
+## 2026-07-18 - Codex - 准备发布复盘页简洁化精修
+
+Changed:
+- Claude 已独立复核 PR #164，无阻断项；PR 已合并至 `main`。
+- 新增受保护生产发布清单，原子发布复盘页 HTML 与现有工作台 CSS。
+
+Files:
+- `ops/production/manifests/review-workbench-simplicity-polish-20260718.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- PR #164 为可干净合并状态，Claude 独立运行 44 套测试全部通过。
+- 本次只更新现有 HTML 与 CSS，不新增静态映射；主服务按请求读取文件，发布无需重启。
+- 发布清单源文件均来自已批准的 `main`，目标路径无重复。
+
+Deployment:
+- 本条提交时尚未执行生产发布，未重启任何服务。
+
+Notes for next agent:
+- 发布后验证 `/kpl` 已引用 `review-workbench.css?v=20260718c`，线上 HTML/CSS 哈希与 `main` 一致。
+- 抽查桌面来源标签栏、四列主因卡片及 390px 手机端单列卡片与逐股明细。
