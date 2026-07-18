@@ -13534,8 +13534,8 @@ function renderMainlineReviewHTML(d) {
       <span class="mlr-slot${starSlotClass}"><span class="mlr-label">明星</span> ${gainCell(r.star, true)}</span>
       ${leaderCells || '<span class="mlr-slot"><span class="mlr-label">龙头</span><span class="mlr-na">—</span></span>'}
       ${expectedCell(r)}</div>`);
-    const actualResult = sourceReview ? '' : actualCell(r);
-    const result = sourceReview ? '' : `${r.noMainline ? '' : hitCell(r)}${actualResult}`;
+    const actualResult = actualCell(r);
+    const result = sourceReview ? actualResult : `${r.noMainline ? '' : hitCell(r)}${actualResult}`;
     return `<div class="mlr-row ${rowHitClass(r)}${starVisual.rowClass ? ` ${starVisual.rowClass}` : ''}${r.sampleValid === false ? ' invalid' : ''}">
     <div class="mlr-l1">
       <span class="mlr-day">${escapeHTML(String(r.day || '').slice(5))}</span>

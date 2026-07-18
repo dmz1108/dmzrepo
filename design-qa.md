@@ -98,6 +98,7 @@ No actionable P0, P1, or P2 findings remain.
 - Legacy and dual-source no-mainline records now use the same scan pattern: `今日无主线` followed immediately by `未通过明星验证`.
 - The former long secondary explanation row is removed, reducing each legacy record to one compact line without losing the reason for exclusion.
 - Empty result arrows and empty result cells are no longer rendered when a no-mainline row has no after-market result.
+- Dual-source records with an actual after-market family keep the visible `盘后` answer, so source hit verdicts remain explainable.
 - The compact status uses the existing strategy border, muted text, panel background, radius, and typography tokens; it does not introduce a new visual language.
 - Desktop and mobile captures show the status intact on one line without text clipping or horizontal overflow.
 - L2 qualification, formal-mainline gating, hit-rate calculation, source data, permissions, and strategy ranking are unchanged.
