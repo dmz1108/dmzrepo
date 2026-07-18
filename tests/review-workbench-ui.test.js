@@ -7,9 +7,12 @@ const html = fs.readFileSync(path.join(root, 'kpl-dashboard_17_apple.html'), 'ut
 const server = fs.readFileSync(path.join(root, 'kpl-stats-server.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'Qi/vendor/review-workbench.css'), 'utf8');
 
-assert(html.includes('<link href="/vendor/review-workbench.css?v=20260718" rel="stylesheet">'));
+assert(html.includes('<link href="/vendor/review-workbench.css?v=20260718b" rel="stylesheet">'));
 assert(html.includes('<header class="review-hero">'));
-assert(html.includes('<nav class="review-source-tabs" aria-label="复盘数据来源">'));
+assert(html.includes('<nav class="review-source-tabs" role="tablist" aria-label="复盘数据来源">'));
+assert(html.includes('role="tab" aria-selected="${activeClass ? \'true\' : \'false\'}"'));
+assert(html.includes('aria-label="查询复盘股票"'));
+assert(html.includes('aria-label="个股复盘证据" aria-live="polite"'));
 assert(html.includes('<section class="review-topic-section">'));
 assert(html.includes('<div class="review-table-scroll">'));
 

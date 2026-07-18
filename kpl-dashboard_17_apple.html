@@ -9893,7 +9893,7 @@
   }
 </style>
 <link href="/vendor/strategy-workbench.css?v=20260717" rel="stylesheet">
-<link href="/vendor/review-workbench.css?v=20260718" rel="stylesheet">
+<link href="/vendor/review-workbench.css?v=20260718b" rel="stylesheet">
 </head>
 <body>
 
@@ -12222,7 +12222,7 @@ function renderLimitupReview(data) {
     const activeClass = String(tab.key || '') === String(activeTab.key || '') ? ' active' : '';
     const tabKind = String(tab.key || '') === 'final' ? 'final' : 'source';
     return `
-      <button class="review-source-tab${activeClass}" type="button" data-review-source="${escapeHTML(tab.key)}" data-review-kind="${tabKind}">
+      <button class="review-source-tab${activeClass}" type="button" role="tab" aria-selected="${activeClass ? 'true' : 'false'}" data-review-source="${escapeHTML(tab.key)}" data-review-kind="${tabKind}">
         <span>${escapeHTML(tab.label || tab.key || '--')}</span>
         <small>${escapeHTML(tab.count ?? (Array.isArray(tab.rows) ? tab.rows.length : 0))}</small>
       </button>
@@ -12333,17 +12333,17 @@ function renderLimitupReview(data) {
         </div>
       </div>
     </header>
-    <nav class="review-source-tabs" aria-label="复盘数据来源">${sourceTabs}</nav>
+    <nav class="review-source-tabs" role="tablist" aria-label="复盘数据来源">${sourceTabs}</nav>
     ${activeTab.note ? `<div class="review-source-note">${escapeHTML(activeTab.note)}</div>` : ''}
     ${resolvedNotice ? `<div class="review-source-note">${escapeHTML(resolvedNotice)}</div>` : ''}
     <section class="review-search-row" aria-label="复盘股票查询">
       <div class="review-search-col">
         <div class="review-filter-bar">
-          <input class="review-stock-search" id="review-stock-search" type="search" value="${escapeHTML(searchTerm)}" placeholder="输入股票名称、代码或首字母，立即查询" autocomplete="off">
+          <input class="review-stock-search" id="review-stock-search" type="search" aria-label="查询复盘股票" value="${escapeHTML(searchTerm)}" placeholder="输入股票名称、代码或首字母，立即查询" autocomplete="off">
         </div>
       </div>
       <div class="review-detail-col">
-        <div id="review-stock-detail" data-code=""></div>
+        <div id="review-stock-detail" role="region" aria-label="个股复盘证据" aria-live="polite" data-code=""></div>
       </div>
     </section>
     <div id="review-pending"></div>

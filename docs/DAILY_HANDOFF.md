@@ -7198,3 +7198,28 @@ Deployment:
 
 Notes for next agent:
 - 本轮生产变化仅为涨停复盘页视觉与结构；四源数据、综合归纳、筛选、日期、权限和交互逻辑均未改变。
+
+## 2026-07-18 - Codex - 再次精修涨停复盘工作台视觉细节
+
+Changed:
+- 在已上线复盘工作台基础上继续收敛视觉层级，优化来源状态、股票查询、个股证据、主因卡片和完整明细表的间距、密度与对比关系。
+- 将股票查询与个股证据整理为连续的纵向分析路径；桌面端把四源证据改为横向证据带，窄屏自动降为两列和单列。
+- 为来源切换、搜索和详情区域补充无障碍语义；不改变来源数据、综合归纳、日期、权限、筛选和交互逻辑。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/review-workbench.css`
+- `tests/review-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 对当前 `main` 生成同数据基线与精修后对照，完成桌面 1440px 和真实手机 390px 渲染检查。
+- 390px 视口的页面宽度、内容宽度均为 390px，无横向溢出；来源、证据、主因卡片和手机记录卡完整显示。
+- `node --check kpl-stats-server.js`、CSS 结构检查、`git diff --check` 和仓库全部 44 套测试通过。
+
+Deployment:
+- 仅 GitHub 分支改动；尚未部署云端，未重启任何服务。
+
+Notes for next agent:
+- 本轮只发布 HTML 与现有静态 CSS 文件即可；主服务按请求读取这两份文件，无需重启。
+- 评审时重点核对视觉层级与移动端完整性，不要修改四源口径、综合归纳或权限逻辑。
