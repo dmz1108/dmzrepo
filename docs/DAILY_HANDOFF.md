@@ -7341,3 +7341,31 @@ Deployment:
 
 Notes for next agent:
 - 本轮生产变化仅为复盘页视觉层级与响应式布局；四源数据、综合归纳、日期、筛选、权限、查询与交互逻辑均未改变。
+
+## 2026-07-18 - Codex - 深度重构今日实时盘面视觉层级
+
+Changed:
+- 新增独立的实时工作台视觉层，把日期、刷新、数据健康和题材搜索组织为紧凑的盘中工具区。
+- 折叠板块卡改为稳定的名称、涨停、明星股、涨幅和资金五层信息结构；桌面采用三列扫描布局，超宽屏四列，手机单列。
+- 展开板块卡改为全宽四栏数据工作台，平板两栏、手机单栏；保留原有板块 QI、涨停榜、10 日涨停和 10/30 日涨幅内容与交互。
+- 修复 390px 手机端原有横向溢出、顶部账户裁切、题材搜索按钮越界和明星股信息挤压。
+- 仅增加页面状态类和静态 CSS 路由，不改变板块筛选、数据源、日期、刷新、权限、删除恢复或卡片加载逻辑。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `kpl-stats-server.js`
+- `Qi/vendor/realtime-workbench.css`
+- `tests/realtime-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 对同一组真实页面结构和代表性行情数据完成 1440px 与真实 390px 设备视口的改前/改后对照。
+- 桌面视口无横向溢出；真实手机视口 `viewport/root/body=390/390/390`，卡片宽度 362px，内容完整。
+- `node --check kpl-stats-server.js`、`git diff --check`、实时工作台 UI 契约测试和仓库全部 45 套测试通过。
+
+Deployment:
+- 仅 GitHub 分支改动；尚未部署云端，未重启任何服务。
+
+Notes for next agent:
+- 这是纯视觉与响应式改造，复核时重点检查桌面三列扫描效率、展开态四栏可读性和 390px 手机完整性。
+- 本轮新增 `/vendor/realtime-workbench.css` 静态映射，首次发布必须原子部署 HTML、主服务和 CSS，并重启主服务后再验证公网 CSS 返回 200。
