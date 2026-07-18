@@ -7057,6 +7057,27 @@ Notes for next agent:
 - 发布发生在北京时间收盘后，自动观察不会补造当日盘中样本；下一个交易日 09:15 起每 3 分钟开始积累事实与质量报告。
 - 先观察数个真实交易日，再做 golden diff 和三方复核；未经 Owner 新批准，不得把诊断 resolver 接入正式 v2，也不得让 KPL 进入策略评分、排序或页面辅助指标。
 
+## 2026-07-18 - Codex - 准备发布今日实时盘面深度优化
+
+Changed:
+- 为已合并并经 Claude 独立复核通过的 PR #167 新增原子生产发布清单。
+- 清单固定同时发布行情 HTML、主服务静态映射和新增的今日实时专用样式，避免页面先引用尚未上线的 CSS。
+
+Files:
+- `ops/production/manifests/realtime-workbench-ui-20260718.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- PR #167 的语法检查、`git diff --check` 和 45 个测试文件均通过；Claude 复核结论为无阻断项。
+- 发布清单只包含 `kpl-dashboard_17_apple.html`、`kpl-stats-server.js` 和 `Qi/vendor/realtime-workbench.css`，目标路径互不重复，`restart=main`。
+- 本次仅调整今日实时页面的视觉层级、密度、响应式布局和展开态；业务数据、权限、交互行为及策略逻辑均未改变。
+
+Deployment:
+- 本条提交时尚未执行生产发布、尚未重启服务。
+
+Notes for next agent:
+- 发布后核对公网 `/health`、`/kpl` 和新增 CSS 均返回 200，并在 1440px 与 390px 视口抽查今日实时卡片、搜索栏和展开详情无横向溢出。
+
 ## 2026-07-17 - Codex - 深度统一策略页视觉与信息结构
 
 Changed:

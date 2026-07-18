@@ -1,0 +1,17 @@
+{
+  "files": [
+    {
+      "source": "kpl-dashboard_17_apple.html",
+      "destination": "kpl-dashboard_17_apple.html"
+    },
+    {
+      "source": "kpl-stats-server.js",
+      "destination": "kpl-stats-server.js"
+    },
+    {
+      "source": "Qi/vendor/realtime-workbench.css",
+      "destination": "Qi/vendor/realtime-workbench.css"
+    }
+  ],
+  "restart": "main"
+}
