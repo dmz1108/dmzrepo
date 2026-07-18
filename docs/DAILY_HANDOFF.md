@@ -7096,6 +7096,25 @@ Deployment:
 Notes for next agent:
 - 重跑成功后记录重启前任务状态、`LastTaskResult`、任务失败重启设置和新监听 PID。
 
+## 2026-07-18 - Codex - 娱乐恢复改用任务计划程序 COM 接口
+
+Changed:
+- 绕开云端已异常的 `Get-ScheduledTask` CIM 枚举，改用 Windows `Schedule.Service` COM 接口直接读取固定娱乐任务及其失败重启设置。
+
+Files:
+- `ops/production/restart-yule.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 第二次受保护运行 `29649288589` 仍在首个全局 `Get-ScheduledTask` 枚举处退出；没有执行娱乐任务停止或启动，生产状态未改变。
+- COM 读取只访问任务计划程序根目录中的固定任务名；实际重启仍由既有 `schtasks.exe /End` 与 `/Run` 完成。
+
+Deployment:
+- 本条提交时尚未重跑恢复操作，娱乐频道仍返回 503。
+
+Notes for next agent:
+- 云端某个计划任务的 CIM 定义可能损坏，导致无参数 `Get-ScheduledTask` 整体失败；本次娱乐恢复不扩大为全机任务修复。
+
 ## 2026-07-18 - Codex - 准备发布今日实时盘面深度优化
 
 Changed:
