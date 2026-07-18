@@ -7495,3 +7495,27 @@ Deployment:
 
 Notes for next agent:
 - 自愈操作执行后必须重新读取任务定义并逐字段验证；不允许改变任务 principal、action 或触发器。
+
+## 2026-07-18 - Codex - 娱乐服务72小时终止问题已永久修复
+
+Changed:
+- 通过受保护生产运行 `29649673009` 更新 `Panda Yule Server` 任务设置：取消 72 小时运行上限，异常退出后每分钟重试、最多 5 次，并启用错过启动后的补启动。
+- 保留原 `SYSTEM` principal、`C:\PandaDashboard\run-yule-server.cmd` 动作和原有触发器；运行中服务健康，因此硬化操作没有再次重启进程。
+
+Files:
+- `ops/production/restart-yule.ps1`
+- `ops/production/harden-yule-task.ps1`
+- `docs/DAILY_HANDOFF.md`
+- 仅云端：`Panda Yule Server` 计划任务设置与两份运维日志
+
+Validated:
+- 工作流逐字段验证设置由 `PT72H / 0 / 空 / false` 变为 `PT0S / 5 / PT1M / true`，principal 仍为 `SYSTEM`、LogonType 仍为 5。
+- 独立 SSH 复核任务为 `running`、8766 正常监听，动作仍为 `/d /c C:\PandaDashboard\run-yule-server.cmd`。
+- 公网 `https://stanning.dreamerqi.com/`、`/health` 和 `/api/yule/categories` 均返回 200；娱乐采集继续运行，内容数量由恢复时 270 更新为 275。
+- 早先运行 `29649170936` 与 `29649288589` 均在查询任务阶段停止，没有执行重启或修改生产状态；成功恢复运行是 `29649414655`。
+
+Deployment:
+- 已变更云端娱乐计划任务设置并写入两份运维日志；未部署网站文件、未修改娱乐数据库、未重启主服务、Caddy 或公司端 L2 worker。
+
+Notes for next agent:
+- 此前重复 503 的根因是任务每运行满 72 小时被 Windows 自动终止且没有失败重试；本次修复后不应再按三天周期掉线。
