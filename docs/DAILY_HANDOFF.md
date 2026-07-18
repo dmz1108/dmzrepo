@@ -7103,3 +7103,27 @@ Deployment:
 
 Notes for next agent:
 - 发布后必须验证 CSS 公网路由返回 200、行情页引用版本正确、主服务健康，并抽查普通用户无管理员控件泄漏。
+
+## 2026-07-18 - Codex - 策略工作台视觉优化已发布
+
+Changed:
+- 通过受保护生产工作流把 PR #155 的策略页 HTML、独立工作台 CSS 和主服务静态路由原子发布到云端。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `kpl-stats-server.js`
+- `ops/production/manifests/strategy-workbench-ui-20260718.json`
+
+Validated:
+- 生产工作流 `29623670093` 成功，批准提交为 `b8d0174a57a260996366e052377c4c4fc870456f`，操作健康检查为 `ok`。
+- 公网 `https://market.dreamerqi.com/health` 返回 `ok=true`，`/kpl` 与版本化 CSS 路由均返回 200。
+- 公网 HTML 已引用 `/vendor/strategy-workbench.css?v=20260717`；线上 CSS SHA-256 与 `main` 一致：`175947ded871c9a3dab3c88a8e22469c81ec190d1e178c6ecd564efe6f47b06c`。
+
+Deployment:
+- 已重启 `Panda Dashboard Server` 主服务；娱乐和 Caddy 未重启。
+- 自动回退备份：`C:\PandaDashboard\_deploy-backups\github-29623670093-1`。
+- 受保护部署器已自动把本次操作追加到两份云端运维日志。
+
+Notes for next agent:
+- 本轮生产变化仅为策略页视觉与结构；主线、L2、评分、排序、权限和资金口径均未改变。
