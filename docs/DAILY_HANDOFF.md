@@ -7846,3 +7846,62 @@ Deployment:
 
 Notes for next agent:
 - 2026-07-20 是明星比值规则切换日，跨日前后比较明星转化率时应标注口径断点。浪潮信息 09:44 样本仍以最大档主动比和最大档合力比两项达标而保持明星确认。
+
+## 2026-07-20 - Claude - 明星粘性抗题材漂移 + 东财资金前排补选(Owner 指派 1/2)
+
+Changed:
+- [P1] 粘性保留抗漂移:轨迹行新增 mainlineBoardIds(主线当时成分板 plateId,并集保留);
+  新增 strategyMainlineResolveExpectedHistory 两级回退匹配——题材经当前归类重新规范化同族、
+  或成分板 plateId 交集;attach 改走解析器。生产证据:2026-07-20 上午"算力AI"浪潮信息已
+  明星确认(11:15 快照),午后家族并组漂移为"算力"致主线卡消失,违反「出过明星永久保留」。
+  不跨来源、不做模糊字符串匹配;TransitionMap 仍是 Map(仅附加 rows 索引),既有直查零破坏。
+- [P2] 东财资金前排补选(与 #186 对称):strategyEastFundCandidateUnion——涨幅前5原样保留,
+  补入「正涨幅 + f66 超大单净流入为正(带符号,流出板不入)」前排,去重≤2×池。生产证据:
+  2026-07-20 国资云概念 rank9/云计算 rank26,紫光股份 +7.29% 领涨全天未被验证。
+  门槛/L2 验证一概不放松,只修"未验证先被取数裁掉"。
+
+Files:
+- kpl-stats-server.js(transitions 落库/映射/解析器/attach + 东财补选与接线)
+- tests/strategy-expected-star-sticky.test.js(新增 10 断言,含实盘缺陷回归)
+- tests/strategy-east-fund-candidates.test.js(新增 7 断言)
+- tests/qi-mainline-states.test.js(attach 依赖注入更新)
+
+Validated:
+- node --check 通过;全仓 49 个测试文件全绿。
+
+Deployment:
+- 未部署;PR 待 Codex 复核后 Owner 合并,production-ops.yml 发布 kpl-stats-server.js 并重启。
+
+Notes for next agent:
+- 已知边界:若漂移后的家族连候选池都没进(无任何同族/共板候选),粘性仍无法恢复——
+  按 #123 规范需要"从预测档案凭空复卡",本次未做,留给 Owner 决定是否要。
+- 明日盘中验收:观察东财候选池是否出现资金前排板;若"算力AI"类漂移再现,确认卡片保留。
+
+## 2026-07-20 - Claude - PR#190 Codex 复核 P1 修复(资金补水挂到快照命中路径)
+
+Changed:
+- [P1] 东财/同花顺资金前排补水此前只接在「无快照才执行」的实时回退块——生产常态
+  (当日快照已存在)完全不运行(Codex 云端核验:zs6 快照 7 块且无 BK1008/BK0579)。
+  新增 fundForwardEligible 补水块:当日策略口径 + source===snapshot 时显式拉实时榜做
+  并集,把 bmap 缺的资金前排板合并进内存板池(绝不回写快照文件);补入板打 fundForward 标记。
+- 集成测试 strategy-fund-forward-augment.test.js:贯穿真实 getDayBoardsWithMembers(仅stub IO),
+  预置非空 zs6 快照(无国资云/云计算)+实时榜含二者 → 板池含二者+标记;看板默认调用零变化;
+  历史日拒绝;不回写快照;流出板拒入。
+
+Files: kpl-stats-server.js / tests/strategy-fund-forward-augment.test.js / docs/DAILY_HANDOFF.md
+Validated: node --check;全仓 50 个测试文件全绿。
+Deployment: 未部署;随 PR#190 走。
+
+## 2026-07-20 - Claude - PR#190 Codex 二审 P1 修复(fund-forward 板贯通补选通道)
+
+Changed:
+- [P1] fund-forward 板此前进了中间板池但无 scanChannel,在正式构建 filter(b=>b.scanChannel)
+  处被全部删除(Codex 二审)。修复:enrich 补选池改为 live→全量 / snapshot→仅 fundForward 板
+  (它们本就是当日真实时拉榜数据,普通快照板仍不得伪装);命中板 scanChannel='supplement',
+  supplementBasis 带 fundForward 标;补选观测状态如实标 snapshot+fund-forward。
+- 集成测试延伸到真实 enrich + 正式 scanChannel 过滤模拟:fund-forward 板存活为 supplement、
+  主通道快照前5不变、普通快照板仍被拦、live 路径零回归、状态如实。
+
+Files: kpl-stats-server.js / tests/strategy-fund-forward-augment.test.js / docs/DAILY_HANDOFF.md
+Validated: node --check;全仓 50 个测试文件全绿(专项 17 断言)。
+Deployment: 未部署;随 PR#190。

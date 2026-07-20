@@ -138,6 +138,9 @@ A(gated.excluded.some(x => x.theme === '消费' && x.reason === 'qi-status-witho
 
 // 6a. 盘中一旦出现预期明星，当日资格不可逆；收盘未确认只标“未兑现”，不删除主线卡。
 eval(extractFn('strategyMainlineExpectedTransitionMap'));
+// 漂移回退匹配依赖题材归类;测试用直通 stub(theme 原样归类),漂移专项在 strategy-expected-star-sticky.test.js
+const strategyMainlineFamilyInfo = (x) => ({ key: `theme:${String(x?.theme || '').trim()}` });
+eval(extractFn('strategyMainlineResolveExpectedHistory'));
 eval(extractFn('strategyMainlineAttachExpectedHistory'));
 eval(extractFn('strategyMainlineUsesStrictQi'));
 A(!strategyMainlineUsesStrictQi('2026-07-15') && strategyMainlineUsesStrictQi('2026-07-16')
