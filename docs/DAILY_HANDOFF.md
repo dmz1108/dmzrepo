@@ -7674,3 +7674,29 @@ Deployment:
 
 Notes for next agent:
 - 发布需同时同步后端和 `kpl-dashboard_17_apple.html`，并重启主服务；部署后检查 `/api/ths-concepts/catalog?fund_metric=dde&limit=20` 的 `fundFlow`、`netInflowMetric`、`netInflowSourceDay` 与页面同花顺卡片。
+
+## 2026-07-20 - Codex - 今日实时同花顺 DDE 修正已发布
+
+Changed:
+- PR #182 已合并进 `main`，并将同一批准版本的后端与行情 HTML 原子发布到云端。
+- 云端部署前备份两份旧文件；替换后只重启 `Panda Dashboard Server`，部署脚本已在本地和云端清理。
+- 两份云端运维日志已追加本次 DDE 口径修正记录。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `docs/DAILY_HANDOFF.md`
+- 仅云端：两份运维日志与回退备份
+
+Validated:
+- 云端后端 SHA-256：`eb90c4ed4161f8c06a3b6d1a28fbe457d3a603242bdf01333f74f39ae5ecba29`；行情 HTML SHA-256：`01cc853edffa8824fe81bdd8e9188ea5c8dff9eb8527126455bb58bda423ef1d`，均与 `main` 一致。
+- 公网 `/health` 返回 `ok=true`，公网 `/kpl` 哈希与 `main` 完全一致。
+- 公网 `/api/ths-concepts/catalog?fund_metric=dde&limit=20` 返回 `applied=20`、`missing=0`、`stale=0`、`state=ok`，全部记录声明 `sourceDay=2026-07-20` 和同花顺源时间。
+- 实例验证：国资云页面资金已改用 DDE `+8.54亿`，原 `zjjlr=-44.83亿` 仅保留于审计字段；煤炭概念 DDE `+15.48亿`，不再显示旧 `zjjlr=+29.54亿`。
+
+Deployment:
+- 已部署云端并重启主服务；回退备份位于 `C:\PandaDashboard\_deploy-backups\manual-ths-dde-realtime-20260720-105231`。
+- 未修改运行数据库、复盘数据、Caddy、娱乐服务或公司端 L2 worker。
+
+Notes for next agent:
+- 今日实时同花顺资金列现在是 DDE 大单金额，不再是 `zjjlr`。若 DDE 源失败或跨日，页面显示缺失是预期保护行为，不应重新回退混用旧口径。
