@@ -136,6 +136,7 @@ jobs:
           PORT: ${{ secrets.DREAMERQI_CLOUD_PORT }}
           USER: ${{ secrets.DREAMERQI_CLOUD_USER }}
           TGB_20260717_PAYLOAD_B64: ${{ secrets.DREAMERQI_TGB_20260717_PAYLOAD_B64 }}
+          TGB_20260720_PAYLOAD_B64: ${{ secrets.DREAMERQI_TGB_20260720_PAYLOAD_B64 }}
           SCRIPT_PATH: ${{ inputs.script_path }}
           MANIFEST_PATH: ${{ inputs.manifest_path }}
           REMOTE_SCRIPT: ${{ steps.validate.outputs.remote_script }}
@@ -170,16 +171,26 @@ jobs:
               "$USER@$HOST:C:/Windows/Temp/$REMOTE_ARCHIVE"
           fi
           remote_payload=''
+          echo "remote_payload=" >> "$GITHUB_OUTPUT"
           if [[ "$SCRIPT_PATH" == 'ops/production/requests/2026-07-17-tgb-hunan-write.ps1' ]]; then
             [[ -n "$TGB_20260717_PAYLOAD_B64" ]] || { echo "Date-bound TGB payload secret is missing" >&2; exit 1; }
             remote_payload="dreamerqi-tgb-payload-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.b64"
+            echo "remote_payload=$remote_payload" >> "$GITHUB_OUTPUT"
             printf '%s' "$TGB_20260717_PAYLOAD_B64" > "$RUNNER_TEMP/$remote_payload"
             chmod 600 "$RUNNER_TEMP/$remote_payload"
             scp_with_retry -q -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
               -i "$HOME/.ssh/dreamerqi_ops" -P "$PORT" "$RUNNER_TEMP/$remote_payload" \
               "$USER@$HOST:C:/Windows/Temp/$remote_payload"
+          elif [[ "$SCRIPT_PATH" == 'ops/production/requests/2026-07-20-tgb-hunan-write.ps1' ]]; then
+            [[ -n "$TGB_20260720_PAYLOAD_B64" ]] || { echo "Date-bound TGB payload secret is missing" >&2; exit 1; }
+            remote_payload="dreamerqi-tgb-payload-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.b64"
+            echo "remote_payload=$remote_payload" >> "$GITHUB_OUTPUT"
+            printf '%s' "$TGB_20260720_PAYLOAD_B64" > "$RUNNER_TEMP/$remote_payload"
+            chmod 600 "$RUNNER_TEMP/$remote_payload"
+            scp_with_retry -q -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              -i "$HOME/.ssh/dreamerqi_ops" -P "$PORT" "$RUNNER_TEMP/$remote_payload" \
+              "$USER@$HOST:C:/Windows/Temp/$remote_payload"
           fi
-          echo "remote_payload=$remote_payload" >> "$GITHUB_OUTPUT"
 
       - name: Execute approved production operation
         shell: bash
@@ -248,27 +259,45 @@ jobs:
           REMOTE_PAYLOAD: ${{ steps.upload.outputs.remote_payload }}
         run: |
           set +e
-          cleanup_command="Remove-Item -LiteralPath 'C:/Windows/Temp/${REMOTE_SCRIPT}' -Force -ErrorAction SilentlyContinue"
-          if [[ -n "$REMOTE_ARCHIVE" ]]; then
-            cleanup_command="$cleanup_command; Remove-Item -LiteralPath 'C:/Windows/Temp/${REMOTE_ARCHIVE}' -Force -ErrorAction SilentlyContinue"
-          fi
+          known_payload="dreamerqi-tgb-payload-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.b64"
+          cleanup_command="Remove-Item -LiteralPath 'C:/Windows/Temp/${known_payload}' -Force -ErrorAction SilentlyContinue"
           if [[ -n "$REMOTE_PAYLOAD" ]]; then
             cleanup_command="$cleanup_command; Remove-Item -LiteralPath 'C:/Windows/Temp/${REMOTE_PAYLOAD}' -Force -ErrorAction SilentlyContinue"
           fi
+          if [[ -n "$REMOTE_SCRIPT" ]]; then
+            cleanup_command="$cleanup_command; Remove-Item -LiteralPath 'C:/Windows/Temp/${REMOTE_SCRIPT}' -Force -ErrorAction SilentlyContinue"
+          fi
+          if [[ -n "$REMOTE_ARCHIVE" ]]; then
+            cleanup_command="$cleanup_command; Remove-Item -LiteralPath 'C:/Windows/Temp/${REMOTE_ARCHIVE}' -Force -ErrorAction SilentlyContinue"
+          fi
+          cleanup_command="$cleanup_command; if (Test-Path -LiteralPath 'C:/Windows/Temp/${known_payload}') { throw 'remote payload cleanup verification failed' }"
+          if [[ -n "$REMOTE_PAYLOAD" ]]; then
+            cleanup_command="$cleanup_command; if (Test-Path -LiteralPath 'C:/Windows/Temp/${REMOTE_PAYLOAD}') { throw 'remote payload cleanup verification failed' }"
+          fi
+          if [[ -n "$REMOTE_SCRIPT" ]]; then
+            cleanup_command="$cleanup_command; if (Test-Path -LiteralPath 'C:/Windows/Temp/${REMOTE_SCRIPT}') { throw 'remote script cleanup verification failed' }"
+          fi
+          if [[ -n "$REMOTE_ARCHIVE" ]]; then
+            cleanup_command="$cleanup_command; if (Test-Path -LiteralPath 'C:/Windows/Temp/${REMOTE_ARCHIVE}') { throw 'remote archive cleanup verification failed' }"
+          fi
+          rm -f "$RUNNER_TEMP/$known_payload"
+          remote_status=255
           for attempt in 1 2 3; do
             if ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
               -i "$HOME/.ssh/dreamerqi_ops" -p "$PORT" "$USER@$HOST" \
               "powershell -NoProfile -Command \"$cleanup_command\""; then
+              remote_status=0
               break
             else
               remote_status=$?
             fi
-            if [[ "$remote_status" -ne 255 ]]; then
-              break
-            fi
             if [[ "$attempt" -lt 3 ]]; then
               delay=$((attempt * 10))
-              echo "Remote cleanup connection failed (attempt $attempt/3); retrying in ${delay}s."
+              echo "Remote cleanup failed (attempt $attempt/3, status $remote_status); retrying in ${delay}s."
               sleep "$delay"
             fi
           done
+          if [[ "$remote_status" -ne 0 ]]; then
+            echo "Remote production-file cleanup failed with status $remote_status" >&2
+            exit "$remote_status"
+          fi

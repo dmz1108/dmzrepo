@@ -7935,3 +7935,29 @@ Deployment:
 
 Notes for next agent:
 - PR #190 已正式上线，不要再按“未部署”处理。下一个交易日盘中重点观察资金前排补选板是否进入 L2 候选，以及发生题材漂移后已有明星主线卡是否保持。
+
+## 2026-07-20 - Codex - 准备按 Owner 终盘口径写入 TGB 湖南人复盘
+
+Changed:
+- Owner 明确当日终盘口径：`600227 赤天化` 未封死，必须排除；`601991 大唐发电`、`603533 掌阅科技` 均封住涨停且出现在湖南人官方原图，必须纳入。人工正式候选因此与当前 53 股终盘池完全一致。
+- 新增日期绑定、受保护的一次性生产请求：只接受固定 SHA-256 的 53 行人工载荷，固定校验官方文章、`image-01-06.png` 原图长度与哈希、三股口径、题材块计数及全部质量闸；通过后备份、原子写正式 TGB、强制重折当天综合主因并验证公网四源健康。
+- 生产请求失败时逐文件按存在状态和 SHA-256 回退，再按每股代码、名称、最终题材、最终细分原因及来源覆盖验证公开缓存；公网请求有 25 秒硬超时。日期绑定载荷只经 GitHub `production` Secret 和 SCP 传递，清理失败会使工作流失败。
+
+Files:
+- `.github/workflows/production-ops.yml`
+- `ops/production/requests/2026-07-20-tgb-hunan-write.ps1`
+- `tests/tgb-20260720-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 人工候选 53 行、唯一代码 53；`missingCodes=[]`、`extraCodes=[]`、重复 0、弱字段 0；纳入 `601991/603533`、排除 `600227`。
+- 题材块为电力 18、算力 7、煤炭 6、油服 4、业绩 3、其他 15，合计 53；仅 `000539 粤电力A/粤电力Ａ` 为 NFKC 等价的已记录名称差异。
+- 人工载荷 SHA-256 为 `808264f51913362f64d6989effa4c6cdd2e58606bc1fb97be3e7fc6782f9746d`；官方图片 SHA-256 为 `736c9169f450b4c1819b2d3eaf4f7e1f28315ded7d65e82b88df46b0550f0061`。
+- 全仓 51 个测试文件、嵌入 JavaScript、Windows PowerShell ASCII、workflow YAML/Bash 语法、后端语法及 `git diff --check` 均通过；另一 Codex agent 独立审查了生产、回退和密文清理路径。
+
+Deployment:
+- 本条记录时尚未执行正式写入、综合主因重折或服务重启；生产请求必须先经独立 `codex/` 分支 PR 合并到 `main`，再按固定脚本哈希走受保护工作流。
+
+Notes for next agent:
+- 正式转录来自 Codex 对官方白底原图的逐题材块、逐行、逐字段人工双遍复核；没有使用 OCR、Qwen 或自动视觉结果生成、补全、猜测或校验正式行。
+- 这是按 Owner 明确事实修正当日来源与终盘池，不改变策略算法或评分，因此不需要 AI 讨论组协议。
