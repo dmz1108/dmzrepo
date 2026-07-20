@@ -21463,6 +21463,29 @@ async function strategyPrepareThsLiveCandidates(boards, useDay, boardPool) {
   await strategyApplyThsDdeFundFlow(list, useDay);
   return strategyThsDdeCandidateUnion(list, boardPool);
 }
+
+// 东财侧同样不能只按涨幅截断(与 #186 同花顺 DDE 补选对称):2026-07-20 国资云概念 rank9、
+// 云计算 rank26,板内紫光股份 +7.29% 领涨,却因涨幅榜前5截断全天未被 L2 验证。
+// 保留原涨幅候选顺序,补入「正涨幅 + 超大单净流入(f66,带符号)为正」的资金前排;
+// 后续仍须过 5亿+涨停≥2 门槛与 L2 明星验证,这里只修覆盖缺口,不放松任何闸门。
+function strategyEastFundCandidateUnion(boards, boardPool) {
+  const limit = Math.max(1, Number(boardPool) || STRATEGY_MAINLINE_LIVE_BOARD_POOL);
+  const list = (Array.isArray(boards) ? boards : []).filter(isBoardGainAllowed);
+  const gainLeaders = list.slice(0, limit);   // 东财榜按涨幅序返回,保持原行为
+  const fundLeaders = list.filter(board => {
+    const gain = numOrNull(board?.gainPct ?? board?.gain);
+    const fund = numOrNull(board?.superLargeNetInflow);
+    return gain != null && gain > 0 && fund != null && fund > 0;
+  }).sort((a, b) => Number(b.superLargeNetInflow) - Number(a.superLargeNetInflow))
+    .slice(0, limit);
+  const seen = new Set();
+  return [...gainLeaders, ...fundLeaders].filter(board => {
+    const key = String(board?.plateId || board?.name || '').trim();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 // 把同花顺侧(zsType=5 的主板 + 每块板的 bySource[5])的 netInflow 覆盖为当日 DDE 大单金额。
 // 仅当 useDay=中国今天(realhead 是"现在"的值,历史日覆盖=数据穿越,绝不做);
 // DDE 拿不到的板保持 zjjlr(metric 维持 ths-net-inflow,如实可辨,不冒充 DDE)。
@@ -21710,7 +21733,9 @@ async function getDayBoardsWithMembers(day, options = {}) {
           const boardPool = Number(options.boardPool || 0) || STRATEGY_MAINLINE_RISING_BOARD_LIMIT;
           const boards = Number(z) === Number(THS_ZS_TYPE)
             ? await strategyPrepareThsLiveCandidates(visibleBoards, requestedDay, boardPool)
-            : visibleBoards.filter(isBoardGainAllowed).slice(0, boardPool);
+            : (Number(z) === Number(EASTMONEY_ZS_TYPE)
+              ? strategyEastFundCandidateUnion(visibleBoards, boardPool)
+              : visibleBoards.filter(isBoardGainAllowed).slice(0, boardPool));
           const hydrated = await hydrateStrategyLiveBoardsForMembers(boards, apiKey, z, requestedDay);
           await absorbPayload(hydrated, z, 'live');
         } catch (err) { strategyMainlineDiagNoteRead(`board-rank-live zs${z} ${requestedDay}`, err); }   // 七审:实时回退失败不再空吞
@@ -24056,6 +24081,10 @@ function strategyPredictStarTransitions(existingRows, mainlines, observedAt) {
       firstGain: isFiniteNumeric(raw?.firstGain) ? Number(raw.firstGain) : null,
       ratios: raw?.ratios && typeof raw.ratios === 'object' ? raw.ratios : null,
       maxBucket: raw?.maxBucket && typeof raw.maxBucket === 'object' ? raw.maxBucket : null,
+      // 主线当时的成分板 plateId:题材家族名盘中漂移(算力AI→算力)时,粘性匹配的备用锚点。
+      mainlineBoardIds: Array.isArray(raw?.mainlineBoardIds)
+        ? raw.mainlineBoardIds.map(id => String(id || '').trim()).filter(Boolean).slice(0, 8)
+        : [],
     });
   }
   for (const m of (Array.isArray(mainlines) ? mainlines.slice(0, 12) : [])) {
@@ -24081,9 +24110,15 @@ function strategyPredictStarTransitions(existingRows, mainlines, observedAt) {
         firstGain: isFiniteNumeric(star?.gain) ? Number(star.gain) : null,
         ratios: star?.ratios && typeof star.ratios === 'object' ? star.ratios : null,
         maxBucket: star?.maxBucket && typeof star.maxBucket === 'object' ? star.maxBucket : null,
+        mainlineBoardIds: [],
       };
       next.mainlineTheme = String(m?.theme || next.mainlineTheme || '').trim();
       next.name = String(star?.name || next.name || '').trim();
+      const boardIds = (Array.isArray(m?.resonanceBoards) ? m.resonanceBoards : [])
+        .map(b => String(b?.plateId || '').trim()).filter(Boolean);
+      if (boardIds.length) {
+        next.mainlineBoardIds = [...new Set([...(next.mainlineBoardIds || []), ...boardIds])].slice(0, 8);
+      }
       next.lastSeenAt = observedAt;
       next.lastLevel = level;
       if (level === 'confirmed' && !next.confirmedAt) next.confirmedAt = observedAt;
@@ -24122,15 +24157,48 @@ function strategyMainlineExpectedTransitionMap(predict, source = '') {
       firstGain: isFiniteNumeric(raw?.firstGain) ? Number(raw.firstGain) : null,
       ratios: raw?.ratios && typeof raw.ratios === 'object' ? raw.ratios : null,
       maxBucket: raw?.maxBucket && typeof raw.maxBucket === 'object' ? raw.maxBucket : null,
+      mainlineBoardIds: Array.isArray(raw?.mainlineBoardIds)
+        ? raw.mainlineBoardIds.map(id => String(id || '').trim()).filter(Boolean).slice(0, 8)
+        : [],
     });
   }
+  // 附带全量行索引供漂移回退匹配(strategyMainlineResolveExpectedHistory);
+  // 返回类型保持 Map(既有调用/测试按 mainlineKey 直查),仅追加属性,不改变形状契约。
+  byMainline.rows = [...byMainline.values()].flat();
   return byMainline;
+}
+
+// 粘性保留的匹配不能只认 familyKey 精确相等:题材家族命名盘中会漂移(2026-07-20 实盘案例:
+// 上午"算力AI"(浪潮信息已明星确认)午后并组变"算力",familyKey 变化导致轨迹查不到、
+// 主线卡消失,违反 Owner「当日出过明星永久保留」规则)。回退两级,仍只在同一来源 Map 内匹配:
+// 1) 双方主题经当前题材归类(strategyMainlineFamilyInfo)重新规范化后同族;
+// 2) 轨迹记录的当时成分板 plateId 与当前候选的成分板有交集(同一批板=同一方向,最精确)。
+// 不做任何模糊字符串匹配,避免把不相干题材误粘。
+function strategyMainlineResolveExpectedHistory(item, transitionMap) {
+  if (!item || !(transitionMap instanceof Map) || !transitionMap.size) return [];
+  const mainlineKey = String(item?.familyKey || item?.key || '').trim();
+  const direct = mainlineKey ? transitionMap.get(mainlineKey) : null;
+  if (Array.isArray(direct) && direct.length) return direct;
+  const rows = Array.isArray(transitionMap.rows) ? transitionMap.rows : [...transitionMap.values()].flat();
+  if (!rows.length) return [];
+  const itemFamilyKey = strategyMainlineFamilyInfo({ theme: item?.theme }).key;
+  const itemBoardIds = new Set((Array.isArray(item?.resonanceBoards) ? item.resonanceBoards : [])
+    .map(b => String(b?.plateId || '').trim()).filter(Boolean));
+  const matched = rows.filter(row => {
+    if (row.mainlineTheme && strategyMainlineFamilyInfo({ theme: row.mainlineTheme }).key === itemFamilyKey) return true;
+    return (row.mainlineBoardIds || []).some(id => itemBoardIds.has(String(id)));
+  });
+  const seen = new Set();
+  return matched.filter(row => {
+    if (seen.has(row.code)) return false;
+    seen.add(row.code);
+    return true;
+  });
 }
 
 function strategyMainlineAttachExpectedHistory(item, transitionMap, sessionPhase = '') {
   if (!item || !(transitionMap instanceof Map)) return item;
-  const mainlineKey = String(item?.familyKey || item?.key || '').trim();
-  const history = mainlineKey ? (transitionMap.get(mainlineKey) || []) : [];
+  const history = strategyMainlineResolveExpectedHistory(item, transitionMap);
   if (!history.length) return item;
   const currentStars = Array.isArray(item?.starStocks) ? item.starStocks : [];
   const currentByCode = new Map(currentStars
