@@ -7820,3 +7820,29 @@ Deployment:
 
 Notes for next agent:
 - 复审需重点确认金额硬门槛未被绕过、三项均为严格大于，以及策略正式判定与管理员历史镜像判定保持一致。通过后需同时发布后端与行情 HTML，并重启主服务。
+
+## 2026-07-20 - Codex - 发布明星买卖比三项取二规则
+
+Changed:
+- Claude 对 PR #188 完成独立复核并确认无阻断项后，将合并后的 `main` 双文件原子发布到云端。
+- 云端正式明星口径现为：最大档主动买入累计严格 `>1.5亿元`，并且最大档主动比、50 万档主动比、最大档合力比三项中至少两项严格 `>1.65`。
+- 同步更新两份云端操作日志并清理临时部署文件。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `docs/DAILY_HANDOFF.md`
+- 仅云端：两份运维日志与回退备份
+
+Validated:
+- Claude 在独立 worktree 复跑 `node --check` 与全部 47 套测试，结论为通过、无阻断项。
+- 云端 SHA-256 与 `main` 一致：服务端 `50d5e634170203cda9947bc1c06c3e694ac5b5337155e1538387fc8ccbd36096`，行情 HTML `96f2aaeb5aa4ca67042c85c6d3bd0a0c72ba8b9e6e69a8af5c8e14fbec346747`。
+- 主服务 PID `15176 -> 960`；公网 `/health` 返回 `ok=true`，`/api/strategy-mainlines?day=2026-07-20` 返回 `ok=true`。
+
+Deployment:
+- 已部署云端并重启主服务。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\manual-star-ratio-2of3-20260720-152014`。
+- 未修改运行数据库、复盘底库、Caddy、娱乐服务或公司端 L2 worker。
+
+Notes for next agent:
+- 2026-07-20 是明星比值规则切换日，跨日前后比较明星转化率时应标注口径断点。浪潮信息 09:44 样本仍以最大档主动比和最大档合力比两项达标而保持明星确认。
