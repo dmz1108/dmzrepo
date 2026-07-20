@@ -7771,3 +7771,27 @@ Deployment:
 
 Notes for next agent:
 - 发布后需重启主服务。验收应在交易时段观察同花顺来源的 `scanSupplement.picked`：DDE 前排但非涨幅前 8 的板块应能进入补选，仍只有满足 `净流入≥5亿元 + 涨停≥2 + L2明星` 才能成为正式主线。
+
+## 2026-07-20 - Codex - 发布同花顺 DDE 强板候选覆盖修复
+
+Changed:
+- 将 PR #186（`77f64f0`）的同花顺 DDE 强板补选逻辑发布到云端。
+- 发布前保留主服务文件备份，发布后同步更新两份云端操作日志并清理临时部署文件。
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+- 仅云端：两份运维日志与回退备份
+
+Validated:
+- 云端 `kpl-stats-server.js` SHA-256 与 `main` 一致：`8cbdd0b6f93c3aef95495c5dab72d61ac2bd6a9ce89801779ffd98b6c0c94877`。
+- 主服务计划任务重启成功，PID `14968 -> 15176`；公网 `/health` 返回 `ok=true`。
+- 刷新后的 `scanSupplement.picked` 已出现原涨幅截断范围外的同花顺 DDE 补选板块，证明新候选并集已在生产生效。
+
+Deployment:
+- 已部署云端并重启主服务。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\manual-ths-dde-candidates-20260720-133713`。
+- 未修改运行数据库、复盘底库、Caddy、娱乐服务或公司端 L2 worker。
+
+Notes for next agent:
+- 数据中心在后续时段转为负涨幅，因此不会被当前补选强行保留；新逻辑只在板块仍为正涨幅且 DDE 居前时补入验证池。正式主线门槛没有放宽。
