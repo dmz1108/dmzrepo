@@ -21824,9 +21824,7 @@ const STRATEGY_MAINLINE_TREND_MIN_GAP_MS = 3 * 60 * 1000;
 const STRATEGY_MAINLINE_TREND_WINDOW_MS = 45 * 60 * 1000;
 const STRATEGY_MAINLINE_TREND_BASE_MIN_AGE_MS = 5 * 60 * 1000;
 const strategyMainlineTrendSamples = new Map();
-// 明星股 L2 判定：档位只看 50万/300万/800万——低价股每笔金额小，500万以上档常年无成交，缺档跳过不判负。
-// 未涨停(涨幅≥5%)：各有效档主动比、被动比都 ≥1.5（涨停瞬间吃掉堆积卖单后会跳到 2 以上，所以盘中 1.5 就算资金活跃）。
-// 已涨停：50万档 主动比/被动比/主动+被动比 三者至少 2 个 ≥2，确认明星。
+// 明星股 L2 展示兼容档位；正式判定使用个股最大可统计档与 50 万档，见 strategyMainlineStarStatus。
 const STRATEGY_MAINLINE_STAR_BUCKETS = [500000, 3000000, 8000000];
 const STRATEGY_MAINLINE_STAR_PRE_RATIO = 1.5;
 const STRATEGY_MAINLINE_STAR_SEAL_RATIO = 2;
@@ -23117,14 +23115,15 @@ function strategyMainlineBucketRatios(bucket) {
   };
 }
 
-// ===== 明星股判定(Owner 定稿 2026-07-15,覆盖 2026-07-10 旧三层规则) =====
-// 单一最大档判据:该股最大可统计档 主动买入累计 > 1.5亿 且 主动买/主动卖 activeRatio > 1.65。
+// ===== 明星股判定(Owner 2026-07-20 修订买卖比闸门) =====
+// 金额硬门槛:该股最大可统计档 主动买入累计 > 1.5亿。
+// 比值闸门以下三项至少两项严格 >1.65:最大档主动比、50万档主动比、最大档合力比。
 //   涨停(封板)满足即"明星确认";未封但大涨(≥5%)满足即"预期明星"。
-//   不再看 passiveRatio/supportRatio,不再要求逐档(小档)先决——只按最大档这两条判(Owner 2026-07-15)。
 // 必含该股最大可统计档:3元股即300w档,10元以上即1000w档,按股价自适应;最大档无大单/数据缺失/现价缺失一律不确认。
 const STRATEGY_MAINLINE_ALL_BUCKETS = [500000, 3000000, 5000000, 8000000, 10000000];
 const STRATEGY_MAINLINE_STAR_MAX_BUY_MIN = 1.5e8;         // 最大档主动买入累计下限(预期/确认共用,Owner 2026-07-15:3亿→1.5亿)
-const STRATEGY_MAINLINE_STAR_MAX_ACTIVE_RATIO_MIN = 1.65; // 最大档 主动买/主动卖(activeRatio)下限(Owner 2026-07-15)
+const STRATEGY_MAINLINE_STAR_MAX_ACTIVE_RATIO_MIN = 1.65; // 三项买卖比共用的严格下限
+const STRATEGY_MAINLINE_STAR_RATIO_REQUIRED_COUNT = 2;
 const STRATEGY_MAINLINE_STAR_MAX_PRE_RATIO = 1.8;   // 旧规则阈值,2026-07-15 起明星闸不再使用,仅保留定义以兼容历史提取脚本
 const STRATEGY_MAINLINE_STAR_LEVEL_ORDER = { confirmed: 0, expected: 1, active: 2 };  // 展示排序:确认 > 预期 > 活跃
 // 限价单笔申报上限(股):主板100万 / 创业板30万 / 科创板10万(按代码前缀;精确交易所规则核实记录见讨论文档议题A)
@@ -23178,6 +23177,17 @@ function strategyMainlineStarStatus(row) {
   const maxBucketEmpty = !!(maxBucketAmount && maxFieldPresent && !maxRatios);   // 字段在、数据空/零 → 条件失败
   const maxBucketDataMissing = !!(maxBucketAmount && !maxFieldPresent);          // 字段缺失 → 数据不完整
   const maxActiveBuy = maxFieldPresent ? Number(maxField?.activeBuy || 0) : 0;
+  const fiftyRatios = strategyMainlineBucketRatios(thresholds['500000']);
+  const maxActiveRatio = maxRatios ? maxRatios.activeRatio : null;
+  const fiftyActiveRatio = fiftyRatios ? fiftyRatios.activeRatio : null;
+  const maxSupportRatio = maxRatios ? maxRatios.supportRatio : null;
+  const ratioChecks = {
+    maxActive: maxActiveRatio != null && maxActiveRatio > STRATEGY_MAINLINE_STAR_MAX_ACTIVE_RATIO_MIN,
+    fiftyActive: fiftyActiveRatio != null && fiftyActiveRatio > STRATEGY_MAINLINE_STAR_MAX_ACTIVE_RATIO_MIN,
+    maxSupport: maxSupportRatio != null && maxSupportRatio > STRATEGY_MAINLINE_STAR_MAX_ACTIVE_RATIO_MIN,
+  };
+  const ratioPassCount = Object.values(ratioChecks).filter(Boolean).length;
+  const ratioValue = value => value == null ? null : Number(value.toFixed(2));
   const maxBucket = maxBucketAmount ? {
     amount: maxBucketAmount,
     activeBuy: Math.round(maxActiveBuy),
@@ -23189,22 +23199,37 @@ function strategyMainlineStarStatus(row) {
       passiveRatio: Number(maxRatios.passiveRatio.toFixed(2)),
       supportRatio: Number(maxRatios.supportRatio.toFixed(2)),
     } : null,
+    ratioGate: {
+      threshold: STRATEGY_MAINLINE_STAR_MAX_ACTIVE_RATIO_MIN,
+      required: STRATEGY_MAINLINE_STAR_RATIO_REQUIRED_COUNT,
+      passed: ratioPassCount,
+      values: {
+        maxActiveRatio: ratioValue(maxActiveRatio),
+        fiftyActiveRatio: ratioValue(fiftyActiveRatio),
+        maxSupportRatio: ratioValue(maxSupportRatio),
+      },
+      checks: ratioChecks,
+    },
   } : null;
   const gain = numOrNull(row?.gainPct ?? row?.gain);
   const sealed = gain != null && gain >= limitUpThreshold(row?.code, row?.name);
-  // Owner 2026-07-15 单一最大档判据:主动买 > 1.5亿 且 activeRatio(主动买/主动卖) > 1.65。
-  // 封板满足→明星确认;未封大涨(≥5%)满足→预期明星。不看被动/合力比值,不要求逐档先决。
-  const maxActiveRatio = maxRatios ? maxRatios.activeRatio : null;
+  // 金额达标且三项比值至少两项达标；封板→明星确认，未封大涨(≥5%)→预期明星。
   const maxBucketStarPass = !maxBucketPriceMissing && !maxBucketEmpty && !maxBucketDataMissing
     && maxActiveBuy > STRATEGY_MAINLINE_STAR_MAX_BUY_MIN
-    && maxActiveRatio != null && maxActiveRatio > STRATEGY_MAINLINE_STAR_MAX_ACTIVE_RATIO_MIN;
+    && ratioPassCount >= STRATEGY_MAINLINE_STAR_RATIO_REQUIRED_COUNT;
   if (sealed) {
     // 最大档无可信证据一律不确认,不用小档回退(缺数据不能把未知判成明星)。
     if (maxBucketPriceMissing) return { level: 'sealedWeak', label: '涨停但最大档现价缺失', gain, ratios: display, maxBucket };
     if (maxBucketEmpty) return { level: 'sealedWeak', label: '涨停但最大档无大单', gain, ratios: display, maxBucket };
     if (maxBucketDataMissing) return { level: 'sealedWeak', label: '涨停但最大档数据缺失', gain, ratios: display, maxBucket };
     if (maxActiveBuy <= STRATEGY_MAINLINE_STAR_MAX_BUY_MIN) return { level: 'sealedWeak', label: '涨停但最大档主动买不足1.5亿', gain, ratios: display, maxBucket };
-    if (!(maxActiveRatio > STRATEGY_MAINLINE_STAR_MAX_ACTIVE_RATIO_MIN)) return { level: 'sealedWeak', label: '涨停但最大档主动买卖比不足1.65', gain, ratios: display, maxBucket };
+    if (ratioPassCount < STRATEGY_MAINLINE_STAR_RATIO_REQUIRED_COUNT) return {
+      level: 'sealedWeak',
+      label: `涨停但买卖比仅${ratioPassCount}/3项>1.65`,
+      gain,
+      ratios: display,
+      maxBucket,
+    };
     return { level: 'confirmed', label: '明星确认', gain, ratios: display, maxBucket };
   }
   if (gain != null && gain >= STRATEGY_MAINLINE_BIG_GAIN_PCT) {
