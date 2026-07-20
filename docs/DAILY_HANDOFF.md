@@ -7905,3 +7905,33 @@ Changed:
 Files: kpl-stats-server.js / tests/strategy-fund-forward-augment.test.js / docs/DAILY_HANDOFF.md
 Validated: node --check;全仓 50 个测试文件全绿(专项 17 断言)。
 Deployment: 未部署;随 PR#190。
+
+## 2026-07-20 - Codex - PR #190 复核、合并与云端部署
+
+Changed:
+- 完成 PR #190 最终复核并批准：明星轨迹支持题材名称漂移后的同族/成分板回退匹配；东财资金前排补选贯通快照命中、enrich 与正式 `scanChannel` 过滤链路。
+- 将 PR #190 合并至 `main`（merge commit `14f98b1`），随后原子替换云端 `kpl-stats-server.js` 并重启主服务。
+- 同步记录两份云端运维日志；未改运行数据库、快照、前端、Caddy、娱乐服务或公司端 L2 worker。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/strategy-expected-star-sticky.test.js`
+- `tests/strategy-east-fund-candidates.test.js`
+- `tests/strategy-fund-forward-augment.test.js`
+- `tests/qi-mainline-states.test.js`
+- `docs/DAILY_HANDOFF.md`
+- 仅云端：两份运维日志与部署回退备份
+
+Validated:
+- `node --check kpl-stats-server.js` 通过；全仓 50 个测试文件全部通过；`git diff --check` 通过。
+- 公网 `https://market.dreamerqi.com/health` 返回 HTTP 200、`ok=true`。
+- 公网 `/api/strategy-mainlines?day=2026-07-20` 返回 HTTP 200、`ok=true`，`realtimeSource=live`，主线结果 3 条。
+- 云端服务端 SHA-256 为 `2d7e0a9e4f111ef6959e460ecce8babe43bbf1c138081852b37d393bb3c2b78e`，与合并后本地文件一致；主进程 PID `5276`。
+
+Deployment:
+- 已部署云端并重启主服务。
+- 回退备份：`C:\\PandaDashboard\\_deploy-backups\\pr190-20260720-212205`。
+- 云端部署前已验证旧文件无漂移，部署脚本包含哈希校验、语法检查、失败自动回退和健康检查。
+
+Notes for next agent:
+- PR #190 已正式上线，不要再按“未部署”处理。下一个交易日盘中重点观察资金前排补选板是否进入 L2 候选，以及发生题材漂移后已有明星主线卡是否保持。
