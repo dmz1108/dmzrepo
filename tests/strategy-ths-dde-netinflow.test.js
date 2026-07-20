@@ -28,6 +28,8 @@ const sample = 'quotebridge_v6_realhead_bk_885977_defer_last({"items":{"10":"140
 A(thsParseRealheadField(sample, '527198') === 1041518380, '解析:从 quotebridge 载荷提取 527198=10.415亿(元)');
 A(thsParseRealheadQuote('cb({"items":{"527198":"719048250","time":"2026-07-20 10:28:00 北京时间","name":"国资云"}})', '527198').sourceDay === '2026-07-20',
   '解析:从 realhead 源时间提取 sourceDay,供跨日污染校验');
+A(thsParseRealheadQuote('cb({"items":{"527198":"719048250","199112":"2.01","time":"2026-07-20 09:35:00 北京时间"}})', '527198').gainPct === 2.01,
+  '解析:同一次 realhead 响应提取当前板块涨幅,供 DDE 补选避免旧排名');
 A(thsParseRealheadField(sample, '999999') === null, '解析:不存在的字段返回 null');
 A(thsParseRealheadField('garbage', '527198') === null, '解析:非法载荷返回 null(不抛错)');
 
@@ -55,6 +57,7 @@ const fetchThsBoardDdeQuote = async (idx) => {
   const value = await ddeFetchImpl(idx);
   return value == null ? null : {
     value,
+    gainPct: idx === '885977' ? 2.01 : 1.25,
     sourceDay: ddeQuoteSourceDay,
     asOf: `${ddeQuoteSourceDay} 10:30:00 北京时间`,
     sourceName: idx,
@@ -73,6 +76,7 @@ eval(extractFn('strategyApplyThsDdeFundFlow'));
   await strategyApplyThsDdeFundFlow([b5, b6], '2026-07-16');
   A(b5.netInflow === 10.415e8 && b5.netInflowMetric === 'ths-dde-big-order-amount', '今日:同花顺主板 netInflow 覆盖为 DDE(10.415亿)');
   A(b5.netInflowZjjlr === 1.79e8 && b5.ddeBigOrderAmount === 10.415e8, '今日:原 zjjlr 留档 netInflowZjjlr,DDE 存 ddeBigOrderAmount');
+  A(b5.gainPct === 2.01, '今日:策略 DDE 覆盖复用 realhead 当前涨幅,用于 DDE 候选补选');
   A(b6.netInflow === 3e8 && b6.netInflowMetric === 'eastmoney-super-large-net-inflow', '今日:东财主板不受同花顺覆盖影响');
   A(b6.bySource[5].netInflow === 20.375e8 && b6.bySource[5].netInflowMetric === 'ths-dde-big-order-amount',
     '今日:塌板后的 bySource[5](智慧政务)同步覆盖为 DDE(20.375亿)——R2 同源配对吃到 DDE 口径');
@@ -93,6 +97,7 @@ eval(extractFn('strategyApplyThsDdeFundFlow'));
   const rtSummary = await applyThsDdeFundFlowToRealtimeBoards([rtOk], '2026-07-16');
   A(rtSummary.applied === 1 && rtOk.netInflow === 10.415e8 && rtOk.netInflowZjjlr === -48.61e8,
     '今日实时:展示当前日 DDE,原 zjjlr 仅留审计字段');
+  A(rtOk.gain === 2.01 && rtOk.gainPct === 2.01, '今日实时:DDE 同请求刷新板块涨幅,不沿用掉出涨幅榜前的旧值');
   ddeQuoteSourceDay = '2026-07-15';
   const rtStale = { plateId: '308874', thsPlateCode: '885977', netInflow: 9e8 };
   const staleSummary = await applyThsDdeFundFlowToRealtimeBoards([rtStale], '2026-07-16');
@@ -131,6 +136,25 @@ eval(extractFn('strategyApplyThsDdeFundFlow'));
   A(/const deadline = Date\.now\(\) \+ THS_DDE_OVERLAY_BUDGET_MS/.test(src), '静态:overlay 设总预算截止线,超预算板保持 zjjlr');
   const realFetchSource = extractFn('fetchThsBoardDdeAmount');
   A(!realFetchSource.includes('await getThsCookieV') && !realFetchSource.includes('Cookie:'), '静态:DDE realhead 直连,不依赖云端可能超时的 GitHub Cookie 脚本');
+
+  // ---- 4b. 候选覆盖:原涨幅前排不变，同时补入涨幅榜截断外的 DDE 强板 ----
+  const MIN_BOARD_GAIN_PCT = -0.5;
+  const STRATEGY_MAINLINE_LIVE_BOARD_POOL = 5;
+  eval(extractFn('strategyThsDdeCandidateUnion'));
+  const candidateRows = [
+    { plateId: 'gain-1', name: '涨幅一', gainPct: 5.2, ddeBigOrderAmount: 1e8 },
+    { plateId: 'gain-2', name: '涨幅二', gainPct: 4.8, ddeBigOrderAmount: 2e8 },
+    { plateId: 'gain-3', name: '涨幅三', gainPct: 4.2, ddeBigOrderAmount: 3e8 },
+    { plateId: 'data-center', name: '数据中心(AIDC)', gainPct: 2.01, ddeBigOrderAmount: 7.1e9 },
+    { plateId: 'weak-dde', name: '弱势大单', gainPct: -1.2, ddeBigOrderAmount: 9e9 },
+  ];
+  const candidateUnion = strategyThsDdeCandidateUnion(candidateRows, 3);
+  A(candidateUnion.slice(0, 3).map(row => row.plateId).join(',') === 'gain-1,gain-2,gain-3',
+    'DDE补选:原涨幅前排与顺序保持不变');
+  A(candidateUnion.some(row => row.plateId === 'data-center'),
+    'DDE补选:约2%但DDE居前的数据中心不会在成分股/L2验证前被裁掉');
+  A(!candidateUnion.some(row => row.plateId === 'weak-dde'),
+    'DDE补选:负涨幅板块不因绝对大单金额直接进入候选');
 
   // ---- 5. [Codex P1] 真实 fetchThsBoardDdeAmount:in-flight 去重 / 失败可重试(独立作用域,不与上方 stub 冲突) ----
   await (async function realFetchScope() {
