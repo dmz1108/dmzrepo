@@ -19927,6 +19927,27 @@ async function buildLimitUpIndex(day, apiKey, options = {}) {
   return value;
 }
 
+function isCurrentPreciseLimitUp(stock, realtimeGain, selectedDayLimitUpCodeSet, isCurrentSelectedDay) {
+  if (!isCurrentSelectedDay) return false;
+  const code = String(stock?.code || '');
+  if (selectedDayLimitUpCodeSet?.has(code)) return true;
+  const threshold = limitUpThreshold(code, stock?.name);
+  return Number.isFinite(realtimeGain) && realtimeGain >= threshold;
+}
+
+function appendCurrentLimitUpsToPreciseTop(topRows, rankedRows, selectedDayText) {
+  const merged = [...(topRows || [])];
+  const seen = new Set(merged.map(row => String(row?.code || '')));
+  for (const row of rankedRows || []) {
+    const code = String(row?.code || '');
+    const isSelectedDayLimitUp = (row?.days || []).map(compactDate).includes(selectedDayText);
+    if (!code || !isSelectedDayLimitUp || seen.has(code)) continue;
+    merged.push(row);
+    seen.add(code);
+  }
+  return merged;
+}
+
 async function buildPreciseZt10Result(day, plates, names, apiKey, options = {}) {
   const zsType = options.zsType || DEFAULT_ZS_TYPE;
   const limitUpIndex = await buildLimitUpIndex(day, apiKey, { force: !!options.forceIndex });
@@ -19940,7 +19961,6 @@ async function buildPreciseZt10Result(day, plates, names, apiKey, options = {}) 
   const selectedDayLimitUpCodeSet = isCurrentSelectedDay
     ? await getDisplayLimitUpCodeSet(day, apiKey).catch(() => new Set())
     : new Set();
-  const hasSelectedDayLimitUpSet = selectedDayLimitUpCodeSet.size > 0;
 
   const result = {};
   const usedDays = new Set();
@@ -19975,11 +19995,11 @@ async function buildPreciseZt10Result(day, plates, names, apiKey, options = {}) 
       const realtimeGain = Number.isFinite(realtime?.gain) ? realtime.gain : stock.todayGain;
       const dbHit = limitUpByCode.get(String(stock.code));
       const dbDays = (dbHit?.days || []).map(compactDate).filter(Boolean);
-      const threshold = limitUpThreshold(stock.code, stock.name);
-      const isRealtimeLimitUp = isCurrentSelectedDay && (
-        hasSelectedDayLimitUpSet
-          ? selectedDayLimitUpCodeSet.has(String(stock.code))
-          : Number.isFinite(realtimeGain) && realtimeGain >= threshold
+      const isRealtimeLimitUp = isCurrentPreciseLimitUp(
+        stock,
+        realtimeGain,
+        selectedDayLimitUpCodeSet,
+        isCurrentSelectedDay,
       );
       if (!dbDays.length && options.currentOnlyFallback && !isRealtimeLimitUp) return null;
       let days = mergeZtDays(dbDays, isRealtimeLimitUp ? [selectedDayText] : []);
@@ -20002,10 +20022,12 @@ async function buildPreciseZt10Result(day, plates, names, apiKey, options = {}) 
         days,
       };
     });
-    const topRows = rows
+    const rankedRows = rows
       .filter(Boolean)
-      .sort((a, b) => b.totalCount - a.totalCount || (b.todayGain || 0) - (a.todayGain || 0))
-      .slice(0, 10);
+      .sort((a, b) => b.totalCount - a.totalCount || (b.todayGain || 0) - (a.todayGain || 0));
+    // boards 仍以前 10 名开头，供“近 10 日涨停次数 Top10”原样消费；同时把未进
+    // Top10 的今日涨停股追加在后，供今日实时涨停榜逐股显示严格主因次数。
+    const topRows = appendCurrentLimitUpsToPreciseTop(rankedRows.slice(0, 10), rankedRows, selectedDayText);
     if (isEastmoneyZsType(zsType)) {
       await mapLimit(topRows, 5, async row => {
         const quote = await fetchEastmoneySingleStockQuote(row.code).catch(() => null);
