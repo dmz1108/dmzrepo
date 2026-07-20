@@ -21748,6 +21748,48 @@ async function getDayBoardsWithMembers(day, options = {}) {
   // 历史日在 strategyApplyThsDdeFundFlow 内部拒绝(realhead 是当前值,回填历史=数据穿越)。
   const strategyScopedZs = Array.isArray(options.zsTypes) && options.zsTypes.length
     && !options.zsTypes.map(Number).includes(7);
+  // [Codex 复核 PR#190 P1] 资金前排补水不能只活在"无快照"回退分支:生产常态下当日快照已
+  // 存在(bmap 非空、上面的实时回退整块跳过),涨幅榜外的 f66/DDE 前排板仍会缺席。
+  // 当日策略口径下,读到快照后仍显式拉实时榜做并集,把 bmap 缺的资金前排板合并进策略板池
+  // (只补内存板池,绝不回写看板快照文件);补进的板打 fundForward 标记,供补选通道与诊断识别。
+  const fundForwardEligible = strategyScopedZs && options.liveIfMissing && source === 'snapshot'
+    && requestedDay === isoFromCompactDate(chinaNowParts().day) && isChinaMarketTradingDay(requestedDay);
+  if (fundForwardEligible) {
+    const apiKey = await readSavedApiKey().catch(() => '');
+    if (apiKey) {
+      const knownPlateIds = new Set();
+      for (const entry of bmap.values()) {
+        for (const s of Object.values(entry.bySource || {})) {
+          const pid = String(s?.plateId || '').trim();
+          if (pid) knownPlateIds.add(`${Number(s.zsType)}:${pid}`);
+        }
+      }
+      await mapLimit(zsTypes.map(Number).filter(z => z === 6 || z === 5), 2, async z => {
+        try {
+          let hidden; try { hidden = await getPermanentHiddenSet(z); } catch { hidden = new Set(); }
+          const rankBoards = await fetchBoardRankingForSnapshot(String(z), apiKey, {
+            count: Number(options.liveRankCount || 0) || BOARD_RANK_FETCH_STEP,
+          });
+          const visibleBoards = rankBoards.filter(board => !hidden.has(String(board?.plateId || '')));
+          const boardPool = Number(options.boardPool || 0) || STRATEGY_MAINLINE_RISING_BOARD_LIMIT;
+          const candidates = z === Number(THS_ZS_TYPE)
+            ? await strategyPrepareThsLiveCandidates(visibleBoards, requestedDay, boardPool)
+            : strategyEastFundCandidateUnion(visibleBoards, boardPool);
+          const missing = candidates.filter(b => {
+            const pid = String(b?.plateId || '').trim();
+            return pid && !knownPlateIds.has(`${z}:${pid}`);
+          });
+          if (!missing.length) return;
+          const hydrated = await hydrateStrategyLiveBoardsForMembers(missing, apiKey, z, requestedDay);
+          await absorbPayload(hydrated, z, 'live');
+          for (const b of missing) {
+            const entry = bmap.get(String(b?.name || '').trim());
+            if (entry) entry.fundForward = true;
+          }
+        } catch (err) { strategyMainlineDiagNoteRead(`fund-forward zs${z} ${requestedDay}`, err); }
+      });
+    }
+  }
   if (strategyScopedZs && zsTypes.map(Number).includes(5)) {
     try { await strategyApplyThsDdeFundFlow([...bmap.values()], useDay); } catch (err) {
       strategyMainlineDiagNoteRead(`ths-dde overlay ${useDay}`, err);

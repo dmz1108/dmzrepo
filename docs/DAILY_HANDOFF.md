@@ -7876,3 +7876,18 @@ Notes for next agent:
 - 已知边界:若漂移后的家族连候选池都没进(无任何同族/共板候选),粘性仍无法恢复——
   按 #123 规范需要"从预测档案凭空复卡",本次未做,留给 Owner 决定是否要。
 - 明日盘中验收:观察东财候选池是否出现资金前排板;若"算力AI"类漂移再现,确认卡片保留。
+
+## 2026-07-20 - Claude - PR#190 Codex 复核 P1 修复(资金补水挂到快照命中路径)
+
+Changed:
+- [P1] 东财/同花顺资金前排补水此前只接在「无快照才执行」的实时回退块——生产常态
+  (当日快照已存在)完全不运行(Codex 云端核验:zs6 快照 7 块且无 BK1008/BK0579)。
+  新增 fundForwardEligible 补水块:当日策略口径 + source===snapshot 时显式拉实时榜做
+  并集,把 bmap 缺的资金前排板合并进内存板池(绝不回写快照文件);补入板打 fundForward 标记。
+- 集成测试 strategy-fund-forward-augment.test.js:贯穿真实 getDayBoardsWithMembers(仅stub IO),
+  预置非空 zs6 快照(无国资云/云计算)+实时榜含二者 → 板池含二者+标记;看板默认调用零变化;
+  历史日拒绝;不回写快照;流出板拒入。
+
+Files: kpl-stats-server.js / tests/strategy-fund-forward-augment.test.js / docs/DAILY_HANDOFF.md
+Validated: node --check;全仓 50 个测试文件全绿。
+Deployment: 未部署;随 PR#190 走。
