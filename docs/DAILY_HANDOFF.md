@@ -7700,3 +7700,28 @@ Deployment:
 
 Notes for next agent:
 - 今日实时同花顺资金列现在是 DDE 大单金额，不再是 `zjjlr`。若 DDE 源失败或跨日，页面显示缺失是预期保护行为，不应重新回退混用旧口径。
+
+## 2026-07-20 - Codex - 恢复今日实时主因次数可见性
+
+Changed:
+- 修复今日实时板块卡片展开后，股票名单元格继承 `display:flex` 并占满固定表格宽度，导致右侧主因次数与涨幅列被裁掉的问题。
+- 展开表格恢复标准 `table-cell` 布局，并为涨停榜、涨停次数和涨幅表设置稳定列宽。
+- 原缩写“主”改为明确的“主因”，悬停说明仍采用近 10 个交易日综合主因匹配次数口径。
+- 更新实时工作台 CSS 缓存版本，避免浏览器继续使用已缓存的旧布局。
+
+Files:
+- `Qi/vendor/realtime-workbench.css`
+- `kpl-dashboard_17_apple.html`
+- `tests/realtime-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 1440px 正式数据回放中，涨停榜首行三列宽度分别为 177.4 / 54.6 / 109.2px，股票、主因次数、今日涨幅均可见。
+- 390px 手机视口无横向溢出，三列宽度分别为 187.2 / 57.6 / 115.2px。
+- `realtime-workbench-ui`、`realtime-main-reason-count` 及仓库全部 47 套测试通过；`git diff --check` 通过。
+
+Deployment:
+- 本条提交时仅 GitHub 分支改动；尚未部署云端，未重启任何服务。
+
+Notes for next agent:
+- 发布时同步行情 HTML 与 `Qi/vendor/realtime-workbench.css` 即可；均为静态文件，不需要重启主服务。

@@ -743,8 +743,59 @@ body.view-dashboard .board-card.expanded tbody tr:last-child td {
 }
 
 body.view-dashboard .board-card.expanded .stock-name {
+  display: table-cell;
+  width: auto;
+  vertical-align: middle;
   color: var(--rt-text);
   font-weight: 650;
+}
+
+/* The legacy table cell uses display:flex. In the four-column realtime layout
+   that makes the first cell consume the fixed table width and clips the
+   numeric columns. Keep real table-cell sizing and reserve explicit space for
+   main-reason counts and gains. */
+body.view-dashboard .board-card.expanded .zt-list-table th:first-child,
+body.view-dashboard .board-card.expanded .zt-list-table td:first-child {
+  width: 52%;
+}
+
+body.view-dashboard .board-card.expanded .zt-list-table th:nth-child(2),
+body.view-dashboard .board-card.expanded .zt-list-table td:nth-child(2) {
+  width: 16%;
+}
+
+body.view-dashboard .board-card.expanded .zt-list-table th:last-child,
+body.view-dashboard .board-card.expanded .zt-list-table td:last-child {
+  width: 32%;
+}
+
+body.view-dashboard .board-card.expanded .zt-count-table th:first-child,
+body.view-dashboard .board-card.expanded .zt-count-table td:first-child {
+  width: 44%;
+}
+
+body.view-dashboard .board-card.expanded .zt-count-table th:nth-child(2),
+body.view-dashboard .board-card.expanded .zt-count-table td:nth-child(2),
+body.view-dashboard .board-card.expanded .zt-count-table th:nth-child(3),
+body.view-dashboard .board-card.expanded .zt-count-table td:nth-child(3) {
+  width: 13%;
+}
+
+body.view-dashboard .board-card.expanded .zt-count-table th:last-child,
+body.view-dashboard .board-card.expanded .zt-count-table td:last-child {
+  width: 30%;
+}
+
+body.view-dashboard .board-card.expanded .gain-table th:first-child,
+body.view-dashboard .board-card.expanded .gain-table td:first-child {
+  width: 44%;
+}
+
+body.view-dashboard .board-card.expanded .gain-table th:nth-child(2),
+body.view-dashboard .board-card.expanded .gain-table td:nth-child(2),
+body.view-dashboard .board-card.expanded .gain-table th:nth-child(3),
+body.view-dashboard .board-card.expanded .gain-table td:nth-child(3) {
+  width: 28%;
 }
 
 body.view-dashboard .board-card.expanded .qi-sum-line {

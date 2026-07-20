@@ -9894,7 +9894,7 @@
 </style>
 <link href="/vendor/strategy-workbench.css?v=20260718b" rel="stylesheet">
 <link href="/vendor/review-workbench.css?v=20260718d" rel="stylesheet">
-<link href="/vendor/realtime-workbench.css?v=20260718" rel="stylesheet">
+<link href="/vendor/realtime-workbench.css?v=20260720" rel="stylesheet">
 </head>
 <body>
 
@@ -15055,7 +15055,7 @@ function renderZtListTable(title, rows) {
   return `<div class="section">
     <div class="section-header"><b>${title}</b></div>
     <table class="zt-list-table">
-      <thead><tr><th>股票</th><th class="right">主</th><th class="right">今日涨幅</th></tr></thead>
+      <thead><tr><th>股票</th><th class="right" title="近10个交易日内，综合主因明确匹配当前板块的涨停次数">主因</th><th class="right">今日涨幅</th></tr></thead>
       <tbody>${trs}</tbody>
     </table>
   </div>`;
@@ -15076,7 +15076,7 @@ function renderZtCountTable(title, rows) {
       <thead><tr>
         <th>股票</th>
         <th class="right">总</th>
-        <th class="right">主</th>
+        <th class="right" title="近10个交易日内，综合主因明确匹配当前板块的涨停次数">主因</th>
         <th class="right">今日涨幅</th>
       </tr></thead>
       <tbody>${trs}</tbody>
