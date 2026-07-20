@@ -7725,3 +7725,25 @@ Deployment:
 
 Notes for next agent:
 - 发布时同步行情 HTML 与 `Qi/vendor/realtime-workbench.css` 即可；均为静态文件，不需要重启主服务。
+
+## 2026-07-20 - Codex - 发布今日实时主因列布局修复
+
+Changed:
+- 将 PR #184（`d7e0b65`）中的行情 HTML 与实时工作台 CSS 发布到云端。
+- 发布前保留原文件回退备份，并同步追加两份云端操作日志。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/realtime-workbench.css`
+- 仅云端：两份运维日志与回退备份
+
+Validated:
+- 云端文件 SHA-256 与 `main` 一致：HTML `4dcb91ca981df62726b84ab244429295b0d9db6612e5720fbbc9d585dcacd9aa`，CSS `feefca8a24f8281cee326330d6f605cb8c7784f655f5c4673bef494908213126`。
+- 公网 `/health` 返回 `ok=true`；`/kpl` 已引用 `realtime-workbench.css?v=20260720`，并包含完整“主因”表头及指标说明。
+
+Deployment:
+- 已部署云端；仅静态文件，无服务重启。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\manual-realtime-main-reason-20260720-034437Z`。
+
+Notes for next agent:
+- 今日实时板块卡片仍按现有交互点击展开；展开后股票、主因次数、今日涨幅三列应同时可见。不要重新给 `.stock-name` 设置 `display:flex`。
