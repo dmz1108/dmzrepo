@@ -19948,6 +19948,18 @@ function appendCurrentLimitUpsToPreciseTop(topRows, rankedRows, selectedDayText)
   return merged;
 }
 
+function keepPreciseTopBeforeCurrentExtras(rows, originalTopCodes) {
+  const compare = (a, b) => b.totalCount - a.totalCount
+    || b.ztCount - a.ztCount
+    || (b.todayGain || 0) - (a.todayGain || 0);
+  const top = [];
+  const extras = [];
+  for (const row of rows || []) {
+    (originalTopCodes.has(String(row?.code || '')) ? top : extras).push(row);
+  }
+  return [...top.sort(compare), ...extras.sort(compare)];
+}
+
 async function buildPreciseZt10Result(day, plates, names, apiKey, options = {}) {
   const zsType = options.zsType || DEFAULT_ZS_TYPE;
   const limitUpIndex = await buildLimitUpIndex(day, apiKey, { force: !!options.forceIndex });
@@ -20027,7 +20039,9 @@ async function buildPreciseZt10Result(day, plates, names, apiKey, options = {}) 
       .sort((a, b) => b.totalCount - a.totalCount || (b.todayGain || 0) - (a.todayGain || 0));
     // boards 仍以前 10 名开头，供“近 10 日涨停次数 Top10”原样消费；同时把未进
     // Top10 的今日涨停股追加在后，供今日实时涨停榜逐股显示严格主因次数。
-    const topRows = appendCurrentLimitUpsToPreciseTop(rankedRows.slice(0, 10), rankedRows, selectedDayText);
+    const rankingTopRows = rankedRows.slice(0, 10);
+    const rankingTopCodes = new Set(rankingTopRows.map(row => String(row.code)));
+    const topRows = appendCurrentLimitUpsToPreciseTop(rankingTopRows, rankedRows, selectedDayText);
     if (isEastmoneyZsType(zsType)) {
       await mapLimit(topRows, 5, async row => {
         const quote = await fetchEastmoneySingleStockQuote(row.code).catch(() => null);
@@ -20040,8 +20054,7 @@ async function buildPreciseZt10Result(day, plates, names, apiKey, options = {}) 
       row.ztCount = await calcMainZtCount(row.code, plateId, names[boardIndex], row.days, apiKey, zsType);
       return row;
     });
-    result[String(plateId)] = topRows
-      .sort((a, b) => b.totalCount - a.totalCount || b.ztCount - a.ztCount || (b.todayGain || 0) - (a.todayGain || 0));
+    result[String(plateId)] = keepPreciseTopBeforeCurrentExtras(topRows, rankingTopCodes);
     if (names[boardIndex]) result[names[boardIndex]] = result[String(plateId)];
   });
 

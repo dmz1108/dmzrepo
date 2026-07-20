@@ -28,6 +28,7 @@ eval(extractFn('limitUpThreshold'));
 eval(extractFn('compactDate'));
 eval(extractFn('isCurrentPreciseLimitUp'));
 eval(extractFn('appendCurrentLimitUpsToPreciseTop'));
+eval(extractFn('keepPreciseTopBeforeCurrentExtras'));
 
 const selected = new Set(['600001']);
 assert.strictEqual(
@@ -60,6 +61,15 @@ const merged = appendCurrentLimitUpsToPreciseTop(rankedRows.slice(0, 10), ranked
 assert.strictEqual(merged.length, 11, 'Top10 之外的今日涨停股必须追加供主因次数映射');
 assert.deepStrictEqual(merged.slice(0, 10).map(row => row.code), rankedRows.slice(0, 10).map(row => row.code), '原 Top10 顺序必须保持');
 assert.strictEqual(merged[10].code, rankedRows[11].code, '追加项必须是今日涨停股');
+
+merged[10].ztCount = 99;
+const finalRows = keepPreciseTopBeforeCurrentExtras(merged, new Set(rankedRows.slice(0, 10).map(row => row.code)));
+assert.deepStrictEqual(
+  finalRows.slice(0, 10).map(row => row.code).sort(),
+  rankedRows.slice(0, 10).map(row => row.code).sort(),
+  '今日追加项即使主因次数更高，也不能改变原 Top10 成员',
+);
+assert.strictEqual(finalRows[10].code, rankedRows[11].code, '今日追加项必须保留在 Top10 之后供涨停榜映射');
 
 const duplicate = appendCurrentLimitUpsToPreciseTop(
   [{ code: '600001', days: ['20260720'] }],
