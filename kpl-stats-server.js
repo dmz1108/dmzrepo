@@ -22854,13 +22854,19 @@ async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day, options
     )
     .slice(0, STRATEGY_MAINLINE_RISING_BOARD_LIMIT);
   for (const b of primary) { if (b) b.scanChannel = 'primary'; }
-  // 补选通道(会签约束2/3):只有真盘中榜(realtimeSource='live')可补选,快照不得伪装成盘中证据;
-  // 每个补选板块记录进入原因(净流入/涨幅/涨停数/榜单位置),观测状态随响应输出。
+  // 补选通道(会签约束2/3):只有真盘中数据可补选,快照不得伪装成盘中证据。
+  // realtimeSource='live':全量 list 参与(原行为不变)。
+  // realtimeSource='snapshot':唯有 fundForward===true 的板可参与——它们是快照命中后
+  // getDayBoardsWithMembers 当日显式实时拉榜合并的资金前排,本身就是真盘中数据
+  // (PR#190 Codex 二审:此前 fund-forward 板因无 scanChannel 在正式 seeds 前被过滤删除)。
   const realtimeSource = String(options.realtimeSource || '');
+  const supplementPool = realtimeSource === 'live'
+    ? list
+    : list.filter(b => b && b.fundForward === true);
   const supplements = [];
-  if (STRATEGY_MAINLINE_SUPPLEMENT_BOARDS > 0 && realtimeSource === 'live') {
+  if (STRATEGY_MAINLINE_SUPPLEMENT_BOARDS > 0 && supplementPool.length) {
     const chosen = new Set(primary.map(b => String(b?.plateId || '')));
-    const ranked = list.slice().sort((a, b) =>
+    const ranked = supplementPool.slice().sort((a, b) =>
       (Number(b?.netInflow) || 0) - (Number(a?.netInflow) || 0) ||
       (Math.max(0, Number(b?.gainPct) || 0)) - (Math.max(0, Number(a?.gainPct) || 0)));
     for (const b of ranked) {
@@ -22872,7 +22878,10 @@ async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day, options
       if (netInflow <= 0 && gainPct <= 0) continue;   // 毫无实时强度的板块不补
       chosen.add(pid);
       b.scanChannel = 'supplement';
-      b.supplementBasis = { netInflow, gainPct, zt: Number(b?.zt) || 0, liveRankIndex: list.indexOf(b) + 1 };
+      b.supplementBasis = {
+        netInflow, gainPct, zt: Number(b?.zt) || 0, liveRankIndex: list.indexOf(b) + 1,
+        ...(b.fundForward === true ? { fundForward: true } : {}),
+      };
       supplements.push(b);
     }
   }
@@ -22881,7 +22890,10 @@ async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day, options
     strategyMainlineSupplementState = {
       day: String(day || ''),
       at: new Date().toISOString(),
-      realtimeSource,
+      // 如实标注数据形态:快照路径上由 fund-forward 板补选时不冒充纯 live(Codex 二审)。
+      realtimeSource: realtimeSource === 'live'
+        ? 'live'
+        : (supplements.some(b => b?.fundForward === true) ? 'snapshot+fund-forward' : realtimeSource),
       enabled: STRATEGY_MAINLINE_SUPPLEMENT_BOARDS > 0,
       limit: STRATEGY_MAINLINE_SUPPLEMENT_BOARDS,
       // picked 即"若无补选会漏掉的板块"清单(它们都不在主通道 top-5 里)

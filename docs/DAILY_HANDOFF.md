@@ -7891,3 +7891,17 @@ Changed:
 Files: kpl-stats-server.js / tests/strategy-fund-forward-augment.test.js / docs/DAILY_HANDOFF.md
 Validated: node --check;全仓 50 个测试文件全绿。
 Deployment: 未部署;随 PR#190 走。
+
+## 2026-07-20 - Claude - PR#190 Codex 二审 P1 修复(fund-forward 板贯通补选通道)
+
+Changed:
+- [P1] fund-forward 板此前进了中间板池但无 scanChannel,在正式构建 filter(b=>b.scanChannel)
+  处被全部删除(Codex 二审)。修复:enrich 补选池改为 live→全量 / snapshot→仅 fundForward 板
+  (它们本就是当日真实时拉榜数据,普通快照板仍不得伪装);命中板 scanChannel='supplement',
+  supplementBasis 带 fundForward 标;补选观测状态如实标 snapshot+fund-forward。
+- 集成测试延伸到真实 enrich + 正式 scanChannel 过滤模拟:fund-forward 板存活为 supplement、
+  主通道快照前5不变、普通快照板仍被拦、live 路径零回归、状态如实。
+
+Files: kpl-stats-server.js / tests/strategy-fund-forward-augment.test.js / docs/DAILY_HANDOFF.md
+Validated: node --check;全仓 50 个测试文件全绿(专项 17 断言)。
+Deployment: 未部署;随 PR#190。

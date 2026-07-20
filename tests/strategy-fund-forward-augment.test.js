@@ -77,6 +77,17 @@ eval(extractFn('isBoardGainAllowed'));
 eval(extractFn('strategyBoardFundFlowForSource'));
 eval(extractFn('strategyEastFundCandidateUnion'));
 eval(extractFn('getDayBoardsWithMembers'));
+// —— 真实 enrich(补选通道)所需依赖:仅 stub 个股抓取 IO,通道选择逻辑走真实代码 ——
+const STRATEGY_MAINLINE_SUPPLEMENT_BOARDS = 3;
+const STRATEGY_MAINLINE_BIG_GAIN_PCT = 5;
+const STRATEGY_MAINLINE_RISING_FETCH_TIMEOUT_MS = 1200;
+let strategyMainlineSupplementState = null;
+const getStrategyBoardRealtimeStocks = async () => [];
+const strategyMainlineWithTimeout = async (p) => p;
+const strategyMainlineNormalizeRisingStock = () => null;
+const strategyMainlineIsNearLimitStock = () => false;
+const strategyMainlineBoardBreadth = () => null;
+eval(extractFn('strategyMainlineEnrichBoardsWithRisingStocks'));
 
 (async () => {
   // ---- 1. 生产常态复现:快照非空,资金前排板仍被合并进策略板池 ----
@@ -94,6 +105,37 @@ eval(extractFn('getDayBoardsWithMembers'));
   A(!names.includes('流出板'), 'f66 净流出板不入资金补选(带符号语义)');
   A(hydrated.length === 2, '仅对缺失的 2 块做成分补水(不重复拉快照已有板)');
   A(fsWrites.length === 0, '绝不回写快照文件(只补内存板池)');
+
+  // ---- 1b. [Codex 二审] 贯穿真实 enrich 与正式 scanChannel 过滤:补进的板必须活到 seeds ----
+  const enriched = await strategyMainlineEnrichBoardsWithRisingStocks(out.boards, '2026-07-20', {
+    primaryPool: 5, realtimeSource: out.source, fullWait: true,
+  });
+  const surviving = enriched.filter(b => b && b.scanChannel);   // 正式构建的过滤行为原样模拟
+  const survNames = surviving.map(b => b.name);
+  A(survNames.includes('国资云概念') && survNames.includes('云计算'),
+    '正式过滤后 fund-forward 板存活——不再在 seeds 前被删除(Codex 二审核心场景)');
+  const gzyEnriched = surviving.find(b => b.name === '国资云概念');
+  A(gzyEnriched.scanChannel === 'supplement' && gzyEnriched.supplementBasis?.fundForward === true,
+    'fund-forward 板走补选通道入选,supplementBasis 如实带 fundForward 标记');
+  A([1, 2, 3, 4, 5].every(i => surviving.some(b => b.name === `快照板${i}` && b.scanChannel === 'primary')),
+    '主通道仍是快照涨幅前5(primary),行为与补选前逐一一致');
+  A(!survNames.includes('快照板6') && !survNames.includes('快照板7'),
+    '普通快照板(非 fundForward)不得借道补选伪装盘中证据——会签约束保持');
+  A(strategyMainlineSupplementState.realtimeSource === 'snapshot+fund-forward',
+    '补选观测状态如实标 snapshot+fund-forward,不冒充纯 live');
+
+  // 1c. 纯 live 路径回归:全量 list 照旧参与补选(原行为不变)
+  strategyMainlineSupplementState = null;
+  const liveBoards = [
+    { name: 'L1', plateId: 'L1', zsType: 6, zt: 2, gainPct: 4, netInflow: 6e8 },
+    { name: 'L2', plateId: 'L2', zsType: 6, zt: 0, gainPct: 1, netInflow: 9e8 },
+  ];
+  await strategyMainlineEnrichBoardsWithRisingStocks(liveBoards, '2026-07-20', {
+    primaryPool: 1, realtimeSource: 'live', fullWait: true,
+  });
+  A(liveBoards[0].scanChannel === 'primary' && liveBoards[1].scanChannel === 'supplement'
+    && strategyMainlineSupplementState.realtimeSource === 'live',
+    'live 路径:普通实时板照旧可补选,观测状态仍为 live(零回归)');
 
   // ---- 2. 看板/复盘默认三源调用:不触发补水(不改非策略页行为) ----
   rankFetches = 0;
