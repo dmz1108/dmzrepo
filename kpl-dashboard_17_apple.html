@@ -11176,6 +11176,7 @@ function readPreviewCache(day = state.date, zsType = state.zsType) {
     const item = map[previewCacheKey(zsType, day)];
     if (!item?.boards?.length) return null;
     if (Date.now() - Number(item.savedAt || 0) > PREVIEW_CACHE_MAX_AGE_MS) return null;
+    if (String(zsType) === '5' && item.boards.some(board => board.netInflowMetric !== 'ths-dde-big-order-amount')) return null;
     return item;
   } catch {
     return null;
@@ -11202,6 +11203,12 @@ function writePreviewCache(boards = state.boards, day = state.date, zsType = sta
         superLargeNetInflowRatio: board.superLargeNetInflowRatio,
         largeNetInflow: board.largeNetInflow,
         largeNetInflowRatio: board.largeNetInflowRatio,
+        netInflowMetric: board.netInflowMetric,
+        netInflowSourceDay: board.netInflowSourceDay,
+        netInflowAsOf: board.netInflowAsOf,
+        netInflowStale: board.netInflowStale,
+        netInflowState: board.netInflowState,
+        netInflowZjjlr: board.netInflowZjjlr,
         ztCount: board.ztCount,
       })),
     };
@@ -11238,11 +11245,17 @@ function rankingRowsToBoards(rankingList) {
     gainPct: parseFloat(row[3]),
     turnover: row[4],
     amount: row[5],
-    netInflow: parseFloat(row[6]),
+    netInflow: rankingOptionalNumber(row[6]),
     superLargeNetInflow: rankingOptionalNumber(row[7]),
     superLargeNetInflowRatio: rankingOptionalNumber(row[8]),
     largeNetInflow: rankingOptionalNumber(row[9]),
     largeNetInflowRatio: rankingOptionalNumber(row[10]),
+    netInflowMetric: String(row[11] || ''),
+    netInflowSourceDay: String(row[12] || ''),
+    netInflowAsOf: String(row[13] || ''),
+    netInflowStale: row[14] === true,
+    netInflowState: String(row[15] || ''),
+    netInflowZjjlr: rankingOptionalNumber(row[16]),
   }));
 }
 
@@ -11595,7 +11608,7 @@ async function fetchBoardRanking(zsType, count = BOARD_COUNT) {
     };
   }
   if (isThsType(zsType)) {
-    const res = await fetch(`${KPL_STATS_BASE}/api/ths-concepts/catalog?_=${Date.now()}`, { cache: 'no-store' });
+    const res = await fetch(`${KPL_STATS_BASE}/api/ths-concepts/catalog?fund_metric=dde&limit=${encodeURIComponent(count)}&_=${Date.now()}`, { cache: 'no-store' });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       throw new Error(`同花顺概念缓存读取失败 ${res.status}: ${text.substring(0, 160)}`);
@@ -11610,6 +11623,16 @@ async function fetchBoardRanking(zsType, count = BOARD_COUNT) {
         null,
         null,
         board.netInflow,
+        null,
+        null,
+        null,
+        null,
+        board.netInflowMetric,
+        board.netInflowSourceDay,
+        board.netInflowAsOf,
+        board.netInflowStale,
+        board.netInflowState,
+        board.netInflowZjjlr,
       ])),
     };
   }
@@ -14426,6 +14449,10 @@ function boardCardHTML(b, pending = false) {
   const deleteControl = canManageDashboardCards()
     ? `<button class="card-delete" type="button" title="&#21024;&#38500;&#21345;&#29255;" aria-label="&#21024;&#38500;${escapeHTML(b.name)}" data-plate-id="${escapeHTML(b.plateId)}" data-board-name="${escapeHTML(b.name)}" onclick="event.stopPropagation(); deleteBoardCard(this)">&times;</button>`
     : '';
+  const fundFlowLabel = b.netInflowMetric === 'ths-dde-big-order-amount' ? 'DDE大单' : '净流入';
+  const fundFlowTitle = escapeHTML(b.netInflowMetric === 'ths-dde-big-order-amount'
+    ? `同花顺 DDE 大单金额${b.netInflowAsOf ? ` · ${b.netInflowAsOf}` : ''}`
+    : '板块资金净流入');
   return `
     <div class="board-card collapsed${pending ? ' board-card-pending' : ''}" id="card-${b.plateId}">
       <div class="board-header" role="button" tabindex="0" aria-expanded="false" ${pending ? 'title="正在筛选符合条件的板块"' : `onclick="toggleBoardCard('${escapeHTML(b.plateId)}')" onkeydown="handleCardHeaderKey(event, '${escapeHTML(b.plateId)}')"`}>
@@ -14441,8 +14468,8 @@ ${managementControls}
             <span class="board-gain ${gainClass(b.gainPct)}">${fmtPct(b.gainPct)}</span>
           </span>
           <span class="board-market-row">
-            <span class="market-label">&#20928;&#27969;&#20837;</span>
-            <span class="board-net-inline ${gainClass(b.netInflow)}">${fmtYiHTML(b.netInflow)}</span>
+            <span class="market-label">${fundFlowLabel}</span>
+            <span class="board-net-inline ${gainClass(b.netInflow)}" title="${fundFlowTitle}">${fmtYiHTML(b.netInflow)}</span>
           </span>
         </span>
         ${deleteControl}
@@ -16304,11 +16331,17 @@ async function loadBoards() {
         gainPct: parseFloat(row[3]),
         turnover: row[4],
         amount: row[5],
-        netInflow: parseFloat(row[6]),
+        netInflow: rankingOptionalNumber(row[6]),
         superLargeNetInflow: rankingOptionalNumber(row[7]),
         superLargeNetInflowRatio: rankingOptionalNumber(row[8]),
         largeNetInflow: rankingOptionalNumber(row[9]),
         largeNetInflowRatio: rankingOptionalNumber(row[10]),
+        netInflowMetric: String(row[11] || ''),
+        netInflowSourceDay: String(row[12] || ''),
+        netInflowAsOf: String(row[13] || ''),
+        netInflowStale: row[14] === true,
+        netInflowState: String(row[15] || ''),
+        netInflowZjjlr: rankingOptionalNumber(row[16]),
         ztCount: cachedBoardMap.get(String(row[0]))?.ztCount ?? '--',
       }));
       const lastLoadedGain = rankingAll.length ? Number(rankingAll[rankingAll.length - 1].gainPct) : null;
