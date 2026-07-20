@@ -7,7 +7,7 @@ const html = fs.readFileSync(path.join(root, 'kpl-dashboard_17_apple.html'), 'ut
 const server = fs.readFileSync(path.join(root, 'kpl-stats-server.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'Qi/vendor/realtime-workbench.css'), 'utf8');
 
-assert(html.includes('<link href="/vendor/realtime-workbench.css?v=20260718" rel="stylesheet">'));
+assert(html.includes('<link href="/vendor/realtime-workbench.css?v=20260720" rel="stylesheet">'));
 assert(html.includes("document.body.classList.toggle('view-dashboard', nextPage === 'dashboard')"));
 assert(html.includes('class="board-grid-shell"'));
 assert(html.includes('class="data-health-shell"'));
@@ -31,5 +31,11 @@ for (const selector of [
 assert(css.includes('@media (max-width: 760px)'));
 assert(!/body\.view-dashboard\s+\.board-grid\s*\{[^}]*display\s*:\s*none/s.test(css));
 assert(!/body\.view-dashboard\s+\.board-card\.expanded\s+\.card-body\s*\{[^}]*display\s*:\s*none/s.test(css));
+assert(
+  /body\.view-dashboard \.board-card\.expanded \.stock-name\s*\{[^}]*display:\s*table-cell/s.test(css),
+  'expanded realtime tables must keep stock names as table cells so numeric columns remain visible',
+);
+assert(css.includes('body.view-dashboard .board-card.expanded .zt-list-table th:nth-child(2)'));
+assert(html.includes('>主因</th>'));
 
 console.log('realtime workbench UI checks passed');
