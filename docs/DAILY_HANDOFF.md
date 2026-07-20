@@ -7990,3 +7990,16 @@ Deployment:
 Notes for next agent:
 - 2026-07-20 TGB 已完整完成，不要再按旧的 52/54 中间判断重复阻断或覆盖正式文件；当日权威复盘口径为 53 只，包含大唐发电、掌阅科技，不包含未封死的赤天化。
 - 最终交接通过独立 `codex/tgb-hunan-20260720-handoff` PR 留存；后续只需按正常次日 SOP 继续，不需要为本日数据重启服务。
+## 2026-07-20 - Claude - 527198 无方向语义写入数据源合同(待三方会签)
+
+Changed:
+- MARKET_DATA_SOURCE_CONTRACTS.md THS 节新增 Directionality 定论段:527198 为无方向量级值,
+  绝不当带符号净流向解读;附 7-17 三源交叉证据(国资云 客户端-5亿/zjjlr-3.15亿/板跌 vs 527198+5.54亿,
+  智慧政务同型)、校准盲区教训(样本必须含净流出板)、公开字段无法复原客户端带符号列的结论、
+  以及接受该口径的后果(同花顺侧5亿腿实为活跃度门槛,方向靠涨停腿+L2明星闸兜底)。
+- 三个待会签问题列在 PR 描述,请 Codex 逐条表态:①无方向口径是否终局;②是否加 zjjlr 符号的
+  卡面方向警示(仅展示,不混口径);③带符号源寻源(方案H/付费)关闭还是搁置。
+
+Files: docs/ops/MARKET_DATA_SOURCE_CONTRACTS.md / docs/DAILY_HANDOFF.md
+Validated: docs-only,node --check 不适用;全仓测试不受影响。
+Deployment: 无(文档)。

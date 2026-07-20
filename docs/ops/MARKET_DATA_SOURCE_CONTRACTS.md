@@ -42,6 +42,14 @@ Strategy-page and today's realtime-card THS money metric (Owner decisions 2026-0
 - Failure policy differs by consumer: the established strategy chain keeps its tagged `zjjlr` fallback for continuity; 今日实时 uses strict DDE semantics, so a failed, undated, or cross-day DDE value is displayed as missing instead of silently substituting `zjjlr` into the same column.
 - 2026-07-20 live calibration: 国资云 raw `zjjlr` was -48.61亿 while field `527198` was +7.19亿; 煤炭概念 was 26.02亿 vs 13.49亿. This confirmed that the old realtime card was displaying a different metric, not suffering a unit-conversion error.
 
+**Directionality (definitive, 2026-07-17 three-way calibration): field `527198` is an UNSIGNED magnitude. It never goes negative and must not be read as a signed net flow.**
+
+- Evidence: 2026-07-17 intraday, 国资云 showed desktop-client DDE **−5亿**, `zjjlr` **−3.15亿**, and a falling board price — while `527198` read **+5.54亿**; 智慧政务 showed client **−13亿** vs `527198` **+13.17亿**. Three independent signals agree the boards were bleeding; `527198` stayed positive. Stock-level `527198` was also never observed negative (including 烽火通信 at −6.8% on heavy volume).
+- The 2026-07-16 close calibration matched the app exactly only because both sample boards happened to be net-inflow that day. **Calibration samples for any money metric must include net-outflow boards** — this was the blind spot.
+- No public field reproduces the signed desktop-client DDE column: the `264648`-based formulas fit some boards and are falsified by others (`|264648|` exceeded 100% on 手机游戏 2026-07-17), and the buy/sell pairs do not reconcile. The signed value lives in the login-gated L2 channel only.
+- Consequences accepted with this metric (Owner decision, APP-aligned): the THS-side "net-inflow" column on strategy/realtime cards is an **activity magnitude**, not a direction; the THS-side 5亿 auto-scan leg is effectively an activity threshold and cannot reject net-outflow boards by itself — the 涨停≥2 leg and the L2 star gate are the remaining direction-sensitive filters. `zjjlr` (signed) remains available in `netInflowZjjlr` for audit and for any future direction-aware display, but the two metrics are never mixed in one column.
+- Pending co-sign items (tracked in the introducing PR): whether this unsigned reading is final for gating, whether a direction warning derived from `zjjlr` sign should appear on cards (display-only, no metric mixing), and whether the search for a signed board-level DDE source (self-aggregated constituents or paid iFinD/L2) is closed or parked.
+
 For a strategy family that maps to several overlapping THS concepts, use one representative board value and expose its identity. Current metadata is:
 
 ```text
