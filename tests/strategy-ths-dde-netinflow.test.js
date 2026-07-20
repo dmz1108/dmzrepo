@@ -18,12 +18,16 @@ function extractFn(name) {
 const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.exitCode = 1; } else console.log('ok: ' + msg); };
 
 const numOrNull = v => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+const THS_DDE_AMOUNT_FIELD = '527198';
+eval(extractFn('thsParseRealheadQuote'));
 eval(extractFn('thsParseRealheadField'));
 eval(extractFn('strategyBoardFundFlowForSource'));
 
 // ---- 1. realhead 载荷解析:527198 提取(真实载荷形态) ----
 const sample = 'quotebridge_v6_realhead_bk_885977_defer_last({"items":{"10":"1403.886","527198":"1041518380.000","19":"49883399000.000"},"other":1})';
 A(thsParseRealheadField(sample, '527198') === 1041518380, '解析:从 quotebridge 载荷提取 527198=10.415亿(元)');
+A(thsParseRealheadQuote('cb({"items":{"527198":"719048250","time":"2026-07-20 10:28:00 北京时间","name":"国资云"}})', '527198').sourceDay === '2026-07-20',
+  '解析:从 realhead 源时间提取 sourceDay,供跨日污染校验');
 A(thsParseRealheadField(sample, '999999') === null, '解析:不存在的字段返回 null');
 A(thsParseRealheadField('garbage', '527198') === null, '解析:非法载荷返回 null(不抛错)');
 
@@ -46,8 +50,19 @@ const DDE = { '885977': 10.415e8, '885956': 20.375e8 };   // indexCode -> DDE;'8
 const thsDdeIndexCodeMap = async () => new Map([['308874', '885977'], ['308606', '885956'], ['308999', '885999']]);
 let ddeFetchImpl = async (idx) => { if (idx === '885999') throw new Error('503'); return DDE[idx] ?? null; };
 const fetchThsBoardDdeAmount = (idx) => ddeFetchImpl(idx);
+let ddeQuoteSourceDay = '2026-07-16';
+const fetchThsBoardDdeQuote = async (idx) => {
+  const value = await ddeFetchImpl(idx);
+  return value == null ? null : {
+    value,
+    sourceDay: ddeQuoteSourceDay,
+    asOf: `${ddeQuoteSourceDay} 10:30:00 北京时间`,
+    sourceName: idx,
+  };
+};
 const THS_DDE_OVERLAY_BUDGET_MS = 250;   // 测试用小预算(生产 8000ms),验证预算机制本身
 eval(extractFn('thsDdeRaceBudget'));
+eval(extractFn('applyThsDdeFundFlowToRealtimeBoards'));
 eval(extractFn('strategyApplyThsDdeFundFlow'));
 
 (async () => {
@@ -73,7 +88,24 @@ eval(extractFn('strategyApplyThsDdeFundFlow'));
   await strategyApplyThsDdeFundFlow([bHist], '2026-07-15');
   A(bHist.netInflow === 5e8 && bHist.ddeBigOrderAmount === undefined, '历史日:不覆盖(拒绝数据穿越)');
 
-  // 3d. [Codex P1] 悬挂请求:overlay 必须在总预算内回退,绝不卡住策略构建
+  // 3d. 今日实时严格口径:当前日用 DDE；跨日/失败置空，绝不把 zjjlr 混回同一列。
+  const rtOk = { plateId: '308874', thsPlateCode: '885977', netInflow: -48.61e8 };
+  const rtSummary = await applyThsDdeFundFlowToRealtimeBoards([rtOk], '2026-07-16');
+  A(rtSummary.applied === 1 && rtOk.netInflow === 10.415e8 && rtOk.netInflowZjjlr === -48.61e8,
+    '今日实时:展示当前日 DDE,原 zjjlr 仅留审计字段');
+  ddeQuoteSourceDay = '2026-07-15';
+  const rtStale = { plateId: '308874', thsPlateCode: '885977', netInflow: 9e8 };
+  const staleSummary = await applyThsDdeFundFlowToRealtimeBoards([rtStale], '2026-07-16');
+  A(staleSummary.stale === 1 && rtStale.netInflow === null && rtStale.netInflowState === 'stale-source-day',
+    '今日实时:跨日 DDE 置空并标 stale,不让昨日值冒充今日');
+  const rtNoCurrentCache = { plateId: '308874', thsPlateCode: '885977', netInflow: 6e8 };
+  await applyThsDdeFundFlowToRealtimeBoards([rtNoCurrentCache], '2026-07-15');
+  A(rtNoCurrentCache.netInflow === null && rtNoCurrentCache.netInflowZjjlr === 6e8
+    && rtNoCurrentCache.netInflowState === 'not-current-day',
+    '今日实时:只有旧目录/旧缓存时同样置空,不展示旧 zjjlr');
+  ddeQuoteSourceDay = '2026-07-16';
+
+  // 3e. [Codex P1] 悬挂请求:overlay 必须在总预算内回退,绝不卡住策略构建
   ddeFetchImpl = () => new Promise(() => {});   // 永不 resolve(模拟 realhead 悬挂)
   const bHang = { zsType: 5, plateId: '308874', netInflow: 1.5e8, netInflowMetric: 'ths-net-inflow' };
   const t0 = Date.now();
@@ -86,10 +118,13 @@ eval(extractFn('strategyApplyThsDdeFundFlow'));
     '悬挂:该板按已定规则保持 zjjlr 与原 metric(不冒充、不清零)');
   ddeFetchImpl = async (idx) => { if (idx === '885999') throw new Error('503'); return DDE[idx] ?? null; };
 
-  // ---- 4. 静态:接线只在策略口径(显式 zsTypes 且不含 7)且含同花顺时生效;失败可观测 ----
+  // ---- 4. 静态:策略接线仍只在显式策略口径生效；今日实时使用独立严格覆盖函数 ----
   A(/strategyScopedZs = Array\.isArray\(options\.zsTypes\) && options\.zsTypes\.length\s*&& !options\.zsTypes\.map\(Number\)\.includes\(7\)/.test(src),
-    '静态:仅显式策略口径(不含 KPL)触发覆盖——复盘/看板默认三源调用不受影响');
+    '静态:策略覆盖仍仅由显式策略口径(不含 KPL)触发');
   A(/if \(strategyScopedZs && zsTypes\.map\(Number\)\.includes\(5\)\)/.test(src), '静态:仅含同花顺来源时触发');
+  A(/async function applyThsDdeFundFlowToRealtimeBoards\(/.test(src)
+    && /board\.netInflowState = 'stale-source-day'/.test(src),
+    '静态:今日实时走独立严格 DDE 覆盖,跨日值不回退 zjjlr');
   A(/strategyMainlineDiagNoteRead\(`ths-dde bk \$\{plateId\}`/.test(src), '静态:单板失败记入诊断上下文(不吞)');
   A(/THS_DDE_AMOUNT_FIELD = '527198'/.test(src), '静态:字段号 527198 常量化(校准记录见合同文档)');
   A(/signal: AbortSignal\.timeout\(THS_DDE_FETCH_TIMEOUT_MS\)/.test(src), '静态:realhead 单请求带 AbortSignal 截止(悬挂请求被真正中止,不留后台占用)');
@@ -103,11 +138,12 @@ eval(extractFn('strategyApplyThsDdeFundFlow'));
     const THS_DDE_CACHE_MS = 90 * 1000;
     const THS_DDE_FETCH_TIMEOUT_MS = 4000;
     const thsDdeAmountCache = new Map();
+    const thsDdeMetaCache = new Map();
     const thsDdePendingFetch = new Map();
     let fetchCalls = 0;
     let failNext = false;
     let missingNext = false;
-    const payload = 'quotebridge_v6_realhead_bk_885977_defer_last({"items":{"527198":"1041518380.000"},"o":1})';
+    const payload = 'quotebridge_v6_realhead_bk_885977_defer_last({"items":{"527198":"1041518380.000","time":"2026-07-16 15:01:00 北京时间","name":"国资云"},"o":1})';
     const fetch = async () => {
       fetchCalls++;
       await new Promise((r) => setTimeout(r, 20));   // 模拟网络延迟,让并发窗口真实存在

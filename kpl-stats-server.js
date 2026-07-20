@@ -10846,6 +10846,13 @@ function publicThsConceptBoard(board, quote = null) {
     stockCount: board.stockCount,
     gain: numOrNull(quote?.gain ?? board.gain),
     netInflow: numOrNull(quote?.netInflow ?? board.netInflow),
+    netInflowMetric: String(quote?.netInflowMetric ?? board.netInflowMetric ?? 'ths-net-inflow'),
+    netInflowSourceDay: String(quote?.netInflowSourceDay ?? board.netInflowSourceDay ?? ''),
+    netInflowAsOf: String(quote?.netInflowAsOf ?? board.netInflowAsOf ?? ''),
+    netInflowStale: (quote?.netInflowStale ?? board.netInflowStale) === true,
+    netInflowState: String(quote?.netInflowState ?? board.netInflowState ?? ''),
+    netInflowZjjlr: numOrNull(quote?.netInflowZjjlr ?? board.netInflowZjjlr),
+    ddeBigOrderAmount: numOrNull(quote?.ddeBigOrderAmount ?? board.ddeBigOrderAmount),
     upRatio: numOrNull(quote?.upRatio ?? board.upRatio),
   };
 }
@@ -12080,12 +12087,26 @@ async function thsConceptCatalog(url, req, res) {
         stockCount: catalogById.get(String(board.plateId))?.stockCount ?? board.stockCount ?? null,
       }))
     : (catalog?.boards || []);
+  const responseBoards = sourceBoards.map(board => publicThsConceptBoard(board, board));
+  const requestedFundMetric = String(url.searchParams.get('fund_metric') || '').trim().toLowerCase();
+  let fundFlow = null;
+  let outputBoards = responseBoards;
+  if (requestedFundMetric === 'dde') {
+    const rawLimit = Number(url.searchParams.get('limit'));
+    const requestedLimit = Math.max(1, Math.min(80, Math.trunc(Number.isFinite(rawLimit) ? rawLimit : BOARD_RANK_FETCH_STEP)));
+    outputBoards = responseBoards.slice(0, requestedLimit);
+    fundFlow = await applyThsDdeFundFlowToRealtimeBoards(
+      outputBoards,
+      realtimeMeta.day,
+    );
+  }
   return send(res, 200, {
     ...(catalog || { version: 1, source: 'ths', savedAt: null }),
     day: quoteBoards.length ? realtimeMeta.day || chinaNowParts().day : catalog?.day,
     realtime: !!quoteBoards.length && realtimeMeta.day === chinaNowParts().day,
     realtimeCache: realtimeMeta,
-    boards: sourceBoards.map(board => publicThsConceptBoard(board, board)),
+    fundFlow,
+    boards: outputBoards,
   });
 }
 
@@ -21201,7 +21222,7 @@ function strategyBoardFundFlowForSource(board, zsType, options = {}) {
   };
 }
 
-// ===== 同花顺板块 DDE 大单金额(Owner 2026-07-16 定稿:仅策略页同花顺侧资金口径) =====
+// ===== 同花顺板块 DDE 大单金额(策略页 + 今日实时同花顺卡片) =====
 // 来源:d.10jqka.com.cn quotebridge realhead,字段 527198,单位:元(实测校准:2026-07-16 收盘
 // 国资云 bk_885977=10.415亿、智慧政务 bk_885956=20.375亿,与 Owner 同花顺 APP「DDE大单金额」
 // 读数一致;同日 zjjlr 分别为 1.79亿/0亿,口径显著不同)。板块指数代码取自 THS 概念目录
@@ -21209,15 +21230,35 @@ function strategyBoardFundFlowForSource(board, zsType, options = {}) {
 const THS_DDE_AMOUNT_FIELD = '527198';
 const THS_DDE_CACHE_MS = 90 * 1000;
 const THS_DDE_FETCH_TIMEOUT_MS = 4000;      // 单请求截止(AbortSignal,悬挂请求真正被中止,不留后台占用)
-const THS_DDE_OVERLAY_BUDGET_MS = 8000;     // 整个 DDE overlay 总预算(超过即整体回退 zjjlr,不卡策略构建)
+const THS_DDE_OVERLAY_BUDGET_MS = 8000;     // 整个 DDE overlay 总预算(策略回退、实时置空,均不得阻塞页面)
 const thsDdeAmountCache = new Map();   // indexCode -> { value, at }(仅成功响应写入,失败不污染重试)
+const thsDdeMetaCache = new Map();     // indexCode -> { sourceDay, asOf, sourceName, at }
 const thsDdePendingFetch = new Map();  // indexCode -> Promise(in-flight 去重:并发同板只发一次网络请求)
 let thsDdeIndexMapCache = null;        // { at, map: Map(plateId -> thsPlateCode) }
+function thsParseRealheadQuote(text, field = THS_DDE_AMOUNT_FIELD) {
+  const source = String(text || '');
+  const start = source.indexOf('(');
+  const end = source.lastIndexOf(')');
+  if (start < 0 || end <= start) return null;
+  try {
+    const payload = JSON.parse(source.slice(start + 1, end));
+    const items = payload?.items || {};
+    const value = numOrNull(items?.[field]);
+    if (value == null) return null;
+    const asOf = String(items.time || items.updateTime || '').trim();
+    const dayMatch = asOf.match(/(\d{4}-\d{2}-\d{2})/);
+    return {
+      value,
+      sourceDay: dayMatch ? dayMatch[1] : '',
+      asOf,
+      sourceName: String(items.name || ''),
+    };
+  } catch {
+    return null;
+  }
+}
 function thsParseRealheadField(text, field) {
-  const m = String(text || '').match(/\{"items":\{([\s\S]*?)\}\s*[,}]/);
-  if (!m) return null;
-  const mm = m[1].match(new RegExp(`"${field}":"([-\\d.]+)"`));
-  return mm ? numOrNull(mm[1]) : null;
+  return thsParseRealheadQuote(text, field)?.value ?? null;
 }
 async function thsDdeIndexCodeMap() {
   const now = Date.now();
@@ -21250,8 +21291,18 @@ async function fetchThsBoardDdeAmount(indexCode) {
       signal: AbortSignal.timeout(THS_DDE_FETCH_TIMEOUT_MS),
     });
     if (!res.ok) throw new Error(`THS realhead ${res.status}: bk_${code}`);
-    const value = thsParseRealheadField(await res.text(), THS_DDE_AMOUNT_FIELD);
-    if (value != null) thsDdeAmountCache.set(code, { value, at: Date.now() });
+    const quote = thsParseRealheadQuote(await res.text(), THS_DDE_AMOUNT_FIELD);
+    const value = quote?.value ?? null;
+    if (value != null) {
+      const at = Date.now();
+      thsDdeAmountCache.set(code, { value, at });
+      thsDdeMetaCache.set(code, {
+        sourceDay: quote.sourceDay,
+        asOf: quote.asOf,
+        sourceName: quote.sourceName,
+        at,
+      });
+    }
     return value;
   })();
   thsDdePendingFetch.set(code, p);
@@ -21260,6 +21311,19 @@ async function fetchThsBoardDdeAmount(indexCode) {
   } finally {
     thsDdePendingFetch.delete(code);   // 成功/失败都清理 pending,失败后下一次可立即重试
   }
+}
+async function fetchThsBoardDdeQuote(indexCode) {
+  const code = String(indexCode || '').trim();
+  if (!code) return null;
+  const value = await fetchThsBoardDdeAmount(code);
+  if (value == null) return null;
+  const meta = thsDdeMetaCache.get(code) || {};
+  return {
+    value,
+    sourceDay: String(meta.sourceDay || ''),
+    asOf: String(meta.asOf || ''),
+    sourceName: String(meta.sourceName || ''),
+  };
 }
 // overlay 级超时竞速:budget 到期即 reject(底层 fetch 自带 AbortSignal 会自行中止,不留悬挂)。
 function thsDdeRaceBudget(promise, ms, label) {
@@ -21271,6 +21335,87 @@ function thsDdeRaceBudget(promise, ms, label) {
       (e) => { clearTimeout(t); reject(e); },
     );
   });
+}
+
+// 今日实时同花顺卡片只展示同花顺 APP 可核对的 DDE 大单金额。抓取失败、源日期不明或
+// 跨日时返回缺失，不再把 zjjlr 填进同一列造成口径混用。原 zjjlr 留在审计字段。
+async function applyThsDdeFundFlowToRealtimeBoards(boards, useDay) {
+  const today = isoFromCompactDate(chinaNowParts().day);
+  const requestedDay = isoFromCompactDate(useDay);
+  const list = Array.isArray(boards) ? boards : [];
+  const summary = {
+    metric: 'ths-dde-big-order-amount',
+    requested: list.length,
+    applied: 0,
+    missing: 0,
+    stale: 0,
+  };
+  if (!requestedDay || requestedDay !== today || !list.length) {
+    for (const board of list) {
+      board.netInflowZjjlr = numOrNull(board?.netInflow);
+      board.netInflow = null;
+      board.ddeBigOrderAmount = null;
+      board.netInflowMetric = 'ths-dde-big-order-amount';
+      board.netInflowSourceDay = requestedDay;
+      board.netInflowAsOf = '';
+      board.netInflowStale = !!requestedDay && requestedDay !== today;
+      board.netInflowState = requestedDay && requestedDay !== today ? 'not-current-day' : 'missing';
+    }
+    summary.missing = list.length;
+    summary.state = requestedDay && requestedDay !== today ? 'not-current-day' : 'empty';
+    return summary;
+  }
+  const idxMap = await thsDdeIndexCodeMap();
+  const deadline = Date.now() + THS_DDE_OVERLAY_BUDGET_MS;
+  await mapLimit(list, 4, async board => {
+    const original = numOrNull(board?.netInflow);
+    board.netInflowZjjlr = original;
+    board.netInflow = null;
+    board.ddeBigOrderAmount = null;
+    board.netInflowMetric = 'ths-dde-big-order-amount';
+    board.netInflowSourceDay = '';
+    board.netInflowAsOf = '';
+    board.netInflowStale = false;
+    board.netInflowState = 'missing';
+    const indexCode = String(board?.thsPlateCode || idxMap.get(String(board?.plateId || '')) || '').trim();
+    if (!indexCode) {
+      summary.missing += 1;
+      board.netInflowState = 'index-missing';
+      return;
+    }
+    const remain = deadline - Date.now();
+    if (remain <= 0) {
+      summary.missing += 1;
+      board.netInflowState = 'budget-exhausted';
+      return;
+    }
+    try {
+      const quote = await thsDdeRaceBudget(fetchThsBoardDdeQuote(indexCode), remain, `realtime bk ${indexCode}`);
+      const sourceDay = isoFromCompactDate(quote?.sourceDay || '');
+      board.netInflowSourceDay = sourceDay;
+      board.netInflowAsOf = String(quote?.asOf || '');
+      if (!quote || sourceDay !== today) {
+        summary.missing += 1;
+        if (sourceDay && sourceDay !== today) {
+          summary.stale += 1;
+          board.netInflowStale = true;
+          board.netInflowState = 'stale-source-day';
+        } else {
+          board.netInflowState = 'source-day-missing';
+        }
+        return;
+      }
+      board.netInflow = quote.value;
+      board.ddeBigOrderAmount = quote.value;
+      board.netInflowState = 'ok';
+      summary.applied += 1;
+    } catch {
+      summary.missing += 1;
+      board.netInflowState = 'fetch-failed';
+    }
+  });
+  summary.state = summary.applied === summary.requested ? 'ok' : (summary.applied ? 'partial' : 'missing');
+  return summary;
 }
 // 把同花顺侧(zsType=5 的主板 + 每块板的 bySource[5])的 netInflow 覆盖为当日 DDE 大单金额。
 // 仅当 useDay=中国今天(realhead 是"现在"的值,历史日覆盖=数据穿越,绝不做);

@@ -7645,3 +7645,32 @@ Deployment:
 
 Notes for next agent:
 - “主”仍是严格近 10 日综合主因匹配次数；显示 `0` 表示统计已完成但没有匹配，`--` 才表示未拿到统计。用户刷新今日实时页面后即可取得新结果。
+
+## 2026-07-20 - Codex - 修正今日实时同花顺资金口径
+
+Changed:
+- 确认今日实时同花顺卡片此前展示的是 `q.10jqka.com.cn/gn` 的 `zjjlr`，与同花顺 APP 可核对的 DDE 大单金额不是同一口径。
+- 今日实时同花顺榜改为显式请求 realhead 字段 `527198`（DDE 大单金额，单位元），只覆盖当前请求的有限候选板块，保留 90 秒缓存与并发去重。
+- 新增源日期、源时间、stale 与状态元数据；DDE 抓取失败、源日期缺失或跨日时显示缺失，不再把 `zjjlr` 混入同一列。
+- 原 `zjjlr` 仅保留在 `netInflowZjjlr` 审计字段；旧浏览器预览缓存会被拒绝，卡片口径标识改为“DDE大单”。
+- 策略页既有 DDE 逻辑、东财、复盘和历史快照口径不变。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `docs/ops/MARKET_DATA_SOURCE_CONTRACTS.md`
+- `tests/strategy-ths-dde-netinflow.test.js`
+- `tests/ths-realtime-dde-display.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 2026-07-20 实时对照：国资云旧 `zjjlr=-48.61亿`、DDE `527198=+7.19亿`；煤炭概念旧 `zjjlr=26.02亿`、DDE `527198=13.49亿`，证实是口径混用而非单位换算错误。
+- `node --check kpl-stats-server.js` 与行情页内联脚本编译通过。
+- DDE 解析、当前日覆盖、跨日拒绝、旧缓存拒绝、失败置空、策略原口径及全仓库测试均通过。
+- `git diff --check` 通过。
+
+Deployment:
+- 本条提交时仅 GitHub 分支改动；尚未部署云端，未重启任何服务。
+
+Notes for next agent:
+- 发布需同时同步后端和 `kpl-dashboard_17_apple.html`，并重启主服务；部署后检查 `/api/ths-concepts/catalog?fund_metric=dde&limit=20` 的 `fundFlow`、`netInflowMetric`、`netInflowSourceDay` 与页面同花顺卡片。

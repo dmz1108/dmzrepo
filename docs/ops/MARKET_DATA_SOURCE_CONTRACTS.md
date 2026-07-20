@@ -32,13 +32,15 @@ If `sourceDay !== targetDay`, the record must not masquerade as today's fact. A 
 - `data.10jqka.com.cn/funds/gnzjl/` is the dedicated concept-fund ranking page. It can be developed as a verification or fallback source only after date, coverage, unit, and plate-mapping checks.
 - `data.10jqka.com.cn/funds/ddzz/` is stock-level large-order tracking. It is not a sector DDE value and must not directly replace board net inflow.
 
-Strategy-page THS money metric (Owner decision 2026-07-16): **DDE big-order amount**, not `zjjlr`.
+Strategy-page and today's realtime-card THS money metric (Owner decisions 2026-07-16 and 2026-07-20): **DDE big-order amount**, not `zjjlr`.
 
 - Source: `https://d.10jqka.com.cn/v6/realhead/bk_{indexCode}/defer/last.js`, field `527198`, unit = yuan. `indexCode` is the THS block-index code (`thsPlateCode`, `885xxx`) mapped from the gn plate id via the THS concept catalog.
 - Calibration record (2026-07-16 after close, cross-checked against the owner's THS app "DDE大单金额"): 国资云 `bk_885977` = 10.415亿, 智慧政务 `bk_885956` = 20.375亿; same-day `zjjlr` was 1.79亿 / 0亿 — a different metric family entirely.
 - Field family observed on the same payload: `526792` behaves like DDE 大单净量(%) on stocks; buy/sell-looking pairs `223/224`, `225/226`, `237/238`, `259/260` remain undecoded — do not use them without their own calibration.
-- Scope: strategy-page chain only (`getDayBoardsWithMembers` calls that pass an explicit KPL-free `zsTypes`). Kanban, review, and default three-source callers keep `zjjlr`. Overlay applies only when `useDay` is the current China trading day — realhead is a *current* value, so backfilling historical days with it is data leakage and is refused in code.
-- Provenance: overlaid boards carry `netInflowMetric='ths-dde-big-order-amount'`, the raw DDE in `ddeBigOrderAmount`, and the displaced `zjjlr` in `netInflowZjjlr`. Boards whose DDE fetch fails keep `zjjlr` with `netInflowMetric='ths-net-inflow'` — the two metrics are never silently mixed as one column without the metric tag.
+- Scope: the strategy-page chain and current-day THS cards on 今日实时. Review, historical snapshots, and unrelated default three-source callers keep their original contracts. Overlay applies only when the source payload itself declares the current China day — realhead is a *current* value, so backfilling historical days with it is data leakage and is refused in code.
+- Provenance: overlaid boards carry `netInflowMetric='ths-dde-big-order-amount'`, the raw DDE in `ddeBigOrderAmount`, the displaced `zjjlr` in `netInflowZjjlr`, plus `netInflowSourceDay`, `netInflowAsOf`, `netInflowStale`, and `netInflowState`.
+- Failure policy differs by consumer: the established strategy chain keeps its tagged `zjjlr` fallback for continuity; 今日实时 uses strict DDE semantics, so a failed, undated, or cross-day DDE value is displayed as missing instead of silently substituting `zjjlr` into the same column.
+- 2026-07-20 live calibration: 国资云 raw `zjjlr` was -48.61亿 while field `527198` was +7.19亿; 煤炭概念 was 26.02亿 vs 13.49亿. This confirmed that the old realtime card was displaying a different metric, not suffering a unit-conversion error.
 
 For a strategy family that maps to several overlapping THS concepts, use one representative board value and expose its identity. Current metadata is:
 
