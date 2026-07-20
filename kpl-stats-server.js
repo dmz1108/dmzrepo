@@ -21249,6 +21249,7 @@ function thsParseRealheadQuote(text, field = THS_DDE_AMOUNT_FIELD) {
     const dayMatch = asOf.match(/(\d{4}-\d{2}-\d{2})/);
     return {
       value,
+      gainPct: numOrNull(items?.['199112']),
       sourceDay: dayMatch ? dayMatch[1] : '',
       asOf,
       sourceName: String(items.name || ''),
@@ -21300,6 +21301,7 @@ async function fetchThsBoardDdeAmount(indexCode) {
         sourceDay: quote.sourceDay,
         asOf: quote.asOf,
         sourceName: quote.sourceName,
+        gainPct: quote.gainPct,
         at,
       });
     }
@@ -21323,6 +21325,7 @@ async function fetchThsBoardDdeQuote(indexCode) {
     sourceDay: String(meta.sourceDay || ''),
     asOf: String(meta.asOf || ''),
     sourceName: String(meta.sourceName || ''),
+    gainPct: numOrNull(meta.gainPct),
   };
 }
 // overlay 级超时竞速:budget 到期即 reject(底层 fetch 自带 AbortSignal 会自行中止,不留悬挂)。
@@ -21405,6 +21408,10 @@ async function applyThsDdeFundFlowToRealtimeBoards(boards, useDay) {
         }
         return;
       }
+      if (quote.gainPct != null) {
+        board.gain = quote.gainPct;
+        board.gainPct = quote.gainPct;
+      }
       board.netInflow = quote.value;
       board.ddeBigOrderAmount = quote.value;
       board.netInflowState = 'ok';
@@ -21416,6 +21423,45 @@ async function applyThsDdeFundFlowToRealtimeBoards(boards, useDay) {
   });
   summary.state = summary.applied === summary.requested ? 'ok' : (summary.applied ? 'partial' : 'missing');
   return summary;
+}
+
+// 同花顺盘中候选不能只按涨幅截断。宽基普涨时，约 2% 的细分主线可能排在 20 名以后，
+// 但 DDE 大单金额已经位居前排。保留原涨幅候选顺序，再补入正涨幅的 DDE 前排；后续仍须
+// 通过成分股涨停数和 L2 明星门槛，这里只修复“还没验证就被取数裁掉”的覆盖缺口。
+function strategyThsDdeCandidateUnion(boards, boardPool) {
+  const limit = Math.max(1, Number(boardPool) || STRATEGY_MAINLINE_LIVE_BOARD_POOL);
+  const list = (Array.isArray(boards) ? boards : []).filter(board => {
+    const gain = numOrNull(board?.gainPct ?? board?.gain);
+    return gain != null && gain >= MIN_BOARD_GAIN_PCT;
+  });
+  const gainLeaders = list.slice()
+    .sort((a, b) => Number(b?.gainPct ?? b?.gain ?? -Infinity) - Number(a?.gainPct ?? a?.gain ?? -Infinity))
+    .slice(0, limit);
+  const ddeLeaders = list.filter(board => {
+    const gain = numOrNull(board?.gainPct ?? board?.gain);
+    return gain != null && gain > 0 && numOrNull(board?.ddeBigOrderAmount) != null;
+  }).sort((a, b) => Number(b.ddeBigOrderAmount) - Number(a.ddeBigOrderAmount))
+    .slice(0, limit);
+  const seen = new Set();
+  return [...gainLeaders, ...ddeLeaders].filter(board => {
+    const key = String(board?.plateId || board?.name || '').trim();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+async function strategyPrepareThsLiveCandidates(boards, useDay, boardPool) {
+  const list = Array.isArray(boards) ? boards : [];
+  if (!list.length || isoFromCompactDate(useDay) !== isoFromCompactDate(chinaNowParts().day)) {
+    return strategyThsDdeCandidateUnion(list, boardPool);
+  }
+  for (const board of list) {
+    if (board && board.zsType == null) board.zsType = Number(THS_ZS_TYPE);
+  }
+  // 策略发现阶段沿用“DDE失败则保留zjjlr且标明口径”的容错语义；严格置空只属于今日实时展示端点。
+  await strategyApplyThsDdeFundFlow(list, useDay);
+  return strategyThsDdeCandidateUnion(list, boardPool);
 }
 // 把同花顺侧(zsType=5 的主板 + 每块板的 bySource[5])的 netInflow 覆盖为当日 DDE 大单金额。
 // 仅当 useDay=中国今天(realhead 是"现在"的值,历史日覆盖=数据穿越,绝不做);
@@ -21446,7 +21492,8 @@ async function strategyApplyThsDdeFundFlow(boards, useDay) {
       return;   // 该板保持 zjjlr,metric 如实
     }
     try {
-      const dde = await thsDdeRaceBudget(fetchThsBoardDdeAmount(idxMap.get(plateId)), remain, `bk ${plateId}`);
+      const quote = await thsDdeRaceBudget(fetchThsBoardDdeQuote(idxMap.get(plateId)), remain, `bk ${plateId}`);
+      const dde = quote?.value ?? null;
       if (dde == null) return;
       for (const ref of refs) {
         ref.netInflowZjjlr = numOrNull(ref.netInflow);   // 原 zjjlr 留档供审计/对照
@@ -21454,6 +21501,10 @@ async function strategyApplyThsDdeFundFlow(boards, useDay) {
         ref.netInflow = dde;
         ref.netInflowMetric = 'ths-dde-big-order-amount';
         ref.netInflowLegacy = false;
+        if (quote.gainPct != null) {
+          ref.gain = quote.gainPct;
+          ref.gainPct = quote.gainPct;
+        }
       }
     } catch (err) {
       strategyMainlineDiagNoteRead(`ths-dde bk ${plateId}`, err);   // 失败可观测,不吞;该板保持 zjjlr
@@ -21655,10 +21706,11 @@ async function getDayBoardsWithMembers(day, options = {}) {
           const rankBoards = await fetchBoardRankingForSnapshot(String(z), apiKey, {
             count: Number(options.liveRankCount || 0) || BOARD_RANK_FETCH_STEP,
           });
-          const boards = rankBoards
-            .filter(board => !hidden.has(String(board?.plateId || '')))
-            .filter(isBoardGainAllowed)
-            .slice(0, Number(options.boardPool || 0) || STRATEGY_MAINLINE_RISING_BOARD_LIMIT);
+          const visibleBoards = rankBoards.filter(board => !hidden.has(String(board?.plateId || '')));
+          const boardPool = Number(options.boardPool || 0) || STRATEGY_MAINLINE_RISING_BOARD_LIMIT;
+          const boards = Number(z) === Number(THS_ZS_TYPE)
+            ? await strategyPrepareThsLiveCandidates(visibleBoards, requestedDay, boardPool)
+            : visibleBoards.filter(isBoardGainAllowed).slice(0, boardPool);
           const hydrated = await hydrateStrategyLiveBoardsForMembers(boards, apiKey, z, requestedDay);
           await absorbPayload(hydrated, z, 'live');
         } catch (err) { strategyMainlineDiagNoteRead(`board-rank-live zs${z} ${requestedDay}`, err); }   // 七审:实时回退失败不再空吞
