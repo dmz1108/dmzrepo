@@ -21463,6 +21463,29 @@ async function strategyPrepareThsLiveCandidates(boards, useDay, boardPool) {
   await strategyApplyThsDdeFundFlow(list, useDay);
   return strategyThsDdeCandidateUnion(list, boardPool);
 }
+
+// 东财侧同样不能只按涨幅截断(与 #186 同花顺 DDE 补选对称):2026-07-20 国资云概念 rank9、
+// 云计算 rank26,板内紫光股份 +7.29% 领涨,却因涨幅榜前5截断全天未被 L2 验证。
+// 保留原涨幅候选顺序,补入「正涨幅 + 超大单净流入(f66,带符号)为正」的资金前排;
+// 后续仍须过 5亿+涨停≥2 门槛与 L2 明星验证,这里只修覆盖缺口,不放松任何闸门。
+function strategyEastFundCandidateUnion(boards, boardPool) {
+  const limit = Math.max(1, Number(boardPool) || STRATEGY_MAINLINE_LIVE_BOARD_POOL);
+  const list = (Array.isArray(boards) ? boards : []).filter(isBoardGainAllowed);
+  const gainLeaders = list.slice(0, limit);   // 东财榜按涨幅序返回,保持原行为
+  const fundLeaders = list.filter(board => {
+    const gain = numOrNull(board?.gainPct ?? board?.gain);
+    const fund = numOrNull(board?.superLargeNetInflow);
+    return gain != null && gain > 0 && fund != null && fund > 0;
+  }).sort((a, b) => Number(b.superLargeNetInflow) - Number(a.superLargeNetInflow))
+    .slice(0, limit);
+  const seen = new Set();
+  return [...gainLeaders, ...fundLeaders].filter(board => {
+    const key = String(board?.plateId || board?.name || '').trim();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 // 把同花顺侧(zsType=5 的主板 + 每块板的 bySource[5])的 netInflow 覆盖为当日 DDE 大单金额。
 // 仅当 useDay=中国今天(realhead 是"现在"的值,历史日覆盖=数据穿越,绝不做);
 // DDE 拿不到的板保持 zjjlr(metric 维持 ths-net-inflow,如实可辨,不冒充 DDE)。
@@ -21710,7 +21733,9 @@ async function getDayBoardsWithMembers(day, options = {}) {
           const boardPool = Number(options.boardPool || 0) || STRATEGY_MAINLINE_RISING_BOARD_LIMIT;
           const boards = Number(z) === Number(THS_ZS_TYPE)
             ? await strategyPrepareThsLiveCandidates(visibleBoards, requestedDay, boardPool)
-            : visibleBoards.filter(isBoardGainAllowed).slice(0, boardPool);
+            : (Number(z) === Number(EASTMONEY_ZS_TYPE)
+              ? strategyEastFundCandidateUnion(visibleBoards, boardPool)
+              : visibleBoards.filter(isBoardGainAllowed).slice(0, boardPool));
           const hydrated = await hydrateStrategyLiveBoardsForMembers(boards, apiKey, z, requestedDay);
           await absorbPayload(hydrated, z, 'live');
         } catch (err) { strategyMainlineDiagNoteRead(`board-rank-live zs${z} ${requestedDay}`, err); }   // 七审:实时回退失败不再空吞
@@ -21723,6 +21748,48 @@ async function getDayBoardsWithMembers(day, options = {}) {
   // 历史日在 strategyApplyThsDdeFundFlow 内部拒绝(realhead 是当前值,回填历史=数据穿越)。
   const strategyScopedZs = Array.isArray(options.zsTypes) && options.zsTypes.length
     && !options.zsTypes.map(Number).includes(7);
+  // [Codex 复核 PR#190 P1] 资金前排补水不能只活在"无快照"回退分支:生产常态下当日快照已
+  // 存在(bmap 非空、上面的实时回退整块跳过),涨幅榜外的 f66/DDE 前排板仍会缺席。
+  // 当日策略口径下,读到快照后仍显式拉实时榜做并集,把 bmap 缺的资金前排板合并进策略板池
+  // (只补内存板池,绝不回写看板快照文件);补进的板打 fundForward 标记,供补选通道与诊断识别。
+  const fundForwardEligible = strategyScopedZs && options.liveIfMissing && source === 'snapshot'
+    && requestedDay === isoFromCompactDate(chinaNowParts().day) && isChinaMarketTradingDay(requestedDay);
+  if (fundForwardEligible) {
+    const apiKey = await readSavedApiKey().catch(() => '');
+    if (apiKey) {
+      const knownPlateIds = new Set();
+      for (const entry of bmap.values()) {
+        for (const s of Object.values(entry.bySource || {})) {
+          const pid = String(s?.plateId || '').trim();
+          if (pid) knownPlateIds.add(`${Number(s.zsType)}:${pid}`);
+        }
+      }
+      await mapLimit(zsTypes.map(Number).filter(z => z === 6 || z === 5), 2, async z => {
+        try {
+          let hidden; try { hidden = await getPermanentHiddenSet(z); } catch { hidden = new Set(); }
+          const rankBoards = await fetchBoardRankingForSnapshot(String(z), apiKey, {
+            count: Number(options.liveRankCount || 0) || BOARD_RANK_FETCH_STEP,
+          });
+          const visibleBoards = rankBoards.filter(board => !hidden.has(String(board?.plateId || '')));
+          const boardPool = Number(options.boardPool || 0) || STRATEGY_MAINLINE_RISING_BOARD_LIMIT;
+          const candidates = z === Number(THS_ZS_TYPE)
+            ? await strategyPrepareThsLiveCandidates(visibleBoards, requestedDay, boardPool)
+            : strategyEastFundCandidateUnion(visibleBoards, boardPool);
+          const missing = candidates.filter(b => {
+            const pid = String(b?.plateId || '').trim();
+            return pid && !knownPlateIds.has(`${z}:${pid}`);
+          });
+          if (!missing.length) return;
+          const hydrated = await hydrateStrategyLiveBoardsForMembers(missing, apiKey, z, requestedDay);
+          await absorbPayload(hydrated, z, 'live');
+          for (const b of missing) {
+            const entry = bmap.get(String(b?.name || '').trim());
+            if (entry) entry.fundForward = true;
+          }
+        } catch (err) { strategyMainlineDiagNoteRead(`fund-forward zs${z} ${requestedDay}`, err); }
+      });
+    }
+  }
   if (strategyScopedZs && zsTypes.map(Number).includes(5)) {
     try { await strategyApplyThsDdeFundFlow([...bmap.values()], useDay); } catch (err) {
       strategyMainlineDiagNoteRead(`ths-dde overlay ${useDay}`, err);
@@ -22787,13 +22854,19 @@ async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day, options
     )
     .slice(0, STRATEGY_MAINLINE_RISING_BOARD_LIMIT);
   for (const b of primary) { if (b) b.scanChannel = 'primary'; }
-  // 补选通道(会签约束2/3):只有真盘中榜(realtimeSource='live')可补选,快照不得伪装成盘中证据;
-  // 每个补选板块记录进入原因(净流入/涨幅/涨停数/榜单位置),观测状态随响应输出。
+  // 补选通道(会签约束2/3):只有真盘中数据可补选,快照不得伪装成盘中证据。
+  // realtimeSource='live':全量 list 参与(原行为不变)。
+  // realtimeSource='snapshot':唯有 fundForward===true 的板可参与——它们是快照命中后
+  // getDayBoardsWithMembers 当日显式实时拉榜合并的资金前排,本身就是真盘中数据
+  // (PR#190 Codex 二审:此前 fund-forward 板因无 scanChannel 在正式 seeds 前被过滤删除)。
   const realtimeSource = String(options.realtimeSource || '');
+  const supplementPool = realtimeSource === 'live'
+    ? list
+    : list.filter(b => b && b.fundForward === true);
   const supplements = [];
-  if (STRATEGY_MAINLINE_SUPPLEMENT_BOARDS > 0 && realtimeSource === 'live') {
+  if (STRATEGY_MAINLINE_SUPPLEMENT_BOARDS > 0 && supplementPool.length) {
     const chosen = new Set(primary.map(b => String(b?.plateId || '')));
-    const ranked = list.slice().sort((a, b) =>
+    const ranked = supplementPool.slice().sort((a, b) =>
       (Number(b?.netInflow) || 0) - (Number(a?.netInflow) || 0) ||
       (Math.max(0, Number(b?.gainPct) || 0)) - (Math.max(0, Number(a?.gainPct) || 0)));
     for (const b of ranked) {
@@ -22805,7 +22878,10 @@ async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day, options
       if (netInflow <= 0 && gainPct <= 0) continue;   // 毫无实时强度的板块不补
       chosen.add(pid);
       b.scanChannel = 'supplement';
-      b.supplementBasis = { netInflow, gainPct, zt: Number(b?.zt) || 0, liveRankIndex: list.indexOf(b) + 1 };
+      b.supplementBasis = {
+        netInflow, gainPct, zt: Number(b?.zt) || 0, liveRankIndex: list.indexOf(b) + 1,
+        ...(b.fundForward === true ? { fundForward: true } : {}),
+      };
       supplements.push(b);
     }
   }
@@ -22814,7 +22890,10 @@ async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day, options
     strategyMainlineSupplementState = {
       day: String(day || ''),
       at: new Date().toISOString(),
-      realtimeSource,
+      // 如实标注数据形态:快照路径上由 fund-forward 板补选时不冒充纯 live(Codex 二审)。
+      realtimeSource: realtimeSource === 'live'
+        ? 'live'
+        : (supplements.some(b => b?.fundForward === true) ? 'snapshot+fund-forward' : realtimeSource),
       enabled: STRATEGY_MAINLINE_SUPPLEMENT_BOARDS > 0,
       limit: STRATEGY_MAINLINE_SUPPLEMENT_BOARDS,
       // picked 即"若无补选会漏掉的板块"清单(它们都不在主通道 top-5 里)
@@ -24056,6 +24135,10 @@ function strategyPredictStarTransitions(existingRows, mainlines, observedAt) {
       firstGain: isFiniteNumeric(raw?.firstGain) ? Number(raw.firstGain) : null,
       ratios: raw?.ratios && typeof raw.ratios === 'object' ? raw.ratios : null,
       maxBucket: raw?.maxBucket && typeof raw.maxBucket === 'object' ? raw.maxBucket : null,
+      // 主线当时的成分板 plateId:题材家族名盘中漂移(算力AI→算力)时,粘性匹配的备用锚点。
+      mainlineBoardIds: Array.isArray(raw?.mainlineBoardIds)
+        ? raw.mainlineBoardIds.map(id => String(id || '').trim()).filter(Boolean).slice(0, 8)
+        : [],
     });
   }
   for (const m of (Array.isArray(mainlines) ? mainlines.slice(0, 12) : [])) {
@@ -24081,9 +24164,15 @@ function strategyPredictStarTransitions(existingRows, mainlines, observedAt) {
         firstGain: isFiniteNumeric(star?.gain) ? Number(star.gain) : null,
         ratios: star?.ratios && typeof star.ratios === 'object' ? star.ratios : null,
         maxBucket: star?.maxBucket && typeof star.maxBucket === 'object' ? star.maxBucket : null,
+        mainlineBoardIds: [],
       };
       next.mainlineTheme = String(m?.theme || next.mainlineTheme || '').trim();
       next.name = String(star?.name || next.name || '').trim();
+      const boardIds = (Array.isArray(m?.resonanceBoards) ? m.resonanceBoards : [])
+        .map(b => String(b?.plateId || '').trim()).filter(Boolean);
+      if (boardIds.length) {
+        next.mainlineBoardIds = [...new Set([...(next.mainlineBoardIds || []), ...boardIds])].slice(0, 8);
+      }
       next.lastSeenAt = observedAt;
       next.lastLevel = level;
       if (level === 'confirmed' && !next.confirmedAt) next.confirmedAt = observedAt;
@@ -24122,15 +24211,48 @@ function strategyMainlineExpectedTransitionMap(predict, source = '') {
       firstGain: isFiniteNumeric(raw?.firstGain) ? Number(raw.firstGain) : null,
       ratios: raw?.ratios && typeof raw.ratios === 'object' ? raw.ratios : null,
       maxBucket: raw?.maxBucket && typeof raw.maxBucket === 'object' ? raw.maxBucket : null,
+      mainlineBoardIds: Array.isArray(raw?.mainlineBoardIds)
+        ? raw.mainlineBoardIds.map(id => String(id || '').trim()).filter(Boolean).slice(0, 8)
+        : [],
     });
   }
+  // 附带全量行索引供漂移回退匹配(strategyMainlineResolveExpectedHistory);
+  // 返回类型保持 Map(既有调用/测试按 mainlineKey 直查),仅追加属性,不改变形状契约。
+  byMainline.rows = [...byMainline.values()].flat();
   return byMainline;
+}
+
+// 粘性保留的匹配不能只认 familyKey 精确相等:题材家族命名盘中会漂移(2026-07-20 实盘案例:
+// 上午"算力AI"(浪潮信息已明星确认)午后并组变"算力",familyKey 变化导致轨迹查不到、
+// 主线卡消失,违反 Owner「当日出过明星永久保留」规则)。回退两级,仍只在同一来源 Map 内匹配:
+// 1) 双方主题经当前题材归类(strategyMainlineFamilyInfo)重新规范化后同族;
+// 2) 轨迹记录的当时成分板 plateId 与当前候选的成分板有交集(同一批板=同一方向,最精确)。
+// 不做任何模糊字符串匹配,避免把不相干题材误粘。
+function strategyMainlineResolveExpectedHistory(item, transitionMap) {
+  if (!item || !(transitionMap instanceof Map) || !transitionMap.size) return [];
+  const mainlineKey = String(item?.familyKey || item?.key || '').trim();
+  const direct = mainlineKey ? transitionMap.get(mainlineKey) : null;
+  if (Array.isArray(direct) && direct.length) return direct;
+  const rows = Array.isArray(transitionMap.rows) ? transitionMap.rows : [...transitionMap.values()].flat();
+  if (!rows.length) return [];
+  const itemFamilyKey = strategyMainlineFamilyInfo({ theme: item?.theme }).key;
+  const itemBoardIds = new Set((Array.isArray(item?.resonanceBoards) ? item.resonanceBoards : [])
+    .map(b => String(b?.plateId || '').trim()).filter(Boolean));
+  const matched = rows.filter(row => {
+    if (row.mainlineTheme && strategyMainlineFamilyInfo({ theme: row.mainlineTheme }).key === itemFamilyKey) return true;
+    return (row.mainlineBoardIds || []).some(id => itemBoardIds.has(String(id)));
+  });
+  const seen = new Set();
+  return matched.filter(row => {
+    if (seen.has(row.code)) return false;
+    seen.add(row.code);
+    return true;
+  });
 }
 
 function strategyMainlineAttachExpectedHistory(item, transitionMap, sessionPhase = '') {
   if (!item || !(transitionMap instanceof Map)) return item;
-  const mainlineKey = String(item?.familyKey || item?.key || '').trim();
-  const history = mainlineKey ? (transitionMap.get(mainlineKey) || []) : [];
+  const history = strategyMainlineResolveExpectedHistory(item, transitionMap);
   if (!history.length) return item;
   const currentStars = Array.isArray(item?.starStocks) ? item.starStocks : [];
   const currentByCode = new Map(currentStars

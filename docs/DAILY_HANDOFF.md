@@ -7847,34 +7847,146 @@ Deployment:
 Notes for next agent:
 - 2026-07-20 是明星比值规则切换日，跨日前后比较明星转化率时应标注口径断点。浪潮信息 09:44 样本仍以最大档主动比和最大档合力比两项达标而保持明星确认。
 
-## 2026-07-20 - Codex - 淘股吧湖南人复盘因终盘池不一致停止入库
+## 2026-07-20 - Claude - 明星粘性抗题材漂移 + 东财资金前排补选(Owner 指派 1/2)
 
 Changed:
-- 按 `docs/ops/TGB_HUNAN_DAILY_SOP.md` 通过受保护生产运行 `29739162245` 强制刷新北京时间交易日 `2026-07-20` 的官方原文和原始图片证据，共保存 17 张图片。
-- 官方文章为 `https://www.tgb.cn/a/2tAptm3XkHu`（`7.20湖南人涨停复盘+晚间消息汇总`）；人工逐张核对后只采用标题、日期、白底表格和 `@TGB湖南人` 水印均匹配的 `image-01-06.png`，排除同花顺红图 `image-01-11.png`、回帖题材图 `image-01-14.jpg`、走势图、头像和广告。
-- Codex 按原图逐题材块、逐行、逐字段人工完成两遍转录；未使用 OCR、Qwen 或其他自动视觉结果。候选计数为电力 18、算力 7、煤炭 6、油服 4、业绩 3、其他 15，共 53；顶部“市场连板股”重复摘要和底部 37 行“涨停炸板”均已排除。
-- 写入前终盘池质量闸未通过：当天 `kpl-limitup-db` 基准 52、人工候选 53，`missingCodes=[600227]`、`extraCodes=[601991,603533]`；无重复、`weakCount=0`，题材块计数之和为 53。`000539` 原图为半角 `A`、终盘池为全角 `Ａ`，该名称规范化差异已单独记录。
-- 严格按 SOP 停止，没有创建生产写入载荷、没有写 `tgb-hunan-structured/2026-07-20.json`、没有重折当天综合主因库。受保护日志运行 `29739822576` 已把阻断结果追加到两份云端运维日志。
-- Owner 要求继续后，通过受保护运行 `29745510680` 在北京时间 21:16 再次强制刷新官方证据；文章、17 张图片及 `image-01-06.png` 均未变化，正式图 SHA-256 仍为 `736c9169f450b4c1819b2d3eaf4f7e1f28315ded7d65e82b88df46b0550f0061`，排除作者已补图的可能。
-- 进一步终盘行情核验确认 `601991` 收盘/涨停价 `6.38/6.38`、`603533` 为 `19.69/19.69`、`600227` 为 `3.37/3.37`，三只均收于涨停。三家已完成的正式复盘源（复盘啦、选股宝、韭研）均为 53 且与湖南人白底图使用同一 53 只集合；因此根因是 Eastmoney 52 只终盘池漏了 `601991/603533`，同时湖南人白底图漏了尾盘涨停的 `600227`。真实终盘并集应为 54，修正终盘池后 TGB 仍会缺 `600227`，不能用同花顺红图或其他来源补造该行。
+- [P1] 粘性保留抗漂移:轨迹行新增 mainlineBoardIds(主线当时成分板 plateId,并集保留);
+  新增 strategyMainlineResolveExpectedHistory 两级回退匹配——题材经当前归类重新规范化同族、
+  或成分板 plateId 交集;attach 改走解析器。生产证据:2026-07-20 上午"算力AI"浪潮信息已
+  明星确认(11:15 快照),午后家族并组漂移为"算力"致主线卡消失,违反「出过明星永久保留」。
+  不跨来源、不做模糊字符串匹配;TransitionMap 仍是 Map(仅附加 rows 索引),既有直查零破坏。
+- [P2] 东财资金前排补选(与 #186 对称):strategyEastFundCandidateUnion——涨幅前5原样保留,
+  补入「正涨幅 + f66 超大单净流入为正(带符号,流出板不入)」前排,去重≤2×池。生产证据:
+  2026-07-20 国资云概念 rank9/云计算 rank26,紫光股份 +7.29% 领涨全天未被验证。
+  门槛/L2 验证一概不放松,只修"未验证先被取数裁掉"。
 
 Files:
-- `ops/production/requests/2026-07-20-tgb-hunan-raw-evidence.ps1`
-- `ops/production/requests/2026-07-20-tgb-hunan-blocked-log.ps1`
-- `docs/DAILY_HANDOFF.md`
-- 仅云端：`kpl-limitup-main-reason-sources/tgb-hunan-raw/2026-07-20/` 与两份运维日志
+- kpl-stats-server.js(transitions 落库/映射/解析器/attach + 东财补选与接线)
+- tests/strategy-expected-star-sticky.test.js(新增 10 断言,含实盘缺陷回归)
+- tests/strategy-east-fund-candidates.test.js(新增 7 断言)
+- tests/qi-mainline-states.test.js(attach 依赖注入更新)
 
 Validated:
-- raw manifest 为 `day=2026-07-20`、`status=raw-evidence-saved`，官方文章 1 篇、成功保存图片 17 张；此前不存在同日 raw 证据，因此没有旧 raw 备份目录。
-- 第二次 raw refresh 已把第一次证据备份到 `C:\PandaDashboard\backups\tgb-hunan-raw-20260720-20260720-211631`；刷新后正式图 URL、长度和哈希不变。
-- 人工候选结构检查：53 行、53 个唯一代码、无重复、`weakCount=0`，题材计数 `18+7+6+4+3+15=53`；第二遍逐字段原图复核完成。
-- 终盘池对账：基准 52，`missingCodes=[600227]`、`extraCodes=[601991,603533]`，因此质量闸失败且正式行保持 0。
-- 公网 `source-view?day=2026-07-20&force=1` 重试时为综合归纳 52、复盘啦 53、选股宝 53、韭研 53、淘股吧 0；`/health` 返回 `ok=true`。TGB 未被误报为完成。
+- node --check 通过;全仓 49 个测试文件全绿。
 
 Deployment:
-- 两次刷新官方 raw evidence 并追加云端日志；未部署应用代码，未写正式复盘库，未重折综合主因，未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
-- Git 受保护请求 PR：#191、#192，均已合并；生产运行分别为 `29739162245`、`29739822576`。
+- 未部署;PR 待 Codex 复核后 Owner 合并,production-ops.yml 发布 kpl-stats-server.js 并重启。
 
 Notes for next agent:
-- 不得为通过数量闸而删除原图中的 `601991/603533`、补造原图没有的 `600227`，或用其他来源原因替代；只有在官方证据或终盘池获得可审计修正并使 missing/extra 同时为空后，才能从头重跑写入前质量闸。
-- 当前已确认仅修复 Eastmoney 终盘池不能解除 TGB 阻断：终盘将从错误的 52 修为真实 54，但未修改的湖南人白底原图仍只有 53 且缺 `600227`。
+- 已知边界:若漂移后的家族连候选池都没进(无任何同族/共板候选),粘性仍无法恢复——
+  按 #123 规范需要"从预测档案凭空复卡",本次未做,留给 Owner 决定是否要。
+- 明日盘中验收:观察东财候选池是否出现资金前排板;若"算力AI"类漂移再现,确认卡片保留。
+
+## 2026-07-20 - Claude - PR#190 Codex 复核 P1 修复(资金补水挂到快照命中路径)
+
+Changed:
+- [P1] 东财/同花顺资金前排补水此前只接在「无快照才执行」的实时回退块——生产常态
+  (当日快照已存在)完全不运行(Codex 云端核验:zs6 快照 7 块且无 BK1008/BK0579)。
+  新增 fundForwardEligible 补水块:当日策略口径 + source===snapshot 时显式拉实时榜做
+  并集,把 bmap 缺的资金前排板合并进内存板池(绝不回写快照文件);补入板打 fundForward 标记。
+- 集成测试 strategy-fund-forward-augment.test.js:贯穿真实 getDayBoardsWithMembers(仅stub IO),
+  预置非空 zs6 快照(无国资云/云计算)+实时榜含二者 → 板池含二者+标记;看板默认调用零变化;
+  历史日拒绝;不回写快照;流出板拒入。
+
+Files: kpl-stats-server.js / tests/strategy-fund-forward-augment.test.js / docs/DAILY_HANDOFF.md
+Validated: node --check;全仓 50 个测试文件全绿。
+Deployment: 未部署;随 PR#190 走。
+
+## 2026-07-20 - Claude - PR#190 Codex 二审 P1 修复(fund-forward 板贯通补选通道)
+
+Changed:
+- [P1] fund-forward 板此前进了中间板池但无 scanChannel,在正式构建 filter(b=>b.scanChannel)
+  处被全部删除(Codex 二审)。修复:enrich 补选池改为 live→全量 / snapshot→仅 fundForward 板
+  (它们本就是当日真实时拉榜数据,普通快照板仍不得伪装);命中板 scanChannel='supplement',
+  supplementBasis 带 fundForward 标;补选观测状态如实标 snapshot+fund-forward。
+- 集成测试延伸到真实 enrich + 正式 scanChannel 过滤模拟:fund-forward 板存活为 supplement、
+  主通道快照前5不变、普通快照板仍被拦、live 路径零回归、状态如实。
+
+Files: kpl-stats-server.js / tests/strategy-fund-forward-augment.test.js / docs/DAILY_HANDOFF.md
+Validated: node --check;全仓 50 个测试文件全绿(专项 17 断言)。
+Deployment: 未部署;随 PR#190。
+
+## 2026-07-20 - Codex - PR #190 复核、合并与云端部署
+
+Changed:
+- 完成 PR #190 最终复核并批准：明星轨迹支持题材名称漂移后的同族/成分板回退匹配；东财资金前排补选贯通快照命中、enrich 与正式 `scanChannel` 过滤链路。
+- 将 PR #190 合并至 `main`（merge commit `14f98b1`），随后原子替换云端 `kpl-stats-server.js` 并重启主服务。
+- 同步记录两份云端运维日志；未改运行数据库、快照、前端、Caddy、娱乐服务或公司端 L2 worker。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/strategy-expected-star-sticky.test.js`
+- `tests/strategy-east-fund-candidates.test.js`
+- `tests/strategy-fund-forward-augment.test.js`
+- `tests/qi-mainline-states.test.js`
+- `docs/DAILY_HANDOFF.md`
+- 仅云端：两份运维日志与部署回退备份
+
+Validated:
+- `node --check kpl-stats-server.js` 通过；全仓 50 个测试文件全部通过；`git diff --check` 通过。
+- 公网 `https://market.dreamerqi.com/health` 返回 HTTP 200、`ok=true`。
+- 公网 `/api/strategy-mainlines?day=2026-07-20` 返回 HTTP 200、`ok=true`，`realtimeSource=live`，主线结果 3 条。
+- 云端服务端 SHA-256 为 `2d7e0a9e4f111ef6959e460ecce8babe43bbf1c138081852b37d393bb3c2b78e`，与合并后本地文件一致；主进程 PID `5276`。
+
+Deployment:
+- 已部署云端并重启主服务。
+- 回退备份：`C:\\PandaDashboard\\_deploy-backups\\pr190-20260720-212205`。
+- 云端部署前已验证旧文件无漂移，部署脚本包含哈希校验、语法检查、失败自动回退和健康检查。
+
+Notes for next agent:
+- PR #190 已正式上线，不要再按“未部署”处理。下一个交易日盘中重点观察资金前排补选板是否进入 L2 候选，以及发生题材漂移后已有明星主线卡是否保持。
+
+## 2026-07-20 - Codex - 准备按 Owner 终盘口径写入 TGB 湖南人复盘
+
+Changed:
+- Owner 明确当日终盘口径：`600227 赤天化` 未封死，必须排除；`601991 大唐发电`、`603533 掌阅科技` 均封住涨停且出现在湖南人官方原图，必须纳入。人工正式候选因此与当前 53 股终盘池完全一致。
+- 新增日期绑定、受保护的一次性生产请求：只接受固定 SHA-256 的 53 行人工载荷，固定校验官方文章、`image-01-06.png` 原图长度与哈希、三股口径、题材块计数及全部质量闸；通过后备份、原子写正式 TGB、强制重折当天综合主因并验证公网四源健康。
+- 生产请求失败时逐文件按存在状态和 SHA-256 回退，再按每股代码、名称、最终题材、最终细分原因及来源覆盖验证公开缓存；公网请求有 25 秒硬超时。日期绑定载荷只经 GitHub `production` Secret 和 SCP 传递，清理失败会使工作流失败。
+
+Files:
+- `.github/workflows/production-ops.yml`
+- `ops/production/requests/2026-07-20-tgb-hunan-write.ps1`
+- `tests/tgb-20260720-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 人工候选 53 行、唯一代码 53；`missingCodes=[]`、`extraCodes=[]`、重复 0、弱字段 0；纳入 `601991/603533`、排除 `600227`。
+- 题材块为电力 18、算力 7、煤炭 6、油服 4、业绩 3、其他 15，合计 53；仅 `000539 粤电力A/粤电力Ａ` 为 NFKC 等价的已记录名称差异。
+- 人工载荷 SHA-256 为 `808264f51913362f64d6989effa4c6cdd2e58606bc1fb97be3e7fc6782f9746d`；官方图片 SHA-256 为 `736c9169f450b4c1819b2d3eaf4f7e1f28315ded7d65e82b88df46b0550f0061`。
+- 全仓 51 个测试文件、嵌入 JavaScript、Windows PowerShell ASCII、workflow YAML/Bash 语法、后端语法及 `git diff --check` 均通过；另一 Codex agent 独立审查了生产、回退和密文清理路径。
+
+Deployment:
+- 本条记录时尚未执行正式写入、综合主因重折或服务重启；生产请求必须先经独立 `codex/` 分支 PR 合并到 `main`，再按固定脚本哈希走受保护工作流。
+
+Notes for next agent:
+- 正式转录来自 Codex 对官方白底原图的逐题材块、逐行、逐字段人工双遍复核；没有使用 OCR、Qwen 或自动视觉结果生成、补全、猜测或校验正式行。
+- 这是按 Owner 明确事实修正当日来源与终盘池，不改变策略算法或评分，因此不需要 AI 讨论组协议。
+
+## 2026-07-20 - Codex - 当日 TGB 湖南人复盘已按 Owner 口径入库
+
+Changed:
+- Owner 最终确认 `600227 赤天化` 当日未封死，不计入涨停池；`601991 大唐发电`、`603533 掌阅科技` 均封住涨停且出现在湖南人官方白底原图，必须计入。此前“赤天化也应计入、终盘应为 54”的中间判断已被本条明确纠正。
+- 通过受保护生产运行 `29751479050` 写入 2026-07-20 `review/tgb-hunan-structured` 正式 53 行，并强制重折当天综合主因库；脚本在任何写入前固定复核官方文章、原图长度/哈希、人工载荷哈希、三股口径与完整质量闸。
+- 正式文章为 `https://www.tgb.cn/a/2tAptm3XkHu`（`7.20湖南人涨停复盘+晚间消息汇总`）；使用官方白底表格 `image-01-06.png`，原图 URL 为 `https://image.tgb.cn/img/2026/07/20/z24ph4hon8kl.png_760w.png`，长度 694480 字节。
+- 生产脚本把本次安全结果追加到两份云端运维日志；一次性载荷 Secret 已在成功后删除，远端脚本和载荷清理步骤通过。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 仅云端：`kpl-limitup-main-reason-sources/tgb-hunan-structured/2026-07-20.json`、当天综合主因/evidence/quality/auto 与四个正式来源折叠产物、两份运维日志和回退备份
+
+Validated:
+- 正式 53 行、唯一代码 53；`missingCodes=[]`、`extraCodes=[]`、重复 0、`weakCount=0`、名称不匹配 0；纳入 `601991/603533`、排除 `600227`。
+- 题材计数：电力 18、算力 7、煤炭 6、油服 4、业绩 3、其他 15，合计 53；仅 `000539 粤电力A/粤电力Ａ` 为已记录的 NFKC 等价差异。
+- 正式 TGB SHA-256：`8220f9f2a65c241d220bc51b2c895a0d1b625cfd9531d52055df26b5e9509f20`；重折后综合主因 SHA-256：`e7b38728c62bcaa51d3717c7354959677f1bbd89b93261534b9122566db9aca6`；终盘池 SHA-256：`a476fc6be57e3a6a64dcf7daa3503229b4583caf956de4542ecc9b9bd55ef1c8`。
+- 独立公网复核显示综合归纳、复盘啦、选股宝、韭研、淘股吧均为 53 行/53 唯一代码，五个标签相对终盘池的 missing/extra 均为空；四源覆盖与主因覆盖均 100%、低置信 0、`sourceErrors=[]`。
+- 当天综合主因、evidence 和 quality 均为 53，review 覆盖与主因覆盖 100%；终盘涨停池为 53，公网 `/health` 为 `ok=true`。
+- 正式行仍全部来自 Codex 对官方原图的逐题材块、逐行、逐字段人工转录和第二遍人工复核；没有使用 OCR、Qwen 或自动视觉结果生成、补全、猜测或校验正式行。
+
+Deployment:
+- 已改变生产运行时复盘数据、重折综合主因并更新云端日志；未部署或替换应用代码，未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+- 写入前回退备份：`C:\PandaDashboard\backups\tgb-hunan-manual-20260720-20260720143858`。
+- 受保护写入请求 PR `#195` 已合并，生产执行提交为 `d2b2277f26bafc3a4944c8ff60fcb5a42ab52510`，脚本 SHA-256 为 `24b1a459f647f77aad128bf3a7206a1ed536e3af288321e9a526f10051a3163d`。
+
+Notes for next agent:
+- 2026-07-20 TGB 已完整完成，不要再按旧的 52/54 中间判断重复阻断或覆盖正式文件；当日权威复盘口径为 53 只，包含大唐发电、掌阅科技，不包含未封死的赤天化。
+- 最终交接通过独立 `codex/tgb-hunan-20260720-handoff` PR 留存；后续只需按正常次日 SOP 继续，不需要为本日数据重启服务。
