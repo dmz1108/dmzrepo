@@ -12571,8 +12571,14 @@ function strategyL2HistoryMaxBucket(row) {
 function strategyL2HistoryStarStatus(row) {
   const maxBucket = strategyL2HistoryMaxBucket(row);
   if (!maxBucket.amount || !maxBucket.priceKnown || !maxBucket.complete || !maxBucket.hasAny) return null;
+  const fiftyBucket = strategyL2HistoryBucket(row, 500000);
   const gain = strategyL2HistoryNum(row?.gainPct ?? row?.gain);
-  if (gain == null || maxBucket.activeBuy <= 1.5e8 || !(maxBucket.activeRatio > 1.65)) return null;
+  const ratioPassCount = [
+    maxBucket.activeRatio > 1.65,
+    fiftyBucket.complete && fiftyBucket.activeRatio > 1.65,
+    maxBucket.supportRatio > 1.65,
+  ].filter(Boolean).length;
+  if (gain == null || maxBucket.activeBuy <= 1.5e8 || ratioPassCount < 2) return null;
   if (gain >= limitUpThreshold(row?.code, row?.name)) return { level: 'confirmed', label: '明星确认', maxBucket };
   if (gain >= 5) return { level: 'expected', label: '预期明星', maxBucket };
   return null;
@@ -13128,6 +13134,11 @@ function renderStrategyMainlinesHTML(d) {
       const buyYi = Number.isFinite(Number(mb.activeBuy)) ? (Number(mb.activeBuy) / 1e8).toFixed(2) + '亿' : '-';
       const r = mb.ratios || {};
       const parts = [`最大档${amountW}`, `主动买${buyYi}`, `主${r.activeRatio ?? '-'}/被${r.passiveRatio ?? '-'}/合${r.supportRatio ?? '-'}`];
+      const gate = mb.ratioGate || null;
+      if (gate) {
+        const v = gate.values || {};
+        parts.push(`比值闸${gate.passed ?? 0}/${gate.required ?? 2}（最大主${v.maxActiveRatio ?? '-'}、50万主${v.fiftyActiveRatio ?? '-'}、最大合${v.maxSupportRatio ?? '-'}）`);
+      }
       if (mb.empty) parts.push('⚠最大档字段在但无大单:非明星');
       if (mb.dataMissing) parts.push('⚠最大档字段缺失:需检查worker采集');
       if (mb.priceMissing) parts.push('⚠现价缺失:无法确认该股允许最大档');
@@ -13174,7 +13185,7 @@ function renderStrategyMainlinesHTML(d) {
       })
       .join('');
     const starRow = starChips ? `<div class="ml-proof-row ml-star-proof">
-      <div class="ml-star-proof-head" title="纯当日 L2 判定:最大可统计档主动买入累计>1.5亿且主动买卖比>1.65；未封大涨为预期明星，封板后为明星确认；盘中出现过的预期信号会保留用于复盘。">
+      <div class="ml-star-proof-head" title="纯当日 L2 判定:最大可统计档主动买入累计>1.5亿，且最大档主动比、50万档主动比、最大档合力比三项中至少两项严格>1.65；未封大涨为预期明星，封板后为明星确认；盘中出现过的预期信号会保留用于复盘。">
         <span class="ml-star-proof-title">明星信号</span>
         <span class="ml-star-proof-summary">${escapeHTML(starSummary)}</span>
       </div>
