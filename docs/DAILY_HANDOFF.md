@@ -7620,3 +7620,28 @@ Deployment:
 
 Notes for next agent:
 - 发布时只需同步 `kpl-stats-server.js` 并重启主服务；部署后用当日存在涨停股的板块验证 `/api/precise-zt10` 返回 Top10 之外的今日涨停股，页面“主”列应显示数值而非 `--`。
+
+## 2026-07-20 - Codex - 今日实时主因次数修复已发布
+
+Changed:
+- PR #179 的今日实时主因次数修复与 PR #180 的部署清单均已合并进 `main`。
+- GitHub 生产运行 `29712201283` 获批后持续停留在托管运行器队列、服务器步骤从未开始；为避免重复执行，先取消该运行，再通过 SSH 部署同一已批准 `main` 文件。
+- 云端部署前自动备份原后端文件，原子替换后仅重启 `Panda Dashboard Server`，并自动追加两份云端运维日志。
+
+Files:
+- `kpl-stats-server.js`
+- `ops/production/manifests/realtime-main-reason-count-20260720.json`
+- `docs/DAILY_HANDOFF.md`
+- 仅云端：`kpl-stats-server.js`、两份运维日志与回退备份
+
+Validated:
+- 本地 46 套测试全部通过，`git diff --check` 与后端语法检查通过。
+- 云端部署文件 SHA-256 为 `32bf7ba0a619f7160381c854e610fc03d9fd95311ccb216a46bbae0652669f30`，与批准的 `main` 文件一致；公网 `/health` 返回 `ok=true`。
+- 真实当日接口验证：`2026-07-20 / zs_type=7 / 在线办公(801625)` 修复前遗漏今日涨停股鸿合科技，修复后返回该股 `totalCount=1`、`ztCount=0`、`days=[20260720]`，今日实时“主”列可显示数值而非 `--`。
+
+Deployment:
+- 已部署云端并重启主服务；回退备份位于 `C:\PandaDashboard\_deploy-backups\manual-realtime-main-reason-20260720-101916`。
+- 未修改任何运行数据库、前端文件、娱乐服务、Caddy 或公司端 L2 worker。
+
+Notes for next agent:
+- “主”仍是严格近 10 日综合主因匹配次数；显示 `0` 表示统计已完成但没有匹配，`--` 才表示未拿到统计。用户刷新今日实时页面后即可取得新结果。
