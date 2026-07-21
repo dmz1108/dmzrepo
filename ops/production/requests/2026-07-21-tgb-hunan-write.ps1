@@ -29,6 +29,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const https = require('https');
 const path = require('path');
+const zlib = require('zlib');
 const { spawnSync } = require('child_process');
 
 const projectRoot = process.argv[2];
@@ -583,7 +584,8 @@ async function verifyPublic(expectedCodes) {
 
 (async () => {
   const payloadB64 = fs.readFileSync(payloadFile, 'utf8').trim();
-  const payloadBytes = Buffer.from(payloadB64, 'base64');
+  const compressedPayloadBytes = Buffer.from(payloadB64, 'base64');
+  const payloadBytes = zlib.gunzipSync(compressedPayloadBytes);
   const inputSha256 = shaBuffer(payloadBytes);
   if (inputSha256 !== expectedInputSha256) throw new Error('manual payload SHA-256 mismatch');
   const payload = JSON.parse(payloadBytes.toString('utf8'));

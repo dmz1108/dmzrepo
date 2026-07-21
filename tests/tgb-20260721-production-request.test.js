@@ -26,6 +26,8 @@ assert(cleanupSection.indexOf("Remove-Item -LiteralPath 'C:/Windows/Temp/${known
 assert(cleanupSection.lastIndexOf('Remove-Item -LiteralPath') < cleanupSection.indexOf('if (Test-Path -LiteralPath'), 'cleanup must attempt every removal before any verification can throw');
 assert(!cleanupSection.includes('if [[ "$remote_status" -ne 255 ]]'), 'all cleanup failures must retry before the workflow fails closed');
 assert(request.includes("$expectedPayloadSha256 = 'b8e7a9c2c07e64e88e088ad366aa219179feb973631a070390bcf35272176ade'"), 'request must pin the manual payload hash');
+assert(request.includes("const zlib = require('zlib')"), 'oversized manual JSON must use a compact date-bound transport');
+assert(request.includes('zlib.gunzipSync(compressedPayloadBytes)'), 'request must decompress before validating the original JSON hash');
 assert(request.includes("expectedImageSha256 = '88318532abb5e8d438cd17071e0e9ff66730d1f8aeaa007aacb752a4716c55cb'"), 'request must pin the twice-reviewed official image hash');
 assert(request.includes('officialArticle.title !== articleTitle'), 'request must verify the official article title');
 assert(request.includes("const expectedCount = 120"), 'request must require the 120-stock filtered review pool');
