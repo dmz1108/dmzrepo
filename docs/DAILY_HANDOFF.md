@@ -8103,3 +8103,30 @@ Deployment:
 
 Notes for next agent:
 - 复审重点：确认预期明星最终 `sealed` 仅在回看展示层升级为真主线；`notSealed` 与 `noData` 不得混淆；本 PR 不应改变任何评分、冻结记录、命中率或后端业务逻辑。
+
+## 2026-07-21 - Codex - PR #200 合并与云端部署
+
+Changed:
+- Claude 对 PR #200 当前提交 `215ad68` 独立复核通过后，将 PR 转为 Ready 并合并到 `main`；合并提交为 `c958122`。
+- 部署前在云端为行情 HTML 和策略工作台样式建立同一回退备份；先发布 CSS，再发布引用新缓存版本的 HTML，避免半发布状态。
+- 仅更新预判回看的前端分组与视觉层级；没有修改后端、评分、冻结记录、运行数据库、行情快照、Caddy 或公司端 L2 worker。
+- 两份云端运维日志均已追加安全部署记录。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `docs/DAILY_HANDOFF.md`
+- 仅云端：两份运维日志和部署回退备份
+
+Validated:
+- Claude 复核与 Codex 合并前验证均确认全仓 51/51 个测试文件通过，后端文件零改动。
+- 部署暂存文件和正式文件的 SHA-256 均与 `main` 一致：HTML `1f16efd4e09cb952ccddb349bea54029d3a3fc1afe39d26b96fe8a0359e8b773`，CSS `00eb430fea6d4c0e778cfb3f405dde85d353713a5ff0f6adab9d312298519431`。
+- 公网 `https://market.dreamerqi.com/kpl`、`/vendor/strategy-workbench.css?v=20260721a` 与 `/health` 均正常；线上 HTML 已包含“真主线 / 未兑现候选 / 待验证”三层文案。
+
+Deployment:
+- 已部署云端，未重启任何服务；健康检查返回 `ok=true`。
+- 回退备份：`C:\PandaDashboard\backups\pr200-review-star-hierarchy-20260721-163648`。
+
+Notes for next agent:
+- PR #200 已正式上线，不要再按“Draft/未部署”处理。
+- PR #201 并非基于 PR #200；继续处理前应同步最新 `main`，并修复其后端门槛顺序、风格板回流、预备主线回看证据丢失及卡片状态/排版问题。
