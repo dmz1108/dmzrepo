@@ -145,6 +145,34 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL STRATEGY-THREE-REQUIREMENTS CHECKS PASSED');
 });
 
+// ---- 5a2. 终盘封板事实升级(Codex #201 四审 P1,实盘反例 2026-07-21 兆易创新 603986) ----
+eval(extractFn('strategyMainlineUpgradeStarsWithFinalSeal'));
+const frozen603986 = mk('半导体', [{ code: '603986', name: '兆易创新', level: 'expected' }], leaders,
+  { expectedStarHistory: [{ code: '603986', level: 'expected', expectedOutcome: 'not-confirmed' }] });
+const upgraded = strategyMainlineUpgradeStarsWithFinalSeal([frozen603986], new Set(['603986']));
+A(upgraded[0].starStocks[0].level === 'confirmed' && upgraded[0].starStocks[0].confirmedBy === 'final-limit-up-db'
+  && upgraded[0].expectedStarHistory[0].expectedOutcome === 'confirmed',
+  '终盘升级:冻结 expected + 最终可靠涨停库在列 → confirmed(旧 expectedOutcome 不得覆盖事实)');
+A(frozen603986.starStocks[0].level === 'expected' && upgraded[0] !== frozen603986,
+  '终盘升级:非变异——共享的缓存/冻结原对象不被改写');
+const gateAfterSeal = strategyMainlineApplyL2StarGate(upgraded, { threeRequirements: true });
+A(gateAfterSeal.kept.length === 1 && gateAfterSeal.kept[0].qiTier === 'formal',
+  '603986 回归:盘中 expected、盘后封板 + 有合格龙头 → 半导体进正式真主线');
+const notSealed = strategyMainlineUpgradeStarsWithFinalSeal([mk('游戏', [{ code: '002624', level: 'expected' }], leaders)], new Set(['603986']));
+A(notSealed[0].starStocks[0].level === 'expected'
+  && strategyMainlineApplyL2StarGate(notSealed, { threeRequirements: true }).reserve.length === 1,
+  '终盘升级:不在涨停库的 expected 保持 expected,仍走预备层');
+A(/strategyMainlineFinalSealedCodes\(isoDay\)/.test(src)
+  && /strategyMainlineUpgradeStarsWithFinalSeal\(\s*inflowGate\.kept\.filter/.test(src),
+  '静态:构建层在分闸前消费终盘封板事实');
+A(/finalSealedCodes = options\.finalSealedCodes instanceof Set/.test(src)
+  && /strategyMainlineUpgradeStarsWithFinalSeal\(themed, finalSealedCodes\)/.test(src),
+  '静态:返回/冻结层(Restrict)同样先升级再分闸');
+A(/unionRows\(originalMainlines, payload\.reserveMainlines\)/.test(src),
+  '静态:冻结载荷既有预备卡与正式候选一起进闸——升级后可重回正式榜');
+A(/strategyPredictPersistFinalSealUpgrades/.test(src) && /绝不改 top\/candidates\/qiTier\/savedAt/.test(src),
+  '静态:confirmed 转换持久化仅限事件轨迹行,预测时点内容不追溯改写');
+
 // ---- 5b. 盘后回看:预备主线预期明星单独输出,与正式回看分开 ----
 eval(extractFn('strategyMainlineReserveStarOutcomes'));
 const outcomePredict = {
@@ -207,7 +235,7 @@ A(/const threeReq = strategyMainlineUsesThreeRequirements\(payload\.day\)/.test(
   '静态:缓存/冻结返回层按载荷日期同样执行三要件重过滤');
 A(/reserveList = \(source && Array\.isArray\(source\.reserveMainlines\)\) \? source\.reserveMainlines : \[\]/.test(src),
   '静态:bySource 预测块并入预备主线轨迹');
-A(/const qiPool = inflowGate\.kept\.filter\(item => strategyMainlineHasQiStarEvidence\(item\)\)/.test(src),
+A(/inflowGate\.kept\.filter\(item => strategyMainlineHasQiStarEvidence\(item\)\)/.test(src),
   '静态:重算对象=未截断的 QI 星证据全集(首闸与截断线不得决定重算对象,Codex #201 三审 P1)');
 A(/strategyMainlineThreeReqReworkAndGate\(qiPool, isoDay, reworkOpts\)/.test(src),
   '静态:三要件日走"重算→唯一分闸"合同,重算完成后才排序截断');

@@ -8326,3 +8326,31 @@ Deployment:
 
 Notes for next agent:
 - 本次 raw 请求 PR `#203`、正式写入请求 PR `#204`、压缩传输修复 PR `#205` 均已合并；2026-07-21 TGB 已完整完成，不要重复覆盖正式文件或重启服务。
+
+## 2026-07-21 - Claude - 四审 P1:终盘封板事实升级(603986 反例)
+
+Changed:
+- 实盘反例:兆易创新 603986 盘中 expected、14:08:05 封板,冻结载荷 level 停在 expected,
+  三要件闸误判半导体"缺确认明星"。修正:正式门槛必须消费最终涨停事实。
+- 新增 strategyMainlineFinalSealedCodes(day)(按日缓存;仅当涨停库 有行+收盘后保存+可靠性
+  校验通过 才返回代码集,盘中返回 null 不提前升级)与
+  strategyMainlineUpgradeStarsWithFinalSeal(非变异:expected 星在终盘涨停库中 → confirmed,
+  confirmedBy=final-limit-up-db,expectedStarHistory 同步升级;共享缓存原对象不改写)。
+- 构建层(impl 三要件路径)与返回/冻结层(Restrict,经 getStrategyMainlinesVisible 传入
+  finalSealedCodes)都在分闸前先升级;Restrict 改为"正式候选+既有预备卡并集进闸"——
+  升级后的预备卡(有龙头)可重回正式榜。
+- strategyPredictPersistFinalSealUpgrades:预测档案只做事件轨迹升级(starTransitions 行补
+  confirmedAt=涨停库 savedAt/lastLevel=confirmed),绝不改 top/candidates/qiTier/savedAt,
+  与"已收盘不写预测"守卫不冲突;幂等。
+
+Files:
+- kpl-stats-server.js / tests/strategy-three-requirements.test.js(603986 回归 4 断言+静态 4)
+
+Validated:
+- node --check;全仓 52 测试文件全绿。回看 API 此前已正确(sealedSameDay=true),本次补齐
+  正式池与前端(经 Restrict)一致性。
+
+Deployment: 未部署;PR #201 待 Codex 复验。
+
+Notes for next agent:
+- 盘中行为不变(expected 保持 expected);升级只在终盘可靠涨停库可用后生效。

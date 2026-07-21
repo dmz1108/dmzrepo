@@ -24448,6 +24448,33 @@ async function writeMainlinePredict(day, sessionPhase, mainlines, confirm, reser
     await recordStrategyDailyIntradayObservation(day, sessionPhase, mainlines, savedAt);
   } catch {}
 }
+// [Codex #201 四审 P1] 终盘封板事实对预测档案只做"事件轨迹"升级:starTransitions 中仍为
+// expected 且代码在最终可靠涨停库的行,补 confirmedAt(取涨停库 savedAt,即事实可用时点)与
+// lastLevel=confirmed(confirmedBy=final-limit-up-db)。绝不改 top/candidates/qiTier/savedAt——
+// 预测时点的分层与内容是历史事实,不追溯改写;这与"已收盘不写预测"的守卫不冲突:
+// 该守卫防的是把盘后答案写成预测,这里只给既有轨迹行补上已发生的封板事件。幂等。
+async function strategyPredictPersistFinalSealUpgrades(day, sealedCodes) {
+  if (!(sealedCodes instanceof Set) || !sealedCodes.size) return;
+  const predict = await readMainlinePredict(day);
+  if (!predict || typeof predict !== 'object') return;
+  const limitDb = await readLimitUpDbDay(day).catch(() => null);
+  const confirmedAt = String(limitDb?.savedAt || '').trim() || new Date().toISOString();
+  let changed = false;
+  const upgradeRows = rows => {
+    for (const row of (Array.isArray(rows) ? rows : [])) {
+      if (!row || String(row.lastLevel || 'expected') === 'confirmed' || row.confirmedAt) continue;
+      if (!sealedCodes.has(normalizeReasonSourceCode(row.code))) continue;
+      row.confirmedAt = confirmedAt;
+      row.lastLevel = 'confirmed';
+      row.confirmedBy = 'final-limit-up-db';
+      changed = true;
+    }
+  };
+  upgradeRows(predict.starTransitions);
+  for (const skey of ['eastmoney', 'ths']) upgradeRows(predict?.bySource?.[skey]?.starTransitions);
+  if (!changed) return;
+  await fs.writeFile(strategyMainlinePredictPath(day), JSON.stringify(predict, null, 2), 'utf8');
+}
 // 两套独立预测落库(Owner v2 / Codex 二审 P1):东财、同花顺各存一块(top/candidates/transitions),
 // 绝不把跨源并集当正式预测真值——同题材两份不再互相覆盖,任一源自己的第 2 名不会被另一源顶掉。
 // 顶层 top/candidates/starTransitions 保留为"东财单源"(非跨源并集)供旧回看兼容,真值以 bySource 为准。
@@ -26526,7 +26553,14 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
   if (threeReqActive) {
     // [Codex #201 三审 P1] 重算对象=未截断的 QI 星证据全集,先重算、唯一一次分闸、最后才排序截断。
     // 首闸(上方 l2Gate)只保留非 QI 证据的诊断行;它的双缺判定基于重算前 leaders,不作数。
-    const qiPool = inflowGate.kept.filter(item => strategyMainlineHasQiStarEvidence(item));
+    // [Codex #201 四审 P1] 分闸前先消费终盘封板事实:盘后 expected 星若在最终可靠涨停库中,
+    // 升级 confirmed(603986 反例)——正式三条件门槛必须读最终状态,不是冻结的盘中等级。
+    const finalSealedCodes = await strategyMainlineFinalSealedCodes(isoDay).catch(() => null);
+    const qiPool = strategyMainlineUpgradeStarsWithFinalSeal(
+      inflowGate.kept.filter(item => strategyMainlineHasQiStarEvidence(item)),
+      finalSealedCodes
+    );
+    if (finalSealedCodes) strategyPredictPersistFinalSealUpgrades(isoDay, finalSealedCodes).catch(() => {});
     const nonQiExcluded = l2Gate.excluded.filter(row => row.reason !== 'missing-confirmed-star-and-leader');
     let reworkOutcome;
     if (diagMode) {
@@ -26807,6 +26841,52 @@ function strategyMainlineHasConfirmedStar(item) {
 }
 function strategyMainlineHasQualifiedLeader(item) {
   return Array.isArray(item?.leaders) && item.leaders.length > 0;
+}
+// [Codex #201 四审 P1,实盘反例 603986 兆易创新 2026-07-21] 终盘封板事实升级:
+// 盘中 expected 的预期明星,若最终可靠涨停库(有行+收盘后保存+可靠性校验,与回看同口径)
+// 记录其涨停,则 expected→confirmed——预期明星的资金/比值腿在 expected 判级时已通过,
+// 缺的只是封板腿,终盘事实补上即为明星确认。冻结载荷的旧 level 不得覆盖最终涨停事实。
+// 盘中(涨停库未终盘)返回 null,expected 保持 expected,不提前升级。
+const strategyMainlineFinalSealCache = new Map();   // day -> Promise<Set<code>|null>
+function strategyMainlineFinalSealedCodes(day) {
+  const isoDay = isoFromCompactDate(day);
+  if (!isoDay) return Promise.resolve(null);
+  if (!strategyMainlineFinalSealCache.has(isoDay)) {
+    strategyMainlineFinalSealCache.set(isoDay, readLimitUpDbDay(isoDay).then(limitDb => {
+      const final = !!(limitDb?.stocks?.length
+        && isSavedAfterMarketClose(limitDb, isoDay)
+        && isReliableLimitUpDbPayload(limitDb));
+      if (!final) {
+        strategyMainlineFinalSealCache.delete(isoDay);   // 未终盘:不缓存,盘后重查
+        return null;
+      }
+      return new Set((limitDb.stocks || [])
+        .map(s => normalizeReasonSourceCode(s?.code))
+        .filter(Boolean));
+    }).catch(() => { strategyMainlineFinalSealCache.delete(isoDay); return null; }));
+  }
+  return strategyMainlineFinalSealCache.get(isoDay);
+}
+// 非变异升级:命中终盘封板的 expected 星换新对象(level=confirmed,confirmedBy 注明依据),
+// 不改写共享的缓存/冻结载荷原对象。expectedStarHistory 同步升级,避免"预期未兑现"旧标残留。
+function strategyMainlineUpgradeStarsWithFinalSeal(items, sealedCodes) {
+  if (!(sealedCodes instanceof Set) || !sealedCodes.size) return Array.isArray(items) ? items : [];
+  return (Array.isArray(items) ? items : []).map(item => {
+    const stars = Array.isArray(item?.starStocks) ? item.starStocks : [];
+    if (!stars.some(star => star?.level === 'expected' && sealedCodes.has(normalizeReasonSourceCode(star?.code)))) {
+      return item;
+    }
+    const upgrade = star => (star?.level === 'expected' && sealedCodes.has(normalizeReasonSourceCode(star?.code)))
+      ? { ...star, level: 'confirmed', label: '明星确认', confirmedBy: 'final-limit-up-db', expectedOutcome: 'confirmed' }
+      : star;
+    return {
+      ...item,
+      starStocks: stars.map(upgrade),
+      ...(Array.isArray(item?.expectedStarHistory)
+        ? { expectedStarHistory: item.expectedStarHistory.map(upgrade) }
+        : {}),
+    };
+  });
 }
 // 预备主线的缺件原因:如实列出缺什么,不合并成模糊标签。
 function strategyMainlineReserveReasons(item) {
@@ -27251,11 +27331,14 @@ function strategyMainlineMatchesConfirm(mainline, confirm) {
 
 // 统一返回层再执行一次严格 QI 过滤：未来实时构建本身已经过闸，这里负责拦住旧内存缓存、
 // 旧文件缓存和已冻结收盘快照中的历史候选，避免部署新规则后页面仍展示旧的未验证卡片。
-function strategyMainlineRestrictToQiPayload(payload) {
+function strategyMainlineRestrictToQiPayload(payload, options = {}) {
   if (!payload || typeof payload !== 'object') return payload;
   // 三要件按 payload 自身日期切界:旧内存/文件缓存与冻结快照重过滤时,2026-07-21 起的当日
   // 载荷同样执行"确认明星+龙头"分层,预备主线以 reserveMainlines 透出;更早的日子保持旧口径。
   const threeReq = strategyMainlineUsesThreeRequirements(payload.day);
+  // [Codex #201 四审 P1] 终盘封板事实升级(603986 反例):冻结载荷的 expected 星若已在最终
+  // 可靠涨停库,升级 confirmed 后再分闸——旧的盘中等级不得覆盖最终涨停事实。
+  const finalSealedCodes = options.finalSealedCodes instanceof Set ? options.finalSealedCodes : null;
   const excluded = [];
   const filterList = (list, source = '') => {
     // [Codex #201 P1-2] 旧内存/文件缓存与冻结快照里的风格板(大盘成长/基金重仓等)在
@@ -27271,34 +27354,40 @@ function strategyMainlineRestrictToQiPayload(payload) {
       });
       return false;
     }) : rows;
-    const gate = strategyMainlineApplyL2StarGate(themed, { threeRequirements: threeReq });
+    const upgraded = (threeReq && finalSealedCodes)
+      ? strategyMainlineUpgradeStarsWithFinalSeal(themed, finalSealedCodes)
+      : themed;
+    const gate = strategyMainlineApplyL2StarGate(upgraded, { threeRequirements: threeReq });
     excluded.push(...gate.excluded.map(row => source ? { ...row, source } : row));
     return {
       kept: gate.kept.map((row, index) => ({ ...row, rank: index + 1 })),
       reserve: (gate.reserve || []).map((row, index) => ({ ...row, rank: index + 1 })),
     };
   };
-  const originalMainlines = Array.isArray(payload.mainlines) ? payload.mainlines : [];
-  const rootGate = filterList(originalMainlines);
-  const mainlines = rootGate.kept;
-  // 缓存载荷可能已带 reserveMainlines(实时构建产物);重过滤结果与其按 key 去重合并。
-  const mergeReserve = (fromGate, existing) => {
+  // 冻结载荷里的既有预备主线与正式候选一起进闸(按 key 去重,正式候选优先):
+  // 预备卡的 expected 星经终盘封板升级 confirmed 且有龙头时,必须能重新升回正式榜。
+  const unionRows = (main, extra) => {
     const seenKeys = new Set();
-    return [...(fromGate || []), ...(Array.isArray(existing) ? existing : [])].filter(row => {
-      if (strategyMainlineIsStyleBoard(row?.theme)) return false;   // 既有 reserve 里的风格板同样剔除
-      const k = String(row?.familyKey || row?.key || row?.theme || '');
-      if (!k || seenKeys.has(k)) return false;
-      seenKeys.add(k);
-      return true;
-    }).slice(0, 6).map((row, index) => ({ ...row, rank: index + 1 }));
+    return [...(Array.isArray(main) ? main : []), ...(threeReq && Array.isArray(extra) ? extra : [])]
+      .filter(row => {
+        const k = String(row?.familyKey || row?.key || row?.theme || '');
+        if (!k || seenKeys.has(k)) return false;
+        seenKeys.add(k);
+        return true;
+      });
   };
-  const reserveMainlines = threeReq ? mergeReserve(rootGate.reserve, payload.reserveMainlines) : [];
+  const originalMainlines = Array.isArray(payload.mainlines) ? payload.mainlines : [];
+  const rootGate = filterList(unionRows(originalMainlines, payload.reserveMainlines));
+  const mainlines = rootGate.kept;
+  const mergeReserve = (fromGate) => (fromGate || []).filter(row => !strategyMainlineIsStyleBoard(row?.theme))
+    .slice(0, 6).map((row, index) => ({ ...row, rank: index + 1 }));
+  const reserveMainlines = threeReq ? mergeReserve(rootGate.reserve) : [];
   const restrictSource = (sourcePayload, source) => {
     if (!sourcePayload || typeof sourcePayload !== 'object') return sourcePayload;
     const original = Array.isArray(sourcePayload.mainlines) ? sourcePayload.mainlines : [];
-    const srcGate = filterList(original, source);
+    const srcGate = filterList(unionRows(original, sourcePayload.reserveMainlines), source);
     const strict = srcGate.kept;
-    const srcReserve = threeReq ? mergeReserve(srcGate.reserve, sourcePayload.reserveMainlines) : [];
+    const srcReserve = threeReq ? mergeReserve(srcGate.reserve) : [];
     const removedCandidates = original.length > strict.length;
     return {
       ...sourcePayload,
@@ -27427,8 +27516,13 @@ async function getStrategyMainlinesVisible(day) {
   const predictDay = isoFromCompactDate(payload.day || day || chinaNowParts().day);
   if (!strategyMainlineUsesStrictQi(predictDay)) return payload;
   const predict = await readMainlinePredict(predictDay).catch(() => null);
+  // [Codex #201 四审 P1] 终盘封板事实进返回层:盘后 expected→confirmed 升级由 Restrict 消费。
+  const finalSealedCodes = strategyMainlineUsesThreeRequirements(predictDay)
+    ? await strategyMainlineFinalSealedCodes(predictDay).catch(() => null)
+    : null;
   return strategyMainlineRestrictToQiPayload(
-    strategyMainlineAttachExpectedHistoryPayload(payload, predict)
+    strategyMainlineAttachExpectedHistoryPayload(payload, predict),
+    { finalSealedCodes }
   );
 }
 
