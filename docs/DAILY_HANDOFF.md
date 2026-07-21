@@ -8004,6 +8004,9 @@ Changed:
   涨停腿/明星闸不再称作方向兜底;新增 Codex 组合门槛提案(527198≥5亿 且 zjjlr>0 且 涨停≥2,
   待 Owner 确认,代码另 PR)与寻源"搁置+三触发条件"结论。命名规则:该口径一律称
   DDE 大单金额/活跃度,不得叫净流入。
+- Owner 2026-07-20 已拍板采用组合门槛(527198≥5亿 且 zjjlr>0 且 涨停≥2,L2 明星要求不变,
+  zjjlr≤0 同时阻断扫描与正式资格);合同已定稿为 approved decision。代码由 Codex 独立分支
+  实现(方向提示与方向闸门须拆为两个接口结果字段),交 Claude 复审。
 
 Files: docs/ops/MARKET_DATA_SOURCE_CONTRACTS.md / docs/DAILY_HANDOFF.md
 Validated: docs-only,node --check 不适用;全仓测试不受影响。
