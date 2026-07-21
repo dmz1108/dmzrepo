@@ -207,7 +207,7 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   A(src.includes('fullWait: diagMode') && src.includes('options.fullWait'), 'fullWait 贯通 enrich(诊断完整等待成分抓取)');
   A(src.includes('const allBoardsForTrace = diagMode ? (boardPayload?.boards || []).slice()'), '保留过滤前全量板块供 boardsWithCode');
   A(src.includes('(allBoardsForTrace || boardPayload?.boards || [])'), 'boardsWithCode 用过滤前全量板块(不漏未进主通道的原始板块)');
-  A(src.match(/if \(diagMode\) \{\s*\n\s*try \{\s*\n\s*await strategyMainlineReworkLeaders\(mainlines, isoDay, reworkOpts\);/), '诊断模式完整等待龙头池重构(不吃 1.2s 超时,且不吞异常)');
+  A(src.match(/if \(diagMode\) \{\s*\n\s*try \{\s*\n\s*await strategyMainlineReworkLeaders\(reworkTargets, isoDay, reworkOpts\);/), '诊断模式完整等待龙头池重构(不吃 1.2s 超时,且不吞异常;三要件后重算对象为正式+预备全集)');
   A(src.includes('debugMeta: diagBuildMeta(') && src.includes('const degraded = ok === false') && src.includes('complete: !degraded'), 'debugMeta 由真实事件计算(complete 需 ok=true 且无读错误/超时/必要缺失),不再静态声明 true');
   A(src.includes("'历史日期不再临时重算'") || src.includes('历史日期不再临时重算'), '事实:历史日展示走冻结快照,修复须重建当日快照');
   A(!fsReal.existsSync(pathReal.join(__dirname, '..', 'tools', 'patch-20260708-suanli-leaders.js')), '快照盲补脚本已废弃删除');

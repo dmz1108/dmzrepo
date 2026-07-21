@@ -24175,6 +24175,10 @@ function strategyPredictCandidateRecord(m) {
     isNewTheme: !!m.isNewTheme,
     l2VerificationStatus: m.l2VerificationStatus || '',
     l2ScanState: m.l2ScanState || '',
+    // 三要件(2026-07-21)分层标记:formal=正式主线 / reserve=预备主线;旧记录无此字段 → null,
+    // 回看的 reserve outcomes 只认显式 reserve,绝不把历史第 4~10 名正式候选猜成预备层。
+    qiTier: m.qiTier || null,
+    reserveReasons: Array.isArray(m.reserveReasons) ? m.reserveReasons.slice(0, 4) : [],
     lowConfidence: null,                   // 低置信通道未上线,先记 null 占位(false=成熟,true=低置信)
     netInflow: isFiniteNumeric(m.netInflow) ? Number(m.netInflow) : null,
     boardCount: Number(m.boardCount) || 0,
@@ -24433,7 +24437,8 @@ async function writeMainlinePredict(day, sessionPhase, mainlines, confirm, reser
     const savedAt = new Date().toISOString();
     const existing = await readMainlinePredict(day);
     const block = strategyPredictBuildBlock(mainlines, existing?.starTransitions, savedAt, reserveMainlines);
-    if (!block.top.length) return;
+    // 三要件后正式 top 可为空而预备轨迹仍有预期明星——整份轨迹不得因 top 空而不落盘(Codex #201 P1-3)。
+    if (!block.top.length && !block.starTransitions.length && !block.candidates.length) return;
     await fs.mkdir(STRATEGY_MAINLINE_DATA_DIR, { recursive: true });
     await fs.writeFile(strategyMainlinePredictPath(day), JSON.stringify({
       day, savedAt, sessionPhase: sessionPhase || '',
@@ -25009,6 +25014,52 @@ function strategyMainlineExpectedStarTransitions(predict, main) {
   return [];
 }
 
+// 三要件(2026-07-21,Codex #201 P1-3)预备主线的盘后回看:reserve 只进 candidates/starTransitions
+// 不进 top,其预期明星"后来是否封板"必须单独输出、单独计数——这是"三要件是否错杀真主线"的检验,
+// 与正式主线命中率口径分开,绝不混入 expectedSeal 统计。
+// 识别只认 candidates 里显式落库的 qiTier==='reserve'(#201 起才写入);旧记录无此字段一律不产出,
+// 不把历史第 4~10 名正式候选或旧口径 expected 候选猜成预备层(不追溯纪律与 #123/#201 同源)。
+function strategyMainlineReserveStarOutcomes(predict) {
+  const blocks = [];
+  if (predict?.bySource) {
+    for (const skey of ['eastmoney', 'ths']) {
+      if (predict.bySource[skey]) blocks.push([skey, predict.bySource[skey]]);
+    }
+  } else if (predict) {
+    blocks.push(['eastmoney', predict]);   // 旧 schema:根层即东财兼容块
+  }
+  const out = [];
+  const seen = new Set();
+  for (const [sourceKey, block] of blocks) {
+    const reserveByKey = new Map((Array.isArray(block.candidates) ? block.candidates : [])
+      .filter(row => row && row.qiTier === 'reserve')
+      .map(row => [String(row?.key || row?.familyKey || '').trim(), row])
+      .filter(([key]) => key));
+    if (!reserveByKey.size) continue;
+    for (const row of (Array.isArray(block.starTransitions) ? block.starTransitions : [])) {
+      const mKey = String(row?.mainlineKey || '').trim();
+      const code = normalizeReasonSourceCode(row?.code);
+      const candidate = mKey ? reserveByKey.get(mKey) : null;
+      if (!candidate || !code) continue;
+      const dedupKey = `${sourceKey}|${mKey}|${code}`;
+      if (seen.has(dedupKey)) continue;
+      seen.add(dedupKey);
+      out.push({
+        source: sourceKey,
+        mainlineKey: mKey,
+        mainlineTheme: String(row?.mainlineTheme || candidate?.theme || '').trim(),
+        reserveReasons: Array.isArray(candidate?.reserveReasons) ? candidate.reserveReasons : [],
+        code,
+        name: String(row?.name || '').trim(),
+        firstExpectedAt: String(row?.firstExpectedAt || '').trim(),
+        confirmedAt: String(row?.confirmedAt || '').trim() || null,
+        lastLevel: String(row?.lastLevel || 'expected').trim() || 'expected',
+      });
+    }
+  }
+  return out;
+}
+
 // schema v2 起已经保存候选的 L2 验证状态。回看里的“正式主线”只认预期明星/明星确认的
 // 正证据；unscanned、scanned-no-star、active 都仍可留在候选档案，但不能冒充正式主线。
 // 更早的旧档案没有足够字段可还原当时 L2 状态，继续按旧口径展示，避免伪造历史结论。
@@ -25090,6 +25141,8 @@ async function getStrategyMainlineReview(days = 10) {
   let starWins = 0, starTotal = 0, leaderWins = 0, leaderTotal = 0;
   let mainlineTop1Hits = 0, mainlineTop3Hits = 0, mainlineTotal = 0;
   let expectedSealWins = 0, expectedSealTotal = 0;
+  // 三要件预备主线的预期明星封板统计(Codex #201 P1-3):独立分母,不与正式 expectedSeal 混算。
+  let reserveSealWins = 0, reserveSealTotal = 0;
   // 两套独立预测(Owner v2)的按来源主线命中统计——各自评各自的第 1 主线是否命中当日真实第一家族。
   const srcStat = { eastmoney: { total: 0, top1: 0, top3: 0 }, ths: { total: 0, top1: 0, top3: 0 } };
   // 从最新交易日开始(修复:旧循环从 length-2 起,最新收盘日因无次日收盘价被整行丢弃,
@@ -25172,6 +25225,22 @@ async function getStrategyMainlineReview(days = 10) {
       if (sampleValid && (item.sealStatus === 'sealed' || item.sealStatus === 'notSealed')) {
         expectedSealTotal += 1;
         if (item.sealStatus === 'sealed') expectedSealWins += 1;
+      }
+      return item;
+    });
+    // 预备主线(三要件降级层)的预期明星盘后结果:按来源/题材/缺件原因逐股输出封板状态,
+    // 独立计数——预备层封板率高说明三要件在错杀,应回给 Owner 复核门槛;混进正式口径则两边都失真。
+    const reserveStarOutcomes = strategyMainlineReserveStarOutcomes(predict).map(row => {
+      const item = { ...row, sealedSameDay: null, sealStatus: 'noData' };
+      if (pendingReview) item.sealStatus = 'pending';
+      else if (limitDbFinal) {
+        item.sealedSameDay = (limitDb.stocks || [])
+          .some(s => normalizeReasonSourceCode(s?.code) === item.code);
+        item.sealStatus = item.sealedSameDay ? 'sealed' : 'notSealed';
+      }
+      if (sampleValid && (item.sealStatus === 'sealed' || item.sealStatus === 'notSealed')) {
+        reserveSealTotal += 1;
+        if (item.sealStatus === 'sealed') reserveSealWins += 1;
       }
       return item;
     });
@@ -25272,7 +25341,7 @@ async function getStrategyMainlineReview(days = 10) {
       candidateThemes: noMainline ? predict.top.slice(0, 3).map(row => String(row?.theme || '')).filter(Boolean) : [],
       phase, sampleValid, sampleInvalidReason, pendingReview,
       actualTop, actualFirstTied, mainlineHitTop1, mainlineHitTop3, mainReasonMissingCount,
-      star, expectedStars, leader, leaders,
+      star, expectedStars, reserveStarOutcomes, leader, leaders,
       ...(reviewBySource ? { bySource: reviewBySource } : {}),
     });
   }
@@ -25287,6 +25356,9 @@ async function getStrategyMainlineReview(days = 10) {
       mainlineTop3Rate: mainlineTotal ? Number((mainlineTop3Hits / mainlineTotal * 100).toFixed(1)) : null,
       expectedSealWins, expectedSealTotal,
       expectedSealRate: expectedSealTotal ? Number((expectedSealWins / expectedSealTotal * 100).toFixed(1)) : null,
+      // 预备主线(三要件降级层)预期明星封板统计——与正式 expectedSeal 分开,检验三要件是否错杀。
+      reserveSealWins, reserveSealTotal,
+      reserveSealRate: reserveSealTotal ? Number((reserveSealWins / reserveSealTotal * 100).toFixed(1)) : null,
       // 两套独立预测各自的主线命中率(schema v3 起有 bySource 记录才累计;旧记录不参与)。
       bySource: {
         eastmoney: { mainlineTotal: srcStat.eastmoney.total, mainlineTop1Hits: srcStat.eastmoney.top1, mainlineTop3Hits: srcStat.eastmoney.top3,
@@ -26405,12 +26477,12 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     (Number(b.score) || 0) - (Number(a.score) || 0) ||
     (Number(b.count) || 0) - (Number(a.count) || 0) ||
     (Number(b.maxLianban) || 0) - (Number(a.maxLianban) || 0);
-  const mainlines = l2Gate.kept
+  let mainlines = l2Gate.kept
     .sort(mainlineSort)
     .slice(0, 10)
     .map((x, i) => ({ ...x, rank: i + 1 }));
   // 预备主线:有 L2 明星证据但缺确认明星/缺龙头,独立层展示,不计正式口径(三要件 2026-07-21)。
-  const reserveMainlines = (l2Gate.reserve || [])
+  let reserveMainlines = (l2Gate.reserve || [])
     .sort(mainlineSort)
     .slice(0, 6)
     .map((x, i) => ({ ...x, rank: i + 1 }));
@@ -26421,18 +26493,32 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     traceCodes: Array.isArray(options.traceCodes) ? options.traceCodes : [],
     debugErrors,
   };
+  // 三要件下正式+预备候选全集一起重算龙头:重算后的 leaders 才是主因硬门槛真值(Codex #201 P1-1)。
+  const reworkTargets = useThreeRequirements ? [...mainlines, ...reserveMainlines] : mainlines;
   if (diagMode) {
     try {
-      await strategyMainlineReworkLeaders(mainlines, isoDay, reworkOpts);
+      await strategyMainlineReworkLeaders(reworkTargets, isoDay, reworkOpts);
     } catch (e) {
       debugErrors.push(`rework: ${String(e && e.message || e)}`);
     }
   } else {
     await strategyMainlineWithTimeout(
-      strategyMainlineReworkLeaders(mainlines, isoDay, reworkOpts).catch(() => {}),
+      strategyMainlineReworkLeaders(reworkTargets, isoDay, reworkOpts).catch(() => {}),
       STRATEGY_MAINLINE_REWORK_TIMEOUT_MS,
       null
     );
+  }
+  // [Codex #201 P1-1] 按重算后的 leaders 二次分层:原始 leaders 非空、重算后被清空
+  // (如 mainZt10Count=0)的卡必须从正式榜降级/移除;双缺卡此时也如实转入诊断。
+  if (useThreeRequirements && !options?.leaderDebug) {
+    const regate = strategyMainlineApplyL2StarGate(reworkTargets, { threeRequirements: true });
+    mainlines = regate.kept.sort(mainlineSort).slice(0, 10).map((x, i) => ({ ...x, rank: i + 1 }));
+    reserveMainlines = regate.reserve.sort(mainlineSort).slice(0, 6).map((x, i) => ({ ...x, rank: i + 1 }));
+    for (const row of regate.excluded) {
+      if (!l2Gate.excluded.some(e => e.familyKey === row.familyKey && e.reason === row.reason)) {
+        l2Gate.excluded.push(row);
+      }
+    }
   }
   if (mainlineConfirm) {
     for (const m of mainlines) {
@@ -26704,8 +26790,20 @@ function strategyMainlineApplyL2StarGate(items, options = {}) {
       const reasons = strategyMainlineReserveReasons(item);
       if (!reasons.length) {
         kept.push({ ...item, qiTier: 'formal' });
-      } else {
+      } else if (reasons.length === 1) {
+        // 单缺进预备层:待明星确认(expected+龙头) / 待龙头形成(confirmed+无龙头)。
         reserve.push({ ...item, qiTier: 'reserve', reserveReasons: reasons });
+      } else {
+        // 双缺仅诊断(Codex #201 P2):既无确认明星也无合格龙头,不占预备位。
+        excluded.push({
+          theme: String(item?.theme || ''),
+          familyKey: String(item?.familyKey || item?.key || ''),
+          count: Number(item?.count) || 0,
+          boardCount: Number(item?.boardCount) || 0,
+          l2VerificationStatus: String(item?.l2VerificationStatus || ''),
+          l2ScanState: String(item?.l2ScanState || ''),
+          reason: 'missing-confirmed-star-and-leader',
+        });
       }
       continue;
     }
@@ -27069,7 +27167,20 @@ function strategyMainlineRestrictToQiPayload(payload) {
   const threeReq = strategyMainlineUsesThreeRequirements(payload.day);
   const excluded = [];
   const filterList = (list, source = '') => {
-    const gate = strategyMainlineApplyL2StarGate(Array.isArray(list) ? list : [], { threeRequirements: threeReq });
+    // [Codex #201 P1-2] 旧内存/文件缓存与冻结快照里的风格板(大盘成长/基金重仓等)在
+    // 返回层同样剔除,否则会以预备主线身份复活;剔除项记入 excluded 供观测。
+    const rows = Array.isArray(list) ? list : [];
+    const themed = threeReq ? rows.filter(item => {
+      if (!strategyMainlineIsStyleBoard(item?.theme)) return true;
+      excluded.push({
+        theme: String(item?.theme || ''),
+        familyKey: String(item?.familyKey || item?.key || ''),
+        reason: 'style-board-not-theme',
+        ...(source ? { source } : {}),
+      });
+      return false;
+    }) : rows;
+    const gate = strategyMainlineApplyL2StarGate(themed, { threeRequirements: threeReq });
     excluded.push(...gate.excluded.map(row => source ? { ...row, source } : row));
     return {
       kept: gate.kept.map((row, index) => ({ ...row, rank: index + 1 })),
@@ -27083,6 +27194,7 @@ function strategyMainlineRestrictToQiPayload(payload) {
   const mergeReserve = (fromGate, existing) => {
     const seenKeys = new Set();
     return [...(fromGate || []), ...(Array.isArray(existing) ? existing : [])].filter(row => {
+      if (strategyMainlineIsStyleBoard(row?.theme)) return false;   // 既有 reserve 里的风格板同样剔除
       const k = String(row?.familyKey || row?.key || row?.theme || '');
       if (!k || seenKeys.has(k)) return false;
       seenKeys.add(k);

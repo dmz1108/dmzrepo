@@ -9892,7 +9892,7 @@
     }
   }
 </style>
-<link href="/vendor/strategy-workbench.css?v=20260718b" rel="stylesheet">
+<link href="/vendor/strategy-workbench.css?v=20260721a" rel="stylesheet">
 <link href="/vendor/review-workbench.css?v=20260718d" rel="stylesheet">
 <link href="/vendor/realtime-workbench.css?v=20260720" rel="stylesheet">
 </head>
@@ -13352,13 +13352,14 @@ function renderStrategyMainlinesHTML(d) {
         tag = ' · 暂缺';
       }
       // 预备主线区(三要件 2026-07-21):有 L2 明星证据但缺确认明星/缺龙头,琥珀降级层,
-      // 与预判回看的"未兑现候选"层同构;明确标注缺件,绝不与正式主线混排。
+      // 与预判回看的"未兑现候选"层同构;缺件状态用流式状态栏置于卡片上方,不做绝对定位角标
+      // (Codex #201 补充意见:绝对角标会压住卡片右上角的预判分/主线分)。预备卡走紧凑样式。
       const reserveNote = (row) => (Array.isArray(row?.reserveReasons) ? row.reserveReasons : [])
-        .map(r => r === 'no-confirmed-star' ? '缺确认明星' : (r === 'no-qualified-leader' ? '缺龙头' : r)).join('·');
+        .map(r => r === 'no-confirmed-star' ? '待明星确认' : (r === 'no-qualified-leader' ? '待龙头形成' : r)).join(' · ');
       const reserveBlock = reserves.length ? `<div class="ml-reserve">
         <div class="ml-reserve-head"><span>预备主线</span><small>有预期明星证据 · 待确认明星/龙头补齐后升正式榜</small></div>
         <div class="ml-grid">${reserves.slice(0, 4).map(row => `<div class="ml-reserve-card">
-          <span class="ml-reserve-badge" title="缺件：${escapeHTML(reserveNote(row) || '待确认')}">预备 · ${escapeHTML(reserveNote(row) || '待确认')}</span>
+          <div class="ml-reserve-bar">预备 · ${escapeHTML(reserveNote(row) || '待补齐')}</div>
           ${renderCard(row)}
         </div>`).join('')}</div>
       </div>` : '';

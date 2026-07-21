@@ -61,18 +61,19 @@ const gate = strategyMainlineApplyL2StarGate([
   mk('确认+龙头', [{ code: '000001', level: 'confirmed' }], leaders),               // → formal
   mk('半导体', [{ code: '603986', level: 'expected' }], leaders),                    // → reserve(缺确认)
   mk('确认无龙头', [{ code: '000002', level: 'confirmed' }], []),                    // → reserve(缺龙头)
-  mk('全缺', [{ code: '000003', level: 'expected' }], []),                           // → reserve(双缺)
+  mk('全缺', [{ code: '000003', level: 'expected' }], []),                           // → excluded(双缺,仅诊断)
   { theme: '无证据', familyKey: 'theme:无证据', l2VerificationStatus: 'scanned-no-star', l2ScanState: 'scanned-no-star', starStocks: [], leaders },
 ], { threeRequirements: true });
 A(gate.kept.length === 1 && gate.kept[0].theme === '确认+龙头' && gate.kept[0].qiTier === 'formal',
   '正式榜:仅确认明星+合格龙头同时满足者(qiTier=formal)');
-A(gate.reserve.length === 3, 'expected-only/缺龙头/双缺 全部降级预备层');
+A(gate.reserve.length === 2, '单缺(expected-only 有龙头 / 确认无龙头)降级预备层');
 const rsv = Object.fromEntries(gate.reserve.map(r => [r.theme, r.reserveReasons.join(',')]));
 A(rsv['半导体'] === 'no-confirmed-star', '预备缺件如实:半导体缺确认明星(2026-07-21 实盘形态)');
 A(rsv['确认无龙头'] === 'no-qualified-leader', '预备缺件如实:有确认明星但无龙头');
-A(rsv['全缺'] === 'no-confirmed-star,no-qualified-leader', '预备缺件如实:双缺并列列出');
-A(gate.excluded.length === 1 && gate.excluded[0].reason === 'completed-scan-without-star',
-  '无 L2 证据者仍走原 excluded 诊断,不混入预备层');
+const exc = Object.fromEntries(gate.excluded.map(r => [r.theme, r.reason]));
+A(gate.excluded.length === 2 && exc['全缺'] === 'missing-confirmed-star-and-leader',
+  '双缺不占预备位,如实转诊断(Codex #201 P2:reserve 只留单缺)');
+A(exc['无证据'] === 'completed-scan-without-star', '无 L2 证据者仍走原 excluded 诊断,不混入预备层');
 
 // ---- 4. 旧口径兼容(threeRequirements=false):expected 照旧过闸,reserve 恒空 ----
 const legacy = strategyMainlineApplyL2StarGate([
@@ -95,6 +96,53 @@ A(block.top.length === 1 && block.top[0].theme === '确认+龙头', '预测 top 
 A(block.starTransitions.some(t => t.code === '603986'),
   '预备主线的预期明星轨迹照常落档——命中率复盘样本不因分层断粮');
 A(block.candidates.some(c => c.theme === '半导体'), '预备主线进入 candidates 档案');
+const reserveOnlyBlock = strategyPredictBuildBlock(
+  [], [], '2026-07-21T02:00:00.000Z',
+  [mk('半导体', [{ code: '603986', name: '兆易创新', level: 'expected', gain: 6.1 }], leaders, { rank: 1, qiTier: 'reserve', reserveReasons: ['no-confirmed-star'] })]
+);
+A(!reserveOnlyBlock.top.length && reserveOnlyBlock.candidates.length === 1 && reserveOnlyBlock.starTransitions.length === 1,
+  '正式榜全空的纯预备日:candidates/starTransitions 仍有内容(配合放宽的落盘守卫,预测不丢档)');
+A(reserveOnlyBlock.candidates[0].qiTier === 'reserve'
+  && reserveOnlyBlock.candidates[0].reserveReasons.join(',') === 'no-confirmed-star',
+  '候选档案持久化 qiTier/缺件原因——盘后回看识别预备层的唯一依据');
+
+// ---- 5b. 盘后回看:预备主线预期明星单独输出,与正式回看分开 ----
+eval(extractFn('strategyMainlineReserveStarOutcomes'));
+const outcomePredict = {
+  bySource: {
+    eastmoney: {
+      top: [{ key: 'theme:确认+龙头', theme: '确认+龙头' }],
+      candidates: [
+        { key: 'theme:确认+龙头', theme: '确认+龙头', qiTier: 'formal', reserveReasons: [] },
+        { key: 'theme:半导体', theme: '半导体', qiTier: 'reserve', reserveReasons: ['no-confirmed-star'] },
+      ],
+      starTransitions: [
+        { mainlineKey: 'theme:确认+龙头', code: '000001', name: '正星', firstExpectedAt: '2026-07-21T01:40:00.000Z' },
+        { mainlineKey: 'theme:半导体', mainlineTheme: '半导体', code: '603986', name: '兆易创新', firstExpectedAt: '2026-07-21T02:00:00.000Z', lastLevel: 'expected' },
+      ],
+    },
+    ths: {
+      top: [],
+      candidates: [{ key: 'theme:消费电子', theme: '消费电子', qiTier: 'reserve', reserveReasons: ['no-qualified-leader'] }],
+      starTransitions: [{ mainlineKey: 'theme:消费电子', code: '000725', name: '京东方A', firstExpectedAt: '2026-07-21T02:10:00.000Z', lastLevel: 'expected' }],
+    },
+  },
+};
+const outcomes = strategyMainlineReserveStarOutcomes(outcomePredict);
+A(outcomes.length === 2, '回看:两源预备明星都产出,正式主线(确认+龙头)的明星不混入');
+const east = outcomes.find(o => o.source === 'eastmoney');
+A(!!east && east.code === '603986' && east.mainlineTheme === '半导体'
+  && east.reserveReasons.join(',') === 'no-confirmed-star',
+  '回看:预备结果按来源/题材/缺件/个股逐条落列(东财 半导体 兆易创新)');
+A(outcomes.some(o => o.source === 'ths' && o.code === '000725' && o.reserveReasons.join(',') === 'no-qualified-leader'),
+  '回看:同花顺预备(缺龙头)独立成行,不与东财合并');
+const legacyPredictNoTier = {
+  top: [{ key: 'theme:白酒', theme: '白酒' }],
+  candidates: [{ key: 'theme:白酒', theme: '白酒' }, { key: 'theme:第四名', theme: '第四名' }],
+  starTransitions: [{ mainlineKey: 'theme:第四名', code: '600000', name: '某股', firstExpectedAt: '2026-07-18T02:00:00.000Z' }],
+};
+A(strategyMainlineReserveStarOutcomes(legacyPredictNoTier).length === 0,
+  '回看:旧档案无 qiTier 标记时一律不产出——不把历史第4~10名正式候选猜成预备层(不追溯)');
 
 // ---- 6. 静态接线 ----
 A(/boardPayload\.boards = boardPayload\.boards\.filter\(b => !strategyMainlineIsStyleBoard\(b\?\.name\)\)/.test(src),
@@ -107,5 +155,13 @@ A(/const threeReq = strategyMainlineUsesThreeRequirements\(payload\.day\)/.test(
   '静态:缓存/冻结返回层按载荷日期同样执行三要件重过滤');
 A(/reserveList = \(source && Array\.isArray\(source\.reserveMainlines\)\) \? source\.reserveMainlines : \[\]/.test(src),
   '静态:bySource 预测块并入预备主线轨迹');
+A(/const regate = strategyMainlineApplyL2StarGate\(reworkTargets, \{ threeRequirements: true \}\)/.test(src),
+  '静态:龙头重算后按重算结果二次分层——原始 leaders 非空、重算清空的卡不得留在正式榜(Codex #201 P1-1)');
+A(/reason: 'style-board-not-theme'/.test(src),
+  '静态:冻结/缓存载荷返回层同样剔除风格板并落诊断(Codex #201 P1-2)');
+A(/if \(!block\.top\.length && !block\.starTransitions\.length && !block\.candidates\.length\) return;/.test(src),
+  '静态:预测落盘守卫放宽——正式 top 全空但预备轨迹有内容仍落档(Codex #201 P1-3)');
+A(/reserveStarOutcomes/.test(src) && /reserveSealTotal/.test(src) && /reserveSealRate/.test(src),
+  '静态:回看 API 输出预备明星结果并独立计数,不混正式 expectedSeal 口径(Codex #201 P1-3)');
 
 console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL STRATEGY-THREE-REQUIREMENTS CHECKS PASSED');

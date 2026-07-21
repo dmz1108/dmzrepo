@@ -1073,16 +1073,30 @@ body.view-strategy .ml-reserve-card .ml-card {
   border-color: rgba(255, 200, 87, 0.35);
   background: rgba(255, 200, 87, 0.05);
 }
-body.view-strategy .ml-reserve-badge {
-  position: absolute;
-  top: 6px;
-  right: 8px;
-  z-index: 2;
+/* 缺件状态栏走文档流,置于卡片上方——不用绝对定位角标,避免压住卡片右上角的
+   预判分/主线分(Codex #201 补充意见,半导体卡 815/1505 实测重叠)。 */
+body.view-strategy .ml-reserve-bar {
   font-size: 10px;
-  padding: 1px 7px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 200, 87, 0.5);
+  line-height: 1.5;
+  padding: 2px 8px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  border: 1px dashed rgba(255, 200, 87, 0.5);
   color: #e8b64c;
-  background: rgba(255, 200, 87, 0.1);
-  white-space: nowrap;
+  background: rgba(255, 200, 87, 0.08);
+}
+/* 预备卡即使含确认明星(缺龙头件)也保持琥珀降级视觉,不套正式榜的红色确认样式 */
+body.view-strategy .ml-reserve-card .ml-card.has-confirmed-star {
+  border-color: rgba(255, 200, 87, 0.35) !important;
+  border-left-color: var(--st-amber) !important;
+  background: rgba(255, 200, 87, 0.05) !important;
+}
+/* 预备卡紧凑化:只保留头部脉冲、龙头/明星证据行与分数;明细/信号带/趋势等收起 */
+body.view-strategy .ml-reserve-card .ml-detail-section,
+body.view-strategy .ml-reserve-card .ml-star-proof,
+body.view-strategy .ml-reserve-card .ml-signal-strip,
+body.view-strategy .ml-reserve-card .ml-newtheme,
+body.view-strategy .ml-reserve-card .ml-trend,
+body.view-strategy .ml-reserve-card .ml-srcpairs {
+  display: none !important;
 }
