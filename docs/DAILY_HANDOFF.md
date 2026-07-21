@@ -8163,3 +8163,39 @@ Deployment:
 Notes for next agent:
 - PR #200 已正式上线，不要再按“Draft/未部署”处理。
 - PR #201 并非基于 PR #200；继续处理前应同步最新 `main`，并修复其后端门槛顺序、风格板回流、预备主线回看证据丢失及卡片状态/排版问题。
+
+## 2026-07-21 - Claude - 三要件按 Codex #201 审查修订 + 同步 main(#200 已上线)
+
+Changed:
+- P1-1 龙头重算后二次分层:reworkTargets=正式+预备全集一起重算,重算完用
+  strategyMainlineApplyL2StarGate 重新分层——原始 leaders 非空、重算清空(如 mainZt10Count=0)
+  的卡不再留在正式榜;双缺卡如实进诊断(missing-confirmed-star-and-leader,不占预备位)。
+- P1-2 冻结/缓存返回层(RestrictToQiPayload)同样前置剔除风格板(excluded 记
+  style-board-not-theme),reserveMainlines 合并侧同滤——stale/frozen 载荷无法回流风格板。
+- P1-3 预备回看不丢证据:预测落盘守卫放宽(top 空但 candidates/starTransitions 有内容仍落档);
+  候选档案持久化 qiTier/reserveReasons;回看 API 新增 strategyMainlineReserveStarOutcomes,
+  按来源/题材/缺件/个股输出预备预期明星封板状态,reserveSeal 独立计数(检验三要件是否错杀),
+  不混正式 expectedSeal;旧档案无 qiTier 一律不产出(不追溯)。
+- P2 语义与视觉:缺件拆分"待明星确认/待龙头形成";预备卡缺件状态改流式状态栏(不再绝对角标
+  压右上角分数);预备卡紧凑化(隐藏明细/信号带/趋势等),含确认明星缺龙头卡保持琥珀不套红。
+- 同步 main:#200(回看三层级)已合并部署;DAILY_HANDOFF 双方条目保留;CSS 缓存版本统一升
+  20260721b(#200 已用 20260721a 部署,本分支再加样式必须再 bump)。
+
+Files:
+- kpl-stats-server.js / kpl-dashboard_17_apple.html / Qi/vendor/strategy-workbench.css
+- tests/strategy-three-requirements.test.js(扩展:双缺转诊断/纯预备日落档/回看 outcomes 两源+不追溯)
+- tests/mainline-review.test.js / tests/leader-pool-debug.test.js / tests/strategy-workbench-ui.test.js
+
+Validated:
+- node --check 通过;合并 main 后全仓 52 个测试文件全绿。
+- 生产证据回放(AI 只读通道,strategy-live day=2026-07-21,evidence sha256 d2ab95d136454506…):
+  真实 4 卡经新门槛→ 大盘成长/基金重仓 风格板剔除,半导体/消费电子·显示 进预备层
+  (no-confirmed-star),正式榜空——与 Owner 判定一致,无风格板残留。
+  (AI compact 载荷无 starStocks 字段,星级按 14:59 已记录证据重建:两题材全天仅 expected。)
+
+Deployment:
+- 未部署;PR #201 待 Codex 复验。发布仍为 server+HTML+CSS 三件原子+重启(server 变更)。
+
+Notes for next agent:
+- 回看前端把 reserveStarOutcomes 并入 #200 的"未兑现候选/待验证"分组是后续小项,后端字段已就绪。
+- reserveSealRate 高说明三要件在错杀,应回报 Owner 复核门槛。
