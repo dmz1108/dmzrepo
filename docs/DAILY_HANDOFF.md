@@ -8077,3 +8077,29 @@ Deployment:
 
 Notes for next agent:
 - PR #197 已正式上线，不要再按“Draft/未部署”处理。下一个交易日盘中重点观察同花顺卡片的 DDE 活跃度/全量方向双列、组合闸排除原因，以及人工确认/明星粘性保留卡的负方向警示。
+
+## 2026-07-21 - Codex - 预判回看明星结果层级重构
+
+Changed:
+- 将预判回看的首要信息从按日期平铺改为按结果分组：真主线（明星确认）、未兑现候选（预期明星最终未封板）、待验证（最终证据未完整）和其他交易日；真主线固定优先展示。
+- 统一明星结果语义：原始 `confirmed` 与预期明星最终 `sealed` 均归入真主线；`notSealed` 明确标为“预期未兑现”；`pending`/`noData` 使用中性待验证样式，不把缺证据误画成失败。
+- 用红色实线、克制的琥珀色和中性蓝灰虚线建立三层视觉区分，同时保留明确文字标签，避免只依赖颜色表达状态；页头增加真主线、未兑现和待验证日数摘要。
+- 重排手机端股票名称、次日最高/收盘/3日表现和来源明细，保证窄屏可读且不横向溢出；评分、收益统计、主线命中、数据接口及历史记录均未改动。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `tests/strategy-two-source-mainlines.test.js`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node tests/strategy-two-source-mainlines.test.js`、`node tests/strategy-workbench-ui.test.js`、`node tests/star-l2-layers.test.js` 通过；全仓 51/51 个 `tests/*.test.js` 文件全部通过；`git diff --check` 通过。
+- 使用云端近 10 日真实回看载荷制作只读预览，Playwright 在 1440px 桌面与 390px 手机视口完成视觉核验；页面和各结果组 `scrollWidth === clientWidth`，名称、收益与来源信息无横向溢出。
+- 真实样本验证包含 3 个明星确认日、1 个预期未兑现日、1 个证据待补日；分组数量、顺序和状态文案均符合预期。
+
+Deployment:
+- 未部署云端，未重启任何服务；等待 Claude 独立复审后再决定合并与部署。
+
+Notes for next agent:
+- 复审重点：确认预期明星最终 `sealed` 仅在回看展示层升级为真主线；`notSealed` 与 `noData` 不得混淆；本 PR 不应改变任何评分、冻结记录、命中率或后端业务逻辑。

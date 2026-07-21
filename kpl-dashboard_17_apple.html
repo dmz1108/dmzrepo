@@ -9892,7 +9892,7 @@
     }
   }
 </style>
-<link href="/vendor/strategy-workbench.css?v=20260718b" rel="stylesheet">
+<link href="/vendor/strategy-workbench.css?v=20260721a" rel="stylesheet">
 <link href="/vendor/review-workbench.css?v=20260718d" rel="stylesheet">
 <link href="/vendor/realtime-workbench.css?v=20260720" rel="stylesheet">
 </head>
@@ -13463,7 +13463,7 @@ function renderMainlineReviewHTML(d) {
       metric('次收', s.nextCloseGain, '下一交易日收盘价相对预判日收盘价的涨幅'),
       metric('3日', s.threeDayGain, '第三个后续交易日收盘价相对预判日收盘价的涨跌幅'),
     ].join('');
-    return `<span class="mlr-name">${escapeHTML(s.name || s.code || '')}</span>${extra}<span class="mlr-performance">${performance}</span>`;
+    return `<span class="mlr-stock-review"><span class="mlr-stock-review-head"><span class="mlr-name">${escapeHTML(s.name || s.code || '')}</span>${extra}</span><span class="mlr-performance">${performance}</span></span>`;
   };
   // 主线命中徽标(口径:盘后涨停主因家族格局,非"整个市场实际主线"):
   // ✓=预判命中(并列)第一家族;△=第一家族在预判前三;✗=脱靶;待盘后验证=当日盘中;—=盘后数据不完整
@@ -13540,13 +13540,35 @@ function renderMainlineReviewHTML(d) {
     const star = r && r.star;
     const expected = Array.isArray(r && r.expectedStars) ? r.expectedStars : [];
     if (star && star.predictLevel === 'confirmed') {
-      return { key: 'confirmed', rowClass: 'star-confirmed', label: '明星确认', name: star.name || star.code || '' };
+      return { key: 'confirmed', rowClass: 'star-confirmed', label: '明星确认', name: star.name || star.code || '', stock: star };
     }
-    if ((star && star.predictLevel === 'expected') || expected.length) {
-      const first = star && star.predictLevel === 'expected' ? star : expected[0];
-      return { key: 'expected', rowClass: 'star-expected', label: '预期明星', name: first?.name || first?.code || '' };
+    const expectedRows = [];
+    if (star && star.predictLevel === 'expected') expectedRows.push(star);
+    for (const row of expected) {
+      if (!expectedRows.some(item => String(item?.code || '') === String(row?.code || ''))) {
+        expectedRows.push({ ...row, predictLevel: 'expected' });
+      }
     }
-    return { key: '', rowClass: '', label: '', name: '' };
+    const sealed = expectedRows.find(row => row?.sealStatus === 'sealed');
+    if (sealed) {
+      return { key: 'confirmed', rowClass: 'star-confirmed', label: '预期转明星', name: sealed.name || sealed.code || '', stock: sealed };
+    }
+    const unresolved = expectedRows.find(row => row?.sealStatus !== 'notSealed');
+    if (unresolved) {
+      const noData = unresolved?.sealStatus === 'noData';
+      return {
+        key: 'pending',
+        rowClass: 'star-expected star-pending',
+        label: noData ? '证据待补' : '等待确认',
+        name: unresolved.name || unresolved.code || '',
+        stock: unresolved,
+      };
+    }
+    if (expectedRows.length) {
+      const missed = expectedRows[0];
+      return { key: 'missed', rowClass: 'star-expected star-missed', label: '预期未兑现', name: missed.name || missed.code || '', stock: missed };
+    }
+    return { key: '', rowClass: '', label: '', name: '', stock: null };
   };
   // 行级结果配色(与 hitCell 同口径):驱动左侧强调条颜色,一眼可扫命中/前三/脱靶/待验证
   const rowHitClass = (r) => {
@@ -13566,8 +13588,8 @@ function renderMainlineReviewHTML(d) {
     if (r.mainlineHitTop3) return 'hit-near';
     return 'hit-miss';
   };
-  const body = rows.map(r => {
-    const starVisual = reviewStarVisual(r);
+  const rowModels = rows.map(r => ({ r, starVisual: reviewStarVisual(r) }));
+  const renderReviewRow = ({ r, starVisual }) => {
     const starSignal = starVisual.key
       ? `<span class="mlr-star-signal ${starVisual.key}" aria-label="${escapeHTML(`${starVisual.label} ${starVisual.name}`)}"><i>${escapeHTML(starVisual.label)}</i><b>${escapeHTML(starVisual.name)}</b></span>`
       : '';
@@ -13585,11 +13607,11 @@ function renderMainlineReviewHTML(d) {
       : `<span class="mlr-pred"><span class="mlr-theme">${r.noMainline ? '今日无主线' : `${escapeHTML(r.theme || '')}${r.confirmed ? '<i title="管理员确认的当日主线">✔</i>' : ''}`}</span>${noStarStatus}${r.phase ? `<em class="mlr-phase" title="预判冻结时点">${escapeHTML(r.phase)}</em>` : ''}</span>`;
     const detail = r.bySource
       ? (!r.noMainline ? `<div class="mlr-l2">
-      <span class="mlr-slot${starSlotClass}"><span class="mlr-label">东财明星</span> ${gainCell(r.star, true)}</span>
+      <span class="mlr-slot${starSlotClass}"><span class="mlr-label">东财明星</span> ${gainCell(starVisual.stock || r.star, true)}</span>
       ${leaderCells || '<span class="mlr-slot"><span class="mlr-label">东财龙头</span><span class="mlr-na">—</span></span>'}
       ${expectedCell(r)}</div>` : '')
       : (r.noMainline ? '' : `<div class="mlr-l2">
-      <span class="mlr-slot${starSlotClass}"><span class="mlr-label">明星</span> ${gainCell(r.star, true)}</span>
+      <span class="mlr-slot${starSlotClass}"><span class="mlr-label">明星</span> ${gainCell(starVisual.stock || r.star, true)}</span>
       ${leaderCells || '<span class="mlr-slot"><span class="mlr-label">龙头</span><span class="mlr-na">—</span></span>'}
       ${expectedCell(r)}</div>`);
     const actualResult = actualCell(r);
@@ -13605,7 +13627,43 @@ function renderMainlineReviewHTML(d) {
     </div>
     ${detail}
   </div>`;
-  }).join('');
+  };
+  const reviewGroups = [
+    {
+      key: 'confirmed',
+      title: '真主线',
+      note: '明星确认',
+      rows: rowModels.filter(item => item.starVisual.key === 'confirmed'),
+    },
+    {
+      key: 'missed',
+      title: '未兑现候选',
+      note: '预期明星最终未封板',
+      rows: rowModels.filter(item => item.starVisual.key === 'missed'),
+    },
+    {
+      key: 'pending',
+      title: '待验证',
+      note: '最终证据尚未完整',
+      rows: rowModels.filter(item => item.starVisual.key === 'pending'),
+    },
+    {
+      key: 'other',
+      title: '其他交易日',
+      note: '无确认明星',
+      rows: rowModels.filter(item => !item.starVisual.key),
+    },
+  ].filter(group => group.rows.length);
+  const body = reviewGroups.map(group => `<section class="mlr-group ${group.key}">
+    <header class="mlr-group-head">
+      <span class="mlr-group-title"><i></i><b>${group.title}</b><small>${group.note}</small></span>
+      <em>${group.rows.length}日</em>
+    </header>
+    <div class="mlr-group-list">${group.rows.map(renderReviewRow).join('')}</div>
+  </section>`).join('');
+  const confirmedDays = rowModels.filter(item => item.starVisual.key === 'confirmed').length;
+  const missedDays = rowModels.filter(item => item.starVisual.key === 'missed').length;
+  const pendingDays = rowModels.filter(item => item.starVisual.key === 'pending').length;
   const rate = (wins, total, pct) => total ? `${wins}/${total}${pct != null ? `(${pct}%)` : ''}` : '--';
   const sourceStats = stats.bySource || {};
   const hasSourceReview = rows.some(r => r && r.bySource)
@@ -13621,10 +13679,14 @@ function renderMainlineReviewHTML(d) {
     : '';
   return `<section class="ml-review">
     <div class="mlr-head">
-      <div class="mlr-title"><span class="mlr-ic">📋</span>预判回看</div>
-      <div class="mlr-stats">${mlChips}${sealChipStat}</div>
+      <div class="mlr-title-block"><div class="mlr-title">预判回看</div><small>明星确认主线</small></div>
+      <div class="mlr-outcome-summary">
+        <span class="confirmed"><i>真主线</i><b>${confirmedDays}</b><small>日</small></span>
+        <span class="missed"><i>未兑现</i><b>${missedDays}</b><small>日</small></span>
+        ${pendingDays ? `<span class="pending"><i>待验证</i><b>${pendingDays}</b><small>日</small></span>` : ''}
+      </div>
     </div>
-    <div class="mlr-sub"><small>回看主线命中、预期明星转封，以及明星/前两名龙头的次日最高、次日收盘和3日收盘表现。明星次日胜率 ${rate(stats.starWins, stats.starTotal, stats.starWinRate)} · 龙头1次日胜率 ${rate(stats.leaderWins, stats.leaderTotal, stats.leaderWinRate)}${hasSourceReview ? ' · 收益统计沿用历史兼容口径（v3 为东财，旧记录按原口径）' : ''} · 盘前/集合竞价/已收盘记录不计样本</small></div>
+    <div class="mlr-overview"><div class="mlr-stats">${mlChips}${sealChipStat}</div><div class="mlr-sub"><small>明星次日胜率 ${rate(stats.starWins, stats.starTotal, stats.starWinRate)} · 龙头1次日胜率 ${rate(stats.leaderWins, stats.leaderTotal, stats.leaderWinRate)}${hasSourceReview ? ' · 收益统计沿用历史兼容口径（v3 为东财，旧记录按原口径）' : ''} · 盘前/集合竞价/已收盘记录不计样本</small></div></div>
     <div class="mlr-list">${body}</div>
   </section>`;
 }
