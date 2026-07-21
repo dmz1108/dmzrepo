@@ -213,6 +213,9 @@ A(l2HistoryRenderer.includes('job?.results')
   && l2HistoryRenderer.includes('strategyL2HistoryStarStatus(row)')
   && l2HistoryRenderer.includes('selectedRows.slice(0, 8)')
   && l2HistoryRenderer.includes('ml-l2-stock-list'), 'L2扫描记录从完整结果补入明星证据，不只依赖旧picked列表');
+A(l2HistoryRenderer.includes('strategyBoardSourceLabel(job?.zsType)')
+  && l2HistoryRenderer.includes("Number(job?.zsType) === 6 ? 'eastmoney'")
+  && l2HistoryRenderer.includes('${escapeHTML(sourceLabel)}板块'), 'L2扫描记录明确显示东财/同花顺/KPL板块来源');
 A(html.includes('const STRATEGY_L2_HISTORY_BUCKETS = [500000, 3000000, 5000000, 8000000, 10000000]')
   && html.includes('function strategyL2HistoryMaxBucket(row)')
   && html.includes('function strategyL2HistoryBucketRow(row, amount, maxAmount)'), 'L2扫描记录支持50万至1000万五档及个股最大档摘要');

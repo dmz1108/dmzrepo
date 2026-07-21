@@ -8077,3 +8077,27 @@ Deployment:
 
 Notes for next agent:
 - PR #197 已正式上线，不要再按“Draft/未部署”处理。下一个交易日盘中重点观察同花顺卡片的 DDE 活跃度/全量方向双列、组合闸排除原因，以及人工确认/明星粘性保留卡的负方向警示。
+
+## 2026-07-21 - Codex - L2 扫描记录标明板块数据源
+
+Changed:
+- 管理员“今日 L2 扫描记录”在每个任务的板块名旁新增明确来源标签：`东财板块`、`同花顺板块`或 `KPL板块`；标签直接使用任务已保存的 `zsType`，不猜测、不改任务协议。
+- 只调整扫描记录展示和测试，不改变自动扫描门槛、派发优先级、L2 明星判定或正式主线资格。
+- 只读核查 2026-07-21“智能穿戴”任务：`BK0641`、`zsType=6`（东财）、`trigger=strategy-auto`、`scanChannel=supplement`，10:56（北京时间）自动派发。相邻时点东财事实库显示超大单净流入约 27.95 亿元；当日成分接口确认联创电子、九安医疗 2 只涨停，因此满足东财自动扫描的“超大单净流入至少 5 亿元且涨停至少 2 只”硬门槛。补选通道只表示资金优先发现，不表示已通过明星验证或已成为正式主线。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `tests/star-l2-layers.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node tests/star-l2-layers.test.js` 通过，包含新增来源标签断言和前端内联脚本编译检查。
+- 全仓 51/51 个 `tests/*.test.js` 文件全部通过。
+- 公网东财成分接口返回 126 只成分股，其中 `isLimitUp=true` 为 2 只；云端 L2 持久化任务与东财资金事实库已只读交叉核对。
+- `git diff --check` 通过。
+
+Deployment:
+- 未部署云端，未重启服务；等待 Claude 复核后再合并部署。
+
+Notes for next agent:
+- 复核重点是窄屏任务头不拥挤、`zsType` 映射准确、未知来源保持不显示；不要把 `scanChannel=supplement` 误解为门槛豁免。
