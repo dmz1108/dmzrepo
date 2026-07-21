@@ -83,10 +83,12 @@ eval(extractFn('strategyNormRealtimeStocks'));
   A(codesTheme[0] === '600006' && codesTheme[1] === '600001', '无关题材10次计0,相关题材1次胜出;多题材只累计同题材次数(无关5次不叠加)');
   A(src.includes('strategyMainlineBoardThemeRelated(board?.name, t?.theme)'), '第三键题材过滤复用 strategyMainlineBoardThemeRelated');
 
-  // 2. 板块级字典序与门槛(Owner 2026-07-16:净流入≥5亿 且 涨停≥2,无任何豁免)+ 调用点接线(静态断言)
+  // 2. 板块级字典序与来源感知门槛(东财净流入；同花顺 DDE 活跃度+zjjlr 方向；均要求涨停≥2)
   A(src.includes('function strategyMainlineBoardAutoScanEligibility(board, options = {})')
     && src.includes('netInflow >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW')
-    && src.includes('zt >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT'), '共享门槛=净流入≥5亿 且 涨停≥2(无豁免)');
+    && src.includes('zt >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT')
+    && src.includes('strategyMainlineThsCompositeEligibility(board'), '共享门槛=东财净流入/同花顺组合门槛 且 涨停≥2(无豁免)');
+  A(src.includes("rule: 'netInflowZjjlr>0'") && src.includes("reason = 'ths-net-outflow'"), '同花顺自动扫描显式要求 zjjlr>0,负方向原因可观测');
   A(src.includes('.filter(b => strategyMainlineBoardAutoScanEligibility(b, { requireMembers: true }).eligible)'), '自动派发复用共享门槛并要求真实成分股');
   A(!src.includes("b?.scanChannel === 'supplement' || Number(b?.zt)"), '补选豁免已移除(补选板同样过涨停门槛)');
   A(!src.includes('Number(b?.netInflow) >= STRATEGY_MAINLINE_AUTO_SCAN_HIGH_INFLOW_OVERRIDE'), '10亿高流入直通已移除');

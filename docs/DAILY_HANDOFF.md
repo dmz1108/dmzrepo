@@ -8011,3 +8011,37 @@ Changed:
 Files: docs/ops/MARKET_DATA_SOURCE_CONTRACTS.md / docs/DAILY_HANDOFF.md
 Validated: docs-only,node --check 不适用;全仓测试不受影响。
 Deployment: 无(文档)。
+
+## 2026-07-20 - Codex - 同花顺 DDE 活跃度与方向组合门槛
+
+Changed:
+- 按 Owner 已批准口径实现同花顺当日实时组合门槛：`527198 DDE 大单活跃度 >= 5亿`、`zjjlr > 0`、板块/主线当日涨停数 `>= 2`，三项全部满足后才允许自动 L2 扫描并进入后续明星闸；L2 预期明星/明星确认规则本身未改。
+- 修复 DDE 覆盖时可能把无方向的 `527198` 金额误写进 `netInflowZjjlr` 的链路；同花顺 DDE 活跃度和带符号方向现在分字段贯穿板块、主线、双源载荷、AI 只读证据与诊断排除原因。
+- 同花顺组合门槛仅用于当日实时构建，历史冻结快照和预判回看维持原兼容口径；东财超大单净流入门槛保持不变。
+- 今日实时与今日策略页面把同花顺 `DDE活跃` 和 `全量方向` 分开显示，避免再把无方向金额标成净流入；方向缺失、净流出、DDE不足、涨停不足均有独立可观测原因。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/realtime-workbench.css`
+- `tests/inflow-gate.test.js`
+- `tests/scan-priority.test.js`
+- `tests/strategy-board-zt-backfill.test.js`
+- `tests/strategy-eastmoney-superlarge-flow.test.js`
+- `tests/strategy-kpl-exclusion.test.js`
+- `tests/strategy-source-pairs.test.js`
+- `tests/strategy-two-source-mainlines.test.js`
+- `tests/ths-realtime-dde-display.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js` 通过；全仓 51/51 个 `tests/*.test.js` 文件全部通过；`git diff --check` 通过。
+- 新增门槛测试覆盖 DDE、方向、涨停三腿的通过/阻断、方向缺失、净流出、DDE 回退不得冒充通过、历史兼容及东财零回归。
+- 前端可执行测试确认实际 HTML 同时显示 DDE 活跃度与同板 `zjjlr` 方向，两个金额不会互相覆盖。
+- 本地临时端口冒烟：`/health`、`/kpl`、两份工作台 CSS 与当日策略 API 均返回 HTTP 200；临时服务已正常停止。
+
+Deployment:
+- 未部署云端，未重启任何服务；本次仅准备 GitHub Draft PR，等待 Claude 独立复审和 Owner 后续确认。
+
+Notes for next agent:
+- 复审重点：同花顺当前日正式资格和自动 L2 派发必须共用三腿门槛；`fundDirection` 与 `thsEligibilityGate` 必须保持独立；不得把该门槛倒溯应用到历史回看，也不得改变东财路径。

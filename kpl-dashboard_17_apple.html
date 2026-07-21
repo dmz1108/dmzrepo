@@ -12981,23 +12981,34 @@ function strategyBoardSourceLabel(zsType) {
   if (source === 7) return 'KPL';
   return '';
 }
-// R2(Owner 2026-07-15):卡片显示东财、同花顺两组,每组的净流入与涨幅取自同一个板(同源一一对应)。
+function strategyThsDirectionMeta(rawValue) {
+  const missing = rawValue === null || rawValue === undefined || rawValue === '' || !Number.isFinite(Number(rawValue));
+  const value = missing ? null : Number(rawValue);
+  return {
+    value,
+    cls: value == null ? 'flat' : (value > 0 ? 'up' : (value < 0 ? 'down' : 'flat')),
+    text: value == null ? '方向缺失' : `方向 ${fmtInflow(value)}`,
+  };
+}
+// R2(Owner 2026-07-15):卡片显示东财、同花顺两组,每组资金与涨幅取自同一个板(同源一一对应)。
 function strategyMainlineSourcePairsHTML(m) {
   const sp = m && m.sourcePairs;
   if (!sp) return '';
-  const one = (label, p) => {
+  const one = (label, p, isThs = false) => {
     if (!p || p.netInflow == null || p.netInflow === '' || !Number.isFinite(Number(p.netInflow))) return '';
     const infCls = Number(p.netInflow) < 0 ? 'down' : 'up';
     const g = Number(p.gainPct);
     const gTxt = Number.isFinite(g) ? `${g > 0 ? '+' : ''}${g.toFixed(2)}%` : '--';
-    return `<span class="ml-srcpair"><em>${label}</em>${escapeHTML(p.board || '')} <i class="${infCls}">${fmtInflow(Number(p.netInflow))}</i> <i>${gTxt}</i></span>`;
+    const direction = strategyThsDirectionMeta(p.directionNetInflow);
+    const directionHtml = isThs ? ` <i class="${direction.cls}">${escapeHTML(direction.text)}</i>` : '';
+    return `<span class="ml-srcpair"><em>${label}</em>${escapeHTML(p.board || '')} <i class="${infCls}">${fmtInflow(Number(p.netInflow))}</i>${directionHtml} <i>${gTxt}</i></span>`;
   };
   const eastmoneyMetric = sp.eastmoney && sp.eastmoney.metric;
   const eastmoneyLegacy = !!(sp.eastmoney && (sp.eastmoney.legacy || eastmoneyMetric !== 'eastmoney-super-large-net-inflow'));
   const eastmoneyLabel = eastmoneyLegacy ? '东财·旧主力' : '东财·超大单';
-  const parts = [one(eastmoneyLabel, sp.eastmoney), one('同花顺', sp.ths)].filter(Boolean);
+  const parts = [one(eastmoneyLabel, sp.eastmoney), one('同花顺·DDE活跃', sp.ths, true)].filter(Boolean);
   if (!parts.length) return '';
-  return `<div class="ml-srcpairs" title="东财使用超大单净流入,同花顺使用其净流入口径;各组资金与涨幅同板一一对应,不跨源拼">${parts.join('')}</div>`;
+  return `<div class="ml-srcpairs" title="东财使用超大单净流入；同花顺分别显示 DDE 大单活跃度与 zjjlr 全量净流向；各组资金与涨幅同板一一对应，不跨源拼">${parts.join('')}</div>`;
 }
 function strategyMainlineDisplayInflow(mainline) {
   const rows = (Array.isArray(mainline && mainline.resonanceBoards) ? mainline.resonanceBoards : [])
@@ -13010,6 +13021,7 @@ function strategyMainlineDisplayInflow(mainline) {
       value: Number(board.netInflow),
       boardName: String(board.name || ''),
       zsType: board.zsType ?? null,
+      directionNetInflow: board.netInflowZjjlr == null || board.netInflowZjjlr === '' ? null : Number(board.netInflowZjjlr),
       metric: String(board.netInflowMetric || ''),
       legacy: !!board.netInflowLegacy || (Number(board.zsType) === 6 && board.netInflowMetric !== 'eastmoney-super-large-net-inflow'),
     };
@@ -13019,6 +13031,7 @@ function strategyMainlineDisplayInflow(mainline) {
     value: rawValue != null && rawValue !== '' && Number.isFinite(Number(rawValue)) ? Number(rawValue) : null,
     boardName: String((mainline && mainline.netInflowBoard) || ''),
     zsType: mainline && mainline.netInflowZsType != null ? mainline.netInflowZsType : null,
+    directionNetInflow: mainline && mainline.netInflowZjjlr != null && mainline.netInflowZjjlr !== '' ? Number(mainline.netInflowZjjlr) : null,
     metric: String((mainline && mainline.netInflowMetric) || ''),
     legacy: !!(mainline && mainline.netInflowLegacy) || (Number(mainline && mainline.netInflowZsType) === 6 && mainline && mainline.netInflowMetric !== 'eastmoney-super-large-net-inflow'),
   };
@@ -13055,7 +13068,7 @@ function renderStrategyMainlinesHTML(d) {
     return `<section class="mainline-wrap">
       <div class="ml-title">
         <span>今日主线榜</span>
-        <small>实时板块涨幅 × 东财超大单/同花顺资金净流入 × 成分股大涨/普涨广度 × 冲板候选 × 盘中动能 × 历史四源主因预判${sourceSuffix}${dayNote}</small>
+        <small>实时板块涨幅 × 东财超大单/同花顺 DDE 活跃度+方向 × 成分股大涨/普涨广度 × 冲板候选 × 盘中动能 × 历史四源主因预判${sourceSuffix}${dayNote}</small>
       </div>
       ${statusHtml}
       <div class="rht-loading">${escapeHTML(emptyText)}</div>
@@ -13087,19 +13100,24 @@ function renderStrategyMainlinesHTML(d) {
     const gainValue = rawGainValue === null || rawGainValue === undefined || rawGainValue === '' ? NaN : Number(rawGainValue);
     const gainClass = !Number.isFinite(gainValue) ? 'empty' : (gainValue > 0 ? 'up' : (gainValue < 0 ? 'down' : 'flat'));
     const fundMetricLabel = Number(displayInflow.zsType) === 5
-      ? (displayInflow.metric === 'ths-dde-big-order-amount' ? '同花顺 DDE' : '同花顺净流入')
+      ? (displayInflow.metric === 'ths-dde-big-order-amount' ? 'DDE活跃' : '同花顺净流入')
       : (Number(displayInflow.zsType) === 6
         ? (displayInflow.legacy ? '东财主力（旧口径）' : '东财超大单')
         : (Number(displayInflow.zsType) === 7 ? 'KPL 净流入' : '资金净流入'));
     const inflowSource = strategyBoardSourceLabel(displayInflow.zsType);
     const inflowMetric = Number(displayInflow.zsType) === 6
       ? (displayInflow.legacy ? '旧口径主力净流入' : '超大单净流入')
-      : '净流入';
+      : (Number(displayInflow.zsType) === 5 && displayInflow.metric === 'ths-dde-big-order-amount' ? 'DDE大单金额（活跃度）' : '净流入');
     const fundTrace = `资金口径 ${displayInflow.boardName || m.theme || ''}${inflowSource ? `·${inflowSource}` : ''}·${inflowMetric}（单板）`;
     const headMetric = (label, value, cls = '', title = '') => `<span class="ml-head-stat ${escapeHTML(cls)}"${title ? ` title="${escapeHTML(title)}"` : ''}><i>${escapeHTML(label)}</i><b>${escapeHTML(value)}</b></span>`;
-    const marketPulse = `<div class="ml-head-pulse" aria-label="板块涨幅与资金净流入">
+    const thsDirection = strategyThsDirectionMeta(displayInflow.directionNetInflow);
+    const thsDirectionMetric = Number(displayInflow.zsType) === 5 && displayInflow.metric === 'ths-dde-big-order-amount'
+      ? headMetric('全量方向', thsDirection.value == null ? '--' : fmtInflow(thsDirection.value), thsDirection.cls, '方向口径：同花顺 zjjlr；方向必须为正才具备正式主线资格')
+      : '';
+    const marketPulse = `<div class="ml-head-pulse" aria-label="板块涨幅、资金活跃度与方向">
       ${headMetric('涨幅', Number.isFinite(gainValue) ? `${gainValue > 0 ? '+' : ''}${gainValue.toFixed(2)}%` : '--', gainClass, m.boardGainName || m.theme || '')}
       ${headMetric(fundMetricLabel, displayInflow.value != null ? fmtInflow(displayInflow.value) : '--', inflowClass, `${fundTrace} · 重叠板块资金不相加，采用单个代表板块值`)}
+      ${thsDirectionMetric}
     </div>`;
     const metricCell = (label, value, cls = '', kind = 'support', title = '') => `<span class="ml-signal-cell ${escapeHTML(kind)} ${escapeHTML(cls)}"${title ? ` title="${escapeHTML(title)}"` : ''}><i>${escapeHTML(label)}</i><b>${escapeHTML(value)}</b></span>`;
     const signalStrip = `<div class="ml-signal-strip">
@@ -13344,7 +13362,7 @@ function renderStrategyMainlinesHTML(d) {
       ${dualNote}
       <div class="ml-cols">
         ${renderColumn('东财主线预测', bs.eastmoney, '超大单净流入')}
-        ${renderColumn('同花顺主线预测', bs.ths, 'DDE 大单金额')}
+        ${renderColumn('同花顺主线预测', bs.ths, 'DDE 活跃度 + 全量方向')}
       </div>
     </section>`;
   }
@@ -13353,7 +13371,7 @@ function renderStrategyMainlinesHTML(d) {
   return `<section class="mainline-wrap">
     <div class="ml-title">
       <span>今日主线榜</span>
-      <small>实时板块涨幅 × 东财超大单/同花顺资金净流入 × 成分股大涨/普涨广度 × 冲板候选 × 盘中动能 × 历史四源主因预判 · ${Number(d.count) || lines.length} 条${sourceSuffix}${dayNote}</small>
+      <small>实时板块涨幅 × 东财超大单/同花顺 DDE 活跃度+方向 × 成分股大涨/普涨广度 × 冲板候选 × 盘中动能 × 历史四源主因预判 · ${Number(d.count) || lines.length} 条${sourceSuffix}${dayNote}</small>
     </div>
     ${statusHtml}
     ${strategyMainlineQuickReadHTML(lines, d)}
@@ -14460,10 +14478,17 @@ function boardCardHTML(b, pending = false) {
   const deleteControl = canManageDashboardCards()
     ? `<button class="card-delete" type="button" title="&#21024;&#38500;&#21345;&#29255;" aria-label="&#21024;&#38500;${escapeHTML(b.name)}" data-plate-id="${escapeHTML(b.plateId)}" data-board-name="${escapeHTML(b.name)}" onclick="event.stopPropagation(); deleteBoardCard(this)">&times;</button>`
     : '';
-  const fundFlowLabel = b.netInflowMetric === 'ths-dde-big-order-amount' ? 'DDE大单' : '净流入';
-  const fundFlowTitle = escapeHTML(b.netInflowMetric === 'ths-dde-big-order-amount'
-    ? `同花顺 DDE 大单金额${b.netInflowAsOf ? ` · ${b.netInflowAsOf}` : ''}`
+  const isThsDde = b.netInflowMetric === 'ths-dde-big-order-amount';
+  const fundFlowLabel = isThsDde ? 'DDE活跃' : '净流入';
+  const fundFlowTitle = escapeHTML(isThsDde
+    ? `同花顺 DDE 大单金额（无方向活跃度）${b.netInflowAsOf ? ` · ${b.netInflowAsOf}` : ''}`
     : '板块资金净流入');
+  const directionValue = b.netInflowZjjlr == null || b.netInflowZjjlr === '' ? null : Number(b.netInflowZjjlr);
+  const directionRow = isThsDde ? `
+          <span class="board-market-row board-direction-row">
+            <span class="market-label">全量方向</span>
+            <span class="board-direction-inline ${gainClass(directionValue)}" title="同花顺 zjjlr 带符号净流向；正值才通过方向闸">${fmtYiHTML(directionValue)}</span>
+          </span>` : '';
   return `
     <div class="board-card collapsed${pending ? ' board-card-pending' : ''}" id="card-${b.plateId}">
       <div class="board-header" role="button" tabindex="0" aria-expanded="false" ${pending ? 'title="正在筛选符合条件的板块"' : `onclick="toggleBoardCard('${escapeHTML(b.plateId)}')" onkeydown="handleCardHeaderKey(event, '${escapeHTML(b.plateId)}')"`}>
@@ -14482,6 +14507,7 @@ ${managementControls}
             <span class="market-label">${fundFlowLabel}</span>
             <span class="board-net-inline ${gainClass(b.netInflow)}" title="${fundFlowTitle}">${fmtYiHTML(b.netInflow)}</span>
           </span>
+          ${directionRow}
         </span>
         ${deleteControl}
       </div>
@@ -15139,6 +15165,11 @@ function updateBoardHeader(board) {
   if (niEl) {
     niEl.innerHTML = fmtYiHTML(board.netInflow);
     niEl.className = 'board-net-inline ' + gainClass(board.netInflow);
+  }
+  const directionEl = card.querySelector('.board-header .board-direction-inline');
+  if (directionEl) {
+    directionEl.innerHTML = fmtYiHTML(board.netInflowZjjlr);
+    directionEl.className = 'board-direction-inline ' + gainClass(board.netInflowZjjlr);
   }
 }
 

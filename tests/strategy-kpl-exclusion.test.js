@@ -24,6 +24,7 @@ const getPermanentHiddenSet = async () => new Set();
 const normalizeReasonSourceCode = c => String(c || '').replace(/\D/g, '').slice(0, 6);
 const strategyMainlineDiagNoteRead = () => {};
 const isChinaMarketTradingDay = () => false;   // 快照存在时不会走实时回退
+const THS_ZS_TYPE = 5;
 const snapshotPath = (day, z) => `${day}|${z}`;
 // 每源快照:zs7(KPL)有独有板 + 一个和东财同名但涨停更高的“医药”(旧逻辑按名去重会让它顶掉东财医药)
 const SNAP = {

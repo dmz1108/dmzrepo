@@ -239,11 +239,13 @@ const STRATEGY_MAINLINE_AUTO_SCAN_WINDOW_MS = 5 * 60 * 1000;
 const STRATEGY_MAINLINE_AUTO_SCAN_MAX_PER_WINDOW = 2;
 const STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW = 5e8;
 const STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT = 2;
+const THS_ZS_TYPE = 5;
 const STRATEGY_MAINLINE_AUTO_SCAN_LIMIT_STOCKS = 50;
 const strategyMainlineAutoScanState = { windowStart: 0, dispatched: 0, lastJobId: '' };
 const strategyMainlineFamilyInfo = (x) => ({ key: 'group:' + String(x && x.theme || '') });
 const strategyMainlineScanPriorityCodes = () => [];
 eval(extractFn('numOrNull'));
+eval(extractFn('strategyMainlineThsCompositeEligibility'));
 eval(extractFn('strategyMainlineBoardAutoScanEligibility'));
 const l2jobs = {};
 let l2seq = 0;
@@ -258,7 +260,7 @@ eval(extractFn('strategyMainlineMaybeAutoScan'));
 // 东财板列在前(9亿),同花顺板在后(99亿);跨源字典序应让同花顺 99亿 先被派发
 const scanBoards = [
   { plateId: 'E1', name: '东财板', netInflow: 9e8, zt: 2, zsType: 6, scanChannel: '', memberRows: [{ code: '600001', gain: 6 }] },
-  { plateId: 'T1', name: '同花顺板', netInflow: 99e8, zt: 2, zsType: 5, scanChannel: '', memberRows: [{ code: '600002', gain: 6 }] },
+  { plateId: 'T1', name: '同花顺板', netInflow: 99e8, netInflowZjjlr: 8e8, netInflowMetric: 'ths-dde-big-order-amount', zt: 2, zsType: 5, scanChannel: '', memberRows: [{ code: '600002', gain: 6 }] },
 ];
 strategyMainlineMaybeAutoScan(scanBoards, '2026-07-15', true, '早盘', null);
 A(dispatched.length === 1, '统一扫描:一次只派发一个任务(限流不变)');
