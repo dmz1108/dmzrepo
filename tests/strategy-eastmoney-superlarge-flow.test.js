@@ -74,7 +74,7 @@ assert(src.includes("const fields = 'f12,f14,f3,f62,f66,f69,f72,f75,f104,f105,f1
   '东财实时请求包含 f66/f69/f72/f75');
 assert(src.includes('netInflow: numOrNull(view.netInflow)') && src.includes('superLargeNetInflow: numOrNull(view.superLargeNetInflow)'),
   '看板快照同时保存 f62 与 f66，今日实时原口径不被替换');
-assert(html.includes('东财超大单/同花顺资金净流入'), '策略页标题明确两源不同资金口径');
+assert(html.includes('东财超大单/同花顺 DDE 活跃度+方向'), '策略页标题明确两源不同资金口径');
 assert(html.includes('function strategyMainlineFundLabel'), '策略卡片存在资金口径标签函数');
 assert(html.includes("return negative ? '超大单净流出' : '超大单净流入';"), '东财新口径显示超大单净流入/流出');
 assert(html.includes("return negative ? '旧主力净流出' : '旧主力净流入';"), '旧快照不会被误标成超大单');

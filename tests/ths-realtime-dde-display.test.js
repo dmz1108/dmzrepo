@@ -29,8 +29,13 @@ assert(
   '旧 zjjlr 预览缓存不会在升级后短暂冒充 DDE',
 );
 assert(
-  dashboard.includes("b.netInflowMetric === 'ths-dde-big-order-amount' ? 'DDE大单' : '净流入'"),
-  '同花顺卡片明确标识 DDE 大单口径',
+  dashboard.includes("const fundFlowLabel = isThsDde ? 'DDE活跃' : '净流入';"),
+  '同花顺卡片明确标识 DDE 为活跃度而非净流入',
+);
+assert(
+  dashboard.includes('board-direction-inline')
+    && dashboard.includes('同花顺 zjjlr 带符号净流向；正值才通过方向闸'),
+  '今日实时卡片另行显示 zjjlr 全量方向提示',
 );
 
 assert(

@@ -21519,7 +21519,11 @@ async function strategyApplyThsDdeFundFlow(boards, useDay) {
       const dde = quote?.value ?? null;
       if (dde == null) return;
       for (const ref of refs) {
-        ref.netInflowZjjlr = numOrNull(ref.netInflow);   // 原 zjjlr 留档供审计/对照
+        // absorbPayload 可能已经把 DDE 写入 netInflow；只有仍处于 zjjlr 口径时才从
+        // netInflow 回填方向，避免把无方向的 527198 误存成带符号净流向。
+        if (numOrNull(ref.netInflowZjjlr) == null && ref.netInflowMetric !== 'ths-dde-big-order-amount') {
+          ref.netInflowZjjlr = numOrNull(ref.netInflow);
+        }
         ref.ddeBigOrderAmount = dde;
         ref.netInflow = dde;
         ref.netInflowMetric = 'ths-dde-big-order-amount';
@@ -21687,10 +21691,14 @@ async function getDayBoardsWithMembers(day, options = {}) {
       // 但每源各留一份到 bySource,供 R2 同源配对可靠拿到东财/同花顺两组(Codex #88 点2)。
       const cur = bmap.get(name);
       const bySource = (cur && cur.bySource) || {};
+      const directionNetInflow = Number(z) === Number(THS_ZS_TYPE)
+        ? numOrNull(b?.netInflowZjjlr ?? (fundFlow.metric === 'ths-net-inflow' ? fundFlow.value : null))
+        : null;
       bySource[z] = {
         zsType: z,
         plateId,
         netInflow,
+        netInflowZjjlr: directionNetInflow,
         netInflowMetric: fundFlow.metric,
         netInflowLegacy: fundFlow.legacy,
         gainPct,
@@ -21703,6 +21711,7 @@ async function getDayBoardsWithMembers(day, options = {}) {
             zsType: z,
             zt,
             netInflow,
+            netInflowZjjlr: directionNetInflow,
             netInflowMetric: fundFlow.metric,
             netInflowLegacy: fundFlow.legacy,
             gainPct,
@@ -21896,7 +21905,8 @@ const STRATEGY_MAINLINE_STAR_BUCKETS = [500000, 3000000, 8000000];
 const STRATEGY_MAINLINE_STAR_PRE_RATIO = 1.5;
 const STRATEGY_MAINLINE_STAR_SEAL_RATIO = 2;
 // 自动 L2 扫描：只在交易时段、每 5 分钟窗口最多派 2 个板块、串行（上一个没跑完不派下一个）、无合格目标不扫。
-// 合格目标 = 今日实时里 净流入≥5亿 且 板内涨停≥2 的前排板块(Owner 2026-07-16:无任何豁免)，当天已扫过的不重复。
+// 合格目标 = 东财超大单净流入≥5亿；同花顺则须同时满足 DDE 活跃度≥5亿、zjjlr>0；两源均要求板内涨停≥2。
+// L2 明星闸保持不变，当天已扫过的不重复。
 const STRATEGY_MAINLINE_AUTO_SCAN_WINDOW_MS = 5 * 60 * 1000;
 const STRATEGY_MAINLINE_AUTO_SCAN_MAX_PER_WINDOW = 2;
 const STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW = 5e8;   // Owner 2026-07-15:8亿→5亿(救钱不够8亿的中小主线)
@@ -21905,22 +21915,75 @@ const STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT = 2;
 // 门槛无豁免——净流入≥5亿 且 涨停≥2;涨停数缺失由成份股精确回填解决,不再用金额直通绕过涨停腿。
 const STRATEGY_MAINLINE_AUTO_SCAN_LIMIT_STOCKS = 50;
 const strategyMainlineAutoScanState = { windowStart: 0, dispatched: 0, lastJobId: '' };
+function strategyMainlineThsCompositeEligibility(record, options = {}) {
+  const zsType = Number(options.zsType ?? record?.netInflowZsType ?? record?.zsType);
+  const metric = String(options.metric ?? record?.netInflowMetric ?? '');
+  const applies = zsType === Number(THS_ZS_TYPE) || metric.startsWith('ths-');
+  if (!applies) return { applies: false, eligible: true };
+  const activityAmount = metric === 'ths-dde-big-order-amount'
+    ? numOrNull(options.activityAmount ?? record?.ddeBigOrderAmount ?? record?.netInflow)
+    : null;
+  const directionNetInflow = numOrNull(options.directionNetInflow ?? record?.netInflowZjjlr);
+  const limitUpCount = numOrNull(options.limitUpCount ?? record?.zt ?? record?.ztCount ?? record?.count);
+  const metricPass = metric === 'ths-dde-big-order-amount';
+  const activityPass = activityAmount != null && activityAmount >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW;
+  const directionPass = directionNetInflow != null && directionNetInflow > 0;
+  const limitUpPass = limitUpCount != null && limitUpCount >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT;
+  let reason = '';
+  if (!metricPass) reason = 'ths-dde-metric-missing';
+  else if (activityAmount == null) reason = 'ths-dde-missing';
+  else if (!activityPass) reason = 'ths-dde-below-threshold';
+  else if (directionNetInflow == null) reason = 'ths-direction-missing';
+  else if (!directionPass) reason = 'ths-net-outflow';
+  else if (limitUpCount == null) reason = 'ths-limit-up-missing';
+  else if (!limitUpPass) reason = 'ths-limit-up-below-threshold';
+  const eligible = metricPass && activityPass && directionPass && limitUpPass;
+  return {
+    applies: true,
+    eligible,
+    activityAmount,
+    activityMetric: 'ths-dde-big-order-amount',
+    metricPass,
+    activityPass,
+    directionHint: {
+      metric: 'ths-net-inflow-zjjlr',
+      value: directionNetInflow,
+      state: directionNetInflow == null ? 'missing' : (directionNetInflow > 0 ? 'inflow' : (directionNetInflow < 0 ? 'outflow' : 'flat')),
+    },
+    directionGate: {
+      rule: 'netInflowZjjlr>0',
+      value: directionNetInflow,
+      passed: directionPass,
+    },
+    limitUpCount,
+    limitUpPass,
+    reason,
+  };
+}
 function strategyMainlineBoardAutoScanEligibility(board, options = {}) {
   const plateId = String(board?.plateId || '');
   const netInflow = numOrNull(board?.netInflow);
   const zt = numOrNull(board?.zt ?? board?.ztCount);
   const hasMembers = Array.isArray(board?.memberRows) && board.memberRows.length > 0;
   const requireMembers = options.requireMembers === true;
-  const inflowPass = netInflow != null && netInflow >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW;
+  const thsComposite = strategyMainlineThsCompositeEligibility(board, { limitUpCount: zt });
+  const inflowPass = thsComposite.applies
+    ? thsComposite.activityPass
+    : netInflow != null && netInflow >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW;
   const ztPass = zt != null && zt >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT;
   return {
-    eligible: !!plateId && inflowPass && ztPass && (!requireMembers || hasMembers),
+    eligible: !!plateId && (thsComposite.applies ? thsComposite.eligible : (inflowPass && ztPass)) && (!requireMembers || hasMembers),
     plateId,
     boardName: String(board?.name || ''),
     netInflow,
     zt,
     inflowPass,
     ztPass,
+    metricPass: thsComposite.applies ? thsComposite.metricPass : true,
+    directionHint: thsComposite.applies ? thsComposite.directionHint : null,
+    directionGate: thsComposite.applies ? thsComposite.directionGate : null,
+    eligibilityReason: thsComposite.applies ? thsComposite.reason : (!inflowPass ? 'inflow-below-threshold' : (!ztPass ? 'limit-up-below-threshold' : '')),
+    thsCompositeGate: thsComposite.applies ? thsComposite : null,
     hasMembers,
   };
 }
@@ -21932,6 +21995,7 @@ function strategyMainlineAutoScanEligibilitySummary(boards) {
   const dispatchableRows = eligibleRows.filter(row => row.hasMembers);
   const inflows = rows.map(row => row.netInflow).filter(Number.isFinite);
   const ztCounts = rows.map(row => row.zt).filter(Number.isFinite);
+  const directionValues = rows.map(row => row.directionHint?.value).filter(Number.isFinite);
   return {
     eligible: eligibleRows.length > 0,
     dispatchable: dispatchableRows.length > 0,
@@ -21940,6 +22004,12 @@ function strategyMainlineAutoScanEligibilitySummary(boards) {
     qualifyingBoards: eligibleRows.map(row => row.boardName).filter(Boolean).slice(0, 8),
     maxNetInflow: inflows.length ? Math.max(...inflows) : null,
     maxZt: ztCounts.length ? Math.max(...ztCounts) : null,
+    maxDirectionNetInflow: directionValues.length ? Math.max(...directionValues) : null,
+    rejectedReasons: rows.filter(row => !row.eligible && row.eligibilityReason)
+      .reduce((out, row) => {
+        out[row.eligibilityReason] = (out[row.eligibilityReason] || 0) + 1;
+        return out;
+      }, {}),
   };
 }
 function strategyMainlineMergeAutoScanEligibility(items) {
@@ -21950,6 +22020,7 @@ function strategyMainlineMergeAutoScanEligibility(items) {
   const qualifyingBoards = [...new Set(summaries.flatMap(summary => summary.qualifyingBoards || []))].slice(0, 8);
   const inflows = summaries.map(summary => summary.maxNetInflow).filter(Number.isFinite);
   const ztCounts = summaries.map(summary => summary.maxZt).filter(Number.isFinite);
+  const directionValues = summaries.map(summary => summary.maxDirectionNetInflow).filter(Number.isFinite);
   return {
     eligible: summaries.some(summary => summary.eligible),
     dispatchable: summaries.some(summary => summary.dispatchable),
@@ -21958,6 +22029,7 @@ function strategyMainlineMergeAutoScanEligibility(items) {
     qualifyingBoards,
     maxNetInflow: inflows.length ? Math.max(...inflows) : null,
     maxZt: ztCounts.length ? Math.max(...ztCounts) : null,
+    maxDirectionNetInflow: directionValues.length ? Math.max(...directionValues) : null,
   };
 }
 function strategyResonanceTopicKey(raw) {
@@ -22111,6 +22183,7 @@ function strategyCreateMainlineSeed(theme, key) {
     netInflowBoard: '',
     netInflowBest: null,
     netInflowZsType: null,
+    netInflowZjjlr: null,
     netInflowMetric: '',
     netInflowLegacy: false,
     boardKeySet: new Set(),
@@ -22139,6 +22212,7 @@ function strategyMainlineRecordNetInflow(seed, board, value) {
     seed.netInflowBest = netInflow;
     seed.netInflowBoard = String(board?.name || '');
     seed.netInflowZsType = board?.zsType ?? null;
+    seed.netInflowZjjlr = numOrNull(board?.netInflowZjjlr);
     seed.netInflowMetric = String(board?.netInflowMetric || '');
     seed.netInflowLegacy = !!board?.netInflowLegacy;
   }
@@ -22155,6 +22229,7 @@ function strategyMainlineRepresentativeBoardInflow(boards) {
     value: board ? Number(board.netInflow) : null,
     boardName: String(board?.name || ''),
     zsType: board?.zsType ?? null,
+    netInflowZjjlr: numOrNull(board?.netInflowZjjlr),
     metric: String(board?.netInflowMetric || ''),
     legacy: !!board?.netInflowLegacy,
   };
@@ -22175,8 +22250,19 @@ function strategyMainlineSourcePairs(boards) {
         : (isFiniteNumeric(b?.gainPct) ? Number(b.gainPct) : null);
       const metric = String((s && s.netInflowMetric) || (Number(b?.zsType) === zs ? b?.netInflowMetric : '') || '');
       const legacy = !!((s && s.netInflowLegacy) || (Number(b?.zsType) === zs && b?.netInflowLegacy));
+      const directionNetInflow = zs === 5
+        ? numOrNull((s && s.netInflowZjjlr) ?? (Number(b?.zsType) === zs ? b?.netInflowZjjlr : null))
+        : null;
       if (!best || inflow > best.netInflow) {
-        best = { board: String(b?.name || ''), netInflow: inflow, gainPct, metric, legacy };
+        best = {
+          board: String(b?.name || ''),
+          netInflow: inflow,
+          gainPct,
+          metric,
+          legacy,
+          directionNetInflow,
+          directionMetric: zs === 5 ? 'ths-net-inflow-zjjlr' : '',
+        };
       }
     }
     return best;
@@ -22427,6 +22513,7 @@ function strategyMergeMainlineFamilies(rawMainlines) {
       netInflow,
       netInflowBoard: netSelection.boardName,
       netInflowZsType: netSelection.zsType,
+      netInflowZjjlr: netSelection.netInflowZjjlr,
       netInflowMetric: netSelection.metric,
       netInflowLegacy: netSelection.legacy,
       netInflowAggregation: 'representative-board-max',
@@ -22994,6 +23081,7 @@ function strategyMainlineAttachRealtimeBoardToSeed(seed, board, matchedCodes = n
     zsType: board?.zsType,
     ztCount: zt != null ? zt : (sourceLimitCodes.length ? sourceLimitCodes.length : null),
     netInflow,
+    netInflowZjjlr: numOrNull(board?.netInflowZjjlr),
     netInflowMetric: String(board?.netInflowMetric || ''),
     netInflowLegacy: !!board?.netInflowLegacy,
     gainPct,
@@ -23541,9 +23629,8 @@ function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase, prior
       if (last && (last.status === 'queued' || last.status === 'running')) return;
     }
     // 板块级字典序(SD v1 第5条):补选来源 > 净流入 > 大涨数;不做加权公式。
-    // 门槛(Owner 2026-07-16 定稿):净流入≥5亿 且 板内涨停≥2,无任何豁免——
-    // 10亿高流入直通与补选豁免均已按 Owner 指示移除;涨停数缺失由成份股精确回填
-    // (strategyMainlineBackfillBoardZt)解决,而非放宽门槛。补选板同样按此门槛,仅保留派发优先级。
+    // 门槛:东财超大单净流入≥5亿；同花顺须 DDE 活跃度≥5亿 且 zjjlr>0；两源均要求涨停≥2。
+    // 10亿高流入直通与补选豁免均已移除；涨停数缺失由成份股精确回填，不放宽门槛。
     const bigGainOf = b => (Array.isArray(b?.memberRows) ? b.memberRows.filter(r => Number(r?.gain) >= STRATEGY_MAINLINE_BIG_GAIN_PCT).length : 0);
     const candidates = (Array.isArray(boards) ? boards : [])
       .filter(b => strategyMainlineBoardAutoScanEligibility(b, { requireMembers: true }).eligible)
@@ -25365,6 +25452,7 @@ function strategyMainlineAddRealtimeBoardSeed(seedByKey, board) {
     zsType: board?.zsType,
     ztCount: zt != null ? zt : codes.length,
     netInflow,
+    netInflowZjjlr: numOrNull(board?.netInflowZjjlr),
     netInflowMetric: String(board?.netInflowMetric || ''),
     netInflowLegacy: !!board?.netInflowLegacy,
     gainPct,
@@ -26073,6 +26161,7 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
       netInflow: seed.netInflowSeen ? Number(seed.netInflowTotal) : null,
       netInflowBoard: seed.netInflowBoard || '',
       netInflowZsType: seed.netInflowZsType ?? null,
+      netInflowZjjlr: seed.netInflowZjjlr ?? null,
       netInflowMetric: seed.netInflowMetric || '',
       netInflowLegacy: !!seed.netInflowLegacy,
       boardGainPct: seed.maxGainPct == null ? null : Number(seed.maxGainPct),
@@ -26210,6 +26299,7 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
       netInflow: t.netInflow ?? null,
       netInflowBoard: t.netInflowBoard || '',
       netInflowZsType: t.netInflowZsType ?? null,
+      netInflowZjjlr: t.netInflowZjjlr ?? null,
       netInflowMetric: t.netInflowMetric || '',
       netInflowLegacy: !!t.netInflowLegacy,
       netInflowAggregation: 'representative-board-max',
@@ -26240,6 +26330,7 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
         zsType: b.zsType,
         ztCount: numOrNull(b.ztCount),
         netInflow: b.netInflow,
+        netInflowZjjlr: b.netInflowZjjlr ?? null,
         netInflowMetric: b.netInflowMetric || '',
         netInflowLegacy: !!b.netInflowLegacy,
         gainPct: b.gainPct,
@@ -26279,7 +26370,8 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     .map(item => strategyMainlineAttachExpectedHistory(item, expectedTransitionMap, sessionPhaseNow));
   const inflowGate = strategyMainlineApplyInflowGate(
     augmentedMainlines,
-    mainlineConfirm
+    mainlineConfirm,
+    { enforceThsComposite: isTodayQuery }
   );
   // 管理员/AI 诊断需要保留完整候选池来解释「为什么没上榜」；严格 QI 门槛只作用于
   // 正式构建和正式页面返回，不得裁掉复核、归属追踪与回放证据。
@@ -26406,7 +26498,11 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     requestedDay,
     sourceDay: { realtime: isoDay, boards: isoDay, priorReason: priorReason.endDay || '', history: history.endDay || '', hotThemes: history.endDay || isoDay, resonance: isoDay },
     realtimeSource: boardPayload.source || 'snapshot',
-    inflowGate: { rule: 'net-inflow-required', excluded: inflowGate.excluded.slice(0, 10) },
+    inflowGate: {
+      rule: 'source-aware-fund-flow-required',
+      thsRule: 'dde>=5e8-and-zjjlr>0-and-limitUp>=2',
+      excluded: inflowGate.excluded.slice(0, 10),
+    },
     l2Gate: {
       rule: 'visible-mainline-requires-expected-or-confirmed-star',
       excluded: l2Gate.excluded.slice(0, 10),
@@ -26423,17 +26519,57 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
   };
 }
 
-// Owner 规则(2026-07-10):主线当天资金必须净流入——净流出/零流入的板块不是当天主线。
-// 三条保护:netInflow 为 null(数据缺失)不视为流出,不误杀(缺数据不得造假);
-// owner 已确认的主线不被自动规则移除；盘中曾出现预期明星的主线也作为当日预判保留。
-// 被排除项记入 excluded 供观测(响应 inflowGate 字段),不悄悄消失。
-function strategyMainlineApplyInflowGate(items, mainlineConfirm) {
+// 资金闸:东财沿用带符号超大单净流入；同花顺使用 Owner 2026-07-20 定稿的组合门槛：
+// DDE 活跃度≥5亿、zjjlr>0、涨停≥2。方向提示与资格闸门作为两个字段输出，不混为同一口径。
+// 同花顺组合门槛只对当日实时构建生效；自动扫描无豁免，正式榜保留人工确认与盘中已出现明星的
+// 既有粘性规则，但必须如实输出未通过门槛的原因和资金方向。历史冻结/回看维持原口径。
+// 其余未通过候选保留在 excluded 供诊断，不进入正式主线。
+function strategyMainlineApplyInflowGate(items, mainlineConfirm, options = {}) {
   const list = Array.isArray(items) ? items : [];
   const isConfirmed = (item) => !!mainlineConfirm &&
     ((item.familyKey || item.key) === mainlineConfirm.key || item.theme === mainlineConfirm.theme);
   const kept = [];
   const excluded = [];
   for (const item of list) {
+    const thsComposite = strategyMainlineThsCompositeEligibility(item, {
+      limitUpCount: numOrNull(item?.count),
+    });
+    if (thsComposite.applies && options.enforceThsComposite !== false) {
+      const exempted = !thsComposite.eligible
+        ? (isConfirmed(item) ? 'owner-confirm' : (item?.hadExpectedStarToday ? 'expected-star-sticky' : ''))
+        : '';
+      const decorated = {
+        ...item,
+        fundDirection: thsComposite.directionHint,
+        thsEligibilityGate: {
+          rule: 'dde>=5e8-and-zjjlr>0-and-limitUp>=2',
+          passed: thsComposite.eligible,
+          activityAmount: thsComposite.activityAmount,
+          activityPass: thsComposite.activityPass,
+          directionPass: thsComposite.directionGate.passed,
+          limitUpCount: thsComposite.limitUpCount,
+          limitUpPass: thsComposite.limitUpPass,
+          reason: thsComposite.reason,
+          ...(exempted ? { exempted } : {}),
+        },
+      };
+      if (!thsComposite.eligible && !exempted) {
+        excluded.push({
+          key: String(item?.familyKey || item?.key || ''),
+          theme: String(item?.theme || ''),
+          netInflow: thsComposite.activityAmount,
+          netInflowZjjlr: thsComposite.directionHint.value,
+          count: Number(item?.count) || 0,
+          boardCount: Number(item?.boardCount) || 0,
+          reason: thsComposite.reason,
+          fundDirection: thsComposite.directionHint,
+          thsEligibilityGate: decorated.thsEligibilityGate,
+        });
+        continue;
+      }
+      kept.push(decorated);
+      continue;
+    }
     const v = numOrNull(item?.netInflow);
     if (v != null && v <= 0 && !isConfirmed(item) && !item?.hadExpectedStarToday) {
       excluded.push({
@@ -27002,6 +27138,9 @@ function aiNum(value, digits = 2) {
   const n = Number(value);
   return Number.isFinite(n) ? Number(n.toFixed(digits)) : null;
 }
+function aiOptionalNum(value, digits = 2) {
+  return value === null || value === undefined || value === '' ? null : aiNum(value, digits);
+}
 
 function aiCompactBoard(board) {
   if (!board) return null;
@@ -27012,6 +27151,7 @@ function aiCompactBoard(board) {
     gainPct: aiNum(board.gainPct),
     ztCount: aiNum(board.ztCount, 0),
     netInflow: aiNum(board.netInflow, 0),
+    netInflowZjjlr: aiOptionalNum(board.netInflowZjjlr, 0),
     netInflowMetric: board.netInflowMetric || '',
     netInflowLegacy: !!board.netInflowLegacy,
     qiLeaders: board.qiLeaders || null,
@@ -27052,9 +27192,12 @@ function aiCompactMainline(mainline) {
     netInflow: aiNum(mainline.netInflow, 0),
     netInflowBoard: mainline.netInflowBoard || '',
     netInflowZsType: mainline.netInflowZsType ?? null,
+    netInflowZjjlr: aiOptionalNum(mainline.netInflowZjjlr, 0),
     netInflowMetric: mainline.netInflowMetric || '',
     netInflowLegacy: !!mainline.netInflowLegacy,
     netInflowAggregation: mainline.netInflowAggregation || '',
+    fundDirection: mainline.fundDirection || null,
+    thsEligibilityGate: mainline.thsEligibilityGate || null,
     sourcePairs: mainline.sourcePairs || null,   // R2:东财/同花顺 各自同源净流入+涨幅配对
     boardGainPct: aiNum(mainline.boardGainPct),
     boardGainName: mainline.boardGainName || '',
@@ -27074,6 +27217,7 @@ function aiCompactMainline(mainline) {
       ztCount: aiNum(board.ztCount, 0),
       gainPct: aiNum(board.gainPct),
       netInflow: aiNum(board.netInflow, 0),
+      netInflowZjjlr: aiOptionalNum(board.netInflowZjjlr, 0),
       netInflowMetric: board.netInflowMetric || '',
       netInflowLegacy: !!board.netInflowLegacy,
       bigGainCount: aiNum(board.bigGainCount, 0),
