@@ -81,6 +81,10 @@ eval(extractHtmlFn('strategyMainlineDisplayInflow'));
 const renderedPairs = strategyMainlineSourcePairsHTML({ sourcePairs: sp });
 A(renderedPairs.includes('同花顺·DDE活跃') && renderedPairs.includes('9.00亿') && renderedPairs.includes('方向 2.00亿'),
   '前端 sourcePairs 实际渲染同时包含 DDE 活跃度与同板 zjjlr 方向');
+const renderedOutflow = strategyMainlineSourcePairsHTML({
+  sourcePairs: { eastmoney: null, ths: { board: '同花顺板X', netInflow: 9e8, directionNetInflow: -2e8, gainPct: 1 } },
+});
+A(renderedOutflow.includes('方向已转负 -2.00亿'), '同花顺负方向在前端明确显示“方向已转负”警示');
 const displayInflow = strategyMainlineDisplayInflow({
   resonanceBoards: [{ name: '同花顺板Y', zsType: 5, netInflow: 9e8, netInflowZjjlr: 2e8, netInflowMetric: 'ths-dde-big-order-amount' }],
 });

@@ -26521,8 +26521,9 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
 
 // 资金闸:东财沿用带符号超大单净流入；同花顺使用 Owner 2026-07-20 定稿的组合门槛：
 // DDE 活跃度≥5亿、zjjlr>0、涨停≥2。方向提示与资格闸门作为两个字段输出，不混为同一口径。
-// 同花顺组合门槛只对当日实时构建生效，无人工确认/盘中预期明星豁免；历史冻结/回看维持原口径。
-// 候选仍保留在 excluded 供诊断，不进入正式主线。
+// 同花顺组合门槛只对当日实时构建生效；自动扫描无豁免，正式榜保留人工确认与盘中已出现明星的
+// 既有粘性规则，但必须如实输出未通过门槛的原因和资金方向。历史冻结/回看维持原口径。
+// 其余未通过候选保留在 excluded 供诊断，不进入正式主线。
 function strategyMainlineApplyInflowGate(items, mainlineConfirm, options = {}) {
   const list = Array.isArray(items) ? items : [];
   const isConfirmed = (item) => !!mainlineConfirm &&
@@ -26534,6 +26535,9 @@ function strategyMainlineApplyInflowGate(items, mainlineConfirm, options = {}) {
       limitUpCount: numOrNull(item?.count),
     });
     if (thsComposite.applies && options.enforceThsComposite !== false) {
+      const exempted = !thsComposite.eligible
+        ? (isConfirmed(item) ? 'owner-confirm' : (item?.hadExpectedStarToday ? 'expected-star-sticky' : ''))
+        : '';
       const decorated = {
         ...item,
         fundDirection: thsComposite.directionHint,
@@ -26546,9 +26550,10 @@ function strategyMainlineApplyInflowGate(items, mainlineConfirm, options = {}) {
           limitUpCount: thsComposite.limitUpCount,
           limitUpPass: thsComposite.limitUpPass,
           reason: thsComposite.reason,
+          ...(exempted ? { exempted } : {}),
         },
       };
-      if (!thsComposite.eligible) {
+      if (!thsComposite.eligible && !exempted) {
         excluded.push({
           key: String(item?.familyKey || item?.key || ''),
           theme: String(item?.theme || ''),

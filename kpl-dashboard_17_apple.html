@@ -12987,7 +12987,9 @@ function strategyThsDirectionMeta(rawValue) {
   return {
     value,
     cls: value == null ? 'flat' : (value > 0 ? 'up' : (value < 0 ? 'down' : 'flat')),
-    text: value == null ? '方向缺失' : `方向 ${fmtInflow(value)}`,
+    text: value == null
+      ? '方向缺失'
+      : (value < 0 ? `方向已转负 ${fmtInflow(value)}` : (value === 0 ? '方向持平 0' : `方向 ${fmtInflow(value)}`)),
   };
 }
 // R2(Owner 2026-07-15):卡片显示东财、同花顺两组,每组资金与涨幅取自同一个板(同源一一对应)。
@@ -13114,10 +13116,14 @@ function renderStrategyMainlinesHTML(d) {
     const thsDirectionMetric = Number(displayInflow.zsType) === 5 && displayInflow.metric === 'ths-dde-big-order-amount'
       ? headMetric('全量方向', thsDirection.value == null ? '--' : fmtInflow(thsDirection.value), thsDirection.cls, '方向口径：同花顺 zjjlr；方向必须为正才具备正式主线资格')
       : '';
+    const thsGateExemption = m?.thsEligibilityGate?.passed === false && m?.thsEligibilityGate?.exempted
+      ? headMetric('组合闸', m.thsEligibilityGate.exempted === 'owner-confirm' ? '人工确认保留' : '明星粘性保留', 'flat', `组合闸未通过：${m.thsEligibilityGate.reason || 'unknown'}；仅保留当日主线记录，不代表资金方向通过`)
+      : '';
     const marketPulse = `<div class="ml-head-pulse" aria-label="板块涨幅、资金活跃度与方向">
       ${headMetric('涨幅', Number.isFinite(gainValue) ? `${gainValue > 0 ? '+' : ''}${gainValue.toFixed(2)}%` : '--', gainClass, m.boardGainName || m.theme || '')}
       ${headMetric(fundMetricLabel, displayInflow.value != null ? fmtInflow(displayInflow.value) : '--', inflowClass, `${fundTrace} · 重叠板块资金不相加，采用单个代表板块值`)}
       ${thsDirectionMetric}
+      ${thsGateExemption}
     </div>`;
     const metricCell = (label, value, cls = '', kind = 'support', title = '') => `<span class="ml-signal-cell ${escapeHTML(kind)} ${escapeHTML(cls)}"${title ? ` title="${escapeHTML(title)}"` : ''}><i>${escapeHTML(label)}</i><b>${escapeHTML(value)}</b></span>`;
     const signalStrip = `<div class="ml-signal-strip">
