@@ -8198,3 +8198,28 @@ Deployment:
 
 Notes for next agent:
 - 后续重跑必须重新计算合并后脚本 SHA-256，并将 gzip 后再 Base64 的值写入 `DREAMERQI_TGB_20260721_PAYLOAD_B64`。
+
+## 2026-07-21 - Codex - 当日 TGB 湖南人复盘已入库
+
+Changed:
+- 受保护运行 `29828853550` 写入 2026-07-21 `review/tgb-hunan-structured` 正式 120 行，并强制重折当天综合主因库；脚本在写入前复核人工载荷、官方文章/原图哈希、121 股原始终盘池、排除北交所 `920267 鑫汇科` 后 120 股正式口径及全部质量闸。
+- 正式行全部来自 Codex 对 `@TGB湖南人` 官方白底原图的逐题材块、逐行、逐字段人工转录和第二遍人工复核；未使用 OCR、Qwen 或任何自动视觉结果生成、补全、猜测或校验。
+- 两份云端运维日志已由脚本追加安全结果；受保护工作流的远端脚本/载荷清理通过，一次性 GitHub `production` 环境 Secret 已删除。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 仅云端：`kpl-limitup-main-reason-sources/tgb-hunan-structured/2026-07-21.json`、当天综合主因/evidence/quality/auto 与四个正式来源折叠产物、两份运维日志和回退备份
+
+Validated:
+- 官方文章 `https://www.tgb.cn/a/2tC8FxwG90V`（`7.21湖南人涨停复盘+晚间消息汇总`）；采用 `image-01-06.png`，原图 URL `https://image.tgb.cn/img/2026/07/21/expg7tsek9kl.png_760w.png`，长度 1021460 字节，SHA-256 `88318532abb5e8d438cd17071e0e9ff66730d1f8aeaa007aacb752a4716c55cb`。
+- 正式 120 行、唯一代码 120；`missingCodes=[]`、`extraCodes=[]`、重复 0、`weakCount=0`、名称差异 0；121 股原始池只排除北交所 `920267 鑫汇科`。
+- 题材块计数：半导体 40、PCB 11、算力+数据中心 11、光通信 7、被动元件 7、机器人 5、大金融 4、公告 4、有色金属 4、AI应用 3、AI硬件 3、玻璃基板封装 3、业绩 3、智能电网 3、黄金 2、其他个股 10，合计 120。
+- 人工输入 SHA-256 `b8e7a9c2c07e64e88e088ad366aa219179feb973631a070390bcf35272176ade`；终盘池 SHA-256 `4d92d11c97559ac6104b0302235552003774a93c182d51d409218677caade9ec`；正式 TGB SHA-256 `fdd91a0ad0725bf60e168714ee24e2a5e81f5a7514400910254c7e0fbe65b011`；重折后综合主因 SHA-256 `373e5e70e8d30b40b351c343ca9723e93c62a5d637e5273be226710ffd86f334`。
+- 独立公网强刷复核：综合归纳/复盘啦/选股宝/韭研/淘股吧均为 120 行和 120 唯一代码，五个标签相对正式集合差异均为 0；TGB 覆盖/主因覆盖 100%、低置信 0、`sourceErrors=[]`，主因库 120，公网 `/health` 为 `ok=true`。
+
+Deployment:
+- 已变更生产运行时复盘数据、重折综合主因并更新云端日志；未部署或替换应用代码，未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+- 正式写入回退备份：`C:\PandaDashboard\backups\tgb-hunan-manual-20260721-20260721120836`；raw 证据备份：`C:\PandaDashboard\backups\tgb-hunan-raw-20260721-20260721-193940`。
+
+Notes for next agent:
+- 本次 raw 请求 PR `#203`、正式写入请求 PR `#204`、压缩传输修复 PR `#205` 均已合并；2026-07-21 TGB 已完整完成，不要重复覆盖正式文件或重启服务。
