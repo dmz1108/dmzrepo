@@ -1296,3 +1296,87 @@ body.view-strategy .strategy-note { display: none !important; }
   body.view-strategy .strategy-board-grid { grid-template-columns: 1fr !important; }
   body.view-strategy .strategy-section-sub { flex: 0 0 100%; margin-left: 5px; }
 }
+
+/* ===== 三要件预备主线层(2026-07-21):琥珀降级,与回看"未兑现候选"同构 ===== */
+body.view-strategy .ml-reserve {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255, 200, 87, 0.35);
+}
+body.view-strategy .ml-reserve-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+body.view-strategy .ml-reserve-head span {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e8b64c;
+}
+body.view-strategy .ml-reserve-head small {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+body.view-strategy .ml-reserve-card {
+  position: relative;
+  opacity: 0.92;
+}
+body.view-strategy .ml-reserve-card > .ml-card,
+body.view-strategy .ml-reserve-card .ml-card {
+  border-color: rgba(255, 200, 87, 0.35);
+  background: rgba(255, 200, 87, 0.05);
+}
+/* 缺件状态栏走文档流,置于卡片上方——不用绝对定位角标,避免压住卡片右上角的
+   预判分/主线分(Codex #201 补充意见,半导体卡 815/1505 实测重叠)。 */
+body.view-strategy .ml-reserve-bar {
+  font-size: 10px;
+  line-height: 1.5;
+  padding: 2px 8px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  border: 1px dashed rgba(255, 200, 87, 0.5);
+  color: #e8b64c;
+  background: rgba(255, 200, 87, 0.08);
+}
+/* 预备卡即使含确认明星(缺龙头件)也保持琥珀降级视觉,不套正式榜的红色确认样式 */
+body.view-strategy .ml-reserve-card .ml-card.has-confirmed-star {
+  border-color: rgba(255, 200, 87, 0.35) !important;
+  border-left-color: var(--st-amber) !important;
+  background: rgba(255, 200, 87, 0.05) !important;
+}
+/* 预备卡紧凑化:保留头部脉冲、明星证据行(核心证据,不可隐藏——Codex #201 三审 P2)、
+   龙头/分数;明细/信号带/趋势等次级拆解收起 */
+body.view-strategy .ml-reserve-card .ml-detail-section,
+body.view-strategy .ml-reserve-card .ml-signal-strip,
+body.view-strategy .ml-reserve-card .ml-newtheme,
+body.view-strategy .ml-reserve-card .ml-trend,
+body.view-strategy .ml-reserve-card .ml-srcpairs {
+  display: none !important;
+}
+/* 明星证据行保留但压缩:预备卡必须能看到是哪只预期/确认明星 */
+body.view-strategy .ml-reserve-card .ml-star-proof {
+  padding: 4px 8px !important;
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+  border-color: rgba(255, 200, 87, 0.3) !important;
+  border-left-color: var(--st-amber) !important;
+  background: var(--st-amber-soft) !important;
+}
+/* 预备回看行(盘后预判回看的预备层结果) */
+body.view-strategy .mlr-reserve-line { flex-wrap: wrap; gap: 6px; opacity: 0.95; }
+body.view-strategy .mlr-reserve-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 2px 8px;
+  border: 1px dashed rgba(255, 200, 87, 0.4);
+  border-radius: 6px;
+  font-size: 11px;
+}
+body.view-strategy .mlr-reserve-item b { color: var(--st-text); font-weight: 640; }
+body.view-strategy .mlr-reserve-item i { color: var(--st-faint); font-style: normal; font-size: 10px; }
+body.view-strategy .mlr-reserve-item em { font-style: normal; font-size: 10px; color: var(--st-muted); }
+body.view-strategy .mlr-reserve-item em.sealed { color: var(--st-red); }
+body.view-strategy .mlr-reserve-item em.missed { color: var(--st-amber); }
+body.view-strategy .mlr-reserve-item em.wait { color: var(--st-faint); }

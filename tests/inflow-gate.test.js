@@ -99,7 +99,7 @@ A(strategyMainlineBoardAutoScanEligibility({ plateId: 'BK001', name: '东财样�
 // 5. 接线静态断言
 A(src.includes('strategyMainlineApplyInflowGate(') && src.includes("rule: 'source-aware-fund-flow-required'"), '构建管线已接来源感知门槛且响应带 inflowGate 观测字段');
 A(src.indexOf('const mainlineConfirm = await readMainlineConfirm(isoDay)') < src.indexOf('const inflowGate = strategyMainlineApplyInflowGate(')
-  && src.indexOf('const inflowGate = strategyMainlineApplyInflowGate(') < src.indexOf(': strategyMainlineApplyL2StarGate(inflowGate.kept);'), 'readMainlineConfirm 先进入净流入门槛,再进入 L2 明星门槛');
+  && src.indexOf('const inflowGate = strategyMainlineApplyInflowGate(') < src.indexOf(': strategyMainlineApplyL2StarGate(inflowGate.kept, { threeRequirements: useThreeRequirements });'), 'readMainlineConfirm 先进入净流入门槛,再进入 L2 明星门槛(三要件形参)');
 A(src.includes('{ enforceThsComposite: isTodayQuery }'), '同花顺组合门槛只作用于当日实时构建');
 
 // 6. 空输入

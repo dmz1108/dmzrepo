@@ -8078,6 +8078,39 @@ Deployment:
 Notes for next agent:
 - PR #197 已正式上线，不要再按“Draft/未部署”处理。下一个交易日盘中重点观察同花顺卡片的 DDE 活跃度/全量方向双列、组合闸排除原因，以及人工确认/明星粘性保留卡的负方向警示。
 
+## 2026-07-21 - Claude - 主线题材三要件(确认明星+龙头+题材板,Owner 定稿)
+
+Changed:
+- 讨论定稿 docs/strategy/discussions/2026-07-21-qi-mainline-three-requirements.md。
+- 正式主线三要件(2026-07-21 起,STRATEGY_MAINLINE_THREE_REQ_START_DAY 切界,不追溯):
+  确认明星≥1(confirmed) 且 合格龙头≥1(leaders 非空) 且 非风格板。
+- strategyMainlineApplyL2StarGate 分层:kept=正式(qiTier=formal)/reserve=预备(qiTier=reserve,
+  reserveReasons 如实列缺件)/excluded 原样;impl、缓存/冻结返回层(Restrict,按载荷日期切界)
+  两处同规则;l2Gate.rule 切换为 formal-mainline-requires-confirmed-star-and-leader。
+- 风格板黑名单(大盘成长/基金重仓/证金持股/茅指数/漂亮100系/上证50等 23 项+含漂亮100兜底):
+  种子/扫描消费前统一剔除,不占扫描配额;显式清单可增删。
+- 预备主线 reserveMainlines 全链路透出(impl→slim→compose 并集→bySource→Restrict→AI compact);
+  预测档案 starTransitions/candidates 并入预备主线(top 仅正式)——命中率飞轮不断粮。
+- 前端:双栏各源正式榜下方琥珀"预备主线"区(缺件角标:缺确认明星/缺龙头),与 #200 回看层
+  "未兑现候选"同构;空态文案区分"暂无正式主线,N 条预备待确认"。
+- 生产证据:2026-07-21 14:59 快照(正式榜 4 卡中 2 张无龙头风格板,其余仅 expected)。
+
+Files:
+- kpl-stats-server.js / kpl-dashboard_17_apple.html / Qi/vendor/strategy-workbench.css
+- docs/strategy/discussions/2026-07-21-qi-mainline-three-requirements.md
+- tests/strategy-three-requirements.test.js(新,20 断言)
+- tests/qi-mainline-states.test.js / tests/inflow-gate.test.js(静态断言随新形状更新)
+
+Validated:
+- node --check 通过;全仓 52 个测试文件全绿;前端内联脚本编译通过。
+
+Deployment:
+- 未部署;PR 待 Codex 复核。发布需 server+HTML+strategy-workbench.css 三件原子+重启说明:
+  未动 STATIC_FILES,重启仅因 server 变更。
+
+Notes for next agent:
+- 明星规则统计分段点新增 2026-07-21(三要件);命中率复盘按 top(正式)与 candidates(含预备)
+  区分口径。风格板黑名单在 STRATEGY_MAINLINE_STYLE_BOARD_NAMES,误伤/漏网直接改清单。
 ## 2026-07-21 - Codex - 预判回看明星结果层级重构
 
 Changed:
@@ -8131,6 +8164,41 @@ Notes for next agent:
 - PR #200 已正式上线，不要再按“Draft/未部署”处理。
 - PR #201 并非基于 PR #200；继续处理前应同步最新 `main`，并修复其后端门槛顺序、风格板回流、预备主线回看证据丢失及卡片状态/排版问题。
 
+## 2026-07-21 - Claude - 三要件按 Codex #201 审查修订 + 同步 main(#200 已上线)
+
+Changed:
+- P1-1 龙头重算后二次分层:reworkTargets=正式+预备全集一起重算,重算完用
+  strategyMainlineApplyL2StarGate 重新分层——原始 leaders 非空、重算清空(如 mainZt10Count=0)
+  的卡不再留在正式榜;双缺卡如实进诊断(missing-confirmed-star-and-leader,不占预备位)。
+- P1-2 冻结/缓存返回层(RestrictToQiPayload)同样前置剔除风格板(excluded 记
+  style-board-not-theme),reserveMainlines 合并侧同滤——stale/frozen 载荷无法回流风格板。
+- P1-3 预备回看不丢证据:预测落盘守卫放宽(top 空但 candidates/starTransitions 有内容仍落档);
+  候选档案持久化 qiTier/reserveReasons;回看 API 新增 strategyMainlineReserveStarOutcomes,
+  按来源/题材/缺件/个股输出预备预期明星封板状态,reserveSeal 独立计数(检验三要件是否错杀),
+  不混正式 expectedSeal;旧档案无 qiTier 一律不产出(不追溯)。
+- P2 语义与视觉:缺件拆分"待明星确认/待龙头形成";预备卡缺件状态改流式状态栏(不再绝对角标
+  压右上角分数);预备卡紧凑化(隐藏明细/信号带/趋势等),含确认明星缺龙头卡保持琥珀不套红。
+- 同步 main:#200(回看三层级)已合并部署;DAILY_HANDOFF 双方条目保留;CSS 缓存版本统一升
+  20260721b(#200 已用 20260721a 部署,本分支再加样式必须再 bump)。
+
+Files:
+- kpl-stats-server.js / kpl-dashboard_17_apple.html / Qi/vendor/strategy-workbench.css
+- tests/strategy-three-requirements.test.js(扩展:双缺转诊断/纯预备日落档/回看 outcomes 两源+不追溯)
+- tests/mainline-review.test.js / tests/leader-pool-debug.test.js / tests/strategy-workbench-ui.test.js
+
+Validated:
+- node --check 通过;合并 main 后全仓 52 个测试文件全绿。
+- 生产证据回放(AI 只读通道,strategy-live day=2026-07-21,evidence sha256 d2ab95d136454506…):
+  真实 4 卡经新门槛→ 大盘成长/基金重仓 风格板剔除,半导体/消费电子·显示 进预备层
+  (no-confirmed-star),正式榜空——与 Owner 判定一致,无风格板残留。
+  (AI compact 载荷无 starStocks 字段,星级按 14:59 已记录证据重建:两题材全天仅 expected。)
+
+Deployment:
+- 未部署;PR #201 待 Codex 复验。发布仍为 server+HTML+CSS 三件原子+重启(server 变更)。
+
+Notes for next agent:
+- 回看前端把 reserveStarOutcomes 并入 #200 的"未兑现候选/待验证"分组是后续小项,后端字段已就绪。
+- reserveSealRate 高说明三要件在错杀,应回报 Owner 复核门槛。
 ## 2026-07-21 - Codex - 准备强刷当日 TGB 湖南人原始证据
 
 Changed:
@@ -8199,6 +8267,41 @@ Deployment:
 Notes for next agent:
 - 后续重跑必须重新计算合并后脚本 SHA-256，并将 gzip 后再 Base64 的值写入 `DREAMERQI_TGB_20260721_PAYLOAD_B64`。
 
+## 2026-07-21 - Claude - 三要件按 Codex 三审修订(重算全集合同/超时 fail-closed/预备回看闭环)
+
+Changed:
+- P1-A 重算对象不再被首闸与截断线决定:三要件日新增 strategyMainlineThreeReqReworkAndGate
+  合同——入参为未截断的 QI 星证据全集(inflowGate.kept 过滤 HasQiStarEvidence),先重算、
+  唯一一次分闸、最后才排序截断。初始双缺候选经近10日主因池重算补出龙头可进预备层;
+  首闸只保留非 QI 证据诊断行。
+- P1-B 超时不污染分闸:重算在浅副本上进行(rework 对 leaders 是整组赋值,浅副本足以隔离),
+  完整成功才提交副本;超时丢弃副本(后台继续改的只是副本),gate 以 leadersUnverified
+  fail-closed——龙头腿视为缺失,当日无正式主线,确认明星者降预备(待龙头形成),
+  expected-only 落诊断;l2Gate.leaderReworkCompleted + 空态 leader-rework-incomplete 可解释。
+- P1-C 预备回看闭环:helper 增 kind 字段——kind=expected(轨迹行,参与预期→封板转化统计)/
+  kind=confirmed(缺龙头卡"从未 expected 的确认明星"从候选档案 stars 补齐,只展示不进转化率);
+  回看前端(#200 三层分组)消费 reserveStarOutcomes:纯预备日按预备结果进组
+  (预备·预期转明星/预备·预期未兑现/预备·待验证,标签防冒充),行内预备层逐股结果条,
+  头部新增"预备预期转封"独立统计 chip。
+- P2 预备卡不再隐藏 .ml-star-proof(核心明星证据),改压缩样式;区头改
+  "明星或龙头单项条件待补齐";预备回看行 CSS。
+
+Files:
+- kpl-stats-server.js / kpl-dashboard_17_apple.html / Qi/vendor/strategy-workbench.css
+- tests/strategy-three-requirements.test.js(新增合同 a/b 行为测试:双缺重算补龙头→预备、
+  超时无正式主线且原对象不被后台污染;kind=confirmed 补齐;前端消费静态断言)
+- tests/leader-pool-debug.test.js(静态断言随分支重构更新)
+
+Validated:
+- node --check 通过;同步 main(含 #203)后全仓 52 个测试文件全绿。
+- 2026-07-21 真实载荷回放结论不变(最终闸函数同一):风格板剔除、半导体/消费电子·显示进预备。
+
+Deployment:
+- 未部署;PR #201 待 Codex 复验。
+
+Notes for next agent:
+- 三要件日重算走 ThreeReqReworkAndGate(副本+fail-closed);旧口径日仍走原 mainlines 截断+超时路径。
+- 预备回看行最多显示 4 只;reserveSealRate 高说明三要件在错杀,回报 Owner。
 ## 2026-07-21 - Codex - 当日 TGB 湖南人复盘已入库
 
 Changed:
@@ -8223,3 +8326,79 @@ Deployment:
 
 Notes for next agent:
 - 本次 raw 请求 PR `#203`、正式写入请求 PR `#204`、压缩传输修复 PR `#205` 均已合并；2026-07-21 TGB 已完整完成，不要重复覆盖正式文件或重启服务。
+
+## 2026-07-21 - Claude - 四审 P1:终盘封板事实升级(603986 反例)
+
+Changed:
+- 实盘反例:兆易创新 603986 盘中 expected、14:08:05 封板,冻结载荷 level 停在 expected,
+  三要件闸误判半导体"缺确认明星"。修正:正式门槛必须消费最终涨停事实。
+- 新增 strategyMainlineFinalSealedCodes(day)(按日缓存;仅当涨停库 有行+收盘后保存+可靠性
+  校验通过 才返回代码集,盘中返回 null 不提前升级)与
+  strategyMainlineUpgradeStarsWithFinalSeal(非变异:expected 星在终盘涨停库中 → confirmed,
+  confirmedBy=final-limit-up-db,expectedStarHistory 同步升级;共享缓存原对象不改写)。
+- 构建层(impl 三要件路径)与返回/冻结层(Restrict,经 getStrategyMainlinesVisible 传入
+  finalSealedCodes)都在分闸前先升级;Restrict 改为"正式候选+既有预备卡并集进闸"——
+  升级后的预备卡(有龙头)可重回正式榜。
+- strategyPredictPersistFinalSealUpgrades:预测档案只做事件轨迹升级(starTransitions 行补
+  confirmedAt=涨停库 savedAt/lastLevel=confirmed),绝不改 top/candidates/qiTier/savedAt,
+  与"已收盘不写预测"守卫不冲突;幂等。
+
+Files:
+- kpl-stats-server.js / tests/strategy-three-requirements.test.js(603986 回归 4 断言+静态 4)
+
+Validated:
+- node --check;全仓 52 测试文件全绿。回看 API 此前已正确(sealedSameDay=true),本次补齐
+  正式池与前端(经 Restrict)一致性。
+
+Deployment: 未部署;PR #201 待 Codex 复验。
+
+Notes for next agent:
+- 盘中行为不变(expected 保持 expected);升级只在终盘可靠涨停库可用后生效。
+
+## 2026-07-21 - Claude - 四审复审两项 P1:空态残留清除 + 持久化挂必经冻结路径
+
+Changed:
+- P1-1 Restrict 层新增 clearStaleEmptyState:冻结载荷带旧"暂无正式主线"空态
+  (no-confirmed-mainline/no-l2-qualified-mainline/no-net-inflow-mainline/no-qualified-mainline/
+  leader-rework-incomplete)而重过滤/终盘升级后正式榜非空时,根层与来源层显式清 reason/message;
+  真正仍为空的来源保留原状态不误清。
+- P1-2 confirmed 转换持久化挂到必经的盘后冻结返回路径:getStrategyMainlinesVisible 在
+  finalSealedCodes 可用时 await strategyPredictPersistFinalSealUpgradesOnce(按日单例,
+  成功保持已完成态、失败清缓存重试);持久化改临时文件+rename 原子写,避免并发 GET 同写。
+  impl 路径同样改用单例。部署前已冻结的当日快照也能把 starTransitions 升级落盘。
+- 文档:strategy-three-requirements.test.js 头注更新(603986 终盘反例推翻"当日正式榜应空")。
+
+Files:
+- kpl-stats-server.js / tests/strategy-three-requirements.test.js
+  (新增:冻结 reserve 升级重回正式榜+空态清除 4 断言;持久化文件级 4 断言——原子写、
+  root+bySource 轨迹升级、top/candidates/qiTier/savedAt 逐字段不变、幂等)
+
+Validated: node --check;全仓 53 个测试文件全绿。
+
+Deployment: 未部署;PR #201 待 Codex 终审。
+
+Notes for next agent:
+- 空态清除只针对主线空态语义 reason 集;来源故障状态字段不复用这些值。
+
+## 2026-07-21 - Claude - 终审 P1:两个按日缓存生命周期收口
+
+Changed:
+- strategyMainlineFinalSealCache 不再"成功后永久缓存":短 TTL 60s(与 readLimitUpDbDay 读缓存
+  同级)+ writeLimitUpDbDay 写入路径显式失效(strategyMainlineFinalSealInvalidate);外部脚本
+  直接落盘由 TTL 兜底——收盘后管理员补齐/修正涨停底库能被策略层及时消费。
+- strategyPredictPersistFinalSealUpgradesOnce 改纯 in-flight 去重:任务 settle 即删缓存,
+  不保留永久成功态;持久化幂等且廉价,后续请求复核捕获同日底库补齐。
+- strategyPredictPersistFinalSealUpgrades 返回明确状态:updated/already-current/source-missing;
+  预测文件缺失不再被误当成功锁死,恢复后自然重试。
+
+Files:
+- kpl-stats-server.js / tests/strategy-three-requirements.test.js
+  (5a4 生命周期 4 断言:source-missing 不锁死、文件恢复重试、{A}→{A,B} 补齐继续升级、
+  全升级后 already-current 零写盘;静态:TTL+写入路径失效、settle 即删)
+
+Validated: node --check;全仓 53 个测试文件全绿。
+
+Deployment: 未部署;Codex 称修完此项即最终批准。
+
+Notes for next agent:
+- 封板集缓存失效点:writeLimitUpDbDay(项目内);外部落盘 60s 内自然过期。

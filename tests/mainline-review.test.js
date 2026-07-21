@@ -59,6 +59,7 @@ const STRATEGY_MAINLINE_INTRADAY_PHASES = extractSet('STRATEGY_MAINLINE_INTRADAY
 // ---- 待测函数 + 可控 IO/时钟 stub ----
 eval(extractFn('strategyMainlineActualFamilyRanking'));
 eval(extractFn('strategyMainlineExpectedStarTransitions'));
+eval(extractFn('strategyMainlineReserveStarOutcomes'));   // 三要件预备层盘后结果(#201)
 eval(extractFn('strategyMainlineReviewFormalTop'));
 eval(extractFn('strategyMainlineReviewHasRecord'));
 
