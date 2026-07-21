@@ -8176,3 +8176,25 @@ Deployment:
 
 Notes for next agent:
 - 正式运行时载荷只允许通过 GitHub `production` 环境日期绑定 Secret 传递，成功或失败后必须删除；运行时 JSON不得进入 Git。
+
+## 2026-07-21 - Codex - 压缩当日 TGB 日期绑定载荷传输
+
+Changed:
+- 首次正式运行 `29828419646` 因环境 Secret 误设为字面量 `-`，在载荷 SHA-256 闸处、读取任何生产运行时数据库之前失败；远端脚本和载荷清理成功，正式库、综合主因和云端日志均未改变。
+- 正确的 59,008 字节人工 JSON 经 Base64 后超过 GitHub 环境 Secret 单值上限；第二次调度 `29828546124` 已在环境审批前取消，未执行生产作业。
+- 写入脚本改为接收 gzip+Base64 日期绑定载荷；远端先解压，再对原始 JSON 继续验证固定 SHA-256 `b8e7a9c2c07e64e88e088ad366aa219179feb973631a070390bcf35272176ade`，不改变任何正式行或质量闸。
+
+Files:
+- `ops/production/requests/2026-07-21-tgb-hunan-write.ps1`
+- `tests/tgb-20260721-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 59,008 字节原始 JSON 经确定性 gzip 后为 4,459 字节，Base64 后为 5,948 字节；日期绑定密文仍由受保护工作流上传、远端清理，解压后的原始 JSON 哈希保持不变。
+- 专项生产请求、旧日兼容、workflow YAML/Bash、后端语法和 `git diff --check` 通过；全仓 52/52 个测试文件全部通过。
+
+Deployment:
+- 本条提交时未再次执行正式写入；未重折综合主因，未重启服务。
+
+Notes for next agent:
+- 后续重跑必须重新计算合并后脚本 SHA-256，并将 gzip 后再 Base64 的值写入 `DREAMERQI_TGB_20260721_PAYLOAD_B64`。
