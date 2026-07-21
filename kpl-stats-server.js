@@ -25031,30 +25031,62 @@ function strategyMainlineReserveStarOutcomes(predict) {
   const out = [];
   const seen = new Set();
   for (const [sourceKey, block] of blocks) {
-    const reserveByKey = new Map((Array.isArray(block.candidates) ? block.candidates : [])
-      .filter(row => row && row.qiTier === 'reserve')
-      .map(row => [String(row?.key || row?.familyKey || '').trim(), row])
-      .filter(([key]) => key));
-    if (!reserveByKey.size) continue;
-    for (const row of (Array.isArray(block.starTransitions) ? block.starTransitions : [])) {
-      const mKey = String(row?.mainlineKey || '').trim();
-      const code = normalizeReasonSourceCode(row?.code);
-      const candidate = mKey ? reserveByKey.get(mKey) : null;
-      if (!candidate || !code) continue;
-      const dedupKey = `${sourceKey}|${mKey}|${code}`;
-      if (seen.has(dedupKey)) continue;
-      seen.add(dedupKey);
-      out.push({
-        source: sourceKey,
-        mainlineKey: mKey,
-        mainlineTheme: String(row?.mainlineTheme || candidate?.theme || '').trim(),
-        reserveReasons: Array.isArray(candidate?.reserveReasons) ? candidate.reserveReasons : [],
-        code,
-        name: String(row?.name || '').trim(),
-        firstExpectedAt: String(row?.firstExpectedAt || '').trim(),
-        confirmedAt: String(row?.confirmedAt || '').trim() || null,
-        lastLevel: String(row?.lastLevel || 'expected').trim() || 'expected',
-      });
+    const reserveCands = (Array.isArray(block.candidates) ? block.candidates : [])
+      .filter(row => row && row.qiTier === 'reserve');
+    if (!reserveCands.length) continue;
+    const transitions = Array.isArray(block.starTransitions) ? block.starTransitions : [];
+    for (const cand of reserveCands) {
+      const key = String(cand?.key || cand?.familyKey || '').trim();
+      if (!key) continue;
+      const reserveReasons = Array.isArray(cand?.reserveReasons) ? cand.reserveReasons : [];
+      const theme = String(cand?.theme || '').trim();
+      const candTransitions = transitions.filter(row => String(row?.mainlineKey || '').trim() === key);
+      // kind='expected':预期明星轨迹行,参与"预期→封板"转化统计(expected 后封板的行
+      // confirmedAt 非空,仍算 expected 起点的成功转化)。
+      for (const row of candTransitions) {
+        const code = normalizeReasonSourceCode(row?.code);
+        if (!code) continue;
+        const dedupKey = `${sourceKey}|${key}|${code}`;
+        if (seen.has(dedupKey)) continue;
+        seen.add(dedupKey);
+        out.push({
+          kind: 'expected',
+          source: sourceKey,
+          mainlineKey: key,
+          mainlineTheme: String(row?.mainlineTheme || theme).trim(),
+          reserveReasons,
+          code,
+          name: String(row?.name || '').trim(),
+          firstExpectedAt: String(row?.firstExpectedAt || '').trim(),
+          confirmedAt: String(row?.confirmedAt || '').trim() || null,
+          lastLevel: String(row?.lastLevel || 'expected').trim() || 'expected',
+        });
+      }
+      // kind='confirmed'(Codex #201 三审 P1):缺龙头预备卡的明星若从首次观察起就是 confirmed
+      // (从未经历 expected),不会有轨迹行——证据从候选档案 stars 补齐。该类行只作展示
+      // (明星已确认·待龙头形成),绝不混入 expected 封板转化率。
+      if (reserveReasons.includes('no-qualified-leader')) {
+        for (const star of (Array.isArray(cand?.stars) ? cand.stars : [])) {
+          if (String(star?.level || '').trim() !== 'confirmed') continue;
+          const code = normalizeReasonSourceCode(star?.code);
+          if (!code) continue;
+          const dedupKey = `${sourceKey}|${key}|${code}`;
+          if (seen.has(dedupKey)) continue;
+          seen.add(dedupKey);
+          out.push({
+            kind: 'confirmed',
+            source: sourceKey,
+            mainlineKey: key,
+            mainlineTheme: theme,
+            reserveReasons,
+            code,
+            name: String(star?.name || '').trim(),
+            firstExpectedAt: '',
+            confirmedAt: null,
+            lastLevel: 'confirmed',
+          });
+        }
+      }
     }
   }
   return out;
@@ -25232,6 +25264,9 @@ async function getStrategyMainlineReview(days = 10) {
     // 独立计数——预备层封板率高说明三要件在错杀,应回给 Owner 复核门槛;混进正式口径则两边都失真。
     const reserveStarOutcomes = strategyMainlineReserveStarOutcomes(predict).map(row => {
       const item = { ...row, sealedSameDay: null, sealStatus: 'noData' };
+      // kind='confirmed' 是"明星已确认·待龙头形成"的展示行:确认本身即含封板事实,
+      // 不再验封、不进 expected 封板转化统计(Codex #201 三审:两类语义分开)。
+      if (row.kind === 'confirmed') { item.sealStatus = 'confirmed'; return item; }
       if (pendingReview) item.sealStatus = 'pending';
       else if (limitDbFinal) {
         item.sealedSameDay = (limitDb.stocks || [])
@@ -26470,22 +26505,13 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
   // 管理员/AI 诊断需要保留完整候选池来解释「为什么没上榜」；严格 QI 门槛只作用于
   // 正式构建和正式页面返回，不得裁掉复核、归属追踪与回放证据。
   const useThreeRequirements = strategyMainlineUsesThreeRequirements(isoDay);
-  const l2Gate = options?.leaderDebug || !strategyMainlineUsesStrictQi(isoDay)
+  let l2Gate = options?.leaderDebug || !strategyMainlineUsesStrictQi(isoDay)
     ? { kept: inflowGate.kept, reserve: [], excluded: [] }
     : strategyMainlineApplyL2StarGate(inflowGate.kept, { threeRequirements: useThreeRequirements });
   const mainlineSort = (a, b) =>
     (Number(b.score) || 0) - (Number(a.score) || 0) ||
     (Number(b.count) || 0) - (Number(a.count) || 0) ||
     (Number(b.maxLianban) || 0) - (Number(a.maxLianban) || 0);
-  let mainlines = l2Gate.kept
-    .sort(mainlineSort)
-    .slice(0, 10)
-    .map((x, i) => ({ ...x, rank: i + 1 }));
-  // 预备主线:有 L2 明星证据但缺确认明星/缺龙头,独立层展示,不计正式口径(三要件 2026-07-21)。
-  let reserveMainlines = (l2Gate.reserve || [])
-    .sort(mainlineSort)
-    .slice(0, 6)
-    .map((x, i) => ({ ...x, rank: i + 1 }));
   // 三审修正3:诊断模式完整等待龙头池重构,不吃正式请求的超时;正式请求行为不变。
   // 四审阻断3:诊断不吞 rework 异常——记入 debugErrors,complete 标 false。
   const reworkOpts = {
@@ -26493,31 +26519,54 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     traceCodes: Array.isArray(options.traceCodes) ? options.traceCodes : [],
     debugErrors,
   };
-  // 三要件下正式+预备候选全集一起重算龙头:重算后的 leaders 才是主因硬门槛真值(Codex #201 P1-1)。
-  const reworkTargets = useThreeRequirements ? [...mainlines, ...reserveMainlines] : mainlines;
-  if (diagMode) {
-    try {
-      await strategyMainlineReworkLeaders(reworkTargets, isoDay, reworkOpts);
-    } catch (e) {
-      debugErrors.push(`rework: ${String(e && e.message || e)}`);
-    }
-  } else {
-    await strategyMainlineWithTimeout(
-      strategyMainlineReworkLeaders(reworkTargets, isoDay, reworkOpts).catch(() => {}),
-      STRATEGY_MAINLINE_REWORK_TIMEOUT_MS,
-      null
-    );
-  }
-  // [Codex #201 P1-1] 按重算后的 leaders 二次分层:原始 leaders 非空、重算后被清空
-  // (如 mainZt10Count=0)的卡必须从正式榜降级/移除;双缺卡此时也如实转入诊断。
-  if (useThreeRequirements && !options?.leaderDebug) {
-    const regate = strategyMainlineApplyL2StarGate(reworkTargets, { threeRequirements: true });
-    mainlines = regate.kept.sort(mainlineSort).slice(0, 10).map((x, i) => ({ ...x, rank: i + 1 }));
-    reserveMainlines = regate.reserve.sort(mainlineSort).slice(0, 6).map((x, i) => ({ ...x, rank: i + 1 }));
-    for (const row of regate.excluded) {
-      if (!l2Gate.excluded.some(e => e.familyKey === row.familyKey && e.reason === row.reason)) {
-        l2Gate.excluded.push(row);
+  let mainlines;
+  // 预备主线:有 L2 明星证据但缺确认明星/缺龙头,独立层展示,不计正式口径(三要件 2026-07-21)。
+  let reserveMainlines = [];
+  const threeReqActive = useThreeRequirements && !options?.leaderDebug && strategyMainlineUsesStrictQi(isoDay);
+  if (threeReqActive) {
+    // [Codex #201 三审 P1] 重算对象=未截断的 QI 星证据全集,先重算、唯一一次分闸、最后才排序截断。
+    // 首闸(上方 l2Gate)只保留非 QI 证据的诊断行;它的双缺判定基于重算前 leaders,不作数。
+    const qiPool = inflowGate.kept.filter(item => strategyMainlineHasQiStarEvidence(item));
+    const nonQiExcluded = l2Gate.excluded.filter(row => row.reason !== 'missing-confirmed-star-and-leader');
+    let reworkOutcome;
+    if (diagMode) {
+      try {
+        reworkOutcome = await strategyMainlineThreeReqReworkAndGate(qiPool, isoDay, reworkOpts, { fullWait: true });
+      } catch (e) {
+        debugErrors.push(`rework: ${String(e && e.message || e)}`);
+        reworkOutcome = {
+          reworkCompleted: false,
+          gate: strategyMainlineApplyL2StarGate(qiPool, { threeRequirements: true, leadersUnverified: true }),
+        };
       }
+    } else {
+      reworkOutcome = await strategyMainlineThreeReqReworkAndGate(qiPool, isoDay, reworkOpts);
+    }
+    l2Gate = {
+      kept: reworkOutcome.gate.kept,
+      reserve: reworkOutcome.gate.reserve,
+      excluded: [...nonQiExcluded, ...reworkOutcome.gate.excluded],
+      leaderReworkCompleted: reworkOutcome.reworkCompleted,
+    };
+    mainlines = l2Gate.kept.sort(mainlineSort).slice(0, 10).map((x, i) => ({ ...x, rank: i + 1 }));
+    reserveMainlines = l2Gate.reserve.sort(mainlineSort).slice(0, 6).map((x, i) => ({ ...x, rank: i + 1 }));
+  } else {
+    mainlines = l2Gate.kept
+      .sort(mainlineSort)
+      .slice(0, 10)
+      .map((x, i) => ({ ...x, rank: i + 1 }));
+    if (diagMode) {
+      try {
+        await strategyMainlineReworkLeaders(mainlines, isoDay, reworkOpts);
+      } catch (e) {
+        debugErrors.push(`rework: ${String(e && e.message || e)}`);
+      }
+    } else {
+      await strategyMainlineWithTimeout(
+        strategyMainlineReworkLeaders(mainlines, isoDay, reworkOpts).catch(() => {}),
+        STRATEGY_MAINLINE_REWORK_TIMEOUT_MS,
+        null
+      );
     }
   }
   if (mainlineConfirm) {
@@ -26528,7 +26577,12 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
   if (isTodayQuery && options.writePredict !== false) {
     await writeMainlinePredict(isoDay, sessionPhaseNow, mainlines, mainlineConfirm, reserveMainlines);
   }
-  const emptyMainlineState = mainlines.length ? null : (reserveMainlines.length
+  const emptyMainlineState = mainlines.length ? null : (l2Gate.leaderReworkCompleted === false
+    ? {
+        reason: 'leader-rework-incomplete',
+        message: '龙头池重算未在时限内完成；为避免用未验证的龙头认定正式主线，本次不给出正式主线，稍后刷新会重试。',
+      }
+    : (reserveMainlines.length
     ? {
         reason: 'no-confirmed-mainline',
         message: `今日暂无同时具备确认明星与合格龙头的正式主线；${reserveMainlines.length} 条预备主线待明星确认。`,
@@ -26546,7 +26600,7 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
       : {
           reason: 'no-qualified-mainline',
           message: '盘中尚未形成满足条件的主线，系统会继续观察实时板块和 L2 扫描结果。',
-        })));
+        }))));
   // 个股归属追踪(诊断端点专用):某只股当天到底被哪些板块携带、映射到哪个题材、
   // 当日综合主因怎么说、最终落进了哪些主线的 todayCodes——用于定位"该进未进"。
   let debugTrace = null;
@@ -26788,6 +26842,12 @@ function strategyMainlineApplyL2StarGate(items, options = {}) {
     if (strategyMainlineHasQiStarEvidence(item)) {
       if (!threeReq) { kept.push(item); continue; }
       const reasons = strategyMainlineReserveReasons(item);
+      // [Codex #201 三审 P1] 龙头重算未完整成功时 fail-closed:所有候选的龙头腿视为缺失——
+      // 不得把重算前的 provisional leaders 当合格龙头。确认明星者降预备(待龙头形成),
+      // expected-only 落诊断,当日不产正式主线。
+      if (options.leadersUnverified === true && !reasons.includes('no-qualified-leader')) {
+        reasons.push('no-qualified-leader');
+      }
       if (!reasons.length) {
         kept.push({ ...item, qiTier: 'formal' });
       } else if (reasons.length === 1) {
@@ -26818,6 +26878,37 @@ function strategyMainlineApplyL2StarGate(items, options = {}) {
     });
   }
   return { kept, reserve, excluded };
+}
+
+// [Codex #201 三审 P1] 三要件日的"重算→唯一分闸"合同:
+// - 入参必须是未截断的 QI 星证据候选全集(首闸不得决定重算对象:初始双缺候选经近10日主因池
+//   重算可能补出合格龙头成为预备主线;初始截断线后的候选重算后排名也可能前移);
+// - 重算在浅副本上进行(rework 对 leaders/mainLeader 是整组赋值,浅副本足以隔离原对象);
+//   完整成功才提交副本;超时/失败丢弃副本——后台未完成的 rework 继续改的只是副本,
+//   已准备返回的对象不会被半成品污染;
+// - 超时 fail-closed:leadersUnverified 让龙头腿视为缺失,当日不产正式主线(宁缺毋滥)。
+async function strategyMainlineThreeReqReworkAndGate(qiPool, isoDay, reworkOpts, options = {}) {
+  const reworkFn = options.reworkFn || strategyMainlineReworkLeaders;
+  const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : STRATEGY_MAINLINE_REWORK_TIMEOUT_MS;
+  const copies = (Array.isArray(qiPool) ? qiPool : []).map(item => ({ ...item }));
+  let reworkCompleted = false;
+  if (options.fullWait) {
+    await reworkFn(copies, isoDay, reworkOpts);   // 诊断模式:完整等待,异常由调用方入 debugErrors
+    reworkCompleted = true;
+  } else {
+    reworkCompleted = await strategyMainlineWithTimeout(
+      reworkFn(copies, isoDay, reworkOpts).then(() => true).catch(() => false),
+      timeoutMs,
+      false,
+      'three-req-rework'
+    );
+  }
+  const pool = reworkCompleted ? copies : (Array.isArray(qiPool) ? qiPool : []);
+  const gate = strategyMainlineApplyL2StarGate(pool, {
+    threeRequirements: true,
+    leadersUnverified: !reworkCompleted,
+  });
+  return { gate, reworkCompleted };
 }
 
 function strategyDailySourceQuality(day, limitDb, mainReasonDb, closeDb) {

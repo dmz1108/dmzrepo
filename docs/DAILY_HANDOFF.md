@@ -8266,3 +8266,39 @@ Deployment:
 
 Notes for next agent:
 - 后续重跑必须重新计算合并后脚本 SHA-256，并将 gzip 后再 Base64 的值写入 `DREAMERQI_TGB_20260721_PAYLOAD_B64`。
+
+## 2026-07-21 - Claude - 三要件按 Codex 三审修订(重算全集合同/超时 fail-closed/预备回看闭环)
+
+Changed:
+- P1-A 重算对象不再被首闸与截断线决定:三要件日新增 strategyMainlineThreeReqReworkAndGate
+  合同——入参为未截断的 QI 星证据全集(inflowGate.kept 过滤 HasQiStarEvidence),先重算、
+  唯一一次分闸、最后才排序截断。初始双缺候选经近10日主因池重算补出龙头可进预备层;
+  首闸只保留非 QI 证据诊断行。
+- P1-B 超时不污染分闸:重算在浅副本上进行(rework 对 leaders 是整组赋值,浅副本足以隔离),
+  完整成功才提交副本;超时丢弃副本(后台继续改的只是副本),gate 以 leadersUnverified
+  fail-closed——龙头腿视为缺失,当日无正式主线,确认明星者降预备(待龙头形成),
+  expected-only 落诊断;l2Gate.leaderReworkCompleted + 空态 leader-rework-incomplete 可解释。
+- P1-C 预备回看闭环:helper 增 kind 字段——kind=expected(轨迹行,参与预期→封板转化统计)/
+  kind=confirmed(缺龙头卡"从未 expected 的确认明星"从候选档案 stars 补齐,只展示不进转化率);
+  回看前端(#200 三层分组)消费 reserveStarOutcomes:纯预备日按预备结果进组
+  (预备·预期转明星/预备·预期未兑现/预备·待验证,标签防冒充),行内预备层逐股结果条,
+  头部新增"预备预期转封"独立统计 chip。
+- P2 预备卡不再隐藏 .ml-star-proof(核心明星证据),改压缩样式;区头改
+  "明星或龙头单项条件待补齐";预备回看行 CSS。
+
+Files:
+- kpl-stats-server.js / kpl-dashboard_17_apple.html / Qi/vendor/strategy-workbench.css
+- tests/strategy-three-requirements.test.js(新增合同 a/b 行为测试:双缺重算补龙头→预备、
+  超时无正式主线且原对象不被后台污染;kind=confirmed 补齐;前端消费静态断言)
+- tests/leader-pool-debug.test.js(静态断言随分支重构更新)
+
+Validated:
+- node --check 通过;同步 main(含 #203)后全仓 52 个测试文件全绿。
+- 2026-07-21 真实载荷回放结论不变(最终闸函数同一):风格板剔除、半导体/消费电子·显示进预备。
+
+Deployment:
+- 未部署;PR #201 待 Codex 复验。
+
+Notes for next agent:
+- 三要件日重算走 ThreeReqReworkAndGate(副本+fail-closed);旧口径日仍走原 mainlines 截断+超时路径。
+- 预备回看行最多显示 4 只;reserveSealRate 高说明三要件在错杀,回报 Owner。

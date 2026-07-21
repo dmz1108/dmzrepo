@@ -106,6 +106,45 @@ A(reserveOnlyBlock.candidates[0].qiTier === 'reserve'
   && reserveOnlyBlock.candidates[0].reserveReasons.join(',') === 'no-confirmed-star',
   '候选档案持久化 qiTier/缺件原因——盘后回看识别预备层的唯一依据');
 
+// ---- 5a. 重算→唯一分闸合同(Codex #201 三审 P1) ----
+const strategyMainlineDiagNoteTimeout = () => {};   // 诊断上下文记录,与本测试无关
+eval(extractFn('strategyMainlineWithTimeout'));
+const STRATEGY_MAINLINE_REWORK_TIMEOUT_MS = 1200;
+eval(extractFn('strategyMainlineThreeReqReworkAndGate'));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+(async () => {
+  // a) 初始双缺(expected+无龙头)候选,重算从近10日主因池补出龙头 → 应进预备层而非诊断
+  const dualMissing = mk('云计算', [{ code: '000001', level: 'expected' }], []);
+  const r1 = await strategyMainlineThreeReqReworkAndGate([dualMissing], '2026-07-21', {}, {
+    reworkFn: async (list) => { for (const m of list) { m.leaders = [{ code: '600001', name: '补出龙头', leadScore: 70 }]; } },
+    timeoutMs: 500,
+  });
+  A(r1.reworkCompleted === true && r1.gate.kept.length === 0 && r1.gate.reserve.length === 1
+    && r1.gate.reserve[0].reserveReasons.join(',') === 'no-confirmed-star',
+    '合同a:初始双缺候选经重算补出龙头 → 预备层(重算前不得判死)');
+  A(dualMissing.leaders.length === 0 && r1.gate.reserve[0].leaders.length === 1,
+    '合同a:重算发生在副本上,原对象不被改写,提交的是副本结果');
+  // b) 重算超时:不得把重算前的 provisional leaders 当合格龙头 → 当日无正式主线(fail-closed)
+  const provisional = mk('确认+旧龙头', [{ code: '000002', level: 'confirmed' }], leaders);
+  const expectedOnly = mk('仅预期', [{ code: '000003', level: 'expected' }], leaders);
+  let bgDone = false;
+  const r2 = await strategyMainlineThreeReqReworkAndGate([provisional, expectedOnly], '2026-07-21', {}, {
+    reworkFn: async (list) => { await sleep(200); for (const m of list) { m.leaders = []; } bgDone = true; },
+    timeoutMs: 40,
+  });
+  A(r2.reworkCompleted === false && r2.gate.kept.length === 0,
+    '合同b:重算超时(>1.2s 场景)不产生任何正式主线——旧 provisional leaders 不算合格龙头');
+  A(r2.gate.reserve.some(m => m.theme === '确认+旧龙头' && m.reserveReasons.includes('no-qualified-leader')),
+    '合同b:确认明星者超时降预备(待龙头形成),不消失');
+  A(r2.gate.excluded.some(e => e.theme === '仅预期' && e.reason === 'missing-confirmed-star-and-leader'),
+    '合同b:expected-only 超时按双缺落诊断');
+  await sleep(220);
+  A(bgDone === true && provisional.leaders.length === 1,
+    '合同b:超时后后台 rework 继续改的只是被丢弃的副本,已返回对象不被半成品污染');
+})().then(() => {
+  console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL STRATEGY-THREE-REQUIREMENTS CHECKS PASSED');
+});
+
 // ---- 5b. 盘后回看:预备主线预期明星单独输出,与正式回看分开 ----
 eval(extractFn('strategyMainlineReserveStarOutcomes'));
 const outcomePredict = {
@@ -123,19 +162,32 @@ const outcomePredict = {
     },
     ths: {
       top: [],
-      candidates: [{ key: 'theme:消费电子', theme: '消费电子', qiTier: 'reserve', reserveReasons: ['no-qualified-leader'] }],
+      candidates: [
+        { key: 'theme:消费电子', theme: '消费电子', qiTier: 'reserve', reserveReasons: ['no-qualified-leader'] },
+        // 缺龙头且明星"从首次观察即 confirmed"(无 expected 轨迹行)——证据必须从候选档案 stars 补齐
+        { key: 'theme:军工', theme: '军工', qiTier: 'reserve', reserveReasons: ['no-qualified-leader'],
+          stars: [{ code: '600760', name: '中航沈飞', level: 'confirmed' }] },
+      ],
       starTransitions: [{ mainlineKey: 'theme:消费电子', code: '000725', name: '京东方A', firstExpectedAt: '2026-07-21T02:10:00.000Z', lastLevel: 'expected' }],
     },
   },
 };
 const outcomes = strategyMainlineReserveStarOutcomes(outcomePredict);
-A(outcomes.length === 2, '回看:两源预备明星都产出,正式主线(确认+龙头)的明星不混入');
+A(outcomes.length === 3, '回看:两源预备明星都产出,正式主线(确认+龙头)的明星不混入');
 const east = outcomes.find(o => o.source === 'eastmoney');
-A(!!east && east.code === '603986' && east.mainlineTheme === '半导体'
+A(!!east && east.code === '603986' && east.mainlineTheme === '半导体' && east.kind === 'expected'
   && east.reserveReasons.join(',') === 'no-confirmed-star',
-  '回看:预备结果按来源/题材/缺件/个股逐条落列(东财 半导体 兆易创新)');
-A(outcomes.some(o => o.source === 'ths' && o.code === '000725' && o.reserveReasons.join(',') === 'no-qualified-leader'),
+  '回看:预备结果按来源/题材/缺件/个股逐条落列(东财 半导体 兆易创新,kind=expected)');
+A(outcomes.some(o => o.source === 'ths' && o.code === '000725' && o.kind === 'expected'
+  && o.reserveReasons.join(',') === 'no-qualified-leader'),
   '回看:同花顺预备(缺龙头)独立成行,不与东财合并');
+A(outcomes.some(o => o.source === 'ths' && o.code === '600760' && o.kind === 'confirmed' && o.lastLevel === 'confirmed'),
+  '回看:缺龙头卡的"从未 expected 的确认明星"从候选档案补齐(kind=confirmed),不因无轨迹行消失(Codex #201 三审)');
+A(/if \(row\.kind === 'confirmed'\) \{ item\.sealStatus = 'confirmed'; return item; \}/.test(src),
+  '静态:kind=confirmed 展示行不进 expected 封板转化统计(两类语义分开)');
+A(/reserveCell\(r\)/.test(fs.readFileSync(path.join(__dirname, '..', 'kpl-dashboard_17_apple.html'), 'utf8'))
+  && /reserveStarOutcomes/.test(fs.readFileSync(path.join(__dirname, '..', 'kpl-dashboard_17_apple.html'), 'utf8')),
+  '静态:回看前端消费 reserveStarOutcomes(纯预备日不再只显示今日无主线)');
 const legacyPredictNoTier = {
   top: [{ key: 'theme:白酒', theme: '白酒' }],
   candidates: [{ key: 'theme:白酒', theme: '白酒' }, { key: 'theme:第四名', theme: '第四名' }],
@@ -155,13 +207,16 @@ A(/const threeReq = strategyMainlineUsesThreeRequirements\(payload\.day\)/.test(
   '静态:缓存/冻结返回层按载荷日期同样执行三要件重过滤');
 A(/reserveList = \(source && Array\.isArray\(source\.reserveMainlines\)\) \? source\.reserveMainlines : \[\]/.test(src),
   '静态:bySource 预测块并入预备主线轨迹');
-A(/const regate = strategyMainlineApplyL2StarGate\(reworkTargets, \{ threeRequirements: true \}\)/.test(src),
-  '静态:龙头重算后按重算结果二次分层——原始 leaders 非空、重算清空的卡不得留在正式榜(Codex #201 P1-1)');
+A(/const qiPool = inflowGate\.kept\.filter\(item => strategyMainlineHasQiStarEvidence\(item\)\)/.test(src),
+  '静态:重算对象=未截断的 QI 星证据全集(首闸与截断线不得决定重算对象,Codex #201 三审 P1)');
+A(/strategyMainlineThreeReqReworkAndGate\(qiPool, isoDay, reworkOpts\)/.test(src),
+  '静态:三要件日走"重算→唯一分闸"合同,重算完成后才排序截断');
+A(/leaderReworkCompleted: reworkOutcome\.reworkCompleted/.test(src) && /reason: 'leader-rework-incomplete'/.test(src),
+  '静态:重算未完成状态透出到 l2Gate 与空态文案(fail-closed 可解释)');
 A(/reason: 'style-board-not-theme'/.test(src),
   '静态:冻结/缓存载荷返回层同样剔除风格板并落诊断(Codex #201 P1-2)');
 A(/if \(!block\.top\.length && !block\.starTransitions\.length && !block\.candidates\.length\) return;/.test(src),
   '静态:预测落盘守卫放宽——正式 top 全空但预备轨迹有内容仍落档(Codex #201 P1-3)');
 A(/reserveStarOutcomes/.test(src) && /reserveSealTotal/.test(src) && /reserveSealRate/.test(src),
   '静态:回看 API 输出预备明星结果并独立计数,不混正式 expectedSeal 口径(Codex #201 P1-3)');
-
-console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL STRATEGY-THREE-REQUIREMENTS CHECKS PASSED');
+// (总结行由 5a 异步块在全部断言后输出)

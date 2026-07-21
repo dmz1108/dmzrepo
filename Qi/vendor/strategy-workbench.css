@@ -1345,12 +1345,38 @@ body.view-strategy .ml-reserve-card .ml-card.has-confirmed-star {
   border-left-color: var(--st-amber) !important;
   background: rgba(255, 200, 87, 0.05) !important;
 }
-/* 预备卡紧凑化:只保留头部脉冲、龙头/明星证据行与分数;明细/信号带/趋势等收起 */
+/* 预备卡紧凑化:保留头部脉冲、明星证据行(核心证据,不可隐藏——Codex #201 三审 P2)、
+   龙头/分数;明细/信号带/趋势等次级拆解收起 */
 body.view-strategy .ml-reserve-card .ml-detail-section,
-body.view-strategy .ml-reserve-card .ml-star-proof,
 body.view-strategy .ml-reserve-card .ml-signal-strip,
 body.view-strategy .ml-reserve-card .ml-newtheme,
 body.view-strategy .ml-reserve-card .ml-trend,
 body.view-strategy .ml-reserve-card .ml-srcpairs {
   display: none !important;
 }
+/* 明星证据行保留但压缩:预备卡必须能看到是哪只预期/确认明星 */
+body.view-strategy .ml-reserve-card .ml-star-proof {
+  padding: 4px 8px !important;
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+  border-color: rgba(255, 200, 87, 0.3) !important;
+  border-left-color: var(--st-amber) !important;
+  background: var(--st-amber-soft) !important;
+}
+/* 预备回看行(盘后预判回看的预备层结果) */
+body.view-strategy .mlr-reserve-line { flex-wrap: wrap; gap: 6px; opacity: 0.95; }
+body.view-strategy .mlr-reserve-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 2px 8px;
+  border: 1px dashed rgba(255, 200, 87, 0.4);
+  border-radius: 6px;
+  font-size: 11px;
+}
+body.view-strategy .mlr-reserve-item b { color: var(--st-text); font-weight: 640; }
+body.view-strategy .mlr-reserve-item i { color: var(--st-faint); font-style: normal; font-size: 10px; }
+body.view-strategy .mlr-reserve-item em { font-style: normal; font-size: 10px; color: var(--st-muted); }
+body.view-strategy .mlr-reserve-item em.sealed { color: var(--st-red); }
+body.view-strategy .mlr-reserve-item em.missed { color: var(--st-amber); }
+body.view-strategy .mlr-reserve-item em.wait { color: var(--st-faint); }
