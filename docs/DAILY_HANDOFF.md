@@ -8077,3 +8077,37 @@ Deployment:
 
 Notes for next agent:
 - PR #197 已正式上线，不要再按“Draft/未部署”处理。下一个交易日盘中重点观察同花顺卡片的 DDE 活跃度/全量方向双列、组合闸排除原因，以及人工确认/明星粘性保留卡的负方向警示。
+
+## 2026-07-21 - Claude - 主线题材三要件(确认明星+龙头+题材板,Owner 定稿)
+
+Changed:
+- 讨论定稿 docs/strategy/discussions/2026-07-21-qi-mainline-three-requirements.md。
+- 正式主线三要件(2026-07-21 起,STRATEGY_MAINLINE_THREE_REQ_START_DAY 切界,不追溯):
+  确认明星≥1(confirmed) 且 合格龙头≥1(leaders 非空) 且 非风格板。
+- strategyMainlineApplyL2StarGate 分层:kept=正式(qiTier=formal)/reserve=预备(qiTier=reserve,
+  reserveReasons 如实列缺件)/excluded 原样;impl、缓存/冻结返回层(Restrict,按载荷日期切界)
+  两处同规则;l2Gate.rule 切换为 formal-mainline-requires-confirmed-star-and-leader。
+- 风格板黑名单(大盘成长/基金重仓/证金持股/茅指数/漂亮100系/上证50等 23 项+含漂亮100兜底):
+  种子/扫描消费前统一剔除,不占扫描配额;显式清单可增删。
+- 预备主线 reserveMainlines 全链路透出(impl→slim→compose 并集→bySource→Restrict→AI compact);
+  预测档案 starTransitions/candidates 并入预备主线(top 仅正式)——命中率飞轮不断粮。
+- 前端:双栏各源正式榜下方琥珀"预备主线"区(缺件角标:缺确认明星/缺龙头),与 #200 回看层
+  "未兑现候选"同构;空态文案区分"暂无正式主线,N 条预备待确认"。
+- 生产证据:2026-07-21 14:59 快照(正式榜 4 卡中 2 张无龙头风格板,其余仅 expected)。
+
+Files:
+- kpl-stats-server.js / kpl-dashboard_17_apple.html / Qi/vendor/strategy-workbench.css
+- docs/strategy/discussions/2026-07-21-qi-mainline-three-requirements.md
+- tests/strategy-three-requirements.test.js(新,20 断言)
+- tests/qi-mainline-states.test.js / tests/inflow-gate.test.js(静态断言随新形状更新)
+
+Validated:
+- node --check 通过;全仓 52 个测试文件全绿;前端内联脚本编译通过。
+
+Deployment:
+- 未部署;PR 待 Codex 复核。发布需 server+HTML+strategy-workbench.css 三件原子+重启说明:
+  未动 STATIC_FILES,重启仅因 server 变更。
+
+Notes for next agent:
+- 明星规则统计分段点新增 2026-07-21(三要件);命中率复盘按 top(正式)与 candidates(含预备)
+  区分口径。风格板黑名单在 STRATEGY_MAINLINE_STYLE_BOARD_NAMES,误伤/漏网直接改清单。

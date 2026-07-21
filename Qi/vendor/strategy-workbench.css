@@ -1042,3 +1042,47 @@ body.view-strategy .strategy-note { display: none !important; }
   body.view-strategy .strategy-board-grid { grid-template-columns: 1fr !important; }
   body.view-strategy .strategy-section-sub { flex: 0 0 100%; margin-left: 5px; }
 }
+
+/* ===== 三要件预备主线层(2026-07-21):琥珀降级,与回看"未兑现候选"同构 ===== */
+body.view-strategy .ml-reserve {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255, 200, 87, 0.35);
+}
+body.view-strategy .ml-reserve-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+body.view-strategy .ml-reserve-head span {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e8b64c;
+}
+body.view-strategy .ml-reserve-head small {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+body.view-strategy .ml-reserve-card {
+  position: relative;
+  opacity: 0.92;
+}
+body.view-strategy .ml-reserve-card > .ml-card,
+body.view-strategy .ml-reserve-card .ml-card {
+  border-color: rgba(255, 200, 87, 0.35);
+  background: rgba(255, 200, 87, 0.05);
+}
+body.view-strategy .ml-reserve-badge {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 2;
+  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 200, 87, 0.5);
+  color: #e8b64c;
+  background: rgba(255, 200, 87, 0.1);
+  white-space: nowrap;
+}

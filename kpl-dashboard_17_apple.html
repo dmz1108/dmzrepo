@@ -13339,20 +13339,33 @@ function renderStrategyMainlinesHTML(d) {
     const renderColumn = (title, src, zsLabel) => {
       // 三态区分(Codex 二审 P2):有主线 / 源可用但无合格主线(有效零结果,展示真实资金/L2/无候选原因) / 源暂缺(不可用)。
       const hasCards = !!(src && src.available && src.hasMainlines && Array.isArray(src.mainlines) && src.mainlines.length);
+      const reserves = (src && src.available && Array.isArray(src.reserveMainlines)) ? src.reserveMainlines : [];
       let body, tag;
       if (hasCards) {
         body = `<div class="ml-grid">${src.mainlines.slice(0, 8).map(renderCard).join('')}</div>`;
         tag = ` · ${Number(src.count) || 0} 条`;
       } else if (src && src.available) {
-        body = `<div class="rht-loading">${escapeHTML(src.message || '本源已完成计算，当前暂无满足资金/L2 条件的主线。')}</div>`;
-        tag = ' · 无合格主线';
+        body = `<div class="rht-loading">${escapeHTML(src.message || '本源已完成计算，当前暂无满足确认明星与龙头条件的正式主线。')}</div>`;
+        tag = reserves.length ? ` · 正式0/预备${reserves.length}` : ' · 无合格主线';
       } else {
         body = `<div class="rht-loading">${escapeHTML((src && src.message) || '该源暂缺：暂无该来源的实时板块/主线数据，不借用另一来源补值。')}</div>`;
         tag = ' · 暂缺';
       }
+      // 预备主线区(三要件 2026-07-21):有 L2 明星证据但缺确认明星/缺龙头,琥珀降级层,
+      // 与预判回看的"未兑现候选"层同构;明确标注缺件,绝不与正式主线混排。
+      const reserveNote = (row) => (Array.isArray(row?.reserveReasons) ? row.reserveReasons : [])
+        .map(r => r === 'no-confirmed-star' ? '缺确认明星' : (r === 'no-qualified-leader' ? '缺龙头' : r)).join('·');
+      const reserveBlock = reserves.length ? `<div class="ml-reserve">
+        <div class="ml-reserve-head"><span>预备主线</span><small>有预期明星证据 · 待确认明星/龙头补齐后升正式榜</small></div>
+        <div class="ml-grid">${reserves.slice(0, 4).map(row => `<div class="ml-reserve-card">
+          <span class="ml-reserve-badge" title="缺件：${escapeHTML(reserveNote(row) || '待确认')}">预备 · ${escapeHTML(reserveNote(row) || '待确认')}</span>
+          ${renderCard(row)}
+        </div>`).join('')}</div>
+      </div>` : '';
       return `<div class="ml-col">
         <div class="ml-col-title"><span>${escapeHTML(title)}</span><small>${escapeHTML(zsLabel)}${tag}</small></div>
         ${body}
+        ${reserveBlock}
       </div>`;
     };
     const dualThemes = (bs.dualResonanceThemes || []).filter(Boolean);
@@ -13362,7 +13375,7 @@ function renderStrategyMainlinesHTML(d) {
     return `<section class="mainline-wrap">
       <div class="ml-title">
         <span>今日主线榜</span>
-        <small title="东财与同花顺各自使用本源板块、成员、涨幅和资金，不跨源拼接；KPL 不参与主线预测">实时强度 × 资金 × 成分股 × 历史主因 · L2 明星验证${sourceSuffix}${dayNote}</small>
+        <small title="东财与同花顺各自使用本源板块、成员、涨幅和资金，不跨源拼接；KPL 不参与主线预测；正式主线三要件：确认明星+合格龙头+题材板（风格板不参选）">实时强度 × 资金 × 成分股 × 历史主因 · 确认明星+龙头三要件${sourceSuffix}${dayNote}</small>
       </div>
       ${statusHtml}
       ${dualNote}
