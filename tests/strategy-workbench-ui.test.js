@@ -7,7 +7,7 @@ const html = fs.readFileSync(path.join(root, 'kpl-dashboard_17_apple.html'), 'ut
 const server = fs.readFileSync(path.join(root, 'kpl-stats-server.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'Qi/vendor/strategy-workbench.css'), 'utf8');
 
-assert(html.includes('<link href="/vendor/strategy-workbench.css?v=20260718b" rel="stylesheet">'));
+assert(html.includes('<link href="/vendor/strategy-workbench.css?v=20260721a" rel="stylesheet">'));
 assert(html.includes('<header class="strategy-hero">'));
 assert(html.includes('class="strategy-hero-head"'));
 assert(html.includes('class="strategy-hero-utility"'));
@@ -20,6 +20,10 @@ for (const selector of [
   '.ml-card.has-confirmed-star',
   '.mlr-row.star-confirmed',
   '.mlr-row.star-expected',
+  '.mlr-row.star-missed',
+  '.mlr-row.star-pending',
+  '.mlr-group.confirmed',
+  '.mlr-outcome-summary',
   '.mlr-no-star',
   '.ml-l2-stock.is-expected',
   '.ml-l2-stock.is-confirmed',

@@ -186,15 +186,29 @@ const starVisualReviewHTML = renderMainlineReviewHTML({
     { day: '2026-07-14', phase: '盘中', sampleValid: true, noMainline: false, theme: '创新药', mainlineHitTop3: true,
       star: { code: '300760', name: '迈瑞医疗', predictLevel: 'expected', sealStatus: 'sealed' }, leaders: [],
       expectedStars: [{ code: '300760', name: '迈瑞医疗', sealStatus: 'sealed' }], actualTop: [] },
+    { day: '2026-07-15', phase: '盘中', sampleValid: true, noMainline: false, theme: '白酒', mainlineHitTop3: false,
+      star: { code: '600519', name: '贵州茅台', predictLevel: 'expected', sealStatus: 'notSealed' }, leaders: [],
+      expectedStars: [{ code: '600519', name: '贵州茅台', sealStatus: 'notSealed' }], actualTop: [] },
+    { day: '2026-07-16', phase: '盘中', sampleValid: true, noMainline: false, theme: '半导体', mainlineHitTop1: null,
+      star: { code: '603986', name: '兆易创新', predictLevel: 'expected', sealStatus: 'noData' }, leaders: [],
+      expectedStars: [{ code: '603986', name: '兆易创新', sealStatus: 'noData' }], actualTop: [] },
     { day: '2026-07-13', phase: '盘中', sampleValid: true, noMainline: false, theme: '消费电子', mainlineHitTop3: true,
       star: null, leaders: [], expectedStars: [], actualTop: [] },
   ],
   stats: {},
 });
 A(starVisualReviewHTML.includes('mlr-row hit-invalid star-confirmed invalid') && starVisualReviewHTML.includes('mlr-star-signal confirmed'), '已收盘不计样本的明星确认记录仍保留确认态行级样式');
-A(/mlr-row [^"\n]*star-expected/.test(starVisualReviewHTML) && starVisualReviewHTML.includes('mlr-star-signal expected'), '预期明星记录使用预期态行级样式与醒目信号');
-A(starVisualReviewHTML.includes('明星确认</i><b>紫光股份') && starVisualReviewHTML.includes('预期明星</i><b>迈瑞医疗'), '明星阶段与股票名称成组展示,可快速扫描');
-A((starVisualReviewHTML.match(/star-confirmed/g) || []).length === 1 && (starVisualReviewHTML.match(/star-expected/g) || []).length === 1, '普通回看记录不会误套明星状态样式');
+A(starVisualReviewHTML.includes('预期转明星</i><b>迈瑞医疗') && /mlr-row [^"\n]*star-confirmed/.test(starVisualReviewHTML), '预期明星最终封板升级为红色真主线证据');
+A(starVisualReviewHTML.includes('star-expected star-missed') && starVisualReviewHTML.includes('mlr-star-signal missed')
+  && starVisualReviewHTML.includes('预期未兑现</i><b>贵州茅台'), '预期明星最终未封板使用未兑现状态');
+A(starVisualReviewHTML.includes('star-expected star-pending') && starVisualReviewHTML.includes('mlr-star-signal pending')
+  && starVisualReviewHTML.includes('证据待补</i><b>兆易创新'), '盘后证据缺失使用中性待验证状态');
+A(starVisualReviewHTML.includes('明星确认</i><b>紫光股份') && starVisualReviewHTML.includes('预期转明星</i><b>迈瑞医疗'), '两种明星确认路径均与股票名称成组展示');
+A((starVisualReviewHTML.match(/star-confirmed/g) || []).length === 2
+  && (starVisualReviewHTML.match(/star-missed/g) || []).length === 1
+  && (starVisualReviewHTML.match(/star-pending/g) || []).length === 1, '普通回看记录不会误套明星结果样式');
+A(starVisualReviewHTML.indexOf('mlr-group confirmed') < starVisualReviewHTML.indexOf('mlr-group missed')
+  && starVisualReviewHTML.indexOf('mlr-group missed') < starVisualReviewHTML.indexOf('mlr-group pending'), '回看按真主线、未兑现、待验证顺序分组');
 A((starVisualReviewHTML.match(/主线命中/g) || []).length >= 2 && !starVisualReviewHTML.includes('✓命中'), '主线命中使用独立结论文案,不再与明星阶段混为同一状态');
 A(/mlr-row hit-invalid star-confirmed invalid[\s\S]*?主线命中/.test(starVisualReviewHTML), '不计样本标记、主线命中与明星确认可在同一记录中独立共存');
 A(html.includes('body.view-strategy .mlr-row.star-confirmed.invalid') && html.includes('opacity: 1;'), '明星证据高亮覆盖 invalid 全行透明度，7月8日不再被变灰');
