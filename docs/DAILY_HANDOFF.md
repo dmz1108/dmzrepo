@@ -8199,3 +8199,70 @@ Deployment:
 Notes for next agent:
 - 回看前端把 reserveStarOutcomes 并入 #200 的"未兑现候选/待验证"分组是后续小项,后端字段已就绪。
 - reserveSealRate 高说明三要件在错杀,应回报 Owner 复核门槛。
+## 2026-07-21 - Codex - 准备强刷当日 TGB 湖南人原始证据
+
+Changed:
+- 新增受保护、日期绑定的一次性生产脚本，用于强制刷新 2026-07-21 `@TGB湖南人` 官方原文与原始图片证据。
+- 脚本只输出公开文章和原图元数据；明确不调用 OCR、Qwen 或视觉识别，不写正式 TGB 行、不重折综合主因库、不重启服务。
+- 若云端已有当天 raw evidence，脚本先备份旧目录；成功后追加两份云端运维日志。
+
+Files:
+- `ops/production/requests/2026-07-21-tgb-hunan-raw-evidence.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 北京时间目标日为 2026-07-21（周二）；本地 `main` 与 `origin/main` 一致，任务分支从最新基线建立。
+- 脚本固定校验目标日、官方文章域名、标题、manifest 日期/状态和至少一张原图下载成功；脚本保持纯 ASCII。
+
+Deployment:
+- 本条提交时尚未运行生产脚本；正式 TGB、综合主因库和服务进程均未改变。
+
+Notes for next agent:
+- raw evidence 成功不代表 TGB 完成；只有匹配标题、日期、白底表格和 `@TGB湖南人` 水印的官方原图可进入后续人工双遍转录。
+
+## 2026-07-21 - Codex - 准备受保护写入当日 TGB 正式库
+
+Changed:
+- 受保护 raw 运行 `29826781199` 强制刷新 2026-07-21 官方文章与 19 张原始图片；只采用标题/日期/白底表格/`@TGB湖南人` 水印均匹配的 `image-01-06.png`，排除同花顺红图、回帖题材表、统计图、账户截图、顶部重复“市场连板股”和底部“涨停炸板”。
+- Codex 对官方原图逐题材块、逐行、逐字段人工转录 120 行并第二遍回看复核；全程未使用 OCR、Qwen 或其他自动视觉结果生成、补全、猜测或校验正式行。
+- 新增日期绑定写入脚本和工作流密文上传分支：写入前固定验证人工载荷/官方原图哈希、121 股原始终盘池、排除 1 条 ST/北交所/新股前缀后 120 股正式口径及全部质量闸；通过后才备份、原子写正式 TGB、重折当天综合主因并验证公网四源健康。
+
+Files:
+- `.github/workflows/production-ops.yml`
+- `ops/production/requests/2026-07-21-tgb-hunan-write.ps1`
+- `tests/tgb-20260721-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 官方文章 `https://www.tgb.cn/a/2tC8FxwG90V`，标题 `7.21湖南人涨停复盘+晚间消息汇总`；官方原图 `image-01-06.png`，长度 1021460 字节，SHA-256 `88318532abb5e8d438cd17071e0e9ff66730d1f8aeaa007aacb752a4716c55cb`。
+- 人工载荷 120 行、唯一代码 120；`missingCodes=[]`、`extraCodes=[]`、重复 0、弱字段 0、名称差异 0；人工载荷 SHA-256 `b8e7a9c2c07e64e88e088ad366aa219179feb973631a070390bcf35272176ade`。
+- 题材块计数：半导体 40、PCB 11、算力+数据中心 11、光通信 7、被动元件 7、机器人 5、大金融 4、公告 4、有色金属 4、AI应用 3、AI硬件 3、玻璃基板封装 3、业绩 3、智能电网 3、黄金 2、其他个股 10，合计 120。
+- 写入脚本内嵌 JavaScript、PowerShell ASCII、workflow YAML/Bash、后端语法和 `git diff --check` 均通过；全仓 52/52 个 `tests/*.test.js` 文件全部通过。
+
+Deployment:
+- raw 证据已刷新并备份到 `C:\PandaDashboard\backups\tgb-hunan-raw-20260721-20260721-193940`；正式 TGB 尚未写入、综合主因尚未重折、服务未重启。
+
+Notes for next agent:
+- 正式运行时载荷只允许通过 GitHub `production` 环境日期绑定 Secret 传递，成功或失败后必须删除；运行时 JSON不得进入 Git。
+
+## 2026-07-21 - Codex - 压缩当日 TGB 日期绑定载荷传输
+
+Changed:
+- 首次正式运行 `29828419646` 因环境 Secret 误设为字面量 `-`，在载荷 SHA-256 闸处、读取任何生产运行时数据库之前失败；远端脚本和载荷清理成功，正式库、综合主因和云端日志均未改变。
+- 正确的 59,008 字节人工 JSON 经 Base64 后超过 GitHub 环境 Secret 单值上限；第二次调度 `29828546124` 已在环境审批前取消，未执行生产作业。
+- 写入脚本改为接收 gzip+Base64 日期绑定载荷；远端先解压，再对原始 JSON 继续验证固定 SHA-256 `b8e7a9c2c07e64e88e088ad366aa219179feb973631a070390bcf35272176ade`，不改变任何正式行或质量闸。
+
+Files:
+- `ops/production/requests/2026-07-21-tgb-hunan-write.ps1`
+- `tests/tgb-20260721-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 59,008 字节原始 JSON 经确定性 gzip 后为 4,459 字节，Base64 后为 5,948 字节；日期绑定密文仍由受保护工作流上传、远端清理，解压后的原始 JSON 哈希保持不变。
+- 专项生产请求、旧日兼容、workflow YAML/Bash、后端语法和 `git diff --check` 通过；全仓 52/52 个测试文件全部通过。
+
+Deployment:
+- 本条提交时未再次执行正式写入；未重折综合主因，未重启服务。
+
+Notes for next agent:
+- 后续重跑必须重新计算合并后脚本 SHA-256，并将 gzip 后再 Base64 的值写入 `DREAMERQI_TGB_20260721_PAYLOAD_B64`。
