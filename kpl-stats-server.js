@@ -24473,7 +24473,27 @@ async function strategyPredictPersistFinalSealUpgrades(day, sealedCodes) {
   upgradeRows(predict.starTransitions);
   for (const skey of ['eastmoney', 'ths']) upgradeRows(predict?.bySource?.[skey]?.starTransitions);
   if (!changed) return;
-  await fs.writeFile(strategyMainlinePredictPath(day), JSON.stringify(predict, null, 2), 'utf8');
+  // 原子写:先写临时文件再 rename,避免并发 GET 直接写同一路径造成半截文件。
+  const target = strategyMainlinePredictPath(day);
+  const tmp = `${target}.tmp-${process.pid}`;
+  await fs.writeFile(tmp, JSON.stringify(predict, null, 2), 'utf8');
+  await fs.rename(tmp, target);
+}
+// [Codex #201 四审 P1] 持久化必须挂在必经的盘后返回路径,不能只靠可能不执行的 live build:
+// 收盘后快照命中时 getStrategyMainlines 直接返回冻结载荷,impl 不会跑。按日单例——同日并发
+// 请求共享同一次持久化任务(成功后保持已完成态,幂等;失败清缓存下次重试)。
+const strategyPredictFinalSealPersistCache = new Map();   // day -> Promise
+function strategyPredictPersistFinalSealUpgradesOnce(day, sealedCodes) {
+  const isoDay = isoFromCompactDate(day);
+  if (!isoDay || !(sealedCodes instanceof Set) || !sealedCodes.size) return Promise.resolve();
+  if (!strategyPredictFinalSealPersistCache.has(isoDay)) {
+    strategyPredictFinalSealPersistCache.set(isoDay,
+      strategyPredictPersistFinalSealUpgrades(isoDay, sealedCodes).catch(err => {
+        strategyPredictFinalSealPersistCache.delete(isoDay);
+        throw err;
+      }));
+  }
+  return strategyPredictFinalSealPersistCache.get(isoDay);
 }
 // 两套独立预测落库(Owner v2 / Codex 二审 P1):东财、同花顺各存一块(top/candidates/transitions),
 // 绝不把跨源并集当正式预测真值——同题材两份不再互相覆盖,任一源自己的第 2 名不会被另一源顶掉。
@@ -26560,7 +26580,7 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
       inflowGate.kept.filter(item => strategyMainlineHasQiStarEvidence(item)),
       finalSealedCodes
     );
-    if (finalSealedCodes) strategyPredictPersistFinalSealUpgrades(isoDay, finalSealedCodes).catch(() => {});
+    if (finalSealedCodes) strategyPredictPersistFinalSealUpgradesOnce(isoDay, finalSealedCodes).catch(() => {});
     const nonQiExcluded = l2Gate.excluded.filter(row => row.reason !== 'missing-confirmed-star-and-leader');
     let reworkOutcome;
     if (diagMode) {
@@ -27339,6 +27359,17 @@ function strategyMainlineRestrictToQiPayload(payload, options = {}) {
   // [Codex #201 四审 P1] 终盘封板事实升级(603986 反例):冻结载荷的 expected 星若已在最终
   // 可靠涨停库,升级 confirmed 后再分闸——旧的盘中等级不得覆盖最终涨停事实。
   const finalSealedCodes = options.finalSealedCodes instanceof Set ? options.finalSealedCodes : null;
+  // [Codex #201 四审 P1] 冻结载荷带着"暂无正式主线"旧空态(reason/message)时,若重过滤/终盘
+  // 升级后正式榜非空,必须显式清除——正式卡与空态元数据不得自相矛盾。只清主线空态语义的
+  // reason,真正的数据源故障状态(非空态语义)原样保留。
+  const MAINLINE_EMPTY_STATE_REASONS = new Set([
+    'no-confirmed-mainline', 'no-l2-qualified-mainline', 'no-net-inflow-mainline',
+    'no-qualified-mainline', 'leader-rework-incomplete',
+  ]);
+  const clearStaleEmptyState = (obj, hasFormal) =>
+    (hasFormal && MAINLINE_EMPTY_STATE_REASONS.has(String(obj?.reason || '')))
+      ? { reason: '', message: '' }
+      : {};
   const excluded = [];
   const filterList = (list, source = '') => {
     // [Codex #201 P1-2] 旧内存/文件缓存与冻结快照里的风格板(大盘成长/基金重仓等)在
@@ -27397,6 +27428,7 @@ function strategyMainlineRestrictToQiPayload(payload, options = {}) {
       mainLeaderTheme: strict[0] ? String(strict[0].theme || '') : '',
       reserveMainlines: srcReserve,
       reserveCount: srcReserve.length,
+      ...clearStaleEmptyState(sourcePayload, strict.length > 0),
       ...(removedCandidates && !strict.length ? (srcReserve.length ? {
         reason: 'no-confirmed-mainline',
         message: `该来源暂无同时具备确认明星与合格龙头的正式主线；${srcReserve.length} 条预备主线待明星确认。`,
@@ -27440,6 +27472,7 @@ function strategyMainlineRestrictToQiPayload(payload, options = {}) {
         : 'visible-mainline-requires-expected-or-confirmed-star',
       excluded: combinedExcluded.slice(0, 20),
     },
+    ...clearStaleEmptyState(payload, mainlines.length > 0),
     ...(payload.ok && removedCandidates && !mainlines.length ? (reserveMainlines.length ? {
       reason: 'no-confirmed-mainline',
       message: `今日暂无同时具备确认明星与合格龙头的正式主线；${reserveMainlines.length} 条预备主线待明星确认。`,
@@ -27520,6 +27553,9 @@ async function getStrategyMainlinesVisible(day) {
   const finalSealedCodes = strategyMainlineUsesThreeRequirements(predictDay)
     ? await strategyMainlineFinalSealedCodes(predictDay).catch(() => null)
     : null;
+  // [Codex #201 四审 P1] 冻结返回路径同样保证 confirmed 转换落盘(按日单例,等待完成):
+  // 部署前已冻结的当日快照也能把 starTransitions 升级持久化,不依赖 live build 是否执行。
+  if (finalSealedCodes) await strategyPredictPersistFinalSealUpgradesOnce(predictDay, finalSealedCodes).catch(() => {});
   return strategyMainlineRestrictToQiPayload(
     strategyMainlineAttachExpectedHistoryPayload(payload, predict),
     { finalSealedCodes }

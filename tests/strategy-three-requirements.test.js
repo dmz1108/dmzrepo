@@ -1,8 +1,10 @@
 // 主线题材三要件测试(node tests/strategy-three-requirements.test.js)——Owner 定稿 2026-07-21。
 // 正式主线(真主线)= 确认明星≥1(confirmed) 且 合格龙头≥1 且 非风格板;expected-only 降级预备主线;
 // 风格板不参与评选与扫描配额;2026-07-21 前的历史日维持旧口径不追溯。
-// 生产证据:2026-07-21 14:59 正式榜 4 卡中 大盘成长/基金重仓 为无龙头风格板,
-// 半导体/消费电子·显示 有龙头但全天仅 expected——按三要件当日正式榜应空、预备 2 张。
+// 生产证据:2026-07-21 14:59 正式榜 4 卡中 大盘成长/基金重仓 为无龙头风格板(剔除)。
+// 盘中口径:半导体/消费电子·显示 仅 expected → 预备;终盘事实(四审反例):兆易创新 603986
+// 14:08 封板入最终可靠涨停库 → expected 升级 confirmed,半导体在龙头重算通过时进正式真主线;
+// 消费电子·显示 未出确认明星,保持预备。
 const fs = require('fs');
 const path = require('path');
 const src = fs.readFileSync(path.join(__dirname, '..', 'kpl-stats-server.js'), 'utf8');
@@ -170,8 +172,85 @@ A(/finalSealedCodes = options\.finalSealedCodes instanceof Set/.test(src)
   '静态:返回/冻结层(Restrict)同样先升级再分闸');
 A(/unionRows\(originalMainlines, payload\.reserveMainlines\)/.test(src),
   '静态:冻结载荷既有预备卡与正式候选一起进闸——升级后可重回正式榜');
+// 冻结 reserve 经终盘升级为 formal 后,旧空态 reason/message 不得残留(四审 P1)
+eval(extractFn('strategyMainlineRestrictToQiPayload'));
+const frozenPayload = {
+  ok: true, day: '2026-07-21',
+  mainlines: [],
+  reserveMainlines: [mk('半导体', [{ code: '603986', name: '兆易创新', level: 'expected' }], leaders, { qiTier: 'reserve', reserveReasons: ['no-confirmed-star'] })],
+  reason: 'no-confirmed-mainline',
+  message: '今日暂无同时具备确认明星与合格龙头的正式主线；1 条预备主线待明星确认。',
+  mainlinesBySource: {
+    eastmoney: { available: true, hasMainlines: false, mainlines: [],
+      reserveMainlines: [mk('半导体', [{ code: '603986', name: '兆易创新', level: 'expected' }], leaders)],
+      reason: 'no-confirmed-mainline', message: '该来源暂无正式主线' },
+    ths: { available: true, hasMainlines: false, mainlines: [], reserveMainlines: [],
+      reason: 'no-l2-qualified-mainline', message: '该来源没有出现 L2 明星' },
+  },
+};
+const promoted = strategyMainlineRestrictToQiPayload(frozenPayload, { finalSealedCodes: new Set(['603986']) });
+A(promoted.mainlines.length === 1 && promoted.mainlines[0].theme === '半导体'
+  && promoted.mainlines[0].starStocks[0].level === 'confirmed' && promoted.count === 1,
+  '冻结载荷:预备半导体经终盘升级+并集进闸重回正式榜(603986 部署前冻结场景)');
+A(promoted.reason === '' && promoted.message === '',
+  '升级后根层旧空态 reason/message 显式清除,不与正式卡自相矛盾(四审 P1)');
+A(promoted.mainlinesBySource.eastmoney.mainlines.length === 1
+  && promoted.mainlinesBySource.eastmoney.hasMainlines === true
+  && promoted.mainlinesBySource.eastmoney.reason === '' && promoted.mainlinesBySource.eastmoney.message === '',
+  '来源层(东财)升级后同样清除旧空态,hasMainlines 翻正');
+A(promoted.mainlinesBySource.ths.mainlines.length === 0
+  && promoted.mainlinesBySource.ths.reason === 'no-l2-qualified-mainline',
+  '真正仍为空的来源(同花顺)保留原状态,不误清');
 A(/strategyPredictPersistFinalSealUpgrades/.test(src) && /绝不改 top\/candidates\/qiTier\/savedAt/.test(src),
   '静态:confirmed 转换持久化仅限事件轨迹行,预测时点内容不追溯改写');
+A(/await strategyPredictPersistFinalSealUpgradesOnce\(predictDay, finalSealedCodes\)/.test(src),
+  '静态:冻结返回路径(getStrategyMainlinesVisible)等待持久化完成——不依赖 live build 是否执行(四审 P1)');
+A(/strategyPredictFinalSealPersistCache/.test(src) && /await fs\.rename\(tmp, target\)/.test(src),
+  '静态:持久化按日单例 + 临时文件原子写,避免并发 GET 同写一路径');
+
+// ---- 5a3. 持久化文件级行为(四审 P1):只升轨迹行,预测内容逐字段不变,幂等 ----
+(async () => {
+  const predictFile = {
+    day: '2026-07-21', savedAt: '2026-07-21T06:59:00.000Z', sessionPhase: '尾盘',
+    schemaVersion: 3, confirmedKey: '',
+    top: [{ key: 'theme:半导体', theme: '半导体' }],
+    candidates: [{ key: 'theme:半导体', theme: '半导体', qiTier: 'reserve', reserveReasons: ['no-confirmed-star'] }],
+    starTransitions: [{ mainlineKey: 'theme:半导体', code: '603986', name: '兆易创新', firstExpectedAt: '2026-07-21T02:00:00.000Z', lastLevel: 'expected' }],
+    bySource: { eastmoney: { top: [], candidates: [], starTransitions: [{ mainlineKey: 'theme:半导体', code: '603986', name: '兆易创新', firstExpectedAt: '2026-07-21T02:00:00.000Z', lastLevel: 'expected' }] },
+      ths: { top: [], candidates: [], starTransitions: [] } },
+  };
+  const writes = [], renames = [];
+  const readMainlinePredict = async () => JSON.parse(JSON.stringify(predictFile));
+  const readLimitUpDbDay = async () => ({ savedAt: '2026-07-21T07:30:00.000Z' });
+  const strategyMainlinePredictPath = d => `/data/predict-${d}.json`;
+  const fs = { writeFile: async (p, data) => writes.push([p, data]), rename: async (a, b) => renames.push([a, b]) };
+  eval(extractFn('strategyPredictPersistFinalSealUpgrades'));
+  await strategyPredictPersistFinalSealUpgrades('2026-07-21', new Set(['603986']));
+  A(writes.length === 1 && renames.length === 1 && writes[0][0].includes('.tmp-') && renames[0][1] === '/data/predict-2026-07-21.json',
+    '持久化:临时文件+rename 原子写到预测档案路径');
+  const saved = JSON.parse(writes[0][1]);
+  A(saved.starTransitions[0].lastLevel === 'confirmed' && saved.starTransitions[0].confirmedAt === '2026-07-21T07:30:00.000Z'
+    && saved.starTransitions[0].confirmedBy === 'final-limit-up-db'
+    && saved.bySource.eastmoney.starTransitions[0].lastLevel === 'confirmed',
+    '持久化:root 与 bySource 轨迹行都升 confirmed(confirmedAt=涨停库 savedAt)');
+  A(JSON.stringify(saved.top) === JSON.stringify(predictFile.top)
+    && JSON.stringify(saved.candidates) === JSON.stringify(predictFile.candidates)
+    && saved.savedAt === predictFile.savedAt && saved.sessionPhase === predictFile.sessionPhase
+    && saved.candidates[0].qiTier === 'reserve',
+    '持久化:top/candidates/qiTier/savedAt/sessionPhase 逐字段不变(预测时点内容不追溯)');
+  // 幂等:已升级的档案再跑一遍不再写文件
+  const upgradedFile = saved;
+  const readMainlinePredict2 = async () => JSON.parse(JSON.stringify(upgradedFile));
+  const writes2 = [];
+  const fs2 = { writeFile: async (p, data) => writes2.push([p, data]), rename: async () => {} };
+  {
+    const readMainlinePredict = readMainlinePredict2;
+    const fs = fs2;
+    eval(extractFn('strategyPredictPersistFinalSealUpgrades'));
+    await strategyPredictPersistFinalSealUpgrades('2026-07-21', new Set(['603986']));
+  }
+  A(writes2.length === 0, '持久化:重复执行幂等——已 confirmed 的档案不再写盘');
+})();
 
 // ---- 5b. 盘后回看:预备主线预期明星单独输出,与正式回看分开 ----
 eval(extractFn('strategyMainlineReserveStarOutcomes'));

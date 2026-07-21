@@ -8354,3 +8354,28 @@ Deployment: 未部署;PR #201 待 Codex 复验。
 
 Notes for next agent:
 - 盘中行为不变(expected 保持 expected);升级只在终盘可靠涨停库可用后生效。
+
+## 2026-07-21 - Claude - 四审复审两项 P1:空态残留清除 + 持久化挂必经冻结路径
+
+Changed:
+- P1-1 Restrict 层新增 clearStaleEmptyState:冻结载荷带旧"暂无正式主线"空态
+  (no-confirmed-mainline/no-l2-qualified-mainline/no-net-inflow-mainline/no-qualified-mainline/
+  leader-rework-incomplete)而重过滤/终盘升级后正式榜非空时,根层与来源层显式清 reason/message;
+  真正仍为空的来源保留原状态不误清。
+- P1-2 confirmed 转换持久化挂到必经的盘后冻结返回路径:getStrategyMainlinesVisible 在
+  finalSealedCodes 可用时 await strategyPredictPersistFinalSealUpgradesOnce(按日单例,
+  成功保持已完成态、失败清缓存重试);持久化改临时文件+rename 原子写,避免并发 GET 同写。
+  impl 路径同样改用单例。部署前已冻结的当日快照也能把 starTransitions 升级落盘。
+- 文档:strategy-three-requirements.test.js 头注更新(603986 终盘反例推翻"当日正式榜应空")。
+
+Files:
+- kpl-stats-server.js / tests/strategy-three-requirements.test.js
+  (新增:冻结 reserve 升级重回正式榜+空态清除 4 断言;持久化文件级 4 断言——原子写、
+  root+bySource 轨迹升级、top/candidates/qiTier/savedAt 逐字段不变、幂等)
+
+Validated: node --check;全仓 53 个测试文件全绿。
+
+Deployment: 未部署;PR #201 待 Codex 终审。
+
+Notes for next agent:
+- 空态清除只针对主线空态语义 reason 集;来源故障状态字段不复用这些值。
