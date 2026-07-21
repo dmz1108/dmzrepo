@@ -8111,3 +8111,55 @@ Deployment:
 Notes for next agent:
 - 明星规则统计分段点新增 2026-07-21(三要件);命中率复盘按 top(正式)与 candidates(含预备)
   区分口径。风格板黑名单在 STRATEGY_MAINLINE_STYLE_BOARD_NAMES,误伤/漏网直接改清单。
+## 2026-07-21 - Codex - 预判回看明星结果层级重构
+
+Changed:
+- 将预判回看的首要信息从按日期平铺改为按结果分组：真主线（明星确认）、未兑现候选（预期明星最终未封板）、待验证（最终证据未完整）和其他交易日；真主线固定优先展示。
+- 统一明星结果语义：原始 `confirmed` 与预期明星最终 `sealed` 均归入真主线；`notSealed` 明确标为“预期未兑现”；`pending`/`noData` 使用中性待验证样式，不把缺证据误画成失败。
+- 用红色实线、克制的琥珀色和中性蓝灰虚线建立三层视觉区分，同时保留明确文字标签，避免只依赖颜色表达状态；页头增加真主线、未兑现和待验证日数摘要。
+- 重排手机端股票名称、次日最高/收盘/3日表现和来源明细，保证窄屏可读且不横向溢出；评分、收益统计、主线命中、数据接口及历史记录均未改动。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `tests/strategy-two-source-mainlines.test.js`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node tests/strategy-two-source-mainlines.test.js`、`node tests/strategy-workbench-ui.test.js`、`node tests/star-l2-layers.test.js` 通过；全仓 51/51 个 `tests/*.test.js` 文件全部通过；`git diff --check` 通过。
+- 使用云端近 10 日真实回看载荷制作只读预览，Playwright 在 1440px 桌面与 390px 手机视口完成视觉核验；页面和各结果组 `scrollWidth === clientWidth`，名称、收益与来源信息无横向溢出。
+- 真实样本验证包含 3 个明星确认日、1 个预期未兑现日、1 个证据待补日；分组数量、顺序和状态文案均符合预期。
+
+Deployment:
+- 未部署云端，未重启任何服务；等待 Claude 独立复审后再决定合并与部署。
+
+Notes for next agent:
+- 复审重点：确认预期明星最终 `sealed` 仅在回看展示层升级为真主线；`notSealed` 与 `noData` 不得混淆；本 PR 不应改变任何评分、冻结记录、命中率或后端业务逻辑。
+
+## 2026-07-21 - Codex - PR #200 合并与云端部署
+
+Changed:
+- Claude 对 PR #200 当前提交 `215ad68` 独立复核通过后，将 PR 转为 Ready 并合并到 `main`；合并提交为 `c958122`。
+- 部署前在云端为行情 HTML 和策略工作台样式建立同一回退备份；先发布 CSS，再发布引用新缓存版本的 HTML，避免半发布状态。
+- 仅更新预判回看的前端分组与视觉层级；没有修改后端、评分、冻结记录、运行数据库、行情快照、Caddy 或公司端 L2 worker。
+- 两份云端运维日志均已追加安全部署记录。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `docs/DAILY_HANDOFF.md`
+- 仅云端：两份运维日志和部署回退备份
+
+Validated:
+- Claude 复核与 Codex 合并前验证均确认全仓 51/51 个测试文件通过，后端文件零改动。
+- 部署暂存文件和正式文件的 SHA-256 均与 `main` 一致：HTML `1f16efd4e09cb952ccddb349bea54029d3a3fc1afe39d26b96fe8a0359e8b773`，CSS `00eb430fea6d4c0e778cfb3f405dde85d353713a5ff0f6adab9d312298519431`。
+- 公网 `https://market.dreamerqi.com/kpl`、`/vendor/strategy-workbench.css?v=20260721a` 与 `/health` 均正常；线上 HTML 已包含“真主线 / 未兑现候选 / 待验证”三层文案。
+
+Deployment:
+- 已部署云端，未重启任何服务；健康检查返回 `ok=true`。
+- 回退备份：`C:\PandaDashboard\backups\pr200-review-star-hierarchy-20260721-163648`。
+
+Notes for next agent:
+- PR #200 已正式上线，不要再按“Draft/未部署”处理。
+- PR #201 并非基于 PR #200；继续处理前应同步最新 `main`，并修复其后端门槛顺序、风格板回流、预备主线回看证据丢失及卡片状态/排版问题。
