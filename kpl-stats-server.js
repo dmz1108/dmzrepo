@@ -5003,6 +5003,7 @@ async function writeLimitUpDbDay(day, stocks, source = 'kpl') {
   };
   await fs.writeFile(limitUpDbPath(day), JSON.stringify(payload, null, 2), 'utf8');
   limitUpDbDayTimedCache.set(String(day || ''), { at: Date.now(), payload });  // 写后即更新读缓存,避免 60s 陈化
+  strategyMainlineFinalSealInvalidate(day);   // 底库更新即失效终盘封板集缓存(Codex #201 终审 P1)
   return payload;
 }
 
@@ -24453,10 +24454,12 @@ async function writeMainlinePredict(day, sessionPhase, mainlines, confirm, reser
 // lastLevel=confirmed(confirmedBy=final-limit-up-db)。绝不改 top/candidates/qiTier/savedAt——
 // 预测时点的分层与内容是历史事实,不追溯改写;这与"已收盘不写预测"的守卫不冲突:
 // 该守卫防的是把盘后答案写成预测,这里只给既有轨迹行补上已发生的封板事件。幂等。
+// 返回明确状态(Codex #201 终审 P1):'updated'=本次升级并写盘;'already-current'=无待升级行;
+// 'source-missing'=预测文件缺失/损坏——不得当成功,调用方不可据此认为该封板集已处理完。
 async function strategyPredictPersistFinalSealUpgrades(day, sealedCodes) {
-  if (!(sealedCodes instanceof Set) || !sealedCodes.size) return;
+  if (!(sealedCodes instanceof Set) || !sealedCodes.size) return 'already-current';
   const predict = await readMainlinePredict(day);
-  if (!predict || typeof predict !== 'object') return;
+  if (!predict || typeof predict !== 'object') return 'source-missing';
   const limitDb = await readLimitUpDbDay(day).catch(() => null);
   const confirmedAt = String(limitDb?.savedAt || '').trim() || new Date().toISOString();
   let changed = false;
@@ -24472,28 +24475,31 @@ async function strategyPredictPersistFinalSealUpgrades(day, sealedCodes) {
   };
   upgradeRows(predict.starTransitions);
   for (const skey of ['eastmoney', 'ths']) upgradeRows(predict?.bySource?.[skey]?.starTransitions);
-  if (!changed) return;
+  if (!changed) return 'already-current';
   // 原子写:先写临时文件再 rename,避免并发 GET 直接写同一路径造成半截文件。
   const target = strategyMainlinePredictPath(day);
   const tmp = `${target}.tmp-${process.pid}`;
   await fs.writeFile(tmp, JSON.stringify(predict, null, 2), 'utf8');
   await fs.rename(tmp, target);
+  return 'updated';
 }
 // [Codex #201 四审 P1] 持久化必须挂在必经的盘后返回路径,不能只靠可能不执行的 live build:
-// 收盘后快照命中时 getStrategyMainlines 直接返回冻结载荷,impl 不会跑。按日单例——同日并发
-// 请求共享同一次持久化任务(成功后保持已完成态,幂等;失败清缓存下次重试)。
-const strategyPredictFinalSealPersistCache = new Map();   // day -> Promise
+// 收盘后快照命中时 getStrategyMainlines 直接返回冻结载荷,impl 不会跑。
+// [Codex #201 终审 P1] 单例只做 in-flight 去重——任务 settle 即删除缓存,不保留"已完成"态:
+// 持久化本身幂等且廉价(读档+至多一次写),后续请求廉价复核即可捕获同日底库补齐
+// (第一次 {A} 升级后底库补成 {A,B},B 的轨迹在下一次请求继续升级);预测文件暂缺
+// (source-missing)也不会被永久锁死,文件恢复后自然重试。
+const strategyPredictFinalSealPersistInflight = new Map();   // day -> Promise<status>
 function strategyPredictPersistFinalSealUpgradesOnce(day, sealedCodes) {
   const isoDay = isoFromCompactDate(day);
-  if (!isoDay || !(sealedCodes instanceof Set) || !sealedCodes.size) return Promise.resolve();
-  if (!strategyPredictFinalSealPersistCache.has(isoDay)) {
-    strategyPredictFinalSealPersistCache.set(isoDay,
-      strategyPredictPersistFinalSealUpgrades(isoDay, sealedCodes).catch(err => {
-        strategyPredictFinalSealPersistCache.delete(isoDay);
-        throw err;
-      }));
+  if (!isoDay || !(sealedCodes instanceof Set) || !sealedCodes.size) return Promise.resolve('already-current');
+  if (!strategyPredictFinalSealPersistInflight.has(isoDay)) {
+    const settle = () => strategyPredictFinalSealPersistInflight.delete(isoDay);
+    const task = strategyPredictPersistFinalSealUpgrades(isoDay, sealedCodes);
+    task.then(settle, settle);
+    strategyPredictFinalSealPersistInflight.set(isoDay, task);
   }
-  return strategyPredictFinalSealPersistCache.get(isoDay);
+  return strategyPredictFinalSealPersistInflight.get(isoDay);
 }
 // 两套独立预测落库(Owner v2 / Codex 二审 P1):东财、同花顺各存一块(top/candidates/transitions),
 // 绝不把跨源并集当正式预测真值——同题材两份不再互相覆盖,任一源自己的第 2 名不会被另一源顶掉。
@@ -26867,25 +26873,34 @@ function strategyMainlineHasQualifiedLeader(item) {
 // 记录其涨停,则 expected→confirmed——预期明星的资金/比值腿在 expected 判级时已通过,
 // 缺的只是封板腿,终盘事实补上即为明星确认。冻结载荷的旧 level 不得覆盖最终涨停事实。
 // 盘中(涨停库未终盘)返回 null,expected 保持 expected,不提前升级。
-const strategyMainlineFinalSealCache = new Map();   // day -> Promise<Set<code>|null>
+// [Codex #201 终审 P1] 封板集不做"成功后永久缓存":收盘后管理员同步/外部脚本可能继续补齐
+// 或修正涨停底库,永久缓存会把策略层冻结在第一次快照上。短 TTL(与 readLimitUpDbDay 读缓存
+// 同级)+ 项目内写入路径显式失效(writeLimitUpDbDay → strategyMainlineFinalSealInvalidate);
+// 外部脚本直接落盘的场景由 TTL 兜底。
+const STRATEGY_MAINLINE_FINAL_SEAL_TTL_MS = 60 * 1000;
+const strategyMainlineFinalSealCache = new Map();   // day -> { at, promise }
+function strategyMainlineFinalSealInvalidate(day) {
+  strategyMainlineFinalSealCache.delete(isoFromCompactDate(day));
+}
 function strategyMainlineFinalSealedCodes(day) {
   const isoDay = isoFromCompactDate(day);
   if (!isoDay) return Promise.resolve(null);
-  if (!strategyMainlineFinalSealCache.has(isoDay)) {
-    strategyMainlineFinalSealCache.set(isoDay, readLimitUpDbDay(isoDay).then(limitDb => {
-      const final = !!(limitDb?.stocks?.length
-        && isSavedAfterMarketClose(limitDb, isoDay)
-        && isReliableLimitUpDbPayload(limitDb));
-      if (!final) {
-        strategyMainlineFinalSealCache.delete(isoDay);   // 未终盘:不缓存,盘后重查
-        return null;
-      }
-      return new Set((limitDb.stocks || [])
-        .map(s => normalizeReasonSourceCode(s?.code))
-        .filter(Boolean));
-    }).catch(() => { strategyMainlineFinalSealCache.delete(isoDay); return null; }));
-  }
-  return strategyMainlineFinalSealCache.get(isoDay);
+  const cached = strategyMainlineFinalSealCache.get(isoDay);
+  if (cached && Date.now() - cached.at < STRATEGY_MAINLINE_FINAL_SEAL_TTL_MS) return cached.promise;
+  const promise = readLimitUpDbDay(isoDay).then(limitDb => {
+    const final = !!(limitDb?.stocks?.length
+      && isSavedAfterMarketClose(limitDb, isoDay)
+      && isReliableLimitUpDbPayload(limitDb));
+    if (!final) {
+      strategyMainlineFinalSealCache.delete(isoDay);   // 未终盘:不缓存,盘后重查
+      return null;
+    }
+    return new Set((limitDb.stocks || [])
+      .map(s => normalizeReasonSourceCode(s?.code))
+      .filter(Boolean));
+  }).catch(() => { strategyMainlineFinalSealCache.delete(isoDay); return null; });
+  strategyMainlineFinalSealCache.set(isoDay, { at: Date.now(), promise });
+  return promise;
 }
 // 非变异升级:命中终盘封板的 expected 星换新对象(level=confirmed,confirmedBy 注明依据),
 // 不改写共享的缓存/冻结载荷原对象。expectedStarHistory 同步升级,避免"预期未兑现"旧标残留。

@@ -205,8 +205,13 @@ A(/strategyPredictPersistFinalSealUpgrades/.test(src) && /绝不改 top\/candida
   '静态:confirmed 转换持久化仅限事件轨迹行,预测时点内容不追溯改写');
 A(/await strategyPredictPersistFinalSealUpgradesOnce\(predictDay, finalSealedCodes\)/.test(src),
   '静态:冻结返回路径(getStrategyMainlinesVisible)等待持久化完成——不依赖 live build 是否执行(四审 P1)');
-A(/strategyPredictFinalSealPersistCache/.test(src) && /await fs\.rename\(tmp, target\)/.test(src),
-  '静态:持久化按日单例 + 临时文件原子写,避免并发 GET 同写一路径');
+A(/strategyPredictFinalSealPersistInflight/.test(src) && /await fs\.rename\(tmp, target\)/.test(src),
+  '静态:持久化 in-flight 去重 + 临时文件原子写,避免并发 GET 同写一路径');
+A(/task\.then\(settle, settle\)/.test(src),
+  '静态:持久化单例 settle 即删缓存——不保留永久成功态,同日底库补齐/文件恢复可重试(终审 P1)');
+A(/STRATEGY_MAINLINE_FINAL_SEAL_TTL_MS/.test(src)
+  && /strategyMainlineFinalSealInvalidate\(day\);\s+\/\/ 底库更新即失效/.test(src),
+  '静态:封板集缓存短 TTL + writeLimitUpDbDay 写入路径显式失效,外部落盘由 TTL 兜底(终审 P1)');
 
 // ---- 5a3. 持久化文件级行为(四审 P1):只升轨迹行,预测内容逐字段不变,幂等 ----
 (async () => {
@@ -250,6 +255,43 @@ A(/strategyPredictFinalSealPersistCache/.test(src) && /await fs\.rename\(tmp, ta
     await strategyPredictPersistFinalSealUpgrades('2026-07-21', new Set(['603986']));
   }
   A(writes2.length === 0, '持久化:重复执行幂等——已 confirmed 的档案不再写盘');
+
+  // ---- 5a4. 缓存生命周期(终审 P1):同日底库补齐可继续升级,文件恢复可重试 ----
+  // in-flight 单例:settle 即删缓存 → 第二次调用重新执行
+  {
+    let store = null;   // 模拟预测文件:第一次缺失
+    let runCount = 0;
+    const readMainlinePredict = async () => { runCount += 1; return store ? JSON.parse(JSON.stringify(store)) : null; };
+    const readLimitUpDbDay = async () => ({ savedAt: '2026-07-21T07:30:00.000Z' });
+    const strategyMainlinePredictPath = d => `/data/predict-${d}.json`;
+    const written = [];
+    const fs = { writeFile: async (p, data) => written.push(data), rename: async () => {} };
+    const isoFromCompactDate = d => String(d);
+    eval(extractFn('strategyPredictPersistFinalSealUpgrades'));
+    eval(extractFn('strategyPredictPersistFinalSealUpgradesOnce').replace(/strategyPredictFinalSealPersistInflight/g, 'persistInflight'));
+    const persistInflight = new Map();
+    const s1 = await strategyPredictPersistFinalSealUpgradesOnce('2026-07-21', new Set(['603986']));
+    A(s1 === 'source-missing' && persistInflight.size === 0,
+      '生命周期:预测文件缺失返回 source-missing,且不留永久成功态');
+    store = {
+      day: '2026-07-21', savedAt: 'S', top: [], candidates: [],
+      starTransitions: [
+        { mainlineKey: 'k', code: '603986', firstExpectedAt: 'T', lastLevel: 'expected' },
+        { mainlineKey: 'k', code: '600760', firstExpectedAt: 'T', lastLevel: 'expected' },
+      ],
+    };
+    const s2 = await strategyPredictPersistFinalSealUpgradesOnce('2026-07-21', new Set(['603986']));
+    A(s2 === 'updated' && runCount === 2, '生命周期:文件恢复后同日重试成功(第一次失败不锁死)');
+    store = JSON.parse(written[written.length - 1]);   // 第一次升级 {603986} 后落盘
+    const s3 = await strategyPredictPersistFinalSealUpgradesOnce('2026-07-21', new Set(['603986', '600760']));
+    const finalSaved = JSON.parse(written[written.length - 1]);
+    A(s3 === 'updated' && finalSaved.starTransitions.find(r => r.code === '600760').lastLevel === 'confirmed'
+      && finalSaved.starTransitions.find(r => r.code === '603986').lastLevel === 'confirmed',
+      '生命周期:底库由 {A} 补齐为 {A,B} 后,B 的 expected 轨迹继续升级(单例不冻结后续修正)');
+    store = finalSaved;
+    const s4 = await strategyPredictPersistFinalSealUpgradesOnce('2026-07-21', new Set(['603986', '600760']));
+    A(s4 === 'already-current', '生命周期:全部升级后复核返回 already-current,零写盘幂等');
+  }
 })();
 
 // ---- 5b. 盘后回看:预备主线预期明星单独输出,与正式回看分开 ----

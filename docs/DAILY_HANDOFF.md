@@ -8379,3 +8379,26 @@ Deployment: 未部署;PR #201 待 Codex 终审。
 
 Notes for next agent:
 - 空态清除只针对主线空态语义 reason 集;来源故障状态字段不复用这些值。
+
+## 2026-07-21 - Claude - 终审 P1:两个按日缓存生命周期收口
+
+Changed:
+- strategyMainlineFinalSealCache 不再"成功后永久缓存":短 TTL 60s(与 readLimitUpDbDay 读缓存
+  同级)+ writeLimitUpDbDay 写入路径显式失效(strategyMainlineFinalSealInvalidate);外部脚本
+  直接落盘由 TTL 兜底——收盘后管理员补齐/修正涨停底库能被策略层及时消费。
+- strategyPredictPersistFinalSealUpgradesOnce 改纯 in-flight 去重:任务 settle 即删缓存,
+  不保留永久成功态;持久化幂等且廉价,后续请求复核捕获同日底库补齐。
+- strategyPredictPersistFinalSealUpgrades 返回明确状态:updated/already-current/source-missing;
+  预测文件缺失不再被误当成功锁死,恢复后自然重试。
+
+Files:
+- kpl-stats-server.js / tests/strategy-three-requirements.test.js
+  (5a4 生命周期 4 断言:source-missing 不锁死、文件恢复重试、{A}→{A,B} 补齐继续升级、
+  全升级后 already-current 零写盘;静态:TTL+写入路径失效、settle 即删)
+
+Validated: node --check;全仓 53 个测试文件全绿。
+
+Deployment: 未部署;Codex 称修完此项即最终批准。
+
+Notes for next agent:
+- 封板集缓存失效点:writeLimitUpDbDay(项目内);外部落盘 60s 内自然过期。
