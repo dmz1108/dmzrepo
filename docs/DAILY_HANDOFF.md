@@ -8402,3 +8402,38 @@ Deployment: 未部署;Codex 称修完此项即最终批准。
 
 Notes for next agent:
 - 封板集缓存失效点:writeLimitUpDbDay(项目内);外部落盘 60s 内自然过期。
+
+## 2026-07-21 - Codex - PR #201 合并并部署主线题材三要件
+
+Changed:
+- 正式合并 PR #201 到 `main`，merge commit `3a3797c`（reviewed head `d87e56f`）。
+- 云端旧版三份文件均匹配既有 Git 历史，确认无游离热修后，原子发布
+  `kpl-stats-server.js`、`kpl-dashboard_17_apple.html`、
+  `Qi/vendor/strategy-workbench.css`。
+- 2026-07-21 线上结果：正式主线仅“半导体”，603986 兆易创新由终盘涨停库升级为
+  `confirmed`（`confirmedBy=final-limit-up-db`）；“消费电子/显示”为预备主线；
+  “大盘成长、基金重仓”按风格板剔除。
+
+Files:
+- Production runtime: `kpl-stats-server.js`, `kpl-dashboard_17_apple.html`,
+  `Qi/vendor/strategy-workbench.css`。
+- Collaboration log: `docs/DAILY_HANDOFF.md`。
+
+Validated:
+- 本地：`node --check kpl-stats-server.js`；
+  `tests/strategy-three-requirements.test.js`、`tests/mainline-review.test.js`、
+  `tests/strategy-workbench-ui.test.js` 全绿。
+- 云端：8765 正常监听，`/health` 返回 `ok=true`；主进程 PID `12504 -> 7436`；
+  服务错误日志为空。
+- 线上 HTML/CSS SHA-256 与 `main` 完全一致；回看确认 2026-07-21 半导体命中实际第一主因，
+  兆易创新 expected 轨迹已持久化为 confirmed。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard` 并重启主服务。
+- 回退备份：`C:\PandaDashboard\backups\pr201-3a3797c-20260721`。
+- 两份云端运维日志均已追加本次合并、部署、重启、哈希与业务验收结果。
+
+Notes for next agent:
+- 云端未安装 Git，当前仍采用“Git `main` 审核通过后，文件哈希校验 + 备份 + 原子替换”发布。
+- 2026-07-21 的既有预测档案保留原预测时点 `top/candidates/qiTier`；仅终盘明星轨迹按设计升级，
+  不追溯改写预测内容。
