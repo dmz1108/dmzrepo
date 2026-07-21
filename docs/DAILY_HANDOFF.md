@@ -8048,3 +8048,32 @@ Deployment:
 
 Notes for next agent:
 - 复验重点：自动 L2 派发始终无豁免；正式榜两条粘性仅豁免下榜且必须保留 `passed=false` 与 `exempted`；不得把该门槛倒溯应用到历史回看，也不得改变东财路径。
+
+## 2026-07-21 - Codex - PR #197 合并与云端部署
+
+Changed:
+- Claude 对 Owner 修订提交 `c1ee6de` 独立复验通过后，将 PR #197 转为 Ready 并合并到 `main`；合并提交为 `545262e`。
+- 部署前逐文件比较云端与 PR #197 前基线：`kpl-stats-server.js`、`kpl-dashboard_17_apple.html`、`Qi/vendor/realtime-workbench.css` 三份哈希全部一致，确认无公司端覆盖或云端热修漂移。
+- 备份三份生产文件后原子部署 PR #197 审批版本，仅重启 `Panda Dashboard Server`；部署失败路径包含原文件回退和服务恢复。
+- 两份云端运维日志已追加安全部署记录；未改运行数据库、行情快照、复盘数据、Caddy、娱乐服务或公司端 L2 worker。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/realtime-workbench.css`
+- `docs/DAILY_HANDOFF.md`
+- 仅云端：两份运维日志和部署回退备份
+
+Validated:
+- 合并前和 Claude 复验均为 `node --check` 通过、全仓 51/51 个测试文件全绿；`git diff --check` 通过。
+- 部署暂存文件再次通过 SHA-256 与 `node --check`；部署后三份云端 SHA-256 分别为 `ae1c49c212a746204e8868039ba56250ea1f7a560bc3d894e5cc570691669f76`、`ea6f5706ad8d250a44abf12921e4d3befadddc464586a62544f094d16f3e6a31`、`6e753f7fceced83d4d5b361c408025f4be50f7a44112e43e8c974ccf150eabd6`，与 `main` 完全一致。
+- 公网 `https://market.dreamerqi.com/health`、`/kpl` 和 `/vendor/realtime-workbench.css` 均返回 HTTP 200。
+- 2026-07-21 盘前策略请求按既有保护返回 `market-not-open`；2026-07-20 历史策略仍正常返回 3 条，证明页面/API 基础链路未回归。
+
+Deployment:
+- 已部署云端并重启主服务；部署回执 `health=ok`。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\pr197-20260721-091733`。
+- 云端暂存目录已清理，两份运维日志均确认写入 PR #197 记录。
+
+Notes for next agent:
+- PR #197 已正式上线，不要再按“Draft/未部署”处理。下一个交易日盘中重点观察同花顺卡片的 DDE 活跃度/全量方向双列、组合闸排除原因，以及人工确认/明星粘性保留卡的负方向警示。
