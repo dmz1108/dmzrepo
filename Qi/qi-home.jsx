@@ -1478,96 +1478,153 @@ const CHAT_STARTER_CHIPS = [
 ];
 
 function SpbChat({ user, onLogin }) {
+  const topicOptions = ['全部话题', '日常打卡', '一图一张', '干饭报告', '碎碎念', '追剧安利'];
   const [posts, setPosts] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState('');
+  const [selectedPost, setSelectedPost] = React.useState(null);
+  const [detailLoading, setDetailLoading] = React.useState(false);
+  const [activeTopic, setActiveTopic] = React.useState('全部话题');
+  const [composerTopic, setComposerTopic] = React.useState('日常打卡');
   const [text, setText] = React.useState('');
   const [imageData, setImageData] = React.useState('');
   const [imageName, setImageName] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
-  const [selectedPost, setSelectedPost] = React.useState(null);
-  const [detailLoading, setDetailLoading] = React.useState(false);
   const [replyText, setReplyText] = React.useState('');
   const [replySubmitting, setReplySubmitting] = React.useState(false);
-  const [filter, setFilter] = React.useState('all');
-  const [topicIndex, setTopicIndex] = React.useState(0);
   const fileInputRef = React.useRef(null);
   const composerRef = React.useRef(null);
   const composerCardRef = React.useRef(null);
-  const postDialogRef = React.useRef(null);
+  const topicRailRef = React.useRef(null);
 
-  const loadPosts = React.useCallback(() => {
-    setLoading(true);
-    fetch(`${ADMIN_SERVER_BASE}/api/chatter/posts?_=${Date.now()}`, { cache: 'no-store' })
-      .then(res => res.json().catch(() => ({})).then(data => ({ ok: res.ok, data })))
-      .then(({ ok, data }) => {
-        if (!ok) throw new Error(data?.error || '瞎聊聊暂时无法读取');
-        setPosts(Array.isArray(data.posts) ? data.posts : []);
-        setError('');
-      })
-      .catch(err => setError(err.message || '瞎聊聊暂时无法读取'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  React.useEffect(() => {
-    loadPosts();
-  }, [loadPosts]);
-
-  React.useEffect(() => {
-    const timer = setInterval(() => setTopicIndex(prev => (prev + 1) % CHAT_TOPIC_PROMPTS.length), 4200);
-    return () => clearInterval(timer);
-  }, []);
-
-  const applyStarter = (starter) => {
-    setText(prev => (prev.trim() ? prev : starter));
-    composerRef.current?.focus();
-  };
-  const goCompose = () => {
-    if (!user) {
-      onLogin?.();
-      return;
-    }
-    composerCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    setTimeout(() => composerRef.current?.focus(), 350);
-  };
-
-  const formatTime = (value) => {
+  const formatTime = (value, relative = false) => {
     if (!value) return '';
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '';
-    return date.toLocaleString('zh-CN', { hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    if (relative) {
+      const diff = Math.max(0, Date.now() - date.getTime());
+      const minutes = Math.floor(diff / 60000);
+      if (minutes < 1) return '刚刚';
+      if (minutes < 60) return `${minutes} 分钟前`;
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return `${hours} 小时前`;
+      const days = Math.floor(hours / 24);
+      if (days < 7) return `${days} 天前`;
+    }
+    return date.toLocaleString('zh-CN', {
+      hour12: false,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   };
   const chatterImageSrc = (url) => {
     if (!url) return '';
     if (/^(https?:|data:)/i.test(url)) return url;
     return `${ADMIN_SERVER_BASE}${url}`;
   };
-  const closePost = () => {
-    setSelectedPost(null);
-    setReplyText('');
-    setDetailLoading(false);
-    setReplySubmitting(false);
+  const splitPostCopy = (post) => {
+    const source = String(post?.text || '').trim();
+    const lines = source.split(/\n+/).map(line => line.trim()).filter(Boolean);
+    if (!lines.length) return { title: post?.imageUrl ? '分享了一张图片' : '一条新帖子', body: '' };
+    if (lines.length === 1 && lines[0].length > 36) {
+      const breakAt = Math.min(36, Math.max(16, lines[0].lastIndexOf('，', 36) + 1));
+      return { title: lines[0].slice(0, breakAt), body: lines[0].slice(breakAt).trim() };
+    }
+    return { title: lines[0], body: lines.slice(1).join('\n\n') };
   };
-  useDialogFocusTrap(postDialogRef, Boolean(selectedPost), closePost);
-  const openPost = async (post) => {
+  const inferTopic = (post) => {
+    const explicit = String(post?.topic || '').trim();
+    if (topicOptions.includes(explicit)) return explicit;
+    const source = String(post?.text || '');
+    if (/饭|面|咖喱|火锅|咖啡|甜品|餐厅|好吃/.test(source)) return '干饭报告';
+    if (/剧|电影|纪录片|综艺|演员|看到第/.test(source)) return '追剧安利';
+    if (post?.imageUrl && /雨|晚霞|江边|天空|路上|随手拍|照片|光/.test(source)) return '一图一张';
+    if (/睡|情绪|焦虑|习惯|心情|恢复|碎碎念/.test(source)) return '碎碎念';
+    return '日常打卡';
+  };
+  const avatarStyle = (name = 'Q', size = 40) => ({
+    width: size,
+    height: size,
+    borderRadius: '50%',
+    display: 'grid',
+    placeItems: 'center',
+    flex: '0 0 auto',
+    color: spb.ink,
+    fontSize: Math.round(size * 0.36),
+    fontWeight: 800,
+    background: 'oklch(0.255 0.025 248)',
+    border: '1px solid oklch(0.72 0.15 242 / 0.28)',
+  });
+  const firstChar = name => String(name || 'Q').trim().slice(0, 1).toUpperCase() || 'Q';
+  const commentCount = post => Number(post?.commentCount || (post?.comments || []).length || 0);
+
+  const loadPostDetail = React.useCallback(async (post) => {
+    if (!post?.id) return;
     setSelectedPost(post);
     setReplyText('');
-    setError('');
     setDetailLoading(true);
+    setError('');
     try {
       const res = await fetch(`${ADMIN_SERVER_BASE}/api/chatter/posts/${encodeURIComponent(post.id)}?_=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || '帖子读取失败');
       if (data.post) {
         setSelectedPost(data.post);
-        setPosts(prev => prev.map(item => item.id === data.post.id ? { ...item, ...data.post, comments: (data.post.comments || []).slice(-2) } : item));
+        setPosts(prev => prev.map(item => item.id === data.post.id
+          ? { ...item, ...data.post, comments: (data.post.comments || []).slice(-2) }
+          : item));
       }
     } catch (err) {
       setError(err.message || '帖子读取失败');
     } finally {
       setDetailLoading(false);
     }
-  };
+  }, []);
+
+  const loadPosts = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${ADMIN_SERVER_BASE}/api/chatter/posts?_=${Date.now()}`, { cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || '瞎聊聊暂时无法读取');
+      const nextPosts = Array.isArray(data.posts) ? data.posts : [];
+      setPosts(nextPosts);
+      setError('');
+      if (nextPosts[0]) await loadPostDetail(nextPosts[0]);
+      else setSelectedPost(null);
+    } catch (err) {
+      setError(err.message || '瞎聊聊暂时无法读取');
+    } finally {
+      setLoading(false);
+    }
+  }, [loadPostDetail]);
+
+  React.useEffect(() => {
+    loadPosts();
+  }, [loadPosts]);
+
+  const visiblePosts = React.useMemo(() => (
+    activeTopic === '全部话题' ? posts : posts.filter(post => inferTopic(post) === activeTopic)
+  ), [posts, activeTopic]);
+  const topicCounts = React.useMemo(() => {
+    const counts = Object.fromEntries(topicOptions.map(topic => [topic, 0]));
+    counts['全部话题'] = posts.length;
+    posts.forEach(post => {
+      const topic = inferTopic(post);
+      counts[topic] = Number(counts[topic] || 0) + 1;
+    });
+    return counts;
+  }, [posts]);
+  React.useEffect(() => {
+    if (!visiblePosts.length) return;
+    if (!selectedPost || !visiblePosts.some(post => post.id === selectedPost.id)) {
+      loadPostDetail(visiblePosts[0]);
+    }
+  }, [activeTopic, visiblePosts, selectedPost, loadPostDetail]);
+
   const pickImage = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -1593,6 +1650,14 @@ function SpbChat({ user, onLogin }) {
     setImageName('');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
+  const goCompose = () => {
+    if (!user) {
+      onLogin?.();
+      return;
+    }
+    composerCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => composerRef.current?.focus(), 320);
+  };
   const submitPost = async () => {
     if (!user) {
       onLogin?.();
@@ -1615,6 +1680,7 @@ function SpbChat({ user, onLogin }) {
         },
         body: JSON.stringify({
           text: cleanText,
+          topic: composerTopic,
           image: imageData ? { dataUrl: imageData, name: imageName } : null,
         }),
       });
@@ -1625,7 +1691,9 @@ function SpbChat({ user, onLogin }) {
       }
       setText('');
       clearImage();
+      setActiveTopic('全部话题');
       setPosts(prev => [data.post, ...prev.filter(item => item.id !== data.post?.id)]);
+      setSelectedPost(data.post);
     } catch (err) {
       setError(err.message || '发布失败');
     } finally {
@@ -1662,7 +1730,9 @@ function SpbChat({ user, onLogin }) {
       }
       if (data.post) {
         setSelectedPost(data.post);
-        setPosts(prev => prev.map(item => item.id === data.post.id ? { ...item, ...data.post, comments: (data.post.comments || []).slice(-2) } : item));
+        setPosts(prev => prev.map(item => item.id === data.post.id
+          ? { ...item, ...data.post, comments: (data.post.comments || []).slice(-2) }
+          : item));
       }
       setReplyText('');
     } catch (err) {
@@ -1672,309 +1742,247 @@ function SpbChat({ user, onLogin }) {
     }
   };
 
-  const surfaceStyle = {
+  const panelStyle = {
     border: `1px solid ${spb.line}`,
     borderRadius: 10,
-    background: 'oklch(0.185 0.014 265 / 0.94)',
-    boxShadow: '0 20px 54px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.055)',
+    background: 'oklch(0.175 0.014 265 / 0.95)',
+    boxShadow: '0 18px 48px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.04)',
   };
-  const smallButton = {
+  const buttonStyle = {
     border: `1px solid ${spb.line}`,
-    background: 'oklch(0.215 0.014 265 / 0.78)',
+    background: 'oklch(0.205 0.014 265 / 0.8)',
     color: spb.ink,
-    borderRadius: 8,
-    padding: '10px 14px',
+    borderRadius: 7,
+    padding: '9px 12px',
     fontFamily: 'inherit',
-    fontSize: 13.5,
-    fontWeight: 700,
+    fontSize: 13,
+    fontWeight: 720,
     cursor: 'pointer',
   };
-  const primary = {
-    ...smallButton,
-    borderColor: 'oklch(0.72 0.15 242 / 0.40)',
+  const primaryStyle = {
+    ...buttonStyle,
+    borderColor: 'oklch(0.72 0.15 242 / 0.42)',
     background: spb.blue,
     color: spb.bg,
   };
-  const avatarStyle = (name = 'Q') => ({
-    width: 34,
-    height: 34,
-    borderRadius: '50%',
-    display: 'grid',
-    placeItems: 'center',
-    flex: '0 0 auto',
-    color: spb.ink,
-    fontSize: 14,
-    fontWeight: 800,
-    background: 'oklch(0.255 0.025 248)',
-    border: '1px solid oklch(0.72 0.15 242 / 0.28)',
-  });
-  const firstChar = name => String(name || 'Q').trim().slice(0, 1).toUpperCase() || 'Q';
-  const postCountText = post => {
-    const count = Number(post?.commentCount || (post?.comments || []).length || 0);
-    return count ? `${count} 条回复` : '打开帖子';
-  };
-  const chatStats = React.useMemo(() => {
-    const imageCount = posts.filter(post => post.imageUrl).length;
-    const replyCount = posts.reduce((sum, post) => sum + Number(post.commentCount || (post.comments || []).length || 0), 0);
-    const repliedPosts = posts.filter(post => Number(post.commentCount || (post.comments || []).length || 0) > 0).length;
-    return { posts: posts.length, images: imageCount, replies: replyCount, repliedPosts };
-  }, [posts]);
-  const visiblePosts = React.useMemo(() => posts.filter(post => {
-    if (filter === 'image') return !!post.imageUrl;
-    if (filter === 'reply') return Number(post.commentCount || (post.comments || []).length || 0) > 0;
-    if (filter === 'text') return !post.imageUrl;
-    return true;
-  }), [posts, filter]);
-  const filterTabs = [
-    ['all', '全部', chatStats.posts],
-    ['image', '带图', chatStats.images],
-    ['reply', '有回复', chatStats.repliedPosts],
-    ['text', '文字', Math.max(chatStats.posts - chatStats.images, 0)],
-  ];
-  const statChip = (label, value) => (
-    <div style={{ borderTop: `1px solid ${spb.line}`, padding: '12px 0', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 14 }}>
-      <div style={{ color: spb.sub, fontSize: 13.5, fontWeight: 650 }}>{label}</div>
-      <div style={{ color: spb.ink, fontSize: 17, fontWeight: 780, lineHeight: 1 }}>{value}</div>
-    </div>
-  );
-  const composerPanel = (
-    <div ref={composerCardRef} className="qi-chat-composer" style={{ ...surfaceStyle, padding: 22 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={avatarStyle(user?.name || 'Q')}>{firstChar(user?.name || 'Q')}</div>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ color: spb.ink, fontSize: 19, fontWeight: 780 }}>发一条帖子</div>
-          <div style={{ marginTop: 4, color: spb.faint, fontSize: 13 }}>{user ? `当前账号：${user.name}` : '登录后可以发布文字和图片。'}</div>
-        </div>
-      </div>
-      <textarea
-        ref={composerRef}
-        aria-label="帖子内容"
-        className="qi-chat-input"
-        value={text}
-        onChange={event => setText(event.target.value.slice(0, 1200))}
-        placeholder={user ? `说点什么... 比如：${CHAT_TOPIC_PROMPTS[topicIndex]}` : '登录后可以发布文字和图片'}
-        style={{ marginTop: 16, width: '100%', minHeight: 118, resize: 'vertical', borderRadius: 8, border: `1px solid ${spb.line}`, background: 'oklch(0.125 0.011 265 / 0.72)', color: spb.ink, padding: 14, font: 'inherit', lineHeight: 1.65, outline: 'none' }}
-      />
-      <div style={{ marginTop: 12, display: 'flex', gap: 7, flexWrap: 'nowrap', alignItems: 'center', overflowX: 'auto', scrollbarWidth: 'none' }}>
-        <span style={{ color: spb.faint, fontSize: 12.5, flex: '0 0 auto' }}>提示：</span>
-        {CHAT_STARTER_CHIPS.slice(0, 4).map(([label, starter]) => (
-          <button key={label} type="button" className="qi-chat-chip qi-chat-action" onClick={() => applyStarter(starter)} style={{ ...smallButton, padding: '6px 8px', fontSize: 12, flex: '0 0 auto' }}>{label}</button>
-        ))}
-      </div>
-      {imageData ? (
-        <div style={{ marginTop: 12, position: 'relative', borderRadius: 8, overflow: 'hidden', border: `1px solid ${spb.line}`, background: spb.panel }}>
-          <img src={imageData} alt={imageName || '预览图'} style={{ width: '100%', maxHeight: 260, objectFit: 'contain', display: 'block', background: 'oklch(0.12 0.01 265)' }} />
-          <button type="button" onClick={clearImage} className="qi-chat-action" style={{ ...smallButton, position: 'absolute', top: 10, right: 10, background: 'oklch(0.12 0.01 265 / 0.78)' }}>移除</button>
-        </div>
-      ) : null}
-      <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={pickImage} style={{ display: 'none' }} />
-      <div style={{ marginTop: 14, display: 'flex', gap: 10, justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
-        <button type="button" onClick={() => fileInputRef.current?.click()} className="qi-chat-action" style={smallButton}>选择图片</button>
-        <button type="button" onClick={submitPost} disabled={submitting} className="qi-chat-action" style={{ ...primary, opacity: submitting ? 0.62 : 1 }}>{user ? (submitting ? '发布中...' : '发一条帖子') : '登录后发布'}</button>
-      </div>
-    </div>
-  );
+  const selectedCopy = splitPostCopy(selectedPost);
 
   return (
-    <section style={{ padding: '34px clamp(18px, 4vw, 56px) 86px', borderTop: `1px solid ${spb.line}`, background: 'linear-gradient(180deg, oklch(0.155 0.013 265), oklch(0.135 0.012 265))' }}>
+    <section className="qi-chat-option-two" style={{ borderTop: `1px solid ${spb.line}`, backgroundColor: 'oklch(0.14 0.014 265)', backgroundImage: 'url("assets/chatter-orbit-studio-bg.jpg?v=1")', backgroundSize: 'cover', backgroundPosition: 'center top', color: spb.ink }}>
       <style>{`
-        .qi-chat-shell { max-width: 1320px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 28px; align-items: start; }
-        .qi-chat-main-column { min-width: 0; display: grid; gap: 24px; }
-        .qi-chat-intro { grid-column: 1; grid-row: 1; }
-        .qi-chat-title { margin: 12px 0 0; font-family: ${spb.disp}; font-size: 64px; line-height: 1.02; color: ${spb.ink}; font-weight: 680; letter-spacing: 0; }
-        .qi-chat-feed { grid-column: 1; grid-row: 2; min-width: 0; }
-        .qi-chat-post-row { display: grid; grid-template-columns: 42px minmax(0, 1fr) 128px 58px; gap: 16px; align-items: center; width: 100%; padding: 18px; border: 0; border-top: 1px solid ${spb.line}; background: transparent; color: inherit; text-align: left; cursor: pointer; font-family: inherit; }
-        .qi-chat-post-row:first-of-type { border-top: 0; }
-        .qi-chat-post-row:hover { background: oklch(0.215 0.014 265 / 0.72); }
-        .qi-chat-image-thumb { width: 128px; height: 92px; object-fit: cover; border-radius: 8px; border: 1px solid ${spb.line}; background: oklch(0.13 0.01 265); }
-        .qi-chat-chip:hover, .qi-chat-post-row:focus-visible, .qi-chat-action:focus-visible, .qi-chat-input:focus-visible { outline: 2px solid ${spb.blue}; outline-offset: 2px; }
-        .qi-chat-aside { position: sticky; top: 18px; display: grid; gap: 16px; }
-        @media (max-width: 1020px) {
-          .qi-chat-shell { grid-template-columns: 1fr; grid-template-rows: auto; }
-          .qi-chat-main-column, .qi-chat-aside { display: contents; }
-          .qi-chat-intro { grid-column: 1; grid-row: 1; }
-          .qi-chat-composer { grid-column: 1; grid-row: 2; }
-          .qi-chat-feed { grid-column: 1; grid-row: 3; }
-          .qi-chat-stats { grid-column: 1; grid-row: 4; }
-          .qi-chat-tips { grid-column: 1; grid-row: 5; }
+        .qi-chat2-shell { max-width: 1480px; min-height: calc(100vh - 78px); margin: 0 auto; display: grid; grid-template-columns: 360px minmax(0, 1fr) 370px; }
+        .qi-chat2-rail, .qi-chat2-aside { padding: 28px 22px 44px; }
+        .qi-chat2-rail { border-right: 1px solid ${spb.line}; }
+        .qi-chat2-main { min-width: 0; padding: 28px 34px 68px; }
+        .qi-chat2-aside { border-left: 1px solid ${spb.line}; display: grid; align-content: start; gap: 16px; }
+        .qi-chat2-topic, .qi-chat2-latest { width: 100%; border: 0; color: inherit; background: transparent; font-family: inherit; text-align: left; cursor: pointer; }
+        .qi-chat2-topic { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border-radius: 7px; }
+        .qi-chat2-topic:hover, .qi-chat2-topic[aria-pressed="true"] { background: oklch(0.21 0.025 248 / 0.78); }
+        .qi-chat2-topic[aria-pressed="true"] { color: ${spb.blueSoft}; box-shadow: inset 3px 0 0 ${spb.blue}; }
+        .qi-chat2-latest { display: block; padding: 11px 10px; border-radius: 7px; }
+        .qi-chat2-latest:hover, .qi-chat2-latest[aria-current="true"] { background: oklch(0.205 0.02 252 / 0.74); }
+        .qi-chat2-author-avatar { box-shadow: 0 0 0 3px oklch(0.72 0.15 242 / 0.07); }
+        .qi-chat2-post-image { width: 100%; aspect-ratio: 2.15 / 1; object-fit: cover; display: block; border-radius: 9px; border: 1px solid ${spb.line}; background: oklch(0.12 0.012 265); }
+        .qi-chat2-reply { padding: 14px 0; border-top: 1px solid ${spb.line}; }
+        .qi-chat2-input { outline: none; }
+        .qi-chat2-topic:focus-visible, .qi-chat2-latest:focus-visible, .qi-chat2-action:focus-visible, .qi-chat2-input:focus-visible { outline: 2px solid ${spb.blue}; outline-offset: 2px; }
+        @media (max-width: 1160px) {
+          .qi-chat2-shell { grid-template-columns: 280px minmax(0, 1fr); }
+          .qi-chat2-aside { grid-column: 1 / -1; border-left: 0; border-top: 1px solid ${spb.line}; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 24px; }
         }
-        @media (max-width: 680px) {
-          .qi-chat-title { font-size: 44px; }
-          .qi-chat-post-row { grid-template-columns: 38px minmax(0, 1fr); gap: 12px; }
-          .qi-chat-image-thumb, .qi-chat-comment-count { display: none; }
+        @media (max-width: 780px) {
+          .qi-chat2-shell { display: flex; flex-direction: column; min-height: 0; }
+          .qi-chat2-rail { order: 1; border-right: 0; border-bottom: 1px solid ${spb.line}; padding: 18px; }
+          .qi-chat2-main { order: 2; padding: 24px 18px 48px; }
+          .qi-chat2-aside { order: 3; display: grid; grid-template-columns: 1fr; padding: 18px; }
+          .qi-chat2-topic-list { display: flex !important; gap: 6px !important; overflow-x: auto; padding-bottom: 5px; scrollbar-width: none; }
+          .qi-chat2-topic { width: auto; min-width: max-content; }
+          .qi-chat2-latest-wrap { display: none; }
+          .qi-chat2-rail-footer { display: none; }
+          .qi-chat2-main h1 { font-size: 32px !important; }
         }
         @media (prefers-reduced-motion: reduce) {
-          .qi-chat-post-row { transition: none; }
+          .qi-chat2-topic, .qi-chat2-latest { scroll-behavior: auto; }
         }
       `}</style>
-      <div className="qi-chat-shell">
-        <div className="qi-chat-main-column">
-          <div className="qi-chat-intro">
-            <div style={{ fontFamily: spb.mono, fontSize: 12.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: spb.blueSoft }}>Community Board</div>
-            <h1 className="qi-chat-title">瞎聊聊</h1>
-            <p style={{ margin: '18px 0 0', maxWidth: 720, color: spb.sub, fontSize: 16.5, lineHeight: 1.72 }}>
-              这里是 DreamerQi 的露天茶话会：晒图、唠嗑、碎碎念，想到什么发什么。未登录也能围观，发布和回复需要登录。
-            </p>
+      <div className="qi-chat2-shell">
+        <aside ref={topicRailRef} className="qi-chat2-rail" aria-label="话题与最新帖子">
+          <div style={{ fontFamily: spb.mono, color: spb.blueSoft, fontSize: 11.5, letterSpacing: '0.11em', textTransform: 'uppercase' }}>Community Board</div>
+          <h2 style={{ margin: '12px 0 6px', fontFamily: spb.disp, fontSize: 28, letterSpacing: '-0.02em' }}>话题列表</h2>
+          <p style={{ margin: 0, color: spb.faint, fontSize: 13, lineHeight: 1.65 }}>选择一个话题，慢慢看，也认真回。</p>
+          <div className="qi-chat2-topic-list" style={{ marginTop: 18, display: 'grid', gap: 4 }}>
+            {topicOptions.map(topic => (
+              <button
+                key={topic}
+                type="button"
+                className="qi-chat2-topic"
+                aria-pressed={activeTopic === topic}
+                onClick={() => setActiveTopic(topic)}
+              >
+                <span style={{ fontSize: 14, fontWeight: activeTopic === topic ? 780 : 620 }}>{topic}</span>
+                <span style={{ color: spb.faint, fontFamily: spb.mono, fontSize: 12 }}>{topicCounts[topic] || 0}</span>
+              </button>
+            ))}
           </div>
 
-          <div className="qi-chat-feed">
+          <div className="qi-chat2-latest-wrap" style={{ marginTop: 28, paddingTop: 22, borderTop: `1px solid ${spb.line}` }}>
+            <div style={{ color: spb.ink, fontSize: 14, fontWeight: 780 }}>最新话题</div>
+            <div style={{ marginTop: 8, display: 'grid', gap: 2 }}>
+              {posts.slice(0, 6).map(post => {
+                const copy = splitPostCopy(post);
+                return (
+                  <button
+                    key={post.id}
+                    type="button"
+                    className="qi-chat2-latest"
+                    aria-current={selectedPost?.id === post.id ? 'true' : undefined}
+                    onClick={() => loadPostDetail(post)}
+                  >
+                    <span style={{ display: 'block', color: selectedPost?.id === post.id ? spb.ink : spb.sub, fontSize: 13.5, fontWeight: 680, lineHeight: 1.45, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{copy.title}</span>
+                    <span style={{ display: 'block', marginTop: 4, color: spb.faint, fontSize: 11.5 }}>{formatTime(post.createdAt, true)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="qi-chat2-rail-footer" style={{ marginTop: 38, color: spb.faint, fontFamily: spb.mono, fontSize: 11, lineHeight: 1.7 }}>© 2026 DreamerQi<br />Respectful, curious, human.</div>
+        </aside>
+
+        <main className="qi-chat2-main">
           {error ? (
-            <div role="alert" style={{ marginBottom: 14, border: '1px solid oklch(0.68 0.15 32 / 0.38)', borderRadius: 8, padding: '12px 14px', color: 'oklch(0.82 0.11 32)', background: 'oklch(0.26 0.04 32 / 0.22)', fontSize: 14 }}>
-              {error}
+            <div role="alert" style={{ marginBottom: 18, border: '1px solid oklch(0.68 0.15 32 / 0.38)', borderRadius: 8, padding: '12px 14px', color: 'oklch(0.82 0.11 32)', background: 'oklch(0.26 0.04 32 / 0.22)', fontSize: 14 }}>{error}</div>
+          ) : null}
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', marginBottom: 24 }}>
+            <button type="button" className="qi-chat2-action" onClick={() => { setActiveTopic('全部话题'); topicRailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} style={{ ...buttonStyle, padding: '8px 10px', color: spb.sub }}>返回全部话题</button>
+            <button type="button" className="qi-chat2-action" onClick={loadPosts} style={{ ...buttonStyle, padding: '8px 10px' }}>刷新</button>
+          </div>
+
+          {loading ? <div style={{ color: spb.sub, padding: '24px 0' }}>正在读取帖子...</div> : null}
+          {!loading && !posts.length ? (
+            <div style={{ ...panelStyle, padding: 28 }}>
+              <h1 style={{ margin: 0, fontSize: 28 }}>这里还很安静。</h1>
+              <p style={{ color: spb.sub, lineHeight: 1.7 }}>第一条可以是一句话，也可以是一张图。</p>
+              <button type="button" className="qi-chat2-action" onClick={goCompose} style={primaryStyle}>{user ? '发起第一个话题' : '登录后发帖'}</button>
             </div>
           ) : null}
+          {!loading && posts.length > 0 && !visiblePosts.length ? (
+            <div style={{ ...panelStyle, padding: 28, color: spb.sub, lineHeight: 1.7 }}>这个话题还没有内容。换一个看看，或登录后发起第一条。</div>
+          ) : null}
 
-          <main style={{ ...surfaceStyle, overflow: 'hidden' }}>
-            <div style={{ padding: '13px 14px', display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
-              <h2 style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: 0 }}>帖子广场</h2>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {filterTabs.map(([key, label, count]) => (
-                  <button
-                    key={key}
-                    type="button"
-                  className="qi-chat-chip qi-chat-action"
-                  aria-pressed={filter === key}
-                  onClick={() => setFilter(key)}
-                    style={{
-                      ...smallButton,
-                      padding: '8px 12px',
-                      color: filter === key ? spb.bg : spb.sub,
-                      borderColor: filter === key ? 'oklch(0.72 0.15 242 / 0.44)' : spb.line,
-                      background: filter === key ? spb.blue : 'oklch(0.18 0.014 265 / 0.72)',
-                    }}
-                  >
-                    {label}{count ? ` ${count}` : ''}
-                  </button>
-                ))}
-              </div>
-              <button type="button" onClick={loadPosts} className="qi-chat-action" style={smallButton}>刷新</button>
-            </div>
-
-            {loading ? <div style={{ borderTop: `1px solid ${spb.line}`, padding: 20, color: spb.sub, fontSize: 15 }}>正在读取帖子...</div> : null}
-            {!loading && !posts.length ? (
-              <div style={{ borderTop: `1px solid ${spb.line}`, padding: 28 }}>
-                <div style={{ color: spb.ink, fontSize: 18, fontWeight: 760 }}>现在还没有帖子。</div>
-                <div style={{ marginTop: 8, color: spb.sub, fontSize: 14.5, lineHeight: 1.7 }}>第一条内容可以是一句话，也可以是一张图。登录后就能发布。</div>
-                <button type="button" onClick={goCompose} className="qi-chat-action" style={{ ...primary, marginTop: 16 }}>{user ? '发第一条帖子' : '登录后发帖'}</button>
-              </div>
-            ) : null}
-            {!loading && posts.length > 0 && !visiblePosts.length ? (
-              <div style={{ borderTop: `1px solid ${spb.line}`, padding: 24, color: spb.sub, lineHeight: 1.7 }}>这个分类暂时没有帖子，换个标签看看，或者自己补一条。</div>
-            ) : null}
-            {visiblePosts.map(post => {
-              const commentCount = Number(post.commentCount || (post.comments || []).length || 0);
-              return (
-                <button key={post.id} type="button" className="qi-chat-post-row" onClick={() => openPost(post)}>
-                  <div style={avatarStyle(post.author || 'Q')}>{firstChar(post.author || 'Q')}</div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      <span style={{ color: spb.ink, fontSize: 14.5, fontWeight: 780 }}>{post.author || '用户'}{post.authorRole === 'admin' ? ' · 管理员' : ''}</span>
-                      <span style={{ color: spb.faint, fontSize: 12.5 }}>{formatTime(post.createdAt) || '刚刚'}</span>
-                    </div>
-                    <div style={{ marginTop: 7, color: spb.ink, fontSize: 18, lineHeight: 1.45, fontWeight: 700, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', whiteSpace: 'pre-wrap' }}>{post.text || '分享了一张图片'}</div>
-                    {(post.comments || []).slice(-1).map(comment => (
-                      <div key={comment.id} style={{ marginTop: 9, color: spb.sub, fontSize: 13.5, lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        <span style={{ color: spb.blueSoft, fontWeight: 750 }}>{comment.author || '用户'}：</span>{comment.text}
-                      </div>
-                    ))}
-                  </div>
-                  {post.imageUrl ? <img className="qi-chat-image-thumb" src={chatterImageSrc(post.imageUrl)} alt="" loading="lazy" decoding="async" /> : <div className="qi-chat-image-thumb" style={{ display: 'grid', placeItems: 'center', color: spb.faint, fontFamily: spb.mono, fontSize: 11 }}>TEXT</div>}
-                  <div className="qi-chat-comment-count" style={{ color: spb.faint, fontSize: 13, textAlign: 'right' }}>{commentCount ? `${commentCount} 条` : '打开'}</div>
-                </button>
-              );
-            })}
-          </main>
-          </div>
-        </div>
-
-          <aside className="qi-chat-aside">
-            {composerPanel}
-            <div className="qi-chat-stats" style={{ ...surfaceStyle, padding: 20 }}>
-              <div style={{ color: spb.ink, fontSize: 18, fontWeight: 780 }}>社区动态</div>
-              <div style={{ marginTop: 10 }}>
-                {statChip('帖子', chatStats.posts)}
-                {statChip('图片', chatStats.images)}
-                {statChip('回复', chatStats.replies)}
-              </div>
-            </div>
-            <div className="qi-chat-tips" style={{ ...surfaceStyle, padding: 20 }}>
-              <div style={{ color: spb.ink, fontSize: 18, fontWeight: 780 }}>发帖小贴士</div>
-              <div style={{ marginTop: 14, display: 'grid', gap: 14 }}>
-                {[
-                  ['想到什么发什么', '记录生活、分享观点、求助答疑，真诚表达最重要。'],
-                  ['图文会更受欢迎', '带图的帖子更容易获得关注和回复。'],
-                  ['尊重与友善', '一起维护社区氛围，让每个人都能自在交流。'],
-                ].map(([title, body]) => (
-                  <div key={title} style={{ borderTop: `1px solid ${spb.line}`, paddingTop: 12 }}>
-                    <div style={{ color: spb.ink, fontSize: 14.5, fontWeight: 760 }}>{title}</div>
-                    <div style={{ marginTop: 5, color: spb.sub, fontSize: 13.5, lineHeight: 1.55 }}>{body}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </aside>
-      </div>
-
-      {selectedPost ? (
-        <div onClick={closePost} style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(5,7,12,0.74)', backdropFilter: 'blur(18px)', display: 'grid', placeItems: 'center', padding: 'clamp(18px, 4vw, 42px)' }}>
-          <article ref={postDialogRef} role="dialog" aria-modal="true" aria-label="帖子详情" tabIndex={-1} onClick={event => event.stopPropagation()} style={{ width: 'min(860px, 100%)', maxHeight: '88vh', overflow: 'auto', ...surfaceStyle }}>
-            {selectedPost.imageUrl ? (
-              <div style={{ background: 'oklch(0.11 0.01 265)', borderBottom: `1px solid ${spb.line}` }}>
-                <img src={chatterImageSrc(selectedPost.imageUrl)} alt="" style={{ width: '100%', maxHeight: '72vh', objectFit: 'contain', display: 'block' }} />
-              </div>
-            ) : null}
-            <div style={{ padding: '24px clamp(20px, 4vw, 34px) 30px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
-                  <div style={avatarStyle(selectedPost.author || 'Q')}>{firstChar(selectedPost.author || 'Q')}</div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ color: spb.ink, fontSize: 15, fontWeight: 780, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedPost.author || '用户'}{selectedPost.authorRole === 'admin' ? ' · 管理员' : ''}</div>
-                    <div style={{ marginTop: 3, color: spb.faint, fontSize: 12.5 }}>{formatTime(selectedPost.createdAt)}</div>
-                  </div>
+          {selectedPost && visiblePosts.length ? (
+            <article aria-busy={detailLoading ? 'true' : 'false'}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: spb.blueSoft, fontSize: 12.5, fontWeight: 740, border: `1px solid oklch(0.72 0.15 242 / 0.28)`, borderRadius: 999, padding: '6px 10px' }}>{inferTopic(selectedPost)}</div>
+              <h1 style={{ margin: '17px 0 0', fontFamily: spb.disp, color: spb.ink, fontSize: 40, lineHeight: 1.16, letterSpacing: '-0.025em', fontWeight: 690 }}>{selectedCopy.title}</h1>
+              <div style={{ marginTop: 18, display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div className="qi-chat2-author-avatar" style={avatarStyle(selectedPost.author, 38)}>{firstChar(selectedPost.author)}</div>
+                <div>
+                  <div style={{ color: spb.ink, fontSize: 14.5, fontWeight: 760 }}>{selectedPost.author || '用户'}{selectedPost.authorRole === 'admin' ? ' · 管理员' : ''}</div>
+                  <div style={{ marginTop: 3, color: spb.faint, fontFamily: spb.mono, fontSize: 11.5 }}>{formatTime(selectedPost.createdAt)}</div>
                 </div>
-                <button type="button" onClick={closePost} className="qi-chat-action" style={smallButton}>关闭</button>
               </div>
-              <div style={{ marginTop: 18, color: spb.ink, fontSize: 18, lineHeight: 1.88, whiteSpace: 'pre-wrap' }}>{selectedPost.text || '分享了一张图片'}</div>
-              {error ? <div role="alert" style={{ marginTop: 16, border: '1px solid oklch(0.68 0.15 32 / 0.38)', borderRadius: 8, padding: '11px 13px', color: 'oklch(0.82 0.11 32)', background: 'oklch(0.26 0.04 32 / 0.22)', fontSize: 14 }}>{error}</div> : null}
-              <div style={{ marginTop: 24, borderTop: `1px solid ${spb.line}`, paddingTop: 22 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, alignItems: 'baseline' }}>
-                  <h3 style={{ margin: 0, fontFamily: spb.disp, color: spb.ink, fontSize: 24, letterSpacing: 0 }}>评论互动</h3>
-                  <span style={{ color: spb.faint, fontSize: 13 }}>{detailLoading ? '读取中...' : `${selectedPost.commentCount || 0} 条回复`}</span>
+
+              {selectedCopy.body ? <div style={{ marginTop: 24, color: spb.sub, fontSize: 16.5, lineHeight: 1.9, whiteSpace: 'pre-wrap' }}>{selectedCopy.body}</div> : null}
+              {selectedPost.imageUrl ? <img className="qi-chat2-post-image" src={chatterImageSrc(selectedPost.imageUrl)} alt={`${selectedPost.author || '用户'}发布的帖子配图`} loading="eager" decoding="async" style={{ marginTop: 24 }} /> : null}
+              <div style={{ marginTop: 18, paddingBottom: 20, borderBottom: `1px solid ${spb.line}`, display: 'flex', justifyContent: 'space-between', gap: 14, color: spb.faint, fontSize: 12.5 }}>
+                <span>{selectedPost.imageUrl ? '图文分享' : '文字话题'} · {inferTopic(selectedPost)}</span>
+                <span>{commentCount(selectedPost)} 条回复</span>
+              </div>
+
+              <section aria-label="帖子回复" style={{ marginTop: 20 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
+                  <h2 style={{ margin: 0, color: spb.ink, fontSize: 17, fontWeight: 780 }}>{commentCount(selectedPost)} 条回复</h2>
+                  <span style={{ color: spb.faint, fontSize: 12 }}>按时间顺序</span>
                 </div>
-                {(selectedPost.comments || []).length ? (
-                  <div style={{ marginTop: 16, display: 'grid', gap: 12 }}>
+                {detailLoading ? <div style={{ padding: '18px 0', color: spb.sub, fontSize: 14 }}>正在读取完整对话...</div> : null}
+                {!detailLoading && (selectedPost.comments || []).length ? (
+                  <div style={{ marginTop: 10 }}>
                     {(selectedPost.comments || []).map(comment => (
-                      <div key={comment.id} style={{ border: `1px solid ${spb.line}`, borderRadius: 8, padding: '13px 14px', background: 'oklch(0.195 0.014 265 / 0.68)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, color: spb.faint, fontSize: 12.5 }}>
-                          <span style={{ color: spb.blueSoft, fontWeight: 780 }}>{comment.author || '用户'}{comment.authorRole === 'admin' ? ' · 管理员' : ''}</span>
-                          <span>{formatTime(comment.createdAt)}</span>
+                      <div key={comment.id} className="qi-chat2-reply">
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11 }}>
+                          <div style={avatarStyle(comment.author, 32)}>{firstChar(comment.author)}</div>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                              <span style={{ color: spb.ink, fontSize: 13.5, fontWeight: 740 }}>{comment.author || '用户'}{comment.authorRole === 'admin' ? ' · 管理员' : ''}</span>
+                              <span style={{ color: spb.faint, fontFamily: spb.mono, fontSize: 11 }}>{formatTime(comment.createdAt)}</span>
+                            </div>
+                            <div style={{ marginTop: 6, color: spb.sub, fontSize: 14.5, lineHeight: 1.72, whiteSpace: 'pre-wrap' }}>{comment.text}</div>
+                          </div>
                         </div>
-                        <div style={{ marginTop: 8, color: spb.sub, fontSize: 15, lineHeight: 1.72, whiteSpace: 'pre-wrap' }}>{comment.text}</div>
                       </div>
                     ))}
                   </div>
-                ) : (
-                  <div style={{ marginTop: 16, color: spb.sub, fontSize: 14.5, lineHeight: 1.7 }}>还没有回复，可以坐第一个沙发。</div>
-                )}
-                <div style={{ marginTop: 16, display: 'grid', gap: 10 }}>
+                ) : null}
+                {!detailLoading && !(selectedPost.comments || []).length ? <div style={{ marginTop: 16, color: spb.sub, fontSize: 14.5 }}>还没有回复，可以坐第一个沙发。</div> : null}
+                <div style={{ ...panelStyle, marginTop: 18, padding: 14 }}>
                   <textarea
                     aria-label="回复内容"
-                    className="qi-chat-input"
+                    className="qi-chat2-input"
                     value={replyText}
                     onChange={event => setReplyText(event.target.value.slice(0, 600))}
-                    placeholder={user ? '写一条回复...' : '登录后可以评论互动'}
-                    style={{ width: '100%', minHeight: 92, resize: 'vertical', borderRadius: 8, border: `1px solid ${spb.line}`, background: 'oklch(0.145 0.012 265 / 0.72)', color: spb.ink, padding: 13, font: 'inherit', lineHeight: 1.65, outline: 'none' }}
+                    placeholder={user ? '回复当前帖子...' : '登录后可以参与回复'}
+                    style={{ width: '100%', minHeight: 82, resize: 'vertical', border: `1px solid ${spb.line}`, borderRadius: 7, background: 'oklch(0.13 0.011 265)', color: spb.ink, padding: 12, font: 'inherit', lineHeight: 1.65 }}
                   />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                    <span style={{ color: spb.faint, fontSize: 12.5 }}>{user ? `以 ${user.name} 回复` : '未登录也可以看评论，回复需要登录。'}</span>
-                    <button type="button" onClick={submitReply} disabled={replySubmitting} className="qi-chat-action" style={{ ...primary, opacity: replySubmitting ? 0.62 : 1 }}>{user ? (replySubmitting ? '回复中...' : '回复') : '登录后回复'}</button>
+                  <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span style={{ color: spb.faint, fontSize: 12 }}>{user ? `以 ${user.name} 回复` : '未登录也可以完整阅读。'}</span>
+                    <button type="button" className="qi-chat2-action" onClick={submitReply} disabled={replySubmitting} style={{ ...primaryStyle, opacity: replySubmitting ? 0.6 : 1 }}>{user ? (replySubmitting ? '回复中...' : '回复当前帖子') : '登录后回复'}</button>
                   </div>
                 </div>
-              </div>
+              </section>
+            </article>
+          ) : null}
+        </main>
+
+        <aside className="qi-chat2-aside" aria-label="发帖和社区说明">
+          <div ref={composerCardRef} style={{ ...panelStyle, padding: 18 }}>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 790 }}>发起新话题</h2>
+            <p style={{ margin: '7px 0 0', color: spb.faint, fontSize: 13, lineHeight: 1.6 }}>{user ? `以 ${user.name} 分享你的想法、照片或日常。` : '登录后可以发布文字和一张图片。'}</p>
+            <textarea
+              ref={composerRef}
+              aria-label="帖子内容"
+              className="qi-chat2-input"
+              value={text}
+              onChange={event => setText(event.target.value.slice(0, 1200))}
+              placeholder={user ? '第一行可以写标题，换行后继续正文...' : '登录后可以发布文字和图片'}
+              style={{ marginTop: 14, width: '100%', minHeight: 132, resize: 'vertical', border: `1px solid ${spb.line}`, borderRadius: 7, background: 'oklch(0.13 0.011 265)', color: spb.ink, padding: 12, font: 'inherit', lineHeight: 1.65 }}
+            />
+            <div style={{ marginTop: 10, display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 3, scrollbarWidth: 'none' }}>
+              {topicOptions.slice(1).map(topic => (
+                <button key={topic} type="button" className="qi-chat2-action" aria-pressed={composerTopic === topic} onClick={() => setComposerTopic(topic)} style={{ ...buttonStyle, flex: '0 0 auto', padding: '6px 8px', color: composerTopic === topic ? spb.bg : spb.sub, background: composerTopic === topic ? spb.blue : 'oklch(0.205 0.014 265 / 0.8)' }}>{topic}</button>
+              ))}
             </div>
-          </article>
-        </div>
-      ) : null}
+            {imageData ? (
+              <div style={{ marginTop: 10, position: 'relative' }}>
+                <img src={imageData} alt={imageName || '帖子图片预览'} style={{ width: '100%', maxHeight: 190, objectFit: 'cover', display: 'block', borderRadius: 7, border: `1px solid ${spb.line}` }} />
+                <button type="button" className="qi-chat2-action" onClick={clearImage} style={{ ...buttonStyle, position: 'absolute', top: 8, right: 8, background: 'oklch(0.12 0.01 265 / 0.9)' }}>移除图片</button>
+              </div>
+            ) : null}
+            <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={pickImage} style={{ display: 'none' }} />
+            <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+              <button type="button" className="qi-chat2-action" onClick={() => fileInputRef.current?.click()} style={buttonStyle}>选择图片</button>
+              <button type="button" className="qi-chat2-action" onClick={submitPost} disabled={submitting} style={{ ...primaryStyle, opacity: submitting ? 0.6 : 1 }}>{user ? (submitting ? '发布中...' : '发布新话题') : '登录后发布'}</button>
+            </div>
+          </div>
+
+          <div style={{ ...panelStyle, padding: 18 }}>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 780 }}>社区公约</h2>
+            <p style={{ margin: '9px 0 0', color: spb.faint, fontSize: 13, lineHeight: 1.65 }}>认真表达，也给别人留一点舒服的空间。</p>
+            <ol style={{ margin: '16px 0 0', paddingLeft: 22, color: spb.sub }}>
+              {[
+                ['尊重他人，友善交流', '不进行人身攻击，不发布侮辱性内容。'],
+                ['真实分享，拒绝虚假', '让经验、照片和感受都尽量可信。'],
+                ['内容相关，避免灌水', '围绕主题表达，也欢迎认真追问。'],
+                ['保护隐私，注意安全', '不公开敏感信息和他人隐私。'],
+              ].map(([title, body]) => (
+                <li key={title} style={{ padding: '0 0 13px 5px' }}>
+                  <div style={{ color: spb.ink, fontSize: 13.5, fontWeight: 740 }}>{title}</div>
+                  <div style={{ marginTop: 3, color: spb.faint, fontSize: 12.5, lineHeight: 1.55 }}>{body}</div>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+        </aside>
+      </div>
     </section>
   );
 }

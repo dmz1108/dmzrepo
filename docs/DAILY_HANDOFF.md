@@ -8608,3 +8608,30 @@ Deployment:
 
 Notes for next agent:
 - Claude 已在 1180/768/390 三种视口完成视觉检查，并确认全仓 53 套测试通过；其非阻断备注是总览按股票去重统计明星，而板块摘要按板块统计，二者合计在跨板块重复股票时可以不同。
+
+## 2026-07-22 - Codex - 瞎聊聊按方案 2 重构并准备高质量真实内容
+
+Changed:
+- 瞎聊聊按已确认的方案 2（Orbit Studio）重构为三栏社区：左侧话题与最新帖子、中间当前讨论与完整回复、右侧发帖器与社区规则；手机端改为横向话题栏和单列阅读流。
+- 保留原有登录、发帖、图片上传与回复接口；新增有界 `topic` 字段并统一公开接口返回口径。
+- 新增 5 篇人工审校的示例帖子、11 条实质回复和 4 张原创配图的一次性幂等生产载荷；作者、回复者和话题均做差异化处理，保留线上既有帖子。
+
+Files:
+- `Qi/qi-home.jsx`, `Qi/qi-home.compiled.js`, `Qi/index.html`
+- `Qi/assets/chatter-orbit-studio-bg.jpg`, `kpl-stats-server.js`
+- `tests/chatter-option2.test.js`, `tests/chatter-production-seed.test.js`, `design-qa.md`
+- `ops/production/manifests/chatter-option2-20260722.json`
+- `ops/production/requests/2026-07-22-chatter-option2-seed.json`
+- `ops/production/requests/2026-07-22-chatter-option2-seed.ps1`
+
+Validated:
+- 本地针对性测试 `chatter-option2`、`chatter-production-seed`、`font-woff2-yule-cache` 全绿；`node --check kpl-stats-server.js`、`node Qi/build-home.js` 与定向 `git diff --check` 通过。
+- 合并前全仓测试 56/56 文件通过；两条旧测试的首页缓存键断言已同步到本次 `20260722-chatter-option2d` 版本。
+- Product Design 视觉复核覆盖 1487×1058 桌面和 390×844 手机：三栏比例、移动端首屏、话题切换、登录弹窗、发帖话题选择均通过；控制台错误 0，最终 QA 无 P0/P1/P2。
+- 生产载荷 SHA-256 为 `eed719bfc64f2b1b17939f6e36433d230b3204e8bd201c10b3d1ad6e31a4ae7a`；4 张配图均固定校验哈希，生产脚本执行前备份数据库与图片，失败时回滚。
+
+Deployment:
+- 本条提交时尚未部署或写入生产；合并后必须通过 SSH/SCP 将清单文件原子发布到 `C:\\PandaDashboard`，重启 `Panda Dashboard Server`，再运行一次性内容脚本并进行公网验收。
+
+Notes for next agent:
+- 线上内容脚本以稳定 seed ID 幂等写入，不删除或覆盖非 seed 的既有帖子；正式验收应看到至少 5 个 seed 帖子、11 条 seed 回复、4 张可访问图片及全部话题字段。
