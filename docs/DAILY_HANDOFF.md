@@ -8462,3 +8462,27 @@ Deployment:
 
 Notes for next agent:
 - HTML 已将策略样式缓存版本更新为 `20260721c`；部署时必须同时发布 `kpl-dashboard_17_apple.html` 与 `Qi/vendor/strategy-workbench.css`。
+
+## 2026-07-22 - Codex - PR #208 合并并部署策略页决策工作台 UI
+
+Changed:
+- Claude 独立复核 PR #208，确认无阻断项、全仓 53/53 测试文件通过；PR 已合并到 `main`，merge commit `7f4a5b3`。
+- 发布前确认云端 HTML/CSS 哈希与合并前 `main`（`ba379b4`）完全一致，没有覆盖线上游离修改。
+- 仅原子发布 `kpl-dashboard_17_apple.html` 与 `Qi/vendor/strategy-workbench.css`；策略样式缓存版本现为 `20260721c`。
+
+Files:
+- Production runtime: `kpl-dashboard_17_apple.html`, `Qi/vendor/strategy-workbench.css`
+- Collaboration log: `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 云端与公网 HTML SHA-256：`dc6e3cbd6be270869885f40546bd5acb152514c6f8ecf511fd56e3d1d58b93cf`；CSS SHA-256：`18d62cb8c1a40404ab8fdac817dcec6e2c2a537d598caaabd5b83ecbafde601d`。
+- 公网 HTML 已引用 `strategy-workbench.css?v=20260721c`，`https://market.dreamerqi.com/health` 返回 `ok=true`。
+- Playwright 使用 2026-07-21 公网真实策略数据复核桌面 1440x1000 与手机 390x844：正式半导体、预备消费电子/显示、明星证据带和龙头排行均正常；手机无横向溢出。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`；未重启主服务、娱乐服务或 Caddy。
+- 正式回退备份：`C:\PandaDashboard\backups\pr208-7f4a5b3-20260722-093354`。
+- 首次 `File.Replace` 尝试因 Windows 路径 API 不兼容在目标写入前停止，线上哈希未改变；额外有效旧版备份保留于 `C:\PandaDashboard\backups\pr208-7f4a5b3-20260722-093302`，随后改用同目录 `Move-Item -Force` 完成发布。两份云端运维日志均已记录。
+
+Notes for next agent:
+- 本次是纯视觉层改造；业务 JS、主线/L2/明星逻辑、后端接口与运行时数据均未改变。
