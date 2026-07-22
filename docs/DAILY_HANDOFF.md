@@ -8437,3 +8437,28 @@ Notes for next agent:
 - 云端未安装 Git，当前仍采用“Git `main` 审核通过后，文件哈希校验 + 备份 + 原子替换”发布。
 - 2026-07-21 的既有预测档案保留原预测时点 `top/candidates/qiTier`；仅终盘明星轨迹按设计升级，
   不追溯改写预测内容。
+
+## 2026-07-21 - Codex - 策略页升级为盘中决策工作台视觉层级
+
+Changed:
+- 仅重构策略页视觉层，不改主线评分、L2 扫描、明星判定、数据字段、接口与按钮行为。
+- 顶部日期、L2 阈值与板块搜索压缩为单行控制台；正式主线、预备主线、板块涨幅/资金、预判分/主线分建立清晰层级。
+- 正式明星与预期明星改为结构化证据带，龙头候选改为可扫描排行；预判回看改为分组时间轴，并保留全部原有内容。
+- 手机端消除横向溢出，长题材名完整展示；策略页手机顶栏取消滚动吸附，避免遮挡展开后的长卡片。
+
+Files:
+- `Qi/vendor/strategy-workbench.css`
+- `kpl-dashboard_17_apple.html`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `tests/strategy-workbench-ui.test.js`、`tests/strategy-three-requirements.test.js`、`tests/strategy-two-source-mainlines.test.js`、`tests/star-l2-layers.test.js`、`tests/mainline-review.test.js` 全绿；`git diff --check` 通过。
+- 使用公网 2026-07-21 真实策略数据做 Playwright 视觉验收：桌面 1440x1000、手机 390x844、正式主线展开态均无卡片内容溢出；手机 `body.scrollWidth=390` 与视口一致，滚动后顶栏不再遮挡正文。
+- 临时验收截图只保存在 `/tmp`，未提交任何生产数据或账号信息。
+
+Deployment:
+- 未部署、未重启服务；本次仅静态 HTML/CSS，复核合并后需原子发布两份静态文件，主服务无需重启。
+
+Notes for next agent:
+- HTML 已将策略样式缓存版本更新为 `20260721c`；部署时必须同时发布 `kpl-dashboard_17_apple.html` 与 `Qi/vendor/strategy-workbench.css`。
