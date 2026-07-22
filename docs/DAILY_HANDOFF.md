@@ -8244,31 +8244,6 @@ Deployment:
 Notes for next agent:
 - 正式运行时载荷只允许通过 GitHub `production` 环境日期绑定 Secret 传递，成功或失败后必须删除；运行时 JSON 不得进入 Git。
 
-## 2026-07-22 - Codex - 当日 TGB 湖南人复盘已入库
-
-Changed:
-- 受保护运行 `29924830883` 写入 2026-07-22 `review/tgb-hunan-structured` 正式 46 行，并强制重折当天综合主因库；脚本在写入前复核人工载荷、官方文章/原图哈希、46 股终盘池及全部质量闸。
-- 正式行全部来自 Codex 对 `@TGB湖南人` 官方白底原图的逐题材块、逐行、逐字段人工转录和第二遍人工复核；未使用 OCR、Qwen 或任何自动视觉结果生成、补全、猜测或校验。
-- 两份云端运维日志已由脚本追加安全结果；受保护工作流的远端脚本/载荷清理通过，一次性 GitHub `production` 环境 Secret 和本地压缩副本已删除。
-
-Files:
-- `docs/DAILY_HANDOFF.md`
-- 仅云端：`kpl-limitup-main-reason-sources/tgb-hunan-structured/2026-07-22.json`、当天综合主因/evidence/quality/auto 与四个正式来源折叠产物、两份运维日志和回退备份
-
-Validated:
-- 官方文章 `https://www.tgb.cn/a/2tDNd3zOTPi`（`7.22湖南人涨停复盘+晚间消息汇总`）；采用 `image-01-06.png`，原图 URL `https://image.tgb.cn/img/2026/07/22/sut9bns87hak.png_760w.png`，长度 680572 字节，SHA-256 `7f57aceb616fe744525793b6c2dc97471e3d277b3f69706c8f6504749426c3e8`。
-- 正式 46 行、唯一代码 46；`missingCodes=[]`、`extraCodes=[]`、重复 0、`weakCount=0`、名称差异 0；终盘池无 ST、北交所或新股前缀排除行。
-- 题材块计数：电力 12、医药 5、半导体 4、算力 4、超节点 3、黄金 3、公告 4、其他热点 4、其他个股 7，合计 46。
-- 人工输入 SHA-256 `1015192cf9a2c45b759273ee2041f9e3bd6dde291ef4dc65ba0c1eae4f4c8514`；终盘池 SHA-256 `7d72790c2310b027f27773ddf35cff6e1b9ba9d61e15c79d9d420a0c88af9f0b`；正式 TGB SHA-256 `13eb76eac9b62d2823dedde0d562453a128399c7d689958edbeec834e135c8da`；重折后综合主因 SHA-256 `52e170edba1590b267ce75973c0717eabc3b22bc724b52530ddfebb318b27fe7`。
-- 独立公网强刷复核：综合归纳/复盘啦/选股宝/韭研/淘股吧均为 46 行和 46 唯一代码，五个标签相对正式集合差异均为 0；TGB 覆盖/主因覆盖 100%、低置信 0、`sourceErrors=[]`，主因库 46，公网 `/health` 为 `ok=true`。
-
-Deployment:
-- 已变更生产运行时复盘数据、重折综合主因并更新云端日志；未部署或替换应用代码，未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
-- 正式写入回退备份：`C:\PandaDashboard\backups\tgb-hunan-manual-20260722-20260722133945`；首次 raw 目录不存在，因此 raw 强刷无需生成旧证据备份。
-
-Notes for next agent:
-- raw 请求 PR `#210`、正式写入请求 PR `#211` 均已合并；2026-07-22 TGB 已完整完成，不要重复覆盖正式文件或重启服务。
-
 ## 2026-07-21 - Codex - 准备受保护写入当日 TGB 正式库
 
 Changed:
@@ -8556,3 +8531,28 @@ Deployment:
 
 Notes for next agent:
 - raw evidence 成功不代表 TGB 完成；只有匹配标题、日期、白底表格和 `@TGB湖南人` 水印的官方原图可进入后续人工双遍转录。
+
+## 2026-07-22 - Codex - 当日 TGB 湖南人复盘已入库
+
+Changed:
+- 受保护运行 `29924830883` 写入 2026-07-22 `review/tgb-hunan-structured` 正式 46 行，并强制重折当天综合主因库；脚本在写入前复核人工载荷、官方文章/原图哈希、46 股终盘池及全部质量闸。
+- 正式行全部来自 Codex 对 `@TGB湖南人` 官方白底原图的逐题材块、逐行、逐字段人工转录和第二遍人工复核；未使用 OCR、Qwen 或任何自动视觉结果生成、补全、猜测或校验。
+- 两份云端运维日志已由脚本追加安全结果；受保护工作流的远端脚本/载荷清理通过，一次性 GitHub `production` 环境 Secret 和本地压缩副本已删除。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 仅云端：`kpl-limitup-main-reason-sources/tgb-hunan-structured/2026-07-22.json`、当天综合主因/evidence/quality/auto 与四个正式来源折叠产物、两份运维日志和回退备份
+
+Validated:
+- 官方文章 `https://www.tgb.cn/a/2tDNd3zOTPi`（`7.22湖南人涨停复盘+晚间消息汇总`）；采用 `image-01-06.png`，原图 URL `https://image.tgb.cn/img/2026/07/22/sut9bns87hak.png_760w.png`，长度 680572 字节，SHA-256 `7f57aceb616fe744525793b6c2dc97471e3d277b3f69706c8f6504749426c3e8`。
+- 正式 46 行、唯一代码 46；`missingCodes=[]`、`extraCodes=[]`、重复 0、`weakCount=0`、名称差异 0；终盘池无 ST、北交所或新股前缀排除行。
+- 题材块计数：电力 12、医药 5、半导体 4、算力 4、超节点 3、黄金 3、公告 4、其他热点 4、其他个股 7，合计 46。
+- 人工输入 SHA-256 `1015192cf9a2c45b759273ee2041f9e3bd6dde291ef4dc65ba0c1eae4f4c8514`；终盘池 SHA-256 `7d72790c2310b027f27773ddf35cff6e1b9ba9d61e15c79d9d420a0c88af9f0b`；正式 TGB SHA-256 `13eb76eac9b62d2823dedde0d562453a128399c7d689958edbeec834e135c8da`；重折后综合主因 SHA-256 `52e170edba1590b267ce75973c0717eabc3b22bc724b52530ddfebb318b27fe7`。
+- 独立公网强刷复核：综合归纳/复盘啦/选股宝/韭研/淘股吧均为 46 行和 46 唯一代码，五个标签相对正式集合差异均为 0；TGB 覆盖/主因覆盖 100%、低置信 0、`sourceErrors=[]`，主因库 46，公网 `/health` 为 `ok=true`。
+
+Deployment:
+- 已变更生产运行时复盘数据、重折综合主因并更新云端日志；未部署或替换应用代码，未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+- 正式写入回退备份：`C:\PandaDashboard\backups\tgb-hunan-manual-20260722-20260722133945`；首次 raw 目录不存在，因此 raw 强刷无需生成旧证据备份。
+
+Notes for next agent:
+- raw 请求 PR `#210`、正式写入请求 PR `#211` 均已合并；2026-07-22 TGB 已完整完成，不要重复覆盖正式文件或重启服务。
