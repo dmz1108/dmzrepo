@@ -138,6 +138,7 @@ jobs:
           TGB_20260717_PAYLOAD_B64: ${{ secrets.DREAMERQI_TGB_20260717_PAYLOAD_B64 }}
           TGB_20260720_PAYLOAD_B64: ${{ secrets.DREAMERQI_TGB_20260720_PAYLOAD_B64 }}
           TGB_20260721_PAYLOAD_B64: ${{ secrets.DREAMERQI_TGB_20260721_PAYLOAD_B64 }}
+          TGB_20260722_PAYLOAD_B64: ${{ secrets.DREAMERQI_TGB_20260722_PAYLOAD_B64 }}
           SCRIPT_PATH: ${{ inputs.script_path }}
           MANIFEST_PATH: ${{ inputs.manifest_path }}
           REMOTE_SCRIPT: ${{ steps.validate.outputs.remote_script }}
@@ -196,6 +197,15 @@ jobs:
             remote_payload="dreamerqi-tgb-payload-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.b64"
             echo "remote_payload=$remote_payload" >> "$GITHUB_OUTPUT"
             printf '%s' "$TGB_20260721_PAYLOAD_B64" > "$RUNNER_TEMP/$remote_payload"
+            chmod 600 "$RUNNER_TEMP/$remote_payload"
+            scp_with_retry -q -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              -i "$HOME/.ssh/dreamerqi_ops" -P "$PORT" "$RUNNER_TEMP/$remote_payload" \
+              "$USER@$HOST:C:/Windows/Temp/$remote_payload"
+          elif [[ "$SCRIPT_PATH" == 'ops/production/requests/2026-07-22-tgb-hunan-write.ps1' ]]; then
+            [[ -n "$TGB_20260722_PAYLOAD_B64" ]] || { echo "Date-bound TGB payload secret is missing" >&2; exit 1; }
+            remote_payload="dreamerqi-tgb-payload-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.b64"
+            echo "remote_payload=$remote_payload" >> "$GITHUB_OUTPUT"
+            printf '%s' "$TGB_20260722_PAYLOAD_B64" > "$RUNNER_TEMP/$remote_payload"
             chmod 600 "$RUNNER_TEMP/$remote_payload"
             scp_with_retry -q -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
               -i "$HOME/.ssh/dreamerqi_ops" -P "$PORT" "$RUNNER_TEMP/$remote_payload" \
