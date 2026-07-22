@@ -8635,3 +8635,24 @@ Deployment:
 
 Notes for next agent:
 - 线上内容脚本以稳定 seed ID 幂等写入，不删除或覆盖非 seed 的既有帖子；正式验收应看到至少 5 个 seed 帖子、11 条 seed 回复、4 张可访问图片及全部话题字段。
+
+## 2026-07-22 - Codex - PR #215 瞎聊聊方案 2 已部署并写入真实内容
+
+Changed:
+- PR `#215` 已合并到 `main`，合并提交为 `4834d3755dfb80aa31ad9907cfe1a507c01638b3`；方案 2 三栏社区、移动端布局、话题字段和背景素材已正式上线。
+- 通过受哈希保护的一次性脚本写入 5 篇帖子、11 条回复和 4 张原创配图；线上原有 1 篇帖子完整保留，当前公开总数为 6 篇。
+- 应用发布与内容写入均已追加 `panda-cloud-ops-2026-06-19.md` 和 `_cloud-change-log-20260705.md`；全部 SSH/SCP 临时文件已清理。
+
+Validated:
+- 发布前 4 个既有目标文件的云端 SHA-256 与合并前 `main` 完全一致，新背景文件不存在；无游离热修复被覆盖。
+- 发布后主服务健康检查通过；公网列表返回 6 篇帖子，其中 seed 5 篇、`commentCount` 合计 11、图片 4 张、旧帖 1 篇；5 个详情接口完整返回 11 条回复。
+- 4 个公网图片端点均为 200，下载后的 SHA-256 与审核载荷逐一一致。
+- 线上 Product Design 复核覆盖桌面三栏和 390×844 手机单列：真实标题、作者、图片、话题切换和完整回复均正常；浏览器控制台错误为 0。
+
+Deployment:
+- 已通过 SSH/SCP 发布到 `C:\PandaDashboard`，只重启 `Panda Dashboard Server`；未重启娱乐服务、Caddy 或公司端 L2 worker。
+- 应用回退备份：`C:\PandaDashboard\_deploy-backups\github-ssh-chatter-option2-4834d37-20260722`。
+- 内容回退备份：`C:\PandaDashboard\backups\chatter-option2-seed-20260722-20260722-225536`。
+
+Notes for next agent:
+- seed 使用稳定 ID 且脚本幂等；没有明确内容修改需求时不要重复覆盖。后续真实用户发帖与回复继续走现有登录权限接口。
