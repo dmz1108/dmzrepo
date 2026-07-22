@@ -8583,3 +8583,28 @@ Deployment:
 Notes for next agent:
 - HTML 已将策略样式缓存版本更新为 `20260722d`；两份静态文件必须同时发布。
 - 工作区另有与本任务无关的主页/聊天和服务端未提交改动，本次提交不得包含这些文件。
+
+## 2026-07-22 - Codex - PR #213 云端发布完成
+
+Changed:
+- PR `#213` 已由 Claude 复核通过并合并到 `main`，合并提交为 `e0fb041ee485bb11dade8ca926af81ffba317aa4`。
+- 仅将本次两份静态资源发布到云端，今日 L2 扫描记录现为默认折叠，并保留两级展开、明星高亮和原有业务逻辑。
+- 发布前后均执行 SHA-256 保护校验；两份云端运维日志已追加本次发布记录。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `docs/DAILY_HANDOFF.md`
+- 仅云端：`panda-cloud-ops-2026-06-19.md`、`_cloud-change-log-20260705.md`
+
+Validated:
+- 发布前云端 HTML/CSS 哈希分别为 `dc6e3cbd6be270869885f40546bd5acb152514c6f8ecf511fd56e3d1d58b93cf`、`18d62cb8c1a40404ab8fdac817dcec6e2c2a537d598caaabd5b83ecbafde601d`，与合并前 `main` 完全一致。
+- 发布后云端 HTML/CSS 哈希分别为 `b1a41ff1a1648089fffb61424ef2389a45eabfb1bd6288827d730ab3c39de993`、`75b93713bee02c212c46b7aee9d509d636592bdf90d1106aa24d4808d1eb5f3d`，与合并提交完全一致。
+- 公网 `https://market.dreamerqi.com/health` 返回 `ok=true`；行情页实际引用 `strategy-workbench.css?v=20260722d`，公网 CSS 包含 `ml-l2-history-disclosure` 与 `ml-l2-job-summary` 新样式。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`；未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+- 正式回退备份：`C:\PandaDashboard\backups\pr213-e0fb041-20260722-223346`。
+
+Notes for next agent:
+- Claude 已在 1180/768/390 三种视口完成视觉检查，并确认全仓 53 套测试通过；其非阻断备注是总览按股票去重统计明星，而板块摘要按板块统计，二者合计在跨板块重复股票时可以不同。
