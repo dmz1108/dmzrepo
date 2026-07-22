@@ -286,6 +286,8 @@ const STATIC_FILES = new Map([
   ['/qi/assets/chatter-cute-preview.png', 'Qi/assets/chatter-cute-preview.png'],
   ['/assets/chatter-cute-preview.webp', 'Qi/assets/chatter-cute-preview.webp'],
   ['/qi/assets/chatter-cute-preview.webp', 'Qi/assets/chatter-cute-preview.webp'],
+  ['/assets/chatter-orbit-studio-bg.jpg', 'Qi/assets/chatter-orbit-studio-bg.jpg'],
+  ['/qi/assets/chatter-orbit-studio-bg.jpg', 'Qi/assets/chatter-orbit-studio-bg.jpg'],
   ['/vendor/react.production.min.js', 'Qi/vendor/react.production.min.js'],
   ['/qi/vendor/react.production.min.js', 'Qi/vendor/react.production.min.js'],
   ['/vendor/react-dom.production.min.js', 'Qi/vendor/react-dom.production.min.js'],
@@ -10426,6 +10428,7 @@ function chatterPublicPost(post, options = {}) {
   return {
     id: String(post.id || ''),
     text: String(post.text || '').slice(0, CHATTER_TEXT_MAX),
+    topic: String(post.topic || '').trim().slice(0, 24),
     author: String(post.author || '用户').slice(0, 40),
     authorRole: post.authorRole === 'admin' ? 'admin' : 'user',
     createdAt: post.createdAt || '',
@@ -10481,6 +10484,7 @@ async function createChatterPost(url, req, res) {
   const body = await readJsonBody(req).catch(() => null);
   if (!body) return send(res, 400, { error: 'bad body' });
   const text = String(body.text || '').replace(/\r\n/g, '\n').trim().slice(0, CHATTER_TEXT_MAX);
+  const topic = String(body.topic || '').trim().slice(0, 24);
   let image = null;
   try {
     image = parseChatterImage(body.image || null);
@@ -10499,6 +10503,7 @@ async function createChatterPost(url, req, res) {
   const post = {
     id,
     text,
+    topic,
     imageName,
     author: session.username || '用户',
     authorRole: session.role === 'admin' ? 'admin' : 'user',

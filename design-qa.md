@@ -1,3 +1,74 @@
+# DreamerQi Chatter Option 2 Design QA — 2026-07-22
+
+## Comparison target
+
+- Source visual truth: Product Design option 2, `Orbit Studio`, at `/Users/qi/.codex/generated_images/019f610e-5404-7950-832f-7e97e8b73625/exec-eae7b587-3c13-4c5b-9e4d-be32c0249b03.png`.
+- Browser-rendered implementation: `/tmp/dreamerqi-option2-qa/chat-desktop-final.png`.
+- Desktop CSS viewport: `1487 × 1058`; document client area: `1472 × 1058` after the vertical scrollbar.
+- Source pixels: `1487 × 1058` at 1×.
+- Implementation evidence: browser-backed capture reported a `2944 × 3419` backing surface for a `1472 × 1709` CSS document. The CSS-sized desktop frame was normalized to `1472 × 1058`, then resized by 1.01× to `1487 × 1058` for the same-size comparison.
+- Mobile CSS viewport: `390 × 844`; document client width: `375`; browser backing surface: `750 × 5810`; normalized mobile evidence: `375 × 2905`.
+- State: anonymous visitor, all topics selected, the first of five realistic local seed posts open, one generated image visible, two replies expanded, composer signed out.
+
+The source mock uses fabricated topic totals and shorter placeholder copy. The implementation intentionally uses the exact five-post and eleven-reply production seed payload prepared for deployment, so text length, counts, and authors are expected dynamic-content differences.
+
+## Evidence
+
+- Required full-view comparison: `/tmp/dreamerqi-option2-qa/chat-side-by-side-final.png`.
+- Focused right-rail comparison: `/tmp/dreamerqi-option2-qa/chat-rail-side-by-side-final.png`.
+- Final desktop full page: `/tmp/dreamerqi-option2-qa/chat-desktop-final.png`.
+- Final mobile full page: `/tmp/dreamerqi-option2-qa/chat-mobile-final.png`.
+- Final mobile first screen: `/tmp/dreamerqi-option2-qa/chat-mobile-first-screen-final.png`.
+
+The full-view comparison was used for column proportions, hierarchy, typography, image crop, and overall density. The right rail was isolated because it contains the highest concentration of controls: composer, signed-out state, topic selection, image action, publish action, and community rules.
+
+## Findings
+
+No actionable P0, P1, or P2 findings remain.
+
+- Fonts and typography: the implementation retains DreamerQi's existing display, body, and mono stacks while matching the source's compact nav, bold thread title, muted metadata, and dense rail labels. The longer real headline wraps cleanly without clipping. Body line height remains readable at desktop and mobile widths.
+- Spacing and layout rhythm: the final desktop grid is `360 / 742 / 370 px`, closely matching the source's broad topic rail, focused reading column, and narrow composer rail. One-pixel dividers, 7–10 px radii, compact panels, and the 2.15:1 post image crop reproduce the source rhythm without card inflation.
+- Colors and visual tokens: the page stays within the established near-black Spectrum Blue palette, electric-blue active states, restrained borders, and low-opacity surfaces. A lightweight generated orbit-night background supplies the source's faint orbital depth without CSS art or a gradient substitute.
+- Image quality and asset fidelity: four production post images are independent ImageGen photographs with consistent navy/amber editorial art direction. The visible coffee image is sharp, correctly centered for both the wide thread image and smaller crops, and has no logo, watermark, placeholder, or unreadable UI text. The orbit background is a real 70 KB JPEG asset, not a code drawing.
+- Copy and content: controls and community rules are concise, coherent Chinese. The production seed content is intentionally more complete than the mock and reads as real conversation rather than filler. Existing posts remain compatible.
+- Icons: the production product has no profile-avatar or thread-action icon model. Plain text actions are used instead of fabricated SVGs, glyphs, or mismatched icon packages. This is an intentional product constraint and does not impair the source hierarchy.
+- States and interactions: topic filtering, current-thread switching, composer topic selection, image selection, signed-out publish/reply gates, loading, empty, error, active, focus, and mobile horizontal-topic states remain functional.
+- Accessibility: buttons retain semantic pressed/current states and visible focus rings; textareas have accessible names; the image has descriptive alt text; reduced-motion behavior remains; mobile controls stay reachable through horizontal scrolling.
+- Responsiveness: at `390 × 844`, topic navigation becomes one horizontal row, the reading column begins at CSS y `268`, and `body.scrollWidth=375` matches the client width. Desktop `body.scrollWidth=1472` also matches the client width.
+
+## Comparison history
+
+1. Initial P1 — desktop columns were `286 / 842 / 344 px`, making the topic rail too narrow and the reading column visibly wider than option 2.
+   - Fix: changed the final grid to `360 / 742 / 370 px` and reduced the post image to a 2.15:1 crop.
+   - Post-fix evidence: `chat-side-by-side-final.png`.
+
+2. Initial P2 — mobile topics stacked vertically because the inline grid declaration won over the responsive rule, pushing the active thread below the first viewport.
+   - Fix: made the mobile topic strip explicitly horizontal and hid desktop-only latest-thread/footer content. The active thread now begins at y `268`.
+   - Post-fix evidence: `chat-mobile-first-screen-final.png`.
+
+3. Initial P2 — the page matched the geometry but lacked option 2's restrained orbital atmosphere.
+   - Fix: generated and installed `Qi/assets/chatter-orbit-studio-bg.jpg`, then verified it was loaded as the section background.
+   - Post-fix evidence: `chat-side-by-side-final.png`.
+
+4. Final pass — the extra right-rail statistics panel had no source counterpart and pulled attention below the community rules.
+   - Fix: removed it so the right rail ends with the source-aligned community-guidelines card.
+   - Post-fix evidence: `chat-rail-side-by-side-final.png`.
+
+## Interaction and runtime checks
+
+- Public post list loaded five local seed posts, eleven replies, four images, and all five explicit topic fields.
+- Selecting `一图一张 2` changed the active thread to `雨停后的十分钟，城市忽然安静了`.
+- Selecting the composer topic `碎碎念` exposed `aria-pressed=true`.
+- The shared login action opened the existing password dialog; closing it removed the dialog state.
+- Final browser console errors: `0`.
+- Targeted checks passed: `node tests/chatter-option2.test.js`, `node tests/font-woff2-yule-cache.test.js`, `node --check kpl-stats-server.js`, `node Qi/build-home.js`, and scoped `git diff --check`.
+
+## Follow-up polish
+
+- P3 only: once real users have profile images, the initial-letter avatar fallback can be replaced by account-owned imagery without changing the option 2 layout.
+
+final result: passed
+
 # DreamerQi Entertainment Page Design QA
 
 ## Comparison target

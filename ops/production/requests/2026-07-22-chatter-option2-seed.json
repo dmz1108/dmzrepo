@@ -1,0 +1,155 @@
+{
+  "version": 1,
+  "updatedAt": "2026-07-22T14:00:00.000Z",
+  "count": 5,
+  "posts": [
+    {
+      "id": "chat_seed_20260722_coffee",
+      "text": "城市转角的咖啡店，值得专程绕一点路吗？\n\n今天提前半小时出门，没有去连锁店，而是拐进一条平时总错过的小路。店里只有磨豆机的声音，窗边那桌刚好空着，桂花拿铁不甜，适合把一本书慢慢翻开。\n\n我后来发现，喜欢的可能不只是咖啡，而是那种不催人离开的空间。你们也有愿意多走十分钟去坐一会儿的地方吗？",
+      "topic": "日常打卡",
+      "imageName": "chat-seed-coffee.png",
+      "author": "夜航船",
+      "authorRole": "user",
+      "userId": "",
+      "createdAt": "2026-07-22T13:32:00.000Z",
+      "comments": [
+        {
+          "id": "reply_seed_20260722_coffee_1",
+          "text": "我会。真正喜欢的是那段“从工作模式走回自己”的路，咖啡反而像一个温柔的借口。",
+          "author": "阿澄",
+          "authorRole": "user",
+          "userId": "",
+          "createdAt": "2026-07-22T13:44:00.000Z"
+        },
+        {
+          "id": "reply_seed_20260722_coffee_2",
+          "text": "有一家店我每周只去一次，老板不会问“还是老样子吗”，但总把靠窗的位置留得很干净。那种分寸感很难得。",
+          "author": "小满",
+          "authorRole": "user",
+          "userId": "",
+          "createdAt": "2026-07-22T13:56:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "chat_seed_20260722_rain",
+      "text": "雨停后的十分钟，城市忽然安静了\n\n刚才还在躲雨，转眼整条街只剩树叶滴水和自行车轮压过水面的声音。大家走得比平时慢一点，店铺的灯在路面上拉得很长。\n\n没有发生什么特别的事，但我很想把这十分钟留下来。",
+      "topic": "一图一张",
+      "imageName": "chat-seed-rain.png",
+      "author": "林深见鹿",
+      "authorRole": "user",
+      "userId": "",
+      "createdAt": "2026-07-22T12:18:00.000Z",
+      "comments": [
+        {
+          "id": "reply_seed_20260722_rain_1",
+          "text": "雨后最喜欢梧桐叶一滴一滴落水的声音，像城市终于把音量调低了。",
+          "author": "木由",
+          "authorRole": "user",
+          "userId": "",
+          "createdAt": "2026-07-22T12:31:00.000Z"
+        },
+        {
+          "id": "reply_seed_20260722_rain_2",
+          "text": "照片里的蓝很克制，暖灯又刚好把人拉回来。谢谢你没有把这份安静修得太满。",
+          "author": "六月海",
+          "authorRole": "user",
+          "userId": "",
+          "createdAt": "2026-07-22T12:47:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "chat_seed_20260722_reading",
+      "text": "下班后只读十页，也算把一天还给自己\n\n以前总觉得读书要有完整的晚上，结果完整的晚上很少出现。最近给自己定了一个很小的规则：洗完澡，手机放远，只读十页。\n\n十页不够改变什么，却能把脑子从消息和待办里领回来。今晚读到一句很喜欢的话，没有抄下来，想让它先在心里待一会儿。",
+      "topic": "碎碎念",
+      "imageName": "chat-seed-reading.png",
+      "author": "纸上微光",
+      "authorRole": "user",
+      "userId": "",
+      "createdAt": "2026-07-22T10:36:00.000Z",
+      "comments": [
+        {
+          "id": "reply_seed_20260722_reading_1",
+          "text": "“十页”这个尺度真好，小到不会畏难，又足够让注意力慢慢沉下来。今晚也试试。",
+          "author": "知野",
+          "authorRole": "user",
+          "userId": "",
+          "createdAt": "2026-07-22T10:52:00.000Z"
+        },
+        {
+          "id": "reply_seed_20260722_reading_2",
+          "text": "我用的是十五分钟，不规定页数。读得慢也没关系，关键是那十五分钟不需要回应任何人。",
+          "author": "一棵盐",
+          "authorRole": "user",
+          "userId": "",
+          "createdAt": "2026-07-22T11:08:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "chat_seed_20260722_riverside",
+      "text": "江边的晚风，把今天最后一点褶皱吹平了\n\n忙完以后没有直接回家，沿江走了四十分钟。云从杏色慢慢变成紫灰，骑车的人从身边经过，芦苇一直朝同一个方向点头。\n\n有些疲惫不需要被解决，只要给它一点风和一段不用赶路的路。",
+      "topic": "一图一张",
+      "imageName": "chat-seed-riverside.png",
+      "author": "北岸风",
+      "authorRole": "user",
+      "userId": "",
+      "createdAt": "2026-07-21T11:46:00.000Z",
+      "comments": [
+        {
+          "id": "reply_seed_20260722_riverside_1",
+          "text": "“不用赶路的路”太准确了。有时恢复不是做更多，而是去一个风能穿过身体的地方。",
+          "author": "晚照",
+          "authorRole": "user",
+          "userId": "",
+          "createdAt": "2026-07-21T12:03:00.000Z"
+        },
+        {
+          "id": "reply_seed_20260722_riverside_2",
+          "text": "我也在这段路骑过车。天色完全暗下来以前，水面会有几分钟像磨砂玻璃，很值得等。",
+          "author": "阿川",
+          "authorRole": "user",
+          "userId": "",
+          "createdAt": "2026-07-21T12:19:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "chat_seed_20260722_habit",
+      "text": "有没有一种“低成本恢复精神”的小习惯？\n\n最近工作一忙，空下来也只会无意识地刷手机，休息过后反而更累。想收集一些不需要买东西、不需要意志力爆棚，却真的能让人慢慢恢复的小办法。\n\n我先分享一个：回家以后先不开大灯，只留一盏暖光，把当天穿过的衣服挂好，再给自己倒一杯水。整个过程两分钟，但像是在告诉身体——今天可以结束了。",
+      "topic": "碎碎念",
+      "imageName": "",
+      "author": "慢慢来",
+      "authorRole": "user",
+      "userId": "",
+      "createdAt": "2026-07-21T08:24:00.000Z",
+      "comments": [
+        {
+          "id": "reply_seed_20260722_habit_1",
+          "text": "把手机留在玄关，洗完澡再去拿。不是戒手机，只是给回家后的前二十分钟留一块没有通知的地方。",
+          "author": "青团",
+          "authorRole": "user",
+          "userId": "",
+          "createdAt": "2026-07-21T08:41:00.000Z"
+        },
+        {
+          "id": "reply_seed_20260722_habit_2",
+          "text": "我会把第二天要穿的衣服提前放好。早晨少做一个决定，晚上也会有一种“已经照顾到明天”的安心。",
+          "author": "南枝",
+          "authorRole": "user",
+          "userId": "",
+          "createdAt": "2026-07-21T09:02:00.000Z"
+        },
+        {
+          "id": "reply_seed_20260722_habit_3",
+          "text": "出门扔一次垃圾，顺便在楼下走五分钟。很短，但能把一直停在脑子里的那股闷劲儿松开。",
+          "author": "白噪音",
+          "authorRole": "user",
+          "userId": "",
+          "createdAt": "2026-07-21T09:16:00.000Z"
+        }
+      ]
+    }
+  ]
+}
