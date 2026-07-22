@@ -8556,3 +8556,30 @@ Deployment:
 
 Notes for next agent:
 - raw 请求 PR `#210`、正式写入请求 PR `#211` 均已合并；2026-07-22 TGB 已完整完成，不要重复覆盖正式文件或重启服务。
+
+## 2026-07-22 - Codex - 折叠并简化今日 L2 扫描记录
+
+Changed:
+- 今日 L2 扫描记录改为默认折叠；折叠摘要直接显示板块数、完成数、处理中数量以及预期/确认明星数量。
+- 展开后先显示按板块整理的紧凑扫描摘要；具体板块再次展开才显示个股最大档及五档明细，降低策略页首屏信息密度。
+- 明星确认、预期明星继续在总览和板块摘要层高亮；管理员权限、扫描结果、最大档算法与明星判定逻辑均未改变。
+- 补齐桌面、平板和手机布局，增加键盘焦点样式与原生 `details/summary` 展开语义。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `tests/star-l2-layers.test.js`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node tests/strategy-workbench-ui.test.js`、`node tests/star-l2-layers.test.js`、`node tests/qi-mainline-states.test.js`、`node tests/local-l2-persistence.test.js`、`node tests/strategy-backend-permissions.test.js` 全部通过。
+- `node --check kpl-stats-server.js`、`node --check strategy-backend.js`、前端内联脚本编译、CSS 花括号检查及 `git diff --check` 通过。
+- 当前环境未提供 Product Design 指定的 in-app Browser 控制工具，因此本轮未执行浏览器截图视觉验收；需在复核阶段检查桌面与手机真实管理员态。
+
+Deployment:
+- 未部署、未重启服务；合并后仅需原子发布 `kpl-dashboard_17_apple.html` 与 `Qi/vendor/strategy-workbench.css`，主服务无需重启。
+
+Notes for next agent:
+- HTML 已将策略样式缓存版本更新为 `20260722d`；两份静态文件必须同时发布。
+- 工作区另有与本任务无关的主页/聊天和服务端未提交改动，本次提交不得包含这些文件。

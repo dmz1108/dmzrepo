@@ -7,7 +7,7 @@ const html = fs.readFileSync(path.join(root, 'kpl-dashboard_17_apple.html'), 'ut
 const server = fs.readFileSync(path.join(root, 'kpl-stats-server.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'Qi/vendor/strategy-workbench.css'), 'utf8');
 
-assert(html.includes('<link href="/vendor/strategy-workbench.css?v=20260721c" rel="stylesheet">'));
+assert(html.includes('<link href="/vendor/strategy-workbench.css?v=20260722d" rel="stylesheet">'));
 assert(html.includes('<header class="strategy-hero">'));
 assert(html.includes('class="strategy-hero-head"'));
 assert(html.includes('class="strategy-hero-utility"'));
@@ -27,6 +27,9 @@ for (const selector of [
   '.mlr-no-star',
   '.ml-l2-stock.is-expected',
   '.ml-l2-stock.is-confirmed',
+  '.ml-l2-history-disclosure',
+  '.ml-l2-history-summary',
+  '.ml-l2-job-summary',
   '.strategy-board-card',
 ]) {
   assert(css.includes(selector), `missing strategy visual state: ${selector}`);
