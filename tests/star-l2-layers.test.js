@@ -207,7 +207,7 @@ A((html.match(/starMaxBucketAdminInfo\(s\)/g) || []).length >= 2, '两处明星 
 A(html.includes('最大档字段在但无大单:非明星') && html.includes('最大档字段缺失:需检查worker采集')
   && html.includes('现价缺失:无法确认该股允许最大档'), 'empty/dataMissing/priceMissing 三种状态文案齐备');
 A(html.includes('id="strategy-l2-history"') && html.includes('function loadStrategyL2History(day)'), '管理员策略页包含每日L2扫描记录入口');
-A(html.includes("if (!canUseL2AdminTools()) return ''") && html.includes('管理员可见 · 默认看最大档'), 'L2扫描记录只在管理员工具权限下渲染');
+A(html.includes("if (!canUseL2AdminTools()) return ''") && html.includes('<small>管理员</small>'), 'L2扫描记录只在管理员工具权限下渲染');
 const l2HistoryRenderer = html.slice(html.indexOf('function renderStrategyL2History(data)'), html.indexOf('async function loadStrategyL2History(day)'));
 A(l2HistoryRenderer.includes('job?.results')
   && l2HistoryRenderer.includes('strategyL2HistoryStarStatus(row)')
@@ -223,6 +223,12 @@ A(html.includes('<details class="ml-l2-stock')
   && html.includes('点击查看该股全部L2档位')
   && html.includes('ml-l2-max-money')
   && html.includes('ml-l2-buckets'), 'L2个股默认显示最大档金额，点击展开全部档位');
+A(l2HistoryRenderer.includes('<details class="ml-l2-history-disclosure">')
+  && l2HistoryRenderer.includes('<summary class="ml-l2-history-summary"')
+  && !l2HistoryRenderer.includes('<details class="ml-l2-history-disclosure" open'), 'L2扫描记录首屏默认折叠');
+A(l2HistoryRenderer.includes('<details class="ml-l2-job')
+  && l2HistoryRenderer.includes('<summary class="ml-l2-job-summary"')
+  && l2HistoryRenderer.includes('ml-l2-job-stars'), '展开总览后按板块显示紧凑摘要，明星状态不被隐藏');
 A(html.includes("return { level: 'expected', label: '预期明星', maxBucket }")
   && html.includes('ml-l2-star ${star.level}')
   && html.includes('.ml-l2-stock.is-expected'), '预期明星在折叠状态优先入列并高亮');

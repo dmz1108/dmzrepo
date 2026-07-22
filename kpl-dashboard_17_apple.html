@@ -9892,7 +9892,7 @@
     }
   }
 </style>
-<link href="/vendor/strategy-workbench.css?v=20260721c" rel="stylesheet">
+<link href="/vendor/strategy-workbench.css?v=20260722d" rel="stylesheet">
 <link href="/vendor/review-workbench.css?v=20260718d" rel="stylesheet">
 <link href="/vendor/realtime-workbench.css?v=20260720" rel="stylesheet">
 </head>
@@ -12639,6 +12639,20 @@ function renderStrategyL2History(data) {
   const jobs = [...byPlate.values()].map(row => row.job)
     .sort((a, b) => String(b?.createdAt || '').localeCompare(String(a?.createdAt || '')));
   if (!jobs.length) return '';
+  const summaryStars = new Map();
+  for (const job of jobs) {
+    for (const row of (Array.isArray(job?.results) ? job.results : [])) {
+      const code = String(row?.code || '');
+      const star = strategyL2HistoryStarStatus(row);
+      if (!code || !star) continue;
+      const previous = summaryStars.get(code);
+      if (!previous || (previous.level !== 'confirmed' && star.level === 'confirmed')) summaryStars.set(code, star);
+    }
+  }
+  const completedJobs = jobs.filter(job => String(job?.status || '') === 'done').length;
+  const runningJobs = jobs.filter(job => ['queued', 'running'].includes(String(job?.status || ''))).length;
+  const confirmedStars = [...summaryStars.values()].filter(star => star.level === 'confirmed').length;
+  const expectedStars = [...summaryStars.values()].filter(star => star.level === 'expected').length;
   const cards = jobs.map(job => {
     const picked = Array.isArray(job?.picked) ? job.picked : [];
     const results = Array.isArray(job?.results) ? job.results : [];
@@ -12665,32 +12679,50 @@ function renderStrategyL2History(data) {
         || (Number(b?.gainPct) || -999) - (Number(a?.gainPct) || -999);
     });
     const shownRows = selectedRows.slice(0, 8);
+    const shownStars = shownRows.map(row => strategyL2HistoryStarStatus(row)).filter(Boolean);
+    const jobConfirmedStars = shownStars.filter(star => star.level === 'confirmed').length;
+    const jobExpectedStars = shownStars.filter(star => star.level === 'expected').length;
     const rows = shownRows.map(strategyL2HistoryStockRow).join('');
     const remaining = Math.max(0, selectedRows.length - shownRows.length);
     const empty = status === 'done' && resultCount > 0 && !picked.length
       ? '<div class="ml-l2-empty">扫描完成，没有达到当前筛选阈值的股票。</div>'
       : (status === 'done' && !resultCount ? '<div class="ml-l2-empty">任务未取得可用成分股结果。</div>' : '');
-    return `<article class="ml-l2-job">
-      <div class="ml-l2-job-head">
+    const starSummary = `${jobConfirmedStars ? `<span class="confirmed">${jobConfirmedStars} 明星确认</span>` : ''}${jobExpectedStars ? `<span class="expected">${jobExpectedStars} 预期明星</span>` : ''}`;
+    return `<details class="ml-l2-job${starSummary ? ' has-star' : ''}">
+      <summary class="ml-l2-job-summary" aria-label="${escapeHTML(String(job?.boardName || job?.plateId || 'L2任务'))} L2 扫描记录">
+        <div class="ml-l2-job-head">
         <div class="ml-l2-job-name"><b>${escapeHTML(String(job?.boardName || job?.plateId || 'L2任务'))}</b><small>${escapeHTML(String(job?.plateId || ''))}</small></div>
         <span class="ml-l2-trigger ${job?.trigger === 'strategy-auto' ? 'auto' : ''}">${trigger}</span>
         <span class="ml-l2-status ${escapeHTML(status)}">${statusText}</span>
         <time>${escapeHTML(strategyL2HistoryTime(job?.createdAt))}</time>
-      </div>
-      <div class="ml-l2-job-meta">
-        <span><i>扫描</i><b>${Number(job?.scanned || 0)}/${Number(job?.total || 0)}</b></span>
-        <span><i>结果</i><b>${resultCount}</b></span>
-        <span><i>入选</i><b>${picked.length}</b></span>
-      </div>
-      ${rows ? `<div class="ml-l2-stock-list">${rows}${remaining ? `<span class="ml-l2-more">其余 ${remaining} 只保留在原始结果中</span>` : ''}</div>` : empty}
-    </article>`;
+        </div>
+        <div class="ml-l2-job-meta">
+          <span><i>扫描</i><b>${Number(job?.scanned || 0)}/${Number(job?.total || 0)}</b></span>
+          <span><i>结果</i><b>${resultCount}</b></span>
+          <span><i>入选</i><b>${picked.length}</b></span>
+        </div>
+        ${starSummary ? `<span class="ml-l2-job-stars">${starSummary}</span>` : '<span class="ml-l2-job-stars is-empty">未发现明星</span>'}
+        <span class="ml-l2-job-toggle" aria-hidden="true"></span>
+      </summary>
+      <div class="ml-l2-job-body">${rows ? `<div class="ml-l2-stock-list">${rows}${remaining ? `<span class="ml-l2-more">其余 ${remaining} 只保留在原始结果中</span>` : ''}</div>` : empty}</div>
+    </details>`;
   }).join('');
   return `<section class="strategy-section ml-l2-history">
-    <div class="strategy-section-head">
-      <span class="strategy-section-title">今日 L2 扫描记录</span>
-      <span class="strategy-section-sub">管理员可见 · 默认看最大档，点击个股查看全部五档</span>
-    </div>
-    <div class="ml-l2-job-grid">${cards}</div>
+    <details class="ml-l2-history-disclosure">
+      <summary class="ml-l2-history-summary" aria-label="今日 L2 扫描记录">
+        <span class="ml-l2-history-heading"><span class="strategy-section-title">今日 L2 扫描记录</span><small>管理员</small></span>
+        <span class="ml-l2-history-overview">
+          <span><b>${jobs.length}</b><i>板块</i></span>
+          <span><b>${completedJobs}</b><i>完成</i></span>
+          ${runningJobs ? `<span class="running"><b>${runningJobs}</b><i>处理中</i></span>` : ''}
+          ${confirmedStars ? `<span class="confirmed"><b>${confirmedStars}</b><i>明星确认</i></span>` : ''}
+          ${expectedStars ? `<span class="expected"><b>${expectedStars}</b><i>预期明星</i></span>` : ''}
+          ${!confirmedStars && !expectedStars ? '<span class="muted"><i>暂未发现明星</i></span>' : ''}
+        </span>
+        <span class="ml-l2-history-toggle"><i class="when-closed">展开</i><i class="when-open">收起</i><b aria-hidden="true"></b></span>
+      </summary>
+      <div class="ml-l2-history-panel"><div class="ml-l2-job-grid">${cards}</div></div>
+    </details>
   </section>`;
 }
 async function loadStrategyL2History(day) {
