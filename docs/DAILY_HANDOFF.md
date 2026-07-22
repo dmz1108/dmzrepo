@@ -8486,3 +8486,24 @@ Deployment:
 
 Notes for next agent:
 - 本次是纯视觉层改造；业务 JS、主线/L2/明星逻辑、后端接口与运行时数据均未改变。
+
+## 2026-07-22 - Codex - 准备强刷当日 TGB 湖南人原始证据
+
+Changed:
+- 新增受保护、日期绑定的一次性生产脚本，用于强制刷新 2026-07-22 `@TGB湖南人` 官方原文与原始图片证据。
+- 脚本只输出公开文章和原图元数据；明确不调用 OCR、Qwen 或视觉识别，不写正式 TGB 行、不重折综合主因库、不重启服务。
+- 若云端已有当天 raw evidence，脚本先备份旧目录；成功后追加两份云端运维日志。
+
+Files:
+- `ops/production/requests/2026-07-22-tgb-hunan-raw-evidence.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 北京时间目标日为 2026-07-22（周三）；本地 `main` 与 `origin/main` 一致，任务分支从最新基线建立。
+- 脚本固定校验目标日、官方文章域名、标题、manifest 日期/状态和至少一张原图下载成功；脚本保持纯 ASCII。
+
+Deployment:
+- 本条提交时尚未运行生产脚本；正式 TGB、综合主因库和服务进程均未改变。
+
+Notes for next agent:
+- raw evidence 成功不代表 TGB 完成；只有匹配标题、日期、白底表格和 `@TGB湖南人` 水印的官方原图可进入后续人工双遍转录。
