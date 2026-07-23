@@ -8809,3 +8809,31 @@ Files:
 
 Validated:
 - 本条提交时尚未完成合并前全套测试或生产发布；需在合并后只部署后端文件、重启主服务，并核验 9 条旧固定地点伪时间和 3 类伪地点均归零。
+
+## 2026-07-23 - Codex - 探索每日推荐刷新修复已部署
+
+Changed:
+- PR `#222`、`#223`、`#224` 已依次合并，最终生产代码提交为 `b0380195d14f38ffc7154dfd89324f48d4192df7`。
+- 首次发布首页/探索页每日轮换和真实新线索逻辑，随后根据生产真实数据补齐旧固定地点时间归一、同日自动同步持久化及非地点标题过滤。
+- 两份云端运维日志均已追加部署、强制同步和最终数据质量验收记录。
+
+Validated:
+- 三个代码 PR 合并前分别完成全套测试，均为 `57/57` 个测试文件通过；`node --check kpl-stats-server.js` 与 `git diff --check` 通过。
+- 生产 4 个页面/后端文件 SHA-256 与最终 `main` 完全一致；公网 `/health` 返回 `ok=true`，最终主服务 PID 为 `4760`。
+- 2026-07-23 发现库最终生成时间为 `2026-07-23T08:35:17.015Z`，公开显示 186 条可信地点、2 条近期真实线索；固定地点带时间记录 `0`、坏标题 `0`。
+- `Pull Tab拉环咖啡` 已归类为无发布时间的编辑精选且不再首推；真实数据复算 2026-07-23 首推 `Soloist Coffee`，2026-07-24 轮换为 `棉花工坊`。
+- 最终后端重启读取 `lastAutoSyncDay=2026-07-23` 后未重复抓取，发现库 SHA-256 和修改时间保持不变。
+
+Deployment:
+- 从精确合并后的 `main` 通过 SSH/SCP 原子发布；首次部署 4 个文件，后两次只补发 `kpl-stats-server.js`。
+- 每次只重启 `Panda Dashboard Server`；未重启娱乐服务、Caddy、Consistency Gate 或公司端 L2 worker。
+- 应用回退备份：
+  - `C:\PandaDashboard\_deploy-backups\github-ssh-pr222-e676407-20260723-1622`
+  - `C:\PandaDashboard\_deploy-backups\github-ssh-pr223-a810789-20260723-1631`
+  - `C:\PandaDashboard\_deploy-backups\github-ssh-pr224-b038019-20260723-1645`
+- 发现库回退备份：
+  - `C:\PandaDashboard\_deploy-backups\pr222-discovery-db-20260723-162158`
+  - `C:\PandaDashboard\_deploy-backups\pr223-discovery-db-20260723-163111`
+
+Notes for next agent:
+- 本次修复、生产同步、质量闸、云端日志和回退点均已完成；不要再次手动强刷 2026-07-23，下一次正常自动同步应以库内 `lastAutoSyncDay` 为准。
