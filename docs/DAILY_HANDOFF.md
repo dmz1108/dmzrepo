@@ -8694,3 +8694,26 @@ Deployment:
 - 已通过 SSH/SCP 原子发布 `Qi/index.html`、`Qi/qi-home.jsx`、`Qi/qi-home.compiled.js` 到 `C:\PandaDashboard`。
 - 未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
 - 回退备份：`C:\PandaDashboard\_deploy-backups\github-ssh-chatter-all-posts-d97847e-20260722`。
+
+## 2026-07-23 - Codex - 收紧重点关注个股 L2 主被动排版
+
+Changed:
+- 重点关注卡片展开个股 L2 五档明细后，主动/被动买卖金额改为按内容宽度紧凑排列，不再随卡片宽度被等分列拉开。
+- 档位标题后的主动比、被动比从两端对齐改为靠近档位标签排列；同时缩短主被动两行的垂直间距和内边距。
+- 桌面仍保持五档双列、手机保持单列；L2 数值、颜色、五档结构、扫描行为和明星判定逻辑均未改变。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `tests/strategy-workbench-ui.test.js`、`tests/star-l2-layers.test.js`、`tests/qi-mainline-states.test.js`、`tests/local-l2-persistence.test.js`、`tests/strategy-backend-permissions.test.js` 共 5 个针对性测试通过，`git diff --check` 通过。
+- Product Design 同结构前后对照确认：调整前买卖金额被弹性列推到卡片两端，调整后主动/被动金额与比值形成紧凑信息组。
+- 1200px 桌面五档双列和 390×844 手机单列均完成截图检查；手机 `body.scrollWidth=390`，卡片 `scrollWidth=clientWidth=360`，无横向溢出。
+
+Deployment:
+- 本条提交时尚未部署或重启服务；合并后只需原子发布 `kpl-dashboard_17_apple.html`，无需重启主服务。
+
+Notes for next agent:
+- 生产管理员态需要登录才能查看完整个股 L2 明细；发布后应由已登录管理员展开任一重点关注个股，再复核真实长金额和 `∞` 比值的对齐。

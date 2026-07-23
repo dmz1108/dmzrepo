@@ -38,5 +38,8 @@ for (const selector of [
 assert(css.includes('@media (max-width: 760px)'));
 assert(!/\.strategy-mainlines\s*\{[^}]*display\s*:\s*none/s.test(css));
 assert(!/\.ml-l2-history\s*\{[^}]*display\s*:\s*none/s.test(css));
+assert(/body\.view-strategy \.sc-pick-detail-title\s*\{[\s\S]*?justify-content:\s*flex-start !important;[\s\S]*?\}/.test(html));
+assert((html.match(/grid-template-columns:\s*max-content max-content max-content !important;/g) || []).length >= 2);
+assert(/body\.view-strategy \.sc-pick-pair\s*\{[\s\S]*?justify-content:\s*start !important;[\s\S]*?gap:\s*8px !important;[\s\S]*?\}/.test(html));
 
 console.log('strategy workbench UI checks passed');
