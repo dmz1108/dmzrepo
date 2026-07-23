@@ -227,6 +227,8 @@ const DISCOVERY_AUTO_SYNC_HOUR = Number(process.env.PANDA_DISCOVERY_AUTO_SYNC_HO
 const DISCOVERY_AUTO_SYNC_MINUTE = Number(process.env.PANDA_DISCOVERY_AUTO_SYNC_MINUTE || 0);
 const DISCOVERY_CITY_LIMIT = Number(process.env.PANDA_DISCOVERY_CITY_LIMIT || 24);
 const DISCOVERY_CATEGORY_PER_CITY_LIMIT = Number(process.env.PANDA_DISCOVERY_CATEGORY_PER_CITY_LIMIT || 3);
+const DISCOVERY_FRESH_PER_CITY_LIMIT = Number(process.env.PANDA_DISCOVERY_FRESH_PER_CITY_LIMIT || 6);
+const DISCOVERY_FRESH_MAX_AGE_DAYS = Number(process.env.PANDA_DISCOVERY_FRESH_MAX_AGE_DAYS || 45);
 const DISCOVERY_IMAGE_ENHANCE_LIMIT = Number(process.env.PANDA_DISCOVERY_IMAGE_ENHANCE_LIMIT || 24);
 const DISCOVERY_POI_ENRICH_LIMIT_PER_CITY = Number(process.env.PANDA_DISCOVERY_POI_ENRICH_LIMIT_PER_CITY || 12);
 const CHATTER_MAX_POSTS = Number(process.env.PANDA_CHATTER_MAX_POSTS || 500);
@@ -8633,12 +8635,49 @@ function discoveryPublicNameLooksBad(name) {
   const text = cleanDiscoveryText(name);
   if (!text) return true;
   if (discoveryTextLooksBroken(text)) return true;
-  if (/^(小吃|简餐|盛大|新春|品牌|资讯|专题|榜单|报告|指南|攻略|新店|首店|探店|空间)$/.test(text)) return true;
+  if (/[\u{1F000}-\u{1FAFF}\u2600-\u27BF]/u.test(text)) return true;
+  if (/[｜|_]/.test(text)) return true;
+  if (/^(小吃|简餐|盛大|新春|品牌|资讯|专题|榜单|报告|指南|攻略|新店|首店|探店|空间|审美积累|咖啡地图[一二三四五六七八九十]?)$/.test(text)) return true;
   if (/^(北京|上海|广州|深圳|成都|杭州|重庆|长沙).*(清单|精选|合集|汇总|周末新展市集|咖啡探店|餐厅新店|甜品下午茶|生活方式新店|夜间小聚)/.test(text)) return true;
   if (/^(超|近|约)?\d+/.test(text)) return true;
   if (/(截至|H1|H2|门店数|400\+|20\d{2}新春|上海出发|网红餐饮|品牌资讯|商业观察|行业报告|招商|财报|业绩|供应链|热潮|生态|强化|专项|正式公示|本地宝|活动汇总|活动亮点|周末去哪|近期活动|购票|门票|交通指南|注意事项|必吃榜|必玩榜|新店榜|服务榜|口味榜|环境榜|\d{1,2}:\d{2}|20\d{2}年\d{1,2}月\d{1,2}日)/i.test(text)) return true;
   if (/[?？]{2,}/.test(text) || !/[\u4e00-\u9fffA-Za-z0-9]/.test(text)) return true;
   return false;
+}
+
+function discoverySourceIsCurated(item) {
+  return /站内地点资料|站内主题兜底/.test(String(item?.sourceName || ''))
+    || String(item?.freshnessKind || '') === 'curated';
+}
+
+function discoveryItemFreshTimestamp(item) {
+  const published = Date.parse(item?.publishedAt || '');
+  if (Number.isFinite(published)) return published;
+  const discovered = Date.parse(item?.discoveredAt || '');
+  return Number.isFinite(discovered) ? discovered : null;
+}
+
+function discoveryItemIsFreshExternal(item, nowMs = Date.now(), maxAgeDays = DISCOVERY_FRESH_MAX_AGE_DAYS) {
+  if (!item || discoverySourceIsCurated(item)) return false;
+  const timestamp = discoveryItemFreshTimestamp(item);
+  if (!Number.isFinite(timestamp)) return false;
+  const ageDays = (Number(nowMs) - timestamp) / 86400000;
+  return ageDays >= -1 && ageDays <= Math.max(1, Number(maxAgeDays) || DISCOVERY_FRESH_MAX_AGE_DAYS);
+}
+
+function discoveryItemStableIdentity(item) {
+  return `${String(item?.city || '').trim().toLowerCase()}|${String(item?.name || '').trim().toLowerCase()}`;
+}
+
+function discoveryNewExternalItemCount(fresh, previous, nowMs = Date.now()) {
+  const previousKeys = new Set((previous || [])
+    .filter(item => !discoverySourceIsCurated(item))
+    .map(discoveryItemStableIdentity)
+    .filter(Boolean));
+  return new Set((fresh || [])
+    .filter(item => discoveryItemIsFreshExternal(item, nowMs))
+    .map(discoveryItemStableIdentity)
+    .filter(key => key && !previousKeys.has(key))).size;
 }
 
 function discoveryNameLooksEditorialNoise(name, context = '') {
@@ -8887,7 +8926,7 @@ function isPublicDiscoveryItem(item) {
   if (discoveryTextLooksBroken(text)) return false;
   if (isBadDiscoveryCandidate(name, item?.sourceTitle || '', item?.summary || '')) return false;
   const hasFresh = discoveryHasFreshSignal(text) || /新展|市集|快闪|探店|打卡|排队|热门/.test(text);
-  if (!hasFresh && discoveryItemFreshnessScore(item) < 2) return false;
+  if (!discoverySourceIsCurated(item) && !hasFresh && discoveryItemFreshnessScore(item) < 2) return false;
   const year = Number(String(item?.publishedAt || item?.discoveredAt || '').slice(0, 4));
   const currentYear = Number(chinaNowParts().day.slice(0, 4));
   if (Number.isFinite(year) && year > 2000 && year < currentYear - 1) return false;
@@ -9823,7 +9862,6 @@ function buildDiscoveryFallbackItems(city) {
 }
 
 function buildDiscoverySeedItems(city) {
-  const nowIso = new Date().toISOString();
   const citySeeds = DISCOVERY_REAL_PLACE_SEEDS[city.name] || {};
   const defaultDistrict = (city.districtHints || [])[0] || '';
   const rows = [];
@@ -9854,8 +9892,9 @@ function buildDiscoverySeedItems(city) {
         sourceName: '站内地点资料',
         sourceUrl: '',
         sourceTitle: `${city.name}${category}去处：${name}`,
-        publishedAt: nowIso,
-        discoveredAt: nowIso,
+        publishedAt: '',
+        discoveredAt: '',
+        freshnessKind: 'curated',
         score: (profile ? 18 : 10) - index,
       });
     }
@@ -9970,18 +10009,32 @@ function scoreDiscoveryCandidate(city, title, summary) {
 function selectDiscoveryCityItems(items) {
   const categoryOrder = DISCOVERY_CATEGORY_KEYWORDS.map(item => item.name);
   const buckets = new Map(categoryOrder.map(category => [category, []]));
-  for (const item of (items || []).filter(isPublicDiscoveryItem).sort(sortDiscoveryItems)) {
+  const publicItems = (items || []).filter(isPublicDiscoveryItem).sort(sortDiscoveryItems);
+  const addToBucket = (item, limit = DISCOVERY_CATEGORY_PER_CITY_LIMIT) => {
     const category = categoryOrder.includes(item.category) ? item.category : '其他';
     if (!buckets.has(category)) buckets.set(category, []);
     const bucket = buckets.get(category);
-    if (bucket.length < DISCOVERY_CATEGORY_PER_CITY_LIMIT) bucket.push(item);
+    if (bucket.length >= limit) return false;
+    const key = String(item.id || item.name || '');
+    if (bucket.some(existing => String(existing.id || existing.name || '') === key)) return false;
+    bucket.push(item);
+    return true;
+  };
+  let freshSelected = 0;
+  for (const item of publicItems) {
+    if (freshSelected >= DISCOVERY_FRESH_PER_CITY_LIMIT) break;
+    if (!discoveryItemIsFreshExternal(item)) continue;
+    if (addToBucket(item, Math.min(2, DISCOVERY_CATEGORY_PER_CITY_LIMIT))) freshSelected += 1;
+  }
+  for (const item of publicItems) {
+    addToBucket(item);
   }
   const selected = [];
   for (const category of categoryOrder) {
     selected.push(...(buckets.get(category) || []));
   }
   if (selected.length < DISCOVERY_CITY_LIMIT) {
-    for (const item of (items || []).filter(isPublicDiscoveryItem).sort(sortDiscoveryItems)) {
+    for (const item of publicItems) {
       if (selected.some(existing => String(existing.id || existing.name) === String(item.id || item.name))) continue;
       selected.push(item);
       if (selected.length >= DISCOVERY_CITY_LIMIT) break;
@@ -10231,11 +10284,12 @@ async function syncDiscoveryDb(options = {}) {
         errors.push({ city: city.name, error: err.message });
       }
       const oldCity = previousCityMap.get(city.id) || {};
+      const freshCount = discoveryNewExternalItemCount(fresh, oldCity.items || []);
       const items = mergeDiscoveryCityItems(fresh, oldCity.items || []);
       cities.push({
         ...city,
-        updatedAt: fresh.length ? new Date().toISOString() : (oldCity.updatedAt || previous.generatedAt || ''),
-        freshCount: fresh.length,
+        updatedAt: freshCount ? new Date().toISOString() : (oldCity.updatedAt || previous.generatedAt || ''),
+        freshCount,
         items,
       });
       await sleep(220);
@@ -20771,8 +20825,8 @@ async function runAutoDiscoverySyncIfDue() {
   const currentMinute = now.hour * 60 + now.minute;
   const targetMinute = DISCOVERY_AUTO_SYNC_HOUR * 60 + DISCOVERY_AUTO_SYNC_MINUTE;
   if (currentMinute < targetMinute) return;
+  await syncDiscoveryDb({ force: true, reason: 'auto-daily' });
   autoDiscoverySyncDay = now.day;
-  await syncDiscoveryDb({ force: false, reason: 'auto-daily' });
 }
 
 async function runAutoSnapshotIfDue() {
