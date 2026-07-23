@@ -145,6 +145,13 @@ function normalizeRestoredJob(job) {
   copy.trigger = String(copy.trigger || 'legacy');
   copy.familyKey = String(copy.familyKey || '');
   copy.scanChannel = String(copy.scanChannel || '');
+  copy.scanStage = String(copy.scanStage || '');
+  copy.scanReasons = Array.isArray(copy.scanReasons) ? copy.scanReasons.map(String).filter(Boolean) : [];
+  copy.scanSequence = Math.max(0, Math.floor(Number(copy.scanSequence || 0)));
+  copy.previousJobId = String(copy.previousJobId || '');
+  copy.strengthSnapshot = copy.strengthSnapshot && typeof copy.strengthSnapshot === 'object'
+    ? { ...copy.strengthSnapshot }
+    : null;
   copy.claimedBy = '';
   return copy;
 }
@@ -181,6 +188,11 @@ function workerJob(job) {
     threshold: job.threshold,
     minAmount: job.minAmount,
     thresholds: job.thresholds,
+    scanStage: job.scanStage,
+    scanReasons: job.scanReasons,
+    scanSequence: job.scanSequence,
+    previousJobId: job.previousJobId,
+    strengthSnapshot: job.strengthSnapshot,
     total: job.total,
     batchSize: job.batchSize,
     priorityCodes: Array.isArray(job.priorityCodes) ? job.priorityCodes : [],
@@ -433,6 +445,13 @@ class LocalL2TaskQueue {
       trigger: String(payload.trigger || 'manual'),
       familyKey: String(payload.familyKey || ''),
       scanChannel: String(payload.scanChannel || ''),
+      scanStage: String(payload.scanStage || ''),
+      scanReasons: Array.isArray(payload.scanReasons) ? payload.scanReasons.map(String).filter(Boolean) : [],
+      scanSequence: Math.max(0, Math.floor(Number(payload.scanSequence || 0))),
+      previousJobId: String(payload.previousJobId || ''),
+      strengthSnapshot: payload.strengthSnapshot && typeof payload.strengthSnapshot === 'object'
+        ? { ...payload.strengthSnapshot }
+        : null,
       zsType: payload.zsType ?? null,
       status: this.configured() ? 'queued' : 'done',
       available: this.configured(),

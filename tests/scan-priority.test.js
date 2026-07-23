@@ -89,11 +89,16 @@ eval(extractFn('strategyNormRealtimeStocks'));
     && src.includes('zt >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT')
     && src.includes('strategyMainlineThsCompositeEligibility(board'), '共享门槛=东财净流入/同花顺组合门槛 且 涨停≥2(无豁免)');
   A(src.includes("rule: 'netInflowZjjlr>0'") && src.includes("reason = 'ths-net-outflow'"), '同花顺自动扫描显式要求 zjjlr>0,负方向原因可观测');
-  A(src.includes('.filter(b => strategyMainlineBoardAutoScanEligibility(b, { requireMembers: true }).eligible)'), '自动派发复用共享门槛并要求真实成分股');
+  A(src.includes('const eligibility = strategyMainlineBoardAutoScanEligibility(board, { requireMembers: true })')
+    && src.includes("item.eligibility.eligible || item.decision.scanStage === 'confirmation'"),
+  '自动派发复用共享门槛并要求真实成分股；仅预期明星封板确认可穿透瞬时资金回落');
   A(!src.includes("b?.scanChannel === 'supplement' || Number(b?.zt)"), '补选豁免已移除(补选板同样过涨停门槛)');
   A(!src.includes('Number(b?.netInflow) >= STRATEGY_MAINLINE_AUTO_SCAN_HIGH_INFLOW_OVERRIDE'), '10亿高流入直通已移除');
-  A(src.includes("((a?.scanChannel === 'supplement') ? 0 : 1) - ((b?.scanChannel === 'supplement') ? 0 : 1)"), '板块级第一键=补选来源(仅派发优先级,非门槛豁免)');
-  A(src.includes('bigGainOf(b) - bigGainOf(a)'), '板块级第三键=大涨数');
+  A(src.includes("const stageOrder = { confirmation: 0, retry: 1, strengthening: 2, discovery: 3 }"),
+    '三段式复扫优先级=封板确认>错误重试>增强复扫>首次发现');
+  A(src.includes("((a.board?.scanChannel === 'supplement') ? 0 : 1) - ((b.board?.scanChannel === 'supplement') ? 0 : 1)"),
+    '同阶段下补选来源仍优先(仅派发优先级,非门槛豁免)');
+  A(src.includes('bigGainOf(b.board) - bigGainOf(a.board)'), '同阶段板块字典序保留大涨数');
   A(src.includes('strategyMainlineScanPriorityCodes(board, priorByCode)'), '派发时传入真实主因上下文');
   A(src.includes('sessionPhaseNow, priorReason?.byCode)'), '调用点接线 priorReason.byCode');
 

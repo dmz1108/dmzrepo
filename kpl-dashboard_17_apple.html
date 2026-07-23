@@ -12575,13 +12575,16 @@ function strategyL2HistoryStarStatus(row) {
   if (!maxBucket.amount || !maxBucket.priceKnown || !maxBucket.complete || !maxBucket.hasAny) return null;
   const fiftyBucket = strategyL2HistoryBucket(row, 500000);
   const gain = strategyL2HistoryNum(row?.gainPct ?? row?.gain);
+  const sealed = gain != null && gain >= limitUpThreshold(row?.code, row?.name);
+  const ratioThreshold = sealed ? 2 : 1.65;
   const ratioPassCount = [
-    maxBucket.activeRatio > 1.65,
-    fiftyBucket.complete && fiftyBucket.activeRatio > 1.65,
-    maxBucket.supportRatio > 1.65,
+    maxBucket.activeRatio > ratioThreshold,
+    fiftyBucket.complete && fiftyBucket.activeRatio > ratioThreshold,
+    maxBucket.supportRatio > ratioThreshold,
   ].filter(Boolean).length;
-  if (gain == null || maxBucket.activeBuy <= 1.5e8 || ratioPassCount < 2) return null;
-  if (gain >= limitUpThreshold(row?.code, row?.name)) return { level: 'confirmed', label: '明星确认', maxBucket };
+  const amountPass = maxBucket.activeBuy > 1.5e8 || maxBucket.passiveBuy > 2e8;
+  if (gain == null || !amountPass || ratioPassCount < 2) return null;
+  if (sealed) return { level: 'confirmed', label: '明星确认', maxBucket };
   if (gain >= 5) return { level: 'expected', label: '预期明星', maxBucket };
   return null;
 }
@@ -13183,19 +13186,22 @@ function renderStrategyMainlinesHTML(d) {
       ? `<span class="ml-stage ml-stage-${escapeHTML(badgeStageKey || 'confirm')}" title="${escapeHTML(badgeTitle)}">${escapeHTML(badgeText)}</span>`
       : '';
     const newThemeBadge = m.isNewTheme ? `<span class="ml-newtheme" title="首日新题材:暂无历史主因属正常,以盘面与资金信号为准">首日</span>` : '';
-    // 管理员专属:明星股最大可统计档证据(档位/主动买累计/三比值/empty/dataMissing)。
+    // 管理员专属:明星股最大可统计档证据(档位/主动被动买累计/金额闸/三比值/empty/dataMissing)。
     // 仅 state.adminLoggedIn 时拼进 tooltip;普通用户返回空串,完全不可见。
     function starMaxBucketAdminInfo(s) {
       if (!state.adminLoggedIn || !s || !s.maxBucket) return '';
       const mb = s.maxBucket;
       const amountW = Number(mb.amount) > 0 ? `${Math.round(Number(mb.amount) / 10000)}w` : '-';
-      const buyYi = Number.isFinite(Number(mb.activeBuy)) ? (Number(mb.activeBuy) / 1e8).toFixed(2) + '亿' : '-';
+      const activeBuyYi = Number.isFinite(Number(mb.activeBuy)) ? (Number(mb.activeBuy) / 1e8).toFixed(2) + '亿' : '-';
+      const passiveBuyYi = Number.isFinite(Number(mb.passiveBuy)) ? (Number(mb.passiveBuy) / 1e8).toFixed(2) + '亿' : '-';
       const r = mb.ratios || {};
-      const parts = [`最大档${amountW}`, `主动买${buyYi}`, `主${r.activeRatio ?? '-'}/被${r.passiveRatio ?? '-'}/合${r.supportRatio ?? '-'}`];
+      const parts = [`最大档${amountW}`, `主动买${activeBuyYi}`, `被动买${passiveBuyYi}`, `主${r.activeRatio ?? '-'}/被${r.passiveRatio ?? '-'}/合${r.supportRatio ?? '-'}`];
+      const amountGate = mb.amountGate || null;
+      if (amountGate) parts.push(`金额闸${amountGate.passed ? '通过' : '未通过'}（主买>1.5亿或被买>2亿）`);
       const gate = mb.ratioGate || null;
       if (gate) {
         const v = gate.values || {};
-        parts.push(`比值闸${gate.passed ?? 0}/${gate.required ?? 2}（最大主${v.maxActiveRatio ?? '-'}、50万主${v.fiftyActiveRatio ?? '-'}、最大合${v.maxSupportRatio ?? '-'}）`);
+        parts.push(`比值闸${gate.passed ?? 0}/${gate.required ?? 2}严格>${gate.threshold ?? '-'}（最大主${v.maxActiveRatio ?? '-'}、50万主${v.fiftyActiveRatio ?? '-'}、最大合${v.maxSupportRatio ?? '-'}）`);
       }
       if (mb.empty) parts.push('⚠最大档字段在但无大单:非明星');
       if (mb.dataMissing) parts.push('⚠最大档字段缺失:需检查worker采集');
@@ -13243,7 +13249,7 @@ function renderStrategyMainlinesHTML(d) {
       })
       .join('');
     const starRow = starChips ? `<div class="ml-proof-row ml-star-proof">
-      <div class="ml-star-proof-head" title="纯当日 L2 判定:最大可统计档主动买入累计>1.5亿，且最大档主动比、50万档主动比、最大档合力比三项中至少两项严格>1.65；未封大涨为预期明星，封板后为明星确认；盘中出现过的预期信号会保留用于复盘。">
+      <div class="ml-star-proof-head" title="纯当日 L2 判定:最大可统计档主动买入累计>1.5亿或被动买入累计>2亿；未封大涨时三项买卖比至少两项严格>1.65为预期明星，封板后至少两项严格>2.00才明星确认；盘中出现过的预期信号会保留用于复盘。">
         <span class="ml-star-proof-title">明星信号</span>
         <span class="ml-star-proof-summary">${escapeHTML(starSummary)}</span>
       </div>
