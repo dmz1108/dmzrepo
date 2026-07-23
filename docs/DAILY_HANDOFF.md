@@ -8717,3 +8717,22 @@ Deployment:
 
 Notes for next agent:
 - 生产管理员态需要登录才能查看完整个股 L2 明细；发布后应由已登录管理员展开任一重点关注个股，再复核真实长金额和 `∞` 比值的对齐。
+
+## 2026-07-23 - Codex - PR #219 重点关注 L2 紧凑排版已部署
+
+Changed:
+- PR `#219` 已合并到 `main`，合并提交为 `92f925e49a6c486cadb219e9284d4796e7bafaf4`。
+- 从该精确 `main` 提交提取并原子发布 `kpl-dashboard_17_apple.html`；重点关注个股 L2 的主动/被动金额及比值紧凑排版已上线。
+- 两份云端运维日志均已追加本次发布记录。
+
+Validated:
+- 发布前云端 HTML SHA-256 为 `b1a41ff1a1648089fffb61424ef2389a45eabfb1bd6288827d730ab3c39de993`，与合并前 `main` 完全一致，没有覆盖游离热修。
+- 发布后云端及公网 HTML SHA-256 均为 `11ee80ea8800179def1713d864e27e74173f47f3de7d0d6a32807cce830453d6`，与合并提交完全一致。
+- 公网 HTML 包含桌面与手机两处紧凑 `max-content` 排版规则；`https://market.dreamerqi.com/health` 返回 `ok=true`。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`；静态 HTML 发布，无需重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+- 回退备份：`C:\PandaDashboard\backups\pr219-92f925e-20260723-113421`。
+
+Notes for next agent:
+- 代码、生产 HTML 和云端日志已一致；完整个股 L2 明细仍是管理员态，后续视觉复核需使用已登录账号展开重点关注卡片。
