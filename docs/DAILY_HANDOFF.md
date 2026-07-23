@@ -8268,6 +8268,28 @@ Deployment:
 Notes for next agent:
 - 正式质量口径是 `116 原始池 - 1 北交所 = 115 正式行`，不要把北交所排除误报为正式缺失。
 
+## 2026-07-23 - Codex - 记录当日 TGB 名称规范化差异
+
+Changed:
+- 第二次正式运行 `30005192355` 在预写名称闸安全停止：115 股代码、题材块、重复和弱字段检查全部通过，仅 `002165` 的官方原图名 `红宝丽` 与终盘池名 `红 宝 丽` 存在内部空格差异。
+- 日期绑定脚本保留官方原图名 `红宝丽`，只在代码-名称对账时使用 `NFKC+remove-whitespace`，并固定记录这一条代码、来源名、终盘池名和规范化方式；任何额外差异继续安全停止。
+
+Files:
+- `ops/production/requests/2026-07-23-tgb-hunan-write.ps1`
+- `tests/tgb-20260723-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 公网同日 source-view 显示 `002165` 在复盘啦为 `红宝丽`，综合归纳、选股宝和韭研为 `红 宝 丽`，确认是已存在的数据源空格差异，不是原图转录错误。
+- 第二次运行仍在备份、正式写入、综合主因重折和云端日志变更之前失败；正式运行时数据未改变，受保护远端脚本/载荷清理成功。
+- 修订后全仓 58/58 个 `tests/*.test.js` 文件通过，PowerShell 仍为纯 ASCII，`git diff --check` 通过。
+
+Deployment:
+- 本条提交时尚未再次重跑正式写入；服务未重启。
+
+Notes for next agent:
+- 正式 TGB 行必须继续保存原图 `红宝丽`，不能为迎合终盘池静默改成带空格名称。
+
 ## 2026-07-22 - Codex - 准备受保护写入当日 TGB 正式库
 
 Changed:

@@ -55,6 +55,14 @@ const publicRequestTimeoutMs = 25000;
 const expectedInputSha256 = expectedPayloadSha256.toLowerCase();
 const fixedSource = 'review/tgb-hunan-structured';
 const fixedQualityNote = 'Manual transcription from @TGB\u6e56\u5357\u4eba official table image; source-faithful board block and stock detail reason.';
+const expectedNameNormalizationDifferences = [
+  {
+    code: '002165',
+    sourceName: '\u7ea2\u5b9d\u4e3d',
+    baselineName: '\u7ea2 \u5b9d \u4e3d',
+    normalization: 'NFKC+remove-whitespace',
+  },
+];
 const expectedReviewSources = [
   { source: 'review/kaipanla-fupanla', group: 'kaipanla', label: '\u590d\u76d8\u5566' },
   { source: 'review/xuangubao-limit-up', group: 'xuangubao', label: '\u9009\u80a1\u5b9d' },
@@ -94,7 +102,10 @@ const normalizeCode = value => {
   const digits = String(value || '').replace(/\D/g, '');
   return digits ? digits.slice(-6).padStart(6, '0') : '';
 };
-const normalizeNameForMatch = value => String(value == null ? '' : value).trim().normalize('NFKC');
+const normalizeNameForMatch = value => String(value == null ? '' : value)
+  .trim()
+  .normalize('NFKC')
+  .replace(/\s+/g, '');
 const toSet = values => new Set(values);
 const setDiff = (left, right) => [...left].filter(value => !right.has(value)).sort();
 const asText = value => String(value == null ? '' : value).trim();
@@ -313,9 +324,10 @@ function validatePayload(payload, baselineRows) {
       code: normalizeCode(row.code),
       sourceName: asText(row.name),
       baselineName: asText(baselineByCode.get(normalizeCode(row.code))),
-      normalization: 'NFKC',
+      normalization: 'NFKC+remove-whitespace',
     }));
-  const nameNormalizationOk = nameNormalizationDifferences.length === 0;
+  const nameNormalizationOk = stableJson(nameNormalizationDifferences)
+    === stableJson(expectedNameNormalizationDifferences);
 
   const topicCounts = rows.reduce((result, row) => {
     const topic = asText(row.boardTopic);

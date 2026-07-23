@@ -41,7 +41,10 @@ assert(request.includes('extraCodes.length'), 'request must reject extra codes')
 assert(request.includes('duplicateCodes.length'), 'request must reject duplicate codes');
 assert(request.includes('weakRows.length'), 'request must reject weak formal rows');
 assert(request.includes("normalize('NFKC')"), 'request must explicitly audit harmless full-width name differences');
-assert(request.includes("nameNormalizationDifferences.length === 0"), 'request must reject unexpected normalized-name differences');
+assert(request.includes(".replace(/\\s+/g, '')"), 'request must normalize only whitespace for the explicit official/source name difference');
+assert(request.includes("sourceName: '\\u7ea2\\u5b9d\\u4e3d'"), 'request must preserve the official image name for 002165');
+assert(request.includes("baselineName: '\\u7ea2 \\u5b9d \\u4e3d'"), 'request must pin the terminal-pool spaced name for 002165');
+assert(request.includes('stableJson(expectedNameNormalizationDifferences)'), 'request must reject every unrecorded normalized-name difference');
 assert(request.includes("'\\u7535\\u529b+\\u7535\\u7f51\\u8bbe\\u5907': 34"), 'request must pin the power-grid topic-block count');
 assert(request.includes("['\\u5176\\u4ed6', 2]"), 'request must pin the first other topic-block count');
 assert(request.includes("['\\u5176\\u4ed6', 7]"), 'request must pin the final other topic-block count');
