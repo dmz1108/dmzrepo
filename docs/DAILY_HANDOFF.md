@@ -9030,3 +9030,24 @@ Deployment:
 
 Notes for next agent:
 - Run only from the exact reviewed commit. Do not hand-edit the prediction JSON and do not treat the correction as an original pre-rule prediction; the script preserves a visible audit trail and rollback point.
+
+## 2026-07-23 - Codex - 电网设备与中国西电预判回看已回填
+
+Changed:
+- 已从合并提交 `3946592afa1fbafafa2ec1fde673d8b6a85280ff` 执行日期绑定的一次性修正脚本，将 2026-07-23 预判回看由“今日无主线”修正为 `电网设备`。
+- 同日持久化 L2 证据按 PR `#231` 新规则重新校验通过，`601179 中国西电` 记录为“明星确认”；东财与同花顺两个来源块均记录为 `电网设备` 主线。
+- 本次只修正 `strategy-data\mainline-predict-2026-07-23.json`；原始盘中冻结快照、L2 任务、主因库、评分代码和服务进程均未改动。
+
+Validated:
+- 脚本执行前目标文件 SHA-256 为 `87eadb24f28fc671fed6dc72c4ce1a0ff9c9cedc67735fc0c48cef1b481e2ae4`，执行后为 `5075e5c8bb92f8518d4fccfbbcb95f1db792ababffad77be4f70205073017a4a`。
+- 公网 `/api/strategy-mainline-review?days=10` 已验证 2026-07-23 为 `noMainline=false`、主题 `电网设备`、明星 `601179 中国西电` 且 `predictLevel=confirmed`；回看实际第一名同为 `电网设备`（32）。
+- 东财与同花顺来源块均为 `status=mainline`、`theme=电网设备`；公网 `/health` 返回 `ok=true`。
+- 云端目标文件包含唯一修正审计记录，两份云端运维日志均包含操作编号 `review-grid-star-backfill-20260723`。
+
+Deployment:
+- 已通过 SSH 运行合并后的受保护脚本；未部署新服务代码，未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\review-grid-star-backfill-20260723-20260723163137`。
+
+Notes for next agent:
+- 这是 PR `#231` 收盘后上线后，使用同日既有 L2 证据进行的规则回放修正，不应解释为 15:00 冻结时已经按新规则完成预测。
+- 后续不要手工覆盖该日期文件；如需撤销，使用上述备份并同时保留云端审计记录。
