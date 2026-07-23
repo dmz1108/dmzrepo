@@ -9894,7 +9894,7 @@
     }
   }
 </style>
-<link href="/vendor/strategy-workbench.css?v=20260722d" rel="stylesheet">
+<link href="/vendor/strategy-workbench.css?v=20260723a" rel="stylesheet">
 <link href="/vendor/review-workbench.css?v=20260718d" rel="stylesheet">
 <link href="/vendor/realtime-workbench.css?v=20260720" rel="stylesheet">
 </head>
@@ -12592,15 +12592,23 @@ function strategyL2HistoryMoney(value, available) {
   if (!available || value == null) return '--';
   return strategyPlainMoney(value) || '0';
 }
+function strategyL2HistoryRatioCell(value) {
+  return `<td class="ml-l2-table-ratio"><b>${strategyL2HistoryRatioText(value)}</b></td>`;
+}
 function strategyL2HistoryBucketRow(row, amount, maxAmount) {
   const bucket = strategyL2HistoryBucket(row, amount);
   const state = !bucket.available ? '数据缺失' : (!bucket.complete ? '字段不完整' : (!bucket.hasAny ? '无大单' : ''));
-  return `<div class="ml-l2-bucket-row${amount === maxAmount ? ' is-max' : ''}">
-    <span class="ml-l2-bucket-name"><b>${strategyL2HistoryBucketLabel(amount)}</b>${amount === maxAmount ? '<i>最大档</i>' : ''}</span>
-    <span class="ml-l2-bucket-ratios"><i>主比 <b>${strategyL2HistoryRatioText(bucket.activeRatio)}</b></i><i>被比 <b>${strategyL2HistoryRatioText(bucket.passiveRatio)}</b></i><i>合比 <b>${strategyL2HistoryRatioText(bucket.supportRatio)}</b></i></span>
-    <span class="ml-l2-bucket-money"><i>主买 <b>${strategyL2HistoryMoney(bucket.activeBuy, bucket.available)}</b></i><i>主卖 <b>${strategyL2HistoryMoney(bucket.activeSell, bucket.available)}</b></i><i>被买 <b>${strategyL2HistoryMoney(bucket.passiveBuy, bucket.available)}</b></i><i>被卖 <b>${strategyL2HistoryMoney(bucket.passiveSell, bucket.available)}</b></i></span>
-    ${state ? `<span class="ml-l2-bucket-state">${state}</span>` : ''}
-  </div>`;
+  const isMax = amount === maxAmount;
+  return `<tr class="ml-l2-bucket-row${isMax ? ' is-max' : ''}">
+    <th scope="row" class="ml-l2-bucket-name"><b>${strategyL2HistoryBucketLabel(amount)}</b>${isMax ? '<i>最大档</i>' : ''}${state ? `<small>${state}</small>` : ''}</th>
+    <td class="ml-l2-table-money is-buy"><b>${strategyL2HistoryMoney(bucket.activeBuy, bucket.available)}</b></td>
+    <td class="ml-l2-table-money is-sell"><b>${strategyL2HistoryMoney(bucket.activeSell, bucket.available)}</b></td>
+    ${strategyL2HistoryRatioCell(bucket.activeRatio)}
+    <td class="ml-l2-table-money is-buy"><b>${strategyL2HistoryMoney(bucket.passiveBuy, bucket.available)}</b></td>
+    <td class="ml-l2-table-money is-sell"><b>${strategyL2HistoryMoney(bucket.passiveSell, bucket.available)}</b></td>
+    ${strategyL2HistoryRatioCell(bucket.passiveRatio)}
+    ${strategyL2HistoryRatioCell(bucket.supportRatio)}
+  </tr>`;
 }
 function strategyL2HistoryStockRow(row) {
   const gain = strategyL2HistoryNum(row?.gainPct ?? row?.gain);
@@ -12627,7 +12635,20 @@ function strategyL2HistoryStockRow(row) {
       <span class="ml-l2-max-money"><i>主买 <b>${strategyL2HistoryMoney(maxBucket.activeBuy, amountAvailable)}</b></i><i>主卖 <b>${strategyL2HistoryMoney(maxBucket.activeSell, amountAvailable)}</b></i><i>被买 <b>${strategyL2HistoryMoney(maxBucket.passiveBuy, amountAvailable)}</b></i><i>被卖 <b>${strategyL2HistoryMoney(maxBucket.passiveSell, amountAvailable)}</b></i></span>
       <span class="ml-l2-stock-toggle" aria-hidden="true"></span>
     </summary>
-    <div class="ml-l2-buckets" aria-label="${escapeHTML(String(row?.name || row?.code || ''))} L2全档明细">${bucketRows}</div>
+    <div class="ml-l2-stock-detail">
+      <div class="ml-l2-buckets" aria-label="${escapeHTML(String(row?.name || row?.code || ''))} L2全档明细">
+        <div class="ml-l2-bucket-title"><b>逐档成交明细</b><small>主动比 = 主动买入 ÷ 主动卖出 · 被动比 = 被动买入 ÷ 被动卖出 · 合力比 = 总买入 ÷ 总卖出</small></div>
+        <div class="ml-l2-bucket-table-wrap">
+          <table class="ml-l2-bucket-table">
+            <thead>
+              <tr><th rowspan="2">统计档位</th><th colspan="3">主动成交</th><th colspan="3">被动成交</th><th>买卖合力</th></tr>
+              <tr><th>买入金额</th><th>卖出金额</th><th>主动比</th><th>买入金额</th><th>卖出金额</th><th>被动比</th><th>合力比</th></tr>
+            </thead>
+            <tbody>${bucketRows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </details>`;
 }
 function renderStrategyL2History(data) {

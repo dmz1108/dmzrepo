@@ -8220,6 +8220,34 @@ Deployment:
 Notes for next agent:
 - raw evidence 成功不代表 TGB 完成；只有匹配标题、日期、白底表格和 `@TGB湖南人` 水印的官方原图可进入后续人工双遍转录。
 
+## 2026-07-23 - Codex - L2 个股逐档明细可读性优化
+
+Changed:
+- 仅重排策略页「今日 L2 扫描记录」中点击个股后展开的五档统计，不改明星判定、扫描门槛、数据字段或折叠摘要。
+- 逐档数据改为分组表格：主动成交和被动成交分别展示买入金额、卖出金额、买卖比，末列单独展示合力比。
+- 最大档保持醒目标记；买入金额、卖出金额使用既有涨跌色语义；窄屏保留档位列并允许横向查看完整统计。
+- 补充三种比值的页面内定义，并更新策略样式缓存版本。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node tests/star-l2-layers.test.js`
+- `node tests/strategy-workbench-ui.test.js`
+- 仓库全量 `59/59` 个测试文件通过。
+- `git diff --check`
+- 与 `origin/main` 逐字节比较 `strategyL2HistoryStarStatus`，结果完全一致（SHA-256 `e3eda055543f4ea5ab7e825540f36230287327edaa22a5e651ce302f698a887d`）。
+- 使用本机 Chrome 无头模式分别以 `1280x720` 和 `390x760` 检查展开表格；未见列宽抖动、文字重叠或窄屏挤压。
+
+Deployment:
+- GitHub only；尚未部署云端，未重启任何服务。
+
+Notes for next agent:
+- 本任务是纯展示改动；复审时重点确认 `strategyL2HistoryStarStatus` 与原 `main` 完全一致，并检查展开表格，不要把本任务扩大为明星口径调整。
+
 ## 2026-07-23 - Codex - 明星股两阶段口径与三段式 L2 复扫
 
 Changed:
