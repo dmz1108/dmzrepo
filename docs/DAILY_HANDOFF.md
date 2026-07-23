@@ -8677,3 +8677,20 @@ Validated:
 
 Deployment:
 - 本条提交时尚未部署；合并后只需原子发布三个 `Qi` 静态文件，不需重启任何服务。
+
+## 2026-07-22 - Codex - PR #217 全帖子流修复已部署
+
+Changed:
+- PR `#217` 已合并到 `main`，合并提交为 `d97847e8789711b69a76098a4987837ceb3431d4`；瞎聊聊现在按话题连续显示全部帖子，不再只显示当前单帖。
+- 首页脚本缓存键更新为 `20260722-chatter-option2e`；云端两份运维日志已记录本次静态发布，SSH/SCP 临时文件已清理。
+
+Validated:
+- 发布前云端 `Qi/index.html`、`Qi/qi-home.jsx`、`Qi/qi-home.compiled.js` 哈希与上一版 `main` 完全一致，无游离修改被覆盖。
+- 公网 HTML 已引用新缓存键；公网 compiled bundle SHA-256 为 `23ad60b678f470c7a5944f360f56ab1ef980dc832abd37030dd30e336acf6308`，与合并提交完全一致，并包含连续帖子流标记。
+- 公网接口返回 6 篇帖子、12 条总回复、5 张总图片；其中既有 seed 仍为 5 篇、11 条回复、4 张图片，旧帖与旧回复完整保留。
+- 公网 `/health` 正常；本地真实数据的桌面和手机浏览器验收已确认全部帖子连续展示、完整回复可展开且控制台错误为 0。
+
+Deployment:
+- 已通过 SSH/SCP 原子发布 `Qi/index.html`、`Qi/qi-home.jsx`、`Qi/qi-home.compiled.js` 到 `C:\PandaDashboard`。
+- 未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-ssh-chatter-all-posts-d97847e-20260722`。
