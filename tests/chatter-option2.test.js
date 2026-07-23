@@ -29,6 +29,6 @@ assert(server.includes("['/assets/chatter-orbit-studio-bg.jpg', 'Qi/assets/chatt
 assert(/const post = \{[\s\S]*?id,[\s\S]*?text,[\s\S]*?topic,[\s\S]*?imageName,/.test(server), 'stored posts retain their topic');
 
 assert(compiled.includes('qi-chat2-shell') && compiled.includes('Respectful, curious, human.'), 'compiled home bundle contains option 2');
-assert(index.includes('qi-home.compiled.js?v=20260722-chatter-option2e'), 'homepage cache key is refreshed');
+assert(index.includes('qi-home.compiled.js?v=20260723-discovery-daily-a'), 'homepage cache key is refreshed');
 
 console.log('chatter option 2 checks passed');

@@ -8761,3 +8761,34 @@ Deployment:
 Notes for next agent:
 - `pickedCount` 是普通 `50` 万档入选数量，不是明星数量；明星结论必须继续按最大可统计档主动买入严格 `>1.5` 亿且三项比值至少 `2/3` 严格 `>1.65` 复算。
 - 中国西电当前只是金额门槛的极近缺口；后续若再次扫描，必须以新任务自己的完整五档结果重新判断，不能沿用本次结论。
+
+## 2026-07-23 - Codex - 修复探索页每日推荐长期固定
+
+Changed:
+- 探索页“今日值得先看的去处”改为优先真实近期外部线索，并让高质量经典地点按北京时间日期稳定轮换；首页“今日探索推荐”复用同一排序器，不再由历史最高分地点长期霸榜。
+- 站内固定地点不再在每次同步时伪造当天发布时间；`freshCount` 只统计本轮首次出现且在新鲜期内的外部地点，中午自动同步强制重新抓取当天来源。
+- 每城为真实近期线索预留展示名额，并补充文章标题式下划线、Emoji、泛化“审美积累/咖啡地图”等非地点名称过滤。
+- 推荐卡新增“近期新线索”或“今日轮换”标签，明确区分内容来源；首页静态脚本缓存键更新。
+
+Files:
+- `kpl-stats-server.js`
+- `Qi/index.html`
+- `Qi/qi-home.jsx`
+- `Qi/qi-home.compiled.js`
+- `tests/discovery-daily-refresh.test.js`
+- `tests/explore-editorial-layout.test.js`
+- `tests/home-preview-contact.test.js`
+- `tests/chatter-option2.test.js`
+- `ops/production/manifests/discovery-daily-refresh-20260723.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 新增探索每日刷新测试覆盖固定地点不算新鲜、真实外部线索占位、坏标题过滤、相邻日期首推轮换、首页/探索页排序一致及编译产物。
+- 探索编辑布局、首页预览/联系和瞎聊聊方案 2 回归测试通过；`node --check kpl-stats-server.js` 与 `git diff --check` 通过。
+- 本地真实数据完成 1280×900 桌面和 390×844 手机浏览器验收，卡片标签完整、页面无横向溢出；修复后不再出现文章标题式伪地点。
+
+Deployment:
+- 本条提交时尚未部署；合并后需从精确 `main` 部署清单中的 4 个文件，备份发现数据库，重启主服务并强制同步当天探索数据。
+
+Notes for next agent:
+- `panda-discovery-db.json` 是本地未跟踪运行时数据，不得提交或覆盖；生产同步完成后应核验固定地点时间字段为空、坏标题消失、`/health` 正常，并用公网真实数据复核桌面和手机页面。

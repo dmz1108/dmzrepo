@@ -38,6 +38,76 @@ const YULE_CATEGORY_LABELS = {
   life: '生活方式'
 };
 const HOME_PAGES = new Set(['home', 'discover', 'stanning', 'chat', 'about', 'contact', 'privacy', 'terms']);
+function discoveryItemIsCurated(item) {
+  return /站内地点资料|站内主题兜底/.test(String(item?.sourceName || '')) || String(item?.freshnessKind || '') === 'curated';
+}
+function discoveryDayOrdinal(dayKey) {
+  const match = String(dayKey || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return Math.floor(Date.now() / 86400000);
+  return Math.floor(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])) / 86400000);
+}
+function discoveryItemTimestamp(item) {
+  const published = Date.parse(item?.publishedAt || '');
+  if (Number.isFinite(published)) return published;
+  const discovered = Date.parse(item?.discoveredAt || '');
+  return Number.isFinite(discovered) ? discovered : null;
+}
+function discoveryItemIsRecentExternal(item, dayKey) {
+  if (!item || discoveryItemIsCurated(item)) return false;
+  const timestamp = discoveryItemTimestamp(item);
+  if (!Number.isFinite(timestamp)) return false;
+  const dayOrdinal = discoveryDayOrdinal(dayKey);
+  const ageDays = dayOrdinal - Math.floor(timestamp / 86400000);
+  return ageDays >= -1 && ageDays <= 45 && Number(item?.qualityScore || 0) >= 40 && Number(item?.recommendationScore || item?.qualityScore || 0) >= 68;
+}
+function discoveryItemIdentity(item) {
+  return `${String(item?.cityId || item?.city || '').toLowerCase()}|${String(item?.id || item?.name || '').toLowerCase()}`;
+}
+function sortDiscoveryFeaturedItems(items) {
+  return [...(items || [])].sort((a, b) => Number(b?.recommendationScore || b?.qualityScore || 0) - Number(a?.recommendationScore || a?.qualityScore || 0) || Number(b?.qualityScore || 0) - Number(a?.qualityScore || 0) || String(b?.publishedAt || b?.discoveredAt || '').localeCompare(String(a?.publishedAt || a?.discoveredAt || '')) || String(a?.name || '').localeCompare(String(b?.name || ''), 'zh-CN'));
+}
+function rotateDiscoveryFeaturedPool(items, dayKey, poolLimit = 24) {
+  const pool = sortDiscoveryFeaturedItems(items).slice(0, Math.max(1, poolLimit));
+  if (pool.length < 2) return pool;
+  const offset = (discoveryDayOrdinal(dayKey) * 7 + 3) % pool.length;
+  return pool.slice(offset).concat(pool.slice(0, offset));
+}
+function rankDiscoveryFeaturedItems(cities, dayKey, limit = 5) {
+  const allItems = (cities || []).flatMap(city => (city.items || []).map(item => ({
+    ...item,
+    cityName: city.name,
+    cityId: city.id
+  })));
+  if (!allItems.length || limit <= 0) return [];
+  const fresh = sortDiscoveryFeaturedItems(allItems.filter(item => discoveryItemIsRecentExternal(item, dayKey)));
+  const curated = sortDiscoveryFeaturedItems(allItems.filter(discoveryItemIsCurated));
+  const other = sortDiscoveryFeaturedItems(allItems.filter(item => !discoveryItemIsCurated(item) && !discoveryItemIsRecentExternal(item, dayKey)));
+  const leadPool = [...fresh.slice(0, 6), ...curated.slice(0, 18)].filter((item, index, rows) => rows.findIndex(candidate => discoveryItemIdentity(candidate) === discoveryItemIdentity(item)) === index);
+  const selected = [];
+  const seen = new Set();
+  const add = item => {
+    const key = discoveryItemIdentity(item);
+    if (!key || seen.has(key) || selected.length >= limit) return false;
+    seen.add(key);
+    selected.push({
+      ...item,
+      dailyPickKind: discoveryItemIsRecentExternal(item, dayKey) ? 'fresh' : 'rotating',
+      dailyPickLabel: discoveryItemIsRecentExternal(item, dayKey) ? '近期新线索' : '今日轮换'
+    });
+    return true;
+  };
+  const rotatedLead = rotateDiscoveryFeaturedPool(leadPool, dayKey, leadPool.length || 1);
+  add(rotatedLead[0]);
+  if (fresh.length && !selected.some(item => item.dailyPickKind === 'fresh')) {
+    add(rotateDiscoveryFeaturedPool(fresh, dayKey, 12)[0]);
+  }
+  const fillPool = [...rotateDiscoveryFeaturedPool(fresh, dayKey, 12), ...rotateDiscoveryFeaturedPool(curated, dayKey, 32), ...rotateDiscoveryFeaturedPool(other, dayKey, 16)];
+  for (const item of fillPool) {
+    add(item);
+    if (selected.length >= limit) break;
+  }
+  return selected;
+}
 function defaultHomePageForHost() {
   const host = String(typeof location !== 'undefined' && location.hostname || '').toLowerCase();
   if (host === 'stanning.dreamerqi.com') return 'stanning';
@@ -1094,11 +1164,7 @@ function SpbShowcase() {
       const dt = Number(db.tDieTing ?? 0);
       const total = up + down;
       const upPct = total ? Math.round(up * 100 / total) : 0;
-      const exploreItems = (discovery.cities || []).flatMap(city => (city.items || []).map(item => ({
-        ...item,
-        cityName: city.name
-      }))).sort((a, b) => Number(b.qualityScore || 0) - Number(a.qualityScore || 0) || String(b.discoveredAt || b.publishedAt || '').localeCompare(String(a.discoveredAt || a.publishedAt || '')));
-      const topExplore = exploreItems[0] || null;
+      const topExplore = rankDiscoveryFeaturedItems(discovery.cities || [], discovery.generatedDay, 1)[0] || null;
       setCards([{
         title: '今日大盘情绪',
         label: '行情',
@@ -1117,7 +1183,7 @@ function SpbShowcase() {
         sub: yule?.summary || '正在整理今天值得看的内容'
       }, {
         title: topExplore?.name || '探索热榜读取中',
-        label: '探索热榜第一',
+        label: '今日探索推荐',
         href: EXPLORE_URL,
         kind: 'image',
         image: topExplore?.imageUrl ? `${ADMIN_SERVER_BASE}/api/discovery/image?url=${encodeURIComponent(topExplore.imageUrl)}` : '',
@@ -1536,11 +1602,7 @@ function SpbDiscover() {
   };
   const closeItem = () => setSelectedItem(null);
   useDialogFocusTrap(itemDialogRef, Boolean(selectedItem), closeItem);
-  const featuredItems = visibleCities.flatMap(city => (city.items || []).map(item => ({
-    ...item,
-    cityName: city.name,
-    cityId: city.id
-  }))).sort((a, b) => Number(b.recommendationScore || b.qualityScore || 0) - Number(a.recommendationScore || a.qualityScore || 0) || String(b.discoveredAt || b.publishedAt || '').localeCompare(String(a.discoveredAt || a.publishedAt || ''))).slice(0, 5);
+  const featuredItems = rankDiscoveryFeaturedItems(visibleCities, payload?.generatedDay, 5);
   const allVisibleItems = visibleCities.flatMap(city => (city.items || []).map(item => ({
     ...item,
     cityName: city.name,
@@ -1801,7 +1863,7 @@ function SpbDiscover() {
     className: "qi-discover-section-title"
   }, "\u4ECA\u65E5\u503C\u5F97\u5148\u770B\u7684\u53BB\u5904")), React.createElement("div", {
     className: "qi-discover-section-note"
-  }, "\u628A\u56FE\u6587\u3001\u5730\u5740\u548C\u8DEF\u7EBF\u4EF7\u503C\u8F83\u5B8C\u6574\u7684\u53BB\u5904\u653E\u5728\u6700\u524D\u9762")), React.createElement("div", {
+  }, "\u4F18\u5148\u8FD1\u671F\u771F\u5B9E\u7EBF\u7D22\uFF0C\u5E76\u8BA9\u9AD8\u8D28\u91CF\u7ECF\u5178\u53BB\u5904\u6309\u5929\u8F6E\u6362")), React.createElement("div", {
     className: "qi-discover-feature-grid"
   }, featuredItems.map((item, index) => {
     const photo = getItemPhoto(item);
@@ -1849,6 +1911,17 @@ function SpbDiscover() {
         backdropFilter: 'blur(8px)'
       }
     }, text)), React.createElement("span", {
+      style: {
+        color: item.dailyPickKind === 'fresh' ? 'oklch(0.91 0.12 150)' : 'oklch(0.9 0.08 72)',
+        background: 'oklch(0.12 0.01 265 / 0.72)',
+        border: `1px solid ${item.dailyPickKind === 'fresh' ? 'oklch(0.72 0.13 150 / 0.46)' : 'oklch(0.78 0.1 72 / 0.42)'}`,
+        borderRadius: 6,
+        padding: '5px 8px',
+        fontSize: 11.5,
+        fontWeight: 800,
+        backdropFilter: 'blur(8px)'
+      }
+    }, item.dailyPickLabel), React.createElement("span", {
       style: {
         color: spb.bg,
         background: index === 0 ? 'oklch(0.84 0.12 62)' : spb.blueSoft,
