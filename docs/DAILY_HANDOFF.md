@@ -9079,3 +9079,25 @@ Deployment:
 Notes for next agent:
 - 这是 PR `#231` 收盘后上线后，使用同日既有 L2 证据进行的规则回放修正，不应解释为 15:00 冻结时已经按新规则完成预测。
 - 后续不要手工覆盖该日期文件；如需撤销，使用上述备份并同时保留云端审计记录。
+
+## 2026-07-23 - Codex - L2 个股逐档明细 UI 已部署
+
+Changed:
+- Claude 已对 PR `#233` 提交正式复核并批准；Codex 独立确认业务逻辑、明星判定、金额闸和比值闸均未改变。
+- PR `#233` 已从 Draft 转为 Ready 并合并，合并提交为 `ea0d5400e70ad1d7d94bfcc557fcb7a5ffaa9377`。
+- 管理员展开 L2 个股后，五档主动成交、被动成交及三项比值改为分组表格显示；最大档、数据缺失和无大单状态继续保留。
+
+Validated:
+- `strategy-workbench-ui.test.js`、`star-l2-layers.test.js` 通过，完整测试共 `59/59` 个测试文件通过；`git diff --check` 通过。
+- 公网 `kpl-dashboard_17_apple.html` SHA-256 为 `c5d5d172e2a057263437cfc3416308bb9dde8925e05433ca3924cd50c46a25dc`。
+- 公网 `Qi/vendor/strategy-workbench.css` SHA-256 为 `e991e1eaee2933cd17e7e0dbb33806ef5299f40acd83c37d0354d7c7000a7e47`；两者均与精确合并提交一致。
+- 公网页面已引用 `/vendor/strategy-workbench.css?v=20260723a`，包含 `.ml-l2-bucket-table` 表格；`/health` 返回 `ok=true`。
+- 2026-07-23 预判回看仍为 `电网设备`，`601179 中国西电` 保持“明星确认”。
+
+Deployment:
+- 已原子发布 `kpl-dashboard_17_apple.html` 与 `Qi/vendor/strategy-workbench.css`；静态发布无需重启任何服务。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-ssh-pr233-ea0d540-20260724-073006`。
+- 两份云端运维日志均已追加本次部署记录。
+
+Notes for next agent:
+- 本次只改变管理员 L2 展开明细的视觉结构；不要据此调整明星股门槛或 L2 统计口径。
