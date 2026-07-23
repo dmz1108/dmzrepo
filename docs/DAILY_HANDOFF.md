@@ -9009,3 +9009,24 @@ Deployment:
 
 Notes for next agent:
 - raw evidence 成功不代表 TGB 完成；只有匹配标题、日期、白底表格和 `@TGB湖南人` 水印的官方原图可进入后续人工双遍转录。
+## 2026-07-23 - Codex - Prepare Electric Grid review correction
+
+Changed:
+- Added a date-bound, idempotent production request for `2026-07-23` that can add `电网设备` and confirmed star `601179 中国西电` to the persisted review prediction only after the current production diagnosis revalidates every PR #231 amount and ratio gate.
+- The request backs up the original prediction record, writes atomically, verifies both source blocks plus the public review response, rolls back on failure, and appends both cloud operation logs.
+- The correction is explicitly recorded as a post-close replay of same-day L2 evidence; it preserves the original prediction `savedAt` and `sessionPhase`.
+
+Files:
+- `ops/production/requests/2026-07-23-review-grid-star-backfill.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Public review currently records `2026-07-23` as no mainline, while the complete four-source reason database ranks `电网设备` first with 32 stocks and records `601179 中国西电` as limit-up.
+- The production read-only diagnosis captured after PR #231 reports `电网设备` as QI-qualified, `601179` as `confirmed`, maximum-bucket passive buy `441,895,492`, and 2/3 confirmed ratio checks above `2.00`.
+- Static and production execution checks are still required before this request is marked deployed.
+
+Deployment:
+- Not deployed in this entry. The runtime prediction, frozen snapshot, L2 jobs, services, and cloud logs are unchanged.
+
+Notes for next agent:
+- Run only from the exact reviewed commit. Do not hand-edit the prediction JSON and do not treat the correction as an original pre-rule prediction; the script preserves a visible audit trail and rollback point.
