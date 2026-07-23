@@ -8968,6 +8968,27 @@ Deployment:
 Notes for next agent:
 - 本次修复、生产同步、质量闸、云端日志和回退点均已完成；不要再次手动强刷 2026-07-23，下一次正常自动同步应以库内 `lastAutoSyncDay` 为准。
 
+## 2026-07-23 - Codex - 明星两阶段口径与三段式 L2 复扫已部署
+
+Changed:
+- PR `#231` 经 Claude 独立复核批准后合并，生产固定使用合并提交 `6355887fbbeda7615714ec59ba37a7c00a8968cb`。
+- 四个关联文件作为同一部署包发布：`kpl-stats-server.js`、`local-l2-task-queue.js`、`strategy-backend.js`、`kpl-dashboard_17_apple.html`。
+- 云端两份运维日志均已记录本次发布；公司端 worker 代码未替换，新增扫描元数据保持向后兼容。
+
+Validated:
+- 部署包 SHA-256 为 `ae2d37c737427e68a55674e227f84bb4185fa8f8429fab0a31ff04ba29f6e1f8`；云端四文件 SHA-256 与合并提交逐一完全一致。
+- 部署前完成三个 JavaScript 文件语法检查；重启后云端本机 `/health`、公网 `https://market.dreamerqi.com/health` 均返回 `ok=true`，行情域名主页返回 HTTP 200。
+- 新进程 PID 为 `14816`，端口 `8765` 正常监听。
+
+Deployment:
+- 已部署生产并仅重启计划任务 `Panda Dashboard Server`；未重启娱乐服务、Caddy 或公司端 L2 worker。
+- 回退备份：`C:\PandaDashboard\backups\codex-pr231-star-rescan-20260723-225718`。
+- 发布失败自动回滚保护已启用，本次未触发回滚。
+
+Notes for next agent:
+- 新口径从 2026-07-23 起形成统计分段：预期明星比值门槛为严格 `>1.65`，封板确认门槛为严格 `>2.00`；金额闸为最大档主动买入严格 `>1.5` 亿或最大档被动买入严格 `>2` 亿。
+- 三段式自动扫描无单板块每日轮次上限；仍保留全局串行和每 5 分钟最多派发 2 个任务的容量保护。
+
 ## 2026-07-23 - Codex - 准备强刷当日 TGB 湖南人原始证据
 
 Changed:
