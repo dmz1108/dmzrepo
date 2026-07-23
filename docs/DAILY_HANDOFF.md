@@ -8220,6 +8220,32 @@ Deployment:
 Notes for next agent:
 - raw evidence 成功不代表 TGB 完成；只有匹配标题、日期、白底表格和 `@TGB湖南人` 水印的官方原图可进入后续人工双遍转录。
 
+## 2026-07-23 - Codex - 准备受保护写入当日 TGB 正式库
+
+Changed:
+- 受保护 raw 运行 `30003870403` 强制刷新 2026-07-23 官方文章与 20 张原始图片；只采用标题、日期、白底表格和 `@TGB湖南人` 水印均匹配的 `image-01-06.png`。
+- 明确排除同花顺红图 `image-01-15.png`、统计图 `image-01-07.png`、回帖题材图 `image-01-11.jpg`、头像、广告和底部“涨停炸板”25 行。
+- Codex 对官方原图逐题材块、逐行、逐字段人工转录 115 行，并第二遍回看原图复核；全程未使用 OCR、Qwen 或其他自动视觉结果生成、补全、猜测或校验正式行。
+- 新增日期绑定写入脚本和工作流密文上传分支：写入前固定验证人工载荷、官方原图哈希、115 股终盘池及全部质量闸；通过后才备份、原子写正式 TGB、重折当天综合主因并验证公网四源健康。
+
+Files:
+- `.github/workflows/production-ops.yml`
+- `ops/production/requests/2026-07-23-tgb-hunan-write.ps1`
+- `tests/tgb-20260723-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 官方文章 `https://www.tgb.cn/a/2tFsEMDE2fP`，标题 `7.23湖南人涨停复盘+晚间消息汇总`；官方原图 `image-01-06.png`，长度 1170327 字节，SHA-256 `829af8cdc44361857914e11a36d93eb8340baf9336ca19c0b769cca3f65057bf`。
+- 人工载荷 115 行、唯一代码 115；`missingCodes=[]`、`extraCodes=[]`、重复 0、`weakCount=0`、名称差异 0；人工载荷 SHA-256 `934b778a239e9010e89a11bb12e7304de3ba4877e2dd55d74be7dd94be5b5269`。
+- 题材块计数：电力+电网设备 34、锂电池 10、化工 9、机器人 8、算力+数据中心 8、医药医疗 6、商业航天 5、地产 4、军工 4、黄金 3、油服 3、有色金属 3、摘帽 3、公告 3、半导体 3、其他 2、其他 7，合计 115。
+- 全仓 58/58 个 `tests/*.test.js` 文件通过；写入脚本内嵌 JavaScript 可解析、PowerShell 保持纯 ASCII，`git diff --check` 通过。
+
+Deployment:
+- raw 证据已刷新并备份到 `C:\PandaDashboard\backups\tgb-hunan-raw-20260723-20260723-193908`；正式 TGB 尚未写入、综合主因尚未重折、服务未重启。
+
+Notes for next agent:
+- 正式运行时载荷只允许通过 GitHub `production` 环境日期绑定 Secret 传递，成功或失败后必须删除；运行时 JSON 不得进入 Git。
+
 ## 2026-07-22 - Codex - 准备受保护写入当日 TGB 正式库
 
 Changed:
