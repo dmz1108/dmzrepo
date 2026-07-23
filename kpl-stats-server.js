@@ -8638,6 +8638,7 @@ function discoveryPublicNameLooksBad(name) {
   if (/[\u{1F000}-\u{1FAFF}\u2600-\u27BF]/u.test(text)) return true;
   if (/[｜|_+＋]/.test(text)) return true;
   if (/^[\u4e00-\u9fff]{2,8}(路|街|大道|公路)$/.test(text)) return true;
+  if (/^[\u4e00-\u9fff]{2,8}之都$/.test(text)) return true;
   if (/[·•].*(特辑|合集|攻略|清单)$/.test(text)) return true;
   if (/^(小吃|简餐|盛大|新春|品牌|资讯|专题|榜单|报告|指南|攻略|新店|首店|探店|空间|审美积累|咖啡地图[一二三四五六七八九十]?)$/.test(text)) return true;
   if (/^(北京|上海|广州|深圳|成都|杭州|重庆|长沙).*(清单|精选|合集|汇总|周末新展市集|咖啡探店|餐厅新店|甜品下午茶|生活方式新店|夜间小聚)/.test(text)) return true;
