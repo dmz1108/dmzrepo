@@ -2441,6 +2441,195 @@ body.view-strategy .ml-l2-job-body .ml-l2-empty {
   padding: 7px 4px;
 }
 
+/* L2 stock detail: make every threshold's amounts and ratios independently scannable. */
+body.view-strategy .ml-l2-stock-detail {
+  border-top: 1px solid var(--st-line);
+  background: rgba(4, 9, 15, 0.24);
+}
+
+body.view-strategy .ml-l2-stock-detail .ml-l2-buckets {
+  padding: 10px 10px 11px !important;
+  border-top: 0 !important;
+}
+
+body.view-strategy .ml-l2-bucket-title {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 1px 8px;
+}
+
+body.view-strategy .ml-l2-bucket-title b {
+  color: var(--st-text);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+body.view-strategy .ml-l2-bucket-title small {
+  overflow: hidden;
+  color: var(--st-faint);
+  font-size: 9px;
+  line-height: 1.45;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.view-strategy .ml-l2-bucket-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--st-line);
+  border-radius: 6px;
+  background: rgba(8, 13, 20, 0.42);
+  scrollbar-color: rgba(126, 151, 184, 0.34) transparent;
+  scrollbar-width: thin;
+}
+
+body.view-strategy .ml-l2-bucket-table {
+  width: 100%;
+  min-width: 760px;
+  border-spacing: 0;
+  border-collapse: separate;
+  table-layout: fixed;
+}
+
+body.view-strategy .ml-l2-bucket-table th,
+body.view-strategy .ml-l2-bucket-table td {
+  height: 34px;
+  padding: 5px 7px;
+  border-right: 1px solid rgba(174, 190, 214, 0.07);
+  border-bottom: 1px solid rgba(174, 190, 214, 0.08);
+  text-align: right;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+body.view-strategy .ml-l2-bucket-table th:last-child,
+body.view-strategy .ml-l2-bucket-table td:last-child {
+  border-right: 0;
+}
+
+body.view-strategy .ml-l2-bucket-table tbody tr:last-child th,
+body.view-strategy .ml-l2-bucket-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+body.view-strategy .ml-l2-bucket-table thead th {
+  height: 26px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  color: var(--st-faint);
+  background: rgba(255, 255, 255, 0.026);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-align: center;
+}
+
+body.view-strategy .ml-l2-bucket-table thead tr:first-child th {
+  color: var(--st-muted);
+  font-size: 10px;
+  font-weight: 730;
+}
+
+body.view-strategy .ml-l2-bucket-table thead th[rowspan] {
+  width: 92px;
+  text-align: left;
+}
+
+body.view-strategy .ml-l2-bucket-table thead tr:first-child th:nth-child(2),
+body.view-strategy .ml-l2-bucket-table thead tr:first-child th:nth-child(3),
+body.view-strategy .ml-l2-bucket-table thead tr:first-child th:nth-child(4),
+body.view-strategy .ml-l2-bucket-table thead tr:nth-child(2) th:first-child,
+body.view-strategy .ml-l2-bucket-table thead tr:nth-child(2) th:nth-child(4),
+body.view-strategy .ml-l2-bucket-table thead tr:nth-child(2) th:nth-child(7),
+body.view-strategy .ml-l2-bucket-table tbody td:nth-child(2),
+body.view-strategy .ml-l2-bucket-table tbody td:nth-child(5),
+body.view-strategy .ml-l2-bucket-table tbody td:nth-child(8) {
+  border-left: 1px solid rgba(126, 159, 205, 0.16);
+}
+
+body.view-strategy .ml-l2-bucket-table .ml-l2-bucket-row {
+  display: table-row !important;
+  background: transparent;
+}
+
+body.view-strategy .ml-l2-bucket-table .ml-l2-bucket-row:hover {
+  background: rgba(255, 255, 255, 0.022);
+}
+
+body.view-strategy .ml-l2-bucket-table .ml-l2-bucket-row.is-max {
+  background: rgba(74, 155, 255, 0.065) !important;
+}
+
+body.view-strategy .ml-l2-bucket-table .ml-l2-bucket-name {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: 92px;
+  display: table-cell !important;
+  padding-left: 9px;
+  color: var(--st-text);
+  background: #0c131d;
+  text-align: left;
+}
+
+body.view-strategy .ml-l2-bucket-table .ml-l2-bucket-row.is-max .ml-l2-bucket-name {
+  background: #102033;
+  box-shadow: inset 3px 0 0 #4a9bff;
+}
+
+body.view-strategy .ml-l2-bucket-table .ml-l2-bucket-name b {
+  display: inline-block;
+  color: var(--st-text);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+body.view-strategy .ml-l2-bucket-table .ml-l2-bucket-name i {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  color: #8abaff;
+  background: rgba(74, 155, 255, 0.12);
+  font-size: 8px;
+  font-style: normal;
+  line-height: 1.35;
+  vertical-align: 1px;
+}
+
+body.view-strategy .ml-l2-bucket-table .ml-l2-bucket-name small {
+  display: block;
+  margin-top: 1px;
+  overflow: hidden;
+  color: #d6a768;
+  font-size: 8px;
+  font-weight: 520;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.view-strategy .ml-l2-table-money b,
+body.view-strategy .ml-l2-table-ratio b {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 740;
+}
+
+body.view-strategy .ml-l2-table-money.is-buy b {
+  color: var(--st-red);
+}
+
+body.view-strategy .ml-l2-table-money.is-sell b {
+  color: var(--st-green);
+}
+
+body.view-strategy .ml-l2-table-ratio b {
+  color: #c5d7ef;
+}
+
 @media (max-width: 920px) {
   body.view-strategy .ml-l2-history-summary {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -2541,5 +2730,22 @@ body.view-strategy .ml-l2-job-body .ml-l2-empty {
 
   body.view-strategy .ml-l2-job-body {
     padding: 6px;
+  }
+
+  body.view-strategy .ml-l2-stock-detail .ml-l2-buckets {
+    padding: 9px 6px 7px !important;
+  }
+
+  body.view-strategy .ml-l2-bucket-title {
+    display: block;
+  }
+
+  body.view-strategy .ml-l2-bucket-title small {
+    display: block;
+    margin-top: 3px;
+    overflow: visible;
+    text-align: left;
+    text-overflow: clip;
+    white-space: normal;
   }
 }

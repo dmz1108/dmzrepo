@@ -7,7 +7,7 @@ const html = fs.readFileSync(path.join(root, 'kpl-dashboard_17_apple.html'), 'ut
 const server = fs.readFileSync(path.join(root, 'kpl-stats-server.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'Qi/vendor/strategy-workbench.css'), 'utf8');
 
-assert(html.includes('<link href="/vendor/strategy-workbench.css?v=20260722d" rel="stylesheet">'));
+assert(html.includes('<link href="/vendor/strategy-workbench.css?v=20260723a" rel="stylesheet">'));
 assert(html.includes('<header class="strategy-hero">'));
 assert(html.includes('class="strategy-hero-head"'));
 assert(html.includes('class="strategy-hero-utility"'));
@@ -30,10 +30,22 @@ for (const selector of [
   '.ml-l2-history-disclosure',
   '.ml-l2-history-summary',
   '.ml-l2-job-summary',
+  '.ml-l2-stock-detail',
+  '.ml-l2-bucket-table',
+  '.ml-l2-table-money.is-buy',
+  '.ml-l2-table-money.is-sell',
+  '.ml-l2-table-ratio',
   '.strategy-board-card',
 ]) {
   assert(css.includes(selector), `missing strategy visual state: ${selector}`);
 }
+
+assert(html.includes('<table class="ml-l2-bucket-table">'));
+assert(html.includes('<th colspan="3">主动成交</th><th colspan="3">被动成交</th><th>买卖合力</th>'));
+assert(html.includes('<th>买入金额</th><th>卖出金额</th><th>主动比</th>'));
+assert(html.includes('主动比 = 主动买入 ÷ 主动卖出'));
+assert(html.includes('被动比 = 被动买入 ÷ 被动卖出'));
+assert(html.includes('合力比 = 总买入 ÷ 总卖出'));
 
 assert(css.includes('@media (max-width: 760px)'));
 assert(!/\.strategy-mainlines\s*\{[^}]*display\s*:\s*none/s.test(css));
