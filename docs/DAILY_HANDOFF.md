@@ -8290,6 +8290,33 @@ Deployment:
 Notes for next agent:
 - 正式 TGB 行必须继续保存原图 `红宝丽`，不能为迎合终盘池静默改成带空格名称。
 
+## 2026-07-23 - Codex - 当日 TGB 湖南人复盘已入库
+
+Changed:
+- 受保护运行 `30005529170` 写入 2026-07-23 `review/tgb-hunan-structured` 正式 115 行，并强制重折当天综合主因库。
+- 写入前复核人工载荷、官方文章/原图哈希、116 股原始终盘池、排除北交所 `920222 益坤电气` 后 115 股正式口径及全部质量闸。
+- 正式行全部来自 Codex 对 `@TGB湖南人` 官方白底原图逐题材块、逐行、逐字段人工转录和第二遍人工复核；未使用 OCR、Qwen 或任何自动视觉结果生成、补全、猜测或校验。
+- 两份云端运维日志已由脚本追加安全结果；远端脚本/载荷清理通过，一次性 GitHub `production` 环境 Secret 已删除。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 仅云端：`kpl-limitup-main-reason-sources/tgb-hunan-structured/2026-07-23.json`、当天综合主因/evidence/quality/auto 与四个正式来源折叠产物、两份运维日志和回退备份
+
+Validated:
+- 官方文章 `https://www.tgb.cn/a/2tFsEMDE2fP`（`7.23湖南人涨停复盘+晚间消息汇总`）；采用 `image-01-06.png`，原图 URL `https://image.tgb.cn/img/2026/07/23/yk1ocfjuge9b.png_760w.png`，长度 1170327 字节，SHA-256 `829af8cdc44361857914e11a36d93eb8340baf9336ca19c0b769cca3f65057bf`。
+- 正式 115 行、唯一代码 115；`missingCodes=[]`、`extraCodes=[]`、重复 0、`weakCount=0`、名称不匹配 0；仅 `002165 红宝丽/红 宝 丽` 为已记录的 `NFKC+remove-whitespace` 等价差异。
+- 题材块计数：电力+电网设备 34、锂电池 10、化工 9、机器人 8、算力+数据中心 8、医药医疗 6、商业航天 5、地产 4、军工 4、黄金 3、油服 3、有色金属 3、摘帽 3、公告 3、半导体 3、其他 2、其他 7，合计 115。
+- 人工输入 SHA-256 `934b778a239e9010e89a11bb12e7304de3ba4877e2dd55d74be7dd94be5b5269`；终盘池 SHA-256 `b9fbffe6caa26a3e2c18ddc9418825d31895c57c7e664c6e65e6c7caefbfd2ce`；正式 TGB SHA-256 `9bfb7e609eaf42e2fde3a4957f35e7f55ae85040f4aa93a521e28dc57eb332be`；重折后综合主因 SHA-256 `a6ef6205220433900b9b200cbf515d58325afce405447995b417109c12f96d53`。
+- 独立公网强刷复核：综合归纳、复盘啦、选股宝、韭研、淘股吧均为 115 行和 115 唯一代码，五个标签相对正式集合的 missing/extra 均为空；四源覆盖和主因覆盖均为 100%、低置信 0、`sourceErrors=[]`，主因库 115，公网 `/health` 为 `ok=true`。
+- 淘股吧公网核心字段与人工载荷逐行比较无差异。
+
+Deployment:
+- 已改变生产运行时复盘数据、重折综合主因并更新云端日志；未部署或替换应用代码，未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+- 正式写入回退备份：`C:\PandaDashboard\backups\tgb-hunan-manual-20260723-20260723120456`；raw 证据备份：`C:\PandaDashboard\backups\tgb-hunan-raw-20260723-20260723-193908`。
+
+Notes for next agent:
+- raw 请求 PR `#226`、正式写入请求 PR `#227`、原始池排除修复 PR `#228`、名称差异记录 PR `#229` 均已合并；2026-07-23 TGB 已完整完成，不要重复覆盖正式文件或重启服务。
+
 ## 2026-07-22 - Codex - 准备受保护写入当日 TGB 正式库
 
 Changed:
