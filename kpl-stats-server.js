@@ -21982,15 +21982,17 @@ const STRATEGY_MAINLINE_TREND_BASE_MIN_AGE_MS = 5 * 60 * 1000;
 const strategyMainlineTrendSamples = new Map();
 // 明星股 L2 展示兼容档位；正式判定使用个股最大可统计档与 50 万档，见 strategyMainlineStarStatus。
 const STRATEGY_MAINLINE_STAR_BUCKETS = [500000, 3000000, 8000000];
-const STRATEGY_MAINLINE_STAR_PRE_RATIO = 1.5;
+const STRATEGY_MAINLINE_STAR_PRE_RATIO = 1.65;
 const STRATEGY_MAINLINE_STAR_SEAL_RATIO = 2;
-// 自动 L2 扫描：只在交易时段、每 5 分钟窗口最多派 2 个板块、串行（上一个没跑完不派下一个）、无合格目标不扫。
+// 自动 L2 扫描：只在交易时段、每 5 分钟窗口最多派 2 个任务、串行（上一个没跑完不派下一个）、无合格目标不扫。
 // 合格目标 = 东财超大单净流入≥5亿；同花顺则须同时满足 DDE 活跃度≥5亿、zjjlr>0；两源均要求板内涨停≥2。
-// L2 明星闸保持不变，当天已扫过的不重复。
+// 同板块不限日扫描轮次；首次发现、板块增强、预期明星封板确认均可触发，轮次由事件变化而非固定等待时间决定。
 const STRATEGY_MAINLINE_AUTO_SCAN_WINDOW_MS = 5 * 60 * 1000;
 const STRATEGY_MAINLINE_AUTO_SCAN_MAX_PER_WINDOW = 2;
 const STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW = 5e8;   // Owner 2026-07-15:8亿→5亿(救钱不够8亿的中小主线)
 const STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT = 2;
+const STRATEGY_MAINLINE_AUTO_RESCAN_MIN_INFLOW_DELTA = 1e8;
+const STRATEGY_MAINLINE_AUTO_RESCAN_MIN_GAIN_DELTA = 0.5;
 // (已移除)高流入直通 STRATEGY_MAINLINE_AUTO_SCAN_HIGH_INFLOW_OVERRIDE:Owner 2026-07-16 定稿
 // 门槛无豁免——净流入≥5亿 且 涨停≥2;涨停数缺失由成份股精确回填解决,不再用金额直通绕过涨停腿。
 const STRATEGY_MAINLINE_AUTO_SCAN_LIMIT_STOCKS = 50;
@@ -23362,14 +23364,16 @@ function strategyMainlineBucketRatios(bucket) {
   };
 }
 
-// ===== 明星股判定(Owner 2026-07-20 修订买卖比闸门) =====
-// 金额硬门槛:该股最大可统计档 主动买入累计 > 1.5亿。
-// 比值闸门以下三项至少两项严格 >1.65:最大档主动比、50万档主动比、最大档合力比。
-//   涨停(封板)满足即"明星确认";未封但大涨(≥5%)满足即"预期明星"。
+// ===== 明星股判定(Owner 2026-07-23 修订金额与两阶段比值闸门) =====
+// 金额硬门槛二选一:该股最大可统计档 主动买入累计 > 1.5亿，或被动买入累计 > 2亿。
+// 预期明星:以下三项至少两项严格 >1.65；封板确认:同三项至少两项严格 >2.00。
+// 三项为最大档主动比、50万档主动比、最大档合力比。
 // 必含该股最大可统计档:3元股即300w档,10元以上即1000w档,按股价自适应;最大档无大单/数据缺失/现价缺失一律不确认。
 const STRATEGY_MAINLINE_ALL_BUCKETS = [500000, 3000000, 5000000, 8000000, 10000000];
-const STRATEGY_MAINLINE_STAR_MAX_BUY_MIN = 1.5e8;         // 最大档主动买入累计下限(预期/确认共用,Owner 2026-07-15:3亿→1.5亿)
-const STRATEGY_MAINLINE_STAR_MAX_ACTIVE_RATIO_MIN = 1.65; // 三项买卖比共用的严格下限
+const STRATEGY_MAINLINE_STAR_MAX_BUY_MIN = 1.5e8;             // 最大档主动买入累计严格下限
+const STRATEGY_MAINLINE_STAR_MAX_PASSIVE_BUY_MIN = 2e8;       // 最大档被动买入累计严格下限
+const STRATEGY_MAINLINE_STAR_MAX_ACTIVE_RATIO_MIN = 1.65;     // 预期明星三项买卖比严格下限
+const STRATEGY_MAINLINE_STAR_CONFIRMED_RATIO_MIN = 2;         // 封板确认三项买卖比严格下限
 const STRATEGY_MAINLINE_STAR_RATIO_REQUIRED_COUNT = 2;
 const STRATEGY_MAINLINE_STAR_MAX_PRE_RATIO = 1.8;   // 旧规则阈值,2026-07-15 起明星闸不再使用,仅保留定义以兼容历史提取脚本
 const STRATEGY_MAINLINE_STAR_LEVEL_ORDER = { confirmed: 0, expected: 1, active: 2 };  // 展示排序:确认 > 预期 > 活跃
@@ -23424,20 +23428,42 @@ function strategyMainlineStarStatus(row) {
   const maxBucketEmpty = !!(maxBucketAmount && maxFieldPresent && !maxRatios);   // 字段在、数据空/零 → 条件失败
   const maxBucketDataMissing = !!(maxBucketAmount && !maxFieldPresent);          // 字段缺失 → 数据不完整
   const maxActiveBuy = maxFieldPresent ? Number(maxField?.activeBuy || 0) : 0;
+  const maxPassiveBuy = maxFieldPresent ? Number(maxField?.passiveBuy || 0) : 0;
   const fiftyRatios = strategyMainlineBucketRatios(thresholds['500000']);
   const maxActiveRatio = maxRatios ? maxRatios.activeRatio : null;
   const fiftyActiveRatio = fiftyRatios ? fiftyRatios.activeRatio : null;
   const maxSupportRatio = maxRatios ? maxRatios.supportRatio : null;
-  const ratioChecks = {
-    maxActive: maxActiveRatio != null && maxActiveRatio > STRATEGY_MAINLINE_STAR_MAX_ACTIVE_RATIO_MIN,
-    fiftyActive: fiftyActiveRatio != null && fiftyActiveRatio > STRATEGY_MAINLINE_STAR_MAX_ACTIVE_RATIO_MIN,
-    maxSupport: maxSupportRatio != null && maxSupportRatio > STRATEGY_MAINLINE_STAR_MAX_ACTIVE_RATIO_MIN,
+  const ratioGateFor = threshold => {
+    const checks = {
+      maxActive: maxActiveRatio != null && maxActiveRatio > threshold,
+      fiftyActive: fiftyActiveRatio != null && fiftyActiveRatio > threshold,
+      maxSupport: maxSupportRatio != null && maxSupportRatio > threshold,
+    };
+    return {
+      threshold,
+      required: STRATEGY_MAINLINE_STAR_RATIO_REQUIRED_COUNT,
+      passed: Object.values(checks).filter(Boolean).length,
+      checks,
+    };
   };
-  const ratioPassCount = Object.values(ratioChecks).filter(Boolean).length;
+  const expectedRatioGate = ratioGateFor(STRATEGY_MAINLINE_STAR_MAX_ACTIVE_RATIO_MIN);
+  const confirmedRatioGate = ratioGateFor(STRATEGY_MAINLINE_STAR_CONFIRMED_RATIO_MIN);
   const ratioValue = value => value == null ? null : Number(value.toFixed(2));
+  const amountChecks = {
+    activeBuy: maxActiveBuy > STRATEGY_MAINLINE_STAR_MAX_BUY_MIN,
+    passiveBuy: maxPassiveBuy > STRATEGY_MAINLINE_STAR_MAX_PASSIVE_BUY_MIN,
+  };
+  const amountPass = amountChecks.activeBuy || amountChecks.passiveBuy;
+  const amountType = amountChecks.activeBuy && amountChecks.passiveBuy
+    ? 'active-passive'
+    : (amountChecks.activeBuy ? 'active' : (amountChecks.passiveBuy ? 'passive' : 'none'));
+  const gain = numOrNull(row?.gainPct ?? row?.gain);
+  const sealed = gain != null && gain >= limitUpThreshold(row?.code, row?.name);
+  const ratioGate = sealed ? confirmedRatioGate : expectedRatioGate;
   const maxBucket = maxBucketAmount ? {
     amount: maxBucketAmount,
     activeBuy: Math.round(maxActiveBuy),
+    passiveBuy: Math.round(maxPassiveBuy),
     empty: maxBucketEmpty,
     dataMissing: maxBucketDataMissing,
     priceMissing: maxBucketPriceMissing,
@@ -23446,42 +23472,53 @@ function strategyMainlineStarStatus(row) {
       passiveRatio: Number(maxRatios.passiveRatio.toFixed(2)),
       supportRatio: Number(maxRatios.supportRatio.toFixed(2)),
     } : null,
+    amountGate: {
+      passed: amountPass,
+      type: amountType,
+      activeBuyMin: STRATEGY_MAINLINE_STAR_MAX_BUY_MIN,
+      passiveBuyMin: STRATEGY_MAINLINE_STAR_MAX_PASSIVE_BUY_MIN,
+      checks: amountChecks,
+    },
     ratioGate: {
-      threshold: STRATEGY_MAINLINE_STAR_MAX_ACTIVE_RATIO_MIN,
-      required: STRATEGY_MAINLINE_STAR_RATIO_REQUIRED_COUNT,
-      passed: ratioPassCount,
+      threshold: ratioGate.threshold,
+      required: ratioGate.required,
+      passed: ratioGate.passed,
       values: {
         maxActiveRatio: ratioValue(maxActiveRatio),
         fiftyActiveRatio: ratioValue(fiftyActiveRatio),
         maxSupportRatio: ratioValue(maxSupportRatio),
       },
-      checks: ratioChecks,
+      checks: ratioGate.checks,
+    },
+    ratioGates: {
+      expected: expectedRatioGate,
+      confirmed: confirmedRatioGate,
     },
   } : null;
-  const gain = numOrNull(row?.gainPct ?? row?.gain);
-  const sealed = gain != null && gain >= limitUpThreshold(row?.code, row?.name);
-  // 金额达标且三项比值至少两项达标；封板→明星确认，未封大涨(≥5%)→预期明星。
-  const maxBucketStarPass = !maxBucketPriceMissing && !maxBucketEmpty && !maxBucketDataMissing
-    && maxActiveBuy > STRATEGY_MAINLINE_STAR_MAX_BUY_MIN
-    && ratioPassCount >= STRATEGY_MAINLINE_STAR_RATIO_REQUIRED_COUNT;
+  // 金额二选一达标；未封预期用 >1.65，封板确认用 >2.00。
+  const evidenceComplete = !maxBucketPriceMissing && !maxBucketEmpty && !maxBucketDataMissing;
+  const expectedStarPass = evidenceComplete && amountPass
+    && expectedRatioGate.passed >= STRATEGY_MAINLINE_STAR_RATIO_REQUIRED_COUNT;
+  const confirmedStarPass = evidenceComplete && amountPass
+    && confirmedRatioGate.passed >= STRATEGY_MAINLINE_STAR_RATIO_REQUIRED_COUNT;
   if (sealed) {
     // 最大档无可信证据一律不确认,不用小档回退(缺数据不能把未知判成明星)。
     if (maxBucketPriceMissing) return { level: 'sealedWeak', label: '涨停但最大档现价缺失', gain, ratios: display, maxBucket };
     if (maxBucketEmpty) return { level: 'sealedWeak', label: '涨停但最大档无大单', gain, ratios: display, maxBucket };
     if (maxBucketDataMissing) return { level: 'sealedWeak', label: '涨停但最大档数据缺失', gain, ratios: display, maxBucket };
-    if (maxActiveBuy <= STRATEGY_MAINLINE_STAR_MAX_BUY_MIN) return { level: 'sealedWeak', label: '涨停但最大档主动买不足1.5亿', gain, ratios: display, maxBucket };
-    if (ratioPassCount < STRATEGY_MAINLINE_STAR_RATIO_REQUIRED_COUNT) return {
+    if (!amountPass) return { level: 'sealedWeak', label: '涨停但最大档主买≤1.5亿且被买≤2亿', gain, ratios: display, maxBucket };
+    if (!confirmedStarPass) return {
       level: 'sealedWeak',
-      label: `涨停但买卖比仅${ratioPassCount}/3项>1.65`,
+      label: `涨停但买卖比仅${confirmedRatioGate.passed}/3项>2.00`,
       gain,
       ratios: display,
       maxBucket,
     };
-    return { level: 'confirmed', label: '明星确认', gain, ratios: display, maxBucket };
+    return { level: 'confirmed', label: '明星确认', gain, ratios: display, maxBucket, amountType };
   }
   if (gain != null && gain >= STRATEGY_MAINLINE_BIG_GAIN_PCT) {
     if (maxBucketEmpty || maxBucketDataMissing || maxBucketPriceMissing) return null;   // 无可信最大档证据 → 连资金活跃也不给
-    if (maxBucketStarPass) return { level: 'expected', label: '预期明星', gain, ratios: display, maxBucket };
+    if (expectedStarPass) return { level: 'expected', label: '预期明星', gain, ratios: display, maxBucket, amountType };
     return { level: 'active', label: '资金活跃', gain, ratios: display, maxBucket };
   }
   return null;
@@ -23692,6 +23729,98 @@ function strategyMainlineBackfillBoardZt(boards, limitUpByCode) {
   }
 }
 
+function strategyMainlineBoardScanStrength(board, capturedAt = new Date().toISOString()) {
+  return {
+    capturedAt,
+    netInflow: numOrNull(board?.netInflow),
+    gainPct: numOrNull(board?.gainPct ?? board?.gain),
+    zt: numOrNull(board?.zt ?? board?.ztCount),
+  };
+}
+
+function strategyMainlineAutoScanDecision(board, existingJob) {
+  const strengthSnapshot = strategyMainlineBoardScanStrength(board);
+  const existingStatus = String(existingJob?.status || '');
+  const previousSequence = Math.max(0, Math.floor(Number(existingJob?.scanSequence || 0)));
+  const result = {
+    dispatch: false,
+    scanStage: '',
+    scanReasons: [],
+    scanSequence: existingJob ? previousSequence + 1 : 1,
+    previousJobId: String(existingJob?.jobId || ''),
+    confirmationCodes: [],
+    strengthSnapshot,
+  };
+  if (!existingJob) {
+    return { ...result, dispatch: true, scanStage: 'discovery', scanReasons: ['first-eligible'] };
+  }
+  if (existingStatus === 'queued' || existingStatus === 'running') return result;
+  if (existingStatus === 'error') {
+    return { ...result, dispatch: true, scanStage: 'retry', scanReasons: ['previous-error'] };
+  }
+
+  const stars = (Array.isArray(existingJob?.results) ? existingJob.results : [])
+    .map(row => {
+      const code = normalizeReasonSourceCode(row?.code);
+      const star = code ? strategyMainlineStarStatus(row) : null;
+      return star ? { code, star } : null;
+    })
+    .filter(Boolean);
+  if (stars.some(item => item.star.level === 'confirmed')) return result;
+
+  const currentByCode = new Map((Array.isArray(board?.memberRows) ? board.memberRows : [])
+    .map(row => [normalizeReasonSourceCode(row?.code), row])
+    .filter(([code]) => !!code));
+  const confirmationCodes = stars
+    .filter(item => item.star.level === 'expected')
+    .filter(item => {
+      const row = currentByCode.get(item.code);
+      const gain = numOrNull(row?.gainPct ?? row?.gain);
+      return gain != null && gain >= limitUpThreshold(item.code, row?.name);
+    })
+    .map(item => item.code);
+  if (confirmationCodes.length) {
+    return {
+      ...result,
+      dispatch: true,
+      scanStage: 'confirmation',
+      scanReasons: ['expected-star-sealed'],
+      confirmationCodes,
+    };
+  }
+
+  const previous = existingJob?.strengthSnapshot;
+  const previousHasEvidence = previous && [
+    previous.netInflow,
+    previous.gainPct,
+    previous.zt,
+  ].some(value => numOrNull(value) != null);
+  if (!previousHasEvidence) {
+    return { ...result, dispatch: true, scanStage: 'strengthening', scanReasons: ['legacy-baseline-missing'] };
+  }
+
+  const scanReasons = [];
+  const currentZt = strengthSnapshot.zt;
+  const previousZt = numOrNull(previous.zt);
+  if (currentZt != null && previousZt != null && currentZt > previousZt) {
+    scanReasons.push('limit-up-count-increased');
+  }
+  const currentInflow = strengthSnapshot.netInflow;
+  const previousInflow = numOrNull(previous.netInflow);
+  if (currentInflow != null && previousInflow != null
+    && currentInflow - previousInflow >= STRATEGY_MAINLINE_AUTO_RESCAN_MIN_INFLOW_DELTA) {
+    scanReasons.push('net-inflow-increased');
+  }
+  const currentGain = strengthSnapshot.gainPct;
+  const previousGain = numOrNull(previous.gainPct);
+  if (currentGain != null && previousGain != null
+    && currentGain - previousGain >= STRATEGY_MAINLINE_AUTO_RESCAN_MIN_GAIN_DELTA) {
+    scanReasons.push('board-gain-increased');
+  }
+  if (!scanReasons.length) return result;
+  return { ...result, dispatch: true, scanStage: 'strengthening', scanReasons };
+}
+
 function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase, priorByCode) {
   try {
     if (!isToday) return;
@@ -23708,19 +23837,31 @@ function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase, prior
       const last = localL2TaskQueue.get(st.lastJobId);
       if (last && (last.status === 'queued' || last.status === 'running')) return;
     }
-    // 板块级字典序(SD v1 第5条):补选来源 > 净流入 > 大涨数;不做加权公式。
+    // 板块级字典序:封板确认 > 错误重试 > 增强复扫 > 首次发现，再按补选来源 > 净流入 > 大涨数。
     // 门槛:东财超大单净流入≥5亿；同花顺须 DDE 活跃度≥5亿 且 zjjlr>0；两源均要求涨停≥2。
-    // 10亿高流入直通与补选豁免均已移除；涨停数缺失由成份股精确回填，不放宽门槛。
+    // 同板不限轮次；是否复扫只看相对上次扫描的增强事件，10亿直通与补选豁免仍保持移除。
     const bigGainOf = b => (Array.isArray(b?.memberRows) ? b.memberRows.filter(r => Number(r?.gain) >= STRATEGY_MAINLINE_BIG_GAIN_PCT).length : 0);
+    const stageOrder = { confirmation: 0, retry: 1, strengthening: 2, discovery: 3 };
     const candidates = (Array.isArray(boards) ? boards : [])
-      .filter(b => strategyMainlineBoardAutoScanEligibility(b, { requireMembers: true }).eligible)
+      .map(board => {
+        const eligibility = strategyMainlineBoardAutoScanEligibility(board, { requireMembers: true });
+        const existing = localL2TaskQueue.latest(String(board.plateId), day);
+        return { board, existing, eligibility, decision: strategyMainlineAutoScanDecision(board, existing) };
+      })
+      // 预期明星已经封板时，即使板块资金瞬时回落也要完成确认扫描；其它阶段仍必须满足板块门槛。
+      .filter(item => item.decision.dispatch
+        && (item.eligibility.eligible || item.decision.scanStage === 'confirmation'))
       .sort((a, b) =>
-        ((a?.scanChannel === 'supplement') ? 0 : 1) - ((b?.scanChannel === 'supplement') ? 0 : 1) ||
-        (Number(b?.netInflow) || 0) - (Number(a?.netInflow) || 0) ||
-        bigGainOf(b) - bigGainOf(a));
-    for (const board of candidates) {
-      const existing = localL2TaskQueue.latest(String(board.plateId), day);
-      if (existing && existing.status !== 'error') continue;
+        (stageOrder[a.decision.scanStage] ?? 9) - (stageOrder[b.decision.scanStage] ?? 9) ||
+        ((a.board?.scanChannel === 'supplement') ? 0 : 1) - ((b.board?.scanChannel === 'supplement') ? 0 : 1) ||
+        (Number(b.board?.netInflow) || 0) - (Number(a.board?.netInflow) || 0) ||
+        bigGainOf(b.board) - bigGainOf(a.board));
+    for (const item of candidates) {
+      const { board, decision } = item;
+      const priorityCodes = [...new Set([
+        ...(decision.confirmationCodes || []),
+        ...strategyMainlineScanPriorityCodes(board, priorByCode),
+      ])];
       const job = localL2TaskQueue.start({
         plateId: String(board.plateId),
         boardName: String(board.name || ''),
@@ -23730,7 +23871,12 @@ function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase, prior
         scanChannel: String(board?.scanChannel || ''),
         zsType: board?.zsType ?? null,
         stocks: board.memberRows,
-        priorityCodes: strategyMainlineScanPriorityCodes(board, priorByCode),   // 猎场股优先扫(主因命中来自真实上下文)
+        priorityCodes,
+        scanStage: decision.scanStage,
+        scanReasons: decision.scanReasons,
+        scanSequence: decision.scanSequence,
+        previousJobId: decision.previousJobId,
+        strengthSnapshot: decision.strengthSnapshot,
         limitStocks: STRATEGY_MAINLINE_AUTO_SCAN_LIMIT_STOCKS,
       });
       st.dispatched += 1;

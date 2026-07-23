@@ -515,6 +515,7 @@ function createStrategyBackend(opts = {}) {
           name: boardForPick?.name || focusForPick?.name || body.boardName || body.name || '',
         };
         const stocks = await getBoardRealtimeStocks(plateId, day, stockInfo).catch(async () => getBoardStocks(plateId, day, stockInfo).catch(() => []));
+        const scanCapturedAt = new Date().toISOString();
         const job = scanBackend.start({
           plateId: String(plateId),
           boardName: body.boardName || body.name || boardForPick?.name || stockInfo.name || '',
@@ -525,7 +526,15 @@ function createStrategyBackend(opts = {}) {
           minAmount,
           limitStocks,
           stocks,
-          sortSnapshotAt: new Date().toISOString(),
+          sortSnapshotAt: scanCapturedAt,
+          scanStage: 'manual',
+          scanReasons: ['manual-request'],
+          strengthSnapshot: {
+            capturedAt: scanCapturedAt,
+            netInflow: numOrNull(boardForPick?.netInflow),
+            gainPct: numOrNull(boardForPick?.gainPct ?? boardForPick?.gain),
+            zt: numOrNull(boardForPick?.zt ?? boardForPick?.ztCount),
+          },
         });
         if (job && job.status === 'queued' && typeof scanBackend.status === 'function') {
           let queueStatus = null;

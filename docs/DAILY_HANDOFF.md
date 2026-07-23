@@ -8220,6 +8220,39 @@ Deployment:
 Notes for next agent:
 - raw evidence 成功不代表 TGB 完成；只有匹配标题、日期、白底表格和 `@TGB湖南人` 水印的官方原图可进入后续人工双遍转录。
 
+## 2026-07-23 - Codex - 明星股两阶段口径与三段式 L2 复扫
+
+Changed:
+- 明星金额闸改为二选一：个股最大可统计档主动买入累计严格 `>1.5亿元`，或被动买入累计严格 `>2亿元`。
+- 预期明星仍要求未封且涨幅 `>=5%`，三项比值至少两项严格 `>1.65`；封板确认改为同三项至少两项严格 `>2.00`，不再沿用预期明星阈值。
+- 自动 L2 扫描改为首次发现、板块增强、封板确认三阶段；同板块不设日扫描轮次上限，涨停数增加、净流入较上次增加至少 1 亿元、板块涨幅较上次增加至少 0.5 个百分点，任一事件即可增强复扫。
+- 预期明星触及涨停后优先发起确认扫描；该确认不受板块资金瞬时回落阻断。已有确认明星后停止该板块无意义复扫。
+- 每个任务记录扫描阶段、触发原因、轮次、前序任务和板块强度快照，并完整传递给公司端 worker；管理员 L2 证据同步显示主/被动买金额、金额闸和当前阶段比值阈值。
+
+Files:
+- `kpl-stats-server.js`
+- `local-l2-task-queue.js`
+- `strategy-backend.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/strategy-l2-rescan.test.js`
+- `tests/star-l2-layers.test.js`
+- `tests/scan-priority.test.js`
+- `tests/strategy-board-zt-backfill.test.js`
+- `tests/strategy-two-source-mainlines.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 全仓 `59/59` 个 `tests/*.test.js` 测试文件通过。
+- `node --check kpl-stats-server.js`、`node --check local-l2-task-queue.js`、`node --check strategy-backend.js` 与 `git diff --check` 通过。
+- 新增回归覆盖主动/被动金额二选一、`1.65/2.00` 严格边界、三个增强条件单独触发、同板第 2 至第 8 轮连续复扫、封板确认优先和 worker 元数据传递。
+
+Deployment:
+- 尚未部署、未改生产运行时数据、未重启主服务、Caddy 或公司端 L2 worker；合并并复核后需原子发布四份应用文件并重启主服务，worker 代码无需替换。
+
+Notes for next agent:
+- “复扫不按分钟判断”指业务触发只看增强事件；现有全局每 5 分钟最多 2 个任务且串行的容量保护仍保留，避免公司端同时超量订阅。
+- 同板块没有次数上限；1 亿元和 0.5 个百分点仅是去除行情微小抖动的事件台阶，不是时间冷却。
+
 ## 2026-07-23 - Codex - 准备受保护写入当日 TGB 正式库
 
 Changed:
