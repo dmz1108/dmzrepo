@@ -1,0 +1,17 @@
+{
+  "files": [
+    {
+      "source": "Qi/index.html",
+      "destination": "Qi/index.html"
+    },
+    {
+      "source": "Qi/qi-home.jsx",
+      "destination": "Qi/qi-home.jsx"
+    },
+    {
+      "source": "Qi/qi-home.compiled.js",
+      "destination": "Qi/qi-home.compiled.js"
+    }
+  ],
+  "restart": "none"
+}

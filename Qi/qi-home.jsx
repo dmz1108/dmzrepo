@@ -1567,6 +1567,9 @@ function SpbChat({ user, onLogin }) {
     setReplyText('');
     setDetailLoading(true);
     setError('');
+    requestAnimationFrame(() => {
+      document.getElementById(`chatter-post-${post.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
     try {
       const res = await fetch(`${ADMIN_SERVER_BASE}/api/chatter/posts/${encodeURIComponent(post.id)}?_=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json().catch(() => ({}));
@@ -1574,7 +1577,7 @@ function SpbChat({ user, onLogin }) {
       if (data.post) {
         setSelectedPost(data.post);
         setPosts(prev => prev.map(item => item.id === data.post.id
-          ? { ...item, ...data.post, comments: (data.post.comments || []).slice(-2) }
+          ? { ...item, ...data.post, comments: data.post.comments || [] }
           : item));
       }
     } catch (err) {
@@ -1731,7 +1734,7 @@ function SpbChat({ user, onLogin }) {
       if (data.post) {
         setSelectedPost(data.post);
         setPosts(prev => prev.map(item => item.id === data.post.id
-          ? { ...item, ...data.post, comments: (data.post.comments || []).slice(-2) }
+          ? { ...item, ...data.post, comments: data.post.comments || [] }
           : item));
       }
       setReplyText('');
@@ -1765,8 +1768,6 @@ function SpbChat({ user, onLogin }) {
     background: spb.blue,
     color: spb.bg,
   };
-  const selectedCopy = splitPostCopy(selectedPost);
-
   return (
     <section className="qi-chat-option-two" style={{ borderTop: `1px solid ${spb.line}`, backgroundColor: 'oklch(0.14 0.014 265)', backgroundImage: 'url("assets/chatter-orbit-studio-bg.jpg?v=1")', backgroundSize: 'cover', backgroundPosition: 'center top', color: spb.ink }}>
       <style>{`
@@ -1783,6 +1784,8 @@ function SpbChat({ user, onLogin }) {
         .qi-chat2-latest:hover, .qi-chat2-latest[aria-current="true"] { background: oklch(0.205 0.02 252 / 0.74); }
         .qi-chat2-author-avatar { box-shadow: 0 0 0 3px oklch(0.72 0.15 242 / 0.07); }
         .qi-chat2-post-image { width: 100%; aspect-ratio: 2.15 / 1; object-fit: cover; display: block; border-radius: 9px; border: 1px solid ${spb.line}; background: oklch(0.12 0.012 265); }
+        .qi-chat2-feed { display: grid; gap: 22px; }
+        .qi-chat2-post-card { scroll-margin-top: 18px; }
         .qi-chat2-reply { padding: 14px 0; border-top: 1px solid ${spb.line}; }
         .qi-chat2-input { outline: none; }
         .qi-chat2-topic:focus-visible, .qi-chat2-latest:focus-visible, .qi-chat2-action:focus-visible, .qi-chat2-input:focus-visible { outline: 2px solid ${spb.blue}; outline-offset: 2px; }
@@ -1869,66 +1872,91 @@ function SpbChat({ user, onLogin }) {
             <div style={{ ...panelStyle, padding: 28, color: spb.sub, lineHeight: 1.7 }}>这个话题还没有内容。换一个看看，或登录后发起第一条。</div>
           ) : null}
 
-          {selectedPost && visiblePosts.length ? (
-            <article aria-busy={detailLoading ? 'true' : 'false'}>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: spb.blueSoft, fontSize: 12.5, fontWeight: 740, border: `1px solid oklch(0.72 0.15 242 / 0.28)`, borderRadius: 999, padding: '6px 10px' }}>{inferTopic(selectedPost)}</div>
-              <h1 style={{ margin: '17px 0 0', fontFamily: spb.disp, color: spb.ink, fontSize: 40, lineHeight: 1.16, letterSpacing: '-0.025em', fontWeight: 690 }}>{selectedCopy.title}</h1>
-              <div style={{ marginTop: 18, display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div className="qi-chat2-author-avatar" style={avatarStyle(selectedPost.author, 38)}>{firstChar(selectedPost.author)}</div>
-                <div>
-                  <div style={{ color: spb.ink, fontSize: 14.5, fontWeight: 760 }}>{selectedPost.author || '用户'}{selectedPost.authorRole === 'admin' ? ' · 管理员' : ''}</div>
-                  <div style={{ marginTop: 3, color: spb.faint, fontFamily: spb.mono, fontSize: 11.5 }}>{formatTime(selectedPost.createdAt)}</div>
-                </div>
-              </div>
+          {visiblePosts.length ? (
+            <div className="qi-chat2-feed" aria-label="帖子列表">
+              <div style={{ color: spb.faint, fontSize: 12.5 }}>当前显示 {visiblePosts.length} 篇帖子，向下滚动可以连续阅读全部内容。</div>
+              {visiblePosts.map((post, index) => {
+                const isSelected = selectedPost?.id === post.id;
+                const displayPost = isSelected ? selectedPost : post;
+                const copy = splitPostCopy(displayPost);
+                const comments = Array.isArray(displayPost?.comments) ? displayPost.comments : [];
+                const totalComments = commentCount(displayPost);
+                const hasMoreComments = totalComments > comments.length;
+                return (
+                  <article
+                    key={post.id}
+                    id={`chatter-post-${post.id}`}
+                    className="qi-chat2-post-card"
+                    aria-busy={isSelected && detailLoading ? 'true' : 'false'}
+                    style={{ ...panelStyle, padding: 24, borderColor: isSelected ? 'oklch(0.72 0.15 242 / 0.38)' : spb.line }}
+                  >
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: spb.blueSoft, fontSize: 12.5, fontWeight: 740, border: `1px solid oklch(0.72 0.15 242 / 0.28)`, borderRadius: 999, padding: '6px 10px' }}>{inferTopic(displayPost)}</div>
+                    <h1 style={{ margin: '15px 0 0', fontFamily: spb.disp, color: spb.ink, fontSize: 32, lineHeight: 1.2, letterSpacing: '-0.022em', fontWeight: 690 }}>{copy.title}</h1>
+                    <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div className="qi-chat2-author-avatar" style={avatarStyle(displayPost.author, 36)}>{firstChar(displayPost.author)}</div>
+                      <div>
+                        <div style={{ color: spb.ink, fontSize: 14.5, fontWeight: 760 }}>{displayPost.author || '用户'}{displayPost.authorRole === 'admin' ? ' · 管理员' : ''}</div>
+                        <div style={{ marginTop: 3, color: spb.faint, fontFamily: spb.mono, fontSize: 11.5 }}>{formatTime(displayPost.createdAt)}</div>
+                      </div>
+                    </div>
 
-              {selectedCopy.body ? <div style={{ marginTop: 24, color: spb.sub, fontSize: 16.5, lineHeight: 1.9, whiteSpace: 'pre-wrap' }}>{selectedCopy.body}</div> : null}
-              {selectedPost.imageUrl ? <img className="qi-chat2-post-image" src={chatterImageSrc(selectedPost.imageUrl)} alt={`${selectedPost.author || '用户'}发布的帖子配图`} loading="eager" decoding="async" style={{ marginTop: 24 }} /> : null}
-              <div style={{ marginTop: 18, paddingBottom: 20, borderBottom: `1px solid ${spb.line}`, display: 'flex', justifyContent: 'space-between', gap: 14, color: spb.faint, fontSize: 12.5 }}>
-                <span>{selectedPost.imageUrl ? '图文分享' : '文字话题'} · {inferTopic(selectedPost)}</span>
-                <span>{commentCount(selectedPost)} 条回复</span>
-              </div>
+                    {copy.body ? <div style={{ marginTop: 20, color: spb.sub, fontSize: 16, lineHeight: 1.88, whiteSpace: 'pre-wrap' }}>{copy.body}</div> : null}
+                    {displayPost.imageUrl ? <img className="qi-chat2-post-image" src={chatterImageSrc(displayPost.imageUrl)} alt={`${displayPost.author || '用户'}发布的帖子配图`} loading={index === 0 ? 'eager' : 'lazy'} decoding="async" style={{ marginTop: 22 }} /> : null}
+                    <div style={{ marginTop: 16, paddingBottom: 18, borderBottom: `1px solid ${spb.line}`, display: 'flex', justifyContent: 'space-between', gap: 14, color: spb.faint, fontSize: 12.5 }}>
+                      <span>{displayPost.imageUrl ? '图文分享' : '文字话题'} · {inferTopic(displayPost)}</span>
+                      <span>{totalComments} 条回复</span>
+                    </div>
 
-              <section aria-label="帖子回复" style={{ marginTop: 20 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
-                  <h2 style={{ margin: 0, color: spb.ink, fontSize: 17, fontWeight: 780 }}>{commentCount(selectedPost)} 条回复</h2>
-                  <span style={{ color: spb.faint, fontSize: 12 }}>按时间顺序</span>
-                </div>
-                {detailLoading ? <div style={{ padding: '18px 0', color: spb.sub, fontSize: 14 }}>正在读取完整对话...</div> : null}
-                {!detailLoading && (selectedPost.comments || []).length ? (
-                  <div style={{ marginTop: 10 }}>
-                    {(selectedPost.comments || []).map(comment => (
-                      <div key={comment.id} className="qi-chat2-reply">
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11 }}>
-                          <div style={avatarStyle(comment.author, 32)}>{firstChar(comment.author)}</div>
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                              <span style={{ color: spb.ink, fontSize: 13.5, fontWeight: 740 }}>{comment.author || '用户'}{comment.authorRole === 'admin' ? ' · 管理员' : ''}</span>
-                              <span style={{ color: spb.faint, fontFamily: spb.mono, fontSize: 11 }}>{formatTime(comment.createdAt)}</span>
+                    <section aria-label={`${copy.title}的回复`} style={{ marginTop: 18 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
+                        <h2 style={{ margin: 0, color: spb.ink, fontSize: 17, fontWeight: 780 }}>{totalComments} 条回复</h2>
+                        <span style={{ color: spb.faint, fontSize: 12 }}>按时间顺序</span>
+                      </div>
+                      {isSelected && detailLoading ? <div style={{ padding: '16px 0', color: spb.sub, fontSize: 14 }}>正在读取完整对话...</div> : null}
+                      {comments.length ? (
+                        <div style={{ marginTop: 8 }}>
+                          {comments.map(comment => (
+                            <div key={comment.id} className="qi-chat2-reply">
+                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11 }}>
+                                <div style={avatarStyle(comment.author, 32)}>{firstChar(comment.author)}</div>
+                                <div style={{ minWidth: 0, flex: 1 }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                                    <span style={{ color: spb.ink, fontSize: 13.5, fontWeight: 740 }}>{comment.author || '用户'}{comment.authorRole === 'admin' ? ' · 管理员' : ''}</span>
+                                    <span style={{ color: spb.faint, fontFamily: spb.mono, fontSize: 11 }}>{formatTime(comment.createdAt)}</span>
+                                  </div>
+                                  <div style={{ marginTop: 6, color: spb.sub, fontSize: 14.5, lineHeight: 1.72, whiteSpace: 'pre-wrap' }}>{comment.text}</div>
+                                </div>
+                              </div>
                             </div>
-                            <div style={{ marginTop: 6, color: spb.sub, fontSize: 14.5, lineHeight: 1.72, whiteSpace: 'pre-wrap' }}>{comment.text}</div>
+                          ))}
+                        </div>
+                      ) : <div style={{ marginTop: 14, color: spb.sub, fontSize: 14.5 }}>还没有回复，可以坐第一个沙发。</div>}
+
+                      {!isSelected ? (
+                        <button type="button" className="qi-chat2-action" onClick={() => loadPostDetail(post)} style={{ ...buttonStyle, marginTop: 14, color: spb.blueSoft }}>
+                          {hasMoreComments ? `查看全部 ${totalComments} 条回复` : (user ? '参与这篇讨论' : '查看并登录回复')}
+                        </button>
+                      ) : (
+                        <div style={{ marginTop: 16, padding: 14, borderTop: `1px solid ${spb.line}` }}>
+                          <textarea
+                            aria-label={`回复${copy.title}`}
+                            className="qi-chat2-input"
+                            value={replyText}
+                            onChange={event => setReplyText(event.target.value.slice(0, 600))}
+                            placeholder={user ? '回复当前帖子...' : '登录后可以参与回复'}
+                            style={{ width: '100%', minHeight: 82, resize: 'vertical', border: `1px solid ${spb.line}`, borderRadius: 7, background: 'oklch(0.13 0.011 265)', color: spb.ink, padding: 12, font: 'inherit', lineHeight: 1.65 }}
+                          />
+                          <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <span style={{ color: spb.faint, fontSize: 12 }}>{user ? `以 ${user.name} 回复` : '未登录也可以完整阅读。'}</span>
+                            <button type="button" className="qi-chat2-action" onClick={submitReply} disabled={replySubmitting} style={{ ...primaryStyle, opacity: replySubmitting ? 0.6 : 1 }}>{user ? (replySubmitting ? '回复中...' : '回复当前帖子') : '登录后回复'}</button>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-                {!detailLoading && !(selectedPost.comments || []).length ? <div style={{ marginTop: 16, color: spb.sub, fontSize: 14.5 }}>还没有回复，可以坐第一个沙发。</div> : null}
-                <div style={{ ...panelStyle, marginTop: 18, padding: 14 }}>
-                  <textarea
-                    aria-label="回复内容"
-                    className="qi-chat2-input"
-                    value={replyText}
-                    onChange={event => setReplyText(event.target.value.slice(0, 600))}
-                    placeholder={user ? '回复当前帖子...' : '登录后可以参与回复'}
-                    style={{ width: '100%', minHeight: 82, resize: 'vertical', border: `1px solid ${spb.line}`, borderRadius: 7, background: 'oklch(0.13 0.011 265)', color: spb.ink, padding: 12, font: 'inherit', lineHeight: 1.65 }}
-                  />
-                  <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <span style={{ color: spb.faint, fontSize: 12 }}>{user ? `以 ${user.name} 回复` : '未登录也可以完整阅读。'}</span>
-                    <button type="button" className="qi-chat2-action" onClick={submitReply} disabled={replySubmitting} style={{ ...primaryStyle, opacity: replySubmitting ? 0.6 : 1 }}>{user ? (replySubmitting ? '回复中...' : '回复当前帖子') : '登录后回复'}</button>
-                  </div>
-                </div>
-              </section>
-            </article>
+                      )}
+                    </section>
+                  </article>
+                );
+              })}
+            </div>
           ) : null}
         </main>
 

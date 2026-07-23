@@ -2569,6 +2569,12 @@ function SpbChat({
     setReplyText('');
     setDetailLoading(true);
     setError('');
+    requestAnimationFrame(() => {
+      document.getElementById(`chatter-post-${post.id}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+      });
+    });
     try {
       const res = await fetch(`${ADMIN_SERVER_BASE}/api/chatter/posts/${encodeURIComponent(post.id)}?_=${Date.now()}`, {
         cache: 'no-store'
@@ -2580,7 +2586,7 @@ function SpbChat({
         setPosts(prev => prev.map(item => item.id === data.post.id ? {
           ...item,
           ...data.post,
-          comments: (data.post.comments || []).slice(-2)
+          comments: data.post.comments || []
         } : item));
       }
     } catch (err) {
@@ -2746,7 +2752,7 @@ function SpbChat({
         setPosts(prev => prev.map(item => item.id === data.post.id ? {
           ...item,
           ...data.post,
-          comments: (data.post.comments || []).slice(-2)
+          comments: data.post.comments || []
         } : item));
       }
       setReplyText('');
@@ -2779,7 +2785,6 @@ function SpbChat({
     background: spb.blue,
     color: spb.bg
   };
-  const selectedCopy = splitPostCopy(selectedPost);
   return React.createElement("section", {
     className: "qi-chat-option-two",
     style: {
@@ -2804,6 +2809,8 @@ function SpbChat({
         .qi-chat2-latest:hover, .qi-chat2-latest[aria-current="true"] { background: oklch(0.205 0.02 252 / 0.74); }
         .qi-chat2-author-avatar { box-shadow: 0 0 0 3px oklch(0.72 0.15 242 / 0.07); }
         .qi-chat2-post-image { width: 100%; aspect-ratio: 2.15 / 1; object-fit: cover; display: block; border-radius: 9px; border: 1px solid ${spb.line}; background: oklch(0.12 0.012 265); }
+        .qi-chat2-feed { display: grid; gap: 22px; }
+        .qi-chat2-post-card { scroll-margin-top: 18px; }
         .qi-chat2-reply { padding: 14px 0; border-top: 1px solid ${spb.line}; }
         .qi-chat2-input { outline: none; }
         .qi-chat2-topic:focus-visible, .qi-chat2-latest:focus-visible, .qi-chat2-action:focus-visible, .qi-chat2-input:focus-visible { outline: 2px solid ${spb.blue}; outline-offset: 2px; }
@@ -3008,212 +3015,245 @@ function SpbChat({
       color: spb.sub,
       lineHeight: 1.7
     }
-  }, "\u8FD9\u4E2A\u8BDD\u9898\u8FD8\u6CA1\u6709\u5185\u5BB9\u3002\u6362\u4E00\u4E2A\u770B\u770B\uFF0C\u6216\u767B\u5F55\u540E\u53D1\u8D77\u7B2C\u4E00\u6761\u3002") : null, selectedPost && visiblePosts.length ? React.createElement("article", {
-    "aria-busy": detailLoading ? 'true' : 'false'
+  }, "\u8FD9\u4E2A\u8BDD\u9898\u8FD8\u6CA1\u6709\u5185\u5BB9\u3002\u6362\u4E00\u4E2A\u770B\u770B\uFF0C\u6216\u767B\u5F55\u540E\u53D1\u8D77\u7B2C\u4E00\u6761\u3002") : null, visiblePosts.length ? React.createElement("div", {
+    className: "qi-chat2-feed",
+    "aria-label": "\u5E16\u5B50\u5217\u8868"
   }, React.createElement("div", {
     style: {
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: 8,
-      color: spb.blueSoft,
-      fontSize: 12.5,
-      fontWeight: 740,
-      border: `1px solid oklch(0.72 0.15 242 / 0.28)`,
-      borderRadius: 999,
-      padding: '6px 10px'
-    }
-  }, inferTopic(selectedPost)), React.createElement("h1", {
-    style: {
-      margin: '17px 0 0',
-      fontFamily: spb.disp,
-      color: spb.ink,
-      fontSize: 40,
-      lineHeight: 1.16,
-      letterSpacing: '-0.025em',
-      fontWeight: 690
-    }
-  }, selectedCopy.title), React.createElement("div", {
-    style: {
-      marginTop: 18,
-      display: 'flex',
-      alignItems: 'center',
-      gap: 12
-    }
-  }, React.createElement("div", {
-    className: "qi-chat2-author-avatar",
-    style: avatarStyle(selectedPost.author, 38)
-  }, firstChar(selectedPost.author)), React.createElement("div", null, React.createElement("div", {
-    style: {
-      color: spb.ink,
-      fontSize: 14.5,
-      fontWeight: 760
-    }
-  }, selectedPost.author || '用户', selectedPost.authorRole === 'admin' ? ' · 管理员' : ''), React.createElement("div", {
-    style: {
-      marginTop: 3,
-      color: spb.faint,
-      fontFamily: spb.mono,
-      fontSize: 11.5
-    }
-  }, formatTime(selectedPost.createdAt)))), selectedCopy.body ? React.createElement("div", {
-    style: {
-      marginTop: 24,
-      color: spb.sub,
-      fontSize: 16.5,
-      lineHeight: 1.9,
-      whiteSpace: 'pre-wrap'
-    }
-  }, selectedCopy.body) : null, selectedPost.imageUrl ? React.createElement("img", {
-    className: "qi-chat2-post-image",
-    src: chatterImageSrc(selectedPost.imageUrl),
-    alt: `${selectedPost.author || '用户'}发布的帖子配图`,
-    loading: "eager",
-    decoding: "async",
-    style: {
-      marginTop: 24
-    }
-  }) : null, React.createElement("div", {
-    style: {
-      marginTop: 18,
-      paddingBottom: 20,
-      borderBottom: `1px solid ${spb.line}`,
-      display: 'flex',
-      justifyContent: 'space-between',
-      gap: 14,
       color: spb.faint,
       fontSize: 12.5
     }
-  }, React.createElement("span", null, selectedPost.imageUrl ? '图文分享' : '文字话题', " \xB7 ", inferTopic(selectedPost)), React.createElement("span", null, commentCount(selectedPost), " \u6761\u56DE\u590D")), React.createElement("section", {
-    "aria-label": "\u5E16\u5B50\u56DE\u590D",
-    style: {
-      marginTop: 20
-    }
-  }, React.createElement("div", {
-    style: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      gap: 12,
-      alignItems: 'baseline'
-    }
-  }, React.createElement("h2", {
-    style: {
-      margin: 0,
-      color: spb.ink,
-      fontSize: 17,
-      fontWeight: 780
-    }
-  }, commentCount(selectedPost), " \u6761\u56DE\u590D"), React.createElement("span", {
-    style: {
-      color: spb.faint,
-      fontSize: 12
-    }
-  }, "\u6309\u65F6\u95F4\u987A\u5E8F")), detailLoading ? React.createElement("div", {
-    style: {
-      padding: '18px 0',
-      color: spb.sub,
-      fontSize: 14
-    }
-  }, "\u6B63\u5728\u8BFB\u53D6\u5B8C\u6574\u5BF9\u8BDD...") : null, !detailLoading && (selectedPost.comments || []).length ? React.createElement("div", {
-    style: {
-      marginTop: 10
-    }
-  }, (selectedPost.comments || []).map(comment => React.createElement("div", {
-    key: comment.id,
-    className: "qi-chat2-reply"
-  }, React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'flex-start',
-      gap: 11
-    }
-  }, React.createElement("div", {
-    style: avatarStyle(comment.author, 32)
-  }, firstChar(comment.author)), React.createElement("div", {
-    style: {
-      minWidth: 0,
-      flex: 1
-    }
-  }, React.createElement("div", {
-    style: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      gap: 10,
-      flexWrap: 'wrap'
-    }
-  }, React.createElement("span", {
-    style: {
-      color: spb.ink,
-      fontSize: 13.5,
-      fontWeight: 740
-    }
-  }, comment.author || '用户', comment.authorRole === 'admin' ? ' · 管理员' : ''), React.createElement("span", {
-    style: {
-      color: spb.faint,
-      fontFamily: spb.mono,
-      fontSize: 11
-    }
-  }, formatTime(comment.createdAt))), React.createElement("div", {
-    style: {
-      marginTop: 6,
-      color: spb.sub,
-      fontSize: 14.5,
-      lineHeight: 1.72,
-      whiteSpace: 'pre-wrap'
-    }
-  }, comment.text)))))) : null, !detailLoading && !(selectedPost.comments || []).length ? React.createElement("div", {
-    style: {
-      marginTop: 16,
-      color: spb.sub,
-      fontSize: 14.5
-    }
-  }, "\u8FD8\u6CA1\u6709\u56DE\u590D\uFF0C\u53EF\u4EE5\u5750\u7B2C\u4E00\u4E2A\u6C99\u53D1\u3002") : null, React.createElement("div", {
-    style: {
-      ...panelStyle,
-      marginTop: 18,
-      padding: 14
-    }
-  }, React.createElement("textarea", {
-    "aria-label": "\u56DE\u590D\u5185\u5BB9",
-    className: "qi-chat2-input",
-    value: replyText,
-    onChange: event => setReplyText(event.target.value.slice(0, 600)),
-    placeholder: user ? '回复当前帖子...' : '登录后可以参与回复',
-    style: {
-      width: '100%',
-      minHeight: 82,
-      resize: 'vertical',
-      border: `1px solid ${spb.line}`,
-      borderRadius: 7,
-      background: 'oklch(0.13 0.011 265)',
-      color: spb.ink,
-      padding: 12,
-      font: 'inherit',
-      lineHeight: 1.65
-    }
-  }), React.createElement("div", {
-    style: {
-      marginTop: 10,
-      display: 'flex',
-      justifyContent: 'space-between',
-      gap: 12,
-      alignItems: 'center',
-      flexWrap: 'wrap'
-    }
-  }, React.createElement("span", {
-    style: {
-      color: spb.faint,
-      fontSize: 12
-    }
-  }, user ? `以 ${user.name} 回复` : '未登录也可以完整阅读。'), React.createElement("button", {
-    type: "button",
-    className: "qi-chat2-action",
-    onClick: submitReply,
-    disabled: replySubmitting,
-    style: {
-      ...primaryStyle,
-      opacity: replySubmitting ? 0.6 : 1
-    }
-  }, user ? replySubmitting ? '回复中...' : '回复当前帖子' : '登录后回复'))))) : null), React.createElement("aside", {
+  }, "\u5F53\u524D\u663E\u793A ", visiblePosts.length, " \u7BC7\u5E16\u5B50\uFF0C\u5411\u4E0B\u6EDA\u52A8\u53EF\u4EE5\u8FDE\u7EED\u9605\u8BFB\u5168\u90E8\u5185\u5BB9\u3002"), visiblePosts.map((post, index) => {
+    const isSelected = selectedPost?.id === post.id;
+    const displayPost = isSelected ? selectedPost : post;
+    const copy = splitPostCopy(displayPost);
+    const comments = Array.isArray(displayPost?.comments) ? displayPost.comments : [];
+    const totalComments = commentCount(displayPost);
+    const hasMoreComments = totalComments > comments.length;
+    return React.createElement("article", {
+      key: post.id,
+      id: `chatter-post-${post.id}`,
+      className: "qi-chat2-post-card",
+      "aria-busy": isSelected && detailLoading ? 'true' : 'false',
+      style: {
+        ...panelStyle,
+        padding: 24,
+        borderColor: isSelected ? 'oklch(0.72 0.15 242 / 0.38)' : spb.line
+      }
+    }, React.createElement("div", {
+      style: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 8,
+        color: spb.blueSoft,
+        fontSize: 12.5,
+        fontWeight: 740,
+        border: `1px solid oklch(0.72 0.15 242 / 0.28)`,
+        borderRadius: 999,
+        padding: '6px 10px'
+      }
+    }, inferTopic(displayPost)), React.createElement("h1", {
+      style: {
+        margin: '15px 0 0',
+        fontFamily: spb.disp,
+        color: spb.ink,
+        fontSize: 32,
+        lineHeight: 1.2,
+        letterSpacing: '-0.022em',
+        fontWeight: 690
+      }
+    }, copy.title), React.createElement("div", {
+      style: {
+        marginTop: 16,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12
+      }
+    }, React.createElement("div", {
+      className: "qi-chat2-author-avatar",
+      style: avatarStyle(displayPost.author, 36)
+    }, firstChar(displayPost.author)), React.createElement("div", null, React.createElement("div", {
+      style: {
+        color: spb.ink,
+        fontSize: 14.5,
+        fontWeight: 760
+      }
+    }, displayPost.author || '用户', displayPost.authorRole === 'admin' ? ' · 管理员' : ''), React.createElement("div", {
+      style: {
+        marginTop: 3,
+        color: spb.faint,
+        fontFamily: spb.mono,
+        fontSize: 11.5
+      }
+    }, formatTime(displayPost.createdAt)))), copy.body ? React.createElement("div", {
+      style: {
+        marginTop: 20,
+        color: spb.sub,
+        fontSize: 16,
+        lineHeight: 1.88,
+        whiteSpace: 'pre-wrap'
+      }
+    }, copy.body) : null, displayPost.imageUrl ? React.createElement("img", {
+      className: "qi-chat2-post-image",
+      src: chatterImageSrc(displayPost.imageUrl),
+      alt: `${displayPost.author || '用户'}发布的帖子配图`,
+      loading: index === 0 ? 'eager' : 'lazy',
+      decoding: "async",
+      style: {
+        marginTop: 22
+      }
+    }) : null, React.createElement("div", {
+      style: {
+        marginTop: 16,
+        paddingBottom: 18,
+        borderBottom: `1px solid ${spb.line}`,
+        display: 'flex',
+        justifyContent: 'space-between',
+        gap: 14,
+        color: spb.faint,
+        fontSize: 12.5
+      }
+    }, React.createElement("span", null, displayPost.imageUrl ? '图文分享' : '文字话题', " \xB7 ", inferTopic(displayPost)), React.createElement("span", null, totalComments, " \u6761\u56DE\u590D")), React.createElement("section", {
+      "aria-label": `${copy.title}的回复`,
+      style: {
+        marginTop: 18
+      }
+    }, React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        gap: 12,
+        alignItems: 'baseline'
+      }
+    }, React.createElement("h2", {
+      style: {
+        margin: 0,
+        color: spb.ink,
+        fontSize: 17,
+        fontWeight: 780
+      }
+    }, totalComments, " \u6761\u56DE\u590D"), React.createElement("span", {
+      style: {
+        color: spb.faint,
+        fontSize: 12
+      }
+    }, "\u6309\u65F6\u95F4\u987A\u5E8F")), isSelected && detailLoading ? React.createElement("div", {
+      style: {
+        padding: '16px 0',
+        color: spb.sub,
+        fontSize: 14
+      }
+    }, "\u6B63\u5728\u8BFB\u53D6\u5B8C\u6574\u5BF9\u8BDD...") : null, comments.length ? React.createElement("div", {
+      style: {
+        marginTop: 8
+      }
+    }, comments.map(comment => React.createElement("div", {
+      key: comment.id,
+      className: "qi-chat2-reply"
+    }, React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 11
+      }
+    }, React.createElement("div", {
+      style: avatarStyle(comment.author, 32)
+    }, firstChar(comment.author)), React.createElement("div", {
+      style: {
+        minWidth: 0,
+        flex: 1
+      }
+    }, React.createElement("div", {
+      style: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        gap: 10,
+        flexWrap: 'wrap'
+      }
+    }, React.createElement("span", {
+      style: {
+        color: spb.ink,
+        fontSize: 13.5,
+        fontWeight: 740
+      }
+    }, comment.author || '用户', comment.authorRole === 'admin' ? ' · 管理员' : ''), React.createElement("span", {
+      style: {
+        color: spb.faint,
+        fontFamily: spb.mono,
+        fontSize: 11
+      }
+    }, formatTime(comment.createdAt))), React.createElement("div", {
+      style: {
+        marginTop: 6,
+        color: spb.sub,
+        fontSize: 14.5,
+        lineHeight: 1.72,
+        whiteSpace: 'pre-wrap'
+      }
+    }, comment.text)))))) : React.createElement("div", {
+      style: {
+        marginTop: 14,
+        color: spb.sub,
+        fontSize: 14.5
+      }
+    }, "\u8FD8\u6CA1\u6709\u56DE\u590D\uFF0C\u53EF\u4EE5\u5750\u7B2C\u4E00\u4E2A\u6C99\u53D1\u3002"), !isSelected ? React.createElement("button", {
+      type: "button",
+      className: "qi-chat2-action",
+      onClick: () => loadPostDetail(post),
+      style: {
+        ...buttonStyle,
+        marginTop: 14,
+        color: spb.blueSoft
+      }
+    }, hasMoreComments ? `查看全部 ${totalComments} 条回复` : user ? '参与这篇讨论' : '查看并登录回复') : React.createElement("div", {
+      style: {
+        marginTop: 16,
+        padding: 14,
+        borderTop: `1px solid ${spb.line}`
+      }
+    }, React.createElement("textarea", {
+      "aria-label": `回复${copy.title}`,
+      className: "qi-chat2-input",
+      value: replyText,
+      onChange: event => setReplyText(event.target.value.slice(0, 600)),
+      placeholder: user ? '回复当前帖子...' : '登录后可以参与回复',
+      style: {
+        width: '100%',
+        minHeight: 82,
+        resize: 'vertical',
+        border: `1px solid ${spb.line}`,
+        borderRadius: 7,
+        background: 'oklch(0.13 0.011 265)',
+        color: spb.ink,
+        padding: 12,
+        font: 'inherit',
+        lineHeight: 1.65
+      }
+    }), React.createElement("div", {
+      style: {
+        marginTop: 10,
+        display: 'flex',
+        justifyContent: 'space-between',
+        gap: 12,
+        alignItems: 'center',
+        flexWrap: 'wrap'
+      }
+    }, React.createElement("span", {
+      style: {
+        color: spb.faint,
+        fontSize: 12
+      }
+    }, user ? `以 ${user.name} 回复` : '未登录也可以完整阅读。'), React.createElement("button", {
+      type: "button",
+      className: "qi-chat2-action",
+      onClick: submitReply,
+      disabled: replySubmitting,
+      style: {
+        ...primaryStyle,
+        opacity: replySubmitting ? 0.6 : 1
+      }
+    }, user ? replySubmitting ? '回复中...' : '回复当前帖子' : '登录后回复')))));
+  })) : null), React.createElement("aside", {
     className: "qi-chat2-aside",
     "aria-label": "\u53D1\u5E16\u548C\u793E\u533A\u8BF4\u660E"
   }, React.createElement("div", {

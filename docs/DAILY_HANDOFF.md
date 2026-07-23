@@ -8656,3 +8656,24 @@ Deployment:
 
 Notes for next agent:
 - seed 使用稳定 ID 且脚本幂等；没有明确内容修改需求时不要重复覆盖。后续真实用户发帖与回复继续走现有登录权限接口。
+
+## 2026-07-22 - Codex - 修复瞎聊聊只能显示一篇帖子
+
+Changed:
+- 将中间栏从单帖阅读器改为按当前话题连续渲染全部帖子；左侧最新帖子现在定位到对应卡片，不再替换整个内容区。
+- 每篇帖子同时展示正文、图片、回复预览和独立回复入口；回复多于列表预览时可展开完整讨论。
+- 手机端保留横向话题筛选，并在同一单列页面中向下连续阅读全部帖子。
+
+Files:
+- `Qi/qi-home.jsx`, `Qi/qi-home.compiled.js`, `Qi/index.html`
+- `tests/chatter-option2.test.js`, `tests/explore-editorial-layout.test.js`, `tests/home-preview-contact.test.js`
+- `design-qa.md`, `ops/production/manifests/chatter-all-posts-fix-20260722.json`
+
+Validated:
+- `node Qi/build-home.js`、`tests/chatter-option2.test.js`、`tests/home-preview-contact.test.js`、`tests/explore-editorial-layout.test.js`、`node --check kpl-stats-server.js` 与 `git diff --check` 通过。
+- 本地真实载荷在同一帖子列表中显示 5/5 篇 seed 帖子；完整回复展开后 11/11 条均可见。
+- 浏览器桌面和 390×844 手机验收通过，话题筛选、回复展开正常，控制台错误为 0。
+- 合并前全仓 56/56 个测试文件通过。
+
+Deployment:
+- 本条提交时尚未部署；合并后只需原子发布三个 `Qi` 静态文件，不需重启任何服务。
