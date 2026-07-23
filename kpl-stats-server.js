@@ -8636,7 +8636,9 @@ function discoveryPublicNameLooksBad(name) {
   if (!text) return true;
   if (discoveryTextLooksBroken(text)) return true;
   if (/[\u{1F000}-\u{1FAFF}\u2600-\u27BF]/u.test(text)) return true;
-  if (/[｜|_]/.test(text)) return true;
+  if (/[｜|_+＋]/.test(text)) return true;
+  if (/^[\u4e00-\u9fff]{2,8}(路|街|大道|公路)$/.test(text)) return true;
+  if (/[·•].*(特辑|合集|攻略|清单)$/.test(text)) return true;
   if (/^(小吃|简餐|盛大|新春|品牌|资讯|专题|榜单|报告|指南|攻略|新店|首店|探店|空间|审美积累|咖啡地图[一二三四五六七八九十]?)$/.test(text)) return true;
   if (/^(北京|上海|广州|深圳|成都|杭州|重庆|长沙).*(清单|精选|合集|汇总|周末新展市集|咖啡探店|餐厅新店|甜品下午茶|生活方式新店|夜间小聚)/.test(text)) return true;
   if (/^(超|近|约)?\d+/.test(text)) return true;
@@ -8648,6 +8650,16 @@ function discoveryPublicNameLooksBad(name) {
 function discoverySourceIsCurated(item) {
   return /站内地点资料|站内主题兜底/.test(String(item?.sourceName || ''))
     || String(item?.freshnessKind || '') === 'curated';
+}
+
+function normalizeDiscoveryCuratedItem(item) {
+  if (!discoverySourceIsCurated(item)) return item;
+  return {
+    ...item,
+    publishedAt: '',
+    discoveredAt: '',
+    freshnessKind: 'curated',
+  };
 }
 
 function discoveryItemFreshTimestamp(item) {
@@ -9237,7 +9249,7 @@ function normalizeDiscoveryDb(payload) {
     const saved = cityMap.get(city.id) || cityMap.get(city.name) || {};
     const items = Array.isArray(saved.items)
       ? saved.items
-        .map(decorateDiscoveryItem)
+        .map(item => decorateDiscoveryItem(normalizeDiscoveryCuratedItem(item)))
         .filter(isPublicDiscoveryItem)
         .sort(sortDiscoveryItems)
         .slice(0, DISCOVERY_CITY_LIMIT)
@@ -10235,24 +10247,25 @@ function mergeDiscoveryCityItems(fresh, previous) {
     if (name && poi?.verified) previousPoiByName.set(name.toLowerCase(), poi);
   }
   for (const item of [...(fresh || []), ...(previous || [])]) {
-    const name = normalizeDiscoveryShopName(item?.name || '');
+    const normalizedItem = normalizeDiscoveryCuratedItem(item);
+    const name = normalizeDiscoveryShopName(normalizedItem?.name || '');
     if (!name) continue;
-    if (isBadDiscoveryCandidate(name, item.sourceTitle || '', item.summary || '')) continue;
+    if (isBadDiscoveryCandidate(name, normalizedItem.sourceTitle || '', normalizedItem.summary || '')) continue;
     const key = name.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    const photoList = Array.isArray(item.photos) ? item.photos.filter(Boolean).slice(0, 4) : [];
-    const imageUrl = item.imageUrl || photoList[0] || '';
+    const photoList = Array.isArray(normalizedItem.photos) ? normalizedItem.photos.filter(Boolean).slice(0, 4) : [];
+    const imageUrl = normalizedItem.imageUrl || photoList[0] || '';
     const decorated = decorateDiscoveryItem({
-      ...item,
+      ...normalizedItem,
       name,
-      category: item.category || '其他',
-      contentTitle: item.contentTitle || item.sourceTitle || '',
-      contentText: cleanDiscoveryText(item.contentText || item.summary || item.sourceTitle || '').slice(0, 420),
-      poi: normalizeDiscoveryPoi(item.poi) || previousPoiByName.get(name.toLowerCase()) || null,
+      category: normalizedItem.category || '其他',
+      contentTitle: normalizedItem.contentTitle || normalizedItem.sourceTitle || '',
+      contentText: cleanDiscoveryText(normalizedItem.contentText || normalizedItem.summary || normalizedItem.sourceTitle || '').slice(0, 420),
+      poi: normalizeDiscoveryPoi(normalizedItem.poi) || previousPoiByName.get(name.toLowerCase()) || null,
       imageUrl,
       photos: photoList.length ? photoList : (imageUrl ? [imageUrl] : []),
-      tags: Array.isArray(item.tags) ? item.tags.slice(0, 4) : [],
+      tags: Array.isArray(normalizedItem.tags) ? normalizedItem.tags.slice(0, 4) : [],
     });
     if (isPublicDiscoveryItem(decorated)) merged.push(decorated);
   }
@@ -10300,6 +10313,7 @@ async function syncDiscoveryDb(options = {}) {
       status: itemCount ? (errors.length ? 'partial' : 'ready') : 'empty',
       generatedAt: new Date().toISOString(),
       generatedDay: now.day,
+      lastAutoSyncDay: options.reason === 'auto-daily' ? now.day : (previous.lastAutoSyncDay || ''),
       source: 'public-search',
       cityLimit: DISCOVERY_CITY_LIMIT,
       categories: DISCOVERY_CATEGORY_KEYWORDS.map(item => item.name),
@@ -20825,6 +20839,11 @@ async function runAutoDiscoverySyncIfDue() {
   const currentMinute = now.hour * 60 + now.minute;
   const targetMinute = DISCOVERY_AUTO_SYNC_HOUR * 60 + DISCOVERY_AUTO_SYNC_MINUTE;
   if (currentMinute < targetMinute) return;
+  const current = await readDiscoveryDb();
+  if (current.lastAutoSyncDay === now.day) {
+    autoDiscoverySyncDay = now.day;
+    return;
+  }
   await syncDiscoveryDb({ force: true, reason: 'auto-daily' });
   autoDiscoverySyncDay = now.day;
 }

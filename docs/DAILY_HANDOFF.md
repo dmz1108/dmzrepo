@@ -8792,3 +8792,19 @@ Deployment:
 
 Notes for next agent:
 - `panda-discovery-db.json` 是本地未跟踪运行时数据，不得提交或覆盖；生产同步完成后应核验固定地点时间字段为空、坏标题消失、`/health` 正常，并用公网真实数据复核桌面和手机页面。
+
+## 2026-07-23 - Codex - 探索每日刷新上线后二次质量收口
+
+Changed:
+- 固定地点在数据库读取和合并阶段统一归一为 `freshnessKind=curated` 且清空发布时间，兼容并修复旧库遗留的伪时间字段。
+- 追加 `+` 分隔式栏目标题、单独道路名和“特辑/合集/攻略/清单”标题过滤，避免把内容栏目或地址片段冒充具体去处。
+- 每日自动同步完成日写入发现库；主服务当天重启时读取持久化标记，不会重复执行同一轮外部抓取。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/discovery-daily-refresh.test.js`
+- `ops/production/manifests/discovery-daily-harden-20260723.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 本条提交时尚未完成合并前全套测试或生产发布；需在合并后只部署后端文件、重启主服务，并核验 9 条旧固定地点伪时间和 3 类伪地点均归零。
