@@ -31,8 +31,9 @@ assert(request.includes('zlib.gunzipSync(compressedPayloadBytes)'), 'request mus
 assert(request.includes("expectedImageSha256 = '829af8cdc44361857914e11a36d93eb8340baf9336ca19c0b769cca3f65057bf'"), 'request must pin the twice-reviewed official image hash');
 assert(request.includes('officialArticle.title !== articleTitle'), 'request must verify the official article title');
 assert(request.includes("const expectedCount = 115"), 'request must require the 115-stock filtered review pool');
-assert(request.includes("const expectedRawPoolCount = 115"), 'request must independently require the 115-stock raw terminal pool');
-assert(request.includes('excludedRows.length !== 0'), 'request must require zero ST/BSE/new-prefix exclusions');
+assert(request.includes("const expectedRawPoolCount = 116"), 'request must independently require the 116-stock raw terminal pool');
+assert(request.includes("{ code: '920222', name: '\\u76ca\\u5764\\u7535\\u6c14' }"), 'request must pin the one excluded BSE row');
+assert(request.includes('stableJson(excludedRows) !== stableJson(expectedExcludedRawPoolRows)'), 'request must reject any unexpected ST/BSE/new-prefix exclusion');
 assert(request.includes('publicRequestTimeoutMs = 25000'), 'public verification must have a bounded request timeout');
 assert(request.includes('request.destroy(new Error'), 'timed-out public requests must enter script-owned rollback');
 assert(request.includes('missingCodes.length'), 'request must reject missing codes');

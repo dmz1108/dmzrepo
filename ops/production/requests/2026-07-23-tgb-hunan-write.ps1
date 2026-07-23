@@ -5,8 +5,8 @@
 # The 115 formal rows are supplied only through a date-bound encrypted GitHub
 # production-environment secret. They are not tracked in Git or printed here.
 # The script verifies the payload SHA-256, reconciles the 115 review-eligible
-# rows against the current 115-row raw terminal pool with no
-# ST/BSE/new-prefix row, repeats the complete quality gate, backs up every
+# rows against the current 116-row raw terminal pool after excluding the one
+# fixed BSE row, repeats the complete quality gate, backs up every
 # touched runtime artifact, writes atomically, rolls back on any failure, and
 # never restarts a service.
 
@@ -47,7 +47,10 @@ const expectedImageLength = 1170327;
 const expectedImageSha256 = '829af8cdc44361857914e11a36d93eb8340baf9336ca19c0b769cca3f65057bf';
 const operationId = 'tgb-hunan-manual-20260723';
 const expectedCount = 115;
-const expectedRawPoolCount = 115;
+const expectedRawPoolCount = 116;
+const expectedExcludedRawPoolRows = [
+  { code: '920222', name: '\u76ca\u5764\u7535\u6c14' },
+];
 const publicRequestTimeoutMs = 25000;
 const expectedInputSha256 = expectedPayloadSha256.toLowerCase();
 const fixedSource = 'review/tgb-hunan-structured';
@@ -246,7 +249,9 @@ function validateRawBaseline(payload) {
     .filter(row => row.code && row.name);
   const codes = toSet(rows.map(row => row.code));
   const excludedRows = rows.filter(row => excludedFromReview(row.code, row.name));
-  if (rows.length !== expectedRawPoolCount || codes.size !== expectedRawPoolCount || excludedRows.length !== 0) {
+  if (rows.length !== expectedRawPoolCount
+      || codes.size !== expectedRawPoolCount
+      || stableJson(excludedRows) !== stableJson(expectedExcludedRawPoolRows)) {
     throw new Error(`raw terminal pool validation failed: ${JSON.stringify({
       count: rows.length,
       uniqueCount: codes.size,

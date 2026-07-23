@@ -8246,6 +8246,28 @@ Deployment:
 Notes for next agent:
 - 正式运行时载荷只允许通过 GitHub `production` 环境日期绑定 Secret 传递，成功或失败后必须删除；运行时 JSON 不得进入 Git。
 
+## 2026-07-23 - Codex - 修正当日 TGB 原始池排除闸
+
+Changed:
+- 首次正式运行 `30004916866` 在预写原始终盘池闸安全停止：云端原始池为 116 行，其中北交所 `920222 益坤电气` 应排除，正式非 ST、非北交所、非新股前缀口径仍为 115 行。
+- 日期绑定脚本改为固定验证 116 行原始池以及唯一且精确的排除行 `920222 益坤电气`，再继续验证 115 行正式集合；不会把排除行写入 TGB 正式库。
+
+Files:
+- `ops/production/requests/2026-07-23-tgb-hunan-write.ps1`
+- `tests/tgb-20260723-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 首次运行在备份、正式写入、综合主因重折和云端日志变更之前失败；正式 TGB、综合主因和服务状态均未改变，受保护远端脚本/载荷清理成功。
+- 修订后闸同时固定原始总数、排除代码和排除名称，任何其他排除行均会继续安全停止。
+- 修订后全仓 58/58 个 `tests/*.test.js` 文件通过，PowerShell 仍为纯 ASCII，`git diff --check` 通过。
+
+Deployment:
+- 本条提交时尚未重跑正式写入；服务未重启。
+
+Notes for next agent:
+- 正式质量口径是 `116 原始池 - 1 北交所 = 115 正式行`，不要把北交所排除误报为正式缺失。
+
 ## 2026-07-22 - Codex - 准备受保护写入当日 TGB 正式库
 
 Changed:
