@@ -9191,3 +9191,28 @@ Deployment:
 
 Notes for next agent:
 - Git `main`、生产静态文件与云端操作日志已一致；本次没有修改任何策略数据或统计口径。
+
+## 2026-07-23 - Codex - 收窄并简化预判回看
+
+Changed:
+- 将预判回看限制为最大 `1040px` 并居中，不再随策略页面铺满宽屏。
+- 顶部四组统计由独立边框块改为无底色的紧凑摘要；每日记录由独立大卡片改为分组内连续列表。
+- 明星状态移除厚重胶囊底色，明星/龙头证据改为两列轻量信息行；移动端保持单列且使用细分隔线。
+- 样式缓存版本更新；未改变任何预判、明星、龙头、命中或收益计算。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 使用线上真实最近 10 个交易日回看数据，在 1440x1000 与 390x844 视口完成 Playwright 前后对照。
+- 桌面端回看宽度由 `1377px` 收至 `1040px`；桌面与移动端均无横向溢出、文字重叠或被裁切。
+- `git diff --check` 通过；全仓 `59/59` 个 `tests/*.test.js` 文件通过。
+
+Deployment:
+- 本条提交时尚未部署生产；未修改云端文件，未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+
+Notes for next agent:
+- 本次是纯视觉减法；部署时应原子发布 HTML 与 CSS，并在覆盖前核对线上仍匹配 PR `#239` 已记录哈希。
