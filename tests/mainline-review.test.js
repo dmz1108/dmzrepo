@@ -82,7 +82,11 @@ const readLimitUpMainReasonDbDay = async d => MAIN_REASON[d] || null;
 const LIMIT_UP = {};
 const readLimitUpDbDay = async d => LIMIT_UP[d] || null;
 const KLINE = {};
-const fetchEastmoneyKline = async code => KLINE[code] || null;
+const KLINE_CALLS = [];
+const fetchEastmoneyKline = async (code, options = {}) => {
+  KLINE_CALLS.push({ code, requiredThroughDay: options.requiredThroughDay || '' });
+  return KLINE[code] || null;
+};
 const compactDate = value => String(value || '').replace(/\D/g, '').slice(0, 8);
 const numOrNull = value => (value == null || value === '' || !Number.isFinite(Number(value))) ? null : Number(value);
 const isFiniteNumeric = value => value != null && value !== '' && Number.isFinite(Number(value));
@@ -91,6 +95,8 @@ const isSavedAfterMarketClose = (payload) => payload?.savedAtOK === true;
 const isReliableLimitUpDbPayload = (payload) => Array.isArray(payload?.stocks) && payload.stocks.length > 0 && payload.reliable !== false;
 const isCompatibleMainReasonDb = (payload) => !!payload?.stocks?.length && String(payload?.ruleVersion || '') === 'vOK';
 
+eval(extractFn('strategyKlineBarForDay'));
+eval(extractFn('strategyKlineCoversDay'));
 eval(extractFn('getStrategyMainlineReview'));
 
 const finalLimitDb = (codes) => ({ savedAtOK: true, reliable: true, stocks: codes.map(code => ({ code, name: 'N' + code })) });
@@ -122,10 +128,12 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
     { code: '600001', name: 'A', finalBoardTopic: '算力' },
     { code: '600003', name: 'C', finalBoardTopic: '算力' }]);
   CLOSE['2026-07-06'] = { '600014': 10, '600015': 20 };
-  CLOSE['2026-07-07'] = { '600014': 11, '600015': 18 };
-  CLOSE['2026-07-09'] = { '600014': 13, '600015': 22 };
-  KLINE['600014'] = { x: ['2026-07-06', '2026-07-07'], y: [[9.5, 10, 10.2, 9.4], [10.5, 11, 12, 10.4]] };
-  KLINE['600015'] = { x: ['2026-07-06', '2026-07-07'], y: [[19.5, 20, 20.2, 19.2], [20, 18, 21, 17.8]] };
+  CLOSE['2026-07-07'] = { '600014': 11 };   // 600015 次收故意缺失，必须由精确日 K 补齐。
+  CLOSE['2026-07-09'] = {};                 // 两只股的 3 日收盘均由精确日 K 补齐。
+  KLINE['600014'] = { x: ['2026-07-06', '2026-07-07', '2026-07-09'],
+    y: [[9.5, 10, 10.2, 9.4], [10.5, 11, 12, 10.4], [12.5, 13, 13.2, 12.4]] };
+  KLINE['600015'] = { x: ['2026-07-06', '2026-07-07', '2026-07-09'],
+    y: [[19.5, 20, 20.2, 19.2], [20, 18, 21, 17.8], [21, 22, 22.3, 20.8]] };
 
   // 07-07(上午盘,有效):并列第一(⑤)——网络安全2 vs 数字货币2 vs 半导体1;预判数字货币 →
   //                     命中任意并列第一 = top1 命中;明星 active → 不进封板统计(③)。
@@ -192,6 +200,13 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
     eastmoney: { available: false, hasMainlines: false, top: [] },
     ths: { available: false, hasMainlines: false, top: [] },
   } }) === false, '⓪两源都不可用的空档案不得冒充今日无主线');
+  A(strategyKlineCoversDay({ x: ['2026-07-23'] }, '2026-07-24') === false,
+    '⓪日K最后日期早于目标交易日时不得视为已覆盖');
+  A(strategyKlineCoversDay({ x: ['2026-07-23', '2026-07-24'] }, '2026-07-24') === true,
+    '⓪日K包含目标交易日时才视为已覆盖');
+  A(strategyMainlineFamilyInfo({ key: 'theme:电网设备', theme: '电网设备' }).key
+    === strategyMainlineFamilyInfo({ theme: '电网设备' }).key,
+    '⓪已有 theme: 前缀的细分题材键保持幂等，不重复生成 theme:theme:');
 
   const out = await getStrategyMainlineReview(10);
   const byDay = new Map(out.days.map(r => [r.day, r]));
@@ -235,6 +250,8 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
     && d6.leaders[0].nextCloseGain === 10 && d6.leaders[0].threeDayGain === 30, '⑤龙头1三项收益计算正确');
   A(d6.leaders[1].leadScore === 77 && d6.leaders[1].nextHighGain === 5
     && d6.leaders[1].nextCloseGain === -10 && d6.leaders[1].threeDayGain === 10, '⑤龙头2三项收益计算正确');
+  A(KLINE_CALLS.some(call => call.code === '600014' && call.requiredThroughDay === '2026-07-09'),
+    '⑤回看日K请求显式要求覆盖第三个后续交易日');
 
   // ⑥ 并列第一
   A(d7.actualFirstTied === true, '⑤网络安全2=数字货币2 → 并列第一标记');

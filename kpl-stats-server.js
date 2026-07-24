@@ -12708,18 +12708,52 @@ async function fetchTencentKline(stockId) {
   return x.length ? { source: 'tencent', stockId: code, x, y } : null;
 }
 
-async function fetchEastmoneyKline(stockId) {
+function strategyKlineBarForDay(kline, day) {
+  const target = compactDate(day);
+  if (!target) return null;
+  const dates = Array.isArray(kline?.x) ? kline.x : [];
+  const bars = Array.isArray(kline?.y) ? kline.y : [];
+  const index = dates.findIndex(value => compactDate(value) === target);
+  if (index < 0 || !Array.isArray(bars[index])) return null;
+  const bar = bars[index];
+  return {
+    day: isoFromCompactDate(target),
+    open: numOrNull(bar[0]),
+    close: numOrNull(bar[1]),
+    high: numOrNull(bar[2]),
+    low: numOrNull(bar[3]),
+  };
+}
+
+function strategyKlineCoversDay(kline, day) {
+  const target = compactDate(day);
+  if (!target) return !!(Array.isArray(kline?.x) && kline.x.length);
+  const dates = Array.isArray(kline?.x) ? kline.x : [];
+  const lastDay = compactDate(dates[dates.length - 1]);
+  return !!lastDay && lastDay >= target;
+}
+
+async function fetchEastmoneyKline(stockId, options = {}) {
   const code = String(stockId || '').replace(/\D/g, '');
   const secid = eastmoneySecid(code);
   if (!secid) return null;
   const cacheKey = `eastmoney:${code}`;
-  if (klineCache.has(cacheKey)) return await klineCache.get(cacheKey);
+  const requiredThroughDay = compactDate(options.requiredThroughDay);
+  if (klineCache.has(cacheKey)) {
+    const cached = await klineCache.get(cacheKey);
+    if (cached && (!requiredThroughDay || strategyKlineCoversDay(cached, requiredThroughDay))) return cached;
+    // null 或未覆盖目标交易日的进程缓存不能永久挡住后续补取。
+    klineCache.delete(cacheKey);
+  }
   const persisted = await readPersistCache('eastmoney-kline60', code);
   const nowParts = chinaNowParts();
   const todayText = compactDate(nowParts.day);
   const persistedLastDay = compactDate(persisted?.data?.x?.[persisted?.data?.x?.length - 1]);
   const persistedSavedDay = persisted?.savedAt ? chinaNowParts(new Date(persisted.savedAt)).day : '';
-  if (persisted?.data && (persistedLastDay === todayText || persistedSavedDay === nowParts.day)) {
+  const persistedCoversTarget = !requiredThroughDay
+    || strategyKlineCoversDay(persisted?.data, requiredThroughDay);
+  if (persisted?.data && persistedCoversTarget
+    && (persistedLastDay === todayText || persistedSavedDay === nowParts.day)) {
     klineCache.set(cacheKey, persisted.data);
     return persisted.data;
   }
@@ -12770,9 +12804,12 @@ async function fetchEastmoneyKline(stockId) {
   })().catch(() => null);
   klineCache.set(cacheKey, task);
   const data = await task;
-  klineCache.set(cacheKey, data);
+  if (data) klineCache.set(cacheKey, data);
+  else klineCache.delete(cacheKey);
   const lastDay = compactDate(data?.x?.[data?.x?.length - 1]);
-  if (data?.x?.length && (lastDay !== todayText || isAfterMarketClose(nowParts.day))) {
+  const fetchedCoversTarget = !requiredThroughDay || strategyKlineCoversDay(data, requiredThroughDay);
+  if (data?.x?.length && fetchedCoversTarget
+    && (lastDay !== todayText || isAfterMarketClose(nowParts.day))) {
     await writePersistCache('eastmoney-kline60', code, data);
   }
   return data;
@@ -22216,13 +22253,17 @@ const STRATEGY_MAINLINE_KEEP_FINE_THEMES = new Set([
 function strategyMainlineFamilyInfo(item) {
   const theme = String(item?.theme || '').trim();
   const info = strategyThemeTaxonomyInfo(theme);
+  const rawKey = String(item?.key || '').trim();
+  const fineKey = /^(?:theme|group):/.test(rawKey)
+    ? rawKey
+    : `theme:${rawKey || strategyMainlineTopicKey(theme) || theme}`;
   if (info?.standard && STRATEGY_MAINLINE_KEEP_FINE_THEMES.has(info.standard)) {
-    return { key: `theme:${item?.key || strategyMainlineTopicKey(theme) || theme}`, label: info.standard, group: '', taxonomy: info };
+    return { key: fineKey, label: info.standard, group: '', taxonomy: info };
   }
   if (info?.group && STRATEGY_MAINLINE_MERGE_GROUPS.has(info.group)) {
     return { key: `group:${info.group}`, label: info.group, group: info.group, taxonomy: info };
   }
-  return { key: `theme:${item?.key || strategyMainlineTopicKey(theme) || theme}`, label: theme, group: '', taxonomy: info };
+  return { key: fineKey, label: theme, group: '', taxonomy: info };
 }
 function strategyDedupeByCode(rows, limit = 5) {
   const seen = new Set();
@@ -25427,25 +25468,13 @@ async function getStrategyMainlineReview(days = 10) {
     return closeMaps.get(d);
   };
   const klineByCode = new Map();
-  const klineOf = code => {
-    if (!klineByCode.has(code)) klineByCode.set(code, fetchEastmoneyKline(code).catch(() => null));
-    return klineByCode.get(code);
-  };
-  const nextHighGainOf = async (code, baseDay, nextDay, fallbackBaseClose) => {
-    if (!code || !baseDay || !nextDay) return null;
-    const kline = await klineOf(code);
-    const dates = Array.isArray(kline?.x) ? kline.x : [];
-    const bars = Array.isArray(kline?.y) ? kline.y : [];
-    const baseKey = compactDate(baseDay);
-    const nextKey = compactDate(nextDay);
-    const baseIndex = dates.findIndex(value => compactDate(value) === baseKey);
-    const nextIndex = dates.findIndex(value => compactDate(value) === nextKey);
-    const klineBaseClose = baseIndex >= 0 ? numOrNull(bars[baseIndex]?.[1]) : null;
-    const nextHigh = nextIndex >= 0 ? numOrNull(bars[nextIndex]?.[2]) : null;
-    const baseClose = klineBaseClose != null && klineBaseClose > 0 ? klineBaseClose : fallbackBaseClose;
-    return nextHigh != null && nextHigh > 0 && Number.isFinite(baseClose) && baseClose > 0
-      ? Number(((nextHigh / baseClose - 1) * 100).toFixed(2))
-      : null;
+  const klineOf = (code, requiredThroughDay = '') => {
+    const required = compactDate(requiredThroughDay);
+    const existing = klineByCode.get(code);
+    if (existing && (!required || existing.requiredThroughDay >= required)) return existing.promise;
+    const promise = fetchEastmoneyKline(code, { requiredThroughDay }).catch(() => null);
+    klineByCode.set(code, { requiredThroughDay: required, promise });
+    return promise;
   };
   const rows = [];
   let starWins = 0, starTotal = 0, leaderWins = 0, leaderTotal = 0;
@@ -25476,12 +25505,25 @@ async function getStrategyMainlineReview(days = 10) {
     const evalStock = async (stock) => {
       if (!stock?.code) return null;
       const code = normalizeReasonSourceCode(stock.code);
-      const p0 = c0.get(code), p1 = c1.get(code), p3 = c3.get(code);
+      const requiredThroughDay = thirdDay || nextDay || '';
+      const kline = requiredThroughDay ? await klineOf(code, requiredThroughDay) : null;
+      const baseBar = strategyKlineBarForDay(kline, day);
+      const nextBar = strategyKlineBarForDay(kline, nextDay);
+      const thirdBar = strategyKlineBarForDay(kline, thirdDay);
+      // 每日收盘价库仍是首选；精确日 K 只在对应日期缺项时补齐，不跨日猜值。
+      const p0Stored = c0.get(code), p1Stored = c1.get(code), p3Stored = c3.get(code);
+      const p0 = Number.isFinite(p0Stored) ? p0Stored : baseBar?.close;
+      const p1 = Number.isFinite(p1Stored) ? p1Stored : nextBar?.close;
+      const p3 = Number.isFinite(p3Stored) ? p3Stored : thirdBar?.close;
       const closeGain = (Number.isFinite(p0) && Number.isFinite(p1) && p0 > 0)
         ? Number(((p1 / p0 - 1) * 100).toFixed(2)) : null;
       const threeDayGain = (Number.isFinite(p0) && Number.isFinite(p3) && p0 > 0)
         ? Number(((p3 / p0 - 1) * 100).toFixed(2)) : null;
-      const nextHighGain = await nextHighGainOf(code, day, nextDay, p0);
+      const highBaseClose = baseBar?.close != null && baseBar.close > 0 ? baseBar.close : p0;
+      const nextHighGain = nextBar?.high != null && nextBar.high > 0
+        && Number.isFinite(highBaseClose) && highBaseClose > 0
+        ? Number(((nextBar.high / highBaseClose - 1) * 100).toFixed(2))
+        : null;
       return {
         code,
         name: stock.name || '',
