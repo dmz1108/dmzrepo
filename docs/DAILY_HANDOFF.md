@@ -9795,3 +9795,28 @@ Deployment:
 Notes for next agent:
 - #199（L2 来源标签 Draft）内容已并入本 PR，可关闭 #199。
 - 合并顺序（Codex 建议）：本 PR（缓存 j）先合，#258（缓存 k）随后同步 main 保留 k。
+
+## 2026-07-24 - Local Claude - #261 补 L2 六列表格布局回归断言
+
+Changed:
+- 按 Codex「#261 仍需完成上一轮第 3 项测试」的意见（对齐 #258 补断言的做法），在 `tests/strategy-workbench-ui.test.js` 锁定 L2 逐档明细 6 列紧凑表的核心 CSS 布局，防止多层覆盖后悄悄退回铺满整页的宽表：
+  - `.ml-l2-bucket-table` 定宽 `560px` + `table-layout:fixed`（不再 `width:100%` 拉满）；
+  - `.ml-l2-bucket-table-wrap` `width:max-content` + `max-width:100%` + `overflow-x:auto`（窄屏容器内滚动、不撑破页面）；
+  - 比值为视觉主角 `.ml-l2-table-ratio b { font-size:14px }`（大于金额 11.5px）；
+  - 合力比列强调底色 `.ml-l2-table-ratio.is-support`；
+  - 买/卖成对格 `.ml-l2-amt-pair .ml-l2-table-money { display:inline-flex }`。
+
+Files:
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 全仓 61/61 个 `tests/*.test.js` 通过；`git diff --check` 通过。
+
+Deployment:
+- 未部署生产。
+
+Notes for next agent:
+- #261 代码已完备（L2 6 列表格 + #199 三色来源标签 + 布局回归断言）。当前对 main 为 MERGEABLE。
+- 合并顺序（Owner/Codex 口径）：等 #262 复核合并后，本 PR 再同步最新 main 并将缓存键升级为下一个未使用版本（`j` 目前与 #262 撞号；#262 合并后按当时未用版本升，如 `k`/`l`）。缓存键升级留到同步 main 时一次性处理，本轮不预改。
+- 附：本人已独立复核 #262，发现 `.ml-card.confirmed-mainline .ml-confirmed` 越界把 QI主线 徽章误染红（与 13350/13353 共用 `.ml-confirmed`），未 approve；#262 修正后方能作为前置合并。

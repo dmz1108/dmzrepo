@@ -59,6 +59,14 @@ assert(html.includes('<th colspan="2" class="grp grp-active">主动成交</th><t
 assert(html.includes('<th class="col-amt">买入 / 卖出</th><th class="col-ratio">主动比</th>'));
 assert(html.includes('class="ml-l2-amt-pair"') && html.includes('ml-l2-amt-sep'));
 assert(html.includes('function strategyL2HistoryAmtPair'));
+// 锁定 6 列紧凑表 CSS 布局(防多层覆盖后悄悄退回铺满整页的宽表):
+// 表定宽 560px + table-layout:fixed(不再 width:100% 拉满);容器 max-content/overflow-x(窄屏滚动不撑页);
+// 比值为视觉主角(14px,大于金额 11.5px);合力比列有强调底色。
+assert(/body\.view-strategy \.ml-l2-bucket-table\s*\{[\s\S]*?width:\s*560px;[\s\S]*?table-layout:\s*fixed;[\s\S]*?\}/.test(css));
+assert(/body\.view-strategy \.ml-l2-bucket-table-wrap\s*\{[\s\S]*?width:\s*max-content;[\s\S]*?max-width:\s*100%;[\s\S]*?overflow-x:\s*auto;[\s\S]*?\}/.test(css));
+assert(/body\.view-strategy \.ml-l2-table-ratio b\s*\{[\s\S]*?font-size:\s*14px;[\s\S]*?\}/.test(css));
+assert(/body\.view-strategy \.ml-l2-table-ratio\.is-support\s*\{[\s\S]*?background:\s*rgba\(203, 178, 126, 0\.07\);[\s\S]*?\}/.test(css));
+assert(css.includes('.ml-l2-amt-pair') && /body\.view-strategy \.ml-l2-amt-pair \.ml-l2-table-money\s*\{[\s\S]*?display:\s*inline-flex;[\s\S]*?\}/.test(css));
 assert(html.includes('主动比 = 主动买入 ÷ 主动卖出'));
 assert(html.includes('被动比 = 被动买入 ÷ 被动卖出'));
 assert(html.includes('合力比 = 总买入 ÷ 总卖出'));
