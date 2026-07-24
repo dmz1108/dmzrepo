@@ -9821,3 +9821,27 @@ Deployment:
 
 Notes for next agent:
 - 本次只修正回看视觉状态归类。PR `#261` 同步 `main` 时必须保留此规则与新增测试。
+
+## 2026-07-25 - Codex - PR #264 单源命中红色状态已部署
+
+Changed:
+- 合并并部署 PR `#264`，合并提交为 `746754e59ace45728d7b77136578b6525e0cecdc`。
+- 预判回看现按已确认规则展示：任一来源命中盘后第一主因家族，且当天有确认明星，整行显示红色真主线状态；各来源仍保持独立展示和命中统计。
+- 云端两份运维日志均已追加本次静态发布记录。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 生产静态文件：`kpl-dashboard_17_apple.html`
+
+Validated:
+- 全仓 `61/61` 个测试文件通过。
+- 使用生产形状数据验证：`07.21=hit-ok+star-confirmed`、`07.22=hit-miss+star-confirmed`、`07.23=hit-ok+star-confirmed`。
+- 发布前云端 HTML 哈希与上一版 `main` 一致，无游离修改；发布后云端磁盘、公网响应和 Git 文件 SHA-256 均为 `25ef3efc909ea0da6785b0860234e3beab8826d2ba737459a7b0d14fbf29ca92`。
+- 公网 `/health` 返回 `ok=true`。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`；仅发布静态 HTML，未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-pr264-746754e-20260725-002228`。
+
+Notes for next agent:
+- PR `#261` 必须同步包含 PR `#264` 的最新 `main`，保留单源命中红色规则及其回归测试，避免后续 UI 合并覆盖本次修复。
