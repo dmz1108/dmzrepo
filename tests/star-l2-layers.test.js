@@ -231,6 +231,14 @@ A(l2HistoryRenderer.includes('job?.results')
   && l2HistoryRenderer.includes('strategyL2HistoryStarStatus(row)')
   && l2HistoryRenderer.includes('selectedRows.slice(0, 8)')
   && l2HistoryRenderer.includes('ml-l2-stock-list'), 'L2扫描记录从完整结果补入明星证据，不只依赖旧picked列表');
+// 板块数据源标签(移植 Draft #199,适配 A+C 折叠表结构:chip 随板块名同格,不新增网格列)。
+A(l2HistoryRenderer.includes('strategyBoardSourceLabel(job?.zsType)')
+  && l2HistoryRenderer.includes("Number(job?.zsType) === 6 ? 'eastmoney'")
+  && l2HistoryRenderer.includes("Number(job?.zsType) === 5 ? 'ths'")
+  && /class="ml-l2-source \$\{sourceClass\}"/.test(l2HistoryRenderer), 'L2扫描记录显示东财/同花顺/KPL板块来源标签');
+A(/\.ml-l2-source\.eastmoney\s*\{/.test(html)
+  && /\.ml-l2-source\.ths\s*\{/.test(html)
+  && /\.ml-l2-source\.kpl\s*\{/.test(html), '三来源标签各有紧凑配色样式;未带入 #199 旧 article 卡布局');
 A(html.includes('const STRATEGY_L2_HISTORY_BUCKETS = [500000, 3000000, 5000000, 8000000, 10000000]')
   && html.includes('function strategyL2HistoryMaxBucket(row)')
   && html.includes('function strategyL2HistoryBucketRow(row, amount, maxAmount)'), 'L2扫描记录支持50万至1000万五档及个股最大档摘要');
