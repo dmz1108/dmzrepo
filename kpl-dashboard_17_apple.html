@@ -9894,7 +9894,7 @@
     }
   }
 </style>
-<link href="/vendor/strategy-workbench.css?v=20260724h" rel="stylesheet">
+<link href="/vendor/strategy-workbench.css?v=20260724j" rel="stylesheet">
 <link href="/vendor/review-workbench.css?v=20260718d" rel="stylesheet">
 <link href="/vendor/realtime-workbench.css?v=20260720" rel="stylesheet">
 </head>
@@ -12632,22 +12632,24 @@ function strategyL2HistoryMoney(value, available) {
   if (!available || value == null) return '--';
   return strategyPlainMoney(value) || '0';
 }
-function strategyL2HistoryRatioCell(value) {
-  return `<td class="ml-l2-table-ratio"><b>${strategyL2HistoryRatioText(value)}</b></td>`;
+function strategyL2HistoryRatioCell(value, kind) {
+  return `<td class="ml-l2-table-ratio${kind ? ` ${kind}` : ''}"><b>${strategyL2HistoryRatioText(value)}</b></td>`;
+}
+// 买/卖金额合并为一格(买红卖绿、斜杠分隔),把原来分列的两格收成一组,收窄整表并强化「买 vs 卖」阅读单元。
+function strategyL2HistoryAmtPair(buy, sell, available) {
+  return `<td class="ml-l2-amt-pair"><span class="ml-l2-table-money is-buy"><i>买</i><b>${strategyL2HistoryMoney(buy, available)}</b></span><em class="ml-l2-amt-sep">/</em><span class="ml-l2-table-money is-sell"><i>卖</i><b>${strategyL2HistoryMoney(sell, available)}</b></span></td>`;
 }
 function strategyL2HistoryBucketRow(row, amount, maxAmount) {
   const bucket = strategyL2HistoryBucket(row, amount);
   const state = !bucket.available ? '数据缺失' : (!bucket.complete ? '字段不完整' : (!bucket.hasAny ? '无大单' : ''));
   const isMax = amount === maxAmount;
-  return `<tr class="ml-l2-bucket-row${isMax ? ' is-max' : ''}">
+  return `<tr class="ml-l2-bucket-row${isMax ? ' is-max' : ''}${state ? ' is-empty' : ''}">
     <th scope="row" class="ml-l2-bucket-name"><b>${strategyL2HistoryBucketLabel(amount)}</b>${isMax ? '<i>最大档</i>' : ''}${state ? `<small>${state}</small>` : ''}</th>
-    <td class="ml-l2-table-money is-buy"><b>${strategyL2HistoryMoney(bucket.activeBuy, bucket.available)}</b></td>
-    <td class="ml-l2-table-money is-sell"><b>${strategyL2HistoryMoney(bucket.activeSell, bucket.available)}</b></td>
-    ${strategyL2HistoryRatioCell(bucket.activeRatio)}
-    <td class="ml-l2-table-money is-buy"><b>${strategyL2HistoryMoney(bucket.passiveBuy, bucket.available)}</b></td>
-    <td class="ml-l2-table-money is-sell"><b>${strategyL2HistoryMoney(bucket.passiveSell, bucket.available)}</b></td>
-    ${strategyL2HistoryRatioCell(bucket.passiveRatio)}
-    ${strategyL2HistoryRatioCell(bucket.supportRatio)}
+    ${strategyL2HistoryAmtPair(bucket.activeBuy, bucket.activeSell, bucket.available)}
+    ${strategyL2HistoryRatioCell(bucket.activeRatio, 'is-active')}
+    ${strategyL2HistoryAmtPair(bucket.passiveBuy, bucket.passiveSell, bucket.available)}
+    ${strategyL2HistoryRatioCell(bucket.passiveRatio, 'is-passive')}
+    ${strategyL2HistoryRatioCell(bucket.supportRatio, 'is-support')}
   </tr>`;
 }
 function strategyL2HistoryStockRow(row) {
@@ -12681,8 +12683,8 @@ function strategyL2HistoryStockRow(row) {
         <div class="ml-l2-bucket-table-wrap">
           <table class="ml-l2-bucket-table">
             <thead>
-              <tr><th rowspan="2">统计档位</th><th colspan="3">主动成交</th><th colspan="3">被动成交</th><th>买卖合力</th></tr>
-              <tr><th>买入金额</th><th>卖出金额</th><th>主动比</th><th>买入金额</th><th>卖出金额</th><th>被动比</th><th>合力比</th></tr>
+              <tr><th rowspan="2" class="col-bucket">统计档位</th><th colspan="2" class="grp grp-active">主动成交</th><th colspan="2" class="grp grp-passive">被动成交</th><th rowspan="2" class="col-support">合力比</th></tr>
+              <tr><th class="col-amt">买入 / 卖出</th><th class="col-ratio">主动比</th><th class="col-amt">买入 / 卖出</th><th class="col-ratio">被动比</th></tr>
             </thead>
             <tbody>${bucketRows}</tbody>
           </table>

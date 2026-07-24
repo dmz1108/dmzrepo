@@ -7,7 +7,7 @@ const html = fs.readFileSync(path.join(root, 'kpl-dashboard_17_apple.html'), 'ut
 const server = fs.readFileSync(path.join(root, 'kpl-stats-server.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'Qi/vendor/strategy-workbench.css'), 'utf8');
 
-assert(html.includes('<link href="/vendor/strategy-workbench.css?v=20260724h" rel="stylesheet">'));
+assert(html.includes('<link href="/vendor/strategy-workbench.css?v=20260724j" rel="stylesheet">'));
 assert(html.includes('<header class="strategy-hero">'));
 assert(html.includes('class="strategy-hero-head"'));
 assert(html.includes('class="strategy-hero-utility"'));
@@ -50,8 +50,11 @@ assert(html.includes('class="mlr-compare"'));
 assert(html.includes('class="mlr-source-grid"'));
 assert(html.includes('class="mlr-evidence-grid"'));
 assert(html.includes('<details class="mlr-reserve-line">'));
-assert(html.includes('<th colspan="3">主动成交</th><th colspan="3">被动成交</th><th>买卖合力</th>'));
-assert(html.includes('<th>买入金额</th><th>卖出金额</th><th>主动比</th>'));
+// 逐档明细 6 列紧凑表(2026-07-24 重设计):买/卖合并成对,比值为主角。
+assert(html.includes('<th colspan="2" class="grp grp-active">主动成交</th><th colspan="2" class="grp grp-passive">被动成交</th><th rowspan="2" class="col-support">合力比</th>'));
+assert(html.includes('<th class="col-amt">买入 / 卖出</th><th class="col-ratio">主动比</th>'));
+assert(html.includes('class="ml-l2-amt-pair"') && html.includes('ml-l2-amt-sep'));
+assert(html.includes('function strategyL2HistoryAmtPair'));
 assert(html.includes('主动比 = 主动买入 ÷ 主动卖出'));
 assert(html.includes('被动比 = 被动买入 ÷ 被动卖出'));
 assert(html.includes('合力比 = 总买入 ÷ 总卖出'));
