@@ -9870,3 +9870,29 @@ Deployment:
 
 Notes for next agent:
 - PR `#261` 同步最新 `main` 时还必须保留本次接口字段、页面资格闸和两组回归测试。
+
+## 2026-07-25 - Codex - PR #266 明星资格规则已部署
+
+Changed:
+- 合并并部署 PR `#266`，合并提交为 `aa263471d7b241958bba509dca8890e0d38ff83d`。
+- 从精确合并提交原子发布回看接口与页面；云端两份运维日志均已追加本次记录。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 生产文件：`kpl-stats-server.js`、`kpl-dashboard_17_apple.html`
+
+Validated:
+- 发布前两份云端文件哈希均与上一版 `main` 一致，没有覆盖游离修改。
+- 发布后云端磁盘、公网响应和 Git 文件一致：
+  - server：`feb6446fda21f803b8f6c2dd6fa2abc27fe18a79058f246813a1c3dfcecd51e4`
+  - HTML：`eb9feefb8410f8ba6ac0889f0480953fc1317ea009f4eb4ae1495051f518770a`
+- 公网接口返回 `07.21=true`、`07.22=false`、`07.23=true`；公网渲染分别为红色明星主线、未命中且预期未兑现、红色明星主线。
+- 7 月 22 日不再把神州数码显示为明星确认；公网 `/health` 返回 `ok=true`。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`，仅重启计划任务 `\Panda Dashboard Server`；新主进程 PID `12992`。
+- 未重启 Caddy、娱乐服务或公司端 L2 worker。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-pr266-aa26347-20260725-004926`。
+
+Notes for next agent:
+- PR `#261` 必须同步包含 PR `#264`、`#266` 及其部署记录的最新 `main`，保留单源红色规则、明星资格字段和全部回归测试。
