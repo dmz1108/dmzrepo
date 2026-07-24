@@ -2572,37 +2572,40 @@ body.view-strategy .ml-l2-bucket-title small {
   white-space: nowrap;
 }
 
+/* 逐档明细 6 列紧凑表(2026-07-24 重设计):买/卖成对、比值为视觉主角、限宽左对齐,
+   不再铺满整页。列宽合计约 560px,超窄屏才横向滚动。 */
 body.view-strategy .ml-l2-bucket-table-wrap {
+  width: max-content;
+  max-width: 100%;
   overflow-x: auto;
   border: 1px solid var(--st-line);
-  border-radius: 6px;
+  border-radius: 8px;
   background: rgba(8, 13, 20, 0.42);
   scrollbar-color: rgba(126, 151, 184, 0.34) transparent;
   scrollbar-width: thin;
 }
 
 body.view-strategy .ml-l2-bucket-table {
-  width: 100%;
-  min-width: 760px;
+  width: 560px;
   border-spacing: 0;
   border-collapse: separate;
   table-layout: fixed;
 }
 
+body.view-strategy .ml-l2-bucket-table col,
+body.view-strategy .ml-l2-bucket-table .col-bucket { width: 92px; }
+body.view-strategy .ml-l2-bucket-table .col-amt { width: 138px; }
+body.view-strategy .ml-l2-bucket-table .col-ratio { width: 58px; }
+body.view-strategy .ml-l2-bucket-table .col-support { width: 58px; }
+
 body.view-strategy .ml-l2-bucket-table th,
 body.view-strategy .ml-l2-bucket-table td {
-  height: 34px;
-  padding: 5px 7px;
-  border-right: 1px solid rgba(174, 190, 214, 0.07);
+  height: 36px;
+  padding: 5px 8px;
   border-bottom: 1px solid rgba(174, 190, 214, 0.08);
   text-align: right;
   vertical-align: middle;
   white-space: nowrap;
-}
-
-body.view-strategy .ml-l2-bucket-table th:last-child,
-body.view-strategy .ml-l2-bucket-table td:last-child {
-  border-right: 0;
 }
 
 body.view-strategy .ml-l2-bucket-table tbody tr:last-child th,
@@ -2610,39 +2613,49 @@ body.view-strategy .ml-l2-bucket-table tbody tr:last-child td {
   border-bottom: 0;
 }
 
+/* 组分隔线:主动｜被动｜合力 三段边界 */
+body.view-strategy .ml-l2-bucket-table thead .grp-passive,
+body.view-strategy .ml-l2-bucket-table thead .col-support,
+body.view-strategy .ml-l2-bucket-table thead tr:nth-child(2) th:nth-child(3),
+body.view-strategy .ml-l2-bucket-table tbody td:nth-child(2),
+body.view-strategy .ml-l2-bucket-table tbody td:nth-child(4),
+body.view-strategy .ml-l2-bucket-table tbody td:nth-child(6) {
+  border-left: 1px solid rgba(126, 159, 205, 0.15);
+}
+
+/* 表头两行:组名(主动成交/被动成交/合力比)+ 子列名 */
 body.view-strategy .ml-l2-bucket-table thead th {
-  height: 26px;
-  padding-top: 3px;
-  padding-bottom: 3px;
+  height: 24px;
+  padding: 3px 8px;
   color: var(--st-faint);
   background: rgba(255, 255, 255, 0.026);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 650;
   letter-spacing: 0;
+  text-align: right;
+}
+
+body.view-strategy .ml-l2-bucket-table thead .grp {
   text-align: center;
-}
-
-body.view-strategy .ml-l2-bucket-table thead tr:first-child th {
   color: var(--st-muted);
-  font-size: 10px;
-  font-weight: 730;
+  font-size: 11px;
+  font-weight: 740;
 }
 
-body.view-strategy .ml-l2-bucket-table thead th[rowspan] {
-  width: 92px;
-  text-align: left;
-}
+body.view-strategy .ml-l2-bucket-table thead .grp-active { color: #d98f8b; }
+body.view-strategy .ml-l2-bucket-table thead .grp-passive { color: #8aa9cf; }
 
-body.view-strategy .ml-l2-bucket-table thead tr:first-child th:nth-child(2),
-body.view-strategy .ml-l2-bucket-table thead tr:first-child th:nth-child(3),
-body.view-strategy .ml-l2-bucket-table thead tr:first-child th:nth-child(4),
-body.view-strategy .ml-l2-bucket-table thead tr:nth-child(2) th:first-child,
-body.view-strategy .ml-l2-bucket-table thead tr:nth-child(2) th:nth-child(4),
-body.view-strategy .ml-l2-bucket-table thead tr:nth-child(2) th:nth-child(7),
-body.view-strategy .ml-l2-bucket-table tbody td:nth-child(2),
-body.view-strategy .ml-l2-bucket-table tbody td:nth-child(5),
-body.view-strategy .ml-l2-bucket-table tbody td:nth-child(8) {
-  border-left: 1px solid rgba(126, 159, 205, 0.16);
+body.view-strategy .ml-l2-bucket-table thead .col-bucket,
+body.view-strategy .ml-l2-bucket-table thead .col-amt { text-align: left; }
+
+body.view-strategy .ml-l2-bucket-table thead .col-ratio { text-align: center; }
+
+body.view-strategy .ml-l2-bucket-table thead .col-support {
+  color: #cbb27e;
+  font-size: 11px;
+  font-weight: 740;
+  text-align: center;
+  vertical-align: middle;
 }
 
 body.view-strategy .ml-l2-bucket-table .ml-l2-bucket-row {
@@ -2655,16 +2668,21 @@ body.view-strategy .ml-l2-bucket-table .ml-l2-bucket-row:hover {
 }
 
 body.view-strategy .ml-l2-bucket-table .ml-l2-bucket-row.is-max {
-  background: rgba(74, 155, 255, 0.065) !important;
+  background: rgba(74, 155, 255, 0.07) !important;
 }
 
+body.view-strategy .ml-l2-bucket-table .ml-l2-bucket-row.is-empty .ml-l2-amt-pair,
+body.view-strategy .ml-l2-bucket-table .ml-l2-bucket-row.is-empty .ml-l2-table-ratio {
+  opacity: 0.55;
+}
+
+/* 档位名(粘性左列) */
 body.view-strategy .ml-l2-bucket-table .ml-l2-bucket-name {
   position: sticky;
   left: 0;
   z-index: 1;
-  width: 92px;
   display: table-cell !important;
-  padding-left: 9px;
+  padding-left: 10px;
   color: var(--st-text);
   background: #0c131d;
   text-align: left;
@@ -2678,20 +2696,20 @@ body.view-strategy .ml-l2-bucket-table .ml-l2-bucket-row.is-max .ml-l2-bucket-na
 body.view-strategy .ml-l2-bucket-table .ml-l2-bucket-name b {
   display: inline-block;
   color: var(--st-text);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 760;
 }
 
 body.view-strategy .ml-l2-bucket-table .ml-l2-bucket-name i {
   display: inline-block;
-  margin-left: 4px;
-  padding: 1px 4px;
+  margin-left: 5px;
+  padding: 1px 5px;
   border-radius: 4px;
   color: #8abaff;
   background: rgba(74, 155, 255, 0.12);
   font-size: 8px;
   font-style: normal;
-  line-height: 1.35;
+  line-height: 1.4;
   vertical-align: 1px;
 }
 
@@ -2700,30 +2718,65 @@ body.view-strategy .ml-l2-bucket-table .ml-l2-bucket-name small {
   margin-top: 1px;
   overflow: hidden;
   color: #d6a768;
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 520;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-body.view-strategy .ml-l2-table-money b,
-body.view-strategy .ml-l2-table-ratio b {
-  font-size: 11px;
+/* 买/卖成对格:小标签 + 数值,买红卖绿,斜杠弱化 */
+body.view-strategy .ml-l2-amt-pair {
+  padding: 5px 8px;
+  text-align: left;
+}
+
+body.view-strategy .ml-l2-amt-pair .ml-l2-table-money {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+}
+
+body.view-strategy .ml-l2-amt-pair .ml-l2-table-money i {
+  color: var(--st-faint);
+  font-size: 9px;
+  font-style: normal;
+}
+
+body.view-strategy .ml-l2-amt-sep {
+  margin: 0 6px;
+  color: rgba(174, 190, 214, 0.3);
+  font-style: normal;
+}
+
+body.view-strategy .ml-l2-table-money b {
+  font-size: 11.5px;
   font-variant-numeric: tabular-nums;
-  font-weight: 740;
+  font-weight: 720;
 }
 
-body.view-strategy .ml-l2-table-money.is-buy b {
-  color: var(--st-red);
-}
+body.view-strategy .ml-l2-table-money.is-buy b { color: var(--st-red); }
+body.view-strategy .ml-l2-table-money.is-sell b { color: var(--st-green); }
 
-body.view-strategy .ml-l2-table-money.is-sell b {
-  color: var(--st-green);
+/* 比值:视觉主角,更大更醒目;三类比值各自淡色底,合力比最强调 */
+body.view-strategy .ml-l2-table-ratio {
+  text-align: center;
 }
 
 body.view-strategy .ml-l2-table-ratio b {
-  color: #c5d7ef;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 760;
+  color: #d6e2f2;
 }
+
+body.view-strategy .ml-l2-table-ratio.is-active { background: rgba(217, 143, 139, 0.05); }
+body.view-strategy .ml-l2-table-ratio.is-passive { background: rgba(138, 169, 207, 0.05); }
+body.view-strategy .ml-l2-table-ratio.is-support {
+  background: rgba(203, 178, 126, 0.07);
+}
+body.view-strategy .ml-l2-table-ratio.is-support b { color: #ecd9ad; }
+
+body.view-strategy .ml-l2-bucket-table .ml-l2-bucket-row.is-max .ml-l2-table-ratio b { color: #eaf1fb; }
 
 @media (max-width: 920px) {
   body.view-strategy .ml-l2-history-summary {

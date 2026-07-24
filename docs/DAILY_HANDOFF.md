@@ -9742,3 +9742,106 @@ Deployment:
 
 Notes for next agent:
 - Git、生产静态文件和云端双日志已一致；后续策略回看改动应继续保持“主线命中状态”和“明星状态”两个视觉维度独立。
+## 2026-07-24 - Local Claude - L2 逐档成交明细重设计（收窄+清晰）
+
+Changed:
+- 「今日 L2 扫描记录 → 展开个股 → 逐档成交明细」原为 8 列宽表（档位 / 主动买入·卖出·比 / 被动买入·卖出·比 / 合力比），`width:100% + min-width:760px`，在整页宽容器里被拉满约 1800px、数据极稀疏、组间关系断裂。
+- 重设计为 6 列紧凑表：
+  - 买/卖金额合并成对格「买 X / 卖 Y」（买红卖绿、斜杠弱化），列数由 8 收到 6；
+  - 表宽固定 560px、左对齐，不再随页面铺满；`.ml-l2-bucket-table-wrap` 用 `width:max-content; max-width:100%; overflow-x:auto`，窄屏时表格保持完整、档位列粘性、其余列在容器内横向滚动（移动端无重叠、页面零溢出）；
+  - 比值（主动比/被动比/合力比）作为视觉主角：字号加大加粗；三段用 `主动成交`(暖) / `被动成交`(蓝) / `合力比`(琥珀) 分组表头 + 组分隔线 + 淡色底，合力比列最强调；
+  - 最大档行蓝色高亮 + 左侧强调条保留；数据缺失/字段不完整/无大单行整行降透明度并保留档位标注。
+- 渲染函数：新增 `strategyL2HistoryAmtPair`，`strategyL2HistoryRatioCell` 增加 kind 参数（is-active/is-passive/is-support）；表头改为 `主动成交/被动成交` 各 colspan=2 + `合力比` rowspan=2。比值公式说明文案不变。
+- 纯展示层，L2 采集/判定/明星逻辑与数值零改动。缓存版本 `v=20260724h` → `v=20260724j`（跳过 #258 占用的 i）。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `tests/strategy-workbench-ui.test.js`
+
+Validated:
+- 真实数据形态（含契约仿真 L2）改前/改后对照：宽表铺满 → 560px 紧凑表；买/卖成对、比值醒目、分组清晰、最大档高亮、缺失档降噪。
+- 桌面 2507px / 移动 4904px，两视口横向溢出均为 0；移动端桶表在容器内横向滚动、无列重叠。
+- `git diff --check` 通过；全仓 61/61 个 `tests/*.test.js` 通过（含更新后的表头结构断言与新增 `ml-l2-amt-pair`/`strategyL2HistoryAmtPair` 断言）。
+
+Deployment:
+- 未部署生产；未修改云端文件，未重启任何服务。
+
+Notes for next agent:
+- 本分支自最新 main（含已部署 #251/#256）新建；与仍在评审的 #258（明星信号小框，占用缓存版本 i）互不重叠，若 #258 先合并，本 PR 合并时仅需处理一次缓存版本号（i↔j）与 CSS 末尾追加块的琐碎冲突。
+- 触及「L2」高风险展示范围，建议 Codex 复核：重点核对 6 列表头 colspan、买/卖成对格数值与原 8 列一一对应无错位、缺失档展示、最大档高亮口径不变。
+- L2 明细以契约仿真数据验证，部署后需 panda 账号在真实 L2 数据下复看一次。
+
+## 2026-07-24 - Local Claude - #261 移植 #199 L2 板块来源标签（Codex 复核要求）
+
+Changed:
+- 按 Codex 复核意见，把旧 Draft #199 的「L2 扫描板块来源标签」移植进本 PR，并适配 A+C 折叠表结构（不带入 #199 旧 `article` 卡布局）：
+  - `renderStrategyL2History` 每个任务计算 `strategyBoardSourceLabel(job?.zsType)` 与来源类名（6→eastmoney/5→ths/7→kpl），把来源 chip 放进 `.ml-l2-job-name` 单元格（随板块名同格），不新增网格列、不打乱折叠表的 9 列对齐。
+  - 新增 `.ml-l2-source` 紧凑 chip 样式（基样式 + 东财红/同花顺蓝/KPL紫三色，`flex:0 0 auto` 不压缩）。
+- `#199` 只移植来源 chip、三色样式与断言，未带入旧卡片布局；完成后 #199 可关闭。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `tests/star-l2-layers.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 真实数据形态预览（三任务分别设 zsType 6/5/7）：东财/同花顺/KPL 三色标签紧跟板块代码正确渲染，`自动/完成/时间/扫描/结果/入选/明星/展开` 列对齐不受影响。
+- 全仓 61/61 个 `tests/*.test.js` 通过（含新增来源标签渲染与三色样式断言）；`git diff --check` 通过；桌面 2507px / 移动 4904px 横向溢出均为 0。
+
+Deployment:
+- 未部署生产。
+
+Notes for next agent:
+- #199（L2 来源标签 Draft）内容已并入本 PR，可关闭 #199。
+- 合并顺序（Codex 建议）：本 PR（缓存 j）先合，#258（缓存 k）随后同步 main 保留 k。
+
+## 2026-07-24 - Local Claude - #261 补 L2 六列表格布局回归断言
+
+Changed:
+- 按 Codex「#261 仍需完成上一轮第 3 项测试」的意见（对齐 #258 补断言的做法），在 `tests/strategy-workbench-ui.test.js` 锁定 L2 逐档明细 6 列紧凑表的核心 CSS 布局，防止多层覆盖后悄悄退回铺满整页的宽表：
+  - `.ml-l2-bucket-table` 定宽 `560px` + `table-layout:fixed`（不再 `width:100%` 拉满）；
+  - `.ml-l2-bucket-table-wrap` `width:max-content` + `max-width:100%` + `overflow-x:auto`（窄屏容器内滚动、不撑破页面）；
+  - 比值为视觉主角 `.ml-l2-table-ratio b { font-size:14px }`（大于金额 11.5px）；
+  - 合力比列强调底色 `.ml-l2-table-ratio.is-support`；
+  - 买/卖成对格 `.ml-l2-amt-pair .ml-l2-table-money { display:inline-flex }`。
+
+Files:
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 全仓 61/61 个 `tests/*.test.js` 通过；`git diff --check` 通过。
+
+Deployment:
+- 未部署生产。
+
+Notes for next agent:
+- #261 代码已完备（L2 6 列表格 + #199 三色来源标签 + 布局回归断言）。当前对 main 为 MERGEABLE。
+- 合并顺序（Owner/Codex 口径）：等 #262 复核合并后，本 PR 再同步最新 main 并将缓存键升级为下一个未使用版本（`j` 目前与 #262 撞号；#262 合并后按当时未用版本升，如 `k`/`l`）。缓存键升级留到同步 main 时一次性处理，本轮不预改。
+- 附：本人已独立复核 #262，发现 `.ml-card.confirmed-mainline .ml-confirmed` 越界把 QI主线 徽章误染红（与 13350/13353 共用 `.ml-confirmed`），未 approve；#262 修正后方能作为前置合并。
+
+## 2026-07-24 - Local Claude - #261 补 L2 桶行运行时样本测试（Codex 终审阻断项）
+
+Changed:
+- 按 Codex 终审第 3 项：不能只做 HTML/CSS 文本断言，需真实调用 `strategyL2HistoryBucketRow` 验证 6 列重构没有错位单元格。
+- 在 `tests/strategy-workbench-ui.test.js` extract+eval 桶行渲染依赖链（strategyPlainMoney → …Num/…RatioValue/…RatioText/…BucketLabel/…Money/…Bucket/…AmtPair/…RatioCell/…BucketRow），用四项互不相同金额（主买3.8亿/主卖1.7亿/被买3.1亿/被卖1.9亿）执行并断言：
+  1. 金额未互换：主动买卖=3.8亿/1.7亿、被动买卖=3.1亿/1.9亿分别落在正确格；列顺序主动买卖→主动比→被动买卖→被动比→合力比；
+  2. 三比值具体结果：主动比 2.24、被动比 1.63、合力比 1.92；
+  3. 最大档 `is-max` + 最大档标记；
+  4. 数据缺失（缺整档）与字段不完整（缺 activeSell 字段）。
+- 备注：`strategyL2HistoryNum` 把 `null` 视作 0，故「字段不完整」样本用「缺字段」而非 `null`。
+
+Files:
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 全仓 61/61 个 `tests/*.test.js` 通过（含新增运行时样本测试）；`git diff --check` 通过。
+
+Deployment:
+- 未部署生产。
+
+Notes for next agent:
+- #261 现含：L2 6 列表格 + #199 三色来源标签 + CSS 布局断言 + 桶行运行时样本测试。对 main 为 MERGEABLE。
+- 缓存键升级仍留到「#262 合并后同步 main」时一次性处理（当前 `j` 与 #262 撞号）。
