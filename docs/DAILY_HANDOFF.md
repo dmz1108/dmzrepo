@@ -9664,3 +9664,31 @@ Deployment:
 Notes for next agent:
 - 合并后需原子发布 `kpl-stats-server.js` 并重启主服务；随后核验 2026-07-23 中国西电次高 `+6.08%`，且东财/同花顺电网设备均由“未命中”改为“主线命中”。
 - 2026-07-23 的 3 日指标要等第三个后续交易日收盘后才能生成；未来数据保持 `--` 是正确边界，不应人工回填。
+
+## 2026-07-24 - Codex - PR #256 回看后续指标修复已部署
+
+Changed:
+- 合并 PR `#256`，合并提交为 `f65714dad3542a406a36b42cb3facb43fdecbdb4`。
+- 从精确合并后的 `main` 发布 `kpl-stats-server.js`，重启主服务并完成公网回看接口验收。
+- 云端两份运维日志均已追加本次发布记录。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 生产后端：`kpl-stats-server.js`
+
+Validated:
+- 发布前云端后端哈希与合并前 `main` 完全一致，无游离修改被覆盖。
+- 发布后云端 `kpl-stats-server.js` SHA-256 为 `46c6d06f01f1f4ede9e7ec02829a5f3ce8ab9e3841bcfe937089e38a6e9a56b5`，与合并提交一致。
+- 公网 `/health` 返回 `ok=true`。
+- 2026-07-23 电网设备盘后实际排名第一（32 涨停）；东财和同花顺 `mainlineHitTop1/mainlineHitTop3` 均已变为 `true`。
+- 中国西电次高已补为 `+6.08%`；立新能源、长缆科技次高均为 `+9.99%`。
+- 近 30 日审计结果：已存在下一交易日的明星/龙头 `nextHighGain` 缺失 `0`；已存在第三个后续交易日的 `threeDayGain` 缺失 `0`。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard` 并仅重启计划任务 `Panda Dashboard Server`；主进程 PID `14816 -> 10720`。
+- 未重启娱乐服务、Caddy 或公司端 L2 worker。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-pr256-f65714d-20260724-133029`。
+
+Notes for next agent:
+- 7 月 22 日第三个后续交易日是 7 月 27 日，7 月 23 日第三个后续交易日是 7 月 28 日；在对应收盘前显示 `--` 是正确状态，之后接口会自动补算。
+- 不需要修改任何历史预测文件、涨停库或收盘价库；修复在读取与计算层即时生效。
