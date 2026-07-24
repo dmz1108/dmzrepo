@@ -168,6 +168,36 @@ const mixedOutcomeHTML = renderMainlineReviewHTML({
   stats: { bySource: { eastmoney: { mainlineTotal: 1 }, ths: { mainlineTotal: 1 } } },
 });
 A(mixedOutcomeHTML.includes('<div class="mlr-row hit-na'), '终审P3:一源命中一源脱靶时整行用中性强调，不用“最好结果”绿色误导');
+const mixedOutcomeWithStarHTML = renderMainlineReviewHTML({
+  days: [{ day: '2026-07-21', phase: '尾盘', sampleValid: true, noMainline: false, theme: '半导体', leaders: [],
+    star: { code: '603986', name: '兆易创新', predictLevel: 'expected', sealStatus: 'sealed' },
+    mainlineStarQualified: true,
+    expectedStars: [{ code: '603986', name: '兆易创新', sealStatus: 'sealed' }],
+    actualTop: [{ theme: '半导体', count: 39 }],
+    bySource: { eastmoney: { available: true, status: 'mainline', theme: '半导体', noMainline: false, mainlineHitTop1: true, mainlineHitTop3: true }, ths: { available: true, status: 'mainline', theme: '消费电子/显示', noMainline: false, mainlineHitTop1: false, mainlineHitTop3: false } } }],
+  stats: { bySource: { eastmoney: { mainlineTotal: 1 }, ths: { mainlineTotal: 1 } } },
+});
+A(mixedOutcomeWithStarHTML.includes('<details class="mlr-line hit-ok star-confirmed')
+  && mixedOutcomeWithStarHTML.includes('<div class="mlr-row hit-ok star-confirmed'),
+  'Owner 2026-07-24:任一来源命中第一家族且有确认明星时，双源结果虽分歧仍使用红色真主线状态');
+const missedOutcomeWithStarHTML = renderMainlineReviewHTML({
+  days: [{ day: '2026-07-22', phase: '尾盘', sampleValid: true, noMainline: false, theme: '算力', leaders: [],
+    star: { code: '000034', name: '神州数码', predictLevel: 'confirmed', sealStatus: 'notSealed' },
+    mainlineStarQualified: false,
+    expectedStars: [
+      { code: '300857', name: '协创数据', sealStatus: 'notSealed' },
+      { code: '000063', name: '中兴通讯', sealStatus: 'notSealed' },
+    ],
+    actualTop: [{ theme: '电力', count: 10 }],
+    bySource: { eastmoney: { available: true, status: 'mainline', theme: '算力', noMainline: false, mainlineHitTop1: false, mainlineHitTop3: false }, ths: { available: true, status: 'no-mainline', theme: '', noMainline: true, mainlineHitTop1: null, mainlineHitTop3: null } } }],
+  stats: { bySource: { eastmoney: { mainlineTotal: 1 }, ths: { mainlineTotal: 0 } } },
+});
+A(missedOutcomeWithStarHTML.includes('<div class="mlr-row hit-miss')
+  && !missedOutcomeWithStarHTML.includes('star-confirmed')
+  && !missedOutcomeWithStarHTML.includes('明星确认</i><b>神州数码')
+  && missedOutcomeWithStarHTML.includes('预期未兑现</i><b>协创数据')
+  && missedOutcomeWithStarHTML.includes('<span class="mlr-label">预期候选</span>'),
+  'Owner 2026-07-24:没有来源命中第一家族时，盘中L2候选不得继续显示为明星确认');
 const legacyReviewHTML = renderMainlineReviewHTML({
   days: [{ day: '2026-07-10', phase: '尾盘', sampleValid: true, noMainline: true, leaders: [], expectedStars: [], actualTop: [] }],
   stats: { mainlineTotal: 0 },

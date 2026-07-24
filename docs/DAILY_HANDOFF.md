@@ -9922,3 +9922,126 @@ Deployment:
 Notes for next agent:
 - #261 已同步至最新 main、缓存键 `k`，对 main 应为 MERGEABLE，含全部 Codex 复核要求（#199 来源标签、CSS 布局断言、桶行运行时样本测试）。待 Codex 终审放行即可合并。
 - #258（明星框方案已被 #262 吸收）可关闭。
+
+## 2026-07-24 - Codex - 单源命中且有确认明星时升级红色真主线状态
+
+Changed:
+- 修正预判回看双源结果分歧时的行级状态：任一来源命中盘后第一主因家族，且当天存在确认明星，即使用红色 `hit-ok` 真主线状态。
+- 东财、同花顺的主题和命中结果继续独立展示、独立统计；没有合并来源，也没有修改命中率算法。
+- 明星存在但没有任何来源命中第一家族时继续显示未命中，不会因明星信号单独误标红色。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `tests/strategy-two-source-mainlines.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 新增 2026-07-21 形状回归：东财半导体命中、同花顺消费电子未命中、兆易创新预期转明星，整行必须为 `hit-ok star-confirmed`。
+- 新增 2026-07-22 形状回归：有盘中明星但东财未命中、同花顺无主线，整行不得误标 `hit-ok`。
+
+Deployment:
+- 本条提交时尚未部署生产；未修改云端文件、运行时数据或服务状态，未重启任何服务。
+
+Notes for next agent:
+- 本次只修正回看视觉状态归类。PR `#261` 同步 `main` 时必须保留此规则与新增测试。
+
+## 2026-07-25 - Codex - PR #264 单源命中红色状态已部署
+
+Changed:
+- 合并并部署 PR `#264`，合并提交为 `746754e59ace45728d7b77136578b6525e0cecdc`。
+- 预判回看现按已确认规则展示：任一来源命中盘后第一主因家族，且当天有确认明星，整行显示红色真主线状态；各来源仍保持独立展示和命中统计。
+- 云端两份运维日志均已追加本次静态发布记录。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 生产静态文件：`kpl-dashboard_17_apple.html`
+
+Validated:
+- 全仓 `61/61` 个测试文件通过。
+- 使用生产形状数据验证：`07.21=hit-ok+star-confirmed`、`07.22=hit-miss+star-confirmed`、`07.23=hit-ok+star-confirmed`。
+- 发布前云端 HTML 哈希与上一版 `main` 一致，无游离修改；发布后云端磁盘、公网响应和 Git 文件 SHA-256 均为 `25ef3efc909ea0da6785b0860234e3beab8826d2ba737459a7b0d14fbf29ca92`。
+- 公网 `/health` 返回 `ok=true`。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`；仅发布静态 HTML，未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-pr264-746754e-20260725-002228`。
+
+Notes for next agent:
+- PR `#261` 必须同步包含 PR `#264` 的最新 `main`，保留单源命中红色规则及其回归测试，避免后续 UI 合并覆盖本次修复。
+
+## 2026-07-25 - Codex - 回看明星确认绑定真实主线
+
+Changed:
+- 为预判回看接口增加 `mainlineStarQualified`，按同一主因家族、同一来源的盘后第一家族命中结果判断明星是否真正属于主线。
+- 盘中 L2 曾确认但对应主线最终未命中的股票继续保留原始候选证据，不再显示“明星确认”或计入红色真主线日。
+- 预期候选未兑现仍保留在展开证据中，并改用“预期候选”标签，避免与正式明星混淆。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/mainline-review.test.js`
+- `tests/strategy-two-source-mainlines.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 接口双源夹具确认：2026-07-21 东财半导体命中且有明星，`mainlineStarQualified=true`；2026-07-22 东财算力未命中且同花顺无主线，`mainlineStarQualified=false`。
+- 生产形状页面渲染结果：`07.21=hit-ok+star-confirmed`、`07.22=hit-miss+star-missed`、`07.23=hit-ok+star-confirmed`；7 月 22 日不再显示神州数码为明星确认。
+- 定向接口、双源页面测试及 `node --check`、`git diff --check` 均通过。
+
+Deployment:
+- 本条提交时尚未部署生产；未修改云端文件、运行时数据或服务状态，未重启任何服务。
+
+Notes for next agent:
+- PR `#261` 同步最新 `main` 时还必须保留本次接口字段、页面资格闸和两组回归测试。
+
+## 2026-07-25 - Codex - PR #266 明星资格规则已部署
+
+Changed:
+- 合并并部署 PR `#266`，合并提交为 `aa263471d7b241958bba509dca8890e0d38ff83d`。
+- 从精确合并提交原子发布回看接口与页面；云端两份运维日志均已追加本次记录。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 生产文件：`kpl-stats-server.js`、`kpl-dashboard_17_apple.html`
+
+Validated:
+- 发布前两份云端文件哈希均与上一版 `main` 一致，没有覆盖游离修改。
+- 发布后云端磁盘、公网响应和 Git 文件一致：
+  - server：`feb6446fda21f803b8f6c2dd6fa2abc27fe18a79058f246813a1c3dfcecd51e4`
+  - HTML：`eb9feefb8410f8ba6ac0889f0480953fc1317ea009f4eb4ae1495051f518770a`
+- 公网接口返回 `07.21=true`、`07.22=false`、`07.23=true`；公网渲染分别为红色明星主线、未命中且预期未兑现、红色明星主线。
+- 7 月 22 日不再把神州数码显示为明星确认；公网 `/health` 返回 `ok=true`。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`，仅重启计划任务 `\Panda Dashboard Server`；新主进程 PID `12992`。
+- 未重启 Caddy、娱乐服务或公司端 L2 worker。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-pr266-aa26347-20260725-004926`。
+
+Notes for next agent:
+- PR `#261` 必须同步包含 PR `#264`、`#266` 及其部署记录的最新 `main`，保留单源红色规则、明星资格字段和全部回归测试。
+
+## 2026-07-25 - Codex - PR #261 最终连续集成复审
+
+Changed:
+- 在独立集成分支将 PR `#261` 与包含 PR `#264`、`#266`、`#267` 的最新 `main` 合并；唯一冲突为双方追加的 `docs/DAILY_HANDOFF.md`，已完整保留两边记录。
+- 保留 L2 逐档成交明细的 6 列紧凑表、东财/同花顺/KPL 来源标签、运行时字段映射测试与缓存键 `20260724k`。
+- 保留最新回看规则：单源命中第一家族且有正式明星时显示红色真主线；`mainlineStarQualified=false` 时原始 L2 候选只作审计，不显示明星确认。
+
+Files:
+- `Qi/vendor/strategy-workbench.css`
+- `kpl-dashboard_17_apple.html`
+- `tests/star-l2-layers.test.js`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js` 通过。
+- L2 UI、明星分层、主线回看和双源主线定向测试全部通过。
+- 全仓 `61/61` 个 `tests/*.test.js` 文件通过；`git diff --check` 通过。
+- 相对最新 `main` 的业务差异仅为 L2 展示、样式和对应测试；未修改采集、评分或明星判定逻辑。
+
+Deployment:
+- 本条提交时尚未部署生产；未修改云端文件、运行时数据或服务状态，未重启任何服务。
+
+Notes for next agent:
+- 合并后只需静态发布 `kpl-dashboard_17_apple.html` 与 `Qi/vendor/strategy-workbench.css`，不需要重启 Node、Caddy 或公司端 L2 worker。

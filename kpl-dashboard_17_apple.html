@@ -13710,7 +13710,10 @@ function renderMainlineReviewHTML(d) {
   const reviewStarVisual = (r) => {
     const star = r && r.star;
     const expected = Array.isArray(r && r.expectedStars) ? r.expectedStars : [];
-    if (star && star.predictLevel === 'confirmed') {
+    // 盘中 L2 确认不等于盘后真主线明星。明确未命中第一主因家族时，
+    // 原始候选证据继续保留，但不能显示“明星确认”或进入红色真主线分组。
+    const mayBeMainlineStar = r?.mainlineStarQualified !== false;
+    if (mayBeMainlineStar && star && star.predictLevel === 'confirmed') {
       return { key: 'confirmed', rowClass: 'star-confirmed', label: '明星确认', name: star.name || star.code || '', stock: star };
     }
     const expectedRows = [];
@@ -13721,8 +13724,11 @@ function renderMainlineReviewHTML(d) {
       }
     }
     const sealed = expectedRows.find(row => row?.sealStatus === 'sealed');
-    if (sealed) {
+    if (mayBeMainlineStar && sealed) {
       return { key: 'confirmed', rowClass: 'star-confirmed', label: '预期转明星', name: sealed.name || sealed.code || '', stock: sealed };
+    }
+    if (!mayBeMainlineStar && sealed) {
+      return { key: 'missed', rowClass: 'star-expected star-missed', label: '未成主线', name: sealed.name || sealed.code || '', stock: sealed };
     }
     const unresolved = expectedRows.find(row => row?.sealStatus !== 'notSealed');
     if (unresolved) {
@@ -13775,12 +13781,15 @@ function renderMainlineReviewHTML(d) {
     return `<details class="mlr-reserve-line"><summary><span><b>预备层</b><small>非正式候选，不计正式命中率</small></span><em>${list.length}条</em></summary><div class="mlr-reserve-items">${items}</div></details>`;
   };
   // 行级结果配色(与 hitCell 同口径):驱动左侧强调条颜色,一眼可扫命中/前三/脱靶/待验证
-  const rowHitClass = (r) => {
+  const rowHitClass = (r, starVisual) => {
     if (r.bySource) {
       if (r.sampleValid === false) return 'hit-invalid';
       if (r.pendingReview) return 'hit-wait';
       const sourceRows = Object.values(r.bySource).filter(src => src && src.status !== 'unavailable' && src.status !== 'unknown' && !src.noMainline && src.mainlineHitTop1 != null);
       const outcomes = new Set(sourceRows.map(src => src.mainlineHitTop1 === true ? 'ok' : src.mainlineHitTop3 === true ? 'near' : 'miss'));
+      // 双源各自独立评估；只要任一来源命中盘后第一家族，并且当日已有确认明星，
+      // 整日即具备一条完整的“单源主线 + 明星”证据链，应使用红色真主线状态。
+      if (starVisual?.key === 'confirmed' && outcomes.has('ok')) return 'hit-ok';
       if (outcomes.size !== 1) return 'hit-na';
       return outcomes.has('ok') ? 'hit-ok' : outcomes.has('near') ? 'hit-near' : 'hit-miss';
     }
@@ -13794,10 +13803,13 @@ function renderMainlineReviewHTML(d) {
   };
   const rowModels = rows.map(r => ({ r, starVisual: reviewStarVisual(r) }));
   const renderReviewRow = ({ r, starVisual }) => {
+    const hitClass = rowHitClass(r, starVisual);
     const starSignal = starVisual.key
       ? `<span class="mlr-star-signal ${starVisual.key}" aria-label="${escapeHTML(`${starVisual.label} ${starVisual.name}`)}"><i>${escapeHTML(starVisual.label)}</i><b>${escapeHTML(starVisual.name)}</b></span>`
       : '';
     const starSlotClass = starVisual.key ? ` mlr-star-slot ${starVisual.key}` : '';
+    const starSlotLabel = starVisual.key === 'confirmed' ? '明星' : '预期候选';
+    const reviewStarStock = starVisual.stock || (r.mainlineStarQualified === false ? null : r.star);
     const leaders = Array.isArray(r.leaders) && r.leaders.length ? r.leaders : (r.leader ? [r.leader] : []);
     const leaderCells = leaders.slice(0, 2).map((leader, index) =>
       `<span class="mlr-slot"><span class="mlr-label">${r.bySource ? '东财' : ''}龙头${index + 1}</span> ${gainCell(leader, false)}</span>`
@@ -13810,7 +13822,9 @@ function renderMainlineReviewHTML(d) {
       ? `<span class="mlr-pred">${sourceReview}</span>`
       : `<span class="mlr-pred"><span class="mlr-theme">${r.noMainline ? '今日无主线' : `${escapeHTML(r.theme || '')}${r.confirmed ? '<i title="管理员确认的当日主线">✔</i>' : ''}`}</span>${noStarStatus}</span>`;
     const evidenceCells = r.noMainline ? [] : [
-      `<span class="mlr-slot${starSlotClass}"><span class="mlr-label">明星</span>${gainCell(starVisual.stock || r.star, true)}</span>`,
+      reviewStarStock
+        ? `<span class="mlr-slot${starSlotClass}"><span class="mlr-label">${starSlotLabel}</span>${gainCell(reviewStarStock, true)}</span>`
+        : '',
       ...(leaderCells.length ? leaderCells : ['<span class="mlr-slot"><span class="mlr-label">龙头</span><span class="mlr-na">—</span></span>']),
       expectedCell(r) ? `<span class="mlr-slot mlr-conversion-slot"><span class="mlr-label">转化</span>${expectedCell(r)}</span>` : '',
     ].filter(Boolean);
@@ -13851,7 +13865,7 @@ function renderMainlineReviewHTML(d) {
     })();
     const actualTopRow = Array.isArray(r.actualTop) && r.actualTop.length ? r.actualTop[0] : null;
     const compactOut = r.pendingReview ? '待盘后验证' : (actualTopRow ? `${String(actualTopRow.theme || '')} ${Number(actualTopRow.count) || 0}涨停` : '暂无结果');
-    const lineStock = starVisual.stock || r.star || null;
+    const lineStock = reviewStarStock || null;
     const linePerf = (v) => {
       if (v == null) return '<b class="na">--</b>';
       const n = Number(v);
@@ -13860,7 +13874,7 @@ function renderMainlineReviewHTML(d) {
     const lineBadge = starVisual.key
       ? `<span class="mlr-line-badge ${starVisual.key}">${escapeHTML(starVisual.label)}</span>`
       : `<span class="mlr-line-badge quiet">${r.noMainline || !r.theme ? '今日无主线' : escapeHTML(r.theme)}</span>`;
-    return `<details class="mlr-line ${rowHitClass(r)}${starVisual.rowClass ? ` ${starVisual.rowClass}` : ''}${r.sampleValid === false ? ' invalid' : ''}">
+    return `<details class="mlr-line ${hitClass}${starVisual.rowClass ? ` ${starVisual.rowClass}` : ''}${r.sampleValid === false ? ' invalid' : ''}">
     <summary class="mlr-line-sum">
       <time class="mlr-line-day">${escapeHTML(String(r.day || '').slice(5).replace('-', '.'))}</time>
       ${lineBadge}
@@ -13871,7 +13885,7 @@ function renderMainlineReviewHTML(d) {
       <span class="mlr-line-perf">${linePerf(lineStock?.threeDayGain)}</span>
       <b class="mlr-line-caret" aria-hidden="true"></b>
     </summary>
-    <div class="mlr-row ${rowHitClass(r)}${starVisual.rowClass ? ` ${starVisual.rowClass}` : ''}${r.sampleValid === false ? ' invalid' : ''}">
+    <div class="mlr-row ${hitClass}${starVisual.rowClass ? ` ${starVisual.rowClass}` : ''}${r.sampleValid === false ? ' invalid' : ''}">
     <header class="mlr-card-head">
       <time class="mlr-day" datetime="${escapeHTML(String(r.day || ''))}">${escapeHTML(String(r.day || '').slice(5).replace('-', '.'))}</time>
       <span class="mlr-card-identity">${starSignal || fallbackIdentity}</span>

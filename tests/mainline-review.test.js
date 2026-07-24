@@ -233,11 +233,15 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   A(d8.mainlineHitTop1 === true, '②07-08 命中照常展示(只是不计分母)');
 
   // ③ 四种明星等级
-  A(d9.star.predictLevel === 'confirmed', '③最终快照允许显示 confirmed');
+  A(d9.star.predictLevel === 'confirmed' && d9.mainlineStarQualified === true,
+    '③命中真实第一家族的最终快照允许显示 confirmed 明星');
   A(d9.expectedStars.length === 1 && d9.expectedStars[0].sealStatus === 'sealed'
     && !!d9.expectedStars[0].confirmedAt, '③expected→confirmed 轨迹保留并计封板成功');
-  A(d3.star.predictLevel === 'expected' && d3.star.sealStatus === 'notSealed' && d3.star.sealedSameDay === false, '③expected+未封 → notSealed 计败');
-  A(d10.star.predictLevel === 'confirmed', '③confirmed → 只展示"当时已确认"');
+  A(d3.star.predictLevel === 'expected' && d3.star.sealStatus === 'notSealed' && d3.star.sealedSameDay === false
+    && d3.mainlineStarQualified === null,
+    '③expected+未封且主因不完整 → notSealed 计败，正式主线明星资格保持未知');
+  A(d10.star.predictLevel === 'confirmed' && d10.mainlineStarQualified === false,
+    '③盘中 confirmed 但主线脱靶 → 保留候选证据，同时明确不得作为正式主线明星');
   A(d7.star.predictLevel === 'active', '③active → 不进封板统计');
   A(d6.star.predictLevel === null, '③旧记录无 level → predictLevel=null(等级未知)');
 
@@ -325,6 +329,50 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   const out6 = await getStrategyMainlineReview(10);
   const oldV3 = out6.days.find(r => r.day === '2026-07-13');
   A(oldV3.bySource.eastmoney.status === 'unknown' && oldV3.bySource.eastmoney.noMainline === false, '终审P2:早期 v3 空块缺可用性元数据时标 unknown，不猜成无主线/暂缺');
+
+  // ---------- Owner 2026-07-24:明星必须挂在同源命中的真实第一主因家族 ----------
+  TODAY = '2026-07-23'; TODAY_CLOSED = true;
+  TRADING_DAYS = ['2026-07-21', '2026-07-22'];
+  PREDICTS['2026-07-21'] = {
+    schemaVersion: 3, sessionPhase: '尾盘', confirmedKey: '', top: [
+      { key: 'theme:半导体', theme: '半导体', star: { code: '603986', name: '兆易创新', level: 'expected' } },
+    ],
+    bySource: {
+      eastmoney: { available: true, hasMainlines: true, top: [
+        { key: 'theme:半导体', theme: '半导体', star: { code: '603986', name: '兆易创新', level: 'expected' } },
+      ], candidates: [], starTransitions: [] },
+      ths: { available: true, hasMainlines: true, top: [
+        { key: 'theme:消费电子', theme: '消费电子', l2VerificationStatus: 'qi', star: null },
+      ], candidates: [{ key: 'theme:消费电子', l2VerificationStatus: 'qi' }], starTransitions: [] },
+    },
+  };
+  LIMIT_UP['2026-07-21'] = finalLimitDb(['603986', '600021']);
+  MAIN_REASON['2026-07-21'] = reasonDb([
+    { code: '603986', name: '兆易创新', finalBoardTopic: '半导体' },
+    { code: '600021', name: 'A', finalBoardTopic: '半导体' },
+  ]);
+  PREDICTS['2026-07-22'] = {
+    schemaVersion: 3, sessionPhase: '尾盘', confirmedKey: '', top: [
+      { key: 'group:算力AI', theme: '算力', star: { code: '000034', name: '神州数码', level: 'confirmed' } },
+    ],
+    bySource: {
+      eastmoney: { available: true, hasMainlines: true, top: [
+        { key: 'group:算力AI', theme: '算力', star: { code: '000034', name: '神州数码', level: 'confirmed' } },
+      ], candidates: [], starTransitions: [] },
+      ths: { available: true, hasMainlines: false, top: [], candidates: [], starTransitions: [] },
+    },
+  };
+  LIMIT_UP['2026-07-22'] = finalLimitDb(['600022']);
+  MAIN_REASON['2026-07-22'] = reasonDb([{ code: '600022', name: 'B', finalBoardTopic: '电力' }]);
+  const out7 = await getStrategyMainlineReview(10);
+  const owner21 = out7.days.find(r => r.day === '2026-07-21');
+  const owner22 = out7.days.find(r => r.day === '2026-07-22');
+  A(owner21?.bySource?.eastmoney?.mainlineHitTop1 === true && owner21.mainlineStarQualified === true,
+    'Owner:7月21日东财同源命中半导体且有明星 → 正式主线明星资格成立');
+  A(owner22?.bySource?.eastmoney?.mainlineHitTop1 === false && owner22.mainlineStarQualified === false,
+    'Owner:7月22日东财算力未命中且同花顺无主线 → 正式主线明星资格不成立');
+  A(owner22?.star?.predictLevel === 'confirmed',
+    'Owner:7月22日原始L2确认候选仍保留用于审计，不因正式资格失败而丢证据');
 
   if (process.exitCode) console.error('\nSOME MAINLINE-REVIEW CHECKS FAILED');
   else console.log('\nALL MAINLINE-REVIEW CHECKS PASSED');
