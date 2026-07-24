@@ -9416,3 +9416,31 @@ Deployment:
 Notes for next agent:
 - 纯视觉减法层，追加在 CSS 文件末尾（沿用分层补丁模式）。部署时应原子发布 HTML 与 CSS，并在覆盖前核对线上文件仍匹配 PR #247 已记录哈希（html=877a65dc…4669 / css=586771c6…13）。
 - L2 管理员明细的验证使用了本地仿真数据（形状与 `strategy-backend.js` l2ScanForViewer 契约一致）；部署后建议用 panda 账号实际浏览一次 L2 展开态。
+
+## 2026-07-24 - Codex - PR #249 策略页视觉细节优化已部署
+
+Changed:
+- 正式复核并合并 PR `#249`，合并提交为 `319cd42a2ea7027d66c371f951c1cd4abece2bd9`。
+- 从该精确 `main` 提交原子发布策略页 HTML 与样式文件；公网缓存键已更新为 `20260724g`。
+- 云端两份运维日志均已追加本次静态发布记录。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 生产静态文件：`kpl-dashboard_17_apple.html`、`Qi/vendor/strategy-workbench.css`
+
+Validated:
+- 合并前独立复核确认全仓 `59/59` 个测试文件通过，`git diff --check` 和新增行秘密扫描通过。
+- 发布前云端 HTML/CSS 哈希与 PR #247 的已知生产版本完全一致，没有覆盖游离修改。
+- 发布后云端磁盘、公网响应和 Git 文件三方 SHA-256 完全一致：
+  - HTML：`f4f03b4446e677ed03919d46e6af1b5755e11ca8e049e8172ed8b1b954bb2719`
+  - CSS：`2141c71acfc4deb8520d0d36d8f1213aebd6b53c88b426fbb0681245250bcea7`
+- 公网 HTML 已引用 `/vendor/strategy-workbench.css?v=20260724g`；本地与公网 `/health` 均返回 `ok=true`。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`；静态文件发布，无需重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+- 主服务继续由原进程 PID `14816` 监听 `8765`。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-pr249-319cd42-20260724-024814`。
+
+Notes for next agent:
+- Git 合并提交、生产静态文件和云端双日志已一致；本次没有修改策略计算、数据接口或运行时数据库。
+- 管理员真实 L2 展开态仍可由 Owner 在页面中做最终主观视觉复验；静态结构、响应式约束和哈希已完成自动验收。
