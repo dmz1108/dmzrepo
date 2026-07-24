@@ -12779,7 +12779,7 @@ function renderStrategyL2History(data) {
     </details>`;
   }).join('');
   return `<section class="strategy-section ml-l2-history">
-    <details class="ml-l2-history-disclosure" open>
+    <details class="ml-l2-history-disclosure">
       <summary class="ml-l2-history-summary" aria-label="今日 L2 扫描记录">
         <span class="ml-l2-history-heading"><span class="strategy-section-title">今日 L2 扫描记录</span><small>管理员</small></span>
         <span class="ml-l2-history-overview">
@@ -13449,30 +13449,41 @@ function renderStrategyMainlinesHTML(d) {
     // ===== A+C 重构(Owner 2026-07-24):双源仍各自独立计算,仅展示层按题材合并 =====
     // 同题材两源合成一张卡:上部结论层 + 双源指标对比条,完整两源原卡收进「展开双源完整明细」。
     // 仅单源入选的题材保持单源卡并标注来源;绝不跨源拼接数据。
+    // 合并键优先 familyKey/key(与双源共振同一套归一化),同族不同名不拆卡;绝不生成跨源统一名次,
+    // 各源名次(rank 或源内序号)原样保留并在对比条内展示。展示顺序仅为东财在前、同花顺补位,不代表排序。
     const mergeByTheme = (eastList, thsList) => {
       const order = [];
-      const byTheme = new Map();
-      const put = (m, srcKey) => {
+      const byKey = new Map();
+      const put = (m, srcKey, idx) => {
         const theme = String(m?.theme || '');
         if (!theme) return;
-        if (!byTheme.has(theme)) { byTheme.set(theme, {}); order.push(theme); }
-        byTheme.get(theme)[srcKey] = m;
+        const key = String(m?.familyKey || m?.key || theme);
+        if (!byKey.has(key)) { byKey.set(key, {}); order.push(key); }
+        const entry = byKey.get(key);
+        entry[srcKey] = m;
+        entry[`${srcKey}Idx`] = idx;
+        entry[`${srcKey}Rank`] = Number(m?.rank) || idx + 1;
       };
-      (Array.isArray(eastList) ? eastList : []).slice(0, 8).forEach(m => put(m, 'east'));
-      (Array.isArray(thsList) ? thsList : []).slice(0, 8).forEach(m => put(m, 'ths'));
-      return order.map(theme => ({ theme, ...byTheme.get(theme) }));
+      (Array.isArray(eastList) ? eastList : []).slice(0, 8).forEach((m, idx) => put(m, 'east', idx));
+      (Array.isArray(thsList) ? thsList : []).slice(0, 8).forEach((m, idx) => put(m, 'ths', idx));
+      return order.map(key => {
+        const entry = byKey.get(key);
+        const primary = entry.east || entry.ths;
+        return { theme: String(primary?.theme || ''), ...entry };
+      });
     };
     const mlxReserveNote = (row) => (Array.isArray(row?.reserveReasons) ? row.reserveReasons : [])
       .map(x => x === 'no-confirmed-star' ? '待明星确认' : (x === 'no-qualified-leader' ? '待龙头形成' : x)).join(' · ');
-    const mlxStripCell = (srcLabel, srcCls, m) => {
+    const mlxStripCell = (srcLabel, srcCls, m, srcRank) => {
       if (!m) return `<div class="mlx-strip-cell ${srcCls} is-empty"><span class="mlx-src"><i class="mlx-dot"></i>${srcLabel}</span><span class="mlx-strip-na">本源未入选该题材</span></div>`;
+      const rankTag = Number.isFinite(Number(srcRank)) ? `<small title="${srcLabel}源内名次,两源独立排序,不存在统一名次">#${Number(srcRank)}</small>` : '';
       const inflow = strategyMainlineDisplayInflow(m);
       const fundLbl = Number(inflow.zsType) === 5 ? 'DDE' : (Number(inflow.zsType) === 6 ? '超大单' : '资金');
       const gv = m.boardGainPct === null || m.boardGainPct === undefined || m.boardGainPct === '' ? NaN : Number(m.boardGainPct);
       const gainCls = !Number.isFinite(gv) ? 'na' : (gv > 0 ? 'up' : (gv < 0 ? 'down' : ''));
       const inflowCls = inflow.value == null ? 'na' : (inflow.value > 0 ? 'up' : (inflow.value < 0 ? 'down' : ''));
       const metric = (lbl, val, cls = '') => `<span class="mlx-m"><i>${lbl}</i><b class="${cls}">${val}</b></span>`;
-      return `<div class="mlx-strip-cell ${srcCls}"><span class="mlx-src"><i class="mlx-dot"></i>${srcLabel}</span>
+      return `<div class="mlx-strip-cell ${srcCls}"><span class="mlx-src"><i class="mlx-dot"></i>${srcLabel}${rankTag}</span>
         ${m.predictScore != null ? metric('预判', Number(m.predictScore || 0).toFixed(0)) : ''}
         ${metric('主线', Number(m.score || 0).toFixed(0))}
         ${metric('涨幅', Number.isFinite(gv) ? `${gv > 0 ? '+' : ''}${gv.toFixed(2)}%` : '--', gainCls)}
@@ -13521,17 +13532,21 @@ function renderStrategyMainlinesHTML(d) {
       const badgeText = [(stage && stage.key && stage.key !== 'quiet' ? stage.label : '') || '', certShort].filter(Boolean).join('·');
       const advice = (stage && stage.advice) || (Array.isArray(primary.explain) && primary.explain.length ? primary.explain[0] : '');
       const reserveBar = isReserve ? `<div class="mlx-reserve-bar">预备 · ${escapeHTML(mlxReserveNote(primary) || '待补齐')}</div>` : '';
-      const detailCols = [entry.east ? `<div class="mlx-detail-col"><div class="mlx-src-label"><i class="mlx-dot"></i>东财完整明细</div>${renderCard(entry.east, i)}</div>` : '', entry.ths ? `<div class="mlx-detail-col"><div class="mlx-src-label ths"><i class="mlx-dot"></i>同花顺完整明细</div>${renderCard(entry.ths, i)}</div>` : ''].filter(Boolean).join('');
+      const detailCols = [entry.east ? `<div class="mlx-detail-col"><div class="mlx-src-label"><i class="mlx-dot"></i>东财完整明细</div>${renderCard(entry.east, entry.eastIdx || 0)}</div>` : '', entry.ths ? `<div class="mlx-detail-col"><div class="mlx-src-label ths"><i class="mlx-dot"></i>同花顺完整明细</div>${renderCard(entry.ths, entry.thsIdx || 0)}</div>` : ''].filter(Boolean).join('');
+      // 同 familyKey 两源题材名不同:主名取东财(缺东财取同花顺),另一源原名以别名保留,不丢原始命名。
+      const altTheme = both && String(entry.east.theme || '') !== String(entry.ths.theme || '')
+        ? `<span class="mlx-alias" title="同一主线族在两源的原始题材名不同,合并展示但保留各自命名">同花顺名·${escapeHTML(String(entry.ths.theme || ''))}</span>`
+        : '';
       return `<article class="mlx-card${isReserve ? ' reserve' : ''}${starLevel ? ` has-${starLevel}-star` : ''}">
         ${reserveBar}
         <div class="mlx-head">
-          <span class="mlx-rank">${i + 1}</span>
           <span class="mlx-name">${escapeHTML(entry.theme)}</span>
+          ${altTheme}
           ${badgeText ? `<span class="mlx-badge">${escapeHTML(badgeText)}</span>` : ''}
           ${primary.isConfirmedMainline ? '<span class="mlx-badge on">✔ 当日主线</span>' : ''}
           ${advice ? `<span class="mlx-advice">${escapeHTML(advice)}</span>` : ''}
         </div>
-        <div class="mlx-strip">${mlxStripCell('东财', 'east', entry.east)}${mlxStripCell('同花顺', 'ths', entry.ths)}</div>
+        <div class="mlx-strip">${mlxStripCell('东财', 'east', entry.east, entry.eastRank)}${mlxStripCell('同花顺', 'ths', entry.ths, entry.thsRank)}</div>
         <div class="mlx-body">
           <div class="mlx-leads"><div class="mlx-blk-label">龙头${both ? '（双源共识 + 差异）' : ''}</div>${leaderRows || '<div class="mlx-lead-none">暂无合格龙头</div>'}</div>
           <div class="mlx-stars"><div class="mlx-blk-label">明星信号${starUnion.size ? ` · ${starUnion.size}只` : ''}</div>${stars || '<div class="mlx-lead-none">暂无明星信号</div>'}</div>

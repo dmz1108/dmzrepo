@@ -9387,6 +9387,63 @@ Deployment:
 Notes for next agent:
 - Git `main`、云端静态文件与云端操作日志已一致；本次没有修改策略逻辑、数据或服务配置。
 
+## 2026-07-24 - Local Claude - 策略页视觉细节优化
+
+Changed:
+- 在 `strategy-workbench.css` 末尾追加 Local Claude 视觉优化层（约 128 行），纯展示层，不改任何策略、数据或交互逻辑。
+- 主线榜两栏的「今日暂无正式主线」空态与重点关注空态：由大边框盒改为左侧细 accent 的安静便签，降低重复空态的视觉噪音。
+- 预判回看统计条：命中率/胜率由分隔线纯文本升级为可扫读的胶囊（桌面与移动都适配）。
+- 真主线卡片「转化」胶囊按内容收窄，不再拉伸成整行空框。
+- L2 个股摘要行的主买/主卖/被买/被卖四项金额由整行均分改为紧凑簇，消除宽屏大片留白；移动端改为两列簇。
+- 题材校准头部说明改为紧跟标题，不再漂到 1720px 壳最右端。
+- 9px 字号下限统一提升到 10px（分组小注、L2 桶表说明、股票代码等），信息密度不变。
+- 样式缓存版本 `v=20260724f` → `v=20260724g`；预备主线标题层间距微调。
+
+Files:
+- `Qi/vendor/strategy-workbench.css`
+- `kpl-dashboard_17_apple.html`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 本地代理预览（公开只读 API 真实数据 + 契约形状的 L2 仿真数据）下，Playwright 在 1440x1000 与 390x844 完成改前/改后分区块截图对照。
+- 两个视口横向溢出均为 0；桌面整页高度 3689→3627；真主线桌面双列等高与回看 1040px 左对齐布局保持不变。
+- `git diff --check` 通过；全仓 59/59 个 `tests/*.test.js` 通过（含本次新增的胶囊/金额簇回归断言）。
+
+Deployment:
+- 本条提交时尚未部署生产；未修改云端文件，未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+
+Notes for next agent:
+- 纯视觉减法层，追加在 CSS 文件末尾（沿用分层补丁模式）。部署时应原子发布 HTML 与 CSS，并在覆盖前核对线上文件仍匹配 PR #247 已记录哈希（html=877a65dc…4669 / css=586771c6…13）。
+- L2 管理员明细的验证使用了本地仿真数据（形状与 `strategy-backend.js` l2ScanForViewer 契约一致）；部署后建议用 panda 账号实际浏览一次 L2 展开态。
+
+## 2026-07-24 - Codex - PR #249 策略页视觉细节优化已部署
+
+Changed:
+- 正式复核并合并 PR `#249`，合并提交为 `319cd42a2ea7027d66c371f951c1cd4abece2bd9`。
+- 从该精确 `main` 提交原子发布策略页 HTML 与样式文件；公网缓存键已更新为 `20260724g`。
+- 云端两份运维日志均已追加本次静态发布记录。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 生产静态文件：`kpl-dashboard_17_apple.html`、`Qi/vendor/strategy-workbench.css`
+
+Validated:
+- 合并前独立复核确认全仓 `59/59` 个测试文件通过，`git diff --check` 和新增行秘密扫描通过。
+- 发布前云端 HTML/CSS 哈希与 PR #247 的已知生产版本完全一致，没有覆盖游离修改。
+- 发布后云端磁盘、公网响应和 Git 文件三方 SHA-256 完全一致：
+  - HTML：`f4f03b4446e677ed03919d46e6af1b5755e11ca8e049e8172ed8b1b954bb2719`
+  - CSS：`2141c71acfc4deb8520d0d36d8f1213aebd6b53c88b426fbb0681245250bcea7`
+- 公网 HTML 已引用 `/vendor/strategy-workbench.css?v=20260724g`；本地与公网 `/health` 均返回 `ok=true`。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`；静态文件发布，无需重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+- 主服务继续由原进程 PID `14816` 监听 `8765`。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-pr249-319cd42-20260724-024814`。
+
+Notes for next agent:
+- Git 合并提交、生产静态文件和云端双日志已一致；本次没有修改策略计算、数据接口或运行时数据库。
+- 管理员真实 L2 展开态仍可由 Owner 在页面中做最终主观视觉复验；静态结构、响应式约束和哈希已完成自动验收。
 ## 2026-07-24 - Local Claude - 策略页 A+C 结构重构（Owner 指定组合）
 
 Changed:

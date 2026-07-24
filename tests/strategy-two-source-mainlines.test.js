@@ -327,5 +327,30 @@ eval(extractFn('strategyMainlineReadCachedCall'));
     A(calls === 2, '不同库(kind)同一天各自缓存,不串键');
   });
 
+  // ---- A+C 合并卡(2026-07-24 Codex 复审意见 2/3):familyKey 归一合并、无跨源统一名次 ----
+  // mergeByTheme 是 renderStrategyMainlinesHTML 的内部纯函数,单独按文本提取执行。
+  const mergeSrcStart = html.indexOf('const mergeByTheme = (eastList, thsList) => {');
+  A(mergeSrcStart > -1, 'A+C:mergeByTheme 存在');
+  let mergeDepth = 0, mergeEnd = html.indexOf('{', mergeSrcStart);
+  for (let i = mergeEnd; i < html.length; i++) {
+    if (html[i] === '{') mergeDepth++;
+    else if (html[i] === '}') { mergeDepth--; if (mergeDepth === 0) { mergeEnd = i; break; } }
+  }
+  const mergeByTheme = eval(`(${html.slice(mergeSrcStart + 'const mergeByTheme = '.length, mergeEnd + 1)})`);
+  const mergedSameFamily = mergeByTheme(
+    [{ theme: '算力租赁', familyKey: 'fam-suanli', rank: 2 }],
+    [{ theme: '算力', familyKey: 'fam-suanli', rank: 1 }],
+  );
+  A(mergedSameFamily.length === 1 && mergedSameFamily[0].theme === '算力租赁'
+    && mergedSameFamily[0].east && mergedSameFamily[0].ths, '同 familyKey 不同题材名合并为一张卡,主名取东财');
+  A(mergedSameFamily[0].eastRank === 2 && mergedSameFamily[0].thsRank === 1, '合并卡保留两源各自源内名次,不生成统一名次');
+  const mergedDiffFamily = mergeByTheme(
+    [{ theme: '算力', familyKey: 'fam-a', rank: 1 }],
+    [{ theme: '算力', familyKey: 'fam-b', rank: 1 }],
+  );
+  A(mergedDiffFamily.length === 2, '不同 familyKey 即使题材同名也不合并(归一键优先于显示名)');
+  A(!html.includes('class="mlx-rank"') && html.includes('#${Number(srcRank)}'), '合并卡不显示虚构统一名次,只显示各源 #名次');
+  A(html.includes('同花顺名·'), '同族异名时保留另一源原始题材名');
+
   console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL STRATEGY-TWO-SOURCE-MAINLINES CHECKS PASSED');
 })();

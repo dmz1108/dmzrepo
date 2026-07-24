@@ -242,9 +242,9 @@ A(html.includes('<details class="ml-l2-stock')
   && html.includes('点击查看该股全部L2档位')
   && html.includes('ml-l2-max-money')
   && html.includes('ml-l2-buckets'), 'L2个股默认显示最大档金额，点击展开全部档位');
-// A+C 重构(2026-07-24,Owner 指定):L2 扫描记录移到页面底部并默认展开为表格视图。
-A(l2HistoryRenderer.includes('<details class="ml-l2-history-disclosure" open')
-  && l2HistoryRenderer.includes('<summary class="ml-l2-history-summary"'), 'L2扫描记录默认展开为表格视图(A+C)');
+A(l2HistoryRenderer.includes('<details class="ml-l2-history-disclosure">')
+  && l2HistoryRenderer.includes('<summary class="ml-l2-history-summary"')
+  && !l2HistoryRenderer.includes('<details class="ml-l2-history-disclosure" open'), 'L2扫描记录首屏默认折叠');
 A(l2HistoryRenderer.includes('<details class="ml-l2-job')
   && l2HistoryRenderer.includes('<summary class="ml-l2-job-summary"')
   && l2HistoryRenderer.includes('ml-l2-job-stars'), '展开总览后按板块显示紧凑摘要，明星状态不被隐藏');
