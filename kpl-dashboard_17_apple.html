@@ -13739,12 +13739,15 @@ function renderMainlineReviewHTML(d) {
     return `<details class="mlr-reserve-line"><summary><span><b>预备层</b><small>非正式候选，不计正式命中率</small></span><em>${list.length}条</em></summary><div class="mlr-reserve-items">${items}</div></details>`;
   };
   // 行级结果配色(与 hitCell 同口径):驱动左侧强调条颜色,一眼可扫命中/前三/脱靶/待验证
-  const rowHitClass = (r) => {
+  const rowHitClass = (r, starVisual) => {
     if (r.bySource) {
       if (r.sampleValid === false) return 'hit-invalid';
       if (r.pendingReview) return 'hit-wait';
       const sourceRows = Object.values(r.bySource).filter(src => src && src.status !== 'unavailable' && src.status !== 'unknown' && !src.noMainline && src.mainlineHitTop1 != null);
       const outcomes = new Set(sourceRows.map(src => src.mainlineHitTop1 === true ? 'ok' : src.mainlineHitTop3 === true ? 'near' : 'miss'));
+      // 双源各自独立评估；只要任一来源命中盘后第一家族，并且当日已有确认明星，
+      // 整日即具备一条完整的“单源主线 + 明星”证据链，应使用红色真主线状态。
+      if (starVisual?.key === 'confirmed' && outcomes.has('ok')) return 'hit-ok';
       if (outcomes.size !== 1) return 'hit-na';
       return outcomes.has('ok') ? 'hit-ok' : outcomes.has('near') ? 'hit-near' : 'hit-miss';
     }
@@ -13758,6 +13761,7 @@ function renderMainlineReviewHTML(d) {
   };
   const rowModels = rows.map(r => ({ r, starVisual: reviewStarVisual(r) }));
   const renderReviewRow = ({ r, starVisual }) => {
+    const hitClass = rowHitClass(r, starVisual);
     const starSignal = starVisual.key
       ? `<span class="mlr-star-signal ${starVisual.key}" aria-label="${escapeHTML(`${starVisual.label} ${starVisual.name}`)}"><i>${escapeHTML(starVisual.label)}</i><b>${escapeHTML(starVisual.name)}</b></span>`
       : '';
@@ -13824,7 +13828,7 @@ function renderMainlineReviewHTML(d) {
     const lineBadge = starVisual.key
       ? `<span class="mlr-line-badge ${starVisual.key}">${escapeHTML(starVisual.label)}</span>`
       : `<span class="mlr-line-badge quiet">${r.noMainline || !r.theme ? '今日无主线' : escapeHTML(r.theme)}</span>`;
-    return `<details class="mlr-line ${rowHitClass(r)}${starVisual.rowClass ? ` ${starVisual.rowClass}` : ''}${r.sampleValid === false ? ' invalid' : ''}">
+    return `<details class="mlr-line ${hitClass}${starVisual.rowClass ? ` ${starVisual.rowClass}` : ''}${r.sampleValid === false ? ' invalid' : ''}">
     <summary class="mlr-line-sum">
       <time class="mlr-line-day">${escapeHTML(String(r.day || '').slice(5).replace('-', '.'))}</time>
       ${lineBadge}
@@ -13835,7 +13839,7 @@ function renderMainlineReviewHTML(d) {
       <span class="mlr-line-perf">${linePerf(lineStock?.threeDayGain)}</span>
       <b class="mlr-line-caret" aria-hidden="true"></b>
     </summary>
-    <div class="mlr-row ${rowHitClass(r)}${starVisual.rowClass ? ` ${starVisual.rowClass}` : ''}${r.sampleValid === false ? ' invalid' : ''}">
+    <div class="mlr-row ${hitClass}${starVisual.rowClass ? ` ${starVisual.rowClass}` : ''}${r.sampleValid === false ? ' invalid' : ''}">
     <header class="mlr-card-head">
       <time class="mlr-day" datetime="${escapeHTML(String(r.day || ''))}">${escapeHTML(String(r.day || '').slice(5).replace('-', '.'))}</time>
       <span class="mlr-card-identity">${starSignal || fallbackIdentity}</span>

@@ -168,6 +168,27 @@ const mixedOutcomeHTML = renderMainlineReviewHTML({
   stats: { bySource: { eastmoney: { mainlineTotal: 1 }, ths: { mainlineTotal: 1 } } },
 });
 A(mixedOutcomeHTML.includes('<div class="mlr-row hit-na'), '终审P3:一源命中一源脱靶时整行用中性强调，不用“最好结果”绿色误导');
+const mixedOutcomeWithStarHTML = renderMainlineReviewHTML({
+  days: [{ day: '2026-07-21', phase: '尾盘', sampleValid: true, noMainline: false, theme: '半导体', leaders: [],
+    star: { code: '603986', name: '兆易创新', predictLevel: 'expected', sealStatus: 'sealed' },
+    expectedStars: [{ code: '603986', name: '兆易创新', sealStatus: 'sealed' }],
+    actualTop: [{ theme: '半导体', count: 39 }],
+    bySource: { eastmoney: { available: true, status: 'mainline', theme: '半导体', noMainline: false, mainlineHitTop1: true, mainlineHitTop3: true }, ths: { available: true, status: 'mainline', theme: '消费电子/显示', noMainline: false, mainlineHitTop1: false, mainlineHitTop3: false } } }],
+  stats: { bySource: { eastmoney: { mainlineTotal: 1 }, ths: { mainlineTotal: 1 } } },
+});
+A(mixedOutcomeWithStarHTML.includes('<details class="mlr-line hit-ok star-confirmed')
+  && mixedOutcomeWithStarHTML.includes('<div class="mlr-row hit-ok star-confirmed'),
+  'Owner 2026-07-24:任一来源命中第一家族且有确认明星时，双源结果虽分歧仍使用红色真主线状态');
+const missedOutcomeWithStarHTML = renderMainlineReviewHTML({
+  days: [{ day: '2026-07-22', phase: '尾盘', sampleValid: true, noMainline: false, theme: '算力', leaders: [],
+    star: { code: '000034', name: '神州数码', predictLevel: 'confirmed', sealStatus: 'notSealed' },
+    expectedStars: [], actualTop: [{ theme: '电力', count: 10 }],
+    bySource: { eastmoney: { available: true, status: 'mainline', theme: '算力', noMainline: false, mainlineHitTop1: false, mainlineHitTop3: false }, ths: { available: true, status: 'no-mainline', theme: '', noMainline: true, mainlineHitTop1: null, mainlineHitTop3: null } } }],
+  stats: { bySource: { eastmoney: { mainlineTotal: 1 }, ths: { mainlineTotal: 0 } } },
+});
+A(missedOutcomeWithStarHTML.includes('<div class="mlr-row hit-miss star-confirmed')
+  && !missedOutcomeWithStarHTML.includes('<div class="mlr-row hit-ok star-confirmed'),
+  '明星存在但没有任何来源命中第一家族时不得误标红色真主线');
 const legacyReviewHTML = renderMainlineReviewHTML({
   days: [{ day: '2026-07-10', phase: '尾盘', sampleValid: true, noMainline: true, leaders: [], expectedStars: [], actualTop: [] }],
   stats: { mainlineTotal: 0 },
