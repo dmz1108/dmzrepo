@@ -9717,3 +9717,28 @@ Deployment:
 
 Notes for next agent:
 - 本次只改策略回看视觉语义。部署时应同时发布 HTML 与 CSS，静态发布无需重启主服务。
+
+## 2026-07-24 - Codex - PR #259 命中与未命中视觉已部署
+
+Changed:
+- 合并 PR `#259`，合并提交为 `efd80b623d1e94271a2c130702e8514d05430dd3`。
+- 从精确合并后的 `main` 原子发布策略页 HTML 与 CSS。
+- 云端两份运维日志均已追加本次静态发布记录。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 生产静态文件：`kpl-dashboard_17_apple.html`、`Qi/vendor/strategy-workbench.css`
+
+Validated:
+- 发布前云端 HTML/CSS 哈希与合并前 `main` 完全一致，无游离修改被覆盖。
+- 发布后云端磁盘、公网响应和 Git 文件 SHA-256 完全一致：
+  - HTML：`7959d2b24819286774cda57038055a1e78462e7b904998ea4652f52f58c7783b`
+  - CSS：`42ce1c0e92a7307c335eeda29b34c6092d716fbc3b8e26f1a04b5f411d367617`
+- 公网 `/health` 返回 `ok=true`，公网 CSS 可检索到 `hit-ok` 与 `hit-miss` 新视觉规则。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`；静态文件发布，未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-pr259-efd80b6-20260724-070432`。
+
+Notes for next agent:
+- Git、生产静态文件和云端双日志已一致；后续策略回看改动应继续保持“主线命中状态”和“明星状态”两个视觉维度独立。
