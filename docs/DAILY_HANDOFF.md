@@ -9145,3 +9145,29 @@ Deployment:
 
 Notes for next agent:
 - 生产代码、Git `main` 与云端运维日志已一致；本次未改变任何策略数据、预测记录或统计口径。
+
+## 2026-07-23 - Codex - 重构预判回看信息层级
+
+Changed:
+- 将每个交易日重组为“日期与明星状态、盘中预判对盘后验证、明星与龙头证据”三层，移除同一行内混杂路线、结果、收益与状态的旧布局。
+- 东财与同花顺预测改为固定两行来源对照；来源暂缺、无主线、状态未知与主线结果继续保持独立语义。
+- 明星、龙头和次高/次收/3日表现改为统一证据带；预备层默认折叠并显示数量，展开后仍保留逐股结果。
+- 更新策略样式缓存版本；未改变预判、明星、龙头、命中、收益或任何策略统计口径。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `tests/strategy-workbench-ui.test.js`
+- `tests/strategy-two-source-mainlines.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 使用线上真实 `/api/strategy-mainline-review?days=10` 数据，在 1440x1000 与 390x844 视口完成 Playwright 前后对照。
+- 两个视口均无横向溢出；最复杂的 2026-07-22 移动端记录由约 554px 降至 497px，预备层保持默认折叠。
+- `git diff --check` 通过；全仓 `59/59` 个 `tests/*.test.js` 文件通过。
+
+Deployment:
+- 本条提交时尚未部署生产；未修改云端文件，未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+
+Notes for next agent:
+- 这是纯展示层重构。生产部署应原子发布 HTML 与 CSS，并在覆盖前核对线上文件仍匹配 PR `#237` 已记录哈希。
