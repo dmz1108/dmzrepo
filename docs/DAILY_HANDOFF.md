@@ -9267,6 +9267,30 @@ Deployment:
 Notes for next agent:
 - 本次是纯视觉对齐修复；部署时应原子发布 HTML 与 CSS。
 
+## 2026-07-23 - Codex - 部署策略页回看等高与左对齐
+
+Changed:
+- 合并 PR `#245`，并将回看卡片等高和策略页左轴统一样式发布到云端。
+- 云端两个运维日志均已追加本次部署记录。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `https://market.dreamerqi.com/health` 返回 `ok=true`。
+- 公网页面引用 `/vendor/strategy-workbench.css?v=20260724e`，公网 CSS SHA-256 与 Git 文件一致。
+- 公网真实策略页复验：策略外层、今日主线榜、预判回看和重点关注左边界均为 `32px`。
+- 真主线第一行两卡均高 `394px`，第二行两卡均高 `353px`；无横向溢出、重叠或裁切。
+
+Deployment:
+- 已原子发布 `kpl-dashboard_17_apple.html` 与 `Qi/vendor/strategy-workbench.css`；未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-ssh-pr245-9a439c0-20260724-134650`。
+- HTML SHA-256：`1fb2ec5068fff5394653accff5ded41719b8653a31400247a5fb3339b1dd0c3c`。
+- CSS SHA-256：`5cb5ebde834113d0f3834a11723738e9d0f0e82f78a71c501e1938f28405392d`。
+
+Notes for next agent:
+- Git `main`、云端静态文件与云端操作日志已一致；本次没有修改策略逻辑、数据或服务配置。
+
 ## 2026-07-23 - Codex - 真主线回看卡片改为半宽
 
 Changed:
