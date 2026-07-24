@@ -9693,6 +9693,55 @@ Notes for next agent:
 - 7 月 22 日第三个后续交易日是 7 月 27 日，7 月 23 日第三个后续交易日是 7 月 28 日；在对应收盘前显示 `--` 是正确状态，之后接口会自动补算。
 - 不需要修改任何历史预测文件、涨停库或收盘价库；修复在读取与计算层即时生效。
 
+## 2026-07-24 - Codex - 预判回看命中与未命中视觉分层
+
+Changed:
+- 预判回看摘要行增加明确的结果语义：主线命中使用红色确认态，未命中使用绿色低饱和否定态，进入前三保持金色，待盘后验证保持蓝灰色。
+- 命中和未命中同时通过整行背景、左侧状态条与结果徽标区分；徽标增加 `✓` / `×`，不依赖颜色也能识别。
+- 主线命中状态与明星确认状态继续独立表达；仅修改视觉样式，不改变任何回看判定、统计、数据或交互逻辑。
+- 更新策略样式缓存版本，避免浏览器继续使用旧样式。
+
+Files:
+- `Qi/vendor/strategy-workbench.css`
+- `kpl-dashboard_17_apple.html`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`、`git diff --check` 通过。
+- 全仓 `61/61` 个 `tests/*.test.js` 通过。
+- Playwright 在 `1200x720` 和 `390x844` 两个视口完成截图验证：命中/未命中在折叠与展开状态均可清楚区分，移动端无文字遮挡或横向溢出。
+
+Deployment:
+- 本条提交时尚未部署生产；未修改云端文件、运行时数据或服务状态，未重启任何服务。
+
+Notes for next agent:
+- 本次只改策略回看视觉语义。部署时应同时发布 HTML 与 CSS，静态发布无需重启主服务。
+
+## 2026-07-24 - Codex - PR #259 命中与未命中视觉已部署
+
+Changed:
+- 合并 PR `#259`，合并提交为 `efd80b623d1e94271a2c130702e8514d05430dd3`。
+- 从精确合并后的 `main` 原子发布策略页 HTML 与 CSS。
+- 云端两份运维日志均已追加本次静态发布记录。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 生产静态文件：`kpl-dashboard_17_apple.html`、`Qi/vendor/strategy-workbench.css`
+
+Validated:
+- 发布前云端 HTML/CSS 哈希与合并前 `main` 完全一致，无游离修改被覆盖。
+- 发布后云端磁盘、公网响应和 Git 文件 SHA-256 完全一致：
+  - HTML：`7959d2b24819286774cda57038055a1e78462e7b904998ea4652f52f58c7783b`
+  - CSS：`42ce1c0e92a7307c335eeda29b34c6092d716fbc3b8e26f1a04b5f411d367617`
+- 公网 `/health` 返回 `ok=true`，公网 CSS 可检索到 `hit-ok` 与 `hit-miss` 新视觉规则。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`；静态文件发布，未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-pr259-efd80b6-20260724-070432`。
+
+Notes for next agent:
+- Git、生产静态文件和云端双日志已一致；后续策略回看改动应继续保持“主线命中状态”和“明星状态”两个视觉维度独立。
 ## 2026-07-24 - Local Claude - L2 逐档成交明细重设计（收窄+清晰）
 
 Changed:
