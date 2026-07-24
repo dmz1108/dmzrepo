@@ -9894,7 +9894,7 @@
     }
   }
 </style>
-<link href="/vendor/strategy-workbench.css?v=20260723a" rel="stylesheet">
+<link href="/vendor/strategy-workbench.css?v=20260724a" rel="stylesheet">
 <link href="/vendor/review-workbench.css?v=20260718d" rel="stylesheet">
 <link href="/vendor/realtime-workbench.css?v=20260720" rel="stylesheet">
 </head>
@@ -13727,10 +13727,10 @@ function renderMainlineReviewHTML(d) {
     return `<div class="mlr-row ${rowHitClass(r)}${starVisual.rowClass ? ` ${starVisual.rowClass}` : ''}${r.sampleValid === false ? ' invalid' : ''}">
     <div class="mlr-l1">
       <span class="mlr-day">${escapeHTML(String(r.day || '').slice(5))}</span>
-      ${starSignal}
-      ${prediction}
-      ${result ? '<span class="mlr-arrow" aria-hidden="true">→</span>' : ''}
-      ${result ? `<span class="mlr-result">${result}</span>` : ''}
+      <div class="mlr-route${result ? ' has-outcome' : ''}">
+        <div class="mlr-route-primary">${starSignal}${prediction}</div>
+        ${result ? `<div class="mlr-route-outcome"><span class="mlr-arrow" aria-hidden="true">→</span><span class="mlr-result">${result}</span></div>` : ''}
+      </div>
       ${sampleTag(r)}
     </div>
     ${detail}
