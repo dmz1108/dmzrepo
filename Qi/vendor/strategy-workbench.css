@@ -4319,3 +4319,193 @@ body.view-strategy .mlr-group-title > small {
     gap: 3px 16px;
   }
 }
+
+/* ===== Local Claude strategy restructure 2026-07-24 (C-only, Owner-confirmed):
+   Kept the "C" parts — KPI band (双源结论分开) / review date-table / L2 table.
+   The "A" merged dual-source card was REVERTED per Owner: 东财与同花顺是两套独立预测,
+   保持来源隔离展示,不合并龙头/明星/分数/阶段,不做跨源统一名次。
+   Display layer only — all computation, auth gates and interactions unchanged.
+   Builds on the "Local Claude polish" layer above; no rules duplicated from it. ===== */
+
+/* ---- KPI 带 ---- */
+body.view-strategy .strategy-kpis {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+body.view-strategy .strategy-kpis.has-l2 {
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr);
+}
+
+body.view-strategy .strategy-kpi {
+  min-height: 86px;
+  padding: 12px 15px;
+  border: 1px solid rgba(182, 198, 219, 0.13);
+  border-radius: 9px;
+  background: #0f161e;
+}
+
+body.view-strategy .strategy-kpi.verdict {
+  border-color: rgba(231, 181, 87, 0.28);
+  background: linear-gradient(180deg, rgba(231, 181, 87, 0.05), rgba(231, 181, 87, 0.008)), #0f161e;
+}
+
+body.view-strategy .strategy-kpi .kpi-label {
+  margin-bottom: 6px;
+  color: #748397;
+  font-size: 10px;
+  font-weight: 720;
+}
+
+body.view-strategy .strategy-kpi .kpi-main {
+  color: #edf3f9;
+  font-size: 15px;
+  font-weight: 740;
+  line-height: 1.45;
+}
+
+body.view-strategy .strategy-kpi .kpi-main b {
+  color: #e7b557;
+  font-weight: 780;
+}
+
+body.view-strategy .strategy-kpi .kpi-main.quiet {
+  color: #66788d;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+body.view-strategy .strategy-kpi .kpi-sub {
+  margin-top: 4px;
+  color: #8b99ac;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+body.view-strategy .strategy-kpi .kpi-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+body.view-strategy .strategy-kpi .kpi-row span { font-size: 11px; color: #748397; }
+body.view-strategy .strategy-kpi .kpi-row span i { font-style: normal; display: block; }
+body.view-strategy .strategy-kpi .kpi-row span b { display: block; margin-top: 1px; color: #edf3f9; font-size: 16px; font-weight: 760; }
+body.view-strategy .strategy-kpi .kpi-row span.hot b { color: #ff6864; }
+body.view-strategy .strategy-kpi .kpi-row span.amb b { color: #e7b557; }
+
+/* 今日结论:东财 / 同花顺两源分开成行,各自独立不合并 */
+body.view-strategy .kpi-verdict-lines { display: flex; flex-direction: column; gap: 4px; }
+body.view-strategy .kpi-src-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+body.view-strategy .kpi-src-line > i {
+  flex: 0 0 auto; width: 44px;
+  color: #748397; font-size: 11px; font-style: normal; font-weight: 700;
+}
+body.view-strategy .kpi-src-line > b {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: #edf3f9; font-size: 14px; font-weight: 740;
+}
+body.view-strategy .kpi-src-line.quiet > b { color: #8b99ac; font-weight: 600; }
+
+/* ---- C:回看表格 ---- */
+body.view-strategy .mlr-table {
+  overflow: hidden;
+  border: 1px solid rgba(182, 198, 219, 0.12);
+  border-radius: 9px;
+  background: #0f161e;
+}
+
+body.view-strategy .mlr-table-head,
+body.view-strategy .mlr-line-sum {
+  display: grid;
+  grid-template-columns: 50px 118px minmax(0, 1fr) 96px 62px 62px 62px 20px;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 14px;
+}
+
+body.view-strategy .mlr-table-head {
+  border-bottom: 1px solid rgba(182, 198, 219, 0.10);
+  background: rgba(255, 255, 255, 0.02);
+  color: #748397;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+body.view-strategy .mlr-table-head .num { text-align: right; }
+
+body.view-strategy .mlr-line { border-bottom: 1px solid rgba(182, 198, 219, 0.07); }
+body.view-strategy .mlr-line:last-child { border-bottom: 0; }
+body.view-strategy .mlr-line-sum { list-style: none; cursor: pointer; min-height: 38px; box-shadow: inset 3px 0 0 rgba(148, 163, 184, 0.22); }
+body.view-strategy .mlr-line-sum::-webkit-details-marker { display: none; }
+body.view-strategy .mlr-line-sum:hover { background: rgba(255, 255, 255, 0.02); }
+body.view-strategy .mlr-line.star-confirmed > .mlr-line-sum { box-shadow: inset 3px 0 0 #ff6864; }
+body.view-strategy .mlr-line.star-missed > .mlr-line-sum { box-shadow: inset 3px 0 0 #e7b557; }
+body.view-strategy .mlr-line.star-pending > .mlr-line-sum { box-shadow: inset 3px 0 0 #7398c1; }
+
+body.view-strategy .mlr-line-day { color: #c5cfda; font-size: 12px; font-weight: 760; font-variant-numeric: tabular-nums; }
+body.view-strategy .mlr-line-badge { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 740; color: #8b99ac; }
+body.view-strategy .mlr-line.star-confirmed .mlr-line-badge { color: #ff6864; }
+body.view-strategy .mlr-line.star-missed .mlr-line-badge { color: #e7b557; }
+body.view-strategy .mlr-line.star-pending .mlr-line-badge { color: #7fa4d0; }
+body.view-strategy .mlr-line-badge.quiet { color: #66788d; font-weight: 600; }
+body.view-strategy .mlr-line-flow { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #8b99ac; font-size: 12px; }
+body.view-strategy .mlr-line-flow i { margin: 0 4px; color: #566373; font-style: normal; }
+body.view-strategy .mlr-line-flow b { color: #cdd8e4; font-weight: 720; }
+body.view-strategy .mlr-line-invalid { margin-left: 8px; color: #8a6d3b; font-size: 10px; font-style: normal; }
+body.view-strategy .mlr-line-star { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #edf3f9; font-size: 12px; font-weight: 720; }
+body.view-strategy .mlr-line-star i { color: #566373; font-style: normal; font-weight: 500; }
+body.view-strategy .mlr-line-perf { text-align: right; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+body.view-strategy .mlr-line-perf b { font-weight: 740; color: #566373; }
+body.view-strategy .mlr-line-perf b.up { color: #ff6864; }
+body.view-strategy .mlr-line-perf b.down { color: #3bcf88; }
+body.view-strategy .mlr-line-caret { position: relative; width: 8px; height: 8px; justify-self: end; }
+body.view-strategy .mlr-line-caret::before {
+  content: ""; position: absolute; inset: 0;
+  border-right: 1.5px solid #566373; border-bottom: 1.5px solid #566373;
+  transform: rotate(45deg); transition: transform 0.15s ease;
+}
+body.view-strategy .mlr-line[open] > .mlr-line-sum .mlr-line-caret::before { transform: rotate(-135deg); }
+
+body.view-strategy .mlr-line > .mlr-row {
+  margin: 0 !important;
+  border: 0 !important;
+  border-top: 1px solid rgba(182, 198, 219, 0.10) !important;
+  border-radius: 0 !important;
+  background: rgba(4, 9, 15, 0.30) !important;
+}
+
+/* ---- C:L2 扫描记录表格化(仅重排既有 DOM;初始折叠交互保持 Owner 锁定不变) ---- */
+body.view-strategy .ml-l2-job-summary {
+  display: grid !important;
+  grid-template-columns: minmax(150px, 1.35fr) 52px 72px 46px minmax(80px, 0.9fr) minmax(58px, 0.7fr) minmax(58px, 0.7fr) minmax(120px, 1fr) 20px;
+  gap: 10px;
+  align-items: center;
+}
+
+body.view-strategy .ml-l2-job-head,
+body.view-strategy .ml-l2-job-meta { display: contents !important; }
+
+body.view-strategy .ml-l2-job-meta > span { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+
+/* polish 层的题材校准修正补全:说明不再被 margin-left:auto 推到最右 */
+body.view-strategy .theme-calib .strategy-section-sub { margin-left: 0; }
+
+/* ---- 移动端 ---- */
+@media (max-width: 980px) {
+  body.view-strategy .strategy-kpis,
+  body.view-strategy .strategy-kpis.has-l2 { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  body.view-strategy .mlr-table-head { display: none; }
+  body.view-strategy .mlr-line-sum { grid-template-columns: 44px minmax(0, 1fr) 20px; gap: 6px 8px; padding: 9px 12px; }
+  body.view-strategy .mlr-line-badge { grid-column: 2; }
+  body.view-strategy .mlr-line-flow { grid-column: 1 / 3; font-size: 11.5px; white-space: normal; }
+  body.view-strategy .mlr-line-star,
+  body.view-strategy .mlr-line-perf { display: none; }
+  body.view-strategy .mlr-line-caret { grid-column: 3; grid-row: 1; }
+  body.view-strategy .ml-l2-job-summary { grid-template-columns: minmax(0, 1fr) auto 20px; }
+}

@@ -9516,3 +9516,91 @@ Deployment:
 
 Notes for next agent:
 - raw evidence 成功不代表 TGB 完成；只有匹配标题、日期、白底表格和 `@TGB湖南人` 水印的官方原图可进入后续人工双遍转录。
+## 2026-07-24 - Local Claude - 策略页 A+C 结构重构（Owner 指定组合）
+
+Changed:
+- Owner 在 claude.ai/design「DreamerQi 策略页方向探索」项目中评审三个方向稿后指定 A+C 组合：KPI 带/回看表格/L2 表格用方向 C，主线卡用方向 A。纯展示层重构，所有计算、鉴权与口径不变。
+- 顶部新增 KPI 带三瓦片：今日结论（主线榜数据推导）、预判战绩（回看 stats 复述）、今日 L2 扫描（管理员）；各自由既有异步 loader 填充。
+- 今日主线榜：双栏改为按题材合并的双源对比卡（`mlx-*`）——结论层（龙头共识+差异标注、明星信号）+ 双源指标对比条；两源完整原卡收进「展开双源完整明细」，仅单源入选的题材标注来源。移除已无调用方的 `renderColumn`。
+- 预判回看：分组大卡改为按日期倒序统一表（日期/结果/预判→验证/明星/次高/次收/3日），行左侧强调色承担分组语义；点行展开原完整证据卡（原 DOM 保留在展开层内）。
+- 今日 L2 扫描记录：移至页面底部（回看与重点关注之后），默认展开，任务摘要行用 `display: contents` 重排为表格列；数据契约不变。
+- 样式缓存版本 `v=20260724f` → `v=20260724h`（跳过 PR #249 的 g）。本分支已并入 #249 的定稿优化（统计胶囊、L2 金额簇、空态便签、字号下限），#249 可关闭。
+- 更新 3 个测试文件的 4 条旧结构断言为新契约（双栏三态→合并卡三态、样式计数×2、分组→统一表、L2 默认折叠→默认展开），并新增 KPI/合并卡/回看表格回归断言。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `tests/strategy-workbench-ui.test.js`
+- `tests/strategy-two-source-mainlines.test.js`
+- `tests/star-l2-layers.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 本地代理预览（生产公开只读 API 真实数据 + 契约形状 L2 仿真数据）Playwright 1440x1000 / 390x844 分区块截图验证：KPI 带、合并卡（含展开态）、回看表格（含展开证据卡）、L2 表格全部正常渲染。
+- 桌面整页高度 3689 → 2847（-23%），移动 6952 → 5363；两视口横向溢出均为 0。
+- `git diff --check` 通过；全仓 59/59 个 `tests/*.test.js` 通过。
+
+Deployment:
+- 未部署生产；未修改云端文件，未重启任何服务。
+
+Notes for next agent:
+- 本次触及「今日策略」高风险展示范围，按 Owner 规则**合并前需另一 agent（建议 Codex）独立复核**，重点：① 合并卡在多条正式主线/两源题材不一致日的渲染；② 回看表格在历史单源记录（无 bySource）下的摘要行；③ 管理员确认主线按钮在展开层内仍可用。
+- L2 明细验证使用契约仿真数据；部署后需用 panda 账号实测 L2 展开态与 KPI L2 瓦片。
+- 部署时原子发布 HTML+CSS；覆盖前核对线上仍匹配 PR #247 哈希（html=877a65dc…4669 / css=586771c6…13）。
+
+## 2026-07-24 - Local Claude - PR #251 按 Codex 复审意见修订
+
+Changed:
+- 按 Codex 独立复核的 4 条阻断项修订 A+C 重构分支：
+  1. 恢复「今日 L2 扫描记录」默认折叠（Owner 已锁定交互），并恢复 `star-l2-layers` 原回归断言；
+  2. 移除合并卡的虚构跨源统一名次，改为对比条内展示两源各自源内名次（东财 #n / 同花顺 #n）；
+  3. 合并键由题材名文本改为 `familyKey || key || theme` 归一键，同族异名不拆卡且以「同花顺名·XXX」保留另一源原始命名；
+  4. 合并最新 main（PR #249/#250 已合并部署），CSS 以线上 polish 层为基底重建 A+C 层并去除重复规则，缓存版本保持 `v=20260724h`。
+- 新增行为测试：提取 `mergeByTheme` 纯函数验证同 familyKey 异名合并、异 familyKey 同名不合并、两源名次保留；静态断言锁定无统一名次、别名保留。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `tests/star-l2-layers.test.js`
+- `tests/strategy-two-source-mainlines.test.js`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 全仓 59/59 个 `tests/*.test.js` 通过；`git diff --check` 通过。
+- 本地真实数据预览复验：合并卡显示「东财 #1 / 同花顺 #1」、无统一名次、双源空态合并为一条便签、L2 默认折叠；桌面 2847px / 移动 5363px，横向溢出均为 0。
+
+Deployment:
+- 未部署生产；未修改云端文件，未重启任何服务。
+
+Notes for next agent:
+- 待 Codex 复审通过与 Owner 确认后合并。「方向 C 的 L2 默认展开」与 Owner 早前锁定的「默认折叠」冲突，本次遵循已锁定交互；若 Owner 希望改为默认展开，需 Owner 明确解锁后另行提交。
+
+## 2026-07-24 - Local Claude - 按 Owner 口径撤回合并卡(A),保留 C 部分
+
+Changed:
+- Owner 澄清:东财与同花顺是两套独立主线预测,相同 familyKey 只表示可能同族/双源共振,不代表结论应并成一条主线。据此撤回 A（合并双源主线卡），恢复来源隔离双栏展示；保留 C（KPI 带 / 回看日期表 / L2 表格化）。
+- 主线榜:从 origin/main 精确还原 `renderColumn` 双栏区块（东财主线预测 / 同花顺主线预测），完全恢复来源隔离；合并卡函数 `renderMergedCard`/`mergeByTheme` 及全部 `mlx-*` 标记与样式彻底移除。原有「🔗双源共振」关联标记（`dualNote` / `m.dualResonance`）随双栏一并保留。
+- KPI「今日结论」改为双源分开成行展示（例:「东财 预备 半导体」「同花顺 预备 半导体」），不合并、不按 familyKey 去重；单源结论各自取「正式→预备→无主线/暂缺」，绝不借另一源。
+- L2 扫描记录默认折叠保持不变（沿用 Owner 锁定交互）。
+- CSS 顶部注释更新为 C-only；删除 mlx 合并卡样式，新增 `.kpi-verdict-lines` / `.kpi-src-line` 双源结论行样式。
+- 测试:移除 mergeByTheme/mlx 断言，恢复双栏三态断言，新增「KPI 双源分开、无 mlx/mergeByTheme 残留、renderColumn 双栏恢复」断言。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `tests/strategy-workbench-ui.test.js`
+- `tests/strategy-two-source-mainlines.test.js`
+- `tests/star-l2-layers.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 真实数据预览复验:今日结论双源分开、主线榜恢复东财/同花顺双栏隔离、无跨源统一名次、L2 默认折叠、回看日期表点行展开完整证据卡正常。
+- 桌面整页高度 2507px、移动 4904px,两视口横向溢出均为 0。
+- `git diff --check` 通过;全仓 59/59 个 `tests/*.test.js` 通过;HTML 内 `mlx-` 残留 0。
+
+Deployment:
+- 未部署生产;未修改云端文件,未重启任何服务。
+
+Notes for next agent:
+- 本 PR 现在只做展示层增量(KPI 带 + 回看日期表 + L2 表格化),主线榜与来源隔离逻辑完全维持现状。待 Codex 最终复审与 Owner 确认后合并。

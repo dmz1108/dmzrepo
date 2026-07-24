@@ -100,6 +100,7 @@ A(!composedBothZero.mainlinesBySource.eastmoney.hasMainlines && !composedBothZer
 A(composedBothZero.mainlinesBySource.ths.reason === 'no-l2-qualified-mainline', 'P2:同花顺零结果带自己的 L2 闸原因(不借东财原因)');
 // 前端:有 mainlinesBySource 不走单列空态早退;双栏区分"无合格主线"与"暂缺"
 A(html.includes('!lines.length && !(d && d.mainlinesBySource)'), 'P2 前端:有 mainlinesBySource 时不走单列空态早退(双栏仍展示)');
+// 双栏来源隔离(A 撤回后恢复):三态区分(有主线/源可用但无正式主线/源暂缺)由 renderColumn 承担。
 A(html.includes('src.available && src.hasMainlines') && html.includes('无合格主线') && html.includes('暂缺'), 'P2 前端:双栏三态区分(有主线/无合格主线/暂缺)');
 const bySourceReviewHTML = renderMainlineReviewHTML({
   days: [{
@@ -203,11 +204,12 @@ A(starVisualReviewHTML.includes('star-expected star-missed') && starVisualReview
 A(starVisualReviewHTML.includes('star-expected star-pending') && starVisualReviewHTML.includes('mlr-star-signal pending')
   && starVisualReviewHTML.includes('证据待补</i><b>兆易创新'), '盘后证据缺失使用中性待验证状态');
 A(starVisualReviewHTML.includes('明星确认</i><b>紫光股份') && starVisualReviewHTML.includes('预期转明星</i><b>迈瑞医疗'), '两种明星确认路径均与股票名称成组展示');
-A((starVisualReviewHTML.match(/star-confirmed/g) || []).length === 2
-  && (starVisualReviewHTML.match(/star-missed/g) || []).length === 1
-  && (starVisualReviewHTML.match(/star-pending/g) || []).length === 1, '普通回看记录不会误套明星结果样式');
-A(starVisualReviewHTML.indexOf('mlr-group confirmed') < starVisualReviewHTML.indexOf('mlr-group missed')
-  && starVisualReviewHTML.indexOf('mlr-group missed') < starVisualReviewHTML.indexOf('mlr-group pending'), '回看按真主线、未兑现、待验证顺序分组');
+// A+C 重构(2026-07-24):每条记录 = 外层摘要行(.mlr-line)+内层证据卡(.mlr-row),状态类各出现一次,计数×2。
+A((starVisualReviewHTML.match(/star-confirmed/g) || []).length === 4
+  && (starVisualReviewHTML.match(/star-missed/g) || []).length === 2
+  && (starVisualReviewHTML.match(/star-pending/g) || []).length === 2, '普通回看记录不会误套明星结果样式');
+// A+C 重构:分组改为按日期倒序统一表,分组语义由行级 star-* 强调色与结果徽章承担。
+A(starVisualReviewHTML.includes('mlr-table-head') && !starVisualReviewHTML.includes('mlr-group '), '回看使用统一日期表,不再分组分节');
 A((starVisualReviewHTML.match(/主线命中/g) || []).length >= 2 && !starVisualReviewHTML.includes('✓命中'), '主线命中使用独立结论文案,不再与明星阶段混为同一状态');
 A(/mlr-row hit-invalid star-confirmed invalid[\s\S]*?主线命中/.test(starVisualReviewHTML), '不计样本标记、主线命中与明星确认可在同一记录中独立共存');
 A(html.includes('body.view-strategy .mlr-row.star-confirmed.invalid') && html.includes('opacity: 1;'), '明星证据高亮覆盖 invalid 全行透明度，7月8日不再被变灰');
@@ -324,6 +326,12 @@ eval(extractFn('strategyMainlineReadCachedCall'));
     await strategyMainlineReadCachedCall('limitUpDb', loader, '2026-07-15', undefined);
     A(calls === 2, '不同库(kind)同一天各自缓存,不串键');
   });
+
+  // ---- 双源隔离(Owner 2026-07-24 口径:合并卡 A 撤回,东财/同花顺分开展示) ----
+  // 今日结论 KPI 分源展示,不按 familyKey 合并去重;主线榜恢复 renderColumn 双栏。
+  A(html.includes('function fillStrategyVerdictKpi') && html.includes('今日结论 · 双源独立'), 'KPI 今日结论双源分开展示,不合并');
+  A(!html.includes('renderMergedCard') && !html.includes('const mergeByTheme = ') && !html.includes('class="mlx-'), '合并双源卡(A)已彻底撤回,无 mlx/mergeByTheme 残留');
+  A(html.includes("renderColumn('东财主线预测'") && html.includes("renderColumn('同花顺主线预测'"), '主线榜恢复东财/同花顺双栏,来源隔离');
 
   console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL STRATEGY-TWO-SOURCE-MAINLINES CHECKS PASSED');
 })();

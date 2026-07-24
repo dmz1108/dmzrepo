@@ -9894,7 +9894,7 @@
     }
   }
 </style>
-<link href="/vendor/strategy-workbench.css?v=20260724g" rel="stylesheet">
+<link href="/vendor/strategy-workbench.css?v=20260724h" rel="stylesheet">
 <link href="/vendor/review-workbench.css?v=20260718d" rel="stylesheet">
 <link href="/vendor/realtime-workbench.css?v=20260720" rel="stylesheet">
 </head>
@@ -12498,10 +12498,50 @@ async function loadStrategyMainlines(day) {
     const d = await res.json();
     const cur = document.getElementById('strategy-mainlines');
     if (cur) cur.innerHTML = renderStrategyMainlinesHTML(d);
+    fillStrategyVerdictKpi(d);
   } catch (e) {
     const cur = document.getElementById('strategy-mainlines');
     if (cur) cur.innerHTML = '';
   }
+}
+// KPI 带「今日结论」:东财与同花顺是两套独立预测,分开展示各自结论,不合并、不按 familyKey 去重
+// (Owner 2026-07-24 口径:相同 familyKey 只表示可能同族/双源共振,不代表两源结论应并成一条主线)。
+function fillStrategyVerdictKpi(d) {
+  const el = document.getElementById('kpi-verdict');
+  if (!el) return;
+  const bs = d && d.mainlinesBySource;
+  if (bs) {
+    // 单源结论文案:正式主线 → 预备主线 → 无主线/暂缺,只复述该源自己的结果,绝不借另一源。
+    const srcVerdict = (src) => {
+      if (!src || !src.available) return { txt: '暂缺', quiet: true };
+      const formal = src.hasMainlines && Array.isArray(src.mainlines) ? src.mainlines.filter(m => m && m.theme) : [];
+      if (formal.length) {
+        const names = formal.slice(0, 2).map(m => String(m.theme)).join('、');
+        return { txt: `正式 ${names}${formal.length > 2 ? ` 等${formal.length}条` : ''}`, quiet: false };
+      }
+      const reserve = Array.isArray(src.reserveMainlines) ? src.reserveMainlines.filter(m => m && m.theme) : [];
+      if (reserve.length) {
+        const names = reserve.slice(0, 2).map(m => String(m.theme)).join('、');
+        return { txt: `预备 ${names}${reserve.length > 2 ? ` 等${reserve.length}条` : ''}`, quiet: true };
+      }
+      return { txt: '今日无主线', quiet: true };
+    };
+    const east = srcVerdict(bs.eastmoney);
+    const ths = srcVerdict(bs.ths);
+    const line = (label, v) => `<span class="kpi-src-line${v.quiet ? ' quiet' : ''}"><i>${label}</i><b>${escapeHTML(v.txt)}</b></span>`;
+    el.innerHTML = `<div class="kpi-label">今日结论 · 双源独立</div><div class="kpi-verdict-lines">${line('东财', east)}${line('同花顺', ths)}</div>`;
+    return;
+  }
+  let main = '', sub = '';
+  if (d && Array.isArray(d.mainlines) && d.mainlines.length) {
+    const themes = d.mainlines.map(m => String(m.theme || '')).filter(Boolean);
+    main = `主线 <b>${escapeHTML(themes.slice(0, 2).join('、'))}</b>${themes.length > 2 ? ` 等${themes.length}条` : ''}`;
+    sub = '历史快照口径';
+  } else {
+    main = '暂无可用主线数据';
+    sub = String((d && d.message) || '');
+  }
+  el.innerHTML = `<div class="kpi-label">今日结论</div><div class="kpi-main">${main}</div>${sub ? `<div class="kpi-sub">${escapeHTML(sub)}</div>` : ''}`;
 }
 function strategyL2HistoryTime(value) {
   if (!value) return '';
@@ -12664,7 +12704,11 @@ function renderStrategyL2History(data) {
   }
   const jobs = [...byPlate.values()].map(row => row.job)
     .sort((a, b) => String(b?.createdAt || '').localeCompare(String(a?.createdAt || '')));
-  if (!jobs.length) return '';
+  const kpiL2 = document.getElementById('kpi-l2');
+  if (!jobs.length) {
+    if (kpiL2) kpiL2.innerHTML = '<div class="kpi-label">今日 L2 扫描</div><div class="kpi-main quiet">今日暂无扫描记录</div>';
+    return '';
+  }
   const summaryStars = new Map();
   for (const job of jobs) {
     for (const row of (Array.isArray(job?.results) ? job.results : [])) {
@@ -12679,6 +12723,9 @@ function renderStrategyL2History(data) {
   const runningJobs = jobs.filter(job => ['queued', 'running'].includes(String(job?.status || ''))).length;
   const confirmedStars = [...summaryStars.values()].filter(star => star.level === 'confirmed').length;
   const expectedStars = [...summaryStars.values()].filter(star => star.level === 'expected').length;
+  if (kpiL2) {
+    kpiL2.innerHTML = `<div class="kpi-label">今日 L2 扫描</div><div class="kpi-row"><span><i>板块</i><b>${jobs.length}</b></span><span><i>完成</i><b>${completedJobs}</b></span>${runningJobs ? `<span><i>处理中</i><b>${runningJobs}</b></span>` : ''}<span class="hot"><i>明星确认</i><b>${confirmedStars}</b></span><span class="amb"><i>预期明星</i><b>${expectedStars}</b></span></div>`;
+  }
   const cards = jobs.map(job => {
     const picked = Array.isArray(job?.picked) ? job.picked : [];
     const results = Array.isArray(job?.results) ? job.results : [];
@@ -13497,10 +13544,26 @@ async function loadStrategyMainlineReview() {
     const d = await res.json();
     const cur = document.getElementById('strategy-mainline-review');
     if (cur) cur.innerHTML = renderMainlineReviewHTML(d);
+    fillStrategyRecordKpi(d);
   } catch (e) {
     const cur = document.getElementById('strategy-mainline-review');
     if (cur) cur.innerHTML = '';
   }
+}
+// KPI 带「预判战绩」:复述回看接口 stats,不另行计算。
+function fillStrategyRecordKpi(d) {
+  const el = document.getElementById('kpi-record');
+  if (!el) return;
+  const stats = (d && d.stats) || {};
+  const src = stats.bySource || {};
+  const rate = (w, t) => (t ? `${Number(w) || 0}/${Number(t)}` : '--');
+  const east = src.eastmoney || {};
+  const cells = [
+    { lbl: '东财命中', v: rate(east.mainlineTop1Hits, east.mainlineTotal) },
+    { lbl: '明星次日', v: rate(stats.starWins, stats.starTotal) },
+    { lbl: '龙头1次日', v: rate(stats.leaderWins, stats.leaderTotal), hot: Number(stats.leaderWinRate) >= 60 },
+  ];
+  el.innerHTML = `<div class="kpi-label">预判战绩（近10日）</div><div class="kpi-row">${cells.map(c => `<span${c.hot ? ' class="hot"' : ''}><i>${c.lbl}</i><b>${escapeHTML(c.v)}</b></span>`).join('')}</div>`;
 }
 function renderMainlineReviewHTML(d) {
   const rows = (d && d.days) || [];
@@ -13730,7 +13793,49 @@ function renderMainlineReviewHTML(d) {
       : r.noMainline
         ? '<span class="mlr-card-state quiet">今日无主线</span>'
         : `<span class="mlr-card-state">${escapeHTML(r.theme || '主线候选')}</span>`;
-    return `<div class="mlr-row ${rowHitClass(r)}${starVisual.rowClass ? ` ${starVisual.rowClass}` : ''}${r.sampleValid === false ? ' invalid' : ''}">
+    // A+C 重构(Owner 2026-07-24):每日先给一行表格式摘要,完整证据卡收进展开层;数据与口径不变。
+    const compactPred = (() => {
+      if (r.bySource) {
+        const part = (key, label) => {
+          const src = r.bySource[key] || {};
+          const status = String(src?.status || '') || (src?.available === false ? 'unavailable'
+            : String(src?.theme || '').trim() ? 'mainline'
+              : (src?.available === true && src?.noMainline === true) ? 'no-mainline' : 'unknown');
+          const t = status === 'unavailable' ? '暂缺' : (status === 'unknown' ? '状态未知' : (status === 'no-mainline' ? '无主线' : String(src.theme || '')));
+          const hit = status === 'mainline'
+            ? (src.mainlineHitTop1 === true ? '命中' : (src.mainlineHitTop3 === true ? '前三' : (src.mainlineHitTop1 === false ? '未命中' : '')))
+            : '';
+          return `${label}${t}${hit ? ` ${hit}` : ''}`;
+        };
+        return `${part('eastmoney', '东财 ')} / ${part('ths', '同花顺 ')}`;
+      }
+      if (r.noMainline) return '今日无主线';
+      const hit = r.pendingReview ? '' : (r.mainlineHitTop1 === true ? ' 命中' : (r.mainlineHitTop3 === true ? ' 前三' : (r.mainlineHitTop1 === false ? ' 未命中' : '')));
+      return `${String(r.theme || '')}${hit}`;
+    })();
+    const actualTopRow = Array.isArray(r.actualTop) && r.actualTop.length ? r.actualTop[0] : null;
+    const compactOut = r.pendingReview ? '待盘后验证' : (actualTopRow ? `${String(actualTopRow.theme || '')} ${Number(actualTopRow.count) || 0}涨停` : '暂无结果');
+    const lineStock = starVisual.stock || r.star || null;
+    const linePerf = (v) => {
+      if (v == null) return '<b class="na">--</b>';
+      const n = Number(v);
+      return `<b class="${n > 0 ? 'up' : (n < 0 ? 'down' : '')}">${n > 0 ? '+' : ''}${n}%</b>`;
+    };
+    const lineBadge = starVisual.key
+      ? `<span class="mlr-line-badge ${starVisual.key}">${escapeHTML(starVisual.label)}</span>`
+      : `<span class="mlr-line-badge quiet">${r.noMainline || !r.theme ? '今日无主线' : escapeHTML(r.theme)}</span>`;
+    return `<details class="mlr-line ${rowHitClass(r)}${starVisual.rowClass ? ` ${starVisual.rowClass}` : ''}${r.sampleValid === false ? ' invalid' : ''}">
+    <summary class="mlr-line-sum">
+      <time class="mlr-line-day">${escapeHTML(String(r.day || '').slice(5).replace('-', '.'))}</time>
+      ${lineBadge}
+      <span class="mlr-line-flow">${escapeHTML(compactPred)} <i>→</i> <b>${escapeHTML(compactOut)}</b>${r.sampleValid === false ? '<em class="mlr-line-invalid">不计样本</em>' : ''}</span>
+      <span class="mlr-line-star">${starVisual.name ? escapeHTML(starVisual.name) : '<i>—</i>'}</span>
+      <span class="mlr-line-perf">${linePerf(lineStock?.nextHighGain)}</span>
+      <span class="mlr-line-perf">${linePerf(lineStock?.nextCloseGain)}</span>
+      <span class="mlr-line-perf">${linePerf(lineStock?.threeDayGain)}</span>
+      <b class="mlr-line-caret" aria-hidden="true"></b>
+    </summary>
+    <div class="mlr-row ${rowHitClass(r)}${starVisual.rowClass ? ` ${starVisual.rowClass}` : ''}${r.sampleValid === false ? ' invalid' : ''}">
     <header class="mlr-card-head">
       <time class="mlr-day" datetime="${escapeHTML(String(r.day || ''))}">${escapeHTML(String(r.day || '').slice(5).replace('-', '.'))}</time>
       <span class="mlr-card-identity">${starSignal || fallbackIdentity}</span>
@@ -13744,41 +13849,15 @@ function renderMainlineReviewHTML(d) {
     </div>
     ${detail}
     ${reserveCell(r)}
-  </div>`;
+  </div>
+  </details>`;
   };
-  const reviewGroups = [
-    {
-      key: 'confirmed',
-      title: '真主线',
-      note: '明星确认',
-      rows: rowModels.filter(item => item.starVisual.key === 'confirmed'),
-    },
-    {
-      key: 'missed',
-      title: '未兑现候选',
-      note: '预期明星最终未封板',
-      rows: rowModels.filter(item => item.starVisual.key === 'missed'),
-    },
-    {
-      key: 'pending',
-      title: '待验证',
-      note: '最终证据尚未完整',
-      rows: rowModels.filter(item => item.starVisual.key === 'pending'),
-    },
-    {
-      key: 'other',
-      title: '其他交易日',
-      note: '无确认明星',
-      rows: rowModels.filter(item => !item.starVisual.key),
-    },
-  ].filter(group => group.rows.length);
-  const body = reviewGroups.map(group => `<section class="mlr-group ${group.key}">
-    <header class="mlr-group-head">
-      <span class="mlr-group-title"><i></i><b>${group.title}</b><small>${group.note}</small></span>
-      <em>${group.rows.length}日</em>
-    </header>
-    <div class="mlr-group-list">${group.rows.map(renderReviewRow).join('')}</div>
-  </section>`).join('');
+  // A+C 重构:分组改为按日期倒序的统一表,分组语义由行左侧强调色与结果徽章承担。
+  const sortedModels = rowModels.slice().sort((a, b) => String(b.r.day || '').localeCompare(String(a.r.day || '')));
+  const body = `<div class="mlr-table">
+    <div class="mlr-table-head"><span>日期</span><span>结果</span><span>预判 → 盘后验证</span><span>明星</span><span class="num">次高</span><span class="num">次收</span><span class="num">3日</span><span></span></div>
+    ${sortedModels.map(renderReviewRow).join('')}
+  </div>`;
   const confirmedDays = rowModels.filter(item => item.starVisual.key === 'confirmed').length;
   const missedDays = rowModels.filter(item => item.starVisual.key === 'missed').length;
   const pendingDays = rowModels.filter(item => item.starVisual.key === 'pending').length;
@@ -13801,7 +13880,7 @@ function renderMainlineReviewHTML(d) {
     : '';
   return `<section class="ml-review">
     <div class="mlr-head">
-      <div class="mlr-title-block"><div class="mlr-title">预判回看</div><small>明星确认主线</small></div>
+      <div class="mlr-title-block"><div class="mlr-title">预判回看</div><small>点行展开当日完整证据 · 红线真主线 · 琥珀未兑现</small></div>
       <div class="mlr-outcome-summary">
         <span class="confirmed"><i>真主线</i><b>${confirmedDays}</b><small>日</small></span>
         <span class="missed"><i>未兑现</i><b>${missedDays}</b><small>日</small></span>
@@ -16226,14 +16305,19 @@ function renderStrategyPage() {
       </div>` : ''}
     </header>
     ${canUseL2AdminTools() ? renderStrategyBoardSearchResultsHTML() : ''}
+    <div class="strategy-kpis${canUseL2AdminTools() ? ' has-l2' : ''}">
+      <div id="kpi-verdict" class="strategy-kpi verdict"><div class="kpi-label">今日结论</div><div class="kpi-main quiet">正在读取主线状态…</div></div>
+      <div id="kpi-record" class="strategy-kpi"><div class="kpi-label">预判战绩（近10日）</div><div class="kpi-main quiet">正在读取回看统计…</div></div>
+      ${canUseL2AdminTools() ? '<div id="kpi-l2" class="strategy-kpi"><div class="kpi-label">今日 L2 扫描</div><div class="kpi-main quiet">正在读取扫描记录…</div></div>' : ''}
+    </div>
     <div id="strategy-mainlines" class="strategy-mainlines"></div>
-    ${canUseL2AdminTools() ? '<div id="strategy-l2-history"></div>' : ''}
     <div id="strategy-mainline-review"></div>
     <div class="strategy-signal-grid" aria-hidden="true">
       <div id="strategy-hot-themes" class="strategy-hot-themes"></div>
       <div id="strategy-strong-resonance" class="strategy-strong-resonance"></div>
     </div>
     ${bodyHtml}
+    ${canUseL2AdminTools() ? '<div id="strategy-l2-history"></div>' : ''}
     ${state.adminLoggedIn ? `
     <section class="strategy-section theme-calib">
       <div class="strategy-section-head tc-head" onclick="toggleThemeCalib()">
