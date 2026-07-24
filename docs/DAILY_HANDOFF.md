@@ -9789,3 +9789,26 @@ Deployment:
 
 Notes for next agent:
 - #258（明星信号小框，v=k）与 #261（L2 逐档明细，v=j）现均已同步至最新 main，各自独立可合并。合并顺序不限；两者缓存版本互不冲突。
+
+## 2026-07-24 - Local Claude - #258 补明星小框布局回归断言（Codex 复核第3点）
+
+Changed:
+- 按 Codex 复核意见第 3 点，在 `tests/strategy-workbench-ui.test.js` 补锁明星信号小框核心布局，防止 CSS 多层覆盖后悄悄退回长条：
+  - `.ml-proof-row.ml-star-proof` 为 block + transparent；
+  - `.ml-star-proof .ml-star-list` 为 flex + wrap；
+  - 明星盒 `width:max-content` + `max-width:100%`；
+  - 移动端 `@media (max-width:760px)` 下明星盒 `width:100%`。
+- Codex 第 1 点（缓存键 `i` 撞 #259）与第 2 点（handoff 冲突）已在上一轮同步 main 时修复：缓存版本改为唯一的 `v=20260724k`，handoff 保留 #256/#259/本 PR 各方记录。
+
+Files:
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 全仓 61/61 个 `tests/*.test.js` 通过（含 4 条新增布局断言）。
+
+Deployment:
+- 未部署生产。
+
+Notes for next agent:
+- 合并顺序（Codex 建议）：先 #261（缓存 j），再让本 PR 保持 `k`。两者缓存键与 handoff 已各自就位。

@@ -98,4 +98,11 @@ assert(/body\.view-strategy \.sc-pick-detail-title\s*\{[\s\S]*?justify-content:\
 assert((html.match(/grid-template-columns:\s*max-content max-content max-content !important;/g) || []).length >= 2);
 assert(/body\.view-strategy \.sc-pick-pair\s*\{[\s\S]*?justify-content:\s*start !important;[\s\S]*?gap:\s*8px !important;[\s\S]*?\}/.test(html));
 
+// 明星信号紧凑小框(2026-07-24,对齐方向A)——锁定核心布局,防止 CSS 多层覆盖后悄悄退回长条。
+assert(css.includes('明星信号改为紧凑小框'));
+assert(/body\.view-strategy \.ml-proof-row\.ml-star-proof\s*\{[\s\S]*?display:\s*block !important;[\s\S]*?background:\s*transparent !important;[\s\S]*?\}/.test(css));
+assert(/body\.view-strategy \.ml-star-proof \.ml-star-list\s*\{[\s\S]*?display:\s*flex !important;[\s\S]*?flex-wrap:\s*wrap;[\s\S]*?\}/.test(css));
+assert(/body\.view-strategy \.ml-star-proof \.ml-stock\.ml-starstock\s*\{[\s\S]*?width:\s*max-content;[\s\S]*?max-width:\s*100%;[\s\S]*?\}/.test(css));
+assert(/@media \(max-width: 760px\)\s*\{[\s\S]*?body\.view-strategy \.ml-star-proof \.ml-stock\.ml-starstock\s*\{\s*width:\s*100%;\s*\}/.test(css));
+
 console.log('strategy workbench UI checks passed');
