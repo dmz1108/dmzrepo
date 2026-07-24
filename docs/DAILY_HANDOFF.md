@@ -9475,3 +9475,31 @@ Notes for next agent:
 - 本次触及「今日策略」高风险展示范围，按 Owner 规则**合并前需另一 agent（建议 Codex）独立复核**，重点：① 合并卡在多条正式主线/两源题材不一致日的渲染；② 回看表格在历史单源记录（无 bySource）下的摘要行；③ 管理员确认主线按钮在展开层内仍可用。
 - L2 明细验证使用契约仿真数据；部署后需用 panda 账号实测 L2 展开态与 KPI L2 瓦片。
 - 部署时原子发布 HTML+CSS；覆盖前核对线上仍匹配 PR #247 哈希（html=877a65dc…4669 / css=586771c6…13）。
+
+## 2026-07-24 - Local Claude - PR #251 按 Codex 复审意见修订
+
+Changed:
+- 按 Codex 独立复核的 4 条阻断项修订 A+C 重构分支：
+  1. 恢复「今日 L2 扫描记录」默认折叠（Owner 已锁定交互），并恢复 `star-l2-layers` 原回归断言；
+  2. 移除合并卡的虚构跨源统一名次，改为对比条内展示两源各自源内名次（东财 #n / 同花顺 #n）；
+  3. 合并键由题材名文本改为 `familyKey || key || theme` 归一键，同族异名不拆卡且以「同花顺名·XXX」保留另一源原始命名；
+  4. 合并最新 main（PR #249/#250 已合并部署），CSS 以线上 polish 层为基底重建 A+C 层并去除重复规则，缓存版本保持 `v=20260724h`。
+- 新增行为测试：提取 `mergeByTheme` 纯函数验证同 familyKey 异名合并、异 familyKey 同名不合并、两源名次保留；静态断言锁定无统一名次、别名保留。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `tests/star-l2-layers.test.js`
+- `tests/strategy-two-source-mainlines.test.js`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 全仓 59/59 个 `tests/*.test.js` 通过；`git diff --check` 通过。
+- 本地真实数据预览复验：合并卡显示「东财 #1 / 同花顺 #1」、无统一名次、双源空态合并为一条便签、L2 默认折叠；桌面 2847px / 移动 5363px，横向溢出均为 0。
+
+Deployment:
+- 未部署生产；未修改云端文件，未重启任何服务。
+
+Notes for next agent:
+- 待 Codex 复审通过与 Owner 确认后合并。「方向 C 的 L2 默认展开」与 Owner 早前锁定的「默认折叠」冲突，本次遵循已锁定交互；若 Owner 希望改为默认展开，需 Owner 明确解锁后另行提交。
