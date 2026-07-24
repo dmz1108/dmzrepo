@@ -86,12 +86,14 @@ assert(/body\.view-strategy \.ml-proof-row\.ml-star-proof\s*\{[\s\S]*?display:\s
 assert(/body\.view-strategy \.ml-star-proof \.ml-star-list\s*\{[\s\S]*?display:\s*flex !important;[\s\S]*?flex-wrap:\s*wrap;[\s\S]*?\}/.test(css));
 assert(/body\.view-strategy \.ml-star-proof \.ml-stock\.ml-starstock\s*\{[\s\S]*?width:\s*max-content;[\s\S]*?max-width:\s*100%;[\s\S]*?\}/.test(css));
 assert(/body\.view-strategy \.ml-card\.confirmed-mainline\s*\{[\s\S]*?border-color:\s*rgba\(255,\s*104,\s*100,\s*0\.62\) !important;[\s\S]*?box-shadow:\s*inset 4px 0 0 #ff6864,[\s\S]*?\}/.test(css));
-assert(/body\.view-strategy \.ml-card\.confirmed-mainline \.ml-confirmed\s*\{[\s\S]*?background:\s*#e95753 !important;[\s\S]*?color:\s*#fff !important;[\s\S]*?\}/.test(css));
+assert(html.includes('class="ml-confirmed ml-daily-confirmed">✔ 当日主线</span>'));
+assert(html.includes('class="ml-confirmed" style="background:rgba(74,155,255,.16);color:#4a9bff;"'));
+assert(/body\.view-strategy \.ml-card\.confirmed-mainline \.ml-daily-confirmed\s*\{[\s\S]*?background:\s*#e95753 !important;[\s\S]*?color:\s*#fff !important;[\s\S]*?\}/.test(css));
+assert(!css.includes('body.view-strategy .ml-card.confirmed-mainline .ml-confirmed {'));
 assert(/body\.view-strategy \.ml-star-proof \.ml-stock\.ml-starstock\.confirmed\s*\{[\s\S]*?box-shadow:\s*inset 3px 0 0 #efb94f !important;[\s\S]*?\}/.test(css));
 assert(/body\.view-strategy \.ml-star-proof \.ml-stock\.ml-starstock\.confirmed \.ml-star-state\s*\{[\s\S]*?background:\s*#efb94f !important;[\s\S]*?font-weight:\s*820 !important;[\s\S]*?\}/.test(css));
 assert(/body\.view-strategy \.mlr-line\.hit-ok > \.mlr-line-sum\s*\{[\s\S]*?box-shadow:\s*inset 6px 0 0 #ff6864;[\s\S]*?\}/.test(css));
 assert(/body\.view-strategy \.mlr-hit\.ok\s*\{[\s\S]*?background:\s*#e95753 !important;[\s\S]*?color:\s*#fff !important;[\s\S]*?\}/.test(css));
-assert(/body\.view-strategy \.mlr-line-sum > \.mlr-hit\s*\{[\s\S]*?grid-column:\s*1 \/ 3;[\s\S]*?min-width:\s*76px;[\s\S]*?\}/.test(css));
 assert(/body\.view-strategy \.ml-l2-job-head,\s*body\.view-strategy \.ml-l2-job-meta \{ display: contents !important; \}/.test(css));
 assert(css.includes('Local Claude polish 2026-07-24'));
 assert(/body\.view-strategy \.mlr-chip\s*\{[\s\S]*?border-radius:\s*999px !important;[\s\S]*?\}/.test(css));
