@@ -9604,3 +9604,35 @@ Deployment:
 
 Notes for next agent:
 - 本 PR 现在只做展示层增量(KPI 带 + 回看日期表 + L2 表格化),主线榜与来源隔离逻辑完全维持现状。待 Codex 最终复审与 Owner 确认后合并。
+
+## 2026-07-24 - Codex - PR #251 双源独立策略 UI 已合并部署
+
+Changed:
+- 最终复核并合并 PR `#251`，合并提交为 `56154fcba9e23433bf79c64c09337dc823262464`。
+- 按 Owner 最终口径保留东财、同花顺两套独立主线预测；同一题材仅显示双源共振提示，不合并评分、排名、龙头或明星信号。
+- 从精确合并后的 `main` 原子发布策略页 HTML 与 CSS，并同步修正 PR 标题和说明，使其与最终代码一致。
+- 云端两份运维日志均已追加本次静态发布记录。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 生产静态文件：`kpl-dashboard_17_apple.html`、`Qi/vendor/strategy-workbench.css`
+
+Validated:
+- 独立复核确认 PR 代码 `git diff --check` 通过；桌面与移动端 Playwright 验证无横向溢出。
+- 合并后的精确 `main` 全仓 `60/60` 个 `tests/*.test.js` 通过。
+- 发布前云端 HTML/CSS 哈希与合并前 `main` 完全一致，没有覆盖游离修改：
+  - HTML：`f4f03b4446e677ed03919d46e6af1b5755e11ca8e049e8172ed8b1b954bb2719`
+  - CSS：`2141c71acfc4deb8520d0d36d8f1213aebd6b53c88b426fbb0681245250bcea7`
+- 发布后云端磁盘、公网响应和 Git 文件三方 SHA-256 完全一致：
+  - HTML：`fe8627952b2ef86d937c87c0ee2df47b3a497cbe8c3980e0f7476484bf12204e`
+  - CSS：`4ba241099720ab86ea82c35e5e6799ee2c6a7a161ced44bbb0ace4faeedead01`
+- 公网页面源码确认东财/同花顺继续使用两个独立 `renderColumn`，双源共振文案明确“未合并”，L2 历史记录 `<details>` 默认未展开；`https://market.dreamerqi.com/health` 返回 `ok=true`。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`；静态文件发布，未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+- 主服务继续由原进程 PID `14816` 监听 `8765`。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-pr251-56154fc-20260724-125549`。
+
+Notes for next agent:
+- Git 合并提交、生产静态文件与云端双日志已一致；本次没有改变策略计算、数据接口、运行时数据库或双源来源隔离口径。
+- 后续 agent 开始新任务前应同步最新 `main`；不要重新引入跨源统一分数或合并排名。
