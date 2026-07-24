@@ -4191,3 +4191,131 @@ body.view-strategy .ml-l2-stock-detail {
     width: 100%;
   }
 }
+
+/* ===== Local Claude polish 2026-07-24: quiet notes, scannable stats, tight clusters.
+   Visual layer only — business logic, interactions and layout contracts stay unchanged. ===== */
+
+/* 空态/状态说明降噪:大边框盒改为左侧细accent的安静便签,两栏重复出现时不再喧宾夺主 */
+body.view-strategy .ml-col > .rht-loading {
+  min-height: 0;
+  margin: 12px 0 0 !important;
+  padding: 11px 13px !important;
+  border: 0 !important;
+  border-left: 2px solid rgba(151, 170, 195, 0.35) !important;
+  border-radius: 0 6px 6px 0 !important;
+  background: rgba(255, 255, 255, 0.018) !important;
+  color: #93a1b3 !important;
+}
+
+body.view-strategy .strategy-focus-section .strategy-empty {
+  min-height: 0;
+  padding: 13px 15px;
+  border: 0 !important;
+  border-left: 2px solid rgba(151, 170, 195, 0.35) !important;
+  border-radius: 0 6px 6px 0;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+/* 预备主线三层标题(组头/说明条/卡片)间距收紧,减少进入卡片前的视觉台阶 */
+body.view-strategy .ml-reserve-head {
+  padding-bottom: 6px;
+}
+
+body.view-strategy .ml-reserve-head > small {
+  font-size: 10px;
+}
+
+body.view-strategy .ml-reserve-bar {
+  padding: 6px 1px 7px;
+}
+
+/* 回看统计条:命中率是全页最重要的结论数字,由分隔线文本升级为可扫读的胶囊 */
+body.view-strategy .mlr-overview {
+  gap: 8px;
+  padding: 12px 0 14px;
+}
+
+body.view-strategy .mlr-stats {
+  gap: 6px !important;
+}
+
+body.view-strategy .mlr-chip {
+  min-height: 24px;
+  padding: 2px 11px !important;
+  border: 1px solid rgba(182, 198, 219, 0.13) !important;
+  border-right: 1px solid rgba(182, 198, 219, 0.13) !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.02) !important;
+  color: #a3b0c1 !important;
+}
+
+body.view-strategy .mlr-chip:first-child {
+  padding-left: 11px !important;
+}
+
+body.view-strategy .mlr-chip:last-child {
+  border-right: 1px solid rgba(182, 198, 219, 0.13) !important;
+}
+
+body.view-strategy .mlr-sub small {
+  color: #7c8b9f;
+  line-height: 1.6;
+}
+
+/* 转化胶囊按内容收窄,不再拉成整行空框 */
+body.view-strategy .mlr-conversion-slot .mlr-expected {
+  width: max-content;
+  max-width: 100%;
+}
+
+/* L2 个股摘要:四个金额从整行均分改为紧凑簇,消除超宽视口下的大片留白 */
+body.view-strategy .ml-l2-max-money {
+  grid-template-columns: repeat(4, minmax(0, max-content));
+  gap: 4px 22px;
+}
+
+/* 题材校准:说明紧跟标题,不再漂到 1720px 壳的最右端 */
+body.view-strategy .theme-calib .strategy-section-head {
+  justify-content: flex-start;
+  gap: 14px;
+}
+
+/* 9px 字号下限提升到 10px,信息密度不变但可读性提升 */
+body.view-strategy .mlr-group-title > small,
+body.view-strategy .mlr-group-head > em {
+  font-size: 10px;
+}
+
+body.view-strategy .ml-l2-bucket-title small {
+  font-size: 10px;
+}
+
+body.view-strategy .ml-l2-stock-id small {
+  font-size: 10px;
+}
+
+body.view-strategy .mlr-block-label {
+  font-size: 10px;
+}
+
+body.view-strategy .ml-reserve-head > small,
+body.view-strategy .mlr-group-title > small {
+  line-height: 1.4;
+}
+
+@media (max-width: 760px) {
+  body.view-strategy .mlr-stats {
+    gap: 5px !important;
+  }
+
+  body.view-strategy .mlr-chip {
+    min-height: 22px;
+    padding: 1px 9px !important;
+    font-size: 10px !important;
+  }
+
+  body.view-strategy .ml-l2-max-money {
+    grid-template-columns: repeat(2, minmax(0, max-content));
+    gap: 3px 16px;
+  }
+}
