@@ -9126,3 +9126,22 @@ Deployment:
 
 Notes for next agent:
 - 本次是纯视觉布局调整；后续复核应重点检查宽屏无右侧占位空洞、窄屏股票名与次高/次收/3日收益不重叠。
+
+## 2026-07-23 - Codex - 预判回看自适应布局已部署
+
+Changed:
+- PR `#237` 已合并到 `main`，合并提交为 `660f902e9b665ebd8d6bef37c31c89aef0df0050`。
+- 已将自适应预判路线、盘后结果和自动填充明细布局发布到云端；两份云端运维日志均已追加本次静态发布记录。
+
+Validated:
+- 发布前线上 HTML/CSS 哈希与上一版已记录的 PR `#233` 生产哈希完全一致，没有游离修改被覆盖。
+- 公网 HTML SHA-256 为 `c4ba7f589d8aed92078c64db4a01d60359b10db9b720f7181ee608703cb52bad`。
+- 公网 CSS SHA-256 为 `36a39caac5d8ecce46006f86219bd810e920d11198cc0f339d33caeb740aa5d3`。
+- 公网页面已引用 `/vendor/strategy-workbench.css?v=20260724a`，`https://market.dreamerqi.com/health` 返回 `ok=true`。
+
+Deployment:
+- 已原子发布 `kpl-dashboard_17_apple.html` 与 `Qi/vendor/strategy-workbench.css`；未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-ssh-pr237-660f902-20260723-172716`。
+
+Notes for next agent:
+- 生产代码、Git `main` 与云端运维日志已一致；本次未改变任何策略数据、预测记录或统计口径。
