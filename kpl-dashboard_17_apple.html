@@ -9201,6 +9201,37 @@
     white-space: nowrap;
   }
 
+  /* 板块数据源标签(#199 移植):紧凑 chip,随板块名同格显示;不压缩、不参与网格列 */
+  body.view-strategy .ml-l2-source {
+    flex: 0 0 auto;
+    padding: 1px 6px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text-muted);
+    font-size: 9px;
+    line-height: 1.5;
+    white-space: nowrap;
+    align-self: center;
+  }
+
+  body.view-strategy .ml-l2-source.eastmoney {
+    border-color: rgba(255, 120, 96, .28);
+    color: #ff8f78;
+    background: rgba(255, 120, 96, .08);
+  }
+
+  body.view-strategy .ml-l2-source.ths {
+    border-color: rgba(91, 154, 255, .28);
+    color: #76adff;
+    background: rgba(91, 154, 255, .08);
+  }
+
+  body.view-strategy .ml-l2-source.kpl {
+    border-color: rgba(189, 157, 255, .28);
+    color: #c3a9ff;
+    background: rgba(189, 157, 255, .08);
+  }
+
   body.view-strategy .ml-l2-trigger.auto {
     border-color: rgba(74,155,255,.28);
     color: #4a9bff;
@@ -12733,6 +12764,9 @@ function renderStrategyL2History(data) {
     const results = Array.isArray(job?.results) ? job.results : [];
     const resultCount = results.length;
     const trigger = job?.trigger === 'strategy-auto' ? '自动' : (job?.trigger === 'manual' ? '手动' : '扫描');
+    // 板块数据源标签(移植自 Draft #199,适配 A+C 折叠表结构):东财/同花顺/KPL,随板块名同格展示,不新增网格列。
+    const sourceLabel = strategyBoardSourceLabel(job?.zsType);
+    const sourceClass = Number(job?.zsType) === 6 ? 'eastmoney' : (Number(job?.zsType) === 5 ? 'ths' : (Number(job?.zsType) === 7 ? 'kpl' : ''));
     const status = String(job?.status || '');
     const statusText = status === 'done' ? '完成' : (status === 'running' ? '计算中' : (status === 'queued' ? '排队中' : '失败'));
     const resultByCode = new Map(results.map(row => [String(row?.code || ''), row]));
@@ -12766,7 +12800,7 @@ function renderStrategyL2History(data) {
     return `<details class="ml-l2-job${starSummary ? ' has-star' : ''}">
       <summary class="ml-l2-job-summary" aria-label="${escapeHTML(String(job?.boardName || job?.plateId || 'L2任务'))} L2 扫描记录">
         <div class="ml-l2-job-head">
-        <div class="ml-l2-job-name"><b>${escapeHTML(String(job?.boardName || job?.plateId || 'L2任务'))}</b><small>${escapeHTML(String(job?.plateId || ''))}</small></div>
+        <div class="ml-l2-job-name"><b>${escapeHTML(String(job?.boardName || job?.plateId || 'L2任务'))}</b><small>${escapeHTML(String(job?.plateId || ''))}</small>${sourceLabel ? `<span class="ml-l2-source ${sourceClass}" title="扫描板块数据源：${escapeHTML(sourceLabel)}">${escapeHTML(sourceLabel)}</span>` : ''}</div>
         <span class="ml-l2-trigger ${job?.trigger === 'strategy-auto' ? 'auto' : ''}">${trigger}</span>
         <span class="ml-l2-status ${escapeHTML(status)}">${statusText}</span>
         <time>${escapeHTML(strategyL2HistoryTime(job?.createdAt))}</time>

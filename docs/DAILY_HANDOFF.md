@@ -9771,3 +9771,27 @@ Notes for next agent:
 - 本分支自最新 main（含已部署 #251/#256）新建；与仍在评审的 #258（明星信号小框，占用缓存版本 i）互不重叠，若 #258 先合并，本 PR 合并时仅需处理一次缓存版本号（i↔j）与 CSS 末尾追加块的琐碎冲突。
 - 触及「L2」高风险展示范围，建议 Codex 复核：重点核对 6 列表头 colspan、买/卖成对格数值与原 8 列一一对应无错位、缺失档展示、最大档高亮口径不变。
 - L2 明细以契约仿真数据验证，部署后需 panda 账号在真实 L2 数据下复看一次。
+
+## 2026-07-24 - Local Claude - #261 移植 #199 L2 板块来源标签（Codex 复核要求）
+
+Changed:
+- 按 Codex 复核意见，把旧 Draft #199 的「L2 扫描板块来源标签」移植进本 PR，并适配 A+C 折叠表结构（不带入 #199 旧 `article` 卡布局）：
+  - `renderStrategyL2History` 每个任务计算 `strategyBoardSourceLabel(job?.zsType)` 与来源类名（6→eastmoney/5→ths/7→kpl），把来源 chip 放进 `.ml-l2-job-name` 单元格（随板块名同格），不新增网格列、不打乱折叠表的 9 列对齐。
+  - 新增 `.ml-l2-source` 紧凑 chip 样式（基样式 + 东财红/同花顺蓝/KPL紫三色，`flex:0 0 auto` 不压缩）。
+- `#199` 只移植来源 chip、三色样式与断言，未带入旧卡片布局；完成后 #199 可关闭。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `tests/star-l2-layers.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 真实数据形态预览（三任务分别设 zsType 6/5/7）：东财/同花顺/KPL 三色标签紧跟板块代码正确渲染，`自动/完成/时间/扫描/结果/入选/明星/展开` 列对齐不受影响。
+- 全仓 61/61 个 `tests/*.test.js` 通过（含新增来源标签渲染与三色样式断言）；`git diff --check` 通过；桌面 2507px / 移动 4904px 横向溢出均为 0。
+
+Deployment:
+- 未部署生产。
+
+Notes for next agent:
+- #199（L2 来源标签 Draft）内容已并入本 PR，可关闭 #199。
+- 合并顺序（Codex 建议）：本 PR（缓存 j）先合，#258（缓存 k）随后同步 main 保留 k。
