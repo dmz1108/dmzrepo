@@ -9339,3 +9339,27 @@ Deployment:
 
 Notes for next agent:
 - Git `main`、云端静态文件与云端操作日志已一致；本次没有修改策略逻辑、数据或服务配置。
+
+## 2026-07-23 - Codex - 深度精修策略工作台视觉层级
+
+Changed:
+- 统一策略页的深色工作台视觉：减少嵌套边框和虚线框，重新梳理标题、来源、板块指标、明星证据与回看信息的层级。
+- 优化今日主线双来源栏、预备主线卡片、真主线回看、重点关注空状态和 L2 历史容器；保留全部业务状态、交互与现有布局规则。
+- 更新策略样式缓存版本；未修改主线筛选、评分、L2 扫描、复盘或数据逻辑。
+
+Files:
+- `Qi/vendor/strategy-workbench.css`
+- `kpl-dashboard_17_apple.html`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 使用同一份线上真实策略数据，在 `1440x1000` 与 `390x844` 视口完成改前/改后截图对照。
+- 两个视口的页面宽度均与视口完全一致，无横向溢出；真主线桌面端继续保持两列等高，移动端保持单列。
+- `git diff --check`、策略 UI 定向检查和全仓 `59/59` 个 `tests/*.test.js` 文件通过。
+
+Deployment:
+- 本条提交时尚未部署生产；未修改云端文件，未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+
+Notes for next agent:
+- 本次为纯视觉精修；部署时应原子发布 HTML 与 CSS，并使用相同桌面/移动视口复验。
