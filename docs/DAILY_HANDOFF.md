@@ -10045,3 +10045,28 @@ Deployment:
 
 Notes for next agent:
 - 合并后只需静态发布 `kpl-dashboard_17_apple.html` 与 `Qi/vendor/strategy-workbench.css`，不需要重启 Node、Caddy 或公司端 L2 worker。
+
+## 2026-07-25 - Codex - PR #268 / #261 L2 明细设计已部署
+
+Changed:
+- 通过集成 PR `#268` 合并原 PR `#261`；`main` 合并提交为 `9a4900175141ab18f5fec298f0e740b80507c142`。
+- 从精确合并提交发布 L2 六列紧凑明细表、三来源标签与缓存键 `20260724k`。
+- 云端两份运维日志均已追加本次静态发布记录。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 生产静态文件：`kpl-dashboard_17_apple.html`、`Qi/vendor/strategy-workbench.css`
+
+Validated:
+- 发布前两份云端文件哈希与上一版 `main` 完全一致，没有覆盖游离修改。
+- 发布后云端磁盘、公网响应与 Git 文件 SHA-256 一致：
+  - HTML：`1f1764f24e355e8477d36a529d8f2697079bc555e03c92dae42533965b31f8ca`
+  - CSS：`239dedbfad0212557c0beced29a0165bb7b17babae24e01d26e1580d20d9eaa6`
+- 公网页面包含缓存键 `20260724k`、六列表格、来源标签和 `mainlineStarQualified` 资格闸；`/health` 返回 `ok=true`。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`；未重启 Node、Caddy、娱乐服务或公司端 L2 worker。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-pr268-9a49001-20260725-010720`。
+
+Notes for next agent:
+- 原 Draft PR `#199` 的来源标签已被本次实现吸收，可关闭且不要再单独合并。
