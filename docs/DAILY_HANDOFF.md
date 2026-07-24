@@ -9772,3 +9772,30 @@ Deployment:
 Notes for next agent:
 - 本分支取代 PR #258 的明星紧凑框实现；若合并，应关闭 #258。
 - PR #261 仍需在本分支合并后同步最新 `main`，并使用新的唯一 CSS 缓存键。
+
+## 2026-07-24 - Codex - PR #262 策略信号层级已合并部署
+
+Changed:
+- 在 Local Claude 对修正提交 `116f804` 复审 `approved` 后合并 PR `#262`，合并提交为 `3f51d4bd7e8536b8ada44f6dd8ca42a92ef7bca9`。
+- 从精确合并后的 `main` 原子发布策略页 HTML 与 CSS；同时关闭已被本 PR 完整取代的 PR `#258`。
+- 云端两份运维日志均已追加本次静态发布记录。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 生产静态文件：`kpl-dashboard_17_apple.html`、`Qi/vendor/strategy-workbench.css`
+
+Validated:
+- 发布前云端 HTML/CSS 哈希与合并前 `main` 完全一致，无游离修改被覆盖。
+- 发布后云端磁盘、公网响应和 Git 文件 SHA-256 完全一致：
+  - HTML：`8fad5f1caa8ffc60807ab01f870c8693428eb249fd5018d0b64ec30df2357077`
+  - CSS：`88f8ebf97e94137229270f6ae109d3b64614d433af050352287631f4f90ce768`
+- 公网 HTML 已引用缓存键 `20260724j`，并包含独立的 `ml-daily-confirmed`；公网 CSS 可检索到主线、明星确认和命中状态规则。
+- 全仓 `61/61` 个测试文件通过；公网 `/health` 返回 `ok=true`。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`；静态文件发布，未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-pr262-3f51d4b-20260724-235342`。
+
+Notes for next agent:
+- PR `#261` 现在应同步最新 `main`，保留双方 handoff，并将 CSS 缓存键升级为下一个未使用值（预计 `20260724k`）；完成连续集成复验后即可合并部署。
+- 旧 Draft PR `#199` 的来源标签已移植进 PR `#261`，待 `#261` 合并后关闭 `#199`。
