@@ -9239,3 +9239,29 @@ Deployment:
 
 Notes for next agent:
 - Git `main`、云端静态文件与云端操作日志已一致；本次没有修改策略逻辑、数据或服务配置。
+
+## 2026-07-23 - Codex - 真主线回看卡片改为半宽
+
+Changed:
+- 桌面端“预判回看 > 真主线”由单列满宽改为两列，每张卡片约为原宽度的一半。
+- 半宽卡片的盘中预判、盘后验证改为纵向阅读，明星与龙头证据改为单列，避免信息被压缩。
+- 卡片按自身内容高度结束；未兑现、待验证、其他交易日和移动端布局保持不变。
+- 样式缓存版本更新；未改变预判、明星、龙头、命中或收益逻辑。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 使用线上真实最近 10 个交易日回看数据，在 1440x1000 与 390x844 视口完成 Playwright 前后对照。
+- 桌面端真主线卡片宽度由约 `1038px` 收至 `516px`；移动端维持约 `368px` 单列。
+- 桌面与移动端均无横向溢出、文字重叠或裁切。
+- `git diff --check` 通过；全仓 `59/59` 个 `tests/*.test.js` 文件通过。
+
+Deployment:
+- 本条提交时尚未部署生产；未修改云端文件，未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+
+Notes for next agent:
+- 本次只改变“真主线”分组的桌面布局；部署时应原子发布 HTML 与 CSS。
