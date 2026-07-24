@@ -9216,3 +9216,26 @@ Deployment:
 
 Notes for next agent:
 - 本次是纯视觉减法；部署时应原子发布 HTML 与 CSS，并在覆盖前核对线上仍匹配 PR `#239` 已记录哈希。
+
+## 2026-07-23 - Codex - 部署收窄版预判回看
+
+Changed:
+- 合并 PR `#241`，并将收窄、列表化的预判回看静态页面发布到云端。
+- 云端两个运维日志均已追加本次部署记录。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `https://market.dreamerqi.com/health` 返回 `ok=true`。
+- 公网页面引用 `/vendor/strategy-workbench.css?v=20260724c`，公网 CSS SHA-256 与 Git 文件一致。
+- 公网回看接口返回最近 10 个交易日；Playwright 复验 1440x1000 和 390x844 均无横向溢出、重叠或裁切。
+
+Deployment:
+- 已原子发布 `kpl-dashboard_17_apple.html` 与 `Qi/vendor/strategy-workbench.css`；未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-ssh-pr241-7581ef3-20260724-095010`。
+- HTML SHA-256：`c4dcc66be69854d5830d7c0d5ca494e3350ff11c6c18eea5cbfe2d7b57cdd9e1`。
+- CSS SHA-256：`5dfebc09b7df5b9c3563922a4aaa65a46f9e1ddc69cd2947d8c7129fe5f9aa1a`。
+
+Notes for next agent:
+- Git `main`、云端静态文件与云端操作日志已一致；本次没有修改策略逻辑、数据或服务配置。
