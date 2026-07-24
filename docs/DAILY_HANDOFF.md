@@ -9265,3 +9265,26 @@ Deployment:
 
 Notes for next agent:
 - 本次只改变“真主线”分组的桌面布局；部署时应原子发布 HTML 与 CSS。
+
+## 2026-07-23 - Codex - 部署真主线半宽回看卡片
+
+Changed:
+- 合并 PR `#243`，并将真主线半宽卡片布局发布到云端。
+- 云端两个运维日志均已追加本次部署记录。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `https://market.dreamerqi.com/health` 返回 `ok=true`。
+- 公网页面引用 `/vendor/strategy-workbench.css?v=20260724d`，公网 CSS SHA-256 与 Git 文件一致。
+- 公网真实回看数据复验：桌面端真主线卡片约 `516px` 两列，移动端约 `368px` 单列；均无溢出、重叠或裁切。
+
+Deployment:
+- 已原子发布 `kpl-dashboard_17_apple.html` 与 `Qi/vendor/strategy-workbench.css`；未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-ssh-pr243-8912554-20260724-111629`。
+- HTML SHA-256：`d401a2e57dbac7e3baac1ebf1e244d83ed3516f222dc367de036ce6ef396da06`。
+- CSS SHA-256：`d265086e4d4128b9c70f083efa87a59feb954dcfacbba8aca5797bce983e03d7`。
+
+Notes for next agent:
+- Git `main`、云端静态文件与云端操作日志已一致；本次没有修改策略逻辑、数据或服务配置。
