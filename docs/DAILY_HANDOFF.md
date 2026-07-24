@@ -9742,6 +9742,20 @@ Deployment:
 
 Notes for next agent:
 - Git、生产静态文件和云端双日志已一致；后续策略回看改动应继续保持“主线命中状态”和“明星状态”两个视觉维度独立。
+
+## 2026-07-24 - Codex - 强化主线、明星确认与命中视觉层级
+
+Changed:
+- 把尚未上线的紧凑明星信号框纳入最新 `main`，明星信息不再铺满整张卡片。
+- 正式主线卡片改为高对比红色边框、状态条、排名块和实心“当日主线”标识。
+- 明星确认改用独立金色证据框和实心确认标识，与主线红色语义分离；预期明星保持较弱琥珀提示。
+- 预判回看命中改为整行高对比状态带和实心结果标识，未命中保持低饱和绿色。
+- 移动端保持主线与明星证据单列适配，并更新静态样式缓存版本。
+- 只调整展示层，不修改主线、明星或命中的判定、数据、评分和交互逻辑。
+
+Files:
+- `Qi/vendor/strategy-workbench.css`
+- `kpl-dashboard_17_apple.html`
 ## 2026-07-24 - Local Claude - L2 逐档成交明细重设计（收窄+清晰）
 
 Changed:
@@ -9811,6 +9825,45 @@ Files:
 - `docs/DAILY_HANDOFF.md`
 
 Validated:
+- `tests/strategy-workbench-ui.test.js` 通过。
+- 全仓 `61/61` 个 `tests/*.test.js` 通过。
+- `git diff --check` 通过。
+- Playwright 在 `1360x900` 与 `390x844` 视口完成状态样例截图；桌面和移动端均无页面级横向溢出，主线与明星状态可独立识别。
+
+Deployment:
+- GitHub 分支准备中，尚未部署生产。
+- 未修改云端文件、运行时数据或服务状态，未重启任何服务。
+
+Notes for next agent:
+- 本分支取代 PR #258 的明星紧凑框实现；若合并，应关闭 #258。
+- PR #261 仍需在本分支合并后同步最新 `main`，并使用新的唯一 CSS 缓存键。
+
+## 2026-07-24 - Codex - PR #262 策略信号层级已合并部署
+
+Changed:
+- 在 Local Claude 对修正提交 `116f804` 复审 `approved` 后合并 PR `#262`，合并提交为 `3f51d4bd7e8536b8ada44f6dd8ca42a92ef7bca9`。
+- 从精确合并后的 `main` 原子发布策略页 HTML 与 CSS；同时关闭已被本 PR 完整取代的 PR `#258`。
+- 云端两份运维日志均已追加本次静态发布记录。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 生产静态文件：`kpl-dashboard_17_apple.html`、`Qi/vendor/strategy-workbench.css`
+
+Validated:
+- 发布前云端 HTML/CSS 哈希与合并前 `main` 完全一致，无游离修改被覆盖。
+- 发布后云端磁盘、公网响应和 Git 文件 SHA-256 完全一致：
+  - HTML：`8fad5f1caa8ffc60807ab01f870c8693428eb249fd5018d0b64ec30df2357077`
+  - CSS：`88f8ebf97e94137229270f6ae109d3b64614d433af050352287631f4f90ce768`
+- 公网 HTML 已引用缓存键 `20260724j`，并包含独立的 `ml-daily-confirmed`；公网 CSS 可检索到主线、明星确认和命中状态规则。
+- 全仓 `61/61` 个测试文件通过；公网 `/health` 返回 `ok=true`。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`；静态文件发布，未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-pr262-3f51d4b-20260724-235342`。
+
+Notes for next agent:
+- PR `#261` 现在应同步最新 `main`，保留双方 handoff，并将 CSS 缓存键升级为下一个未使用值（预计 `20260724k`）；完成连续集成复验后即可合并部署。
+- 旧 Draft PR `#199` 的来源标签已移植进 PR `#261`，待 `#261` 合并后关闭 `#199`。
 - 全仓 61/61 个 `tests/*.test.js` 通过；`git diff --check` 通过。
 
 Deployment:
@@ -9845,3 +9898,27 @@ Deployment:
 Notes for next agent:
 - #261 现含：L2 6 列表格 + #199 三色来源标签 + CSS 布局断言 + 桶行运行时样本测试。对 main 为 MERGEABLE。
 - 缓存键升级仍留到「#262 合并后同步 main」时一次性处理（当前 `j` 与 #262 撞号）。
+
+## 2026-07-24 - Local Claude - #261 同步 main（#262 已合并）+ 缓存键升级 k
+
+Changed:
+- #262（强化主线/明星确认/命中视觉，已吸收 #258）已合并并部署（main a9edc5a）。按约定顺序，本 PR 随后同步最新 main：
+  - CSS/HTML/测试自动合并无逻辑冲突（#262 的强调层在文件末尾追加、本 PR 的 L2 六列桶表在中段，互不重叠）；仅 `docs/DAILY_HANDOFF.md` 文本冲突，已保留双方记录。
+  - **缓存键避让**：自动合并把缓存键并成 `j`（与已部署的 #262 撞号），已手动升级为下一个未用版本 `v=20260724k`（序列 h→i(#259)→j(#262) 已上线，#258 未合并将关闭、`k` 空闲），HTML 与测试断言一致。
+- 合并后核对无丢失：#262 的 `.ml-daily-confirmed` 强调 + 死规则保持删除；本 PR 的 L2 六列表格 + #199 三色来源标签 + CSS 布局断言 + 桶行运行时样本测试全部在位。
+
+Files:
+- `kpl-dashboard_17_apple.html`（缓存键 k）
+- `tests/strategy-workbench-ui.test.js`（缓存键断言 k）
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 全仓 61/61 个 `tests/*.test.js` 通过；`git diff --check` 通过。
+- 真实数据预览复验：L2 六列桶表与 #262 命中/主线强调共存正常；桌面/移动横向溢出均为 0；命中行红带 + 实心「✓主线命中」、L2 表格均正确渲染。
+
+Deployment:
+- 未部署生产。
+
+Notes for next agent:
+- #261 已同步至最新 main、缓存键 `k`，对 main 应为 MERGEABLE，含全部 Codex 复核要求（#199 来源标签、CSS 布局断言、桶行运行时样本测试）。待 Codex 终审放行即可合并。
+- #258（明星框方案已被 #262 吸收）可关闭。
