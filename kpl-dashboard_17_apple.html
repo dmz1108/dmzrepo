@@ -12504,34 +12504,36 @@ async function loadStrategyMainlines(day) {
     if (cur) cur.innerHTML = '';
   }
 }
-// KPI 带「今日结论」:从主线榜数据推导一句话结论,不做任何新计算,只复述已有结果。
+// KPI 带「今日结论」:东财与同花顺是两套独立预测,分开展示各自结论,不合并、不按 familyKey 去重
+// (Owner 2026-07-24 口径:相同 familyKey 只表示可能同族/双源共振,不代表两源结论应并成一条主线)。
 function fillStrategyVerdictKpi(d) {
   const el = document.getElementById('kpi-verdict');
   if (!el) return;
   const bs = d && d.mainlinesBySource;
-  let main = '', sub = '';
   if (bs) {
-    const listOf = src => (src && src.available && src.hasMainlines && Array.isArray(src.mainlines)) ? src.mainlines : [];
-    const rlistOf = src => (src && src.available && Array.isArray(src.reserveMainlines)) ? src.reserveMainlines : [];
-    const east = listOf(bs.eastmoney), ths = listOf(bs.ths);
-    const eastR = rlistOf(bs.eastmoney), thsR = rlistOf(bs.ths);
-    const formalThemes = [...new Set([...east, ...ths].map(m => String(m.theme || '')).filter(Boolean))];
-    const reserveThemes = [...new Set([...eastR, ...thsR].map(m => String(m.theme || '')).filter(Boolean))];
-    const primary = east[0] || ths[0] || eastR[0] || thsR[0] || null;
-    if (formalThemes.length) {
-      main = `正式主线 <b>${escapeHTML(formalThemes.slice(0, 2).join('、'))}</b>${formalThemes.length > 2 ? ` 等${formalThemes.length}条` : ''}`;
-      sub = `东财${east.length}条 · 同花顺${ths.length}条`;
-    } else if (reserveThemes.length) {
-      main = `暂无正式主线 · <b>${escapeHTML(reserveThemes.slice(0, 2).join('、'))}</b> 预备待补齐`;
-      const agree = eastR.length && thsR.length && String(eastR[0]?.theme || '') === String(thsR[0]?.theme || '');
-      sub = [eastR.length ? `东财预备${eastR.length}` : '', thsR.length ? `同花顺预备${thsR.length}` : '', agree ? '双源一致' : ''].filter(Boolean).join(' · ');
-    } else {
-      main = '今日无主线';
-      sub = String((bs.eastmoney && bs.eastmoney.message) || (bs.ths && bs.ths.message) || '');
-    }
-    const advice = primary && primary.stage && primary.stage.advice ? String(primary.stage.advice) : '';
-    if (advice) sub = sub ? `${sub} · ${advice}` : advice;
-  } else if (d && Array.isArray(d.mainlines) && d.mainlines.length) {
+    // 单源结论文案:正式主线 → 预备主线 → 无主线/暂缺,只复述该源自己的结果,绝不借另一源。
+    const srcVerdict = (src) => {
+      if (!src || !src.available) return { txt: '暂缺', quiet: true };
+      const formal = src.hasMainlines && Array.isArray(src.mainlines) ? src.mainlines.filter(m => m && m.theme) : [];
+      if (formal.length) {
+        const names = formal.slice(0, 2).map(m => String(m.theme)).join('、');
+        return { txt: `正式 ${names}${formal.length > 2 ? ` 等${formal.length}条` : ''}`, quiet: false };
+      }
+      const reserve = Array.isArray(src.reserveMainlines) ? src.reserveMainlines.filter(m => m && m.theme) : [];
+      if (reserve.length) {
+        const names = reserve.slice(0, 2).map(m => String(m.theme)).join('、');
+        return { txt: `预备 ${names}${reserve.length > 2 ? ` 等${reserve.length}条` : ''}`, quiet: true };
+      }
+      return { txt: '今日无主线', quiet: true };
+    };
+    const east = srcVerdict(bs.eastmoney);
+    const ths = srcVerdict(bs.ths);
+    const line = (label, v) => `<span class="kpi-src-line${v.quiet ? ' quiet' : ''}"><i>${label}</i><b>${escapeHTML(v.txt)}</b></span>`;
+    el.innerHTML = `<div class="kpi-label">今日结论 · 双源独立</div><div class="kpi-verdict-lines">${line('东财', east)}${line('同花顺', ths)}</div>`;
+    return;
+  }
+  let main = '', sub = '';
+  if (d && Array.isArray(d.mainlines) && d.mainlines.length) {
     const themes = d.mainlines.map(m => String(m.theme || '')).filter(Boolean);
     main = `主线 <b>${escapeHTML(themes.slice(0, 2).join('、'))}</b>${themes.length > 2 ? ` 等${themes.length}条` : ''}`;
     sub = '历史快照口径';
@@ -13442,145 +13444,54 @@ function renderStrategyMainlinesHTML(d) {
   // 桌面并列、移动上下;缺某源显示「暂缺」,绝不借另一源。KPL 不参与任何一边。
   if (d && d.mainlinesBySource) {
     const bs = d.mainlinesBySource;
+    const renderColumn = (title, src, zsLabel) => {
+      // 三态区分(Codex 二审 P2):有主线 / 源可用但无合格主线(有效零结果,展示真实资金/L2/无候选原因) / 源暂缺(不可用)。
+      const hasCards = !!(src && src.available && src.hasMainlines && Array.isArray(src.mainlines) && src.mainlines.length);
+      const reserves = (src && src.available && Array.isArray(src.reserveMainlines)) ? src.reserveMainlines : [];
+      let body, tag;
+      if (hasCards) {
+        body = `<div class="ml-grid">${src.mainlines.slice(0, 8).map(renderCard).join('')}</div>`;
+        tag = ` · ${Number(src.count) || 0} 条`;
+      } else if (src && src.available) {
+        body = `<div class="rht-loading">${escapeHTML(src.message || '本源已完成计算，当前暂无满足确认明星与龙头条件的正式主线。')}</div>`;
+        tag = reserves.length ? ` · 正式0/预备${reserves.length}` : ' · 无合格主线';
+      } else {
+        body = `<div class="rht-loading">${escapeHTML((src && src.message) || '该源暂缺：暂无该来源的实时板块/主线数据，不借用另一来源补值。')}</div>`;
+        tag = ' · 暂缺';
+      }
+      // 预备主线区(三要件 2026-07-21):有 L2 明星证据但缺确认明星/缺龙头,琥珀降级层,
+      // 与预判回看的"未兑现候选"层同构;缺件状态用流式状态栏置于卡片上方,不做绝对定位角标
+      // (Codex #201 补充意见:绝对角标会压住卡片右上角的预判分/主线分)。预备卡走紧凑样式。
+      const reserveNote = (row) => (Array.isArray(row?.reserveReasons) ? row.reserveReasons : [])
+        .map(r => r === 'no-confirmed-star' ? '待明星确认' : (r === 'no-qualified-leader' ? '待龙头形成' : r)).join(' · ');
+      const reserveBlock = reserves.length ? `<div class="ml-reserve">
+        <div class="ml-reserve-head"><span>预备主线</span><small>明星或龙头单项条件待补齐 · 补齐后升正式榜</small></div>
+        <div class="ml-grid">${reserves.slice(0, 4).map(row => `<div class="ml-reserve-card">
+          <div class="ml-reserve-bar">预备 · ${escapeHTML(reserveNote(row) || '待补齐')}</div>
+          ${renderCard(row)}
+        </div>`).join('')}</div>
+      </div>` : '';
+      return `<div class="ml-col">
+        <div class="ml-col-title"><span>${escapeHTML(title)}</span><small>${escapeHTML(zsLabel)}${tag}</small></div>
+        ${body}
+        ${reserveBlock}
+      </div>`;
+    };
     const dualThemes = (bs.dualResonanceThemes || []).filter(Boolean);
     const dualNote = dualThemes.length
       ? `<div class="ml-dual-note">🔗 双源共振题材（东财与同花顺各自独立预测都排进前列，未合并）：${dualThemes.map(escapeHTML).join('、')}</div>`
       : '';
-    // ===== A+C 重构(Owner 2026-07-24):双源仍各自独立计算,仅展示层按题材合并 =====
-    // 同题材两源合成一张卡:上部结论层 + 双源指标对比条,完整两源原卡收进「展开双源完整明细」。
-    // 仅单源入选的题材保持单源卡并标注来源;绝不跨源拼接数据。
-    // 合并键优先 familyKey/key(与双源共振同一套归一化),同族不同名不拆卡;绝不生成跨源统一名次,
-    // 各源名次(rank 或源内序号)原样保留并在对比条内展示。展示顺序仅为东财在前、同花顺补位,不代表排序。
-    const mergeByTheme = (eastList, thsList) => {
-      const order = [];
-      const byKey = new Map();
-      const put = (m, srcKey, idx) => {
-        const theme = String(m?.theme || '');
-        if (!theme) return;
-        const key = String(m?.familyKey || m?.key || theme);
-        if (!byKey.has(key)) { byKey.set(key, {}); order.push(key); }
-        const entry = byKey.get(key);
-        entry[srcKey] = m;
-        entry[`${srcKey}Idx`] = idx;
-        entry[`${srcKey}Rank`] = Number(m?.rank) || idx + 1;
-      };
-      (Array.isArray(eastList) ? eastList : []).slice(0, 8).forEach((m, idx) => put(m, 'east', idx));
-      (Array.isArray(thsList) ? thsList : []).slice(0, 8).forEach((m, idx) => put(m, 'ths', idx));
-      return order.map(key => {
-        const entry = byKey.get(key);
-        const primary = entry.east || entry.ths;
-        return { theme: String(primary?.theme || ''), ...entry };
-      });
-    };
-    const mlxReserveNote = (row) => (Array.isArray(row?.reserveReasons) ? row.reserveReasons : [])
-      .map(x => x === 'no-confirmed-star' ? '待明星确认' : (x === 'no-qualified-leader' ? '待龙头形成' : x)).join(' · ');
-    const mlxStripCell = (srcLabel, srcCls, m, srcRank) => {
-      if (!m) return `<div class="mlx-strip-cell ${srcCls} is-empty"><span class="mlx-src"><i class="mlx-dot"></i>${srcLabel}</span><span class="mlx-strip-na">本源未入选该题材</span></div>`;
-      const rankTag = Number.isFinite(Number(srcRank)) ? `<small title="${srcLabel}源内名次,两源独立排序,不存在统一名次">#${Number(srcRank)}</small>` : '';
-      const inflow = strategyMainlineDisplayInflow(m);
-      const fundLbl = Number(inflow.zsType) === 5 ? 'DDE' : (Number(inflow.zsType) === 6 ? '超大单' : '资金');
-      const gv = m.boardGainPct === null || m.boardGainPct === undefined || m.boardGainPct === '' ? NaN : Number(m.boardGainPct);
-      const gainCls = !Number.isFinite(gv) ? 'na' : (gv > 0 ? 'up' : (gv < 0 ? 'down' : ''));
-      const inflowCls = inflow.value == null ? 'na' : (inflow.value > 0 ? 'up' : (inflow.value < 0 ? 'down' : ''));
-      const metric = (lbl, val, cls = '') => `<span class="mlx-m"><i>${lbl}</i><b class="${cls}">${val}</b></span>`;
-      return `<div class="mlx-strip-cell ${srcCls}"><span class="mlx-src"><i class="mlx-dot"></i>${srcLabel}${rankTag}</span>
-        ${m.predictScore != null ? metric('预判', Number(m.predictScore || 0).toFixed(0)) : ''}
-        ${metric('主线', Number(m.score || 0).toFixed(0))}
-        ${metric('涨幅', Number.isFinite(gv) ? `${gv > 0 ? '+' : ''}${gv.toFixed(2)}%` : '--', gainCls)}
-        ${metric(fundLbl, inflow.value != null ? fmtInflow(inflow.value) : '--', inflowCls)}
-        ${metric('共振', `${Number(m.boardCount) || 0}板块`)}</div>`;
-    };
-    const renderMergedCard = (entry, i, isReserve) => {
-      const primary = entry.east || entry.ths;
-      const both = entry.east && entry.ths;
-      const leaderUnion = [];
-      const seenLeader = new Set();
-      for (const [srcKey, m] of [['east', entry.east], ['ths', entry.ths]]) {
-        for (const l of (m && Array.isArray(m.leaders) ? m.leaders : [])) {
-          const code = String(l.code || l.name || '');
-          if (!code) continue;
-          const prev = leaderUnion.find(x => x.code === code);
-          if (prev) { prev.srcs.push(srcKey); continue; }
-          if (seenLeader.has(code)) continue;
-          seenLeader.add(code);
-          leaderUnion.push({ code, name: l.name || l.code || '', basis: Array.isArray(l.basis) ? l.basis : [], srcs: [srcKey] });
-        }
-      }
-      const leaderRows = leaderUnion.slice(0, 4).map((l, idx) => {
-        const only = both && l.srcs.length === 1 ? `<em class="mlx-only">仅${l.srcs[0] === 'east' ? '东财' : '同花顺'}</em>` : '';
-        return `<div class="mlx-lead-row"><span class="mlx-lead-nm">${idx === 0 ? '👑 ' : ''}${escapeHTML(l.name)}${only}</span><span class="mlx-lead-meta">${escapeHTML(l.basis.slice(0, 3).join(' · '))}</span></div>`;
-      }).join('');
-      const starUnion = new Map();
-      for (const m of [entry.east, entry.ths]) {
-        for (const s of (m && Array.isArray(m.starStocks) ? m.starStocks : [])) {
-          if (s.level !== 'confirmed' && s.level !== 'expected') continue;
-          const code = String(s.code || s.name || '');
-          const prev = starUnion.get(code);
-          if (!prev || (prev.level !== 'confirmed' && s.level === 'confirmed')) starUnion.set(code, s);
-        }
-      }
-      const stars = [...starUnion.values()].slice(0, 2).map(s => {
-        const missed = s.expectedOutcome === 'not-confirmed';
-        const stateText = missed ? '未兑现' : (s.level === 'confirmed' ? '已确认' : '预期');
-        return `<div class="mlx-star ${s.level}${missed ? ' missed' : ''}"><b>${escapeHTML(s.name || s.code || '')}</b><em>${stateText}</em><span><i>主动</i><b>${s.ratios?.activeRatio ?? '-'}</b><i>被动</i><b>${s.ratios?.passiveRatio ?? '-'}</b><i>合计</i><b>${s.ratios?.supportRatio ?? '-'}</b></span></div>`;
-      }).join('');
-      const starLevel = [...starUnion.values()].some(s => s.level === 'confirmed') ? 'confirmed'
-        : (starUnion.size ? 'expected' : '');
-      const stage = primary.stage || null;
-      const cert = primary.certainty || null;
-      const certShort = cert ? ({ high: '高把握', medium: '中等', watch: '观察' }[cert.level] || '观察') : '';
-      const badgeText = [(stage && stage.key && stage.key !== 'quiet' ? stage.label : '') || '', certShort].filter(Boolean).join('·');
-      const advice = (stage && stage.advice) || (Array.isArray(primary.explain) && primary.explain.length ? primary.explain[0] : '');
-      const reserveBar = isReserve ? `<div class="mlx-reserve-bar">预备 · ${escapeHTML(mlxReserveNote(primary) || '待补齐')}</div>` : '';
-      const detailCols = [entry.east ? `<div class="mlx-detail-col"><div class="mlx-src-label"><i class="mlx-dot"></i>东财完整明细</div>${renderCard(entry.east, entry.eastIdx || 0)}</div>` : '', entry.ths ? `<div class="mlx-detail-col"><div class="mlx-src-label ths"><i class="mlx-dot"></i>同花顺完整明细</div>${renderCard(entry.ths, entry.thsIdx || 0)}</div>` : ''].filter(Boolean).join('');
-      // 同 familyKey 两源题材名不同:主名取东财(缺东财取同花顺),另一源原名以别名保留,不丢原始命名。
-      const altTheme = both && String(entry.east.theme || '') !== String(entry.ths.theme || '')
-        ? `<span class="mlx-alias" title="同一主线族在两源的原始题材名不同,合并展示但保留各自命名">同花顺名·${escapeHTML(String(entry.ths.theme || ''))}</span>`
-        : '';
-      return `<article class="mlx-card${isReserve ? ' reserve' : ''}${starLevel ? ` has-${starLevel}-star` : ''}">
-        ${reserveBar}
-        <div class="mlx-head">
-          <span class="mlx-name">${escapeHTML(entry.theme)}</span>
-          ${altTheme}
-          ${badgeText ? `<span class="mlx-badge">${escapeHTML(badgeText)}</span>` : ''}
-          ${primary.isConfirmedMainline ? '<span class="mlx-badge on">✔ 当日主线</span>' : ''}
-          ${advice ? `<span class="mlx-advice">${escapeHTML(advice)}</span>` : ''}
-        </div>
-        <div class="mlx-strip">${mlxStripCell('东财', 'east', entry.east, entry.eastRank)}${mlxStripCell('同花顺', 'ths', entry.ths, entry.thsRank)}</div>
-        <div class="mlx-body">
-          <div class="mlx-leads"><div class="mlx-blk-label">龙头${both ? '（双源共识 + 差异）' : ''}</div>${leaderRows || '<div class="mlx-lead-none">暂无合格龙头</div>'}</div>
-          <div class="mlx-stars"><div class="mlx-blk-label">明星信号${starUnion.size ? ` · ${starUnion.size}只` : ''}</div>${stars || '<div class="mlx-lead-none">暂无明星信号</div>'}</div>
-        </div>
-        <details class="mlx-detail"><summary>展开双源完整明细 ▾</summary><div class="mlx-detail-cols">${detailCols}</div></details>
-      </article>`;
-    };
-    const formalMerged = mergeByTheme(bs.eastmoney?.available && bs.eastmoney.hasMainlines ? bs.eastmoney.mainlines : [], bs.ths?.available && bs.ths.hasMainlines ? bs.ths.mainlines : []);
-    const reserveMerged = mergeByTheme(bs.eastmoney?.available ? bs.eastmoney.reserveMainlines : [], bs.ths?.available ? bs.ths.reserveMainlines : []);
-    const srcEmptyNote = (label, src) => {
-      if (!src || !src.available) return `${label}：${(src && src.message) || '来源暂缺，不借用另一源补值'}`;
-      if (!src.hasMainlines) return `${label}：${src.message || '暂无满足确认明星与龙头条件的正式主线'}`;
-      return '';
-    };
-    const eastEmptyNote = srcEmptyNote('东财', bs.eastmoney);
-    const thsEmptyNote = srcEmptyNote('同花顺', bs.ths);
-    const sameEmptyMsg = eastEmptyNote && thsEmptyNote && eastEmptyNote.slice(3) === thsEmptyNote.slice(4);
-    const emptyNotes = formalMerged.length ? '' : (sameEmptyMsg ? `双源${eastEmptyNote.slice(2)}` : [eastEmptyNote, thsEmptyNote].filter(Boolean).join(' ｜ '));
-    const formalHtml = formalMerged.length
-      ? `<div class="mlx-grid">${formalMerged.map((entry, i) => renderMergedCard(entry, i, false)).join('')}</div>`
-      : (emptyNotes ? `<div class="rht-loading mlx-empty">${escapeHTML(emptyNotes)}</div>` : '');
-    const reserveHtml = reserveMerged.length
-      ? `<div class="mlx-group reserve"><div class="mlx-group-head"><span>预备主线</span><small>明星或龙头单项条件待补齐 · 补齐后升正式榜 · 双源独立预测，结论一致时合并展示、差异高亮</small></div>
-        <div class="mlx-grid">${reserveMerged.map((entry, i) => renderMergedCard(entry, i, true)).join('')}</div></div>`
-      : '';
-    return `<section class="mainline-wrap mlx-wrap">
+    return `<section class="mainline-wrap">
       <div class="ml-title">
         <span>今日主线榜</span>
         <small title="东财与同花顺各自使用本源板块、成员、涨幅和资金，不跨源拼接；KPL 不参与主线预测；正式主线三要件：确认明星+合格龙头+题材板（风格板不参选）">实时强度 × 资金 × 成分股 × 历史主因 · 确认明星+龙头三要件${sourceSuffix}${dayNote}</small>
       </div>
       ${statusHtml}
       ${dualNote}
-      ${formalHtml}
-      ${reserveHtml}
+      <div class="ml-cols">
+        ${renderColumn('东财主线预测', bs.eastmoney, '超大单净流入')}
+        ${renderColumn('同花顺主线预测', bs.ths, 'DDE 活跃度 + 全量方向')}
+      </div>
     </section>`;
   }
   // 兼容:旧冻结快照无 mainlinesBySource 时,沿用单列渲染。

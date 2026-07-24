@@ -58,16 +58,21 @@ assert(html.includes('合力比 = 总买入 ÷ 总卖出'));
 
 assert(css.includes('@media (max-width: 760px)'));
 assert(css.includes('Strategy workspace polish: clearer hierarchy with fewer nested frames.'));
-assert(css.includes('Local Claude A+C restructure 2026-07-24'));
+assert(css.includes('Local Claude strategy restructure 2026-07-24'));
+// C 部分保留:KPI 带 + 回看日期表 + L2 表格化。A(合并双源卡)已按 Owner 撤回,双源保持隔离展示。
 assert(html.includes('class="strategy-kpis'));
 assert(html.includes('id="kpi-verdict"'));
 assert(html.includes('function fillStrategyVerdictKpi'));
 assert(html.includes('function fillStrategyRecordKpi'));
-assert(html.includes('class="mlx-strip"'));
-assert(html.includes('class="mlx-detail"'));
+// 今日结论双源分开(不合并、不去重)
+assert(html.includes('今日结论 · 双源独立') && html.includes('class="kpi-verdict-lines"'));
+assert(css.includes('.kpi-verdict-lines') && css.includes('.kpi-src-line'));
+// A 已撤回:合并卡类彻底移除
+assert(!html.includes('mlx-strip') && !html.includes('renderMergedCard') && !css.includes('.mlx-card'));
+// 双栏来源隔离渲染恢复(原 renderColumn 双栏)
+assert(html.includes('const renderColumn = ') && html.includes("renderColumn('东财主线预测'") && html.includes("renderColumn('同花顺主线预测'"));
 assert(html.includes('class="mlr-table-head"'));
 assert(html.includes('class="mlr-line-sum"'));
-assert(css.includes('.mlx-card'));
 assert(css.includes('.mlr-line-sum'));
 assert(/body\.view-strategy \.ml-l2-job-head,\s*body\.view-strategy \.ml-l2-job-meta \{ display: contents !important; \}/.test(css));
 assert(css.includes('Local Claude polish 2026-07-24'));

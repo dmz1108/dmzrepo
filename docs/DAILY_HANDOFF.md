@@ -9524,3 +9524,32 @@ Deployment:
 
 Notes for next agent:
 - 待 Codex 复审通过与 Owner 确认后合并。「方向 C 的 L2 默认展开」与 Owner 早前锁定的「默认折叠」冲突，本次遵循已锁定交互；若 Owner 希望改为默认展开，需 Owner 明确解锁后另行提交。
+
+## 2026-07-24 - Local Claude - 按 Owner 口径撤回合并卡(A),保留 C 部分
+
+Changed:
+- Owner 澄清:东财与同花顺是两套独立主线预测,相同 familyKey 只表示可能同族/双源共振,不代表结论应并成一条主线。据此撤回 A（合并双源主线卡），恢复来源隔离双栏展示；保留 C（KPI 带 / 回看日期表 / L2 表格化）。
+- 主线榜:从 origin/main 精确还原 `renderColumn` 双栏区块（东财主线预测 / 同花顺主线预测），完全恢复来源隔离；合并卡函数 `renderMergedCard`/`mergeByTheme` 及全部 `mlx-*` 标记与样式彻底移除。原有「🔗双源共振」关联标记（`dualNote` / `m.dualResonance`）随双栏一并保留。
+- KPI「今日结论」改为双源分开成行展示（例:「东财 预备 半导体」「同花顺 预备 半导体」），不合并、不按 familyKey 去重；单源结论各自取「正式→预备→无主线/暂缺」，绝不借另一源。
+- L2 扫描记录默认折叠保持不变（沿用 Owner 锁定交互）。
+- CSS 顶部注释更新为 C-only；删除 mlx 合并卡样式，新增 `.kpi-verdict-lines` / `.kpi-src-line` 双源结论行样式。
+- 测试:移除 mergeByTheme/mlx 断言，恢复双栏三态断言，新增「KPI 双源分开、无 mlx/mergeByTheme 残留、renderColumn 双栏恢复」断言。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `tests/strategy-workbench-ui.test.js`
+- `tests/strategy-two-source-mainlines.test.js`
+- `tests/star-l2-layers.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 真实数据预览复验:今日结论双源分开、主线榜恢复东财/同花顺双栏隔离、无跨源统一名次、L2 默认折叠、回看日期表点行展开完整证据卡正常。
+- 桌面整页高度 2507px、移动 4904px,两视口横向溢出均为 0。
+- `git diff --check` 通过;全仓 59/59 个 `tests/*.test.js` 通过;HTML 内 `mlx-` 残留 0。
+
+Deployment:
+- 未部署生产;未修改云端文件,未重启任何服务。
+
+Notes for next agent:
+- 本 PR 现在只做展示层增量(KPI 带 + 回看日期表 + L2 表格化),主线榜与来源隔离逻辑完全维持现状。待 Codex 最终复审与 Owner 确认后合并。

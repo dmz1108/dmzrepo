@@ -4320,8 +4320,10 @@ body.view-strategy .mlr-group-title > small {
   }
 }
 
-/* ===== Local Claude A+C restructure 2026-07-24 (Owner-picked mix):
-   C = KPI band / review table / L2 table · A = merged dual-source mainline card.
+/* ===== Local Claude strategy restructure 2026-07-24 (C-only, Owner-confirmed):
+   Kept the "C" parts — KPI band (双源结论分开) / review date-table / L2 table.
+   The "A" merged dual-source card was REVERTED per Owner: 东财与同花顺是两套独立预测,
+   保持来源隔离展示,不合并龙头/明星/分数/阶段,不做跨源统一名次。
    Display layer only — all computation, auth gates and interactions unchanged.
    Builds on the "Local Claude polish" layer above; no rules duplicated from it. ===== */
 
@@ -4394,117 +4396,18 @@ body.view-strategy .strategy-kpi .kpi-row span b { display: block; margin-top: 1
 body.view-strategy .strategy-kpi .kpi-row span.hot b { color: #ff6864; }
 body.view-strategy .strategy-kpi .kpi-row span.amb b { color: #e7b557; }
 
-/* ---- A:合并双源主线卡(展示层合并;两源各自独立计算与排名,不做统一名次) ---- */
-body.view-strategy .mlx-grid { display: grid; gap: 12px; padding-top: 12px; }
-
-body.view-strategy .mlx-card {
-  border: 1px solid rgba(182, 198, 219, 0.14);
-  border-left: 3px solid rgba(182, 198, 219, 0.30);
-  border-radius: 10px;
-  background: #0f161e;
-  overflow: hidden;
+/* 今日结论:东财 / 同花顺两源分开成行,各自独立不合并 */
+body.view-strategy .kpi-verdict-lines { display: flex; flex-direction: column; gap: 4px; }
+body.view-strategy .kpi-src-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+body.view-strategy .kpi-src-line > i {
+  flex: 0 0 auto; width: 44px;
+  color: #748397; font-size: 11px; font-style: normal; font-weight: 700;
 }
-
-body.view-strategy .mlx-card.reserve { border-color: rgba(231, 181, 87, 0.22); border-left-color: #e7b557; }
-body.view-strategy .mlx-card.has-confirmed-star { border-color: rgba(255, 104, 100, 0.26); border-left-color: #ff6864; }
-body.view-strategy .mlx-card.reserve.has-confirmed-star { border-color: rgba(231, 181, 87, 0.26); border-left-color: #e7b557; }
-
-body.view-strategy .mlx-reserve-bar {
-  padding: 6px 16px;
-  border-bottom: 1px solid rgba(231, 181, 87, 0.14);
-  color: #bf9850;
-  font-size: 10px;
-  font-weight: 700;
-  background: rgba(231, 181, 87, 0.045);
+body.view-strategy .kpi-src-line > b {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: #edf3f9; font-size: 14px; font-weight: 740;
 }
-
-body.view-strategy .mlx-head { display: flex; align-items: center; gap: 11px; padding: 13px 16px 11px; min-width: 0; }
-body.view-strategy .mlx-name { font-size: 19px; font-weight: 780; color: #edf3f9; }
-body.view-strategy .mlx-alias { color: #748397; font-size: 11px; }
-body.view-strategy .mlx-badge {
-  padding: 2px 8px; border: 1px solid rgba(182, 198, 219, 0.16); border-radius: 5px;
-  color: #8b99ac; font-size: 10px; white-space: nowrap;
-}
-body.view-strategy .mlx-badge.on { color: #61aaf8; border-color: rgba(97, 170, 248, 0.32); background: rgba(97, 170, 248, 0.07); }
-body.view-strategy .mlx-advice {
-  margin-left: auto; min-width: 0; max-width: 46%;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  color: #8b99ac; font-size: 11.5px; text-align: right;
-}
-
-body.view-strategy .mlx-strip {
-  display: grid; grid-template-columns: 1fr 1fr;
-  border-top: 1px solid rgba(182, 198, 219, 0.10);
-  border-bottom: 1px solid rgba(182, 198, 219, 0.10);
-  background: rgba(255, 255, 255, 0.012);
-}
-body.view-strategy .mlx-strip-cell { display: flex; align-items: center; gap: 13px; min-width: 0; padding: 9px 16px; overflow-x: auto; scrollbar-width: none; }
-body.view-strategy .mlx-strip-cell + .mlx-strip-cell { border-left: 1px solid rgba(182, 198, 219, 0.10); }
-body.view-strategy .mlx-src { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; min-width: 52px; color: #a2afbf; font-size: 12px; font-weight: 760; }
-body.view-strategy .mlx-src small { color: #748397; font-size: 10px; font-weight: 650; }
-body.view-strategy .mlx-dot { width: 6px; height: 6px; border-radius: 50%; background: #61aaf8; box-shadow: 0 0 0 3px rgba(97, 170, 248, 0.09); }
-body.view-strategy .mlx-strip-cell.ths .mlx-dot, body.view-strategy .mlx-src-label.ths .mlx-dot { background: #43c6aa; box-shadow: 0 0 0 3px rgba(67, 198, 170, 0.09); }
-body.view-strategy .mlx-m { flex: 0 0 auto; color: #748397; font-size: 11px; white-space: nowrap; }
-body.view-strategy .mlx-m b { margin-left: 3px; color: #edf3f9; font-size: 13px; font-weight: 760; }
-body.view-strategy .mlx-m b.up { color: #ff6864; }
-body.view-strategy .mlx-m b.down { color: #3bcf88; }
-body.view-strategy .mlx-m b.na { color: #566373; font-weight: 500; }
-body.view-strategy .mlx-strip-na { color: #566373; font-size: 11px; }
-
-body.view-strategy .mlx-body { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 18px; padding: 12px 16px 14px; }
-body.view-strategy .mlx-blk-label { margin-bottom: 7px; color: #748397; font-size: 10px; font-weight: 720; }
-body.view-strategy .mlx-lead-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px solid rgba(182, 198, 219, 0.08); }
-body.view-strategy .mlx-lead-row:last-child { border-bottom: 0; }
-body.view-strategy .mlx-lead-nm { color: #edf3f9; font-size: 13px; font-weight: 720; white-space: nowrap; }
-body.view-strategy .mlx-only { margin-left: 6px; color: #566373; font-size: 10px; font-style: normal; }
-body.view-strategy .mlx-lead-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #e7b557; font-size: 11px; text-align: right; }
-body.view-strategy .mlx-lead-none { padding: 6px 0; color: #66788d; font-size: 12px; }
-
-body.view-strategy .mlx-star {
-  display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
-  margin-bottom: 6px; padding: 8px 11px;
-  border: 1px solid rgba(231, 181, 87, 0.24); border-radius: 8px; background: #101619;
-}
-body.view-strategy .mlx-star.confirmed { border-color: rgba(255, 104, 100, 0.28); background: #121618; }
-body.view-strategy .mlx-star > b { color: #edf3f9; font-size: 13px; font-weight: 760; }
-body.view-strategy .mlx-star > em {
-  padding: 1px 8px; border: 1px solid rgba(231, 181, 87, 0.4); border-radius: 999px;
-  color: #e7b557; font-size: 10px; font-style: normal;
-}
-body.view-strategy .mlx-star.confirmed > em { color: #ff6864; border-color: rgba(255, 104, 100, 0.42); }
-body.view-strategy .mlx-star.missed > em { color: #a08654; border-color: rgba(160, 134, 84, 0.4); }
-body.view-strategy .mlx-star > span { margin-left: auto; display: inline-flex; gap: 9px; color: #748397; font-size: 10.5px; }
-body.view-strategy .mlx-star > span b { margin: 0 2px 0 3px; color: #cdd8e4; font-weight: 740; }
-
-body.view-strategy .mlx-detail { border-top: 1px solid rgba(182, 198, 219, 0.09); }
-body.view-strategy .mlx-detail > summary {
-  list-style: none; cursor: pointer; padding: 8px;
-  color: #61aaf8; font-size: 11px; text-align: center;
-  background: rgba(255, 255, 255, 0.012);
-}
-body.view-strategy .mlx-detail > summary::-webkit-details-marker { display: none; }
-body.view-strategy .mlx-detail[open] > summary { border-bottom: 1px solid rgba(182, 198, 219, 0.09); }
-body.view-strategy .mlx-detail-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; padding: 12px 14px 14px; }
-body.view-strategy .mlx-src-label { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; color: #a2afbf; font-size: 11px; font-weight: 760; }
-body.view-strategy .mlx-detail-cols .ml-card { border-left-width: 1px !important; }
-
-body.view-strategy .mlx-group.reserve { margin-top: 18px; }
-body.view-strategy .mlx-group-head { display: flex; align-items: baseline; gap: 9px; min-height: 34px; padding: 0 2px 8px; border-bottom: 1px solid rgba(231, 181, 87, 0.14); }
-body.view-strategy .mlx-group-head > span { color: #e2b65d; font-size: 12px; font-weight: 760; }
-body.view-strategy .mlx-group-head > small { color: #81745d; font-size: 10px; }
-
-/* 合并卡空态沿用 polish 层的安静便签样式 */
-body.view-strategy .mlx-empty {
-  min-height: 0;
-  margin: 12px 0 0 !important;
-  padding: 11px 13px !important;
-  border: 0 !important;
-  border-left: 2px solid rgba(151, 170, 195, 0.35) !important;
-  border-radius: 0 6px 6px 0 !important;
-  background: rgba(255, 255, 255, 0.018) !important;
-  color: #93a1b3 !important;
-  text-align: left;
-}
+body.view-strategy .kpi-src-line.quiet > b { color: #8b99ac; font-weight: 600; }
 
 /* ---- C:回看表格 ---- */
 body.view-strategy .mlr-table {
@@ -4594,15 +4497,9 @@ body.view-strategy .theme-calib .strategy-section-sub { margin-left: 0; }
 @media (max-width: 980px) {
   body.view-strategy .strategy-kpis,
   body.view-strategy .strategy-kpis.has-l2 { grid-template-columns: 1fr; }
-  body.view-strategy .mlx-strip { grid-template-columns: 1fr; }
-  body.view-strategy .mlx-strip-cell + .mlx-strip-cell { border-left: 0; border-top: 1px solid rgba(182, 198, 219, 0.10); }
-  body.view-strategy .mlx-body { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 760px) {
-  body.view-strategy .mlx-head { flex-wrap: wrap; }
-  body.view-strategy .mlx-advice { max-width: 100%; flex: 1 1 100%; text-align: left; }
-  body.view-strategy .mlx-detail-cols { grid-template-columns: 1fr; }
   body.view-strategy .mlr-table-head { display: none; }
   body.view-strategy .mlr-line-sum { grid-template-columns: 44px minmax(0, 1fr) 20px; gap: 6px 8px; padding: 9px 12px; }
   body.view-strategy .mlr-line-badge { grid-column: 2; }

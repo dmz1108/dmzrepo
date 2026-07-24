@@ -100,8 +100,8 @@ A(!composedBothZero.mainlinesBySource.eastmoney.hasMainlines && !composedBothZer
 A(composedBothZero.mainlinesBySource.ths.reason === 'no-l2-qualified-mainline', 'P2:同花顺零结果带自己的 L2 闸原因(不借东财原因)');
 // 前端:有 mainlinesBySource 不走单列空态早退;双栏区分"无合格主线"与"暂缺"
 A(html.includes('!lines.length && !(d && d.mainlinesBySource)'), 'P2 前端:有 mainlinesBySource 时不走单列空态早退(双栏仍展示)');
-// A+C 重构(2026-07-24):双栏改为合并卡,三态区分由 srcEmptyNote 承担(有主线/源可用但无正式主线/源暂缺)。
-A(html.includes('if (!src || !src.available)') && html.includes('来源暂缺，不借用另一源补值') && html.includes('暂无满足确认明星与龙头条件的正式主线'), 'P2 前端:合并卡下仍保留三态区分(有主线/无合格主线/暂缺)');
+// 双栏来源隔离(A 撤回后恢复):三态区分(有主线/源可用但无正式主线/源暂缺)由 renderColumn 承担。
+A(html.includes('src.available && src.hasMainlines') && html.includes('无合格主线') && html.includes('暂缺'), 'P2 前端:双栏三态区分(有主线/无合格主线/暂缺)');
 const bySourceReviewHTML = renderMainlineReviewHTML({
   days: [{
     day: '2026-07-13', phase: '早盘', sampleValid: true, pendingReview: false,
@@ -327,30 +327,11 @@ eval(extractFn('strategyMainlineReadCachedCall'));
     A(calls === 2, '不同库(kind)同一天各自缓存,不串键');
   });
 
-  // ---- A+C 合并卡(2026-07-24 Codex 复审意见 2/3):familyKey 归一合并、无跨源统一名次 ----
-  // mergeByTheme 是 renderStrategyMainlinesHTML 的内部纯函数,单独按文本提取执行。
-  const mergeSrcStart = html.indexOf('const mergeByTheme = (eastList, thsList) => {');
-  A(mergeSrcStart > -1, 'A+C:mergeByTheme 存在');
-  let mergeDepth = 0, mergeEnd = html.indexOf('{', mergeSrcStart);
-  for (let i = mergeEnd; i < html.length; i++) {
-    if (html[i] === '{') mergeDepth++;
-    else if (html[i] === '}') { mergeDepth--; if (mergeDepth === 0) { mergeEnd = i; break; } }
-  }
-  const mergeByTheme = eval(`(${html.slice(mergeSrcStart + 'const mergeByTheme = '.length, mergeEnd + 1)})`);
-  const mergedSameFamily = mergeByTheme(
-    [{ theme: '算力租赁', familyKey: 'fam-suanli', rank: 2 }],
-    [{ theme: '算力', familyKey: 'fam-suanli', rank: 1 }],
-  );
-  A(mergedSameFamily.length === 1 && mergedSameFamily[0].theme === '算力租赁'
-    && mergedSameFamily[0].east && mergedSameFamily[0].ths, '同 familyKey 不同题材名合并为一张卡,主名取东财');
-  A(mergedSameFamily[0].eastRank === 2 && mergedSameFamily[0].thsRank === 1, '合并卡保留两源各自源内名次,不生成统一名次');
-  const mergedDiffFamily = mergeByTheme(
-    [{ theme: '算力', familyKey: 'fam-a', rank: 1 }],
-    [{ theme: '算力', familyKey: 'fam-b', rank: 1 }],
-  );
-  A(mergedDiffFamily.length === 2, '不同 familyKey 即使题材同名也不合并(归一键优先于显示名)');
-  A(!html.includes('class="mlx-rank"') && html.includes('#${Number(srcRank)}'), '合并卡不显示虚构统一名次,只显示各源 #名次');
-  A(html.includes('同花顺名·'), '同族异名时保留另一源原始题材名');
+  // ---- 双源隔离(Owner 2026-07-24 口径:合并卡 A 撤回,东财/同花顺分开展示) ----
+  // 今日结论 KPI 分源展示,不按 familyKey 合并去重;主线榜恢复 renderColumn 双栏。
+  A(html.includes('function fillStrategyVerdictKpi') && html.includes('今日结论 · 双源独立'), 'KPI 今日结论双源分开展示,不合并');
+  A(!html.includes('renderMergedCard') && !html.includes('const mergeByTheme = ') && !html.includes('class="mlx-'), '合并双源卡(A)已彻底撤回,无 mlx/mergeByTheme 残留');
+  A(html.includes("renderColumn('东财主线预测'") && html.includes("renderColumn('同花顺主线预测'"), '主线榜恢复东财/同花顺双栏,来源隔离');
 
   console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL STRATEGY-TWO-SOURCE-MAINLINES CHECKS PASSED');
 })();
