@@ -9171,3 +9171,23 @@ Deployment:
 
 Notes for next agent:
 - 这是纯展示层重构。生产部署应原子发布 HTML 与 CSS，并在覆盖前核对线上文件仍匹配 PR `#237` 已记录哈希。
+
+## 2026-07-23 - Codex - 预判回看时间线重构已部署
+
+Changed:
+- PR `#239` 已合并到 `main`，合并提交为 `52c6f19a5107352568dcdfdc9b4aa0edc214eece`。
+- 已将新的预判/验证对照、统一证据带、双来源行和默认折叠预备层发布到云端。
+- 两份云端运维日志均已追加本次静态发布记录。
+
+Validated:
+- 发布前线上 HTML/CSS 与 PR `#237` 已记录哈希完全一致，没有游离修改被覆盖。
+- 公网 HTML SHA-256 为 `9ce2526acf571971854ec27c43cb8a834fc9466e7c4b345b825e8fa1e84f2a93`。
+- 公网 CSS SHA-256 为 `47b1f7ee5cc8cf7ee0e8f07fec9278c9440cc847d31b5f6dc2a145476579bd4e`。
+- 公网页面引用 `/vendor/strategy-workbench.css?v=20260724b`，包含 `.mlr-card-head` 与 `.mlr-compare`；`/health` 返回 `ok=true`，回看接口返回最近 10 个交易日。
+
+Deployment:
+- 已原子发布 `kpl-dashboard_17_apple.html` 与 `Qi/vendor/strategy-workbench.css`；未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-ssh-pr239-52c6f19-20260724-091042`。
+
+Notes for next agent:
+- Git `main`、生产静态文件与云端操作日志已一致；本次没有修改任何策略数据或统计口径。
