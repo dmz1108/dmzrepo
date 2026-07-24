@@ -25682,10 +25682,29 @@ async function getStrategyMainlineReview(days = 10) {
           reason: String(block.reason || ''),
           message: String(block.message || ''),
           theme: sourceStatus === 'mainline' ? String(sMain?.theme || '') : '',
+          familyKey: sourceStatus === 'mainline'
+            ? strategyMainlineFamilyInfo({ theme: sMain?.theme || '', key: sMain?.key || '' }).key
+            : '',
           noMainline: sourceStatus === 'no-mainline',
           mainlineHitTop1: hitTop1,
           mainlineHitTop3: hitTop3,
         };
+      }
+    }
+    // 明星必须属于盘后实际成立的同一条主线。L2 盘中曾确认只说明扫描信号成立；
+    // 若该候选主线最终没有命中第一主因家族，回看不得继续称其为“明星确认”。
+    // null 表示当日盘后主因尚未完成，保留候选证据但不提前下正式结论。
+    let mainlineStarQualified = null;
+    if (star && !pendingReview) {
+      if (reviewBySource && main) {
+        const mainFamily = strategyMainlineFamilyInfo({ theme: main.theme || '', key: main.key || '' }).key;
+        const matchingSources = Object.values(reviewBySource)
+          .filter(src => src?.status === 'mainline' && src.familyKey && src.familyKey === mainFamily);
+        if (matchingSources.some(src => src.mainlineHitTop1 === true)) mainlineStarQualified = true;
+        else if (matchingSources.length && matchingSources.every(src => src.mainlineHitTop1 === false)) mainlineStarQualified = false;
+        else if (!matchingSources.length && mainlineHitTop1 != null) mainlineStarQualified = mainlineHitTop1 === true;
+      } else if (mainlineHitTop1 != null) {
+        mainlineStarQualified = mainlineHitTop1 === true;
       }
     }
     rows.push({
@@ -25696,7 +25715,7 @@ async function getStrategyMainlineReview(days = 10) {
       candidateThemes: noMainline ? predict.top.slice(0, 3).map(row => String(row?.theme || '')).filter(Boolean) : [],
       phase, sampleValid, sampleInvalidReason, pendingReview,
       actualTop, actualFirstTied, mainlineHitTop1, mainlineHitTop3, mainReasonMissingCount,
-      star, expectedStars, reserveStarOutcomes, leader, leaders,
+      star, mainlineStarQualified, expectedStars, reserveStarOutcomes, leader, leaders,
       ...(reviewBySource ? { bySource: reviewBySource } : {}),
     });
   }

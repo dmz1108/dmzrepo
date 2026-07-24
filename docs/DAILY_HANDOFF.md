@@ -9845,3 +9845,28 @@ Deployment:
 
 Notes for next agent:
 - PR `#261` 必须同步包含 PR `#264` 的最新 `main`，保留单源命中红色规则及其回归测试，避免后续 UI 合并覆盖本次修复。
+
+## 2026-07-25 - Codex - 回看明星确认绑定真实主线
+
+Changed:
+- 为预判回看接口增加 `mainlineStarQualified`，按同一主因家族、同一来源的盘后第一家族命中结果判断明星是否真正属于主线。
+- 盘中 L2 曾确认但对应主线最终未命中的股票继续保留原始候选证据，不再显示“明星确认”或计入红色真主线日。
+- 预期候选未兑现仍保留在展开证据中，并改用“预期候选”标签，避免与正式明星混淆。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/mainline-review.test.js`
+- `tests/strategy-two-source-mainlines.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 接口双源夹具确认：2026-07-21 东财半导体命中且有明星，`mainlineStarQualified=true`；2026-07-22 东财算力未命中且同花顺无主线，`mainlineStarQualified=false`。
+- 生产形状页面渲染结果：`07.21=hit-ok+star-confirmed`、`07.22=hit-miss+star-missed`、`07.23=hit-ok+star-confirmed`；7 月 22 日不再显示神州数码为明星确认。
+- 定向接口、双源页面测试及 `node --check`、`git diff --check` 均通过。
+
+Deployment:
+- 本条提交时尚未部署生产；未修改云端文件、运行时数据或服务状态，未重启任何服务。
+
+Notes for next agent:
+- PR `#261` 同步最新 `main` 时还必须保留本次接口字段、页面资格闸和两组回归测试。
