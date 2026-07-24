@@ -8244,6 +8244,33 @@ Deployment:
 Notes for next agent:
 - 正式载荷只允许通过 GitHub `production` 环境日期绑定 Secret 传递；运行完成后必须删除 Secret 和本地临时压缩副本，运行时 JSON 不得进入 Git。
 
+## 2026-07-24 - Codex - 当日 TGB 湖南人复盘已入库
+
+Changed:
+- 受保护运行 `30091351229` 写入 2026-07-24 `review/tgb-hunan-structured` 正式 40 行，并只强制重折当天综合主因库；脚本在写入前复核人工载荷、官方文章/原图哈希、40 股终盘池及全部质量闸。
+- 正式行全部来自 Codex 对 `@TGB湖南人` 官方白底原图逐题材块、逐行、逐字段人工转录和第二遍人工复核；未使用 OCR、Qwen 或任何自动视觉结果生成、补全、猜测或校验。
+- 两份云端运维日志已追加安全结果；受保护工作流的远端脚本/载荷清理通过，日期绑定 GitHub `production` 环境 Secret 已删除，本地人工载荷和压缩传输副本已移入废纸篓。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 仅云端：`kpl-limitup-main-reason-sources/tgb-hunan-structured/2026-07-24.json`、当天综合主因/evidence/quality/auto 与正式来源折叠产物、两份运维日志和回退备份
+
+Validated:
+- 官方文章 `https://www.tgb.cn/a/2tH73JZqkpi`（`7.24湖南人涨停复盘+晚间消息汇总`）；采用 `image-01-07.png`，原图 URL `https://image.tgb.cn/img/2026/07/24/p4wrmyze8ckl.png_760w.png`，长度 530066 字节，SHA-256 `60347f3fcbe837df5007852f8d257b20e0a2375cd60d5386b0c1f5a61b54b88c`。
+- 正式 40 行、唯一代码 40；`missingCodes=[]`、`extraCodes=[]`、重复 0、`weakCount=0`、名称差异 0；终盘池无 ST、北交所或新股前缀排除行。
+- 题材块计数：半导体 8、军工 7、智能电网 6、资产重组 3、其他热点 6、其他个股 10，合计 40；顶部 17 行“市场连板股”重复摘要和底部 11 行“涨停炸板”均未入库。
+- 人工输入 SHA-256 `e8ec18efa6f7dc81f6be0ff89d8c2049f776f5541b4deee0a10f57a549e55915`；终盘池 SHA-256 `af312ca2c86e2d3131dfc7fcd1fba8d28cf00e906824970ef532d2bc4d7b7268`；正式 TGB SHA-256 `5a0c5331aede0b1f900f9160ee6328db668e015d471b6611e8384463d67a3d0a`；重折后综合主因 SHA-256 `22346da9035a6d85f3b6bc7cae666d9fbb76c00ffbb153b1f814d7ed4ebf549c`。
+- 独立公网强刷复核：综合归纳/复盘啦/选股宝/淘股吧均为 40 行和 40 个唯一代码，TGB 相对综合集合 `missingCodes=[]`、`extraCodes=[]`；TGB 覆盖/主因覆盖 100%、低置信 0，`sourceErrors=[]`、主因库 40，公网 `/health` 为 `ok=true`。
+- 韭研标签当时仍为 0 行；这是独立来源尚未形成当日正式行，不影响本次 TGB 40 行的完整对账和健康状态，但后续四源巡检仍应继续关注。
+
+Deployment:
+- 已变更生产运行时复盘数据、重折综合主因并更新云端日志；未部署或替换应用代码，未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+- 正式写入回退备份：`C:\PandaDashboard\backups\tgb-hunan-manual-20260724-20260724115829`；首次 raw 目录不存在，因此 raw 强刷未生成旧证据备份。
+
+Notes for next agent:
+- raw 请求 PR `#252`、正式写入请求 PR `#253` 均已合并；2026-07-24 TGB 已完整完成，不要重复覆盖正式文件或重启服务。
+- 未跟踪的 `panda-discovery-db.json` 属于其他任务的本地运行时数据，本次未读取、修改或提交。
+
 ## 2026-07-23 - Codex - L2 个股逐档明细可读性优化
 
 Changed:
