@@ -4509,3 +4509,81 @@ body.view-strategy .theme-calib .strategy-section-sub { margin-left: 0; }
   body.view-strategy .mlr-line-caret { grid-column: 3; grid-row: 1; }
   body.view-strategy .ml-l2-job-summary { grid-template-columns: minmax(0, 1fr) auto 20px; }
 }
+
+/* ===== Local Claude 2026-07-24: 明星信号改为紧凑小框(对齐方向A评审稿)。
+   原样式是「固定标签列 + 1fr」整行长条,比值被拉满整卡宽;改为标签置顶、
+   每只明星成独立紧凑盒、比值紧凑成组。纯样式,不改任何 DOM 或明星判定逻辑。 ===== */
+body.view-strategy .ml-proof-row.ml-star-proof {
+  display: block !important;
+  grid-template-columns: none !important;
+  gap: 0 !important;
+  overflow: visible !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+body.view-strategy .ml-card.has-confirmed-star .ml-star-proof,
+body.view-strategy .ml-card.confirmed-mainline .ml-star-proof {
+  border: 0 !important;
+  background: transparent !important;
+}
+/* 标签「明星信号 · 1只预期」置顶成一行,去掉琥珀底色块 */
+body.view-strategy .ml-star-proof .ml-star-proof-head {
+  min-height: 0 !important;
+  flex-direction: row !important;
+  align-items: baseline !important;
+  justify-content: flex-start !important;
+  gap: 6px !important;
+  margin: 0 0 8px !important;
+  padding: 0 !important;
+  border-right: 0 !important;
+  background: transparent !important;
+}
+body.view-strategy .ml-card.has-confirmed-star .ml-star-proof-head,
+body.view-strategy .ml-card.confirmed-mainline .ml-star-proof-head {
+  border-right: 0 !important;
+  background: transparent !important;
+}
+body.view-strategy .ml-star-proof .ml-star-proof-summary::before {
+  content: "·";
+  margin-right: 5px;
+  color: var(--st-faint);
+}
+/* 明星盒:横向自适应内容、可换行,不再铺满整卡 */
+body.view-strategy .ml-star-proof .ml-star-list {
+  display: flex !important;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-content: flex-start;
+  padding: 0 !important;
+}
+body.view-strategy .ml-star-proof .ml-stock.ml-starstock {
+  min-height: 0 !important;
+  width: max-content;
+  max-width: 100%;
+  gap: 7px 12px !important;
+  padding: 9px 12px !important;
+  border: 1px solid rgba(231, 181, 87, 0.24) !important;
+  border-radius: 8px !important;
+  background: #101619 !important;
+}
+body.view-strategy .ml-star-proof .ml-stock.ml-starstock.confirmed {
+  border-color: rgba(255, 104, 100, 0.28) !important;
+  background: #121618 !important;
+}
+/* 比值主动/被动/合计紧凑成组,取消等分整行与竖分隔线 */
+body.view-strategy .ml-star-proof .ml-star-ratios {
+  display: flex !important;
+  grid-template-columns: none !important;
+  gap: 16px !important;
+  padding-top: 8px !important;
+}
+body.view-strategy .ml-star-proof .ml-star-ratios > span {
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 0 !important;
+  border-right: 0 !important;
+}
+@media (max-width: 760px) {
+  body.view-strategy .ml-star-proof .ml-stock.ml-starstock { width: 100%; }
+}
