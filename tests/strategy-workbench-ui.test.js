@@ -109,4 +109,52 @@ assert(/body\.view-strategy \.sc-pick-detail-title\s*\{[\s\S]*?justify-content:\
 assert((html.match(/grid-template-columns:\s*max-content max-content max-content !important;/g) || []).length >= 2);
 assert(/body\.view-strategy \.sc-pick-pair\s*\{[\s\S]*?justify-content:\s*start !important;[\s\S]*?gap:\s*8px !important;[\s\S]*?\}/.test(html));
 
+// ===== 运行时样本测试:实际执行 strategyL2HistoryBucketRow,验证 6 列重构没有错位单元格 =====
+// (Codex 终审第 3 项:仅有文本断言不够,需真实调用确认主动/被动买卖映射与三比值落位正确。)
+function extractHtmlFn(name) {
+  const sig = new RegExp(`function ${name}\\(`);
+  const m = html.match(sig);
+  if (!m) throw new Error('L2 fn not found: ' + name);
+  const open = html.indexOf('{', html.indexOf(')', m.index));
+  let depth = 0, i = open;
+  for (; i < html.length; i++) { if (html[i] === '{') depth++; else if (html[i] === '}') { depth--; if (depth === 0) break; } }
+  return html.slice(m.index, i + 1);
+}
+const L2_ROW_FNS = [
+  'strategyPlainMoney', 'strategyL2HistoryNum', 'strategyL2HistoryRatioValue',
+  'strategyL2HistoryRatioText', 'strategyL2HistoryBucketLabel', 'strategyL2HistoryMoney',
+  'strategyL2HistoryBucket', 'strategyL2HistoryAmtPair', 'strategyL2HistoryRatioCell',
+  'strategyL2HistoryBucketRow',
+];
+eval(L2_ROW_FNS.map(extractHtmlFn).join('\n'));
+
+// 四项互不相同的金额:主买3.8亿 主卖1.7亿 被买3.1亿 被卖1.9亿(单位元)。
+const sampleRow = { code: '600001', price: 12, thresholds: {
+  '500000': { activeBuy: 3.8e8, activeSell: 1.7e8, passiveBuy: 3.1e8, passiveSell: 1.9e8 },
+  '3000000': { activeBuy: 3.5e8, activeSell: 1.5e8, passiveBuy: 2.9e8, passiveSell: 1.6e8 },
+  // 800万缺整个档位 → 数据缺失;1000万有对象但缺 activeSell 字段 → 字段不完整
+  // (strategyL2HistoryNum 把 null 视作 0,故用「缺字段」而非 null 才是真正的字段不完整)。
+  '10000000': { activeBuy: 2.0e8, passiveBuy: 1.8e8, passiveSell: 1.2e8 },
+} };
+const rowMax = strategyL2HistoryBucketRow(sampleRow, 500000, 500000);
+// 1) 金额未互换:主动格=买3.8亿/卖1.7亿,被动格=买3.1亿/卖1.9亿(四值互不相同,错位即被抓)。
+assert(rowMax.includes('is-buy"><i>买</i><b>3.8亿</b>'), 'L2样本:主动买入=3.8亿落在主动买格');
+assert(rowMax.includes('is-sell"><i>卖</i><b>1.7亿</b>'), 'L2样本:主动卖出=1.7亿落在主动卖格');
+assert(rowMax.includes('is-buy"><i>买</i><b>3.1亿</b>'), 'L2样本:被动买入=3.1亿落在被动买格');
+assert(rowMax.includes('is-sell"><i>卖</i><b>1.9亿</b>'), 'L2样本:被动卖出=1.9亿落在被动卖格');
+// 列顺序:主动买卖 → 主动比 → 被动买卖 → 被动比 → 合力比。
+const iActBuy = rowMax.indexOf('<b>3.8亿</b>'), iActR = rowMax.indexOf('is-active'), iPasBuy = rowMax.indexOf('<b>3.1亿</b>'), iPasR = rowMax.indexOf('is-passive'), iSup = rowMax.indexOf('is-support');
+assert(iActBuy > -1 && iActBuy < iActR && iActR < iPasBuy && iPasBuy < iPasR && iPasR < iSup, 'L2样本:主动买卖/主动比/被动买卖/被动比/合力比列顺序正确');
+// 2) 三比值具体结果:主动比 3.8/1.7=2.24;被动比 3.1/1.9=1.63;合力比 6.9/3.6=1.92。
+assert(rowMax.includes('is-active"><b>2.24</b>'), 'L2样本:主动比=2.24');
+assert(rowMax.includes('is-passive"><b>1.63</b>'), 'L2样本:被动比=1.63');
+assert(rowMax.includes('is-support"><b>1.92</b>'), 'L2样本:合力比=1.92');
+// 3) 最大档:is-max + 最大档标记。
+assert(/class="ml-l2-bucket-row is-max"/.test(rowMax) && rowMax.includes('<i>最大档</i>'), 'L2样本:最大档行带 is-max 与最大档标记');
+// 4) 数据缺失(缺 key)与字段不完整(字段含 null)。
+const rowMissing = strategyL2HistoryBucketRow(sampleRow, 8000000, 500000);
+assert(/ is-empty"/.test(rowMissing) && rowMissing.includes('<small>数据缺失</small>'), 'L2样本:缺档位数据 → 数据缺失');
+const rowIncomplete = strategyL2HistoryBucketRow(sampleRow, 10000000, 500000);
+assert(/ is-empty"/.test(rowIncomplete) && rowIncomplete.includes('<small>字段不完整</small>'), 'L2样本:字段含 null → 字段不完整');
+
 console.log('strategy workbench UI checks passed');

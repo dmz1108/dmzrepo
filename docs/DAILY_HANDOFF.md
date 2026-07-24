@@ -9820,3 +9820,28 @@ Notes for next agent:
 - #261 代码已完备（L2 6 列表格 + #199 三色来源标签 + 布局回归断言）。当前对 main 为 MERGEABLE。
 - 合并顺序（Owner/Codex 口径）：等 #262 复核合并后，本 PR 再同步最新 main 并将缓存键升级为下一个未使用版本（`j` 目前与 #262 撞号；#262 合并后按当时未用版本升，如 `k`/`l`）。缓存键升级留到同步 main 时一次性处理，本轮不预改。
 - 附：本人已独立复核 #262，发现 `.ml-card.confirmed-mainline .ml-confirmed` 越界把 QI主线 徽章误染红（与 13350/13353 共用 `.ml-confirmed`），未 approve；#262 修正后方能作为前置合并。
+
+## 2026-07-24 - Local Claude - #261 补 L2 桶行运行时样本测试（Codex 终审阻断项）
+
+Changed:
+- 按 Codex 终审第 3 项：不能只做 HTML/CSS 文本断言，需真实调用 `strategyL2HistoryBucketRow` 验证 6 列重构没有错位单元格。
+- 在 `tests/strategy-workbench-ui.test.js` extract+eval 桶行渲染依赖链（strategyPlainMoney → …Num/…RatioValue/…RatioText/…BucketLabel/…Money/…Bucket/…AmtPair/…RatioCell/…BucketRow），用四项互不相同金额（主买3.8亿/主卖1.7亿/被买3.1亿/被卖1.9亿）执行并断言：
+  1. 金额未互换：主动买卖=3.8亿/1.7亿、被动买卖=3.1亿/1.9亿分别落在正确格；列顺序主动买卖→主动比→被动买卖→被动比→合力比；
+  2. 三比值具体结果：主动比 2.24、被动比 1.63、合力比 1.92；
+  3. 最大档 `is-max` + 最大档标记；
+  4. 数据缺失（缺整档）与字段不完整（缺 activeSell 字段）。
+- 备注：`strategyL2HistoryNum` 把 `null` 视作 0，故「字段不完整」样本用「缺字段」而非 `null`。
+
+Files:
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 全仓 61/61 个 `tests/*.test.js` 通过（含新增运行时样本测试）；`git diff --check` 通过。
+
+Deployment:
+- 未部署生产。
+
+Notes for next agent:
+- #261 现含：L2 6 列表格 + #199 三色来源标签 + CSS 布局断言 + 桶行运行时样本测试。对 main 为 MERGEABLE。
+- 缓存键升级仍留到「#262 合并后同步 main」时一次性处理（当前 `j` 与 #262 撞号）。
