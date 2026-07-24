@@ -9742,3 +9742,33 @@ Deployment:
 
 Notes for next agent:
 - Git、生产静态文件和云端双日志已一致；后续策略回看改动应继续保持“主线命中状态”和“明星状态”两个视觉维度独立。
+
+## 2026-07-24 - Codex - 强化主线、明星确认与命中视觉层级
+
+Changed:
+- 把尚未上线的紧凑明星信号框纳入最新 `main`，明星信息不再铺满整张卡片。
+- 正式主线卡片改为高对比红色边框、状态条、排名块和实心“当日主线”标识。
+- 明星确认改用独立金色证据框和实心确认标识，与主线红色语义分离；预期明星保持较弱琥珀提示。
+- 预判回看命中改为整行高对比状态带和实心结果标识，未命中保持低饱和绿色。
+- 移动端保持主线与明星证据单列适配，并更新静态样式缓存版本。
+- 只调整展示层，不修改主线、明星或命中的判定、数据、评分和交互逻辑。
+
+Files:
+- `Qi/vendor/strategy-workbench.css`
+- `kpl-dashboard_17_apple.html`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `tests/strategy-workbench-ui.test.js` 通过。
+- 全仓 `61/61` 个 `tests/*.test.js` 通过。
+- `git diff --check` 通过。
+- Playwright 在 `1360x900` 与 `390x844` 视口完成状态样例截图；桌面和移动端均无页面级横向溢出，主线与明星状态可独立识别。
+
+Deployment:
+- GitHub 分支准备中，尚未部署生产。
+- 未修改云端文件、运行时数据或服务状态，未重启任何服务。
+
+Notes for next agent:
+- 本分支取代 PR #258 的明星紧凑框实现；若合并，应关闭 #258。
+- PR #261 仍需在本分支合并后同步最新 `main`，并使用新的唯一 CSS 缓存键。

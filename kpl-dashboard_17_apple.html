@@ -9894,7 +9894,7 @@
     }
   }
 </style>
-<link href="/vendor/strategy-workbench.css?v=20260724i" rel="stylesheet">
+<link href="/vendor/strategy-workbench.css?v=20260724j" rel="stylesheet">
 <link href="/vendor/review-workbench.css?v=20260718d" rel="stylesheet">
 <link href="/vendor/realtime-workbench.css?v=20260720" rel="stylesheet">
 </head>
@@ -13350,7 +13350,7 @@ function renderStrategyMainlinesHTML(d) {
       'qi': `<span class="ml-confirmed" style="background:rgba(74,155,255,.16);color:#4a9bff;" title="已扫描且至少 1 只股票满足 L2 预期明星或明星确认标准。">QI主线</span>`,
     };
     const qiBadge = l2BadgeByState[l2State] || '';
-    const confirmedBadge = m.isConfirmedMainline ? `<span class="ml-confirmed">✔ 当日主线</span>` : '';
+    const confirmedBadge = m.isConfirmedMainline ? `<span class="ml-confirmed ml-daily-confirmed">✔ 当日主线</span>` : '';
     const confirmBtn = state.adminLoggedIn
       ? (m.isConfirmedMainline
         ? `<button type="button" class="ml-confirm-btn on" onclick="unconfirmMainlineTheme()">取消确认</button>`
