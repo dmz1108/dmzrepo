@@ -2938,6 +2938,62 @@ body.view-strategy .mlr-row.star-pending {
   background: #10171f !important;
 }
 
+@media (min-width: 900px) {
+  body.view-strategy .mlr-group.confirmed .mlr-group-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 8px;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  body.view-strategy .mlr-group.confirmed .mlr-row {
+    min-width: 0;
+    border: 1px solid var(--st-line) !important;
+    border-left: 2px solid var(--st-red) !important;
+    border-radius: 6px !important;
+  }
+
+  body.view-strategy .mlr-group.confirmed .mlr-row:last-child {
+    border-bottom: 1px solid var(--st-line) !important;
+  }
+
+  body.view-strategy .mlr-group.confirmed .mlr-compare {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  body.view-strategy .mlr-group.confirmed .mlr-compare-arrow {
+    height: 10px;
+    line-height: 10px;
+    transform: rotate(90deg);
+  }
+
+  body.view-strategy .mlr-group.confirmed .mlr-compare-block.outcome {
+    padding-top: 8px;
+    border-top: 1px solid var(--st-line);
+  }
+
+  body.view-strategy .mlr-group.confirmed .mlr-evidence-grid {
+    grid-template-columns: 1fr;
+  }
+
+  body.view-strategy .mlr-group.confirmed .mlr-evidence-grid > .mlr-slot,
+  body.view-strategy .mlr-group.confirmed .mlr-evidence-grid > .mlr-slot:nth-child(n+3) {
+    grid-column: auto;
+    border-top: 0 !important;
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--st-line) !important;
+  }
+
+  body.view-strategy .mlr-group.confirmed .mlr-evidence-grid > .mlr-slot:last-child {
+    border-bottom: 0 !important;
+  }
+}
+
 body.view-strategy .mlr-card-head {
   min-height: 42px;
   display: grid;
