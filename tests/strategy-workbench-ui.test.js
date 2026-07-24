@@ -7,7 +7,7 @@ const html = fs.readFileSync(path.join(root, 'kpl-dashboard_17_apple.html'), 'ut
 const server = fs.readFileSync(path.join(root, 'kpl-stats-server.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'Qi/vendor/strategy-workbench.css'), 'utf8');
 
-assert(html.includes('<link href="/vendor/strategy-workbench.css?v=20260724h" rel="stylesheet">'));
+assert(html.includes('<link href="/vendor/strategy-workbench.css?v=20260724i" rel="stylesheet">'));
 assert(html.includes('<header class="strategy-hero">'));
 assert(html.includes('class="strategy-hero-head"'));
 assert(html.includes('class="strategy-hero-utility"'));
@@ -22,6 +22,10 @@ for (const selector of [
   '.mlr-row.star-expected',
   '.mlr-row.star-missed',
   '.mlr-row.star-pending',
+  '.mlr-line.hit-ok',
+  '.mlr-line.hit-miss',
+  '.mlr-hit.ok',
+  '.mlr-hit.miss',
   '.mlr-group.confirmed',
   '.mlr-outcome-summary',
   '.mlr-card-head',
@@ -74,6 +78,10 @@ assert(html.includes('const renderColumn = ') && html.includes("renderColumn('�
 assert(html.includes('class="mlr-table-head"'));
 assert(html.includes('class="mlr-line-sum"'));
 assert(css.includes('.mlr-line-sum'));
+assert(/body\.view-strategy \.mlr-line\.hit-ok > \.mlr-line-sum\s*\{[\s\S]*?box-shadow:\s*inset 4px 0 0 #ff6864;[\s\S]*?\}/.test(css));
+assert(/body\.view-strategy \.mlr-line\.hit-miss > \.mlr-line-sum\s*\{[\s\S]*?box-shadow:\s*inset 4px 0 0 #3fc98a;[\s\S]*?\}/.test(css));
+assert(/body\.view-strategy \.mlr-hit\.ok::before\s*\{[\s\S]*?content:\s*"✓";[\s\S]*?\}/.test(css));
+assert(/body\.view-strategy \.mlr-hit\.miss::before\s*\{[\s\S]*?content:\s*"×";[\s\S]*?\}/.test(css));
 assert(/body\.view-strategy \.ml-l2-job-head,\s*body\.view-strategy \.ml-l2-job-meta \{ display: contents !important; \}/.test(css));
 assert(css.includes('Local Claude polish 2026-07-24'));
 assert(/body\.view-strategy \.mlr-chip\s*\{[\s\S]*?border-radius:\s*999px !important;[\s\S]*?\}/.test(css));
