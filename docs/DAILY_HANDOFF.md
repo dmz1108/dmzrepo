@@ -9240,6 +9240,33 @@ Deployment:
 Notes for next agent:
 - Git `main`、云端静态文件与云端操作日志已一致；本次没有修改策略逻辑、数据或服务配置。
 
+## 2026-07-23 - Codex - 统一策略页回看卡片高度与左轴
+
+Changed:
+- 桌面端“真主线”并排卡片恢复同一行等高，消除上下边界参差。
+- “预判回看”保持 `1040px` 窄内容宽度，但由居中改为左对齐，与今日策略、今日主线榜和重点关注共用同一左轴。
+- 手机端继续保持单列；未改变任何策略、明星、龙头、命中或收益逻辑。
+- 样式缓存版本更新，并增加左对齐、等高布局回归断言。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 使用线上真实策略和最近 10 个交易日回看数据完成 1440x1000 全页 Playwright 检查。
+- 策略外层、今日主线榜、预判回看和重点关注左边界均为 `32px`。
+- 真主线第一行两卡均高 `394px`，第二行两卡均高 `353px`；卡片宽度均为 `516px`。
+- 390x844 移动端保持约 `368px` 单列，无横向溢出、重叠或裁切。
+- `git diff --check` 通过；全仓 `59/59` 个 `tests/*.test.js` 文件通过。
+
+Deployment:
+- 本条提交时尚未部署生产；未修改云端文件，未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+
+Notes for next agent:
+- 本次是纯视觉对齐修复；部署时应原子发布 HTML 与 CSS。
+
 ## 2026-07-23 - Codex - 真主线回看卡片改为半宽
 
 Changed:

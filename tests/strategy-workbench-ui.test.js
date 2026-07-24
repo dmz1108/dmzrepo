@@ -7,7 +7,7 @@ const html = fs.readFileSync(path.join(root, 'kpl-dashboard_17_apple.html'), 'ut
 const server = fs.readFileSync(path.join(root, 'kpl-stats-server.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'Qi/vendor/strategy-workbench.css'), 'utf8');
 
-assert(html.includes('<link href="/vendor/strategy-workbench.css?v=20260724d" rel="stylesheet">'));
+assert(html.includes('<link href="/vendor/strategy-workbench.css?v=20260724e" rel="stylesheet">'));
 assert(html.includes('<header class="strategy-hero">'));
 assert(html.includes('class="strategy-hero-head"'));
 assert(html.includes('class="strategy-hero-utility"'));
@@ -58,6 +58,9 @@ assert(html.includes('合力比 = 总买入 ÷ 总卖出'));
 
 assert(css.includes('@media (max-width: 760px)'));
 assert(/body\.view-strategy \.mlr-group\.confirmed \.mlr-group-list\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);[\s\S]*?\}/.test(css));
+assert(/body\.view-strategy \.ml-review\s*\{[\s\S]*?margin:\s*20px 0 0 !important;[\s\S]*?\}/.test(css));
+assert(/body\.view-strategy \.mlr-group\.confirmed \.mlr-group-list\s*\{[\s\S]*?align-items:\s*stretch;[\s\S]*?\}/.test(css));
+assert(/body\.view-strategy \.mlr-group\.confirmed \.mlr-row\s*\{[\s\S]*?height:\s*100%;[\s\S]*?\}/.test(css));
 assert(!/\.strategy-mainlines\s*\{[^}]*display\s*:\s*none/s.test(css));
 assert(!/\.ml-l2-history\s*\{[^}]*display\s*:\s*none/s.test(css));
 assert(/body\.view-strategy \.sc-pick-detail-title\s*\{[\s\S]*?justify-content:\s*flex-start !important;[\s\S]*?\}/.test(html));
