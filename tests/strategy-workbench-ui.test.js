@@ -7,7 +7,7 @@ const html = fs.readFileSync(path.join(root, 'kpl-dashboard_17_apple.html'), 'ut
 const server = fs.readFileSync(path.join(root, 'kpl-stats-server.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'Qi/vendor/strategy-workbench.css'), 'utf8');
 
-assert(html.includes('<link href="/vendor/strategy-workbench.css?v=20260723a" rel="stylesheet">'));
+assert(html.includes('<link href="/vendor/strategy-workbench.css?v=20260724a" rel="stylesheet">'));
 assert(html.includes('<header class="strategy-hero">'));
 assert(html.includes('class="strategy-hero-head"'));
 assert(html.includes('class="strategy-hero-utility"'));
@@ -24,6 +24,9 @@ for (const selector of [
   '.mlr-row.star-pending',
   '.mlr-group.confirmed',
   '.mlr-outcome-summary',
+  '.mlr-route.has-outcome',
+  '.mlr-route-primary',
+  '.mlr-route-outcome',
   '.mlr-no-star',
   '.ml-l2-stock.is-expected',
   '.ml-l2-stock.is-confirmed',
@@ -41,6 +44,9 @@ for (const selector of [
 }
 
 assert(html.includes('<table class="ml-l2-bucket-table">'));
+assert(html.includes('<div class="mlr-route${result ? \' has-outcome\' : \'\'}">'));
+assert(html.includes('class="mlr-route-primary"'));
+assert(html.includes('class="mlr-route-outcome"'));
 assert(html.includes('<th colspan="3">主动成交</th><th colspan="3">被动成交</th><th>买卖合力</th>'));
 assert(html.includes('<th>买入金额</th><th>卖出金额</th><th>主动比</th>'));
 assert(html.includes('主动比 = 主动买入 ÷ 主动卖出'));

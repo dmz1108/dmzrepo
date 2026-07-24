@@ -9101,3 +9101,28 @@ Deployment:
 
 Notes for next agent:
 - 本次只改变管理员 L2 展开明细的视觉结构；不要据此调整明星股门槛或 L2 统计口径。
+
+## 2026-07-23 - Codex - 优化预判回看横向布局
+
+Changed:
+- 将预判回看每个交易日的固定六列占位布局改为自适应的“日期、预判路线、盘后结果”结构；明星状态或结果缺失时不再保留空列。
+- 明星、龙头与收益明细改为自动填充列；只有两项时均分可用宽度，多项时按容器宽度自动换行。
+- 统计说明改为左对齐的紧凑信息带，桌面端充分利用横向空间；窄屏继续使用单列结果流。
+- 更新策略样式缓存版本；未改变预判、命中、明星、龙头或收益统计逻辑。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `git diff --check` 通过。
+- `strategy-workbench-ui.test.js` 与 `star-l2-layers.test.js` 通过。
+- 全仓 `59/59` 个 `tests/*.test.js` 文件通过。
+
+Deployment:
+- 本条提交时尚未部署生产；未修改云端文件，未重启主服务、娱乐服务、Caddy 或公司端 L2 worker。
+
+Notes for next agent:
+- 本次是纯视觉布局调整；后续复核应重点检查宽屏无右侧占位空洞、窄屏股票名与次高/次收/3日收益不重叠。
