@@ -204,4 +204,13 @@ assert(html.includes('ml-star-proof is-empty') && html.includes('已完成 L2 �
   '无明星方向仍显示明星信号行与扫描状态,强度够的板块不隐身');
 assert(!html.includes('<div class="ml-score-wrap">'), '旧的整行评分盒已由左柱取代');
 assert(css.includes('body.view-strategy .ml-card.has-confirmed-star .ml-rail')
-  && css.includes('#efb94f'), '确认明星沿用金色证据语义(#262),红色仍留给人工确认主线');
+  && css.includes('--st-gold: #f0c04a'), '确认明星沿用金色证据语义(#262),红色仍留给人工确认主线');
+// Owner 定稿方案A:确认=金箔徽章,预期改冷石板(原金/琥珀色相仅差 1.4°、RGB 距离 17,几乎同色)
+assert(css.includes('--st-slate: #7f9bbd') && css.includes('.ml-card.has-expected-star .ml-rail-bar i { background: var(--st-slate)'),
+  '预期明星改冷石板色,与确认金拉开色相');
+assert(html.includes('class="ml-qi-seal') && css.includes('body.view-strategy .ml-qi-seal {'),
+  'QI 标识置于徽章外框内(确认态显金环)');
+assert(css.includes('body.view-strategy .ml-card.has-confirmed-star::after'),
+  '确认卡顶部金箔高光使用 ::after(::before 已被左色条占用)');
+assert(css.includes('body.view-strategy .ml-qi-seal.pending') && css.includes('body.view-strategy .ml-qi-seal.empty'),
+  '徽章外框三态同尺寸,保证卡片文字起始线对齐');

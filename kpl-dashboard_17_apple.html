@@ -13139,23 +13139,28 @@ function strategyThsDirectionMeta(rawValue) {
 // confirmed=已认证(白描边+蓝高亮点+原动画);pending=待认证(灰度、无高亮点);
 // viewBox 裁到内容包围盒,小尺寸下字形才清晰(原 0 0 160 135 含大量留白)。
 function strategyMainlineQiMarkHTML(kind) {
-  const pending = kind === 'pending';
-  const label = pending ? '待 QI 认证明星' : 'QI 认证明星';
-  return `<svg class="ml-qi-mark${pending ? ' pending' : ''}" viewBox="12 27 110 82" fill="none" role="img" aria-label="${label}">
-    <ellipse class="qim-orbit" cx="65" cy="68" rx="53.2" ry="22" transform="rotate(-28 65 68)" stroke-width="3"></ellipse>
-    <circle class="qim-line" cx="61" cy="68" r="30" stroke-width="8"></circle>
-    <path class="qim-line" d="M78 84 L92 98" stroke-width="8" stroke-linecap="round"></path>
-    <rect class="qim-fill" x="106.5" y="61" width="11" height="37" rx="5.5"></rect>
-    ${pending ? '' : `<g transform="rotate(-28 65 68)">
-      <circle class="qim-spark" r="6.5">
-        <animateMotion dur="6.4s" repeatCount="indefinite" rotate="0"
-          path="M 11.8 68 a 53.2 22 0 1 0 106.4 0 a 53.2 22 0 1 0 -106.4 0"
-          keyTimes="0;0.422;0.4221;0.844;1" keyPoints="0.5;1;0;0.5;0.5" calcMode="linear"></animateMotion>
-        <animate attributeName="opacity" dur="6.4s" repeatCount="indefinite"
-          keyTimes="0;0.844;0.88;0.905;0.93;0.955;0.98;1" values="1;1;1;0.12;1;0.12;1;1"></animate>
-      </circle>
-    </g>`}
-  </svg>`;
+  const confirmed = kind === 'confirmed';
+  const empty = kind === 'empty';
+  const label = confirmed ? 'QI 认证明星' : (empty ? '' : '待 QI 认证明星');
+  const cls = confirmed ? '' : (empty ? ' empty' : ' pending');
+  // 徽章外框在三态下尺寸一致(确认态才显示金环),保证卡片文字起始线对齐。
+  return `<span class="ml-qi-seal${cls}" aria-hidden="${empty ? 'true' : 'false'}">
+    <svg class="ml-qi-mark${cls}" viewBox="12 27 110 82" fill="none" role="img" aria-label="${label}">
+      <ellipse class="qim-orbit" cx="65" cy="68" rx="53.2" ry="22" transform="rotate(-28 65 68)" stroke-width="3"></ellipse>
+      <circle class="qim-line" cx="61" cy="68" r="30" stroke-width="8"></circle>
+      <path class="qim-line" d="M78 84 L92 98" stroke-width="8" stroke-linecap="round"></path>
+      <rect class="qim-fill" x="106.5" y="61" width="11" height="37" rx="5.5"></rect>
+      ${confirmed ? `<g transform="rotate(-28 65 68)">
+        <circle class="qim-spark" r="6.5">
+          <animateMotion dur="6.4s" repeatCount="indefinite" rotate="0"
+            path="M 11.8 68 a 53.2 22 0 1 0 106.4 0 a 53.2 22 0 1 0 -106.4 0"
+            keyTimes="0;0.422;0.4221;0.844;1" keyPoints="0.5;1;0;0.5;0.5" calcMode="linear"></animateMotion>
+          <animate attributeName="opacity" dur="6.4s" repeatCount="indefinite"
+            keyTimes="0;0.844;0.88;0.905;0.93;0.955;0.98;1" values="1;1;1;0.12;1;0.12;1;1"></animate>
+        </circle>
+      </g>` : ''}
+    </svg>
+  </span>`;
 }
 function strategyMainlineSourcePairsHTML(m) {
   const sp = m && m.sourcePairs;

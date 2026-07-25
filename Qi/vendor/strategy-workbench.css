@@ -5399,3 +5399,133 @@ body.view-strategy .ml-star-none {
   font-size: 11.5px;
   color: var(--st-faint);
 }
+
+/* =========================================================================
+   确认明星卡精修(Owner 定稿方案A · 金箔徽章版,2026-07-25)
+   问题:原「确认金 #efb94f」与「预期琥珀 #e7ad46」色相仅差 1.4°、RGB 距离 17,
+        两态几乎同色。现确认=金(认证/勋章),预期=冷石板(未坐实/待定,色相 210°),
+        红色仍专属 Owner 人工确认的当日主线。
+   ========================================================================= */
+body.view-strategy {
+  --st-gold: #f0c04a;
+  --st-gold-hi: #ffe9a8;
+  --st-slate: #7f9bbd;
+}
+
+/* ---------- QI 徽章外框:三态同尺寸,确认态才显金环 ---------- */
+body.view-strategy .ml-qi-seal {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  align-self: center;
+  border-radius: 50%;
+  border: 1px solid rgba(240, 192, 74, .55);
+  background: radial-gradient(circle at 38% 32%, rgba(240, 192, 74, .28), rgba(240, 192, 74, .06) 70%);
+  box-shadow: 0 0 0 3px rgba(240, 192, 74, .07), inset 0 1px 0 rgba(255, 233, 168, .3);
+}
+body.view-strategy .ml-qi-seal.pending,
+body.view-strategy .ml-qi-seal.empty {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+body.view-strategy .ml-qi-seal.empty { visibility: hidden; }
+body.view-strategy .ml-qi-seal .ml-qi-mark { width: 26px; height: 19px; }
+body.view-strategy .ml-qi-seal.pending .ml-qi-mark { width: 30px; height: 22px; }
+body.view-strategy .ml-qi-mark .qim-orbit { stroke: rgba(255, 233, 168, .75); }
+body.view-strategy .ml-qi-mark .qim-line { stroke: #fff8e6; }
+body.view-strategy .ml-qi-mark .qim-fill { fill: #fff8e6; }
+body.view-strategy .ml-qi-mark.pending { opacity: .5; }
+body.view-strategy .ml-qi-mark.pending .qim-orbit { stroke: rgba(127, 155, 189, .6); }
+body.view-strategy .ml-qi-mark.pending .qim-line { stroke: var(--st-muted); }
+body.view-strategy .ml-qi-mark.pending .qim-fill { fill: var(--st-muted); }
+
+/* ---------- 确认明星卡:金箔顶边 + 金色左柱 ---------- */
+body.view-strategy .ml-card.has-confirmed-star { position: relative; }
+body.view-strategy .ml-card.has-confirmed-star:not(.confirmed-mainline) {
+  border-color: rgba(240, 192, 74, .34) !important;
+  background: var(--st-panel) !important;
+  box-shadow: none !important;
+}
+/* 卡顶一道金箔高光(::before 已被左色条占用,这里用 ::after) */
+body.view-strategy .ml-card.has-confirmed-star::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--st-gold-hi) 18%, var(--st-gold) 42%, transparent 78%);
+}
+body.view-strategy .ml-card.has-confirmed-star .ml-rail {
+  background: linear-gradient(165deg, rgba(240, 192, 74, .20), rgba(240, 192, 74, .045) 55%, transparent);
+  border-right-color: rgba(240, 192, 74, .28);
+}
+body.view-strategy .ml-card.has-confirmed-star .ml-rail .ml-rank { color: var(--st-gold) !important; }
+body.view-strategy .ml-card.has-confirmed-star .ml-rail-score {
+  color: var(--st-gold-hi);
+  text-shadow: 0 0 18px rgba(240, 192, 74, .28);
+}
+body.view-strategy .ml-card.has-confirmed-star .ml-rail-bar i {
+  background: linear-gradient(90deg, var(--st-gold), var(--st-gold-hi));
+}
+
+/* ---------- 确认明星条 ---------- */
+body.view-strategy .ml-card.has-confirmed-star .ml-proof-row.ml-star-proof {
+  border-color: rgba(240, 192, 74, .3) !important;
+  border-left: 1px solid rgba(240, 192, 74, .3) !important;
+  background: linear-gradient(100deg, rgba(240, 192, 74, .17), rgba(240, 192, 74, .05) 55%, rgba(240, 192, 74, .015)) !important;
+}
+body.view-strategy .ml-card.has-confirmed-star .ml-star-proof .ml-star-proof-title {
+  color: var(--st-gold) !important;
+  font-weight: 800 !important;
+  letter-spacing: .09em;
+}
+body.view-strategy .ml-star-proof .ml-stock.ml-starstock.confirmed {
+  background: transparent !important;
+  padding-left: 0 !important;
+}
+body.view-strategy .ml-star-proof .ml-stock.ml-starstock.confirmed .ml-star-name {
+  color: var(--st-gold-hi) !important;
+  font-size: 16px !important;
+  font-weight: 800 !important;
+}
+body.view-strategy .ml-star-proof .ml-stock.ml-starstock.confirmed .ml-star-state {
+  border-color: transparent !important;
+  background: var(--st-gold) !important;
+  color: #17130b !important;
+}
+body.view-strategy .ml-card.has-confirmed-star .ml-star-proof .ml-star-ratios > span {
+  border-right-color: rgba(240, 192, 74, .18) !important;
+}
+body.view-strategy .ml-card.has-confirmed-star .ml-star-proof .ml-star-ratios b { color: var(--st-muted) !important; }
+
+/* ---------- 预期明星:冷石板(与金拉开 170° 色相) ---------- */
+body.view-strategy .ml-card.has-expected-star:not(.confirmed-mainline) {
+  border-color: rgba(127, 155, 189, .26) !important;
+  box-shadow: none !important;
+}
+body.view-strategy .ml-card.has-expected-star .ml-rail {
+  background: linear-gradient(180deg, rgba(127, 155, 189, .1), transparent 70%);
+  border-right-color: rgba(127, 155, 189, .22);
+}
+body.view-strategy .ml-card.has-expected-star .ml-rail .ml-rank { color: var(--st-slate) !important; }
+body.view-strategy .ml-card.has-expected-star .ml-rail-bar i { background: var(--st-slate); }
+body.view-strategy .ml-card.has-expected-star .ml-proof-row.ml-star-proof {
+  border: 1px dashed rgba(127, 155, 189, .4) !important;
+  background: rgba(127, 155, 189, .06) !important;
+}
+body.view-strategy .ml-card.has-expected-star .ml-star-proof .ml-star-proof-title { color: var(--st-slate) !important; }
+body.view-strategy .ml-star-proof .ml-stock.ml-starstock:not(.confirmed) {
+  background: transparent !important;
+  padding-left: 0 !important;
+}
+body.view-strategy .ml-star-proof .ml-stock.ml-starstock:not(.confirmed) .ml-star-state {
+  border-color: rgba(127, 155, 189, .45) !important;
+  background: transparent !important;
+  color: #b9cde4 !important;
+}
