@@ -10277,3 +10277,30 @@ Deployment:
 Notes for next agent:
 - 历史恢复以同日预测档案为只读事实来源，不得借此重算或猜测缺失的历史盘面字段。
 - 7 月 21 日存在同类“预测档案有单源主线、早期冻结快照为空”形态，本修复会按相同规则自动校正。
+
+## 2026-07-25 - Codex - PR #274 历史主线结论修复已部署
+
+Changed:
+- PR `#274` 已合并到 `main`，merge commit 为 `86a9085f282070c18cb5a7fdc1045d0d739b59f2`。
+- 已将历史主线恢复与 15:30 快照冻结边界发布到云端；发布前确认云端后端与 HTML 均和上一版 `main` 哈希一致，没有覆盖云端游离修改。
+- 云端两份运维日志已追加本次发布记录。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 云端与 Git 后端 SHA-256：`fbb1bdb3407709da8aa51136c7c7ed60687f1b9c31eb082758e82b7399a98ec0`。
+- 云端磁盘、公网 `/kpl` 与 Git HTML SHA-256：`bd6e6e2085b64e769704cd70f7edc46e00437101a7c52822e003108b331b665e`。
+- 公网 `/health` 返回 `ok=true`。
+- 公网 `/api/strategy-mainlines?day=2026-07-23` 已返回：电网设备、中国西电明星确认、东财和同花顺两源主线、立新能源/长缆科技等龙头；旧的 `no-l2-qualified-mainline` 原因与消息已清除。
+- 原冻结快照文件未改写；接口响应带 `historicalPredictionRecovered=true`，明确表明结论来自同日预测档案校正。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-pr274-86a9085-20260725-135917`。
+- 仅重启计划任务 `\Panda Dashboard Server`，主服务 PID `12992 -> 960`；未重启 Caddy、娱乐服务或公司端 L2 worker。
+
+Notes for next agent:
+- PR `#274` 已完成，不需要继续修改；后续观察新的交易日是否只在 15:30 后生成正式收盘快照。
