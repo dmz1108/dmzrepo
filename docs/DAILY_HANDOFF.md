@@ -10172,3 +10172,32 @@ Deployment:
 
 Notes for next agent:
 - 该文件存在多层历史 `!important`（尤其 `max-width:760px` 媒体查询块）。后置层若要改 `.ml-card` 的盒模型属性，需确认是否被旧 `!important` 压制，并至少复测 1440 / 760 / 500 三档。
+
+## 2026-07-25 - Codex - PR #270 主线卡紧凑化已合并部署
+
+Changed:
+- 完成 PR `#270` 多轮复审并合并到 `main`，合并提交为 `26698ea9f7898e1e0e3674a18fd269cf9df28e51`。
+- 发布今日主线榜紧凑化样式：桌面和中等视口卡片最大宽度为 600px，正式卡与预备卡保持等宽；窄屏按可用宽度自然收缩。
+- 发布前确认云端 HTML/CSS 哈希与上一版 `main` 完全一致，没有覆盖云端游离修改。
+- 云端两份运维日志均已追加本次静态发布记录。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 全仓 `61/61` 个 `tests/*.test.js` 文件通过；`node --check` 与 `git diff --check` 通过。
+- 使用 2026-07-22 真实数据验证 1440 / 760 / 500 三档：每档正式卡与全部预备卡宽度唯一，均无横向溢出。
+- 云端磁盘与公网响应 SHA-256 均与 Git 一致：
+  - HTML：`4b5d2e12ea858e2da97690338ac60cd5f4836e51ed8ace4c0e944709d308d003`
+  - CSS：`78bad40182174dbba4fb402dfc8361d680495cca13522da991f9ed3432475283`
+- 公网缓存键为 `20260724l`，`/health` 返回 `ok=true`。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-pr270-26698ea-20260725-125446`。
+- 本次仅静态发布，未重启 Node、Caddy、娱乐服务或公司端 L2 worker。
+
+Notes for next agent:
+- PR `#270` 已完成，不需要继续修改；后续任务从最新 `main` 开始。
