@@ -35,6 +35,19 @@ function extractFunction(name) {
 
 let today = '2026-07-24';
 const chinaToday = () => today;
+const STRATEGY_DATE_SESSION_STORAGE = 'panda_strategy_date_override_v1';
+const sessionValues = new Map();
+const sessionStorage = {
+  getItem(key) {
+    return sessionValues.has(key) ? sessionValues.get(key) : null;
+  },
+  setItem(key, value) {
+    sessionValues.set(key, String(value));
+  },
+  removeItem(key) {
+    sessionValues.delete(key);
+  },
+};
 const picker = { value: '' };
 const document = {
   getElementById(id) {
@@ -60,6 +73,9 @@ const state = {
 };
 
 eval([
+  extractFunction('normalizeStrategyDateOverride'),
+  extractFunction('readStrategyDateOverride'),
+  extractFunction('persistStrategyDateOverride'),
   extractFunction('syncDatePickerForPage'),
   extractFunction('ensureLivePageToday'),
   extractFunction('refreshLivePageAfterDateSync'),
@@ -72,10 +88,16 @@ assert.strictEqual(state.date, '2026-07-22');
 assert.strictEqual(state.strategyDateOverride, '2026-07-22');
 assert.strictEqual(picker.value, '2026-07-22');
 assert.deepStrictEqual(state.smartPick, {});
+assert.strictEqual(sessionStorage.getItem(STRATEGY_DATE_SESSION_STORAGE), '2026-07-22');
 const renderAfterSelection = renderCount;
 assert.strictEqual(refreshLivePageAfterDateSync(), false);
 assert.strictEqual(state.date, '2026-07-22');
 assert.strictEqual(renderCount, renderAfterSelection);
+
+// 浏览器完整刷新后，当前标签页应从 sessionStorage 恢复手选日期。
+const restoredOverride = readStrategyDateOverride();
+assert.strictEqual(restoredOverride, '2026-07-22');
+assert.strictEqual(restoredOverride || chinaToday(), '2026-07-22');
 
 // 切到实时看板仍应回到今天，但不能遗失策略页历史日期锁定。
 state.page = 'dashboard';
@@ -94,6 +116,7 @@ assert.strictEqual(picker.value, '2026-07-22');
 onStrategyDateChange(today);
 assert.strictEqual(state.strategyDateOverride, '');
 assert.strictEqual(state.date, '2026-07-24');
+assert.strictEqual(sessionStorage.getItem(STRATEGY_DATE_SESSION_STORAGE), null);
 today = '2026-07-25';
 assert.strictEqual(refreshLivePageAfterDateSync(), true);
 assert.strictEqual(state.date, '2026-07-25');
@@ -104,8 +127,9 @@ assert(
   'global date picker should route strategy changes through onStrategyDateChange',
 );
 assert(
-  /strategyDateOverride:\s*''/.test(html),
-  'strategy date override should be initialized in shared state',
+  /strategyDateOverride:\s*initialStrategyDateOverride/.test(html)
+    && /date:\s*initialPage === 'strategy' && initialStrategyDateOverride/.test(html),
+  'strategy date override should be restored into initial strategy state',
 );
 
 console.log('strategy date lock checks passed');
