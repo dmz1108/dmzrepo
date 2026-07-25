@@ -7,7 +7,7 @@ const html = fs.readFileSync(path.join(root, 'kpl-dashboard_17_apple.html'), 'ut
 const server = fs.readFileSync(path.join(root, 'kpl-stats-server.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'Qi/vendor/strategy-workbench.css'), 'utf8');
 
-assert(html.includes('<link href="/vendor/strategy-workbench.css?v=20260725b" rel="stylesheet">'));
+assert(html.includes('<link href="/vendor/strategy-workbench.css?v=20260725c" rel="stylesheet">'));
 assert(html.includes('<header class="strategy-hero">'));
 assert(html.includes('class="strategy-hero-head"'));
 assert(html.includes('class="strategy-hero-utility"'));
@@ -207,11 +207,58 @@ assert(css.includes('body.view-strategy .ml-card.has-confirmed-star .ml-rail')
 assert(css.includes('--st-slate: #7f9bbd') && css.includes('.ml-card.has-expected-star .ml-rail-bar i { background: var(--st-slate)'),
   '预期明星改冷石板色,与确认金拉开色相');
 assert(html.includes('class="ml-qi-seal') && css.includes('body.view-strategy .ml-qi-seal {'),
-  'QI 标识置于徽章外框内(确认态显金环)');
+  'QI 标识置于外框内(外框只负责三态占位对齐)');
 assert(css.includes('body.view-strategy .ml-card.has-confirmed-star::after'),
   '确认卡顶部金箔高光使用 ::after(::before 已被左色条占用)');
-assert(css.includes('body.view-strategy .ml-qi-seal.pending') && css.includes('body.view-strategy .ml-qi-seal.empty'),
-  '徽章外框三态同尺寸,保证卡片文字起始线对齐');
+assert(css.includes('body.view-strategy .ml-qi-seal.empty { visibility: hidden; }'),
+  '无明星态外框隐藏但仍占位,保证卡片文字起始线对齐');
+// Owner 2026-07-25:"qi 一圈还是黄色框"——外框金环与标识是一个视觉整体,同受"QI 不着金"约束。
+{
+  const sealAt = css.indexOf('body.view-strategy .ml-qi-seal {');
+  const sealRule = css.slice(sealAt, css.indexOf('}', sealAt));
+  assert(/border:\s*1px solid transparent/.test(sealRule)
+    && /background:\s*transparent/.test(sealRule)
+    && /box-shadow:\s*none/.test(sealRule),
+    'QI 外框不着色(无金环/金底/金光晕),确认态由卡片层的金边金顶线金明星条表达');
+  assert(!/240, 192, 74|255, 233, 168/.test(sealRule), 'QI 外框规则内不得出现金色值');
+  assert(/\.ml-qi-seal \.ml-qi-mark \{ width: 30px; height: 22px; \}/.test(css)
+    && !/\.ml-qi-seal\.pending \.ml-qi-mark/.test(css),
+    '标识三态统一 30×22(去掉金环后不再需要为其留内缩量)');
+}
+// Codex #280 [P2]:外框同为 40×40 不代表文字对齐——明星行本身的左边框宽度三态不同,
+// 边框计入盒宽会把内容右推。运行时实测曾为 164/164/166。断言"边框 + 左内边距"三态相等。
+{
+  const num = (s) => parseInt(s, 10);
+  const ruleOf = (sel) => {
+    const at = css.indexOf(sel);
+    assert(at > -1, `CSS 存在规则 ${sel}`);
+    return css.slice(at, css.indexOf('}', at));
+  };
+  const edge = (rule, fallback) => {
+    const bl = /border-left:\s*(\d+)px/.exec(rule) || /border-left-width:\s*(\d+)px/.exec(rule);
+    const pl = /padding-left:\s*(\d+)px/.exec(rule);
+    return {
+      border: bl ? num(bl[1]) : fallback.border,
+      padding: pl ? num(pl[1]) : fallback.padding,
+    };
+  };
+  // 基准:.ml-proof-row.ml-star-proof 的 padding: 9px 11px
+  const base = { border: 1, padding: 11 };
+  const confirmed = edge(ruleOf('body.view-strategy .ml-card.has-confirmed-star .ml-proof-row.ml-star-proof {\n  border-color: rgba(240, 192, 74, .3)'), base);
+  const expected = edge(ruleOf('body.view-strategy .ml-card.has-expected-star .ml-proof-row.ml-star-proof {'), base);
+  const empty = edge(ruleOf('body.view-strategy .ml-proof-row.ml-star-proof.is-empty {'), base);
+  const start = (e) => e.border + e.padding;
+  assert(empty.border === 3, '无明星行保留 3px 状态边的视觉厚度');
+  assert(start(confirmed) === start(expected) && start(expected) === start(empty),
+    `三态"明星信号"文字起始线必须一致(border+padding-left):`
+    + ` 确认 ${start(confirmed)} / 预期 ${start(expected)} / 无明星 ${start(empty)};`
+    + ' 改动任一态的 border-left 宽度时必须同步补偿 padding-left');
+}
+// 实现注释不得与规范冲突(Codex #280 [P2]:旧注释仍写"确认态才显示金环",会诱导后续 agent 加回金环)
+assert(!/徽章外框在三态下尺寸一致\(确认态才显示金环\)/.test(html),
+  '旧的"确认态才显示金环"注释必须删除');
+assert(html.includes('外框三态均透明,只负责 40×40 占位对齐'),
+  '外框注释改为描述占位职责,并指向视觉语义规范');
 
 // 视觉语义规范(docs/strategy/STRATEGY_VISUAL_SEMANTICS.md)——色相归属不得被后续样式无意翻转
 {
@@ -272,7 +319,7 @@ assert(css.includes('.ml-qi-mark .qim-orbit { stroke: var(--border-strong)')
 // 断言其存在,防止后续 agent 以"标识颜色恒定"为由误删(见 STRATEGY_VISUAL_SEMANTICS.md §2)。
 assert(css.includes('.ml-qi-mark.pending') && css.includes('.ml-qi-mark.pending .qim-line'),
   'pending 态灰蓝规则必须保留(规范定义的唯一状态化例外)');
-assert(!/\.ml-qi-mark[^}]*(#fff8e6|rgba\(255, 233, 168|rgba\(239, 185, 79)/.test(css),
-  'QI 标识本身不得使用金色系(金色只用于外框徽章环)');
+assert(!/\.ml-qi-mark[^}]*(#fff8e6|rgba\(255, 233, 168|rgba\(239, 185, 79|rgba\(231, 173, 70|rgba\(240, 192, 74)/.test(css),
+  'QI 标识任何状态都不得使用金色系(pending 轨道曾残留暖金 rgba(231,173,70,.5),已改冷石板)');
 
 console.log('strategy workbench UI checks passed');
