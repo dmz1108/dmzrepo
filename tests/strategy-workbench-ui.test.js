@@ -7,7 +7,7 @@ const html = fs.readFileSync(path.join(root, 'kpl-dashboard_17_apple.html'), 'ut
 const server = fs.readFileSync(path.join(root, 'kpl-stats-server.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'Qi/vendor/strategy-workbench.css'), 'utf8');
 
-assert(html.includes('<link href="/vendor/strategy-workbench.css?v=20260724k" rel="stylesheet">'));
+assert(html.includes('<link href="/vendor/strategy-workbench.css?v=20260724l" rel="stylesheet">'));
 assert(html.includes('<header class="strategy-hero">'));
 assert(html.includes('class="strategy-hero-head"'));
 assert(html.includes('class="strategy-hero-utility"'));
@@ -109,6 +109,13 @@ assert(/body\.view-strategy \.ml-l2-job-head,\s*body\.view-strategy \.ml-l2-job-
 assert(css.includes('Local Claude polish 2026-07-24'));
 assert(/body\.view-strategy \.mlr-chip\s*\{[\s\S]*?border-radius:\s*999px !important;[\s\S]*?\}/.test(css));
 assert(/body\.view-strategy \.ml-l2-max-money\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*max-content\)\);[\s\S]*?\}/.test(css));
+// 今日主线榜卡片紧凑化(2026-07-24,Owner 反馈卡片太大太宽)——锁定核心收紧,防多层覆盖后回退:
+// 标题 15px、评分数字 15px、龙头行左对齐(消除整行中间空档)、信号条改 flex 左排(不再 4 等宽铺满)。
+assert(css.includes('今日主线榜卡片紧凑化'));
+assert(/body\.view-strategy \.ml-name\s*\{[\s\S]*?font-size:\s*15px !important;[\s\S]*?\}/.test(css));
+assert(/body\.view-strategy \.ml-score b, body\.view-strategy \.ml-predict b\s*\{\s*font-size:\s*15px !important;\s*\}/.test(css));
+assert(/body\.view-strategy \.ml-stock\.ml-leaderstock,[\s\S]*?justify-content:\s*flex-start !important;[\s\S]*?\}/.test(css));
+assert(/body\.view-strategy \.ml-signal-strip\s*\{[\s\S]*?display:\s*flex !important;[\s\S]*?\}/.test(css));
 assert(/body\.view-strategy \.strategy-focus-section \.strategy-empty\s*\{[\s\S]*?width:\s*min\(100%,\s*580px\);[\s\S]*?text-align:\s*left;[\s\S]*?\}/.test(css));
 assert(/body\.view-strategy \.ml-col > \.rht-loading\s*\{[\s\S]*?text-align:\s*left;[\s\S]*?\}/.test(css));
 assert(/body\.view-strategy \.mlr-group\.confirmed \.mlr-group-list\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);[\s\S]*?\}/.test(css));
