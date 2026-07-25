@@ -10304,3 +10304,120 @@ Deployment:
 
 Notes for next agent:
 - PR `#274` 已完成，不需要继续修改；后续观察新的交易日是否只在 15:30 后生成正式收盘快照。
+
+## 2026-07-25 - Claude - 今日主线榜卡片重构(左柱锚点 + 明星前置 + QI 认证标识)
+
+Changed:
+- Owner 反馈现卡片"视觉上不太舒服",经四轮方案迭代(数据条式/左右分栏/结论优先/融合)定稿:
+  左柱锚点(方案2骨架)+ 明星前置(方案3优先级)+ QI 认证标识。
+- 左柱:NO.x 排名 + 主线分 26px 做最大视觉量 + 强度条(相对当日最强主线比例填充,纵览即强弱
+  梯度,基准取自 map 自动传入的整列表)+ 预判分;取代原先横铺整行的评分盒。
+- 明星条升为卡片主角:确认明星佩戴与主页左上角同款 QI 标识(SVG 倾斜轨道+Q/i+绕行高亮点,
+  含原动画;viewBox 裁到内容包围盒 12 27 110 82,小尺寸下字形才清晰);预期明星佩戴灰度
+  "待认证"版(无高亮点),形成"未盖章/已盖章"对比;无明星时留白占位保持三态文字起始线一致。
+- 三比值改右侧微型统计栏(列宽统一右对齐),龙头 chip 并排,盘面 4 项进等分网格(涨停为核心格)。
+- 新增无明星态明星行:强度够但 L2 未出明星的方向不再整条隐身,如实写出扫描状态
+  (已完成扫描未出明星/扫描中/等待公司端/覆盖不足/未达门槛)——针对 7-23 电网设备 29 涨停
+  scanned-no-star 却在页面无任何表达的问题。
+- 配色服从 Codex #262 已建立的语义(确认明星=金色证据、人工确认当日主线=红色),未翻转。
+
+Files:
+- kpl-dashboard_17_apple.html(卡片模板重构 + QI 标识助手 + 无明星态;CSS 版本 20260724l→20260725a)
+- Qi/vendor/strategy-workbench.css(新增卡片设计层,选择器特异性对齐 #262 以正确接管)
+- tests/strategy-workbench-ui.test.js(左柱/QI标识/无明星态/金色语义断言)
+
+Validated:
+- 全仓 63 个测试文件通过;git diff --check 通过;内联脚本 new Function 解析通过。
+- Playwright 实测 1280/390 双视口:卡高 426px→297px(-30%),两视口 body 零横向溢出;
+  三态(确认金/预期琥珀/无明星中性虚线)渲染正确。
+
+Deployment:
+- 未部署;待独立复核。发布为 HTML + strategy-workbench.css 两件静态原子发布,无需重启。
+
+Notes for next agent:
+- 明星条选择器需 .ml-proof-row.ml-star-proof 级(0,3,1)才能压过 #262 的规则,直接用
+  .ml-star-proof 会被覆盖——后续改动请沿用同级选择器。
+- 左柱强度条基准依赖 Array.map 的第三参数;单卡直接调用(预备主线)时回退自身 100%。
+
+## 2026-07-25 - Claude - 确认明星卡精修(方案A 金箔徽章 + 预期改冷石板)
+
+Changed:
+- Owner 指出确认(金 #efb94f)与预期(琥珀 #e7ad46)颜色接近;实测色相仅差 1.4°、RGB 距离 17,
+  确属几乎同色。出三版确认卡精修方案(金箔徽章/光晕聚焦/克制勋章)供选,Owner 定稿方案A。
+- 确认明星卡:QI 标识置入金环徽章(radial 渐变 + 外圈光晕 + 内高光);卡顶一道金箔高光
+  (::after,因 ::before 已被左色条占用);左柱金色斜向渐变、主线分暖象牙白带辉光;
+  明星条金色渐变底 + 金色分隔线;股名 16px 金白、"已确认"金底黑字。
+- 预期明星统一改冷石板 #7f9bbd(色相 210°,与金 40° 拉开 170°):左柱、强度条、虚线明星条、
+  待认证灰蓝 QI 标识;红色继续专属 Owner 人工确认的当日主线,三态不再看混。
+- QI 徽章外框三态同尺寸(确认显金环/预期与无明星透明),保持卡片文字起始线对齐。
+
+Files:
+- kpl-dashboard_17_apple.html(QI 助手改为徽章外框结构)
+- Qi/vendor/strategy-workbench.css(确认卡精修层 + 冷石板预期态)
+- tests/strategy-workbench-ui.test.js(金/石板色值、徽章外框三态、::after 金箔断言)
+
+Validated:
+- 全仓 63 个测试文件通过;git diff --check 通过;内联脚本解析通过。
+- Playwright 2x 实测 1280/390:卡高 285px,双视口零横向溢出,三态渲染正确。
+
+Deployment: 未部署;并入 PR #276 待独立复核。HTML + CSS 两件静态发布,无需重启。
+
+Notes for next agent:
+- 色彩语义:金=L2 确认明星(证据),冷石板=预期明星(待坐实),红=Owner 人工确认当日主线。
+  三者不可互换;新增状态请避开金/石板色相区间。
+
+## 2026-07-25 - Claude - 策略页视觉语义规范入库
+
+Changed:
+- 新增 docs/strategy/STRATEGY_VISUAL_SEMANTICS.md:把"金=L2确认明星证据 / 冷石板=预期明星待认证 /
+  红=Owner 人工确认当日主线 / 绿=跌与流出"的色彩语义显式成文,此前只存在于 HANDOFF 与 CSS 注释,
+  任何 agent 改样式都可能无意翻转。
+- 硬约束入文:确认与预期明星色相必须相差 ≥90°(当前 40° vs 210°);红色专属涨/流入与人工确认主线,
+  不得表示 L2 确认明星;绿色专属跌/流出;冷石板与交互蓝同为 210°,靠明度饱和度区分。
+- 一并记录 QI 认证标识三态(金环/透明/隐藏,外框恒 40×40 保对齐、viewBox 用裁切值)与两处维护陷阱
+  (明星条规则须写到 .ml-proof-row.ml-star-proof 级;.ml-card::before 已被左色条占用,新装饰用 ::after)。
+- 统一我方 CSS 块内 5 处硬编码 #efb94f → var(--st-gold),消除与新 token(#f0c04a,距离 8.7)的双值漂移;
+  Codex #262 块内的字面值未动(非本方代码且已被后置规则覆盖)。
+
+Files:
+- docs/strategy/STRATEGY_VISUAL_SEMANTICS.md(新)
+- Qi/vendor/strategy-workbench.css(金值 token 化)
+- tests/strategy-workbench-ui.test.js(规范存在性 + 文档与 CSS 色值一致 + 运行时计算色相差 ≥90° 的断言)
+
+Validated: 全仓 63 个测试文件通过;git diff --check 通过。
+
+Deployment: 文档与样式并入 PR #276,未部署。
+
+Notes for next agent:
+- 色相断言会实际解析 hex 计算差值,改回相近色会直接测试失败,不是靠注释约束。
+- 若要新增状态色,先查本规范第 1 节色相表,再开 discussions 走 Owner 定稿。
+
+## 2026-07-25 - Claude - PR #276 按 Codex 复审修订三项 P1
+
+Changed:
+- P1-1 窄屏三比值未隐藏:媒体查询不增加特异性,`.ml-star-ratios{display:none}`(0-2-1)被桌面
+  `.ml-star-proof .ml-star-ratios{display:flex}`(0-3-1)压过,390px 下三列仍在、最右列被
+  overflow:hidden 裁掉、股名被挤窄。修:窄屏规则提到同级选择器。
+- P1-2 强度条基准失真:预备主线用 `renderCard(row)` 单卡调用,拿不到 map 隐式第三参数,
+  每卡只与自身比 → 恒 100%,与"相对当日最强主线"语义相反(生产实测东财 418/326/239/166
+  四卡全满格)。修:预备列表先具名 reserveList 再 map,显式传入 `renderCard(row, idx, reserveList)`。
+- P1-3 空态文案与徽章矛盾:明星空态另起一套原始 l2ScanState/l2VerificationStatus 推导,
+  旧冻结快照(unscanned + 已达历史门槛)会出现徽章"覆盖不足"、明星行"未达门槛"互相打架。
+  修:把 l2State 归一化块整体上移到 starRow 之前,空态与徽章共用同一份。
+- 非阻断:测试成功日志移到文件末尾,避免后续断言失败时仍先打印"checks passed"。
+
+Files:
+- kpl-dashboard_17_apple.html / Qi/vendor/strategy-workbench.css / tests/strategy-workbench-ui.test.js
+
+Validated:
+- 全仓 63 个测试文件通过;git diff --check、内联脚本解析通过。
+- 新增三项 P1 回归锁:窄屏隐藏规则特异性(并禁止低特异性版本复现)、预备列表显式传参、
+  l2State 归一化必须早于 starRow 且空态不得另起推导。
+- Playwright 运行时窄屏核验(不只看 body 溢出):390px 三比值可见数=0、卡内无元素越界、
+  股名宽度 63/59px 未被压扁;1280px 三比值正常显示且不越界。
+
+Deployment: 未部署;PR #276 待 Codex 复验。
+
+Notes for next agent:
+- 教训:媒体查询内的规则不会自动提升特异性,覆盖桌面规则时必须显式对齐选择器层级。
+- 教训:Array.map 隐式第三参数是脆弱约定,凡有单卡直调路径的渲染函数都应显式传列表。

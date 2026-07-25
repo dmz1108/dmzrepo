@@ -7,7 +7,7 @@ const html = fs.readFileSync(path.join(root, 'kpl-dashboard_17_apple.html'), 'ut
 const server = fs.readFileSync(path.join(root, 'kpl-stats-server.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'Qi/vendor/strategy-workbench.css'), 'utf8');
 
-assert(html.includes('<link href="/vendor/strategy-workbench.css?v=20260724l" rel="stylesheet">'));
+assert(html.includes('<link href="/vendor/strategy-workbench.css?v=20260725a" rel="stylesheet">'));
 assert(html.includes('<header class="strategy-hero">'));
 assert(html.includes('class="strategy-hero-head"'));
 assert(html.includes('class="strategy-hero-utility"'));
@@ -43,6 +43,13 @@ for (const selector of [
   '.ml-l2-table-money.is-buy',
   '.ml-l2-table-money.is-sell',
   '.ml-l2-table-ratio',
+  '.ml-rail',
+  '.ml-rail-score',
+  '.ml-rail-bar',
+  '.ml-cardbody',
+  '.ml-qi-mark',
+  '.ml-qi-mark.pending',
+  '.ml-star-none',
   '.strategy-board-card',
 ]) {
   assert(css.includes(selector), `missing strategy visual state: ${selector}`);
@@ -182,5 +189,77 @@ const rowMissing = strategyL2HistoryBucketRow(sampleRow, 8000000, 500000);
 assert(/ is-empty"/.test(rowMissing) && rowMissing.includes('<small>数据缺失</small>'), 'L2样本:缺档位数据 → 数据缺失');
 const rowIncomplete = strategyL2HistoryBucketRow(sampleRow, 10000000, 500000);
 assert(/ is-empty"/.test(rowIncomplete) && rowIncomplete.includes('<small>字段不完整</small>'), 'L2样本:字段含 null → 字段不完整');
+
+// 主线卡片重构(2026-07-25):左柱锚点 + 明星前置 + QI 认证标识
+assert(html.includes('<div class="ml-rail">') && html.includes('class="ml-rail-score"')
+  && html.includes('class="ml-rail-bar"'), '主线卡片左柱含排名/主线分/强度条');
+assert(html.includes('<div class="ml-cardbody">'), '卡片右侧内容区包裹存在');
+assert(html.includes('function strategyMainlineQiMarkHTML(kind)')
+  && html.includes('viewBox="12 27 110 82"'), 'QI 认证标识助手存在且使用裁切后的 viewBox');
+assert(html.includes("strategyMainlineQiMarkHTML(visibleStars.some(s => s.level === 'confirmed') ? 'confirmed' : 'pending')"),
+  '确认明星佩戴 QI 认证标识,预期明星为待认证态');
+assert(html.includes('ml-star-proof is-empty') && html.includes('已完成 L2 扫描,未出现达标明星'),
+  '无明星方向仍显示明星信号行与扫描状态,强度够的板块不隐身');
+assert(!html.includes('<div class="ml-score-wrap">'), '旧的整行评分盒已由左柱取代');
+assert(css.includes('body.view-strategy .ml-card.has-confirmed-star .ml-rail')
+  && css.includes('--st-gold: #f0c04a'), '确认明星沿用金色证据语义(#262),红色仍留给人工确认主线');
+// Owner 定稿方案A:确认=金箔徽章,预期改冷石板(原金/琥珀色相仅差 1.4°、RGB 距离 17,几乎同色)
+assert(css.includes('--st-slate: #7f9bbd') && css.includes('.ml-card.has-expected-star .ml-rail-bar i { background: var(--st-slate)'),
+  '预期明星改冷石板色,与确认金拉开色相');
+assert(html.includes('class="ml-qi-seal') && css.includes('body.view-strategy .ml-qi-seal {'),
+  'QI 标识置于徽章外框内(确认态显金环)');
+assert(css.includes('body.view-strategy .ml-card.has-confirmed-star::after'),
+  '确认卡顶部金箔高光使用 ::after(::before 已被左色条占用)');
+assert(css.includes('body.view-strategy .ml-qi-seal.pending') && css.includes('body.view-strategy .ml-qi-seal.empty'),
+  '徽章外框三态同尺寸,保证卡片文字起始线对齐');
+
+// 视觉语义规范(docs/strategy/STRATEGY_VISUAL_SEMANTICS.md)——色相归属不得被后续样式无意翻转
+{
+  const specPath = path.join(root, 'docs/strategy/STRATEGY_VISUAL_SEMANTICS.md');
+  assert(fs.existsSync(specPath), '策略页视觉语义规范文档存在');
+  const spec = fs.readFileSync(specPath, 'utf8');
+  for (const token of ['--st-gold', '--st-slate', '#f0c04a', '#7f9bbd']) {
+    assert(spec.includes(token), `规范记录 ${token}`);
+  }
+  // 规范里声明的色值必须与实际 CSS 一致(防文档与实现漂移)
+  assert(css.includes('--st-gold: #f0c04a') && css.includes('--st-slate: #7f9bbd'),
+    'CSS token 与视觉语义规范声明的色值一致');
+  // 确认明星与预期明星色相必须拉开(规范硬约束:>=90°)
+  const hue = (h) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    if (!d) return 0;
+    const t = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return (t * 60 + 360) % 360;
+  };
+  const diff = Math.abs(hue('#f0c04a') - hue('#7f9bbd'));
+  assert(Math.min(diff, 360 - diff) >= 90, '确认明星与预期明星色相相差 >=90°(规范硬约束)');
+}
+
+// ===== Codex #276 复审三项 P1 的回归锁 =====
+// P1-1 媒体查询不增加特异性:移动端隐藏三比值的规则必须与桌面规则同级(.ml-star-proof .ml-star-ratios)
+assert(css.includes('body.view-strategy .ml-star-proof .ml-star-ratios { display: none !important; }'),
+  '窄屏隐藏三比值的规则特异性与桌面规则同级,否则窄屏下仍显示并被裁切');
+assert(!/\n\s*body\.view-strategy \.ml-star-ratios \{ display: none !important; \}/.test(css),
+  '不得保留低特异性的窄屏隐藏规则(会被桌面规则静默压过)');
+
+// P1-2 强度条基准:预备主线必须显式传入所属列表,不能依赖 map 隐式第三参数
+assert(html.includes('renderCard(row, idx, reserveList)'),
+  '预备主线显式传入整份列表作为强度条基准(否则每卡只与自身比,恒 100%)');
+assert(html.includes('const reserveList = reserves.slice(0, 4);'),
+  '预备列表先具名再 map,保证基准与渲染集合一致');
+
+// P1-3 L2 状态单一归一化:明星空态与徽章共用同一份 l2State
+{
+  const cardFn = html.slice(html.indexOf('const renderCard = (m, i, cardList)'), html.indexOf('// 两套独立主线预测'));
+  const l2StateAt = cardFn.indexOf('const l2State = m.l2ScanState');
+  const starRowAt = cardFn.indexOf('const starRow = starChips');
+  assert(l2StateAt > -1 && starRowAt > -1 && l2StateAt < starRowAt,
+    'l2State 归一化必须在 starRow 之前,供空态文案与徽章共同消费');
+  assert(!cardFn.includes("const st = String(m.l2ScanState || m.l2VerificationStatus || '');"),
+    '明星空态不得另起一套原始状态推导(旧冻结快照会与徽章文案矛盾)');
+  assert(cardFn.includes("l2State === 'coverage-insufficient' ? '扫描覆盖不足,暂不能判定无明星'"),
+    '空态文案读归一化后的 l2State');
+}
 
 console.log('strategy workbench UI checks passed');
