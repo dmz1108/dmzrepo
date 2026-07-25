@@ -10421,3 +10421,28 @@ Deployment: 未部署;PR #276 待 Codex 复验。
 Notes for next agent:
 - 教训:媒体查询内的规则不会自动提升特异性,覆盖桌面规则时必须显式对齐选择器层级。
 - 教训:Array.map 隐式第三参数是脆弱约定,凡有单卡直调路径的渲染函数都应显式传列表。
+
+## 2026-07-25 - Claude - QI 标识取色回归主页原色
+
+Changed:
+- Owner 指出今日主线榜的 QI 标识不该是黄色。核对:主页 .qi-logo 用 --border-strong(轨道)、
+  --text(Q/i 描边与填充)、--accent(高亮点),是中性白+蓝点;而我在 #276 里为配合金卡把
+  轨道染成 rgba(255,233,168)、描边填充染成 #fff8e6,偏离了"与主页一模一样"的原始要求。
+- 修正为直接取同一组变量,标识与主页逐项一致;金色只保留在外框徽章环(.ml-qi-seal),
+  由外框表达"这张卡是确认态",标识本身不承载卡片主题色。
+- 视觉语义规范补一条硬约束:QI 标识是品牌资产、颜色恒定,不得为配合卡片主题染色。
+- CSS 缓存版本 20260725a → 20260725b。
+
+Files:
+- Qi/vendor/strategy-workbench.css / kpl-dashboard_17_apple.html
+- docs/strategy/STRATEGY_VISUAL_SEMANTICS.md / tests/strategy-workbench-ui.test.js
+
+Validated:
+- 全仓 63 个测试文件通过;git diff --check 通过。新增断言:标识四项取色必须等于主页变量,
+  且 .ml-qi-mark 规则内不得出现金色系字面值(#fff8e6 / rgba(255,233,168) / rgba(239,185,79))。
+- 4x 渲染核验:标识为白色 Q/i + 蓝色高亮点,外框金环保留。
+
+Deployment: 未部署。HTML + CSS 两件静态原子发布,无需重启。
+
+Notes for next agent:
+- 教训:品牌标识不要跟着容器主题变色。想表达状态请用外框/底色,不要改标识本身。

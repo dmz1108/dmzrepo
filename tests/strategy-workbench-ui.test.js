@@ -7,7 +7,7 @@ const html = fs.readFileSync(path.join(root, 'kpl-dashboard_17_apple.html'), 'ut
 const server = fs.readFileSync(path.join(root, 'kpl-stats-server.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'Qi/vendor/strategy-workbench.css'), 'utf8');
 
-assert(html.includes('<link href="/vendor/strategy-workbench.css?v=20260725a" rel="stylesheet">'));
+assert(html.includes('<link href="/vendor/strategy-workbench.css?v=20260725b" rel="stylesheet">'));
 assert(html.includes('<header class="strategy-hero">'));
 assert(html.includes('class="strategy-hero-head"'));
 assert(html.includes('class="strategy-hero-utility"'));
@@ -261,5 +261,14 @@ assert(html.includes('const reserveList = reserves.slice(0, 4);'),
   assert(cardFn.includes("l2State === 'coverage-insufficient' ? '扫描覆盖不足,暂不能判定无明星'"),
     '空态文案读归一化后的 l2State');
 }
+
+// QI 标识必须与主页 .qi-logo 同色(中性白描边 + 蓝色高亮点),不得随卡片主题染成金色
+assert(css.includes('.ml-qi-mark .qim-orbit { stroke: var(--border-strong)')
+  && css.includes('.ml-qi-mark .qim-line { stroke: var(--text)')
+  && css.includes('.ml-qi-mark .qim-fill { fill: var(--text)')
+  && css.includes('.ml-qi-mark .qim-spark { fill: var(--accent)'),
+  'QI 标识取色与主页 logo 一致(--text / --border-strong / --accent)');
+assert(!/\.ml-qi-mark[^}]*(#fff8e6|rgba\(255, 233, 168|rgba\(239, 185, 79)/.test(css),
+  'QI 标识本身不得使用金色系(金色只用于外框徽章环)');
 
 console.log('strategy workbench UI checks passed');
