@@ -114,7 +114,8 @@ assert(/body\.view-strategy \.ml-l2-max-money\s*\{[\s\S]*?grid-template-columns:
 assert(css.includes('今日主线榜卡片紧凑化'));
 // 卡片物理宽度收窄:限宽 600px 且左对齐(不再撑满双源栏),预备卡同宽。
 assert(/body\.view-strategy \.ml-card\s*\{[\s\S]*?max-width:\s*600px;[\s\S]*?margin-right:\s*auto;[\s\S]*?\}/.test(css));
-assert(/body\.view-strategy \.ml-reserve-card\s*\{\s*max-width:\s*600px;\s*margin-right:\s*auto;\s*\}/.test(css));
+// 预备卡 wrapper 必须显式 width:100%,否则 .ml-grid 的 justify-items:start 会让它按内容收缩、各卡宽度不齐。
+assert(/body\.view-strategy \.ml-reserve-card\s*\{[\s\S]*?width:\s*100%;[\s\S]*?max-width:\s*600px;[\s\S]*?margin-right:\s*auto;[\s\S]*?\}/.test(css));
 assert(/body\.view-strategy \.ml-grid\s*\{[\s\S]*?justify-items:\s*start;[\s\S]*?\}/.test(css));
 assert(/body\.view-strategy \.ml-name\s*\{[\s\S]*?font-size:\s*15px !important;[\s\S]*?\}/.test(css));
 assert(/body\.view-strategy \.ml-score b, body\.view-strategy \.ml-predict b\s*\{\s*font-size:\s*15px !important;\s*\}/.test(css));

@@ -4843,7 +4843,13 @@ body.view-strategy .ml-card {
   padding: 12px 13px !important;
 }
 body.view-strategy .ml-grid { gap: 8px !important; justify-items: start; }
-body.view-strategy .ml-reserve-card { max-width: 600px; margin-right: auto; }
+/* 预备卡 wrapper 必须显式 width:100%:.ml-grid 的 justify-items:start 会让 wrapper 按内容收缩,
+   内层 .ml-card{width:100%} 只能继承收缩宽度 → 各预备卡宽度不一(实测 372~542px)、边缘不齐。 */
+body.view-strategy .ml-reserve-card {
+  width: 100%;
+  max-width: 600px;
+  margin-right: auto;
+}
 
 /* 窄卡下头部:标题与指标条保持同一行(标题优先、指标条按内容收缩),指标条内部可换行 */
 body.view-strategy .ml-name-row {

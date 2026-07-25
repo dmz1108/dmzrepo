@@ -10122,3 +10122,27 @@ Deployment:
 
 Notes for next agent:
 - 三段对照（原始 674 / 卡内紧凑 / 收窄 600）确认第三版最终生效。仍为纯 CSS，业务逻辑零改动。
+
+## 2026-07-24 - Local Claude - #270 修复预备卡宽度不一致（Codex 二次复审 P1）
+
+Changed:
+- Codex 二次复审指出并经我实测复现：`.ml-grid { justify-items: start }` 会让 `.ml-reserve-card` wrapper 按内容收缩，内层 `.ml-card { width:100% }` 只能继承收缩宽度 → 预备卡宽度不一。
+- 实测复现（2026-07-22 真实数据，1440 视口）：正式卡 600px，预备卡分别为 451 / 436 / 372 / 406 / 542 / 512 / 497px —— 8 张卡 7 种宽度，左右来源与同列卡片边缘明显不齐。
+- 修复：`.ml-reserve-card` 补 `width: 100%`（保留 `max-width:600px` + `margin-right:auto`）。
+- 补断言锁定 `width:100%`，防止再次退化。
+
+Files:
+- `Qi/vendor/strategy-workbench.css`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 修后 DOM 几何实测：8 张卡（1 正式 + 7 预备、跨东财/同花顺两栏）**全部 600px，宽度值唯一**，边缘对齐。
+- 明星 3 盒仍保持一行；移动端预备卡满宽正常、无溢出。
+- 桌面/移动横向溢出均为 0；全仓 61/61 通过；`git diff --check` 通过。
+
+Deployment:
+- 未部署生产。
+
+Notes for next agent:
+- 该 bug 说明：给 `.ml-grid` 加 `justify-items:start` 时，所有直接子项（含 wrapper）都需显式 `width:100%`，否则会按内容收缩。
