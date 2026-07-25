@@ -27531,6 +27531,12 @@ async function ensureStrategyMainlineSnapshot(day, reason = '') {
   return { ok: !!snapshot, day: isoDay, snapshot };
 }
 
+const STRATEGY_MAINLINE_SNAPSHOT_FREEZE_MINUTE = 15 * 60 + 30;
+function strategyMainlineSnapshotFreezeReady(now = chinaNowParts()) {
+  const minuteOfDay = Number(now?.hour) * 60 + Number(now?.minute);
+  return Number.isFinite(minuteOfDay) && minuteOfDay >= STRATEGY_MAINLINE_SNAPSHOT_FREEZE_MINUTE;
+}
+
 async function getStrategyMainlines(day) {
   const requestedDay = isoFromCompactDate(day || chinaNowParts().day);
   const now = chinaNowParts();
@@ -27576,6 +27582,48 @@ async function getStrategyMainlines(day) {
   if (sessionPhase === '已收盘') {
     const snapshot = await readStrategyMainlineSnapshot(requestedDay);
     if (snapshot) return snapshot;
+    // 15:00-15:30 是收盘事实/L2 结果归档缓冲期。页面访问只能触发临时重算，
+    // 不能把尚未收齐的空结果永久冻结成当天快照（2026-07-23 15:01 实盘缺陷）。
+    if (!strategyMainlineSnapshotFreezeReady(now)) {
+      const refreshJob = startStrategyMainlineRefresh(requestedDay, { writePredict: false });
+      const reusable = await readStrategyMainlineLiveCache(requestedDay, Infinity).catch(() => null);
+      if (strategyMainlineIsUsablePayload(reusable)) {
+        return {
+          ...strategyMainlineAttachResponseMeta(reusable, {
+            cacheState: 'after-close-settling',
+            refreshState: 'running',
+            sessionPhase,
+          }),
+          sessionPhase,
+          snapshotState: 'settling-after-close',
+          message: reusable.mainlines.length
+            ? String(reusable.message || '')
+            : '收盘数据与 L2 结果仍在归档，15:30 后生成最终快照。',
+        };
+      }
+      const live = await strategyMainlineWithTimeout(refreshJob, STRATEGY_MAINLINE_QUICK_BUILD_TIMEOUT_MS, null);
+      if (strategyMainlineIsUsablePayload(live)) {
+        return {
+          ...strategyMainlineAttachResponseMeta(live, {
+            cacheState: 'after-close-settling',
+            sessionPhase,
+          }),
+          sessionPhase,
+          snapshotState: 'settling-after-close',
+        };
+      }
+      return {
+        ...strategyMainlineEmptyPayload(
+          requestedDay,
+          requestedDay,
+          'strategy-mainline-settling-after-close',
+          '收盘数据与 L2 结果仍在归档，15:30 后生成最终快照。',
+          sessionPhase
+        ),
+        snapshotState: 'settling-after-close',
+        refreshState: 'running',
+      };
+    }
     const saved = await ensureStrategyMainlineSnapshot(requestedDay, 'api-after-close');
     if (saved?.snapshot) return saved.snapshot;
     const fallback = saved?.payload || strategyMainlineEmptyPayload(
@@ -27650,6 +27698,180 @@ function strategyMainlineMatchesConfirm(mainline, confirm) {
   return !!((confirmKey && mainlineKey === confirmKey) || (confirmTheme && mainlineTheme === confirmTheme));
 }
 
+// 某些旧日由页面在 15:30 前过早冻结为空，但同日盘中预测档案已经保存了正式主线、
+// 明星与龙头（2026-07-23）。历史展示只读补回这些已落档事实，不改写冻结快照，
+// 也不虚构预测档案未保存的板块涨幅、资金或成分股指标。
+function strategyMainlineHistoricalPredictRow(row, predictBlock, options = {}) {
+  if (!row || !String(row.theme || '').trim()) return null;
+  const key = String(row.key || row.familyKey || '').trim();
+  const candidates = Array.isArray(predictBlock?.candidates) ? predictBlock.candidates : [];
+  const candidate = candidates.find(item =>
+    String(item?.key || item?.familyKey || '').trim() === key
+  ) || null;
+  const finalSealedCodes = options.finalSealedCodes instanceof Set ? options.finalSealedCodes : null;
+  const starRows = [];
+  const pushStar = raw => {
+    const code = normalizeReasonSourceCode(raw?.code);
+    if (!code || starRows.some(star => star.code === code)) return;
+    const confirmed = String(raw?.level || raw?.lastLevel || '') === 'confirmed'
+      || !!raw?.confirmedAt
+      || !!finalSealedCodes?.has(code);
+    starRows.push({
+      code,
+      name: String(raw?.name || code),
+      gain: isFiniteNumeric(raw?.gain ?? raw?.firstGain) ? Number(raw.gain ?? raw.firstGain) : null,
+      level: confirmed ? 'confirmed' : 'expected',
+      label: confirmed ? '明星确认' : '预期明星',
+      historicalPrediction: true,
+      firstExpectedAt: String(raw?.firstExpectedAt || ''),
+      confirmedAt: String(raw?.confirmedAt || '') || null,
+    });
+  };
+  for (const star of (Array.isArray(candidate?.stars) ? candidate.stars : [])) {
+    if (['expected', 'confirmed'].includes(String(star?.level || ''))) pushStar(star);
+  }
+  if (row.star && ['expected', 'confirmed'].includes(String(row.star.level || ''))) pushStar(row.star);
+  for (const transition of strategyMainlineExpectedStarTransitions(predictBlock, row)) pushStar(transition);
+
+  const rawLeaders = Array.isArray(candidate?.leaders) && candidate.leaders.length
+    ? candidate.leaders
+    : (Array.isArray(row.leaders) && row.leaders.length ? row.leaders : (row.leader ? [row.leader] : []));
+  const leaders = rawLeaders.filter(stock => normalizeReasonSourceCode(stock?.code)).slice(0, 3).map(stock => ({
+    ...stock,
+    code: normalizeReasonSourceCode(stock.code),
+    name: String(stock.name || stock.code || ''),
+    leadScore: isFiniteNumeric(stock.leadScore) ? Number(stock.leadScore) : null,
+  }));
+  const source = String(options.source || '');
+  const sourceZsType = source === 'eastmoney' ? 6 : (source === 'ths' ? 5 : null);
+  const stageLabel = String(row.stage || candidate?.stage || '').trim();
+  const certaintyLabel = String(row.certainty || candidate?.certainty || '').trim();
+  return {
+    key,
+    familyKey: String(candidate?.familyKey || key),
+    theme: String(row.theme || candidate?.theme || '').trim(),
+    rank: Number(row.rank || candidate?.rank) || 0,
+    score: isFiniteNumeric(row.score ?? candidate?.score) ? Number(row.score ?? candidate.score) : null,
+    predictScore: isFiniteNumeric(row.predictScore ?? candidate?.predictScore)
+      ? Number(row.predictScore ?? candidate.predictScore) : null,
+    stage: stageLabel ? { key: 'confirm', label: stageLabel, advice: '来自当日盘中预测档案' } : null,
+    certainty: certaintyLabel ? {
+      level: certaintyLabel.includes('高') ? 'high' : (certaintyLabel.includes('中') ? 'medium' : 'watch'),
+      label: certaintyLabel,
+      signals: [],
+    } : null,
+    qiTier: 'formal',
+    l2VerificationStatus: 'qi',
+    l2ScanState: 'qi',
+    l2QualifiedBy: 'historical-predict-record',
+    historicalPredictionSummary: true,
+    historicalPredictionSavedAt: String(options.savedAt || ''),
+    netInflow: isFiniteNumeric(candidate?.netInflow) ? Number(candidate.netInflow) : null,
+    netInflowZsType: sourceZsType,
+    boardCount: Number(candidate?.boardCount) || 0,
+    count: Number(candidate?.limitUpCount) || 0,
+    bigGainCount: Number(candidate?.bigGainCount) || 0,
+    nearLimitCount: Number(candidate?.nearLimitCount) || 0,
+    todayCodes: Array.isArray(candidate?.todayLimitCodes) ? candidate.todayLimitCodes.slice(0, 16) : [],
+    starStocks: starRows.slice(0, 4),
+    mainLeader: leaders[0] || null,
+    leaders,
+    explain: ['该结论由当日盘中预测档案恢复；原收盘快照过早冻结，未补造缺失的盘面指标。'],
+  };
+}
+
+function strategyMainlineRestoreHistoricalPrediction(payload, predict, options = {}) {
+  if (!payload || typeof payload !== 'object' || !predict || !(payload.snapshot || payload.frozen)) return payload;
+  const emptyStateReasons = new Set([
+    'no-confirmed-mainline', 'no-l2-qualified-mainline', 'no-net-inflow-mainline',
+    'no-qualified-mainline', 'leader-rework-incomplete',
+  ]);
+  const finalSealedCodes = options.finalSealedCodes instanceof Set ? options.finalSealedCodes : null;
+  const mergeRows = (existing, restored) => {
+    const out = Array.isArray(existing) ? existing.slice() : [];
+    const keys = new Set(out.map(row => String(row?.familyKey || row?.key || row?.theme || '')).filter(Boolean));
+    for (const row of restored) {
+      const key = String(row?.familyKey || row?.key || row?.theme || '');
+      if (!key || keys.has(key)) continue;
+      keys.add(key);
+      out.push(row);
+    }
+    return out.map((row, index) => ({ ...row, rank: index + 1 }));
+  };
+  const restoredFor = (block, source) => {
+    if (!block) return [];
+    return strategyMainlineReviewFormalTop({ ...block, schemaVersion: predict.schemaVersion, savedAt: predict.savedAt })
+      .map(row => strategyMainlineHistoricalPredictRow(row, block, {
+        source,
+        savedAt: predict.savedAt,
+        finalSealedCodes,
+      }))
+      .filter(Boolean);
+  };
+  const restoredBySource = {
+    eastmoney: restoredFor(predict?.bySource?.eastmoney || (predict.bySource ? null : predict), 'eastmoney'),
+    ths: restoredFor(predict?.bySource?.ths, 'ths'),
+  };
+  const fallbackRoot = restoredFor(predict, 'eastmoney');
+  const restoredRoot = fallbackRoot.length
+    ? fallbackRoot
+    : [...restoredBySource.eastmoney, ...restoredBySource.ths];
+  const mainlines = mergeRows(payload.mainlines, restoredRoot);
+  const recoveredSources = [];
+  const restoreSource = (current, block, source) => {
+    if (!current && !block) return current;
+    const restored = restoredBySource[source] || [];
+    const mainlines = mergeRows(current?.mainlines, restored);
+    if (restored.some(row =>
+      !(Array.isArray(current?.mainlines) ? current.mainlines : [])
+        .some(old => String(old?.familyKey || old?.key || old?.theme || '') === String(row?.familyKey || row?.key || row?.theme || ''))
+    )) recoveredSources.push(source);
+    const hasMainlines = mainlines.length > 0;
+    const clearEmpty = hasMainlines && emptyStateReasons.has(String(current?.reason || ''));
+    return {
+      ...(current || {}),
+      available: typeof block?.available === 'boolean' ? block.available : (current?.available ?? hasMainlines),
+      hasMainlines,
+      count: mainlines.length,
+      mainLeaderTheme: mainlines[0] ? String(mainlines[0].theme || '') : '',
+      mainlines,
+      ...(clearEmpty ? { reason: '', message: '' } : {}),
+    };
+  };
+  const mainlinesBySource = (payload.mainlinesBySource || predict.bySource)
+    ? {
+        ...(payload.mainlinesBySource || {}),
+        eastmoney: restoreSource(payload?.mainlinesBySource?.eastmoney, predict?.bySource?.eastmoney, 'eastmoney'),
+        ths: restoreSource(payload?.mainlinesBySource?.ths, predict?.bySource?.ths, 'ths'),
+      }
+    : null;
+  const rootRecovered = mainlines.length > (Array.isArray(payload.mainlines) ? payload.mainlines.length : 0);
+  if (!rootRecovered && !recoveredSources.length) return payload;
+  const eastKeys = new Set((mainlinesBySource?.eastmoney?.mainlines || [])
+    .map(row => String(row?.familyKey || row?.key || '')).filter(Boolean));
+  const dualResonanceThemes = (mainlinesBySource?.ths?.mainlines || [])
+    .filter(row => eastKeys.has(String(row?.familyKey || row?.key || '')))
+    .map(row => String(row.theme || '')).filter(Boolean);
+  const clearRootEmpty = mainlines.length > 0
+    && emptyStateReasons.has(String(payload.reason || ''));
+  const restored = {
+    ...payload,
+    mainlines,
+    count: mainlines.length,
+    ...(mainlinesBySource ? {
+      mainlinesBySource: {
+        ...mainlinesBySource,
+        dualResonanceThemes: [...new Set(dualResonanceThemes)],
+      },
+    } : {}),
+    historicalPredictionRecovered: true,
+    historicalPredictionRecoveredSources: recoveredSources,
+    historicalPredictionSavedAt: String(predict.savedAt || ''),
+    ...(clearRootEmpty ? { reason: '', message: '' } : {}),
+  };
+  return { ...restored, quality: strategyMainlineQuality(restored) };
+}
+
 // 统一返回层再执行一次严格 QI 过滤：未来实时构建本身已经过闸，这里负责拦住旧内存缓存、
 // 旧文件缓存和已冻结收盘快照中的历史候选，避免部署新规则后页面仍展示旧的未验证卡片。
 function strategyMainlineRestrictToQiPayload(payload, options = {}) {
@@ -27663,12 +27885,12 @@ function strategyMainlineRestrictToQiPayload(payload, options = {}) {
   // [Codex #201 四审 P1] 冻结载荷带着"暂无正式主线"旧空态(reason/message)时,若重过滤/终盘
   // 升级后正式榜非空,必须显式清除——正式卡与空态元数据不得自相矛盾。只清主线空态语义的
   // reason,真正的数据源故障状态(非空态语义)原样保留。
-  const MAINLINE_EMPTY_STATE_REASONS = new Set([
+  const emptyStateReasons = new Set([
     'no-confirmed-mainline', 'no-l2-qualified-mainline', 'no-net-inflow-mainline',
     'no-qualified-mainline', 'leader-rework-incomplete',
   ]);
   const clearStaleEmptyState = (obj, hasFormal) =>
-    (hasFormal && MAINLINE_EMPTY_STATE_REASONS.has(String(obj?.reason || '')))
+    (hasFormal && emptyStateReasons.has(String(obj?.reason || '')))
       ? { reason: '', message: '' }
       : {};
   const excluded = [];
@@ -27857,10 +28079,11 @@ async function getStrategyMainlinesVisible(day) {
   // [Codex #201 四审 P1] 冻结返回路径同样保证 confirmed 转换落盘(按日单例,等待完成):
   // 部署前已冻结的当日快照也能把 starTransitions 升级持久化,不依赖 live build 是否执行。
   if (finalSealedCodes) await strategyPredictPersistFinalSealUpgradesOnce(predictDay, finalSealedCodes).catch(() => {});
-  return strategyMainlineRestrictToQiPayload(
+  const restricted = strategyMainlineRestrictToQiPayload(
     strategyMainlineAttachExpectedHistoryPayload(payload, predict),
     { finalSealedCodes }
   );
+  return strategyMainlineRestoreHistoricalPrediction(restricted, predict, { finalSealedCodes });
 }
 
 async function readAiReadOnlyToken() {

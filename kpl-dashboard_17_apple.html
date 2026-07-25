@@ -13198,6 +13198,7 @@ function renderStrategyMainlinesHTML(d) {
   const priorDay = d && d.sourceDay && d.sourceDay.priorReason;
   const sourceNote = [
     d && d.snapshotState === 'frozen' ? '收盘快照' : '',
+    d && d.historicalPredictionRecovered ? '盘中预测档案校正' : '',
     d && d.sessionPhase ? String(d.sessionPhase) : '',
     realtimeDay ? `盘中${formatStatusDay(realtimeDay)}` : '',
     priorDay && priorDay !== realtimeDay ? `主因参考${formatStatusDay(priorDay)}` : '',
@@ -13220,6 +13221,7 @@ function renderStrategyMainlinesHTML(d) {
   }
   const statusHtml = strategyMainlineStatusHTML(d);
   const renderCard = (m, i) => {
+    const predictionSummaryOnly = !!m.historicalPredictionSummary;
     const leader = m.mainLeader || {};
     const leaderName = leader.name || leader.code || '--';
     const leaderScore = Number(leader.leadScore);
@@ -13261,14 +13263,14 @@ function renderStrategyMainlinesHTML(d) {
     const thsGateExemption = m?.thsEligibilityGate?.passed === false && m?.thsEligibilityGate?.exempted
       ? headMetric('组合闸', m.thsEligibilityGate.exempted === 'owner-confirm' ? '人工确认保留' : '明星粘性保留', 'flat', `组合闸未通过：${m.thsEligibilityGate.reason || 'unknown'}；仅保留当日主线记录，不代表资金方向通过`)
       : '';
-    const marketPulse = `<div class="ml-head-pulse" aria-label="板块涨幅、资金活跃度与方向">
+    const marketPulse = predictionSummaryOnly ? '' : `<div class="ml-head-pulse" aria-label="板块涨幅、资金活跃度与方向">
       ${headMetric('涨幅', Number.isFinite(gainValue) ? `${gainValue > 0 ? '+' : ''}${gainValue.toFixed(2)}%` : '--', gainClass, m.boardGainName || m.theme || '')}
       ${headMetric(fundMetricLabel, displayInflow.value != null ? fmtInflow(displayInflow.value) : '--', inflowClass, `${fundTrace} · 重叠板块资金不相加，采用单个代表板块值`)}
       ${thsDirectionMetric}
       ${thsGateExemption}
     </div>`;
     const metricCell = (label, value, cls = '', kind = 'support', title = '') => `<span class="ml-signal-cell ${escapeHTML(kind)} ${escapeHTML(cls)}"${title ? ` title="${escapeHTML(title)}"` : ''}><i>${escapeHTML(label)}</i><b>${escapeHTML(value)}</b></span>`;
-    const signalStrip = `<div class="ml-signal-strip">
+    const signalStrip = predictionSummaryOnly ? '' : `<div class="ml-signal-strip">
       ${metricCell('涨停', String(Number(m.count) || 0), '', 'support')}
       ${metricCell('大涨', String(Number(m.bigGainCount) || 0), '', 'support')}
       ${metricCell('冲板', String(Number(m.nearLimitCount) || 0), '', 'support')}
@@ -13291,6 +13293,9 @@ function renderStrategyMainlinesHTML(d) {
       ? `<span class="ml-stage ml-stage-${escapeHTML(badgeStageKey || 'confirm')}" title="${escapeHTML(badgeTitle)}">${escapeHTML(badgeText)}</span>`
       : '';
     const newThemeBadge = m.isNewTheme ? `<span class="ml-newtheme" title="首日新题材:暂无历史主因属正常,以盘面与资金信号为准">首日</span>` : '';
+    const historicalPredictionBadge = predictionSummaryOnly
+      ? '<span class="ml-newtheme" title="原收盘快照过早冻结；本卡只读恢复当日已经落盘的主线、明星与龙头，不补造缺失盘面数据">历史预测档案</span>'
+      : '';
     // 管理员专属:明星股最大可统计档证据(档位/主动被动买累计/金额闸/三比值/empty/dataMissing)。
     // 仅 state.adminLoggedIn 时拼进 tooltip;普通用户返回空串,完全不可见。
     function starMaxBucketAdminInfo(s) {
@@ -13342,14 +13347,16 @@ function renderStrategyMainlinesHTML(d) {
         const stateClass = s.level === 'confirmed' ? 'confirmed' : 'expected';
         const missedClass = s.expectedOutcome === 'not-confirmed' ? ' missed' : '';
         const leaderMark = leaderCodeSet.has(String(s.code || '')) ? '<em class="ml-star-role">龙头</em>' : '';
+        const hasRatios = s.ratios && [s.ratios.activeRatio, s.ratios.passiveRatio, s.ratios.supportRatio]
+          .some(value => value != null && value !== '');
         return `<span class="ml-stock ml-starstock ${stateClass}${s.historicalExpected ? ' historical' : ''}${missedClass}" title="${escapeHTML(`${s.firstExpectedAt ? `首次预期 ${s.firstExpectedAt} · ` : ''}L2:主动比${s.ratios?.activeRatio ?? '-'} 被动比${s.ratios?.passiveRatio ?? '-'} 合计比${s.ratios?.supportRatio ?? '-'}` + starMaxBucketAdminInfo(s))}">
           <span class="ml-star-identity"><b class="ml-star-name">${escapeHTML(s.name || s.code || '')}</b>${leaderMark}</span>
           <strong class="ml-star-state">${stateText}</strong>
-          <span class="ml-star-ratios">
+          ${hasRatios ? `<span class="ml-star-ratios">
             <span><i>主动</i><b>${s.ratios?.activeRatio ?? '-'}</b></span>
             <span><i>被动</i><b>${s.ratios?.passiveRatio ?? '-'}</b></span>
             <span><i>合计</i><b>${s.ratios?.supportRatio ?? '-'}</b></span>
-          </span>
+          </span>` : ''}
         </span>`;
       })
       .join('');
@@ -13420,12 +13427,14 @@ function renderStrategyMainlinesHTML(d) {
             ${marketPulse}
           </div>
           <div class="ml-name-flags">
-            ${qiBadge}${confirmedBadge}
+            ${qiBadge}${confirmedBadge}${historicalPredictionBadge}
             ${combinedBadge}
             ${newThemeBadge}
             ${m.dualResonance ? `<span class="ml-dual" title="该题材在东财与同花顺两套独立预测里都排进前列（各自独立评分，未合并）">🔗双源共振</span>` : ''}
           </div>
-          <div class="ml-sub">${escapeHTML(driver.label)} · ${Number(m.boardCount) || 0}个共振板块</div>
+          <div class="ml-sub">${predictionSummaryOnly
+            ? '历史盘中预测结论 · 未补造早期快照缺失的盘面指标'
+            : `${escapeHTML(driver.label)} · ${Number(m.boardCount) || 0}个共振板块`}</div>
           ${strategyMainlineSourcePairsHTML(m)}
         </div>
         <div class="ml-score-wrap">
