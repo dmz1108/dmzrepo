@@ -267,7 +267,11 @@ assert(css.includes('.ml-qi-mark .qim-orbit { stroke: var(--border-strong)')
   && css.includes('.ml-qi-mark .qim-line { stroke: var(--text)')
   && css.includes('.ml-qi-mark .qim-fill { fill: var(--text)')
   && css.includes('.ml-qi-mark .qim-spark { fill: var(--accent)'),
-  'QI 标识取色与主页 logo 一致(--text / --border-strong / --accent)');
+  'QI 标识取色与主页 logo 一致(--text / --border-strong / --accent);pending 态是规范定义的唯一例外');
+// pending(预期明星)是规范批准的状态化例外:灰蓝半透明 + 无高亮点,表达"尚未盖章"。
+// 断言其存在,防止后续 agent 以"标识颜色恒定"为由误删(见 STRATEGY_VISUAL_SEMANTICS.md §2)。
+assert(css.includes('.ml-qi-mark.pending') && css.includes('.ml-qi-mark.pending .qim-line'),
+  'pending 态灰蓝规则必须保留(规范定义的唯一状态化例外)');
 assert(!/\.ml-qi-mark[^}]*(#fff8e6|rgba\(255, 233, 168|rgba\(239, 185, 79)/.test(css),
   'QI 标识本身不得使用金色系(金色只用于外框徽章环)');
 

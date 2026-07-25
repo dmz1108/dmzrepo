@@ -10446,3 +10446,68 @@ Deployment: 未部署。HTML + CSS 两件静态原子发布,无需重启。
 
 Notes for next agent:
 - 教训:品牌标识不要跟着容器主题变色。想表达状态请用外框/底色,不要改标识本身。
+## 2026-07-25 - Codex - PR #276 今日主线榜卡片重构已合并部署
+
+Changed:
+- 独立复验 Claude 对三项 P1 的修复：窄屏明星三比值正确隐藏、预备主线强度条使用同组卡片作为
+  相对基准、旧冻结快照的明星空态与 L2 徽章共用同一归一化状态。
+- PR `#276` 已合并到 `main`，merge commit 为
+  `714a720b205c6aaad767b4e2b89bbfc3e3b6c583`。
+- 已将左柱排名/主线分、明星证据前置、QI 标识与视觉语义规范对应的 HTML/CSS 静态发布到云端。
+- 云端两份运维日志均已追加本次发布记录。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `docs/strategy/STRATEGY_VISUAL_SEMANTICS.md`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check`、`git diff --check` 及全仓 `63/63` 个 `tests/*.test.js` 文件通过。
+- 使用 2026-07-22 生产数据完成 1280px / 390px Playwright 实测：移动端无横向或卡内溢出，
+  三比值可见数为 0，明星名称未被压缩；桌面端三比值正常显示。
+- 预备主线强度条实测不再恒为 100%：东财为 `100/78/57/40%`，同花顺为
+  `100/88/68%`。
+- 旧快照合成用例中，明星空态与徽章均显示“覆盖不足”。
+- 云端磁盘、公网 `/kpl` 与 Git HTML SHA-256 均为
+  `25ba708d49580d604e1f9a0597a90dd5f3368b63bc4894ea629d363ae1db803b`。
+- 云端磁盘、公网 CSS 与 Git SHA-256 均为
+  `1a3929177049df9a4d90435eecb6a4e95796f53bb87699da141103a19b2affa7`；
+  公网 `/health` 返回 `ok=true`，HTML 仍为 `cache-control: no-cache`。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`。
+- 回退备份：
+  `C:\PandaDashboard\_deploy-backups\github-pr276-714a720-20260725-175022`。
+- 首次尝试 Windows `File.Replace` 时自动回退且旧版保持完整；随后使用备份保护的复制发布成功，
+  发布后哈希全部匹配。
+- 本次仅静态发布，未重启 Node、Caddy、娱乐服务或公司端 L2 worker。
+
+Notes for next agent:
+- PR `#276` 已完成，无需重复部署；后续策略页视觉调整必须遵守
+  `docs/strategy/STRATEGY_VISUAL_SEMANTICS.md` 的颜色语义。
+
+## 2026-07-25 - Claude - PR #278 按 Codex 复审同步 main 并澄清规范
+
+Changed:
+- P1 分支冲突:main 已含 PR #277(#276 部署交接记录),与本分支的 DAILY_HANDOFF 新条目冲突。
+  按纪律 merge origin/main(不 rebase、不改写共享历史),双方条目全部保留。
+- P2 视觉规范自相矛盾:§2 先定义 pending 态为灰蓝半透明无高亮点,后文硬约束却写"标识颜色恒定"。
+  改为:一致性约束限定于确认/默认态;pending 是规范批准的唯一状态化例外,并明确写出
+  "后续 agent 不要以颜色恒定为由删掉 .ml-qi-mark.pending",除 pending 外不得新增状态化染色。
+- 测试注释同步澄清,并新增断言锁定 pending 规则存在,防止被误删。
+- PR 描述更新:#276 已于 714a720 合并并完成生产发布(线上实测 ?v=20260725a),
+  #278 是在已部署基础上的追加静态更新,不再是"与 #276 一起首发"。
+
+Files: docs/DAILY_HANDOFF.md / docs/strategy/STRATEGY_VISUAL_SEMANTICS.md / tests/strategy-workbench-ui.test.js
+
+Validated: 合并 main 后全仓 63 个测试文件通过;git diff --check 通过。CSS 实现未改动
+(Codex 已逐项验证与主页 logo 运行时取色完全一致:轨道 rgba(180,194,214,0.2)、
+Q/i rgb(237,242,248)、高亮点 rgb(75,159,255),金环 rgba(240,192,74,0.55) 保留)。
+
+Deployment: 未部署。生产当前 ?v=20260725a(#276);本 PR 合并后需再发一次 HTML+CSS 到 20260725b,无需重启。
+
+Notes for next agent:
+- 教训:规范文档里"恒定/一律"类硬约束,若存在已批准的例外,必须在同一段显式写出例外范围,
+  否则后续 agent 会按字面执行、删掉正确实现。
