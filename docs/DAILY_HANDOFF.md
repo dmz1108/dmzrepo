@@ -10365,3 +10365,29 @@ Deployment: 未部署;并入 PR #276 待独立复核。HTML + CSS 两件静态�
 Notes for next agent:
 - 色彩语义:金=L2 确认明星(证据),冷石板=预期明星(待坐实),红=Owner 人工确认当日主线。
   三者不可互换;新增状态请避开金/石板色相区间。
+
+## 2026-07-25 - Claude - 策略页视觉语义规范入库
+
+Changed:
+- 新增 docs/strategy/STRATEGY_VISUAL_SEMANTICS.md:把"金=L2确认明星证据 / 冷石板=预期明星待认证 /
+  红=Owner 人工确认当日主线 / 绿=跌与流出"的色彩语义显式成文,此前只存在于 HANDOFF 与 CSS 注释,
+  任何 agent 改样式都可能无意翻转。
+- 硬约束入文:确认与预期明星色相必须相差 ≥90°(当前 40° vs 210°);红色专属涨/流入与人工确认主线,
+  不得表示 L2 确认明星;绿色专属跌/流出;冷石板与交互蓝同为 210°,靠明度饱和度区分。
+- 一并记录 QI 认证标识三态(金环/透明/隐藏,外框恒 40×40 保对齐、viewBox 用裁切值)与两处维护陷阱
+  (明星条规则须写到 .ml-proof-row.ml-star-proof 级;.ml-card::before 已被左色条占用,新装饰用 ::after)。
+- 统一我方 CSS 块内 5 处硬编码 #efb94f → var(--st-gold),消除与新 token(#f0c04a,距离 8.7)的双值漂移;
+  Codex #262 块内的字面值未动(非本方代码且已被后置规则覆盖)。
+
+Files:
+- docs/strategy/STRATEGY_VISUAL_SEMANTICS.md(新)
+- Qi/vendor/strategy-workbench.css(金值 token 化)
+- tests/strategy-workbench-ui.test.js(规范存在性 + 文档与 CSS 色值一致 + 运行时计算色相差 ≥90° 的断言)
+
+Validated: 全仓 63 个测试文件通过;git diff --check 通过。
+
+Deployment: 文档与样式并入 PR #276,未部署。
+
+Notes for next agent:
+- 色相断言会实际解析 hex 计算差值,改回相近色会直接测试失败,不是靠注释约束。
+- 若要新增状态色,先查本规范第 1 节色相表,再开 discussions 走 Owner 定稿。

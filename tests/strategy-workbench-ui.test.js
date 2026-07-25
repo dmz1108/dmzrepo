@@ -214,3 +214,26 @@ assert(css.includes('body.view-strategy .ml-card.has-confirmed-star::after'),
   '确认卡顶部金箔高光使用 ::after(::before 已被左色条占用)');
 assert(css.includes('body.view-strategy .ml-qi-seal.pending') && css.includes('body.view-strategy .ml-qi-seal.empty'),
   '徽章外框三态同尺寸,保证卡片文字起始线对齐');
+
+// 视觉语义规范(docs/strategy/STRATEGY_VISUAL_SEMANTICS.md)——色相归属不得被后续样式无意翻转
+{
+  const specPath = path.join(root, 'docs/strategy/STRATEGY_VISUAL_SEMANTICS.md');
+  assert(fs.existsSync(specPath), '策略页视觉语义规范文档存在');
+  const spec = fs.readFileSync(specPath, 'utf8');
+  for (const token of ['--st-gold', '--st-slate', '#f0c04a', '#7f9bbd']) {
+    assert(spec.includes(token), `规范记录 ${token}`);
+  }
+  // 规范里声明的色值必须与实际 CSS 一致(防文档与实现漂移)
+  assert(css.includes('--st-gold: #f0c04a') && css.includes('--st-slate: #7f9bbd'),
+    'CSS token 与视觉语义规范声明的色值一致');
+  // 确认明星与预期明星色相必须拉开(规范硬约束:>=90°)
+  const hue = (h) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    if (!d) return 0;
+    const t = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return (t * 60 + 360) % 360;
+  };
+  const diff = Math.abs(hue('#f0c04a') - hue('#7f9bbd'));
+  assert(Math.min(diff, 360 - diff) >= 90, '确认明星与预期明星色相相差 >=90°(规范硬约束)');
+}

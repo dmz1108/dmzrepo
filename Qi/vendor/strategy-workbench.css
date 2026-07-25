@@ -4984,7 +4984,7 @@ body.view-strategy .ml-rail .ml-rank {
   font-weight: 700 !important;
   letter-spacing: .06em;
 }
-body.view-strategy .ml-card.has-confirmed-star .ml-rail .ml-rank { color: #efb94f !important; }
+body.view-strategy .ml-card.has-confirmed-star .ml-rail .ml-rank { color: var(--st-gold) !important; }
 body.view-strategy .ml-card.confirmed-mainline .ml-rail .ml-rank { color: #ff8b86 !important; }
 body.view-strategy .ml-rail-score {
   font-size: 26px;
@@ -5015,7 +5015,7 @@ body.view-strategy .ml-rail-bar i {
   border-radius: 2px;
   background: var(--st-faint);
 }
-body.view-strategy .ml-card.has-confirmed-star .ml-rail-bar i { background: #efb94f; }
+body.view-strategy .ml-card.has-confirmed-star .ml-rail-bar i { background: var(--st-gold); }
 body.view-strategy .ml-card.confirmed-mainline .ml-rail-bar i { background: var(--st-red); }
 body.view-strategy .ml-card.has-expected-star .ml-rail-bar i { background: var(--st-amber); }
 body.view-strategy .ml-rail-pred {
@@ -5087,7 +5087,7 @@ body.view-strategy .ml-proof-row.ml-star-proof {
 }
 body.view-strategy .ml-card.has-confirmed-star .ml-proof-row.ml-star-proof {
   border-color: rgba(239, 185, 79, .42) !important;
-  border-left-color: #efb94f !important;
+  border-left-color: var(--st-gold) !important;
   background: linear-gradient(96deg, rgba(239, 185, 79, .18), rgba(239, 185, 79, .05) 62%, transparent) !important;
 }
 body.view-strategy .ml-card.confirmed-mainline .ml-proof-row.ml-star-proof {
@@ -5368,7 +5368,7 @@ body.view-strategy .ml-star-proof .ml-stock.ml-starstock .ml-star-state {
 }
 body.view-strategy .ml-star-proof .ml-stock.ml-starstock.confirmed .ml-star-state {
   border-color: transparent !important;
-  background: #efb94f !important;
+  background: var(--st-gold) !important;
   color: #17130b !important;
   font-weight: 800 !important;
 }
