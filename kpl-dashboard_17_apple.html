@@ -13143,7 +13143,8 @@ function strategyMainlineQiMarkHTML(kind) {
   const empty = kind === 'empty';
   const label = confirmed ? 'QI 认证明星' : (empty ? '' : '待 QI 认证明星');
   const cls = confirmed ? '' : (empty ? ' empty' : ' pending');
-  // 徽章外框在三态下尺寸一致(确认态才显示金环),保证卡片文字起始线对齐。
+  // 外框三态均透明,只负责 40×40 占位对齐;确认态由卡片层表达(金边 + 金箔顶线 + 金明星条)。
+  // 不要给外框加金环或任何着色——QI 标识含外圈都不着金,见 STRATEGY_VISUAL_SEMANTICS.md §2。
   return `<span class="ml-qi-seal${cls}" aria-hidden="${empty ? 'true' : 'false'}">
     <svg class="ml-qi-mark${cls}" viewBox="12 27 110 82" fill="none" role="img" aria-label="${label}">
       <ellipse class="qim-orbit" cx="65" cy="68" rx="53.2" ry="22" transform="rotate(-28 65 68)" stroke-width="3"></ellipse>

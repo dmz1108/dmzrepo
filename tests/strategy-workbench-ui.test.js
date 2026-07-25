@@ -225,6 +225,40 @@ assert(css.includes('body.view-strategy .ml-qi-seal.empty { visibility: hidden; 
     && !/\.ml-qi-seal\.pending \.ml-qi-mark/.test(css),
     '标识三态统一 30×22(去掉金环后不再需要为其留内缩量)');
 }
+// Codex #280 [P2]:外框同为 40×40 不代表文字对齐——明星行本身的左边框宽度三态不同,
+// 边框计入盒宽会把内容右推。运行时实测曾为 164/164/166。断言"边框 + 左内边距"三态相等。
+{
+  const num = (s) => parseInt(s, 10);
+  const ruleOf = (sel) => {
+    const at = css.indexOf(sel);
+    assert(at > -1, `CSS 存在规则 ${sel}`);
+    return css.slice(at, css.indexOf('}', at));
+  };
+  const edge = (rule, fallback) => {
+    const bl = /border-left:\s*(\d+)px/.exec(rule) || /border-left-width:\s*(\d+)px/.exec(rule);
+    const pl = /padding-left:\s*(\d+)px/.exec(rule);
+    return {
+      border: bl ? num(bl[1]) : fallback.border,
+      padding: pl ? num(pl[1]) : fallback.padding,
+    };
+  };
+  // 基准:.ml-proof-row.ml-star-proof 的 padding: 9px 11px
+  const base = { border: 1, padding: 11 };
+  const confirmed = edge(ruleOf('body.view-strategy .ml-card.has-confirmed-star .ml-proof-row.ml-star-proof {\n  border-color: rgba(240, 192, 74, .3)'), base);
+  const expected = edge(ruleOf('body.view-strategy .ml-card.has-expected-star .ml-proof-row.ml-star-proof {'), base);
+  const empty = edge(ruleOf('body.view-strategy .ml-proof-row.ml-star-proof.is-empty {'), base);
+  const start = (e) => e.border + e.padding;
+  assert(empty.border === 3, '无明星行保留 3px 状态边的视觉厚度');
+  assert(start(confirmed) === start(expected) && start(expected) === start(empty),
+    `三态"明星信号"文字起始线必须一致(border+padding-left):`
+    + ` 确认 ${start(confirmed)} / 预期 ${start(expected)} / 无明星 ${start(empty)};`
+    + ' 改动任一态的 border-left 宽度时必须同步补偿 padding-left');
+}
+// 实现注释不得与规范冲突(Codex #280 [P2]:旧注释仍写"确认态才显示金环",会诱导后续 agent 加回金环)
+assert(!/徽章外框在三态下尺寸一致\(确认态才显示金环\)/.test(html),
+  '旧的"确认态才显示金环"注释必须删除');
+assert(html.includes('外框三态均透明,只负责 40×40 占位对齐'),
+  '外框注释改为描述占位职责,并指向视觉语义规范');
 
 // 视觉语义规范(docs/strategy/STRATEGY_VISUAL_SEMANTICS.md)——色相归属不得被后续样式无意翻转
 {
