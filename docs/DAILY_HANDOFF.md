@@ -10201,3 +10201,27 @@ Deployment:
 
 Notes for next agent:
 - PR `#270` 已完成，不需要继续修改；后续任务从最新 `main` 开始。
+
+## 2026-07-25 - Codex - 锁定策略页手选历史日期
+
+Changed:
+- 修复策略页手选历史日期后，窗口重新聚焦或页面从缓存恢复时自动跳回当天的问题。
+- 根因是 `focus` / `pageshow` 与页面切换共用 `ensureLivePageToday`，此前把策略页与今日实时都强制重置为中国时区当天。
+- 新增策略页会话级日期锁定：用户选历史日期后，自动刷新、窗口恢复及离开再返回策略页均保留该日期；只有用户主动选回当天才解除锁定。
+- 顶部日期框与策略页内部日期框统一走 `onStrategyDateChange`，避免旁路状态不一致；今日实时仍保持始终回到当天的原逻辑。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `tests/strategy-date-lock.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 新增专项回归覆盖：策略历史日期在 `focus/pageshow` 后不变、切到今日实时后再返回可恢复、主动选今天解除锁定、跨日后跟随新当天。
+- `node --check kpl-stats-server.js`、`tests/strategy-workbench-ui.test.js` 及全仓 `62/62` 个 `tests/*.test.js` 文件通过。
+- `git diff --check` 通过。
+
+Deployment:
+- 尚未部署生产；待本任务 PR 合并后静态发布 `kpl-dashboard_17_apple.html`，无需重启服务。
+
+Notes for next agent:
+- 策略页的历史日期是页面会话状态，不写入账号或服务器持久配置；浏览器完整刷新后仍按系统默认当天进入。
