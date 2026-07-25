@@ -10545,3 +10545,45 @@ Deployment:
 
 Notes for next agent:
 - PR #278 已完成,无需重复部署;生产与 main 的两份静态文件哈希一致。
+
+---
+
+## 2026-07-25 移除 QI 徽章金环(Remote Claude)
+
+Owner 在 #278 部署完成后追问"为什么 qi 一圈还是黄色框"。核对属实:#278 只把**标识本身**
+(`.ml-qi-mark` 的轨道/Q/i/高亮点)改回主页原色,**外框 `.ml-qi-seal` 的金环、金色径向底、
+外圈金光晕原封不动保留**(#276 方案A 的"金箔徽章")。Owner 说的"qi 的标识"包含外圈,
+上一轮只做了一半。
+
+Changed:
+- `Qi/vendor/strategy-workbench.css`
+  - `.ml-qi-seal` 去掉金描边、金径向渐变、金 box-shadow,改为透明纯占位;
+    仍保持 40×40,三态文字起始线不错开。
+  - 删除 `.ml-qi-seal.pending` 单独规则(基准态已透明);标识尺寸三态统一 30×22
+    (原确认态 26px 是为金环留的内缩量)。
+  - 清掉 `.ml-qi-mark.pending .qim-orbit` 里残留的暖金 `rgba(231,173,70,.5)`(被后置规则覆盖的死值),
+    统一为冷石板 `rgba(127,155,189,.6)`。至此 QI 标识与外框在任何状态下都无金色。
+- `kpl-dashboard_17_apple.html` — CSS 缓存版本 `20260725b → 20260725c`(仅此一行)。
+- `docs/strategy/STRATEGY_VISUAL_SEMANTICS.md` — §1 金色适用范围排除 QI 标识与外框;
+  §2 三态表改为"外框透明仅占位",新增"外框不着色"条款并写明确认态由卡片层 5 处金色信号表达,
+  明确禁止后续 agent 以"确认态需要更醒目"为由加回金环;§5 变更记录。
+- `tests/strategy-workbench-ui.test.js` — 版本断言;新增外框规则体断言
+  (transparent/none + 规则体内不得出现 `240, 192, 74` / `255, 233, 168`)、
+  标识三态统一 30×22 断言;金色禁用正则扩展到 `rgba(231,173,70` 与 `rgba(240,192,74`。
+
+Validated:
+- `node tests/strategy-workbench-ui.test.js` 通过;全仓测试通过。
+- Playwright 直接加载仓库 CSS 渲染三态卡片:确认态为白 Q/i + 蓝高亮点无外圈、
+  预期态灰蓝、无明星态隐藏;三态"明星信号"文字起始线一致;
+  1280 卡宽 600、390 卡宽 358,`bodyW` 无横向溢出。
+
+Deployment:
+- 未部署。需发布 `kpl-dashboard_17_apple.html` + `Qi/vendor/strategy-workbench.css`,
+  先 CSS 后 HTML,原子发布,**无需重启任何服务**。
+- 发布后核对:线上 HTML 引用 `?v=20260725c`,确认明星卡的 QI 处已无金色圆环。
+
+Notes for next agent:
+- 纯展示层,后端与判定逻辑零改动。
+- 确认态的视觉权重现在完全由卡片层承担(金边 + 顶部金箔线 + 金左柱 + 金明星条 + "已确认"标签)。
+  若 Owner 后续觉得徽章位置太素,规范里预留的替代方案是**中性灰描边圆环**(保留"盖章"形态但不着金),
+  不要再回到金环。

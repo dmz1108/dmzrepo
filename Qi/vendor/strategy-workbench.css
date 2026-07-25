@@ -5066,7 +5066,8 @@ body.view-strategy .ml-qi-mark .qim-fill { fill: var(--text); stroke: none; }
 body.view-strategy .ml-qi-mark .qim-spark { fill: var(--accent); }
 /* 待认证:预期明星佩戴同款轮廓但灰度无高亮点,与确认版对齐并形成"未盖章/已盖章"对比 */
 body.view-strategy .ml-qi-mark.pending { opacity: .42; }
-body.view-strategy .ml-qi-mark.pending .qim-orbit { stroke: rgba(231, 173, 70, .5); }
+/* 冷石板,不用暖金——QI 标识任何状态都不着金色(见 STRATEGY_VISUAL_SEMANTICS.md §2) */
+body.view-strategy .ml-qi-mark.pending .qim-orbit { stroke: rgba(127, 155, 189, .6); }
 body.view-strategy .ml-qi-mark.pending .qim-line { stroke: var(--st-muted); }
 body.view-strategy .ml-qi-mark.pending .qim-fill { fill: var(--st-muted); }
 /* 无明星:留白占位,保持三态卡片文字起始线一致 */
@@ -5414,7 +5415,11 @@ body.view-strategy {
   --st-slate: #7f9bbd;
 }
 
-/* ---------- QI 徽章外框:三态同尺寸,确认态才显金环 ---------- */
+/* ---------- QI 徽章外框:三态同尺寸,不着色 ----------
+   外框只负责 40×40 占位对齐(三态文字起始线不能错开),不承载状态色。
+   确认态由卡片层表达(金边 + 金箔顶线 + 金色明星条 + 金色左柱),
+   徽章位置只放与主页完全一致的 QI 标识——Owner 2026-07-25 定稿:
+   "qi 的标识不应该是黄色",外圈金环同属 QI 标识的视觉整体,一并去掉。 */
 body.view-strategy .ml-qi-seal {
   flex-shrink: 0;
   width: 40px;
@@ -5423,19 +5428,12 @@ body.view-strategy .ml-qi-seal {
   place-items: center;
   align-self: center;
   border-radius: 50%;
-  border: 1px solid rgba(240, 192, 74, .55);
-  background: radial-gradient(circle at 38% 32%, rgba(240, 192, 74, .28), rgba(240, 192, 74, .06) 70%);
-  box-shadow: 0 0 0 3px rgba(240, 192, 74, .07), inset 0 1px 0 rgba(255, 233, 168, .3);
-}
-body.view-strategy .ml-qi-seal.pending,
-body.view-strategy .ml-qi-seal.empty {
-  border-color: transparent;
+  border: 1px solid transparent;
   background: transparent;
   box-shadow: none;
 }
 body.view-strategy .ml-qi-seal.empty { visibility: hidden; }
-body.view-strategy .ml-qi-seal .ml-qi-mark { width: 26px; height: 19px; }
-body.view-strategy .ml-qi-seal.pending .ml-qi-mark { width: 30px; height: 22px; }
+body.view-strategy .ml-qi-seal .ml-qi-mark { width: 30px; height: 22px; }
 body.view-strategy .ml-qi-mark .qim-orbit { stroke: var(--border-strong); }
 body.view-strategy .ml-qi-mark .qim-line { stroke: var(--text); }
 body.view-strategy .ml-qi-mark .qim-fill { fill: var(--text); }
