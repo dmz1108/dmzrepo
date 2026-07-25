@@ -10600,3 +10600,40 @@ Notes for next agent:
 - 确认态的视觉权重现在完全由卡片层承担(金边 + 顶部金箔线 + 金左柱 + 金明星条 + "已确认"标签)。
   若 Owner 后续觉得徽章位置太素,规范里预留的替代方案是**中性灰描边圆环**(保留"盖章"形态但不着金),
   不要再回到金环。
+
+## 2026-07-25 - Codex - PR #280 QI 金环移除已合并部署
+
+Changed:
+- 独立复审 Claude 对 PR #280 的实现及两项 P2 修正:
+  无明星态 2px 对齐补偿正确,旧"确认态显示金环"注释已清除。
+- PR #280 已通过 merge commit `233c27eb4b4d7b177c1ca8c1ddb80d34ba285907` 合入 main。
+- 已把透明 QI 外框、三态对齐修正和 CSS 缓存键 `20260725c` 静态发布到云端。
+- 云端两份运维日志均已追加本次发布记录。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `docs/strategy/STRATEGY_VISUAL_SEMANTICS.md`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check`、`git diff --check` 及全仓 `63/63` 个 `tests/*.test.js` 文件通过。
+- Playwright 运行时验证:
+  1280px 三态 `headLeft=496/496/496`,390px 为 `92/92/92`;
+  三态外框均透明、无背景、无阴影且为 40×40,页面和卡片均无横向溢出。
+- 云端磁盘和公网 `/kpl` 的 HTML SHA-256 均为
+  `75dff780c08f9a7adc0e75d53435de6b73ccd84eebe2c2366dd1c649d166b2d0`。
+- 云端磁盘和公网 CSS SHA-256 均为
+  `88df4f866be658ef1f91d994efab7e1a3adab24b2312e78ab25735a50f756b63`。
+- 公网 HTML 已引用 `strategy-workbench.css?v=20260725c`,透明外框规则验证通过,
+  `/health` 返回 `ok=true`,HTML 继续使用 `cache-control: no-cache`。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`。
+- 回退备份:
+  `C:\PandaDashboard\_deploy-backups\github-pr280-233c27e-20260725-221258`。
+- 发布顺序为先 CSS、后 HTML;本次仅静态发布,未重启 Node、Caddy、娱乐服务或公司端 L2 worker。
+
+Notes for next agent:
+- PR #280 已完成,无需重复部署;生产与 main 的两份静态文件哈希一致。
