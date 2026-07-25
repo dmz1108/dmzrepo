@@ -10662,3 +10662,30 @@ Deployment:
 Notes for next agent:
 - 日期只在当前标签页会话内保留；关闭该标签页并重新打开网站仍按系统默认当天进入。
 - 不要移除三个策略异步区块的请求序号与日期校验，否则快速切日期时会重新出现旧响应覆盖。
+
+## 2026-07-25 - Codex - PR #282 策略日期稳定性已部署
+
+Changed:
+- PR `#282` 已通过 merge commit `2102f53` 合入 `main`。
+- 已将策略历史日期会话保持和异步请求隔离静态发布到云端。
+- 发布前确认云端旧 HTML SHA-256 与上一版 `main` 完全一致，没有覆盖游离修改。
+- 云端两份运维日志均已备份并追加本次发布记录。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 云端磁盘和公网 `/kpl` 的 HTML SHA-256 均为
+  `947d9eff4fec34714372ffd2011290408975ed43c43ac52c3bf5a59568ecb755`。
+- 公网页面包含日期会话键及主线榜、L2、预判回看三组请求序号保护，`/health` 返回 `ok=true`。
+- 合并前全仓 `64/64` 个测试文件通过。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`。
+- 回退备份:
+  `C:\PandaDashboard\_deploy-backups\github-pr282-2102f53-20260725-224853`。
+- 本次仅静态发布，未重启 Node、Caddy、娱乐服务或公司端 L2 worker。
+
+Notes for next agent:
+- PR `#282` 已完成，无需重复发布。
