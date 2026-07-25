@@ -42,6 +42,15 @@ const {
   buildStrategyObservationReport,
   writeStrategyObservationReport,
 } = require('./strategy-observation-report');
+const {
+  guardedImportReviewSourceArtifact,
+  isProtectedManualReviewArtifact,
+  reviewSourceArtifactCount,
+  reviewSourceArtifactPayloadDay,
+} = require('./review-source-artifact-guard');
+const {
+  adminReviewSourceHealthVerdict,
+} = require('./review-source-health');
 
 // 只读诊断的环境级错误/超时收集器(六审):低层读取函数在遭遇 JSON 损坏/权限/网络错误时,
 // 无论调用方是否 .catch 吞掉,都把真实错误写进当前诊断上下文;正常缺文件(ENOENT)只记 missing。
@@ -4681,11 +4690,19 @@ async function adminReviewSourceHealth(url, req, res) {
   const rows = await mapLimit(tradingDays, 3, async day => {
     const inspect = await inspectLimitUpMainReasonDbDay(day, apiKey).catch(err => ({ day, error: err.message, needsSync: true }));
     const artifacts = Array.isArray(inspect.sourceArtifactStats) ? inspect.sourceArtifactStats : [];
+    const verdict = adminReviewSourceHealthVerdict(inspect, {
+      afterMarketClose: isAfterMarketClose(day),
+      requiredSourceCount: REQUIRED_REVIEW_SOURCE_GROUPS.length,
+    });
     return {
       day,
-      ok: !inspect.needsSync && !inspect.error,
+      ok: verdict.status === 'healthy',
+      status: verdict.status,
+      statusLabel: verdict.label,
+      reasonCode: verdict.reasonCode,
       needsSync: !!inspect.needsSync,
       reasonReady: !!inspect.reasonReady,
+      compatible: inspect.compatible === true,
       limitUpCount: Number(inspect.limitUpCount || 0),
       mainReasonCount: Number(inspect.mainReasonCount || 0),
       missingCount: Number(inspect.missingCount || 0),
@@ -4697,14 +4714,21 @@ async function adminReviewSourceHealth(url, req, res) {
       error: inspect.error || '',
     };
   });
+  const statusCounts = rows.reduce((counts, row) => {
+    counts[row.status] = Number(counts[row.status] || 0) + 1;
+    return counts;
+  }, {});
   return send(res, 200, {
     ok: true,
     checkedAt: authNowIso(),
     requestedEndDay,
     endDay,
     scanned: rows.length,
-    complete: rows.filter(item => item.ok).length,
-    pending: rows.filter(item => item.needsSync).length,
+    complete: Number(statusCounts.healthy || 0),
+    pending: Number(statusCounts.pending || 0),
+    attention: rows.filter(item => !['healthy', 'pending', 'not-required'].includes(item.status)).length,
+    notRequired: Number(statusCounts['not-required'] || 0),
+    statusCounts,
     requiredSourceGroups: REQUIRED_REVIEW_SOURCE_GROUPS,
     rows,
   });
@@ -5459,7 +5483,6 @@ async function syncLimitUpMainReasonDb(url, req, res) {
       dryRun,
       forceAll: force,
       forceReviewReady: true,
-      forceSources: true,
     });
     return send(res, 200, {
       ok: true,
@@ -14590,15 +14613,6 @@ function summarizeRequiredReviewSources(autoPayload, stocks) {
   };
 }
 
-function reviewSourceArtifactCount(group, payload) {
-  if (!payload) return 0;
-  if (group === 'kaipanla') {
-    if (Number(payload.stockRows || 0) > 0) return Number(payload.stockRows);
-    return (payload.boards || []).reduce((sum, board) => sum + Number(board?.rows?.length || 0), 0);
-  }
-  return Number(payload.count || payload.rows?.length || 0);
-}
-
 async function readReviewSourceArtifactStatus(day, group) {
   const isoDay = isoFromCompactDate(day);
   const paths = {
@@ -14613,17 +14627,32 @@ async function readReviewSourceArtifactStatus(day, group) {
   if (!filePath) return { group, exists: false, count: 0, path: '' };
   try {
     const payload = JSON.parse(await fs.readFile(filePath, 'utf8'));
-    const count = reviewSourceArtifactCount(group, payload);
-    const current = group !== 'ths' || payload?.sourceMode === 'official-limit-up-pool-json' || payload?.method === 'official-limit-up-pool-json';
+    const observedCount = reviewSourceArtifactCount(group, payload);
+    const sourceDay = reviewSourceArtifactPayloadDay(payload);
+    const dayMatch = sourceDay === isoDay;
+    const sourceModeCurrent = group !== 'ths'
+      || payload?.sourceMode === 'official-limit-up-pool-json'
+      || payload?.method === 'official-limit-up-pool-json';
+    const current = sourceModeCurrent && dayMatch;
+    const protectedManual = isProtectedManualReviewArtifact(group, payload, { targetExists: true });
     return {
       group,
       exists: true,
-      count,
-      ok: count > 0 && current,
+      count: dayMatch ? observedCount : 0,
+      observedCount,
+      ok: observedCount > 0 && current,
       path: filePath,
+      day: isoDay,
+      sourceDay,
+      dayMatch,
       savedAt: payload?.savedAt || payload?.generatedAt || '',
       source: payload?.source || '',
-      outdated: count > 0 && !current,
+      protectedManual,
+      outdated: observedCount > 0 && !sourceModeCurrent,
+      stale: observedCount > 0 && !dayMatch,
+      reasonCode: !dayMatch
+        ? (sourceDay ? 'cross-day-artifact' : 'artifact-day-missing')
+        : (!sourceModeCurrent ? 'outdated-source-mode' : ''),
     };
   } catch (err) {
     if (err.code === 'ENOENT') {
@@ -14694,27 +14723,14 @@ function reviewSourceManualCandidatePaths(group, day) {
   return [];
 }
 
-async function tryCopyReviewSourceArtifact(group, sourceFile, targetFile) {
-  try {
-    const payload = JSON.parse(await fs.readFile(sourceFile, 'utf8'));
-    const count = reviewSourceArtifactCount(group, payload);
-    if (count <= 0) {
-      return { ok: false, error: 'source artifact has no rows', sourceFile, targetFile, count };
-    }
-    await fs.mkdir(path.dirname(targetFile), { recursive: true });
-    if (path.resolve(sourceFile).toLowerCase() !== path.resolve(targetFile).toLowerCase()) {
-      await fs.writeFile(targetFile, JSON.stringify(payload, null, 2), 'utf8');
-    }
-    return {
-      ok: true,
-      count,
-      sourceFile,
-      targetFile,
-    };
-  } catch (err) {
-    if (err.code === 'ENOENT') return { ok: false, error: 'source file not found', sourceFile };
-    return { ok: false, error: err.message, sourceFile };
-  }
+async function tryCopyReviewSourceArtifact(group, sourceFile, targetFile, targetDay) {
+  return guardedImportReviewSourceArtifact({
+    group,
+    sourceFile,
+    targetFile,
+    targetDay,
+    backupRoot: path.join(__dirname, 'backups', 'review-source-artifact-import'),
+  });
 }
 
 async function tryImportReviewSourceArtifactFromCandidates(group, day, targetFile) {
@@ -14722,7 +14738,7 @@ async function tryImportReviewSourceArtifactFromCandidates(group, day, targetFil
   const attempts = [];
   for (const candidate of candidates) {
     if (path.resolve(candidate).toLowerCase() === path.resolve(targetFile).toLowerCase()) continue;
-    const copied = await tryCopyReviewSourceArtifact(group, candidate, targetFile);
+    const copied = await tryCopyReviewSourceArtifact(group, candidate, targetFile, day);
     attempts.push(copied);
     if (copied.ok) {
       return {
@@ -15906,6 +15922,24 @@ async function ensureReviewSourceArtifactDay(day, group, apiKey, options = {}) {
     };
   }
   const before = await readReviewSourceArtifactStatus(isoDay, group);
+  if (before.protectedManual) {
+    const message = before.ok
+      ? 'protected manual source artifact already complete'
+      : 'protected manual source artifact requires manual repair';
+    return {
+      group,
+      label,
+      ok: !!before.ok,
+      skipped: true,
+      protected: true,
+      day: isoDay,
+      before,
+      after: before,
+      count: before.count,
+      error: before.ok ? '' : message,
+      message,
+    };
+  }
   if (before.ok && !options.force) {
     return {
       group,

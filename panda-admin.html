@@ -1461,29 +1461,46 @@
       const rows = Array.isArray(data.rows) ? [...data.rows] : [];
       const pill = $('ops-review-health-pill');
       if (pill) {
-        const pending = Number(data.pending || rows.filter(row => row.needsSync).length);
-        pill.textContent = pending ? `待补齐 ${pending}` : '已完整';
-        pill.className = `pill ${pending ? '' : 'success'}`;
+        const pending = Number(data.pending || rows.filter(row => row.status === 'pending').length);
+        const attention = Number(data.attention || rows.filter(row => ['missing', 'invalid', 'failed'].includes(row.status)).length);
+        const notRequired = Number(data.notRequired || rows.filter(row => row.status === 'not-required').length);
+        pill.textContent = attention
+          ? `异常 ${attention}`
+          : (pending ? `等待 ${pending}` : (rows.length && notRequired === rows.length ? '无需检查' : '已完整'));
+        pill.className = `pill ${attention ? 'fail' : (pending || (rows.length && notRequired === rows.length) ? '' : 'success')}`;
       }
       const latestRows = rows.sort((a, b) => String(b.day).localeCompare(String(a.day)));
       $('ops-review-source-grid').innerHTML = latestRows.map(row => {
         const sourceText = (row.sourceArtifactStats || []).map(source => {
           const label = source.label || source.group || '--';
-          const value = source.ok ? Number(source.count || 0) : '缺';
+          const value = source.ok
+            ? Number(source.count || 0)
+            : (source.reasonCode === 'cross-day-artifact' ? '跨日' : '缺');
           return `${label}:${value}`;
         }).join('，');
         const missing = Array.isArray(row.missingSourceLabels) && row.missingSourceLabels.length
           ? `缺：${row.missingSourceLabels.join('、')}`
           : '';
-        const status = row.error ? 'error' : (row.needsSync ? 'warn' : 'ok');
+        const reviewStatus = row.status || (row.error ? 'failed' : (row.needsSync ? 'missing' : 'healthy'));
+        const labelByStatus = {
+          healthy: '完整',
+          pending: '等待发布',
+          missing: '缺失',
+          invalid: '异常',
+          failed: '检查失败',
+          'not-required': '无需检查',
+        };
+        const status = reviewStatus === 'healthy'
+          ? 'ok'
+          : (['missing', 'invalid', 'failed'].includes(reviewStatus) ? 'error' : 'warn');
         return `
           <article class="ops-source-card">
             <strong>
               <span>${escapeHtml(row.day || '--')}</span>
-              <span class="pill ${pillClassForState(status)}">${escapeHtml(row.error ? '异常' : (row.needsSync ? '待补齐' : '完整'))}</span>
+              <span class="pill ${pillClassForState(status)}">${escapeHtml(row.statusLabel || labelByStatus[reviewStatus] || '需确认')}</span>
             </strong>
             <small>涨停 ${Number(row.limitUpCount || 0)} · 主因 ${Number(row.mainReasonCount || 0)}${missing ? ` · ${escapeHtml(missing)}` : ''}</small><br>
-            <small>${escapeHtml(sourceText || row.skipReason || row.error || '暂无来源状态')}</small>
+            <small>${escapeHtml(sourceText || row.skipReason || row.error || row.reasonCode || '暂无来源状态')}</small>
           </article>
         `;
       }).join('') || '<div class="status">暂无数据源健康记录</div>';

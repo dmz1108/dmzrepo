@@ -64,12 +64,21 @@ The current regression contract is covered by `tests/review-source-health.test.j
 
 The health-source sync action should repair only missing, invalid, or stale source artifacts. It must not blindly regenerate and overwrite already valid source-faithful files.
 
+Before a structured candidate can be imported:
+
+- its internal trading day must exactly equal the target day;
+- an existing protected manual artifact must never be overwritten by the generic sync path, including force mode;
+- any permitted replacement must create a rollback backup and use an atomic file replacement;
+- `mode=missing` must leave already healthy sources untouched instead of forcing every source.
+
 After repair:
 
 - rerun the source reconciliation;
 - rebuild the combined database if a formal source changed;
 - refresh the health response from actual rows;
 - report what was filled, skipped, or still pending.
+
+Health and repair are separate decisions. In particular, `needsSync === false` does not by itself mean `healthy`: a pre-publication day, a missing terminal pool, and a non-trading day must remain `pending`, `missing`, and `not-required` respectively.
 
 ## TGB Special Rule
 

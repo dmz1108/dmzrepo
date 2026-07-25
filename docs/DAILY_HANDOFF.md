@@ -10689,3 +10689,37 @@ Deployment:
 
 Notes for next agent:
 - PR `#282` 已完成，无需重复发布。
+
+## 2026-07-25 - Codex - 复盘健康 P0 安全止血
+
+Changed:
+- 给复盘来源候选导入增加内部交易日硬校验；错误日期或缺少日期的候选不得写入正式来源文件。
+- 通用同步路径现在保护已存在的人工来源成果；TGB 正式文件以及带人工来源标记的其他文件在任何 force 级别下都不会被自动生成器覆盖，异常人工文件会明确要求人工修复。
+- 允许替换非人工来源文件时，先写入 `backups/review-source-artifact-import` 回退备份，再使用临时文件完成原子替换。
+- `mode=missing` 不再固定对所有来源传 `forceSources:true`，已有健康来源会保持文件内容和修改时间不变；显式 `force=1` 的既有语义保留。
+- 来源文件健康状态开始校验 payload 内部日期；跨日文件不再贡献目标日计数，并返回 `cross-day-artifact`。
+- 管理员运维中心不再把 `needsSync=false` 直接等同绿色“完整”，明确区分完整、等待发布、缺失、异常、检查失败和无需检查；这套展示判定没有接入同步重建决策。
+
+Files:
+- `review-source-artifact-guard.js`
+- `review-source-health.js`
+- `kpl-stats-server.js`
+- `panda-admin.html`
+- `tests/review-source-artifact-guard.test.js`
+- `tests/review-source-p0-health.test.js`
+- `docs/ops/REVIEW_SOURCE_HEALTH_SOP.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 新增行为测试覆盖同日导入、跨日拒写、缺日期拒写、人工 TGB 字节不变、非人工替换备份和管理员假绿回归。
+- `node --check` 通过主服务及两个新模块；管理员页内联脚本可编译。
+- 复盘来源、人工 TGB 专项测试通过；全仓 `66/66` 个 `tests/*.test.js` 文件通过。
+- `git diff --check` 通过；未触碰原有未跟踪的 `panda-discovery-db.json`，未加入任何运行时数据库或秘密。
+
+Deployment:
+- 未部署生产、未重启服务。
+- 部署时 `kpl-stats-server.js`、`review-source-artifact-guard.js`、`review-source-health.js` 必须作为同一后端版本原子发布并重启主服务；`panda-admin.html` 同批发布。
+
+Notes for next agent:
+- 本次仅为 P0 安全止血，不改变行情页 `/api/after-close-status` 和四源精确对账口径，也没有让更严格的管理员展示状态驱动自动重建。
+- 下一阶段 P1 应新增纯读取的影子 health manifest，与现有结果并行比较最近 30 个交易日后再决定切换。
