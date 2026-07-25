@@ -4933,3 +4933,469 @@ body.view-strategy .ml-reserve-bar { margin-bottom: 6px !important; }
   body.view-strategy .ml-card { padding: 11px !important; }
   body.view-strategy .ml-name { font-size: 15px !important; }
 }
+
+/* =========================================================================
+   主线卡片重构(2026-07-25):左柱锚点 + 明星前置 + QI 认证标识
+   设计目标:①左柱把主线分做成排序锚,扫列表即强弱梯度;②明星条升为卡片主角,
+   确认明星佩戴与主页同款 QI 标识;③盘面数字降为支撑材料。
+   纯展示层:不改任何主线/龙头/明星判定、评分与交互逻辑。
+   ========================================================================= */
+body.view-strategy .ml-card {
+  display: grid !important;
+  grid-template-columns: 80px minmax(0, 1fr);
+  gap: 0 !important;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+/* ---------- 左柱:排序锚 ---------- */
+body.view-strategy .ml-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 13px 7px 11px;
+  background: var(--st-panel-2);
+  border-right: 1px solid var(--st-line);
+}
+body.view-strategy .ml-card.has-confirmed-star .ml-rail {
+  background: linear-gradient(180deg, rgba(239, 185, 79, .13), rgba(239, 185, 79, .03));
+  border-right-color: rgba(239, 185, 79, .3);
+}
+body.view-strategy .ml-card.confirmed-mainline .ml-rail {
+  background: linear-gradient(180deg, rgba(255, 98, 93, .13), rgba(255, 98, 93, .03));
+  border-right-color: rgba(255, 98, 93, .3);
+}
+body.view-strategy .ml-card.has-expected-star .ml-rail {
+  background: linear-gradient(180deg, rgba(231, 173, 70, .1), rgba(231, 173, 70, .025));
+  border-right-color: rgba(231, 173, 70, .24);
+}
+body.view-strategy .ml-rail .ml-rank {
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  margin: 0 0 3px !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--st-faint) !important;
+  font-size: 9.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: .06em;
+}
+body.view-strategy .ml-card.has-confirmed-star .ml-rail .ml-rank { color: #efb94f !important; }
+body.view-strategy .ml-card.confirmed-mainline .ml-rail .ml-rank { color: #ff8b86 !important; }
+body.view-strategy .ml-rail-score {
+  font-size: 26px;
+  font-weight: 800;
+  line-height: .95;
+  letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--st-text);
+}
+body.view-strategy .ml-rail-score-l {
+  margin-top: 2px;
+  color: var(--st-faint);
+  font-size: 8.5px;
+  letter-spacing: .04em;
+}
+/* 强度条:相对当日最强主线的比例,列表纵览即可比 */
+body.view-strategy .ml-rail-bar {
+  width: 38px;
+  height: 2.5px;
+  margin-top: 7px;
+  border-radius: 2px;
+  background: rgba(194, 207, 224, .14);
+  overflow: hidden;
+}
+body.view-strategy .ml-rail-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--st-faint);
+}
+body.view-strategy .ml-card.has-confirmed-star .ml-rail-bar i { background: #efb94f; }
+body.view-strategy .ml-card.confirmed-mainline .ml-rail-bar i { background: var(--st-red); }
+body.view-strategy .ml-card.has-expected-star .ml-rail-bar i { background: var(--st-amber); }
+body.view-strategy .ml-rail-pred {
+  width: 100%;
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--st-line);
+  text-align: center;
+}
+body.view-strategy .ml-rail-pred b {
+  color: var(--st-muted);
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+body.view-strategy .ml-rail-pred i {
+  display: block;
+  color: var(--st-faint);
+  font-size: 8px;
+  font-style: normal;
+  letter-spacing: .03em;
+}
+
+/* ---------- 右侧内容区 ---------- */
+body.view-strategy .ml-cardbody {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 13px 10px;
+}
+body.view-strategy .ml-cardbody > .ml-top {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 4px !important;
+}
+
+/* ---------- QI 认证标识(与主页左上角同款 SVG) ---------- */
+body.view-strategy .ml-qi-mark {
+  flex-shrink: 0;
+  width: 34px;
+  height: 25px;
+  display: block;
+  align-self: center;
+}
+body.view-strategy .ml-qi-mark .qim-orbit { stroke: rgba(239, 185, 79, .7); fill: none; }
+body.view-strategy .ml-qi-mark .qim-line { stroke: #fff; fill: none; }
+body.view-strategy .ml-qi-mark .qim-fill { fill: #fff; stroke: none; }
+body.view-strategy .ml-qi-mark .qim-spark { fill: var(--st-blue); }
+/* 待认证:预期明星佩戴同款轮廓但灰度无高亮点,与确认版对齐并形成"未盖章/已盖章"对比 */
+body.view-strategy .ml-qi-mark.pending { opacity: .42; }
+body.view-strategy .ml-qi-mark.pending .qim-orbit { stroke: rgba(231, 173, 70, .5); }
+body.view-strategy .ml-qi-mark.pending .qim-line { stroke: var(--st-muted); }
+body.view-strategy .ml-qi-mark.pending .qim-fill { fill: var(--st-muted); }
+/* 无明星:留白占位,保持三态卡片文字起始线一致 */
+body.view-strategy .ml-qi-mark.empty { visibility: hidden; }
+
+/* ---------- 明星条:卡片主角 ---------- */
+body.view-strategy .ml-proof-row.ml-star-proof {
+  display: flex !important;
+  border-left-width: 3px !important;
+  align-items: flex-start;
+  gap: 10px !important;
+  margin: 0 !important;
+  padding: 9px 11px !important;
+  border: 1px solid rgba(231, 173, 70, .32) !important;
+  border-left: 4px solid var(--st-amber) !important;
+  border-radius: 8px !important;
+  background: linear-gradient(96deg, rgba(231, 173, 70, .15), rgba(231, 173, 70, .04) 62%, transparent) !important;
+}
+body.view-strategy .ml-card.has-confirmed-star .ml-proof-row.ml-star-proof {
+  border-color: rgba(239, 185, 79, .42) !important;
+  border-left-color: #efb94f !important;
+  background: linear-gradient(96deg, rgba(239, 185, 79, .18), rgba(239, 185, 79, .05) 62%, transparent) !important;
+}
+body.view-strategy .ml-card.confirmed-mainline .ml-proof-row.ml-star-proof {
+  border-color: rgba(255, 98, 93, .34) !important;
+  border-left-color: var(--st-red) !important;
+  background: linear-gradient(96deg, rgba(255, 98, 93, .16), rgba(255, 98, 93, .045) 62%, transparent) !important;
+}
+body.view-strategy .ml-star-proof .ml-star-proof-head {
+  min-height: 0 !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: center;
+  gap: 1px !important;
+  flex-shrink: 0;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+body.view-strategy .ml-star-proof .ml-star-proof-title {
+  font-size: 9.5px !important;
+  font-weight: 780 !important;
+  letter-spacing: .07em;
+  color: #eec173 !important;
+}
+body.view-strategy .ml-card.has-confirmed-star .ml-star-proof .ml-star-proof-title { color: #f6cd7c !important; }
+body.view-strategy .ml-card.confirmed-mainline .ml-star-proof .ml-star-proof-title { color: #ff9c97 !important; }
+body.view-strategy .ml-star-proof .ml-star-proof-summary {
+  font-size: 9px !important;
+  color: var(--st-faint) !important;
+}
+body.view-strategy .ml-star-proof .ml-star-list {
+  flex: 1;
+  min-width: 0;
+  display: flex !important;
+  flex-direction: column;
+  gap: 5px;
+  padding: 0 !important;
+  align-content: initial;
+}
+body.view-strategy .ml-star-proof .ml-stock.ml-starstock {
+  width: 100%;
+  min-height: 0 !important;
+  display: flex !important;
+  align-items: center;
+  gap: 9px !important;
+  padding: 4px 8px !important;
+  border: 0 !important;
+  border-radius: 5px !important;
+  background: rgba(255, 255, 255, .04) !important;
+}
+body.view-strategy .ml-star-proof .ml-stock.ml-starstock.confirmed {
+  border: 0 !important;
+  box-shadow: none !important;
+  background: rgba(239, 185, 79, .12) !important;
+}
+body.view-strategy .ml-star-identity { display: inline-flex; align-items: baseline; gap: 5px; min-width: 0; }
+body.view-strategy .ml-star-name {
+  font-size: 15px !important;
+  font-weight: 780 !important;
+  letter-spacing: -.015em;
+}
+body.view-strategy .ml-star-state {
+  font-size: 9.5px !important;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+/* 三比值:右侧微型统计栏,列宽统一右对齐 */
+body.view-strategy .ml-star-proof .ml-star-ratios {
+  margin-left: auto;
+  display: flex !important;
+  grid-template-columns: none !important;
+  gap: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  flex-shrink: 0;
+}
+body.view-strategy .ml-star-proof .ml-star-ratios > span {
+  display: flex !important;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1px;
+  min-width: 52px;
+  padding: 0 9px !important;
+  border-right: 1px solid rgba(255, 255, 255, .09) !important;
+}
+body.view-strategy .ml-star-proof .ml-star-ratios > span:last-child { border-right: 0 !important; padding-right: 0 !important; }
+body.view-strategy .ml-star-proof .ml-star-ratios i {
+  font-size: 8px !important;
+  font-style: normal;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  color: var(--st-faint) !important;
+}
+body.view-strategy .ml-star-proof .ml-star-ratios b {
+  font-size: 11.5px !important;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--st-muted) !important;
+}
+
+/* ---------- 龙头行 ---------- */
+body.view-strategy .ml-proof-row:not(.ml-star-proof) {
+  display: flex !important;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px !important;
+  grid-template-columns: none !important;
+}
+body.view-strategy .ml-proof-row:not(.ml-star-proof) > .ml-proof-lbl {
+  grid-row: auto !important;
+  align-self: center !important;
+  padding: 0 !important;
+  flex-shrink: 0;
+  font-size: 9px !important;
+  font-weight: 650;
+  letter-spacing: .06em;
+  color: var(--st-faint) !important;
+}
+body.view-strategy .ml-proof-row:not(.ml-star-proof) > :not(.ml-proof-lbl) { grid-column: auto !important; }
+body.view-strategy .ml-proof-row .ml-stock.ml-leaderstock {
+  min-height: 0 !important;
+  display: inline-flex !important;
+  align-items: baseline;
+  justify-content: flex-start !important;
+  gap: 5px !important;
+  padding: 3px 9px !important;
+  border-radius: 5px !important;
+  border: 1px solid transparent;
+  background: var(--st-panel-2) !important;
+  font-size: 12.5px;
+  font-weight: 670;
+}
+body.view-strategy .ml-proof-row .ml-stock.ml-leaderstock.top { border-color: var(--st-line-strong); }
+body.view-strategy .ml-proof-row .ml-stock.ml-leaderstock i {
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 400;
+  color: var(--st-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 盘面数字:核心3 | 扩散3 ---------- */
+body.view-strategy .ml-signal-strip {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 1px !important;
+  border: 1px solid var(--st-line) !important;
+  border-radius: 7px !important;
+  background: var(--st-line) !important;
+  overflow: hidden;
+}
+body.view-strategy .ml-signal-cell,
+body.view-strategy .ml-signal-cell.support {
+  min-height: 0 !important;
+  display: block !important;
+  justify-content: flex-start !important;
+  padding: 6px 8px !important;
+  border: 0 !important;
+  background: var(--st-panel) !important;
+}
+body.view-strategy .ml-signal-cell.core { background: #101820 !important; }
+body.view-strategy .ml-signal-cell i {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 8.5px !important;
+  letter-spacing: .03em;
+  color: var(--st-faint) !important;
+}
+body.view-strategy .ml-signal-cell b {
+  margin-left: 0 !important;
+  font-size: 13.5px !important;
+  font-weight: 750;
+  line-height: 1.1;
+  letter-spacing: -.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 页脚 ---------- */
+body.view-strategy .ml-reason {
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  font-size: 10.5px !important;
+  line-height: 1.5;
+  color: var(--st-faint) !important;
+}
+body.view-strategy .ml-card-actions {
+  margin: 0 !important;
+  padding-top: 8px;
+  border-top: 1px solid var(--st-line);
+}
+body.view-strategy .ml-toggle,
+body.view-strategy .ml-confirm-btn {
+  min-height: 0 !important;
+  padding: 3px 10px !important;
+  font-size: 10.5px !important;
+}
+
+/* ---------- 窄屏:左柱转横向头条 ---------- */
+@media (max-width: 560px) {
+  body.view-strategy .ml-card { grid-template-columns: minmax(0, 1fr); }
+  body.view-strategy .ml-rail {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 9px;
+    padding: 8px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--st-line);
+  }
+  body.view-strategy .ml-card.has-confirmed-star .ml-rail { border-bottom-color: rgba(255, 98, 93, .26); }
+  body.view-strategy .ml-card.has-expected-star .ml-rail { border-bottom-color: rgba(231, 173, 70, .24); }
+  body.view-strategy .ml-rail .ml-rank { margin-bottom: 0 !important; }
+  body.view-strategy .ml-rail-score { font-size: 20px; }
+  body.view-strategy .ml-rail-score-l { margin-top: 0; }
+  body.view-strategy .ml-rail-bar { margin-top: 0; width: 44px; }
+  body.view-strategy .ml-rail-pred {
+    width: auto;
+    margin: 0 0 0 auto;
+    padding: 0;
+    border-top: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+  }
+  body.view-strategy .ml-rail-pred i { display: inline; }
+  body.view-strategy .ml-star-ratios { display: none !important; }
+  body.view-strategy .ml-signal-strip { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  body.view-strategy .ml-card { padding: 0 !important; }
+}
+
+/* 头部脉冲:板块涨幅/资金活跃度/方向,紧随题材名 */
+body.view-strategy .ml-head-pulse {
+  min-height: 0 !important;
+  display: flex !important;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+body.view-strategy .ml-head-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 0 9px 0 0 !important;
+  margin-right: 9px;
+  border-left: 0 !important;
+  border-right: 1px solid var(--st-line);
+}
+body.view-strategy .ml-head-stat:last-child { border-right: 0; margin-right: 0; padding-right: 0 !important; }
+body.view-strategy .ml-head-stat i { font-size: 9px !important; color: var(--st-faint); }
+body.view-strategy .ml-head-stat b { font-size: 13px !important; font-weight: 750; font-variant-numeric: tabular-nums; }
+body.view-strategy .ml-name-row {
+  display: flex !important;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px 10px !important;
+  grid-template-columns: none !important;
+}
+body.view-strategy .ml-name { font-size: 18px !important; font-weight: 770 !important; letter-spacing: -.02em !important; }
+body.view-strategy .ml-name-flags { margin-top: 0 !important; gap: 4px; }
+body.view-strategy .ml-sub { font-size: 10.5px !important; color: var(--st-faint) !important; }
+
+/* 明星状态标签:确认=金实心,预期=琥珀描边(承接 #262 金色证据语义) */
+body.view-strategy .ml-star-proof .ml-stock.ml-starstock .ml-star-state {
+  padding: 1px 6px !important;
+  border-radius: 4px !important;
+  border: 1px solid rgba(231, 173, 70, .45) !important;
+  background: transparent !important;
+  color: #eec173 !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+}
+body.view-strategy .ml-star-proof .ml-stock.ml-starstock.confirmed .ml-star-state {
+  border-color: transparent !important;
+  background: #efb94f !important;
+  color: #17130b !important;
+  font-weight: 800 !important;
+}
+body.view-strategy .ml-star-proof .ml-stock.ml-starstock .ml-star-name { color: var(--st-text) !important; }
+body.view-strategy .ml-star-proof .ml-stock.ml-starstock.confirmed .ml-star-name { color: #ffeec4 !important; }
+/* 龙头 chip 统一底色,压掉旧的明星高亮底 */
+body.view-strategy .ml-card .ml-proof-row .ml-stock.ml-leaderstock,
+body.view-strategy .ml-card.has-confirmed-star .ml-proof-row .ml-stock.ml-leaderstock,
+body.view-strategy .ml-card.confirmed-mainline .ml-proof-row .ml-stock.ml-leaderstock {
+  background: var(--st-panel-2) !important;
+  box-shadow: none !important;
+}
+body.view-strategy .ml-card .ml-proof-row .ml-stock.ml-leaderstock.top {
+  border-color: var(--st-line-strong) !important;
+}
+/* 无明星态:强度够但 L2 未出明星的方向不隐身,明确写出扫描状态 */
+body.view-strategy .ml-proof-row.ml-star-proof.is-empty {
+  border-style: dashed !important;
+  border-color: var(--st-line) !important;
+  border-left: 3px solid var(--st-line-strong) !important;
+  background: transparent !important;
+}
+body.view-strategy .ml-star-proof.is-empty .ml-star-proof-title { color: var(--st-faint) !important; }
+body.view-strategy .ml-star-none {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  font-size: 11.5px;
+  color: var(--st-faint);
+}

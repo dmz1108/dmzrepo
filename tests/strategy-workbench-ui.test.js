@@ -7,7 +7,7 @@ const html = fs.readFileSync(path.join(root, 'kpl-dashboard_17_apple.html'), 'ut
 const server = fs.readFileSync(path.join(root, 'kpl-stats-server.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'Qi/vendor/strategy-workbench.css'), 'utf8');
 
-assert(html.includes('<link href="/vendor/strategy-workbench.css?v=20260724l" rel="stylesheet">'));
+assert(html.includes('<link href="/vendor/strategy-workbench.css?v=20260725a" rel="stylesheet">'));
 assert(html.includes('<header class="strategy-hero">'));
 assert(html.includes('class="strategy-hero-head"'));
 assert(html.includes('class="strategy-hero-utility"'));
@@ -43,6 +43,13 @@ for (const selector of [
   '.ml-l2-table-money.is-buy',
   '.ml-l2-table-money.is-sell',
   '.ml-l2-table-ratio',
+  '.ml-rail',
+  '.ml-rail-score',
+  '.ml-rail-bar',
+  '.ml-cardbody',
+  '.ml-qi-mark',
+  '.ml-qi-mark.pending',
+  '.ml-star-none',
   '.strategy-board-card',
 ]) {
   assert(css.includes(selector), `missing strategy visual state: ${selector}`);
@@ -184,3 +191,17 @@ const rowIncomplete = strategyL2HistoryBucketRow(sampleRow, 10000000, 500000);
 assert(/ is-empty"/.test(rowIncomplete) && rowIncomplete.includes('<small>字段不完整</small>'), 'L2样本:字段含 null → 字段不完整');
 
 console.log('strategy workbench UI checks passed');
+
+// 主线卡片重构(2026-07-25):左柱锚点 + 明星前置 + QI 认证标识
+assert(html.includes('<div class="ml-rail">') && html.includes('class="ml-rail-score"')
+  && html.includes('class="ml-rail-bar"'), '主线卡片左柱含排名/主线分/强度条');
+assert(html.includes('<div class="ml-cardbody">'), '卡片右侧内容区包裹存在');
+assert(html.includes('function strategyMainlineQiMarkHTML(kind)')
+  && html.includes('viewBox="12 27 110 82"'), 'QI 认证标识助手存在且使用裁切后的 viewBox');
+assert(html.includes("strategyMainlineQiMarkHTML(visibleStars.some(s => s.level === 'confirmed') ? 'confirmed' : 'pending')"),
+  '确认明星佩戴 QI 认证标识,预期明星为待认证态');
+assert(html.includes('ml-star-proof is-empty') && html.includes('已完成 L2 扫描,未出现达标明星'),
+  '无明星方向仍显示明星信号行与扫描状态,强度够的板块不隐身');
+assert(!html.includes('<div class="ml-score-wrap">'), '旧的整行评分盒已由左柱取代');
+assert(css.includes('body.view-strategy .ml-card.has-confirmed-star .ml-rail')
+  && css.includes('#efb94f'), '确认明星沿用金色证据语义(#262),红色仍留给人工确认主线');
