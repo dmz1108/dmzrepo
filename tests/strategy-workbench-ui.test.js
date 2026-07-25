@@ -190,8 +190,6 @@ assert(/ is-empty"/.test(rowMissing) && rowMissing.includes('<small>数据缺失
 const rowIncomplete = strategyL2HistoryBucketRow(sampleRow, 10000000, 500000);
 assert(/ is-empty"/.test(rowIncomplete) && rowIncomplete.includes('<small>字段不完整</small>'), 'L2样本:字段含 null → 字段不完整');
 
-console.log('strategy workbench UI checks passed');
-
 // 主线卡片重构(2026-07-25):左柱锚点 + 明星前置 + QI 认证标识
 assert(html.includes('<div class="ml-rail">') && html.includes('class="ml-rail-score"')
   && html.includes('class="ml-rail-bar"'), '主线卡片左柱含排名/主线分/强度条');
@@ -237,3 +235,31 @@ assert(css.includes('body.view-strategy .ml-qi-seal.pending') && css.includes('b
   const diff = Math.abs(hue('#f0c04a') - hue('#7f9bbd'));
   assert(Math.min(diff, 360 - diff) >= 90, '确认明星与预期明星色相相差 >=90°(规范硬约束)');
 }
+
+// ===== Codex #276 复审三项 P1 的回归锁 =====
+// P1-1 媒体查询不增加特异性:移动端隐藏三比值的规则必须与桌面规则同级(.ml-star-proof .ml-star-ratios)
+assert(css.includes('body.view-strategy .ml-star-proof .ml-star-ratios { display: none !important; }'),
+  '窄屏隐藏三比值的规则特异性与桌面规则同级,否则窄屏下仍显示并被裁切');
+assert(!/\n\s*body\.view-strategy \.ml-star-ratios \{ display: none !important; \}/.test(css),
+  '不得保留低特异性的窄屏隐藏规则(会被桌面规则静默压过)');
+
+// P1-2 强度条基准:预备主线必须显式传入所属列表,不能依赖 map 隐式第三参数
+assert(html.includes('renderCard(row, idx, reserveList)'),
+  '预备主线显式传入整份列表作为强度条基准(否则每卡只与自身比,恒 100%)');
+assert(html.includes('const reserveList = reserves.slice(0, 4);'),
+  '预备列表先具名再 map,保证基准与渲染集合一致');
+
+// P1-3 L2 状态单一归一化:明星空态与徽章共用同一份 l2State
+{
+  const cardFn = html.slice(html.indexOf('const renderCard = (m, i, cardList)'), html.indexOf('// 两套独立主线预测'));
+  const l2StateAt = cardFn.indexOf('const l2State = m.l2ScanState');
+  const starRowAt = cardFn.indexOf('const starRow = starChips');
+  assert(l2StateAt > -1 && starRowAt > -1 && l2StateAt < starRowAt,
+    'l2State 归一化必须在 starRow 之前,供空态文案与徽章共同消费');
+  assert(!cardFn.includes("const st = String(m.l2ScanState || m.l2VerificationStatus || '');"),
+    '明星空态不得另起一套原始状态推导(旧冻结快照会与徽章文案矛盾)');
+  assert(cardFn.includes("l2State === 'coverage-insufficient' ? '扫描覆盖不足,暂不能判定无明星'"),
+    '空态文案读归一化后的 l2State');
+}
+
+console.log('strategy workbench UI checks passed');

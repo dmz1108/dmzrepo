@@ -13247,8 +13247,9 @@ function renderStrategyMainlinesHTML(d) {
     </section>`;
   }
   const statusHtml = strategyMainlineStatusHTML(d);
-  // cardList 由 Array.prototype.map 自动传入(第三参数=整列表),用于左柱强度条的相对基准;
-  // 单卡直接调用(预备主线)时为 undefined,回退为自身 100%。
+  // cardList = 该卡所属列表,用于左柱强度条的相对基准。.map(renderCard) 会自动传入(第三参数),
+  // 单卡调用必须显式传入所属列表——否则每张卡只和自己比,强度条恒 100%,与"相对当日最强主线"
+  // 的语义相反(Codex #276 P1-2:预备主线实测 418/326/239/166 四张卡全满格)。
   const renderCard = (m, i, cardList) => {
     const predictionSummaryOnly = !!m.historicalPredictionSummary;
     const leader = m.mainLeader || {};
@@ -13389,6 +13390,19 @@ function renderStrategyMainlinesHTML(d) {
         </span>`;
       })
       .join('');
+    const l2Detail = m.l2ScanDetail || {};
+    // 旧冻结快照没有 l2ScanState：能从卡片已有指标确认未达门槛的显示“未达扫描条件”；
+    // 达标但过程未知的保守显示“覆盖不足”，绝不伪装成公司端正在排队。
+    const legacyL2Eligible = (Array.isArray(m.resonanceBoards) ? m.resonanceBoards : []).some(board =>
+      String(board?.plateId || '') && Number(board?.netInflow) >= 5e8 && Number(board?.ztCount) >= 2
+    );
+    const l2State = m.l2ScanState || (m.l2VerificationStatus === 'qi'
+      ? 'qi'
+      : (m.l2VerificationStatus === 'scanned-no-star'
+        ? 'scanned-no-star'
+        : (m.l2VerificationStatus === 'unscanned' ? (legacyL2Eligible ? 'coverage-insufficient' : 'not-eligible') : '')));
+    // 明星空态文案与下方 L2 徽章共用上面这份归一化 l2State(Codex #276 P1-3:
+    // 旧冻结快照 unscanned+达门槛 会被归一化为 coverage-insufficient,两处必须一致)。
     const starRow = starChips ? `<div class="ml-proof-row ml-star-proof">
       ${strategyMainlineQiMarkHTML(visibleStars.some(s => s.level === 'confirmed') ? 'confirmed' : 'pending')}
       <div class="ml-star-proof-head" title="纯当日 L2 判定:最大可统计档主动买入累计>1.5亿或被动买入累计>2亿；未封大涨时三项买卖比至少两项严格>1.65为预期明星，封板后至少两项严格>2.00才明星确认；盘中出现过的预期信号会保留用于复盘。">
@@ -13401,27 +13415,14 @@ function renderStrategyMainlinesHTML(d) {
       <div class="ml-star-proof-head">
         <span class="ml-star-proof-title">明星信号</span>
       </div>
-      <div class="ml-star-list"><span class="ml-star-none">${escapeHTML((() => {
-        const st = String(m.l2ScanState || m.l2VerificationStatus || '');
-        if (st === 'scanned-no-star') return '已完成 L2 扫描,未出现达标明星';
-        if (st === 'running') return '公司端正在扫描,完成前不下结论';
-        if (st === 'waiting-worker') return '已达门槛,等待公司端扫描';
-        if (st === 'coverage-insufficient') return '扫描覆盖不足,暂不能判定无明星';
-        if (st === 'not-eligible' || st === 'unscanned') return '未达自动扫描门槛,今日未扫描';
-        return '暂无 L2 明星证据';
-      })())}</span></div>
+      <div class="ml-star-list"><span class="ml-star-none">${escapeHTML(
+        l2State === 'scanned-no-star' ? '已完成 L2 扫描,未出现达标明星'
+        : l2State === 'running' ? '公司端正在扫描,完成前不下结论'
+        : l2State === 'waiting-worker' ? '已达门槛,等待公司端扫描'
+        : l2State === 'coverage-insufficient' ? '扫描覆盖不足,暂不能判定无明星'
+        : l2State === 'not-eligible' ? '未达自动扫描门槛,今日未扫描'
+        : '暂无 L2 明星证据')}</span></div>
     </div>`);
-    const l2Detail = m.l2ScanDetail || {};
-    // 旧冻结快照没有 l2ScanState：能从卡片已有指标确认未达门槛的显示“未达扫描条件”；
-    // 达标但过程未知的保守显示“覆盖不足”，绝不伪装成公司端正在排队。
-    const legacyL2Eligible = (Array.isArray(m.resonanceBoards) ? m.resonanceBoards : []).some(board =>
-      String(board?.plateId || '') && Number(board?.netInflow) >= 5e8 && Number(board?.ztCount) >= 2
-    );
-    const l2State = m.l2ScanState || (m.l2VerificationStatus === 'qi'
-      ? 'qi'
-      : (m.l2VerificationStatus === 'scanned-no-star'
-        ? 'scanned-no-star'
-        : (m.l2VerificationStatus === 'unscanned' ? (legacyL2Eligible ? 'coverage-insufficient' : 'not-eligible') : '')));
     const l2Actual = [];
     if (l2Detail.maxNetInflow != null) l2Actual.push(`最高净流入${fmtInflow(l2Detail.maxNetInflow)}`);
     if (l2Detail.maxZt != null) l2Actual.push(`最多涨停${Number(l2Detail.maxZt)}只`);
@@ -13463,7 +13464,7 @@ function renderStrategyMainlinesHTML(d) {
     const hasConfirmedStar = visibleStars.some(s => s.level === 'confirmed');
     const hasExpectedStar = !hasConfirmedStar && visibleStars.some(s => s.level === 'expected');
     // 左柱(排序锚):主线分做最大视觉量,强度条按相对当日最强主线的比例填充,纵览即强弱梯度。
-    // maxScore 取自 .map(renderCard) 自动传入的第三参数(整列表);单卡调用时回退为自身=100%。
+    // maxScore 取自 cardList(正式榜由 .map 自动传入、预备榜显式传入);两处都保证是"整列表"。
     const railScore = Number(m.score) || 0;
     const railMaxScore = Math.max(1, ...(Array.isArray(cardList) ? cardList : [m]).map(x => Number(x?.score) || 0));
     const railBarPct = Math.max(4, Math.min(100, Math.round(railScore / railMaxScore * 100)));
@@ -13568,10 +13569,13 @@ function renderStrategyMainlinesHTML(d) {
         .map(r => r === 'no-confirmed-star' ? '待明星确认' : (r === 'no-qualified-leader' ? '待龙头形成' : r)).join(' · ');
       const reserveBlock = reserves.length ? `<div class="ml-reserve">
         <div class="ml-reserve-head"><span>预备主线</span><small>明星或龙头单项条件待补齐 · 补齐后升正式榜</small></div>
-        <div class="ml-grid">${reserves.slice(0, 4).map(row => `<div class="ml-reserve-card">
+        <div class="ml-grid">${(() => {
+          const reserveList = reserves.slice(0, 4);
+          return reserveList.map((row, idx) => `<div class="ml-reserve-card">
           <div class="ml-reserve-bar">预备 · ${escapeHTML(reserveNote(row) || '待补齐')}</div>
-          ${renderCard(row)}
-        </div>`).join('')}</div>
+          ${renderCard(row, idx, reserveList)}
+        </div>`).join('');
+        })()}</div>
       </div>` : '';
       return `<div class="ml-col">
         <div class="ml-col-title"><span>${escapeHTML(title)}</span><small>${escapeHTML(zsLabel)}${tag}</small></div>

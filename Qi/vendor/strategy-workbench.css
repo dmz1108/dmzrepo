@@ -5317,7 +5317,9 @@ body.view-strategy .ml-confirm-btn {
     gap: 4px;
   }
   body.view-strategy .ml-rail-pred i { display: inline; }
-  body.view-strategy .ml-star-ratios { display: none !important; }
+  /* [Codex #276 P1-1] 媒体查询不增加特异性:必须写到与桌面规则(.ml-star-proof .ml-star-ratios,
+     0-3-1)同级,否则窄屏下三比值仍显示,最右列被 overflow:hidden 裁掉、股名被挤到 0 宽。 */
+  body.view-strategy .ml-star-proof .ml-star-ratios { display: none !important; }
   body.view-strategy .ml-signal-strip { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
   body.view-strategy .ml-card { padding: 0 !important; }
 }

@@ -10391,3 +10391,33 @@ Deployment: 文档与样式并入 PR #276,未部署。
 Notes for next agent:
 - 色相断言会实际解析 hex 计算差值,改回相近色会直接测试失败,不是靠注释约束。
 - 若要新增状态色,先查本规范第 1 节色相表,再开 discussions 走 Owner 定稿。
+
+## 2026-07-25 - Claude - PR #276 按 Codex 复审修订三项 P1
+
+Changed:
+- P1-1 窄屏三比值未隐藏:媒体查询不增加特异性,`.ml-star-ratios{display:none}`(0-2-1)被桌面
+  `.ml-star-proof .ml-star-ratios{display:flex}`(0-3-1)压过,390px 下三列仍在、最右列被
+  overflow:hidden 裁掉、股名被挤窄。修:窄屏规则提到同级选择器。
+- P1-2 强度条基准失真:预备主线用 `renderCard(row)` 单卡调用,拿不到 map 隐式第三参数,
+  每卡只与自身比 → 恒 100%,与"相对当日最强主线"语义相反(生产实测东财 418/326/239/166
+  四卡全满格)。修:预备列表先具名 reserveList 再 map,显式传入 `renderCard(row, idx, reserveList)`。
+- P1-3 空态文案与徽章矛盾:明星空态另起一套原始 l2ScanState/l2VerificationStatus 推导,
+  旧冻结快照(unscanned + 已达历史门槛)会出现徽章"覆盖不足"、明星行"未达门槛"互相打架。
+  修:把 l2State 归一化块整体上移到 starRow 之前,空态与徽章共用同一份。
+- 非阻断:测试成功日志移到文件末尾,避免后续断言失败时仍先打印"checks passed"。
+
+Files:
+- kpl-dashboard_17_apple.html / Qi/vendor/strategy-workbench.css / tests/strategy-workbench-ui.test.js
+
+Validated:
+- 全仓 63 个测试文件通过;git diff --check、内联脚本解析通过。
+- 新增三项 P1 回归锁:窄屏隐藏规则特异性(并禁止低特异性版本复现)、预备列表显式传参、
+  l2State 归一化必须早于 starRow 且空态不得另起推导。
+- Playwright 运行时窄屏核验(不只看 body 溢出):390px 三比值可见数=0、卡内无元素越界、
+  股名宽度 63/59px 未被压扁;1280px 三比值正常显示且不越界。
+
+Deployment: 未部署;PR #276 待 Codex 复验。
+
+Notes for next agent:
+- 教训:媒体查询内的规则不会自动提升特异性,覆盖桌面规则时必须显式对齐选择器层级。
+- 教训:Array.map 隐式第三参数是脆弱约定,凡有单卡直调路径的渲染函数都应显式传列表。
