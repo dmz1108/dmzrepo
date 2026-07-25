@@ -10225,3 +10225,28 @@ Deployment:
 
 Notes for next agent:
 - 策略页的历史日期是页面会话状态，不写入账号或服务器持久配置；浏览器完整刷新后仍按系统默认当天进入。
+
+## 2026-07-25 - Codex - PR #272 策略历史日期锁定已部署
+
+Changed:
+- PR `#272` 已合并到 `main`，merge commit 为 `9f3c44f3849e41272ed53d575ba6ac97532af8fb`。
+- 已将策略页历史日期锁定修复静态发布到云端；发布前确认云端 HTML 与上一版 `main` 哈希完全一致，没有覆盖游离修改。
+- 云端两份运维日志均已追加本次发布记录。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `tests/strategy-date-lock.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 专项日期锁定测试及全仓 `62/62` 个 `tests/*.test.js` 文件通过。
+- 云端磁盘和公网 `/kpl` SHA-256 均为 `50dbc1798accb930724bbc78021bca0c6216b107541d98c877134683a9edf30d`。
+- 公网 `/health` 返回 `ok=true`，HTML 响应为 `cache-control: no-cache`。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard\kpl-dashboard_17_apple.html`。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-pr272-9f3c44f-20260725-132819`。
+- 本次仅静态 HTML 发布，未重启 Node、Caddy、娱乐服务或公司端 L2 worker。
+
+Notes for next agent:
+- PR `#272` 已完成，不需要继续修改；若将来需要跨浏览器刷新长期保存历史日期，应另行设计账号级偏好，不要复用当前会话锁定。
