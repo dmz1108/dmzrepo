@@ -112,6 +112,10 @@ assert(/body\.view-strategy \.ml-l2-max-money\s*\{[\s\S]*?grid-template-columns:
 // 今日主线榜卡片紧凑化(2026-07-24,Owner 反馈卡片太大太宽)——锁定核心收紧,防多层覆盖后回退:
 // 标题 15px、评分数字 15px、龙头行左对齐(消除整行中间空档)、信号条改 flex 左排(不再 4 等宽铺满)。
 assert(css.includes('今日主线榜卡片紧凑化'));
+// 卡片物理宽度收窄:限宽 600px 且左对齐(不再撑满双源栏),预备卡同宽。
+assert(/body\.view-strategy \.ml-card\s*\{[\s\S]*?max-width:\s*600px;[\s\S]*?margin-right:\s*auto;[\s\S]*?\}/.test(css));
+assert(/body\.view-strategy \.ml-reserve-card\s*\{\s*max-width:\s*600px;\s*margin-right:\s*auto;\s*\}/.test(css));
+assert(/body\.view-strategy \.ml-grid\s*\{[\s\S]*?justify-items:\s*start;[\s\S]*?\}/.test(css));
 assert(/body\.view-strategy \.ml-name\s*\{[\s\S]*?font-size:\s*15px !important;[\s\S]*?\}/.test(css));
 assert(/body\.view-strategy \.ml-score b, body\.view-strategy \.ml-predict b\s*\{\s*font-size:\s*15px !important;\s*\}/.test(css));
 assert(/body\.view-strategy \.ml-stock\.ml-leaderstock,[\s\S]*?justify-content:\s*flex-start !important;[\s\S]*?\}/.test(css));

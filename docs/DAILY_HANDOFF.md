@@ -10098,3 +10098,27 @@ Deployment:
 Notes for next agent:
 - 纯视觉紧凑化，主线卡业务逻辑零改动；涉及"今日主线/龙头/明星股"展示范围，建议 Codex 复核。部署时原子发布 HTML+CSS。
 - 缓存键序列：h→i(#259)→j(#262)→k(#261,已部署)→本 PR l。
+
+## 2026-07-24 - Local Claude - #270 追加：主线卡物理宽度收窄（Owner 确认口径）
+
+Changed:
+- Codex 复核 #270 通过但指出「卡片物理宽度未变（699px→699px）」，本 PR 原版只压缩了卡内空档与高度。Owner 确认所指「太宽」**包含卡片物理宽度**，故追加收窄：
+  - `.ml-card` / `.ml-reserve-card` 加 `max-width: 600px` + `margin-right: auto` 左对齐，`.ml-grid` 加 `justify-items: start` —— 卡片不再撑满双源栏，右侧留白。
+  - 限宽依据实测卡内自然内容宽度：明星信号行 550px 最宽（3 只明星盒并排）+ 左右内边距 26px = 576px 为不换行下限，取 600px 留余量；较原 674px 收窄约 11%。
+  - 试过 560px，实测导致明星 3 盒换行、右栏标题与三指标挤压换行，故上调至 600px。
+  - 头部 `.ml-name-row` 改 `minmax(0,auto) minmax(0,max-content)`（标题优先、指标条按内容收缩），指标条内部允许换行，保证窄卡下标题与涨幅/DDE/全量方向仍同一行。
+
+Files:
+- `Qi/vendor/strategy-workbench.css`
+- `tests/strategy-workbench-ui.test.js`（新增限宽 600px + 左对齐断言）
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 2026-07-22 真实数据实测：卡片宽度 674px → 600px；明星 3 盒保持一行；左右两栏头部（东财 2 指标 / 同花顺 3 指标）均不挤压换行。
+- 桌面/移动横向溢出均为 0；全仓 61/61 通过；`git diff --check` 通过。
+
+Deployment:
+- 未部署生产。
+
+Notes for next agent:
+- 三段对照（原始 674 / 卡内紧凑 / 收窄 600）确认第三版最终生效。仍为纯 CSS，业务逻辑零改动。

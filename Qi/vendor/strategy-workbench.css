@@ -4832,12 +4832,25 @@ body.view-strategy .mlr-line.hit-miss > .mlr-line-sum {
    收紧标题/排名/评分/信号条尺寸,龙头行由整行 space-between 改为左对齐消除中间空档,
    压实内边距与垂直节奏。纯样式:不改任何主线/龙头/明星判定、评分或交互。 ===== */
 
-/* 卡片整体:更小内边距、更紧的分节间距 */
+/* 卡片整体:更小内边距、更紧的分节间距;并限制物理宽度、左对齐,不再撑满双源栏。
+   限宽依据实测卡内自然内容宽度:明星信号行 550px 最宽(3 只明星盒并排)+ 左右内边距 26px
+   = 576px 为不换行下限,取 600px 留余量;较原 674px 收窄约 11%,且明星盒不被迫换行。 */
 body.view-strategy .ml-card {
+  width: 100%;
+  max-width: 600px;
+  margin-right: auto;
   gap: 8px !important;
   padding: 12px 13px !important;
 }
-body.view-strategy .ml-grid { gap: 8px !important; }
+body.view-strategy .ml-grid { gap: 8px !important; justify-items: start; }
+body.view-strategy .ml-reserve-card { max-width: 600px; margin-right: auto; }
+
+/* 窄卡下头部:标题与指标条保持同一行(标题优先、指标条按内容收缩),指标条内部可换行 */
+body.view-strategy .ml-name-row {
+  grid-template-columns: minmax(0, auto) minmax(0, max-content) !important;
+  column-gap: 10px;
+}
+body.view-strategy .ml-head-pulse { flex-wrap: wrap; }
 
 /* 头部:排名块与标题收小 */
 body.view-strategy .ml-top { gap: 10px !important; }
