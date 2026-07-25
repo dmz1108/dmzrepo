@@ -10511,3 +10511,37 @@ Deployment: 未部署。生产当前 ?v=20260725a(#276);本 PR 合并后需再�
 Notes for next agent:
 - 教训:规范文档里"恒定/一律"类硬约束,若存在已批准的例外,必须在同一段显式写出例外范围,
   否则后续 agent 会按字面执行、删掉正确实现。
+
+## 2026-07-25 - Codex - PR #278 QI 标识取色修正已合并部署
+
+Changed:
+- 独立复审并确认 Claude 已解决 PR #278 的 main 冲突、部署事实过期和 pending 例外规范歧义。
+- PR #278 已通过 merge commit `2ef03fc89e08263ce2de38dde10f471418bd4502` 合入 main。
+- 已把 QI 标识主页原色修正和 CSS 缓存键 `20260725b` 静态发布到云端。
+- 云端两份运维日志均已追加本次发布记录。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `docs/strategy/STRATEGY_VISUAL_SEMANTICS.md`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check`、`git diff --check` 及全仓 `63/63` 个 `tests/*.test.js` 文件通过。
+- PR 修订后确认 merge 拓扑正确,且 #276/#277 与 #278 的交接记录均保留。
+- 云端磁盘和公网 `/kpl` 的 HTML SHA-256 均为
+  `ddb359c979dc7e6a8632b5a9d564839cd85f1bb26fef1ae82537bbba0ce97f93`。
+- 云端磁盘和公网 CSS SHA-256 均为
+  `99c73274711eaf0f1623ffe5aa71b076b27034f1a925ea2d174757915a5d9a6a`。
+- 公网 HTML 已引用 `strategy-workbench.css?v=20260725b`,`/health` 返回 `ok=true`,
+  HTML 继续使用 `cache-control: no-cache`。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`。
+- 回退备份:
+  `C:\PandaDashboard\_deploy-backups\github-pr278-2ef03fc-20260725-194219`。
+- 发布顺序为先 CSS、后 HTML;本次仅静态发布,未重启 Node、Caddy、娱乐服务或公司端 L2 worker。
+
+Notes for next agent:
+- PR #278 已完成,无需重复部署;生产与 main 的两份静态文件哈希一致。
