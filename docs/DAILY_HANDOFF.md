@@ -10637,3 +10637,28 @@ Deployment:
 
 Notes for next agent:
 - PR #280 已完成,无需重复部署;生产与 main 的两份静态文件哈希一致。
+
+## 2026-07-25 - Codex - 修复策略页日期重载与异步串页
+
+Changed:
+- 将策略页手选历史日期从仅内存状态升级为当前浏览器标签页的 `sessionStorage` 状态；完整刷新后仍恢复该日期，关闭标签页后不长期残留。
+- 用户主动选择当天时立即解除日期锁定；今日实时页继续维持默认当天，不受策略页历史日期影响。
+- 给主线榜、L2 扫描记录和预判回看增加最新请求序号校验；旧日期或旧一轮请求晚返回时不再覆盖当前页面。
+- 公共选股结果同样绑定请求发起日期，避免切换日期后把旧结果写入新日期卡片。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `tests/strategy-date-lock.test.js`
+- `tests/strategy-date-request-guard.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 专项回归覆盖标签页完整刷新恢复历史日期、主动选当天解除锁定、窗口聚焦保持日期，以及旧日期请求晚返回不覆盖主线榜/L2/预判回看。
+- `node --check kpl-stats-server.js`、`git diff --check` 及全仓 `64/64` 个 `tests/*.test.js` 文件通过。
+
+Deployment:
+- 未部署；本次只需静态发布 `kpl-dashboard_17_apple.html`，无需重启 Node、Caddy、娱乐服务或公司端 L2 worker。
+
+Notes for next agent:
+- 日期只在当前标签页会话内保留；关闭该标签页并重新打开网站仍按系统默认当天进入。
+- 不要移除三个策略异步区块的请求序号与日期校验，否则快速切日期时会重新出现旧响应覆盖。

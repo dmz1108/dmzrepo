@@ -10196,6 +10196,7 @@ const BOARD_NAME_CATALOG_STORAGE = 'kpl_board_name_catalog_v1';
 const PREVIEW_CACHE_STORAGE = 'kpl_preview_cache_v2';
 const OPPORTUNITY_BOARD_STORAGE = 'kpl_opportunity_board_v1';
 const DOCS_CARDS_STORAGE = 'panda_docs_cards_v1';
+const STRATEGY_DATE_SESSION_STORAGE = 'panda_strategy_date_override_v1';
 const PREVIEW_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 const BOARD_COUNT = 8;           // 固定显示多少个板块
 const BOARD_INITIAL_CANDIDATE_COUNT = 15; // 优先筛选涨幅榜前 15 个有效板块
@@ -10324,7 +10325,34 @@ function pageFromHash() {
   return 'dashboard';
 }
 
+function normalizeStrategyDateOverride(value, today = chinaToday()) {
+  const day = String(value || '').trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) && day <= today ? day : '';
+}
+
+function readStrategyDateOverride() {
+  try {
+    const day = normalizeStrategyDateOverride(sessionStorage.getItem(STRATEGY_DATE_SESSION_STORAGE));
+    if (!day) sessionStorage.removeItem(STRATEGY_DATE_SESSION_STORAGE);
+    return day;
+  } catch (_) {
+    return '';
+  }
+}
+
+function persistStrategyDateOverride(value) {
+  const day = normalizeStrategyDateOverride(value);
+  const override = day && day !== chinaToday() ? day : '';
+  try {
+    if (override) sessionStorage.setItem(STRATEGY_DATE_SESSION_STORAGE, override);
+    else sessionStorage.removeItem(STRATEGY_DATE_SESSION_STORAGE);
+  } catch (_) {}
+  return override;
+}
+
 // ====================== State ======================
+const initialPage = pageFromHash();
+const initialStrategyDateOverride = readStrategyDateOverride();
 const state = {
   apiKey: localStorage.getItem(KEY_STORAGE) || '',
   adminToken: readSharedAuthToken(),
@@ -10344,7 +10372,7 @@ const state = {
   manualRefreshReadyAt: 0,
   manualRefreshTimer: null,
   usingSnapshot: false,
-  date: chinaToday(),
+  date: initialPage === 'strategy' && initialStrategyDateOverride ? initialStrategyDateOverride : chinaToday(),
   loadSeq: 0,
   reviewLoadSeq: 0,
   reviewData: null,
@@ -10355,7 +10383,10 @@ const state = {
   reviewSearchTerm: '',
   reviewAutoJumpKey: '',   // 记住已自动跳转过的「搜索词@最近涨停日」,避免手动切回时被反复拽走
   strategyData: {},
-  strategyDateOverride: '', // 用户在策略页手选的日期；窗口恢复/重新聚焦时不得自动跳回今天
+  strategyDateOverride: initialStrategyDateOverride, // 当前标签页手选日期；完整刷新后也保持
+  strategyMainlinesLoadSeq: 0,
+  strategyL2HistoryLoadSeq: 0,
+  strategyMainlineReviewLoadSeq: 0,
   smartPick: {},
   smartPickPublicLoads: {},
   smartPickThreshold: 1.5,
@@ -10377,7 +10408,7 @@ const state = {
   docsLoading: null,
   docsSaveTimer: null,
   docsNeedsCloudSave: false,
-  page: pageFromHash(),
+  page: initialPage,
 };
 const boardNameLookupInFlight = new Set();
 const boardNameLookupTriedAt = new Map();
@@ -12523,15 +12554,22 @@ function ensureReviewDetailDrag() {
 // ===== 今日主线榜(策略页):实时板块强度 + 成分股大涨/冲板 + 历史四源主因预判 =====
 function reviewHotGainColor(g) { g = Number(g); return g > 0 ? 'var(--up)' : (g < 0 ? 'var(--down)' : 'var(--text-faint)'); }
 async function loadStrategyMainlines(day) {
+  const requestDay = String(day || '');
+  const requestSeq = ++state.strategyMainlinesLoadSeq;
+  const isCurrentRequest = () => state.page === 'strategy'
+    && state.date === requestDay
+    && requestSeq === state.strategyMainlinesLoadSeq;
   const el = document.getElementById('strategy-mainlines'); if (!el) return;
   el.innerHTML = '<div class="rht-loading">正在读取今日主线榜状态…</div>';
   try {
-    const res = await fetch(`${KPL_STATS_BASE}/api/strategy-mainlines?day=${encodeURIComponent(day)}&_=${Date.now()}`, { cache: 'no-store' });
+    const res = await fetch(`${KPL_STATS_BASE}/api/strategy-mainlines?day=${encodeURIComponent(requestDay)}&_=${Date.now()}`, { cache: 'no-store' });
     const d = await res.json();
+    if (!isCurrentRequest()) return;
     const cur = document.getElementById('strategy-mainlines');
     if (cur) cur.innerHTML = renderStrategyMainlinesHTML(d);
     fillStrategyVerdictKpi(d);
   } catch (e) {
+    if (!isCurrentRequest()) return;
     const cur = document.getElementById('strategy-mainlines');
     if (cur) cur.innerHTML = '';
   }
@@ -12836,17 +12874,24 @@ function renderStrategyL2History(data) {
   </section>`;
 }
 async function loadStrategyL2History(day) {
+  const requestDay = String(day || '');
+  const requestSeq = ++state.strategyL2HistoryLoadSeq;
+  const isCurrentRequest = () => state.page === 'strategy'
+    && state.date === requestDay
+    && requestSeq === state.strategyL2HistoryLoadSeq;
   const el = document.getElementById('strategy-l2-history');
   if (!el || !canUseL2AdminTools()) return;
   el.innerHTML = '<div class="rht-loading">正在读取今日 L2 扫描记录…</div>';
   try {
-    const res = await fetch(`${KPL_STATS_BASE}/api/strategy/focus-l2-scan?history=1&day=${encodeURIComponent(day)}&_=${Date.now()}`, {
+    const res = await fetch(`${KPL_STATS_BASE}/api/strategy/focus-l2-scan?history=1&day=${encodeURIComponent(requestDay)}&_=${Date.now()}`, {
       cache: 'no-store', headers: typeof adminHeaders === 'function' ? adminHeaders() : {},
     });
     const data = await res.json().catch(() => null);
+    if (!isCurrentRequest()) return;
     const cur = document.getElementById('strategy-l2-history');
     if (cur) cur.innerHTML = res.ok ? renderStrategyL2History(data) : '';
   } catch (_) {
+    if (!isCurrentRequest()) return;
     const cur = document.getElementById('strategy-l2-history');
     if (cur) cur.innerHTML = '';
   }
@@ -13644,15 +13689,20 @@ async function unconfirmMainlineTheme() {
   }
 }
 async function loadStrategyMainlineReview() {
+  const requestSeq = ++state.strategyMainlineReviewLoadSeq;
+  const isCurrentRequest = () => state.page === 'strategy'
+    && requestSeq === state.strategyMainlineReviewLoadSeq;
   const el = document.getElementById('strategy-mainline-review');
   if (!el) return;
   try {
     const res = await fetch(`${KPL_STATS_BASE}/api/strategy-mainline-review?days=10&_=${Date.now()}`, { cache: 'no-store' });
     const d = await res.json();
+    if (!isCurrentRequest()) return;
     const cur = document.getElementById('strategy-mainline-review');
     if (cur) cur.innerHTML = renderMainlineReviewHTML(d);
     fillStrategyRecordKpi(d);
   } catch (e) {
+    if (!isCurrentRequest()) return;
     const cur = document.getElementById('strategy-mainline-review');
     if (cur) cur.innerHTML = '';
   }
@@ -16067,8 +16117,8 @@ function findStrategySmartPickBoard(plateId) {
 // 候选板块日期选择：切换查看日期（与顶栏日期联动），重拉跨类型实时指标
 function onStrategyDateChange(value) {
   const selectedDay = String(value || '').trim();
-  if (!selectedDay) return;
-  state.strategyDateOverride = selectedDay === chinaToday() ? '' : selectedDay;
+  if (!normalizeStrategyDateOverride(selectedDay)) return;
+  state.strategyDateOverride = persistStrategyDateOverride(selectedDay);
   if (selectedDay === state.date) {
     syncDatePickerForPage();
     return;
@@ -16498,10 +16548,11 @@ function refreshSmartPickCard(plateId) {
 function loadPublicSmartPick(plateId) {
   const id = String(plateId || '');
   if (!id || canUseL2AdminTools()) return;
-  const key = `${state.date}:${id}`;
+  const requestDay = state.date;
+  const key = `${requestDay}:${id}`;
   if (state.smartPickPublicLoads[key]) return;
   state.smartPickPublicLoads[key] = 'loading';
-  fetch(`${KPL_STATS_BASE}/api/strategy/focus-l2-scan?plateId=${encodeURIComponent(id)}&day=${encodeURIComponent(state.date)}&_=${Date.now()}`, {
+  fetch(`${KPL_STATS_BASE}/api/strategy/focus-l2-scan?plateId=${encodeURIComponent(id)}&day=${encodeURIComponent(requestDay)}&_=${Date.now()}`, {
     cache: 'no-store',
     headers: typeof adminHeaders === 'function' ? adminHeaders() : {},
   })
@@ -16512,6 +16563,7 @@ function loadPublicSmartPick(plateId) {
     })
     .then(data => {
       state.smartPickPublicLoads[key] = 'done';
+      if (state.page !== 'strategy' || state.date !== requestDay) return;
       if (!data || data.publicOnly !== true || !(Number(data.pickedCount) > 0)) return;
       state.smartPick[id] = normalizeSmartPickJob(data);
       refreshSmartPickCard(id);
