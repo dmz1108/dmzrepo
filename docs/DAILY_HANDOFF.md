@@ -10070,3 +10070,105 @@ Deployment:
 
 Notes for next agent:
 - 原 Draft PR `#199` 的来源标签已被本次实现吸收，可关闭且不要再单独合并。
+
+## 2026-07-24 - Local Claude - 今日主线榜卡片紧凑化（Owner 反馈太大太宽）
+
+Changed:
+- Owner 反馈今日主线榜卡片太大太宽。纯 CSS 追加紧凑化层（文件末尾，源码顺序最高优先），不改任何主线/龙头/明星判定、评分或交互：
+  - 标题 18/19px → 15px；排名块 30px → 26px；评分块收窄（min-width 118→90px）、数字 19px → 15px、降高。
+  - **龙头/共振/活跃行**：由整行 `space-between`（名字最左、数据最右、中间大空档）改为 `justify-content: flex-start` 左对齐紧贴，主因/板数据紧随龙头名，超长省略号收尾——这是"太宽"的核心修复。
+  - **信号条**（涨停/大涨/冲板/共振）：由 4 等宽格铺满整卡改为 `display:flex` 左对齐紧凑排列（保留分隔线），不再把数字推到每格最右。
+  - 涨幅/资金指标条、明星信号盒、建议行、操作按钮、预备主线标题层间距一并收紧。
+- 缓存键 `v=20260724k` → `v=20260724l`。
+
+Files:
+- `Qi/vendor/strategy-workbench.css`
+- `kpl-dashboard_17_apple.html`（仅缓存版本号）
+- `tests/strategy-workbench-ui.test.js`（缓存断言 + 紧凑化布局回归断言）
+
+Validated:
+- 用有丰富主线卡的交易日（2026-07-22：东财 1 正式 + 6 预备、同花顺 3 预备）真实数据渲染改前/改后对照。
+- 正式卡桌面高度约 493px → 434px；龙头行由"名字左/数据右大空档"变为左对齐紧贴；信号条左排紧凑；标题/评分/内边距整体收小。
+- 展开详情（强度拆解/今日龙头/龙头候选/盘面证据）渲染正常未受影响。
+- 桌面/移动横向溢出均为 0；全仓 61/61 个 `tests/*.test.js` 通过；`git diff --check` 通过。
+
+Deployment:
+- 未部署生产。
+
+Notes for next agent:
+- 纯视觉紧凑化，主线卡业务逻辑零改动；涉及"今日主线/龙头/明星股"展示范围，建议 Codex 复核。部署时原子发布 HTML+CSS。
+- 缓存键序列：h→i(#259)→j(#262)→k(#261,已部署)→本 PR l。
+
+## 2026-07-24 - Local Claude - #270 追加：主线卡物理宽度收窄（Owner 确认口径）
+
+Changed:
+- Codex 复核 #270 通过但指出「卡片物理宽度未变（699px→699px）」，本 PR 原版只压缩了卡内空档与高度。Owner 确认所指「太宽」**包含卡片物理宽度**，故追加收窄：
+  - `.ml-card` / `.ml-reserve-card` 加 `max-width: 600px` + `margin-right: auto` 左对齐，`.ml-grid` 加 `justify-items: start` —— 卡片不再撑满双源栏，右侧留白。
+  - 限宽依据实测卡内自然内容宽度：明星信号行 550px 最宽（3 只明星盒并排）+ 左右内边距 26px = 576px 为不换行下限，取 600px 留余量；较原 674px 收窄约 11%。
+  - 试过 560px，实测导致明星 3 盒换行、右栏标题与三指标挤压换行，故上调至 600px。
+  - 头部 `.ml-name-row` 改 `minmax(0,auto) minmax(0,max-content)`（标题优先、指标条按内容收缩），指标条内部允许换行，保证窄卡下标题与涨幅/DDE/全量方向仍同一行。
+
+Files:
+- `Qi/vendor/strategy-workbench.css`
+- `tests/strategy-workbench-ui.test.js`（新增限宽 600px + 左对齐断言）
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 2026-07-22 真实数据实测：卡片宽度 674px → 600px；明星 3 盒保持一行；左右两栏头部（东财 2 指标 / 同花顺 3 指标）均不挤压换行。
+- 桌面/移动横向溢出均为 0；全仓 61/61 通过；`git diff --check` 通过。
+
+Deployment:
+- 未部署生产。
+
+Notes for next agent:
+- 三段对照（原始 674 / 卡内紧凑 / 收窄 600）确认第三版最终生效。仍为纯 CSS，业务逻辑零改动。
+
+## 2026-07-24 - Local Claude - #270 修复预备卡宽度不一致（Codex 二次复审 P1）
+
+Changed:
+- Codex 二次复审指出并经我实测复现：`.ml-grid { justify-items: start }` 会让 `.ml-reserve-card` wrapper 按内容收缩，内层 `.ml-card { width:100% }` 只能继承收缩宽度 → 预备卡宽度不一。
+- 实测复现（2026-07-22 真实数据，1440 视口）：正式卡 600px，预备卡分别为 451 / 436 / 372 / 406 / 542 / 512 / 497px —— 8 张卡 7 种宽度，左右来源与同列卡片边缘明显不齐。
+- 修复：`.ml-reserve-card` 补 `width: 100%`（保留 `max-width:600px` + `margin-right:auto`）。
+- 补断言锁定 `width:100%`，防止再次退化。
+
+Files:
+- `Qi/vendor/strategy-workbench.css`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 修后 DOM 几何实测：8 张卡（1 正式 + 7 预备、跨东财/同花顺两栏）**全部 600px，宽度值唯一**，边缘对齐。
+- 明星 3 盒仍保持一行；移动端预备卡满宽正常、无溢出。
+- 桌面/移动横向溢出均为 0；全仓 61/61 通过；`git diff --check` 通过。
+
+Deployment:
+- 未部署生产。
+
+Notes for next agent:
+- 该 bug 说明：给 `.ml-grid` 加 `justify-items:start` 时，所有直接子项（含 wrapper）都需显式 `width:100%`，否则会按内容收缩。
+
+## 2026-07-24 - Local Claude - #270 修复 601–760px 区间宽度不一致（Codex 三次复审 P1）
+
+Changed:
+- Codex 三次复审确认桌面 P1 已修，但发现响应式阻断并经我实测复现：`max-width:760px` 媒体查询里旧规则 `.ml-card { max-width:100% !important }`（`strategy-workbench.css` 约 1224 行）压过本 PR 后置的 `max-width:600px`（无 `!important`），导致 601–760px 区间正式卡撑满、预备卡仍 600px。
+- 实测复现（2026-07-22 真实数据，DOM 几何）：
+  - 1440px：8 张卡均 600px ✅
+  - 760px：正式卡 **736px**、7 张预备卡 **600px** ❌ 不齐
+  - 500px：全部 476px（自然缩到可用宽度）✅
+- 修复：`.ml-card` 与 `.ml-reserve-card` 的 `max-width: 600px` 均加 `!important`，明确覆盖旧移动端规则；容器不足 600px 时仍自然缩到可用宽度，手机不受影响。
+- 补断言锁定 `max-width: 600px !important`（两处），防再退化。
+
+Files:
+- `Qi/vendor/strategy-workbench.css`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 修后三档几何复测：1440px 全部 600px、760px 全部 600px、500px 全部 476px —— **每档宽度值唯一**，三档横向溢出均为 0。
+- 全仓 61/61 通过；`git diff --check` 通过。
+
+Deployment:
+- 未部署生产。
+
+Notes for next agent:
+- 该文件存在多层历史 `!important`（尤其 `max-width:760px` 媒体查询块）。后置层若要改 `.ml-card` 的盒模型属性，需确认是否被旧 `!important` 压制，并至少复测 1440 / 760 / 500 三档。
