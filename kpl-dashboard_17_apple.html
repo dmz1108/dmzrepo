@@ -10355,6 +10355,7 @@ const state = {
   reviewSearchTerm: '',
   reviewAutoJumpKey: '',   // 记住已自动跳转过的「搜索词@最近涨停日」,避免手动切回时被反复拽走
   strategyData: {},
+  strategyDateOverride: '', // 用户在策略页手选的日期；窗口恢复/重新聚焦时不得自动跳回今天
   smartPick: {},
   smartPickPublicLoads: {},
   smartPickThreshold: 1.5,
@@ -14510,6 +14511,8 @@ async function resolveReviewLoadDay() {
 function syncDatePickerForPage() {
   if (state.page === 'review') {
     setDatePickerValue(state.reviewDateOverride || reviewClockFallbackDay(state.date));
+  } else if (state.page === 'strategy') {
+    setDatePickerValue(state.strategyDateOverride || state.date);
   } else {
     setDatePickerValue(state.date);
   }
@@ -14519,6 +14522,16 @@ function ensureLivePageToday(page, options = {}) {
   if (options.keepDate) return false;
   if (page !== 'dashboard' && page !== 'strategy') return false;
   const today = chinaToday();
+  const strategyDay = page === 'strategy' ? String(state.strategyDateOverride || '').trim() : '';
+  // 策略页允许用户锁定历史日期。pageshow/focus/switchPage 只能恢复这个日期，
+  // 不能像实时看板那样强制跳回今天；用户主动选择今天时会清除该锁定。
+  if (/^\d{4}-\d{2}-\d{2}$/.test(strategyDay) && strategyDay <= today) {
+    if (state.date === strategyDay) return false;
+    state.date = strategyDay;
+    state.reviewDateOverride = '';
+    state.smartPick = {};
+    return true;
+  }
   if (!today || state.date === today) return false;
   state.date = today;
   state.reviewDateOverride = '';
@@ -15983,10 +15996,16 @@ function findStrategySmartPickBoard(plateId) {
 
 // 候选板块日期选择：切换查看日期（与顶栏日期联动），重拉跨类型实时指标
 function onStrategyDateChange(value) {
-  if (!value || value === state.date) return;
-  state.date = value;
+  const selectedDay = String(value || '').trim();
+  if (!selectedDay) return;
+  state.strategyDateOverride = selectedDay === chinaToday() ? '' : selectedDay;
+  if (selectedDay === state.date) {
+    syncDatePickerForPage();
+    return;
+  }
+  state.date = selectedDay;
   const topPicker = document.getElementById('date-picker');
-  if (topPicker) topPicker.value = value;
+  if (topPicker) topPicker.value = selectedDay;
   state.smartPick = {};   // 换日期清掉选股结果
   renderStrategyPage();
 }
@@ -17958,13 +17977,17 @@ datePicker.addEventListener('change', e => {
     refreshLimitupReviewPage();
     return;
   }
+  if (state.page === 'strategy') {
+    state.reviewDateOverride = '';
+    onStrategyDateChange(selectedDay);
+    return;
+  }
   state.date = selectedDay;
   state.reviewDateOverride = '';
   refreshOpportunityBoardState();
   refreshAfterCloseStatus();
   refreshJiuyangongsheAuthStatus();
-  if (state.page === 'strategy') loadStrategyData(state.date);
-  else refreshAll({ force: true });
+  refreshAll({ force: true });
 });
 // 自动刷新读秒/勾选框已移除；改为后台轮转刷新（见 backgroundRotateRefresh）。
 document.querySelector('.docs-add-card')?.addEventListener('click', addDocsCard);
