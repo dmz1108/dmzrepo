@@ -10165,7 +10165,7 @@ Files:
 
 Validated:
 - 修后三档几何复测：1440px 全部 600px、760px 全部 600px、500px 全部 476px —— **每档宽度值唯一**，三档横向溢出均为 0。
-- 全仓 61/61 通过；`git diff --click` 通过（`git diff --check`）。
+- 全仓 61/61 通过；`git diff --check` 通过。
 
 Deployment:
 - 未部署生产。
