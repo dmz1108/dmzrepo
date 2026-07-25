@@ -5060,10 +5060,10 @@ body.view-strategy .ml-qi-mark {
   display: block;
   align-self: center;
 }
-body.view-strategy .ml-qi-mark .qim-orbit { stroke: rgba(239, 185, 79, .7); fill: none; }
-body.view-strategy .ml-qi-mark .qim-line { stroke: #fff; fill: none; }
-body.view-strategy .ml-qi-mark .qim-fill { fill: #fff; stroke: none; }
-body.view-strategy .ml-qi-mark .qim-spark { fill: var(--st-blue); }
+body.view-strategy .ml-qi-mark .qim-orbit { stroke: var(--border-strong); fill: none; }
+body.view-strategy .ml-qi-mark .qim-line { stroke: var(--text); fill: none; }
+body.view-strategy .ml-qi-mark .qim-fill { fill: var(--text); stroke: none; }
+body.view-strategy .ml-qi-mark .qim-spark { fill: var(--accent); }
 /* 待认证:预期明星佩戴同款轮廓但灰度无高亮点,与确认版对齐并形成"未盖章/已盖章"对比 */
 body.view-strategy .ml-qi-mark.pending { opacity: .42; }
 body.view-strategy .ml-qi-mark.pending .qim-orbit { stroke: rgba(231, 173, 70, .5); }
@@ -5436,9 +5436,9 @@ body.view-strategy .ml-qi-seal.empty {
 body.view-strategy .ml-qi-seal.empty { visibility: hidden; }
 body.view-strategy .ml-qi-seal .ml-qi-mark { width: 26px; height: 19px; }
 body.view-strategy .ml-qi-seal.pending .ml-qi-mark { width: 30px; height: 22px; }
-body.view-strategy .ml-qi-mark .qim-orbit { stroke: rgba(255, 233, 168, .75); }
-body.view-strategy .ml-qi-mark .qim-line { stroke: #fff8e6; }
-body.view-strategy .ml-qi-mark .qim-fill { fill: #fff8e6; }
+body.view-strategy .ml-qi-mark .qim-orbit { stroke: var(--border-strong); }
+body.view-strategy .ml-qi-mark .qim-line { stroke: var(--text); }
+body.view-strategy .ml-qi-mark .qim-fill { fill: var(--text); }
 body.view-strategy .ml-qi-mark.pending { opacity: .5; }
 body.view-strategy .ml-qi-mark.pending .qim-orbit { stroke: rgba(127, 155, 189, .6); }
 body.view-strategy .ml-qi-mark.pending .qim-line { stroke: var(--st-muted); }

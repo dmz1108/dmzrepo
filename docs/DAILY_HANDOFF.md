@@ -10422,6 +10422,30 @@ Notes for next agent:
 - 教训:媒体查询内的规则不会自动提升特异性,覆盖桌面规则时必须显式对齐选择器层级。
 - 教训:Array.map 隐式第三参数是脆弱约定,凡有单卡直调路径的渲染函数都应显式传列表。
 
+## 2026-07-25 - Claude - QI 标识取色回归主页原色
+
+Changed:
+- Owner 指出今日主线榜的 QI 标识不该是黄色。核对:主页 .qi-logo 用 --border-strong(轨道)、
+  --text(Q/i 描边与填充)、--accent(高亮点),是中性白+蓝点;而我在 #276 里为配合金卡把
+  轨道染成 rgba(255,233,168)、描边填充染成 #fff8e6,偏离了"与主页一模一样"的原始要求。
+- 修正为直接取同一组变量,标识与主页逐项一致;金色只保留在外框徽章环(.ml-qi-seal),
+  由外框表达"这张卡是确认态",标识本身不承载卡片主题色。
+- 视觉语义规范补一条硬约束:QI 标识是品牌资产、颜色恒定,不得为配合卡片主题染色。
+- CSS 缓存版本 20260725a → 20260725b。
+
+Files:
+- Qi/vendor/strategy-workbench.css / kpl-dashboard_17_apple.html
+- docs/strategy/STRATEGY_VISUAL_SEMANTICS.md / tests/strategy-workbench-ui.test.js
+
+Validated:
+- 全仓 63 个测试文件通过;git diff --check 通过。新增断言:标识四项取色必须等于主页变量,
+  且 .ml-qi-mark 规则内不得出现金色系字面值(#fff8e6 / rgba(255,233,168) / rgba(239,185,79))。
+- 4x 渲染核验:标识为白色 Q/i + 蓝色高亮点,外框金环保留。
+
+Deployment: 未部署。HTML + CSS 两件静态原子发布,无需重启。
+
+Notes for next agent:
+- 教训:品牌标识不要跟着容器主题变色。想表达状态请用外框/底色,不要改标识本身。
 ## 2026-07-25 - Codex - PR #276 今日主线榜卡片重构已合并部署
 
 Changed:
@@ -10463,3 +10487,27 @@ Deployment:
 Notes for next agent:
 - PR `#276` 已完成，无需重复部署；后续策略页视觉调整必须遵守
   `docs/strategy/STRATEGY_VISUAL_SEMANTICS.md` 的颜色语义。
+
+## 2026-07-25 - Claude - PR #278 按 Codex 复审同步 main 并澄清规范
+
+Changed:
+- P1 分支冲突:main 已含 PR #277(#276 部署交接记录),与本分支的 DAILY_HANDOFF 新条目冲突。
+  按纪律 merge origin/main(不 rebase、不改写共享历史),双方条目全部保留。
+- P2 视觉规范自相矛盾:§2 先定义 pending 态为灰蓝半透明无高亮点,后文硬约束却写"标识颜色恒定"。
+  改为:一致性约束限定于确认/默认态;pending 是规范批准的唯一状态化例外,并明确写出
+  "后续 agent 不要以颜色恒定为由删掉 .ml-qi-mark.pending",除 pending 外不得新增状态化染色。
+- 测试注释同步澄清,并新增断言锁定 pending 规则存在,防止被误删。
+- PR 描述更新:#276 已于 714a720 合并并完成生产发布(线上实测 ?v=20260725a),
+  #278 是在已部署基础上的追加静态更新,不再是"与 #276 一起首发"。
+
+Files: docs/DAILY_HANDOFF.md / docs/strategy/STRATEGY_VISUAL_SEMANTICS.md / tests/strategy-workbench-ui.test.js
+
+Validated: 合并 main 后全仓 63 个测试文件通过;git diff --check 通过。CSS 实现未改动
+(Codex 已逐项验证与主页 logo 运行时取色完全一致:轨道 rgba(180,194,214,0.2)、
+Q/i rgb(237,242,248)、高亮点 rgb(75,159,255),金环 rgba(240,192,74,0.55) 保留)。
+
+Deployment: 未部署。生产当前 ?v=20260725a(#276);本 PR 合并后需再发一次 HTML+CSS 到 20260725b,无需重启。
+
+Notes for next agent:
+- 教训:规范文档里"恒定/一律"类硬约束,若存在已批准的例外,必须在同一段显式写出例外范围,
+  否则后续 agent 会按字面执行、删掉正确实现。
