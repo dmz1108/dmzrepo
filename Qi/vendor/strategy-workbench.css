@@ -4837,7 +4837,10 @@ body.view-strategy .mlr-line.hit-miss > .mlr-line-sum {
    = 576px 为不换行下限,取 600px 留余量;较原 674px 收窄约 11%,且明星盒不被迫换行。 */
 body.view-strategy .ml-card {
   width: 100%;
-  max-width: 600px;
+  /* !important 用于覆盖 max-width:760px 媒体查询里旧的 .ml-card{max-width:100% !important}:
+     否则 601–760px 区间正式卡会撑满(实测 736px)而预备卡仍 600px,两者不齐。
+     容器不足 600px 时仍自然缩到可用宽度,不影响手机。 */
+  max-width: 600px !important;
   margin-right: auto;
   gap: 8px !important;
   padding: 12px 13px !important;
@@ -4847,7 +4850,7 @@ body.view-strategy .ml-grid { gap: 8px !important; justify-items: start; }
    内层 .ml-card{width:100%} 只能继承收缩宽度 → 各预备卡宽度不一(实测 372~542px)、边缘不齐。 */
 body.view-strategy .ml-reserve-card {
   width: 100%;
-  max-width: 600px;
+  max-width: 600px !important;
   margin-right: auto;
 }
 

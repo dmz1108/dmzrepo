@@ -10146,3 +10146,29 @@ Deployment:
 
 Notes for next agent:
 - 该 bug 说明：给 `.ml-grid` 加 `justify-items:start` 时，所有直接子项（含 wrapper）都需显式 `width:100%`，否则会按内容收缩。
+
+## 2026-07-24 - Local Claude - #270 修复 601–760px 区间宽度不一致（Codex 三次复审 P1）
+
+Changed:
+- Codex 三次复审确认桌面 P1 已修，但发现响应式阻断并经我实测复现：`max-width:760px` 媒体查询里旧规则 `.ml-card { max-width:100% !important }`（`strategy-workbench.css` 约 1224 行）压过本 PR 后置的 `max-width:600px`（无 `!important`），导致 601–760px 区间正式卡撑满、预备卡仍 600px。
+- 实测复现（2026-07-22 真实数据，DOM 几何）：
+  - 1440px：8 张卡均 600px ✅
+  - 760px：正式卡 **736px**、7 张预备卡 **600px** ❌ 不齐
+  - 500px：全部 476px（自然缩到可用宽度）✅
+- 修复：`.ml-card` 与 `.ml-reserve-card` 的 `max-width: 600px` 均加 `!important`，明确覆盖旧移动端规则；容器不足 600px 时仍自然缩到可用宽度，手机不受影响。
+- 补断言锁定 `max-width: 600px !important`（两处），防再退化。
+
+Files:
+- `Qi/vendor/strategy-workbench.css`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 修后三档几何复测：1440px 全部 600px、760px 全部 600px、500px 全部 476px —— **每档宽度值唯一**，三档横向溢出均为 0。
+- 全仓 61/61 通过；`git diff --click` 通过（`git diff --check`）。
+
+Deployment:
+- 未部署生产。
+
+Notes for next agent:
+- 该文件存在多层历史 `!important`（尤其 `max-width:760px` 媒体查询块）。后置层若要改 `.ml-card` 的盒模型属性，需确认是否被旧 `!important` 压制，并至少复测 1440 / 760 / 500 三档。
