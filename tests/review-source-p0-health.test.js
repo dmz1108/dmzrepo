@@ -113,7 +113,10 @@ assert(
   functionSource('ensureXuangubaoLimitUpSourceDay').includes('writeGeneratedReviewSourceArtifact'),
   'Xuangubao formal writes must use the guarded writer',
 );
-assert(admin.includes("const reviewStatus = row.status ||"), 'admin UI must render the backend verdict');
+assert(
+  admin.includes("const reviewStatus = manifest.status || 'invalid'"),
+  'admin UI must render the read-only manifest verdict',
+);
 assert(!admin.includes("(row.needsSync ? '待补齐' : '完整')"), 'admin UI must not infer complete only from needsSync');
 
 console.log('review source P0 health tests passed');

@@ -300,6 +300,17 @@
       font-size: 12px;
       line-height: 1.45;
     }
+    .ops-source-line {
+      color: rgba(247,248,252,.78);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .ops-source-line + .ops-source-line {
+      margin-top: 4px;
+    }
+    .ops-source-issue {
+      color: #ffb6ad;
+    }
     .ops-check-grid,
     .ops-source-grid {
       display: grid;
@@ -716,7 +727,7 @@
           <div class="sync-card-head" style="margin-bottom:0;">
             <div>
               <div class="sync-title">涨停复盘数据源健康</div>
-              <div class="sync-desc">检查最近 30 个交易日的复盘啦、韭研、选股宝、淘股吧底层库和综合主因库是否缺失。同步按钮会优先补缺失来源，再生成综合主因库。</div>
+              <div class="sync-desc">只读核对最近 30 个交易日的终盘涨停池、四个正式来源和综合主因库。健康检查不会写文件；“补齐”是单独的修复动作。</div>
             </div>
             <span class="pill" id="ops-review-health-pill">读取中</span>
           </div>
@@ -1457,57 +1468,101 @@
       return data;
     }
 
+    const REVIEW_HEALTH_STATUS_META = {
+      healthy: { label: '完整', state: 'ok' },
+      pending: { label: '等待发布', state: 'warn' },
+      missing: { label: '缺失', state: 'error' },
+      invalid: { label: '异常', state: 'error' },
+      stale: { label: '跨日数据', state: 'error' },
+      failed: { label: '检查失败', state: 'error' },
+      'not-required': { label: '无需检查', state: 'warn' },
+    };
+
+    function reviewHealthStatusMeta(status) {
+      return REVIEW_HEALTH_STATUS_META[status] || { label: '需确认', state: 'warn' };
+    }
+
+    function reviewHealthActualText(item = {}) {
+      if (Number.isFinite(Number(item.actual)) && item.actual !== null) {
+        const actual = Number(item.actual);
+        const raw = Number(item.rawActual);
+        return Number.isFinite(raw) && raw !== actual
+          ? `${actual}（原始 ${raw}）`
+          : String(actual);
+      }
+      return reviewHealthStatusMeta(item.status).label;
+    }
+
+    function reviewHealthIssueText(manifest = {}) {
+      const issues = [];
+      const combined = manifest.combined || {};
+      if (combined.poolComparison && combined.poolComparison.exact === false) {
+        const comparison = combined.poolComparison;
+        issues.push(`综合缺 ${Number(comparison.missingCount || 0)} / 多 ${Number(comparison.extraCount || 0)}`);
+      }
+      for (const source of Array.isArray(manifest.sources) ? manifest.sources : []) {
+        const comparison = source.poolComparison;
+        const status = String(source.status || '');
+        if (!['healthy', 'not-required'].includes(status)) {
+          issues.push(`${source.label || source.group || '来源'}：${reviewHealthStatusMeta(status).label}`);
+        }
+        if (!comparison) continue;
+        const identityMismatchCount = Number(comparison.identityMismatchCount || 0);
+        const missingCount = Number(comparison.missingCount || 0);
+        const extraCount = Number(comparison.extraCount || 0);
+        if (identityMismatchCount > 0) {
+          issues.push(`${source.label || source.group || '来源'}身份错配 ${identityMismatchCount}`);
+        }
+        if (source.group !== 'tgb' && (missingCount > 0 || extraCount > 0)) {
+          issues.push(`${source.label || source.group || '来源'}缺 ${missingCount} / 多 ${extraCount}`);
+        }
+      }
+      return [...new Set(issues)].join('；');
+    }
+
     function renderOpsReviewHealth(data = {}) {
       const rows = Array.isArray(data.rows) ? [...data.rows] : [];
+      const counts = data.statusCounts || {};
       const pill = $('ops-review-health-pill');
       if (pill) {
-        const pending = Number(data.pending || rows.filter(row => row.status === 'pending').length);
-        const attention = Number(data.attention || rows.filter(row => ['missing', 'invalid', 'failed'].includes(row.status)).length);
-        const notRequired = Number(data.notRequired || rows.filter(row => row.status === 'not-required').length);
+        const healthy = Number(counts.healthy || 0);
+        const pending = Number(counts.pending || 0);
+        const attention = ['missing', 'invalid', 'stale', 'failed']
+          .reduce((sum, key) => sum + Number(counts[key] || 0), 0);
+        const notRequired = Number(counts['not-required'] || 0);
         pill.textContent = attention
-          ? `异常 ${attention}`
-          : (pending ? `等待 ${pending}` : (rows.length && notRequired === rows.length ? '无需检查' : '已完整'));
+          ? `异常 ${attention} · 完整 ${healthy}`
+          : (pending
+            ? `等待 ${pending} · 完整 ${healthy}`
+            : (rows.length && notRequired === rows.length ? '无需检查' : `已完整 ${healthy}/${rows.length}`));
         pill.className = `pill ${attention ? 'fail' : (pending || (rows.length && notRequired === rows.length) ? '' : 'success')}`;
       }
       const latestRows = rows.sort((a, b) => String(b.day).localeCompare(String(a.day)));
       $('ops-review-source-grid').innerHTML = latestRows.map(row => {
-        const sourceText = (row.sourceArtifactStats || []).map(source => {
+        const manifest = row.manifest || {};
+        const sourceText = (manifest.sources || []).map(source => {
           const label = source.label || source.group || '--';
-          const value = source.ok
-            ? Number(source.count || 0)
-            : (source.reasonCode === 'cross-day-artifact' ? '跨日' : '缺');
-          return `${label}:${value}`;
+          return `${label} ${reviewHealthActualText(source)}`;
         }).join('，');
-        const missing = Array.isArray(row.missingSourceLabels) && row.missingSourceLabels.length
-          ? `缺：${row.missingSourceLabels.join('、')}`
-          : '';
-        const reviewStatus = row.status || (row.error ? 'failed' : (row.needsSync ? 'missing' : 'healthy'));
-        const labelByStatus = {
-          healthy: '完整',
-          pending: '等待发布',
-          missing: '缺失',
-          invalid: '异常',
-          failed: '检查失败',
-          'not-required': '无需检查',
-        };
-        const status = reviewStatus === 'healthy'
-          ? 'ok'
-          : (['missing', 'invalid', 'failed'].includes(reviewStatus) ? 'error' : 'warn');
+        const reviewStatus = manifest.status || 'invalid';
+        const statusMeta = reviewHealthStatusMeta(reviewStatus);
+        const issueText = reviewHealthIssueText(manifest);
         return `
           <article class="ops-source-card">
             <strong>
               <span>${escapeHtml(row.day || '--')}</span>
-              <span class="pill ${pillClassForState(status)}">${escapeHtml(row.statusLabel || labelByStatus[reviewStatus] || '需确认')}</span>
+              <span class="pill ${pillClassForState(statusMeta.state)}">${escapeHtml(statusMeta.label)}</span>
             </strong>
-            <small>涨停 ${Number(row.limitUpCount || 0)} · 主因 ${Number(row.mainReasonCount || 0)}${missing ? ` · ${escapeHtml(missing)}` : ''}</small><br>
-            <small>${escapeHtml(sourceText || row.skipReason || row.error || row.reasonCode || '暂无来源状态')}</small>
+            <div class="ops-source-line">终盘涨停 ${escapeHtml(reviewHealthActualText(manifest.terminal))} · 综合主因 ${escapeHtml(reviewHealthActualText(manifest.combined))}</div>
+            <div class="ops-source-line">${escapeHtml(sourceText || '暂无来源状态')}</div>
+            ${issueText ? `<div class="ops-source-line ops-source-issue">${escapeHtml(issueText)}</div>` : ''}
           </article>
         `;
       }).join('') || '<div class="status">暂无数据源健康记录</div>';
     }
 
     async function refreshOpsReviewHealth() {
-      const data = await api('/api/admin/review-source-health?days=30');
+      const data = await api('/api/admin/review-source-health-shadow?days=30');
       renderOpsReviewHealth(data);
       return data;
     }
