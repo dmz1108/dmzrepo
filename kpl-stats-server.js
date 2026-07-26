@@ -24797,7 +24797,14 @@ function getStrategyPredictHitRatesCached() {
         strategyPredictHitRatesCache.at = Date.now();
       })
       .catch(err => {
-        strategyPredictHitRatesCache.at = Date.now();   // 失败也记时间:10 分钟退避,不随轮询重试重活
+        // 失败也推进锚点日(Codex #292 三审 P1):首次(day='')/跨日失败若只更新 at 不更新 day,
+        // day !== today 会让每次轮询都判过期、重触发完整回看计算,10 分钟退避失效。
+        // 同日失败保留旧值继续 SWR;跨日/首次失败清空旧值,绝不让昨日值冒充今日。
+        if (strategyPredictHitRatesCache.day !== anchorDay) {
+          strategyPredictHitRatesCache.day = anchorDay;
+          strategyPredictHitRatesCache.value = null;
+        }
+        strategyPredictHitRatesCache.at = Date.now();
         console.warn('strategy hit-rates refresh failed (badge stays hidden):', err?.message || err);
       })
       .finally(() => { strategyPredictHitRatesCache.inflight = null; });

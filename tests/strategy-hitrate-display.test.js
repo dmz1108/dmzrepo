@@ -97,6 +97,52 @@ assert(cachedFn.includes('strategyPredictHitRatesCache.day !== todayIso'), '锚�
 assert(/return strategyPredictHitRatesCache\.day === todayIso \? strategyPredictHitRatesCache\.value : null;/.test(cachedFn),
   '跨午夜窗口绝不返回旧锚点的值(asOfDay 必须如实)');
 assert(cachedFn.includes('const anchorDay = todayIso;'), '锚点在刷新触发时记录,计算跨午夜时记录的仍是数据真实锚点');
+// Codex #292 三审 P1 行为测试:刷新 rejection 后退避必须生效(首次/跨日失败不得逐轮重触发重活),
+// 同日旧值失败保留 SWR。真实调用缓存函数两次,统计 getStrategyMainlineReview 触发次数。
+const backoffTests = (async () => {
+  const makeScope = (cacheInit) => {
+    const state = { calls: 0 };
+    const isoFromCompactDate = (d) => String(d || '');
+    const chinaNowParts = () => ({ day: '2026-07-26' });
+    const STRATEGY_HIT_RATES_TTL_MS = 10 * 60 * 1000;
+    const STRATEGY_HIT_RATES_WINDOW_DAYS = 10;
+    const strategyPredictHitRatesCompact = () => null;
+    const console = { warn: () => {} };
+    const getStrategyMainlineReview = () => { state.calls += 1; return Promise.reject(new Error('boom')); };
+    const strategyPredictHitRatesCache = cacheInit;
+    // eslint-disable-next-line no-eval
+    const cached = eval(`(${extractFn('getStrategyPredictHitRatesCached')})`);
+    return { cached, state, cache: strategyPredictHitRatesCache };
+  };
+  const settle = () => new Promise(resolve => setImmediate(resolve));
+
+  // 场景 1:首次启动(day='')刷新失败——两次调用只允许一次重活,期间返回 null
+  const boot = makeScope({ at: 0, day: '', value: null, inflight: null });
+  assert.strictEqual(boot.cached(), null, '首启缓存未就绪返回 null');
+  await settle();
+  assert.strictEqual(boot.cached(), null, '失败退避期内仍返回 null');
+  await settle();
+  assert.strictEqual(boot.state.calls, 1, '首启失败后 10 分钟退避内不得重触发回看计算');
+  assert.strictEqual(boot.cache.day, '2026-07-26', '失败也必须推进锚点日');
+
+  // 场景 2:同日已有旧值,TTL 过期后刷新失败——旧值保留继续 SWR
+  const OLD = { windowDays: 10, overall: { total: 4, top1Rate: 50 } };
+  const stale = makeScope({ at: Date.now() - 11 * 60 * 1000, day: '2026-07-26', value: OLD, inflight: null });
+  assert.strictEqual(stale.cached(), OLD, 'TTL 过期瞬间仍返回旧值(SWR)');
+  await settle();
+  assert.strictEqual(stale.cached(), OLD, '同日刷新失败必须保留旧值,不得清空');
+  await settle();
+  assert.strictEqual(stale.state.calls, 1, '同日失败后退避内不得重触发');
+
+  // 场景 3:跨日旧值(day=昨日)刷新失败——旧值清空,绝不冒充今日
+  const cross = makeScope({ at: Date.now(), day: '2026-07-25', value: OLD, inflight: null });
+  assert.strictEqual(cross.cached(), null, '跨日旧值不得返回');
+  await settle();
+  assert.strictEqual(cross.cache.value, null, '跨日失败必须清空昨日旧值');
+  assert.strictEqual(cross.cached(), null, '清空后返回 null');
+  await settle();
+  assert.strictEqual(cross.state.calls, 1, '跨日失败后退避内不得重触发');
+})();
 
 // ---- 4. 前端三态 ----
 assert(html.includes("renderColumn('东财主线预测', bs.eastmoney, '超大单净流入', 'eastmoney')")
@@ -127,4 +173,9 @@ assert(/@media \(max-width: 430px\) \{[\s\S]{0,240}?\.ml-hitrate \{[\s\S]{0,120}
   '≤400px 命中率徽标必须退回块级独立行,恢复标题单行');
 assert(html.includes('strategy-workbench.css?v=20260726d'), 'CSS 缓存版本已升号');
 
-console.log('strategy hit-rate display checks passed');
+backoffTests.then(() => {
+  console.log('strategy hit-rate display checks passed');
+}).catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
