@@ -34,10 +34,11 @@ if (@($parseErrors).Count -gt 0) {
 
 New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
 $hadExistingTask = $false
-$existingXml = @(& schtasks.exe /Query /TN $taskFullName /XML 2>$null)
-if ($LASTEXITCODE -eq 0 -and $existingXml.Count -gt 0) {
+$existingTask = Get-ScheduledTask -TaskName $taskName -TaskPath '\' -ErrorAction SilentlyContinue
+if ($null -ne $existingTask) {
   $hadExistingTask = $true
-  [System.IO.File]::WriteAllLines($backupXmlPath, $existingXml, $utf8)
+  $existingXml = Export-ScheduledTask -TaskName $taskName -TaskPath '\' -ErrorAction Stop
+  [System.IO.File]::WriteAllText($backupXmlPath, $existingXml, $utf8)
 }
 
 $initialOutput = @(& $powershellPath -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $runtimeScript)
@@ -94,9 +95,10 @@ try {
 } catch {
   $failure = $_
   if ($hadExistingTask -and (Test-Path -LiteralPath $backupXmlPath)) {
-    & schtasks.exe /Create /TN $taskFullName /XML $backupXmlPath /F *> $null
+    $backupXml = Get-Content -LiteralPath $backupXmlPath -Raw -Encoding UTF8
+    Register-ScheduledTask -TaskName $taskName -TaskPath '\' -Xml $backupXml -Force | Out-Null
   } else {
-    & schtasks.exe /Delete /TN $taskFullName /F *> $null
+    Unregister-ScheduledTask -TaskName $taskName -TaskPath '\' -Confirm:$false -ErrorAction SilentlyContinue
   }
   throw "SSH orphan cleanup task installation failed and task registration was rolled back: $failure"
 }

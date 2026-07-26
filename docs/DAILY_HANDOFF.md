@@ -11253,3 +11253,32 @@ Notes for next agent:
   父 PID 已不存在、年龄至少 60 秒；`-R`、`-z` 和无参数监听器必须保留。
 - 安装后应再次运行增强版只读诊断，目标是
   `orphanedUnauthenticatedChildren=0`，并用全新 SSH 握手复测。
+
+## 2026-07-26 - Codex - 修复 SSH 清理任务首次安装
+
+Changed:
+- 首次安装运行 `30210039733` 在查询尚不存在的计划任务时，`schtasks /Query` 的正常
+  “找不到任务”错误被生产脚本的严格错误模式提升为终止错误；安装在首轮清理之前退出，
+  没有注册任务，也没有改变 `sshd`。
+- 改用 `Get-ScheduledTask -ErrorAction SilentlyContinue` 判断任务是否存在；已有任务使用
+  `Export-ScheduledTask` 备份，失败回滚使用 `Register-ScheduledTask` 或
+  `Unregister-ScheduledTask`，不再依赖会把“任务不存在”写入错误流的原生命令查询。
+- 增加首次安装、已有任务备份和两类回滚路径的静态回归断言。
+
+Files:
+- `ops/production/install-ssh-orphan-cleanup-task.ps1`
+- `tests/ssh-orphan-cleanup.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `tests/*.test.js` 共 71 份测试全部通过。
+- `tests/ssh-orphan-cleanup.test.js` 与 `git diff --check` 通过；生产工作流还会在远端执行前
+  用 PowerShell AST 解析器再次检查脚本语法。
+
+Deployment:
+- 本条提交时修复版安装器尚未执行；失败的 run `30210039733` 未留下计划任务。
+- 合并后只重新运行任务安装器，不重新部署运行时文件，不重启 `sshd` 或任何网站服务。
+
+Notes for next agent:
+- 安装成功后必须核验计划任务为 SYSTEM、周期 `PT5M`，并核验状态文件由计划任务实际更新；
+  不能只以 `schtasks /Create` 返回成功作为完成标准。
