@@ -64,12 +64,26 @@ The current regression contract is covered by `tests/review-source-health.test.j
 
 The health-source sync action should repair only missing, invalid, or stale source artifacts. It must not blindly regenerate and overwrite already valid source-faithful files.
 
+Before a structured candidate can be imported:
+
+- its internal trading day must exactly equal the target day;
+- an existing protected manual artifact must never be overwritten by the generic sync path, including force mode;
+- an unreadable existing artifact must be preserved for manual repair instead of being treated as absent;
+- actual row count must be recomputed from `rows` (or `boards[].rows` for 复盘啦); declared `count` and `stockRows` fields are diagnostic metadata only;
+- a manual candidate import must retain a manual provenance marker after it moves into the formal source directory;
+- any permitted automatic or candidate replacement must create a rollback backup and use a synced temporary file plus one same-directory rename as the commit step;
+- `mode=missing` must leave already healthy sources untouched instead of forcing every source.
+
 After repair:
 
 - rerun the source reconciliation;
 - rebuild the combined database if a formal source changed;
 - refresh the health response from actual rows;
 - report what was filled, skipped, or still pending.
+
+Health and repair are separate decisions. In particular, `needsSync === false` does not by itself mean `healthy`: a pre-publication day, a missing terminal pool, and a non-trading day must remain `pending`, `missing`, and `not-required` respectively. The admin verdict is read-only and does not trigger repair. The formal artifact validity checks are shared with repair readiness, so a wrong-day, unreadable, or protected-pending required source intentionally blocks publishing a newly rebuilt combined database until that source is settled; other automatic source artifacts may still be repaired and reported independently.
+
+Before the first production sync after a guard/rule change, inspect 30 trading days in read-only mode and list `artifact-day-missing`, `cross-day-artifact`, `artifact-json-invalid`, and protected-pending rows. Do not interpret the expected stricter status change as permission to force-rebuild protected sources.
 
 ## TGB Special Rule
 
