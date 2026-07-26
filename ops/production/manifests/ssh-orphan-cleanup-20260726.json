@@ -1,0 +1,9 @@
+{
+  "files": [
+    {
+      "source": "ops/production/runtime/cleanup-orphaned-ssh-preauth.ps1",
+      "destination": "ops/cleanup-orphaned-ssh-preauth.ps1"
+    }
+  ],
+  "restart": "none"
+}

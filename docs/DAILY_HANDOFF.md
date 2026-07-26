@@ -11213,3 +11213,43 @@ Notes for next agent:
 - 目标配置是 `LoginGraceTime 20`、`MaxAuthTries 3`、`MaxStartups 20:30:60`、
   `PerSourceMaxStartups 3`、`KbdInteractiveAuthentication no`。
 - 修复后必须用一条全新的 SSH 握手复测，不能只依赖修复前建立的 ControlMaster 连接。
+
+## 2026-07-26 - Codex - Windows OpenSSH 孤立预认证进程清理
+
+Changed:
+- 配置加固后，本地新握手和 GitHub 托管运行器新握手均已恢复，但进程诊断仍看到大量
+  `sshd.exe -y`。按 Win32 OpenSSH 9.5 官方源码，`-y` 是未认证权限分离子进程，
+  `-z` 才是已认证子进程。
+- 云端只读父进程核验发现当时剩余 65 个 `-y` 全部已失去父进程；它们不是监听器、
+  `-R` 连接监视器或已认证会话。新增运行时清理器，只处理父进程不存在、类型仍为
+  `sshd.exe -y`、存活至少 60 秒的进程，并在终止前再次核验 PID、名称、参数和父进程。
+- 新增每 5 分钟运行的 SYSTEM 计划任务安装器和只含一个文件的部署 manifest。运行时清理
+  不停止/重启 `sshd`，不读取或输出远端地址；状态原子写入
+  `C:\PandaDashboard\ops\ssh-orphan-cleanup-status.json`。
+- 扩展只读 SSH 诊断，增加未认证、已认证、`-R` 和孤立未认证进程的聚合计数。
+
+Files:
+- `ops/production/runtime/cleanup-orphaned-ssh-preauth.ps1`
+- `ops/production/install-ssh-orphan-cleanup-task.ps1`
+- `ops/production/manifests/ssh-orphan-cleanup-20260726.json`
+- `ops/production/diagnose-ssh-concurrency.ps1`
+- `tests/ssh-orphan-cleanup.test.js`
+- `tests/production-ops-workflow.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 加固后家里主机全新 SSH 握手约 0.2 秒成功。
+- 加固后 GitHub 只读诊断 run `30209440991` 全流程约 16 秒成功；此前饱和时同一流程
+  首次握手约 2 分 38 秒。
+- 本条提交的全部测试、YAML 解析与补丁格式须在合并前通过。
+
+Deployment:
+- 本条提交时运行时清理脚本和计划任务尚未部署。
+- 合并后先以 manifest 部署单一运行时脚本（`restart=none`），再运行任务安装器；
+  两步均不得重启网站服务。
+
+Notes for next agent:
+- 不要按进程总数直接杀 `sshd.exe`。允许自动清理的唯一集合是：参数为 `-y`、
+  父 PID 已不存在、年龄至少 60 秒；`-R`、`-z` 和无参数监听器必须保留。
+- 安装后应再次运行增强版只读诊断，目标是
+  `orphanedUnauthenticatedChildren=0`，并用全新 SSH 握手复测。
