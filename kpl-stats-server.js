@@ -24306,7 +24306,9 @@ function strategyMainlineExpectedStarTransitions(predict, main) {
       name: String(row?.name || '').trim(),
       firstExpectedAt: String(row?.firstExpectedAt || '').trim(),
       confirmedAt: String(row?.confirmedAt || '').trim() || null,
+      confirmedBy: String(row?.confirmedBy || '').trim(),
       lastLevel: String(row?.lastLevel || 'expected').trim() || 'expected',
+      transitionEvidence: 'recorded',
     }))
     .filter(row => row.code && row.firstExpectedAt);
   if (stored.length) return stored;
@@ -24319,10 +24321,107 @@ function strategyMainlineExpectedStarTransitions(predict, main) {
       name: String(main.star.name || '').trim(),
       firstExpectedAt: String(predict?.savedAt || '').trim(),
       confirmedAt: null,
+      confirmedBy: '',
       lastLevel: 'expected',
+      transitionEvidence: 'legacy-snapshot',
     }];
   }
   return [];
+}
+
+// “领先时长”只认可核验的真实事件时间:
+//   预期明星首次出现(firstExpectedAt) → 同一股票终盘涨停库的首次封板(firstLimitTime)。
+// 盘后补确认写入的 confirmedAt 可能只是涨停库保存时点(例如 15:30),不能冒充实际封板时间。
+function strategyMainlineChinaEventTimeMs(day, timeValue) {
+  const isoDay = isoFromCompactDate(day);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDay)) return null;
+  const normalized = normalizeReviewFirstLimitTime(timeValue);
+  const match = String(normalized || '').match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) return null;
+  const hour = Number(match[1]), minute = Number(match[2]), second = Number(match[3] || 0);
+  if (!(hour >= 0 && hour < 24 && minute >= 0 && minute < 60 && second >= 0 && second < 60)) return null;
+  const hh = String(hour).padStart(2, '0');
+  const mm = String(minute).padStart(2, '0');
+  const ss = String(second).padStart(2, '0');
+  const value = Date.parse(`${isoDay}T${hh}:${mm}:${ss}+08:00`);
+  return Number.isFinite(value) ? value : null;
+}
+function strategyMainlineTradingMinutesBetween(day, startMs, endMs) {
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) return null;
+  const windows = [
+    [strategyMainlineChinaEventTimeMs(day, '09:30:00'), strategyMainlineChinaEventTimeMs(day, '11:30:00')],
+    [strategyMainlineChinaEventTimeMs(day, '13:00:00'), strategyMainlineChinaEventTimeMs(day, '15:00:00')],
+  ];
+  let totalMs = 0;
+  for (const [windowStart, windowEnd] of windows) {
+    if (!Number.isFinite(windowStart) || !Number.isFinite(windowEnd)) return null;
+    totalMs += Math.max(0, Math.min(endMs, windowEnd) - Math.max(startMs, windowStart));
+  }
+  return Number((totalMs / 60000).toFixed(1));
+}
+function strategyMainlineLeadAssessment(day, transitions, limitDb) {
+  const isoDay = isoFromCompactDate(day);
+  if (!Array.isArray(transitions) || !transitions.length || !Array.isArray(limitDb?.stocks)) {
+    return { status: 'unavailable', sample: null };
+  }
+  const limitByCode = new Map(limitDb.stocks
+    .map(stock => [normalizeReasonSourceCode(stock?.code), stock])
+    .filter(([code]) => code));
+  const candidates = [];
+  let appearedAfterFirstLimit = false;
+  for (const row of transitions) {
+    // 兼容期仅从最终快照反推的 expected 没有“首次出现”证据，不能用于精确时长。
+    if (row?.transitionEvidence !== 'recorded') continue;
+    const code = normalizeReasonSourceCode(row?.code);
+    const expectedAtMs = Date.parse(String(row?.firstExpectedAt || ''));
+    const stock = limitByCode.get(code);
+    if (!code || !stock || !Number.isFinite(expectedAtMs)) continue;
+    if (chinaNowParts(new Date(expectedAtMs)).day !== isoDay) continue;
+    const firstLimitTime = normalizeReviewFirstLimitTime(
+      stock?.firstLimitTime || stock?.time || stock?.sealTime || stock?.first_limit_up_time || stock?.fbt || ''
+    );
+    const confirmedAtMs = strategyMainlineChinaEventTimeMs(isoDay, firstLimitTime);
+    if (!Number.isFinite(confirmedAtMs)) continue;
+    if (confirmedAtMs <= expectedAtMs) {
+      appearedAfterFirstLimit = true;
+      continue;
+    }
+    const leadMinutes = strategyMainlineTradingMinutesBetween(isoDay, expectedAtMs, confirmedAtMs);
+    if (!Number.isFinite(leadMinutes)) continue;
+    candidates.push({
+      code,
+      name: String(row?.name || stock?.name || '').trim(),
+      firstExpectedAt: new Date(expectedAtMs).toISOString(),
+      firstLimitTime,
+      confirmedAt: new Date(confirmedAtMs).toISOString(),
+      leadMinutes,
+      basis: 'expected-to-first-limit-up-trading-minutes',
+      expectedAtMs,
+      confirmedAtMs,
+    });
+  }
+  // 一来源/一交易日只记一个样本:取最早完成真实明星确认的预期股。
+  // 同一封板时点有多股时取更早出现的预期信号，避免按股票数放大单日权重。
+  candidates.sort((a, b) => a.confirmedAtMs - b.confirmedAtMs || a.expectedAtMs - b.expectedAtMs);
+  const first = candidates[0];
+  if (!first) {
+    return { status: appearedAfterFirstLimit ? 'after-first-limit' : 'unavailable', sample: null };
+  }
+  const { expectedAtMs, confirmedAtMs, ...sample } = first;
+  return { status: 'measured', sample };
+}
+function strategyMainlineLeadSample(day, transitions, limitDb) {
+  return strategyMainlineLeadAssessment(day, transitions, limitDb).sample;
+}
+function strategyMedianNumber(values) {
+  const sorted = (Array.isArray(values) ? values : [])
+    .map(Number)
+    .filter(value => Number.isFinite(value) && value >= 0)
+    .sort((a, b) => a - b);
+  if (!sorted.length) return null;
+  const mid = Math.floor(sorted.length / 2);
+  const value = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  return Number(value.toFixed(1));
 }
 
 // 三要件(2026-07-21,Codex #201 P1-3)预备主线的盘后回看:reserve 只进 candidates/starTransitions
@@ -24474,8 +24573,13 @@ async function getStrategyMainlineReview(days = 10) {
   let expectedSealWins = 0, expectedSealTotal = 0;
   // 三要件预备主线的预期明星封板统计(Codex #201 P1-3):独立分母,不与正式 expectedSeal 混算。
   let reserveSealWins = 0, reserveSealTotal = 0;
+  const mainlineLeadMinutes = [];
+  let mainlineLeadAfterFirstLimitSamples = 0;
   // 两套独立预测(Owner v2)的按来源主线命中统计——各自评各自的第 1 主线是否命中当日真实第一家族。
-  const srcStat = { eastmoney: { total: 0, top1: 0, top3: 0 }, ths: { total: 0, top1: 0, top3: 0 } };
+  const srcStat = {
+    eastmoney: { total: 0, top1: 0, top3: 0, leadMinutes: [], leadAfterFirstLimit: 0 },
+    ths: { total: 0, top1: 0, top3: 0, leadMinutes: [], leadAfterFirstLimit: 0 },
+  };
   // 从最新交易日开始(修复:旧循环从 length-2 起,最新收盘日因无次日收盘价被整行丢弃,
   // 连当日主线命中与封板结果也不展示;现在无次日数据只置 nextCloseGain=null)。
   for (let i = tradingDays.length - 1; i >= 0 && rows.length < days; i -= 1) {
@@ -24620,6 +24724,8 @@ async function getStrategyMainlineReview(days = 10) {
       .map(f => ({ theme: f.label, count: f.count, rankTier: f.rankTier }));
     const actualFirstTied = tier1.length > 1;
     let mainlineHitTop1 = null, mainlineHitTop3 = null;
+    let mainlineLead = null;
+    let mainlineLeadStatus = null;
     if (actualRanking.length && main) {
       const tiedFirstFamilies = tier1.map(f => f.familyKey);
       const predictedFamilies = formalTop.slice(0, 3)
@@ -24633,6 +24739,17 @@ async function getStrategyMainlineReview(days = 10) {
         mainlineTotal += 1;
         if (mainlineHitTop1) mainlineTop1Hits += 1;
         if (mainlineHitTop3) mainlineTop3Hits += 1;
+      }
+      if (sampleValid && !pendingReview && mainlineHitTop1 === true && limitDbFinal) {
+        const assessment = strategyMainlineLeadAssessment(
+          day,
+          strategyMainlineExpectedStarTransitions(predict, main),
+          limitDb
+        );
+        mainlineLead = assessment.sample;
+        mainlineLeadStatus = assessment.status;
+        if (mainlineLead) mainlineLeadMinutes.push(mainlineLead.leadMinutes);
+        else if (assessment.status === 'after-first-limit') mainlineLeadAfterFirstLimitSamples += 1;
       }
     }
     // 两套独立预测(schema v3):分别评东财/同花顺各自第 1 主线的命中,共享当日真实第一家族;
@@ -24656,6 +24773,8 @@ async function getStrategyMainlineReview(days = 10) {
           : sMain ? 'mainline'
             : sourceAvailable === true ? 'no-mainline' : 'unknown';
         let hitTop1 = null, hitTop3 = null;
+        let leadTime = null;
+        let leadTimeStatus = null;
         if (sourceStatus === 'mainline' && actualRanking.length) {
           const predFams = fTop.slice(0, 3).map(t => strategyMainlineFamilyInfo({ theme: t?.theme || '', key: t?.key || '' }).key).filter(Boolean);
           const mFam = strategyMainlineFamilyInfo({ theme: sMain.theme || '', key: sMain.key || '' }).key;
@@ -24665,6 +24784,17 @@ async function getStrategyMainlineReview(days = 10) {
             srcStat[skey].total += 1;
             if (hitTop1) srcStat[skey].top1 += 1;
             if (hitTop3) srcStat[skey].top3 += 1;
+          }
+          if (sampleValid && !pendingReview && hitTop1 === true && limitDbFinal) {
+            const assessment = strategyMainlineLeadAssessment(
+              day,
+              strategyMainlineExpectedStarTransitions({ ...blockPredict, savedAt: block.savedAt || predict.savedAt }, sMain),
+              limitDb
+            );
+            leadTime = assessment.sample;
+            leadTimeStatus = assessment.status;
+            if (leadTime) srcStat[skey].leadMinutes.push(leadTime.leadMinutes);
+            else if (assessment.status === 'after-first-limit') srcStat[skey].leadAfterFirstLimit += 1;
           }
         }
         reviewBySource[skey] = {
@@ -24680,6 +24810,8 @@ async function getStrategyMainlineReview(days = 10) {
           noMainline: sourceStatus === 'no-mainline',
           mainlineHitTop1: hitTop1,
           mainlineHitTop3: hitTop3,
+          mainlineLead: leadTime,
+          mainlineLeadStatus: leadTimeStatus,
         };
       }
     }
@@ -24707,7 +24839,7 @@ async function getStrategyMainlineReview(days = 10) {
       candidateThemes: noMainline ? predict.top.slice(0, 3).map(row => String(row?.theme || '')).filter(Boolean) : [],
       phase, sampleValid, sampleInvalidReason, pendingReview,
       actualTop, actualFirstTied, mainlineHitTop1, mainlineHitTop3, mainReasonMissingCount,
-      star, mainlineStarQualified, expectedStars, reserveStarOutcomes, leader, leaders,
+      mainlineLead, mainlineLeadStatus, star, mainlineStarQualified, expectedStars, reserveStarOutcomes, leader, leaders,
       ...(reviewBySource ? { bySource: reviewBySource } : {}),
     });
   }
@@ -24720,6 +24852,9 @@ async function getStrategyMainlineReview(days = 10) {
       mainlineTop1Hits, mainlineTop3Hits, mainlineTotal,
       mainlineTop1Rate: mainlineTotal ? Number((mainlineTop1Hits / mainlineTotal * 100).toFixed(1)) : null,
       mainlineTop3Rate: mainlineTotal ? Number((mainlineTop3Hits / mainlineTotal * 100).toFixed(1)) : null,
+      mainlineLeadSamples: mainlineLeadMinutes.length,
+      mainlineLeadMedianMinutes: strategyMedianNumber(mainlineLeadMinutes),
+      mainlineLeadAfterFirstLimitSamples,
       expectedSealWins, expectedSealTotal,
       expectedSealRate: expectedSealTotal ? Number((expectedSealWins / expectedSealTotal * 100).toFixed(1)) : null,
       // 预备主线(三要件降级层)预期明星封板统计——与正式 expectedSeal 分开,检验三要件是否错杀。
@@ -24729,13 +24864,19 @@ async function getStrategyMainlineReview(days = 10) {
       bySource: {
         eastmoney: { mainlineTotal: srcStat.eastmoney.total, mainlineTop1Hits: srcStat.eastmoney.top1, mainlineTop3Hits: srcStat.eastmoney.top3,
           mainlineTop1Rate: srcStat.eastmoney.total ? Number((srcStat.eastmoney.top1 / srcStat.eastmoney.total * 100).toFixed(1)) : null,
-          mainlineTop3Rate: srcStat.eastmoney.total ? Number((srcStat.eastmoney.top3 / srcStat.eastmoney.total * 100).toFixed(1)) : null },
+          mainlineTop3Rate: srcStat.eastmoney.total ? Number((srcStat.eastmoney.top3 / srcStat.eastmoney.total * 100).toFixed(1)) : null,
+          mainlineLeadSamples: srcStat.eastmoney.leadMinutes.length,
+          mainlineLeadMedianMinutes: strategyMedianNumber(srcStat.eastmoney.leadMinutes),
+          mainlineLeadAfterFirstLimitSamples: srcStat.eastmoney.leadAfterFirstLimit },
         ths: { mainlineTotal: srcStat.ths.total, mainlineTop1Hits: srcStat.ths.top1, mainlineTop3Hits: srcStat.ths.top3,
           mainlineTop1Rate: srcStat.ths.total ? Number((srcStat.ths.top1 / srcStat.ths.total * 100).toFixed(1)) : null,
-          mainlineTop3Rate: srcStat.ths.total ? Number((srcStat.ths.top3 / srcStat.ths.total * 100).toFixed(1)) : null },
+          mainlineTop3Rate: srcStat.ths.total ? Number((srcStat.ths.top3 / srcStat.ths.total * 100).toFixed(1)) : null,
+          mainlineLeadSamples: srcStat.ths.leadMinutes.length,
+          mainlineLeadMedianMinutes: strategyMedianNumber(srcStat.ths.leadMinutes),
+          mainlineLeadAfterFirstLimitSamples: srcStat.ths.leadAfterFirstLimit },
       },
     },
-    note: '回看只将存在L2预期明星或明星确认正证据的方向认定为正式主线；未扫描、覆盖不足或已扫描无明星的候选显示为今日无主线且不计命中率。回看同时统计次日最高涨幅、次日收盘涨幅和第三个后续交易日收盘涨跌幅；收盘指标来自每日收盘价库，次日最高来自复权日K。',
+    note: '回看只将存在L2预期明星或明星确认正证据的方向认定为正式主线；未扫描、覆盖不足或已扫描无明星的候选显示为今日无主线且不计命中率。领先时长只统计主线top1命中日中有完整事件轨迹的预期明星，从首次预期至同股真实首次封板，仅累计09:30–11:30与13:00–15:00可交易分钟，一来源一日一个样本并取窗口中位数；预期在首次封板后才出现的日期单独计数，不混入中位数。回看同时统计次日最高涨幅、次日收盘涨幅和第三个后续交易日收盘涨跌幅；收盘指标来自每日收盘价库，次日最高来自复权日K。',
   };
 }
 
@@ -24749,6 +24890,9 @@ function strategyPredictHitRatesCompact(stats, windowDays) {
     total: Number(stats.bySource?.[key]?.mainlineTotal || 0),
     top1Rate: stats.bySource?.[key]?.mainlineTop1Rate ?? null,
     top3Rate: stats.bySource?.[key]?.mainlineTop3Rate ?? null,
+    leadSamples: Number(stats.bySource?.[key]?.mainlineLeadSamples || 0),
+    leadMedianMinutes: stats.bySource?.[key]?.mainlineLeadMedianMinutes ?? null,
+    leadAfterFirstLimitSamples: Number(stats.bySource?.[key]?.mainlineLeadAfterFirstLimitSamples || 0),
   });
   return {
     windowDays: Number(windowDays) || 0,
@@ -24758,6 +24902,9 @@ function strategyPredictHitRatesCompact(stats, windowDays) {
       total: Number(stats.mainlineTotal || 0),
       top1Rate: stats.mainlineTop1Rate ?? null,
       top3Rate: stats.mainlineTop3Rate ?? null,
+      leadSamples: Number(stats.mainlineLeadSamples || 0),
+      leadMedianMinutes: stats.mainlineLeadMedianMinutes ?? null,
+      leadAfterFirstLimitSamples: Number(stats.mainlineLeadAfterFirstLimitSamples || 0),
     },
     bySource: { eastmoney: src('eastmoney'), ths: src('ths') },
   };

@@ -11080,3 +11080,47 @@ Deployment:
 Notes for next agent:
 - PR `#292` 已完成并上线，不要重复发布。首次请求或缓存刷新失败时命中率字段可暂时缺失，这是既定三态行为；不要用 `0%` 代替无样本。
 - 命中率与预判回看同源，只允许今日请求携带；历史日期不得附加以今天为锚点的统计。
+
+## 2026-07-26 - Codex - 主线预测领先时长
+
+Changed:
+- 在预判回看同一条统计链上新增“领先时长”：仅统计同源 top1 命中日中有完整首次预期轨迹、
+  后续真实封板且终盘涨停库有可核验 `firstLimitTime` 的明星股。
+- 一来源一交易日最多一个样本；多只预期明星后来封板时取最早完成真实确认的一只，窗口汇总取中位数，
+  不按股票数放大单日权重；时长只累计 `09:30–11:30`、`13:00–15:00` 可交易分钟。
+- 盘后补确认的 `confirmedAt` 可能是涨停库保存时点，明确禁止用于时长；旧记录只有最终快照、
+  没有首次事件轨迹时保持无样本。
+- 预期信号在同股首次封板后才出现时不混入领先中位数，单独累计
+  `mainlineLeadAfterFirstLimitSamples` 并在前端提示中披露，避免指标只报有利样本。
+- 策略页东财/同花顺标题在现有 top1/top3 命中率后展示“领先中位”，缺少可核验样本时显示
+  “领先暂无样本”；历史日期继续不附加当前锚点统计。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/mainline-review.test.js`
+- `tests/strategy-hitrate-display.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 生产只读证据：`GET /api/strategy-mainline-review?days=10`，响应证据 SHA-256
+  `87c3291a59cfa337ef4754a25ec12531a05bda1aef54ccd98343bd9a34fe7d96`；
+  `strategy-data/mainline-predict-2026-07-21.json` SHA-256
+  `0EAADFC515C013765A0B54D59D4FF2315540166D06B1246306323C25274E1433`；
+  `kpl-limitup-db/2026-07-21.json` SHA-256
+  `F97565ED5359A96C7D85ED3308FFB6C10ACFD306828C2AC227D761B6CC9FDA26`。
+- 7月21日东财半导体为 top1 命中样本：兆易创新首次预期为北京时间 `11:04:29`，
+  真实首次封板为 `14:08:05`；自然间隔 `183.6` 分钟，剔除午休后可交易领先
+  `93.6` 分钟；涨停库 `savedAt=15:30` 未被误用。
+- Local Claude 首轮复核发现自然时间包含午休会造成样本排序倒挂；修订后测试覆盖上午、
+  下午、跨午休、开盘前一字板及封板后识别五种边界。云端近30日共 `2526` 条
+  `firstLimitTime` 均为5/6位，三位格式风险未在生产数据出现。
+- `node --check kpl-stats-server.js`、`git diff --check`、全仓 `69/69` 测试文件通过。
+
+Deployment:
+- 未部署、未重启任何服务、未写运行时数据库。待另一 agent 独立复审后再合并发布。
+
+Notes for next agent:
+- 请重点复核：交易时段净分钟、封板后识别单独计数、按来源独立、top1 命中前置、
+  真实 `firstLimitTime`、旧快照不造样本、一来源一日一个样本及历史日期隔离。
+- 本任务只增加只读统计与展示，不改变正式主线筛选、排序、评分、冻结快照或预测档案。
