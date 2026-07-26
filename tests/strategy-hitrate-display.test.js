@@ -92,6 +92,11 @@ assert(!visibleFn.includes('predictHitRates'), '冻结快照/可见载荷生成�
 const cachedFn = extractFn('getStrategyPredictHitRatesCached');
 assert(!/await/.test(cachedFn), '缓存读取必须同步返回,过期时后台刷新,不得阻塞主线榜热路径');
 assert(cachedFn.includes('inflight'), '并发轮询只允许一个后台刷新在途');
+// Local #292 复审:asOfDay 不得错锚——缓存按锚点日失效,锚点日不等于今天时返回 null 而非旧锚数据
+assert(cachedFn.includes('strategyPredictHitRatesCache.day !== todayIso'), '锚点日变更必须视为过期');
+assert(/return strategyPredictHitRatesCache\.day === todayIso \? strategyPredictHitRatesCache\.value : null;/.test(cachedFn),
+  '跨午夜窗口绝不返回旧锚点的值(asOfDay 必须如实)');
+assert(cachedFn.includes('const anchorDay = todayIso;'), '锚点在刷新触发时记录,计算跨午夜时记录的仍是数据真实锚点');
 
 // ---- 4. 前端三态 ----
 assert(html.includes("renderColumn('东财主线预测', bs.eastmoney, '超大单净流入', 'eastmoney')")

@@ -24778,13 +24778,22 @@ function attachPredictHitRatesIfToday(payload, requestedDay) {
 // 命中缓存直接返回;过期时后台异步刷新、本次先用旧值(或首轮返回 null,前端静默不显示)。
 const STRATEGY_HIT_RATES_TTL_MS = 10 * 60 * 1000;
 const STRATEGY_HIT_RATES_WINDOW_DAYS = 10;
-const strategyPredictHitRatesCache = { at: 0, value: null, inflight: null };
+// 缓存带锚点日 day(Local #292 复审:值在 D 日 23:58 算出、D+1 00:05 命中 TTL 时,
+// asOfDay 会被现盖成 D+1 而数据锚点仍是 D——锚点日换了就按过期处理,绝不返回错锚的值)。
+// 锚点在刷新触发时记录:若计算跨午夜完成,记录的仍是数据真实锚点 D,次日请求会因
+// day 不匹配再触发一次以 D+1 为锚的刷新。
+const strategyPredictHitRatesCache = { at: 0, day: '', value: null, inflight: null };
 function getStrategyPredictHitRatesCached() {
   const now = Date.now();
-  if (now - strategyPredictHitRatesCache.at > STRATEGY_HIT_RATES_TTL_MS && !strategyPredictHitRatesCache.inflight) {
+  const todayIso = isoFromCompactDate(chinaNowParts().day);
+  const expired = now - strategyPredictHitRatesCache.at > STRATEGY_HIT_RATES_TTL_MS
+    || strategyPredictHitRatesCache.day !== todayIso;
+  if (expired && !strategyPredictHitRatesCache.inflight) {
+    const anchorDay = todayIso;
     strategyPredictHitRatesCache.inflight = getStrategyMainlineReview(STRATEGY_HIT_RATES_WINDOW_DAYS)
       .then(review => {
         strategyPredictHitRatesCache.value = strategyPredictHitRatesCompact(review?.stats, STRATEGY_HIT_RATES_WINDOW_DAYS);
+        strategyPredictHitRatesCache.day = anchorDay;
         strategyPredictHitRatesCache.at = Date.now();
       })
       .catch(err => {
@@ -24793,7 +24802,7 @@ function getStrategyPredictHitRatesCached() {
       })
       .finally(() => { strategyPredictHitRatesCache.inflight = null; });
   }
-  return strategyPredictHitRatesCache.value;
+  return strategyPredictHitRatesCache.day === todayIso ? strategyPredictHitRatesCache.value : null;
 }
 
 // 最终输出前的预判增强：广度分、动能分、潜力个股、明星股、首日题材、确定性分级都在这一处挂载。
