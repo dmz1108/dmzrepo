@@ -117,6 +117,14 @@ C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\YYYY-MM-D
 C:\PandaDashboard\backups\tgb-hunan-manual-YYYYMMDD-HHmmss\
 ```
 
+已存在的 TGB 正式文件受人工来源保护，普通同步与 `force` 都不得覆盖。需要纠正人工转录时：
+
+1. 先把当前正式文件完整备份到上述目录并记录 SHA-256。
+2. 对更正后的候选重新执行第 6 节全部校验。
+3. 由具备云端写权限的操作者受控替换正式文件；不要依赖同步按钮，也不要无备份删除正式文件。
+4. 在两份云端运维日志记录日期、旧/新 SHA-256、行数和备份路径。
+5. 按第 8 节重折当天综合主因库，再完成第 9 节验证。
+
 ### 8. 重折当天综合主因库
 
 写入 TGB 正式库后，在云端重建当天综合主因库：
