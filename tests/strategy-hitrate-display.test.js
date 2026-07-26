@@ -80,6 +80,6 @@ assert(/if \(!Number\(hr\.total\)\)[^;]*暂无样本/.test(overallBlock) && !/0%
 
 // ---- 5. CSS 与缓存版本 ----
 assert(css.includes('body.view-strategy .ml-hitrate {') && css.includes('.ml-hitrate.is-empty'), '命中率行样式存在');
-assert(html.includes('strategy-workbench.css?v=20260726a'), 'CSS 缓存版本已升号');
+assert(html.includes('strategy-workbench.css?v=20260726b'), 'CSS 缓存版本已升号');
 
 console.log('strategy hit-rate display checks passed');
