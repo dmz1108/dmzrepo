@@ -62,11 +62,15 @@ performing an independent review in this repository.
   verdict. A single tested corner never justifies a whole-boundary ✅. (Origin: a corrupt
   non-TGB manual artifact was overwritable; the reviewer had tested only the TGB corner.)
   For deletion changes the matrix has a second question: not only "is everything removed
-  safe to remove" but "does anything of the same class remain un-removed". Sweep for
-  same-class remnants — full deleted-symbol back-scan, sibling-implementation search —
-  before confirming a removal complete. (Origin: PR #286 deleted the Qwen vision subtree
-  but left a same-class WinRT OCR subtree; both reviewers' first instinct verified only
-  the safety of what was deleted, and the remnant surfaced only through a full sweep.)
+  safe to remove" but "is the removal complete". The strongest known check is an
+  **orphan-set diff**: compute the set of defined-but-never-called functions on the base
+  and on the branch, then compare — orphans eliminated show what the deletion cleaned up,
+  orphans created show what it left behind. This catches both same-class remnants
+  (a sibling subtree never touched) and newly stranded helpers (a survivor whose only
+  caller was deleted); a back-scan of deleted symbols alone catches neither. (Origin:
+  PR #286 deleted the Qwen vision subtree but left a same-class WinRT OCR subtree, and
+  the WinRT removal in turn stranded a helper — the first surfaced only through a full
+  reference sweep, the second only through the orphan-set diff.)
 - **Fail-safe is the default for unidentifiable files.** A file that is corrupt, unmarked,
   or of unknown origin must be treated as the highest-value asset class it could be —
   reject writes first, ask later. "It was backed up" does not make overwriting acceptable:
