@@ -24,6 +24,7 @@ assert(workflow.includes('ControlPersist 10m'), 'production SSH control connecti
 assert(workflow.includes('ControlPath ~/.ssh/dreamerqi-control-%C'), 'production SSH must use a deterministic per-target control socket');
 assert(workflow.includes('for attempt in $(seq 1 20)'), 'initial SSH handshake must use bounded low-frequency retries');
 assert(workflow.includes('trap close_control_master EXIT'), 'production cleanup must always close the persistent SSH control connection');
+assert(workflow.includes('System.Management.Automation.Language.Parser'), 'remote PowerShell must pass parser validation before execution');
 assert(workflow.includes('actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5'), 'checkout action must be commit pinned');
 assert(workflow.includes('ops/production/'), 'operation scripts must be tracked under the approved directory');
 assert(workflow.includes('archive_paths=("$MANIFEST_PATH")'), 'deployment archives must start from the reviewed manifest');
