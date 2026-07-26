@@ -55,7 +55,10 @@ A(src.includes(': strategyMainlineApplyL2StarGate(inflowGate.kept, { threeRequir
 A(src.includes("const STRATEGY_MAINLINE_STRICT_QI_START_DAY = '2026-07-16'")
   && src.includes('options?.leaderDebug || !strategyMainlineUsesStrictQi(isoDay)')
   && src.includes('if (!strategyMainlineUsesStrictQi(predictDay)) return payload;'), '严格 QI 门槛仅从 2026-07-16 起在构建层和返回层生效,不倒溯清空旧历史');
-A(src.includes('getStrategyMainlinesVisible(url.searchParams.get') && src.includes('strategyMainlineAttachExpectedHistoryPayload(payload, predict)'), '正式页面接口对旧缓存与冻结快照补历史预期证据后再执行严格 QI 过滤');
+// 2026-07-26 命中率日期锚点修正:路由先取 requestedDay(源于 url.searchParams.get('day'))再传入 Visible,
+// 锁的意图不变——正式页面接口必须把请求日传给 getStrategyMainlinesVisible。
+A(/const requestedDay = url\.searchParams\.get\('day'\) \|\| chinaNowParts\(\)\.day;\s*\n\s*const payload = await getStrategyMainlinesVisible\(requestedDay\)/.test(src)
+  && src.includes('strategyMainlineAttachExpectedHistoryPayload(payload, predict)'), '正式页面接口对旧缓存与冻结快照补历史预期证据后再执行严格 QI 过滤');
 A(src.includes("options?.leaderDebug || !strategyMainlineUsesStrictQi(isoDay)\n    ? { kept: inflowGate.kept, reserve: [], excluded: [] }"), '管理员复核保留完整候选池,旧历史日期也不受新门槛影响(含预备层空位)');
 const autoScanAt = src.indexOf('strategyMainlineMaybeAutoScan(boardPayload?.boards || []');
 const strictGateAt = src.indexOf(': strategyMainlineApplyL2StarGate(inflowGate.kept, { threeRequirements: useThreeRequirements });');

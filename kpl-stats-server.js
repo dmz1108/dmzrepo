@@ -24739,6 +24739,79 @@ async function getStrategyMainlineReview(days = 10) {
   };
 }
 
+// ===== 主线榜命中率随行展示(Owner 2026-07-26 第一步:把回看命中率搬到决策现场) =====
+// 只做展示层搬运:数字与预判回看完全同源(getStrategyMainlineReview 的 stats),不新增口径。
+// 提取为紧凑块,不带逐日明细,避免撑大高频轮询的主线榜响应。
+// 分母为 0 时各 rate 保持 null——前端必须显示"暂无样本",禁止渲染成 0%(不装有数据)。
+function strategyPredictHitRatesCompact(stats, windowDays) {
+  if (!stats) return null;
+  const src = key => ({
+    total: Number(stats.bySource?.[key]?.mainlineTotal || 0),
+    top1Rate: stats.bySource?.[key]?.mainlineTop1Rate ?? null,
+    top3Rate: stats.bySource?.[key]?.mainlineTop3Rate ?? null,
+  });
+  return {
+    windowDays: Number(windowDays) || 0,
+    basis: 'predict-review',       // 口径声明:与预判回看同源,盘后主因库缺失的日子不计分母
+    // 只带前端实际渲染的字段(明星胜率留待 Owner 批准的后续步骤,不预置)
+    overall: {
+      total: Number(stats.mainlineTotal || 0),
+      top1Rate: stats.mainlineTop1Rate ?? null,
+      top3Rate: stats.mainlineTop3Rate ?? null,
+    },
+    bySource: { eastmoney: src('eastmoney'), ths: src('ths') },
+  };
+}
+// 命中率只随"今天"的页面走(Codex #292 P1):历史日期页面若挂上按当前锚点算的
+// 近10日命中率,会被自然误读成"截至该历史日的成绩"——日期穿越。回看统计固定以
+// 中国时区今天为锚,且缓存只有一份全局值,所以历史请求一律不附加;响应带 asOfDay
+// 显式声明锚点。错误载荷与缓存未就绪同样原样返回,前端三态里的"字段缺失"分支静默。
+function attachPredictHitRatesIfToday(payload, requestedDay) {
+  if (!payload || payload.error) return payload;
+  const todayIso = isoFromCompactDate(chinaNowParts().day);
+  if (isoFromCompactDate(requestedDay) !== todayIso) return payload;
+  const predictHitRates = getStrategyPredictHitRatesCached();
+  if (!predictHitRates) return payload;
+  return { ...payload, predictHitRates: { ...predictHitRates, asOfDay: todayIso } };
+}
+// stale-while-revalidate:回看计算含收盘价库/日K读取,不能同步挂在主线榜热路径上。
+// 命中缓存直接返回;过期时后台异步刷新、本次先用旧值(或首轮返回 null,前端静默不显示)。
+const STRATEGY_HIT_RATES_TTL_MS = 10 * 60 * 1000;
+const STRATEGY_HIT_RATES_WINDOW_DAYS = 10;
+// 缓存带锚点日 day(Local #292 复审:值在 D 日 23:58 算出、D+1 00:05 命中 TTL 时,
+// asOfDay 会被现盖成 D+1 而数据锚点仍是 D——锚点日换了就按过期处理,绝不返回错锚的值)。
+// 锚点在刷新触发时记录:若计算跨午夜完成,记录的仍是数据真实锚点 D,次日请求会因
+// day 不匹配再触发一次以 D+1 为锚的刷新。
+const strategyPredictHitRatesCache = { at: 0, day: '', value: null, inflight: null };
+function getStrategyPredictHitRatesCached() {
+  const now = Date.now();
+  const todayIso = isoFromCompactDate(chinaNowParts().day);
+  const expired = now - strategyPredictHitRatesCache.at > STRATEGY_HIT_RATES_TTL_MS
+    || strategyPredictHitRatesCache.day !== todayIso;
+  if (expired && !strategyPredictHitRatesCache.inflight) {
+    const anchorDay = todayIso;
+    strategyPredictHitRatesCache.inflight = getStrategyMainlineReview(STRATEGY_HIT_RATES_WINDOW_DAYS)
+      .then(review => {
+        strategyPredictHitRatesCache.value = strategyPredictHitRatesCompact(review?.stats, STRATEGY_HIT_RATES_WINDOW_DAYS);
+        strategyPredictHitRatesCache.day = anchorDay;
+        strategyPredictHitRatesCache.at = Date.now();
+      })
+      .catch(err => {
+        // 失败也推进锚点日(Codex #292 三审 P1):首次(day='')/跨日失败若只更新 at 不更新 day,
+        // day !== today 会让每次轮询都判过期、重触发完整回看计算,10 分钟退避失效。
+        // 同日失败保留旧值继续 SWR;跨日/首次失败清空旧值,绝不让昨日值冒充今日。
+        if (strategyPredictHitRatesCache.day !== anchorDay) {
+          strategyPredictHitRatesCache.day = anchorDay;
+          strategyPredictHitRatesCache.value = null;
+        }
+        strategyPredictHitRatesCache.at = Date.now();
+        console.warn('strategy hit-rates refresh failed (badge stays hidden):', err?.message || err);
+      })
+      .finally(() => { strategyPredictHitRatesCache.inflight = null; });
+  }
+  return strategyPredictHitRatesCache.day === todayIso ? strategyPredictHitRatesCache.value : null;
+}
+
 // 最终输出前的预判增强：广度分、动能分、潜力个股、明星股、首日题材、确定性分级都在这一处挂载。
 // trendKeyPrefix(Owner v2 两套独立预测):盘中动能采样必须按来源隔离,否则东财/同花顺同题材共用
 // 同一趋势键,先跑的一边写入基线后,另一边会拿它当基线算 delta,串改两边分数与排名(Codex 二审 P1)。
@@ -28006,8 +28079,12 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/limit-up-main-reason-db/recent-universe') return await getLimitUpMainReasonRecentUniverse(url, req, res);
     if (url.pathname === '/api/limit-up-main-reason-db/pending') return await getLimitUpMainReasonPending(url, req, res);
     if (url.pathname === '/api/limit-up-main-reason-db/hot-themes') return await getLimitUpMainReasonHotThemes(url, req, res);
-    if (url.pathname === '/api/strategy-mainlines') return send(res, 200, await getStrategyMainlinesVisible(url.searchParams.get('day') || chinaNowParts().day)
-      .catch(e => ({ ok: false, error: String(e && e.message || e) })));
+    if (url.pathname === '/api/strategy-mainlines') {
+      const requestedDay = url.searchParams.get('day') || chinaNowParts().day;
+      const payload = await getStrategyMainlinesVisible(requestedDay)
+        .catch(e => ({ ok: false, error: String(e && e.message || e) }));
+      return send(res, 200, attachPredictHitRatesIfToday(payload, requestedDay));
+    }
     if (url.pathname === '/api/admin/strategy-realtime-context') return await getStrategyRealtimeContextApi(url, req, res);
     if (url.pathname === '/api/admin/strategy-daily-events') return await getStrategyDailyEventsApi(url, req, res);
     if (url.pathname === '/api/detail-evidence-index') return await getDetailEvidenceIndexApi(url, req, res);

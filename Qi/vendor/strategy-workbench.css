@@ -304,6 +304,51 @@ body.view-strategy .ml-col-title small {
   opacity: 1 !important;
 }
 
+/* 命中率随行(2026-07-26,Owner 二次修订:直接进标题行,跟在"××主线预测"后面)。
+   标签中性小字、数字亮色加粗主角(Owner 反馈首版 11px 全灰看不清);
+   仍不用金/红(那两色在本页有确认态语义);暂无样本弱化,不许用 0% 冒充。 */
+body.view-strategy .ml-hitrate {
+  margin-left: 10px;
+  display: inline;
+  color: var(--st-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  cursor: help;
+  white-space: nowrap;
+}
+body.view-strategy .ml-hitrate b {
+  color: var(--st-text);
+  font-size: 13px;
+  font-weight: 820;
+  letter-spacing: 0;
+}
+body.view-strategy .ml-hitrate.is-empty {
+  color: var(--st-faint);
+  cursor: default;
+}
+/* ≤430px 窄屏修正(Local #292 阻断:nowrap 徽标把同花顺标题挤成两行;其量测页断点
+   400→390,换真实 .ml-cols 单列规则复测为 405–420,阈值取 430 留余量):
+   列头改为可折行,标题 span(本身是 flex 容器,含标题文本与徽标)flex-basis 100% 独占整行,
+   副标签退到下一行——标题与徽标同行且都不再被挤压,徽标 white-space 放开必要时内部折行。
+   标题文本 nowrap 防 CJK 单字竖排。桌面(>430)保持行内形态不变。
+   实测 340–430 全区间:标题 1 行、副标签 1 行、零横向溢出。 */
+@media (max-width: 430px) {
+  body.view-strategy .ml-col-title {
+    flex-wrap: wrap !important;
+  }
+  body.view-strategy .ml-col-title > span {
+    flex: 1 1 100%;
+    white-space: nowrap;
+  }
+  body.view-strategy .ml-hitrate {
+    display: block;
+    margin-left: 0;
+    margin-top: 4px;
+    white-space: normal;
+  }
+}
+
 body.view-strategy .ml-grid {
   display: grid !important;
   grid-template-columns: 1fr !important;

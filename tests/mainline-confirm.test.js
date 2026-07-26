@@ -21,7 +21,9 @@ assert(!context.matchesConfirm({ familyKey: 'group:医药', theme: '医药' }, {
 assert(server.includes('async function getStrategyMainlinesWithConfirm(day)'), '主线响应经过动态确认叠加器');
 assert(server.includes('async function getStrategyMainlinesVisible(day)')
   && server.includes('const payload = await getStrategyMainlinesWithConfirm(day);')
-  && server.includes("url.pathname === '/api/strategy-mainlines') return send(res, 200, await getStrategyMainlinesVisible"), '公开主线接口在动态确认后补预期轨迹并执行正式榜过滤');
+  // 2026-07-26 命中率随行:路由改为先取 payload 再在响应层附加 predictHitRates,
+  // 锁的意图不变——公开主线接口必须走 getStrategyMainlinesVisible(动态确认 + 正式榜过滤)。
+  && /url\.pathname === '\/api\/strategy-mainlines'\) \{[\s\S]{0,240}?const payload = await getStrategyMainlinesVisible\(/.test(server), '公开主线接口在动态确认后补预期轨迹并执行正式榜过滤');
 assert(server.includes('strategyMainlineWithTimeout(getStrategyMainlinesWithConfirm(requestedDay)'), 'AI只读策略响应使用同一确认口径');
 
 assert(dashboard.includes('async function confirmMainlineTheme(key, theme)'), '确认主线操作改为可捕获错误的异步流程');
