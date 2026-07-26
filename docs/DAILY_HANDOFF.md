@@ -10784,3 +10784,29 @@ Deployment:
 Notes for next agent:
 - 本次是 PR `#284` 记录的独立 P2 死代码清理；不要恢复 Qwen/OCR 自动生成 TGB 正式行。
 - `runAutoTgbVisionSyncIfDue` 与 `--tgb-vision-sync` 名称为历史兼容，但其行为仅抓 raw evidence 并明确要求人工转录。
+
+## 2026-07-26 - Codex - PR #286 TGB 死代码清理已合并部署
+
+Changed:
+- Local Claude 与 Remote Claude 复核通过后，PR `#286` 以 merge commit `aa3c583c56f7cc921c8a49eaa1aab880d32112da` 合入 `main`。
+- 发布合并后的 `kpl-stats-server.js`；云端遗留 `winrt-ocr.ps1` 未直接删除，已移入同一回退备份。
+
+Files:
+- `kpl-stats-server.js`
+- `winrt-ocr.ps1`（从生产站点移入备份）
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 合并前 `node --check`、TGB manual-only 专项测试、全仓 `66/66` 个测试文件及 `git diff --check` 均通过。
+- 云端主服务文件 SHA-256 为 `44C0995FA813C4B633ECCA9C47222ED1CFCC54C3E31818E43B372D17571CFA54`，与合并后 `main` 完全一致。
+- 云端 `http://127.0.0.1:8765/health` 与公网 `https://market.dreamerqi.com/health` 均返回健康；公网 `/kpl`、`/admin` 均返回 200。
+- 生产站点不再存在 `winrt-ocr.ps1`，主服务和该脚本的回退副本均已确认存在；两份云端运维日志均有部署及归档记录。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`，仅重启 `Panda Dashboard Server`；未重启 Caddy、娱乐服务或公司端 L2 worker。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-pr286-aa3c583-20260726T071220Z`。
+- 未触发来源同步、未重建综合主因库、未读取或改写任何复盘运行时数据库。
+
+Notes for next agent:
+- PR `#286` 已完成并部署，不要重复发布。
+- TGB 正式库仍必须来自湖南人官方复盘原图的人工逐行结构化；纠错按 `docs/ops/TGB_HUNAN_DAILY_SOP.md` 的备份、哈希、受控替换和双日志流程执行。
