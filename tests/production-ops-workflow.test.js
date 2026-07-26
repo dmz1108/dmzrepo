@@ -53,6 +53,7 @@ assert(verify.includes('runtimeDataDirsReadable'), 'access test must verify runt
 assert(diagnoseSsh.includes("$ProgressPreference = 'SilentlyContinue'"), 'SSH diagnosis must suppress noisy progress output');
 assert(diagnoseSsh.includes('& $sshdPath -T -f $configPath'), 'SSH diagnosis must read the effective validated configuration');
 assert(diagnoseSsh.includes('maxConnectionsFromOneSource'), 'SSH diagnosis must measure per-source concentration without exposing addresses');
+assert(diagnoseSsh.includes('orphanedUnauthenticatedChildren'), 'SSH diagnosis must report orphaned -y children');
 assert(diagnoseSsh.includes("readOnly = $true"), 'SSH diagnosis must declare read-only behavior');
 assert(!diagnoseSsh.includes('RemoteAddress ='), 'SSH diagnosis must not emit remote source addresses');
 assert(!diagnoseSsh.includes('Set-Content'), 'SSH diagnosis must not rewrite configuration');

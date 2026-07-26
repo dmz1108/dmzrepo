@@ -76,6 +76,24 @@ $startupDropEvents = @($events | Where-Object {
 
 $service = Get-Service -Name sshd -ErrorAction Stop
 $processes = @(Get-Process -Name sshd -ErrorAction SilentlyContinue)
+$allProcessDetails = @(Get-CimInstance Win32_Process)
+$knownPids = [System.Collections.Generic.HashSet[int]]::new()
+foreach ($process in $allProcessDetails) {
+  $null = $knownPids.Add([int]$process.ProcessId)
+}
+$sshdProcessDetails = @($allProcessDetails | Where-Object { $_.Name -eq 'sshd.exe' })
+$unauthenticatedChildren = @($sshdProcessDetails | Where-Object {
+  [string]$_.CommandLine -match '(?:^|\s)-y(?:\s|$)'
+})
+$authenticatedChildren = @($sshdProcessDetails | Where-Object {
+  [string]$_.CommandLine -match '(?:^|\s)-z(?:\s|$)'
+})
+$reexecChildren = @($sshdProcessDetails | Where-Object {
+  [string]$_.CommandLine -match '(?:^|\s)-R(?:\s|$)'
+})
+$orphanedUnauthenticatedChildren = @($unauthenticatedChildren | Where-Object {
+  -not $knownPids.Contains([int]$_.ParentProcessId)
+})
 $versionInfo = (Get-Item -LiteralPath $sshdPath).VersionInfo
 $versionText = [string]$versionInfo.FileVersion
 if (-not $versionText) {
@@ -91,6 +109,12 @@ if (-not $versionText) {
   sshdVersion = $versionText.Trim()
   serviceStatus = [string]$service.Status
   sshdProcessCount = $processes.Count
+  processSummary = [PSCustomObject]@{
+    unauthenticatedChildren = $unauthenticatedChildren.Count
+    authenticatedChildren = $authenticatedChildren.Count
+    reexecChildren = $reexecChildren.Count
+    orphanedUnauthenticatedChildren = $orphanedUnauthenticatedChildren.Count
+  }
   effectiveSettings = $settings
   connectionSummary = [PSCustomObject]@{
     port = $port
