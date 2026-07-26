@@ -11118,9 +11118,29 @@ Validated:
 - `node --check kpl-stats-server.js`、`git diff --check`、全仓 `69/69` 测试文件通过。
 
 Deployment:
-- 未部署、未重启任何服务、未写运行时数据库。待另一 agent 独立复审后再合并发布。
+- PR `#295` 已以 merge commit `3c95b105aa56d351e52d24cc26c5f724391390f9`
+  合入 `main`，Local Claude 与 Remote Claude 均针对修订 head `abf39bb` 复核通过。
+- 首次受保护工作流
+  `https://github.com/dmz1108/dmzrepo/actions/runs/30207661455`
+  在远程执行前因云端 SSH 返回 `Exceeded MaxStartups` / exit `255` 失败；上传虽成功，
+  但部署脚本未执行，生产文件、PID 与运行时数据当时均未改变。
+- 随后复用单一持久 SSH 会话，运行同一份经哈希校验的
+  `ops/production/deploy-from-main.ps1`，从精确的 `main@3c95b10` 归档部署
+  `kpl-stats-server.js` 与 `kpl-dashboard_17_apple.html`。回退备份：
+  `C:\PandaDashboard\_deploy-backups\github-manual-pr295-3c95b10-20260726T151744Z`。
+- 云端后端 SHA-256 为
+  `717C1F06614D3A09320F8FB727CAC40EB9671F3C3AF9D9269285D85A0F85ECD5`，
+  行情页 SHA-256 为
+  `72CA91C58D5669F7E81CA415B3B6ADB881B7FD110131FC1FAC4A821476708D4D`，
+  均与 `main@3c95b10` 完全一致。
+- 仅重启 `Panda Dashboard Server`，PID `15896 -> 10980`；公网
+  `https://market.dreamerqi.com/health` 返回 HTTP 200。今日接口刷新后返回
+  `overall.leadMedianMinutes=93.6`、东财 `leadMedianMinutes=93.6`，
+  历史请求 `day=2026-07-21` 不含 `predictHitRates`，日期隔离正常。
+- 未重启 Caddy、娱乐服务或公司端 L2 worker，未触发来源同步或写入运行时数据库；
+  两份云端运维日志已由部署器自动追加，远端与本地临时部署文件已清理。
 
 Notes for next agent:
-- 请重点复核：交易时段净分钟、封板后识别单独计数、按来源独立、top1 命中前置、
-  真实 `firstLimitTime`、旧快照不造样本、一来源一日一个样本及历史日期隔离。
-- 本任务只增加只读统计与展示，不改变正式主线筛选、排序、评分、冻结快照或预测档案。
+- PR `#295` 已完成并上线，不要重复部署。上线初期某来源显示“领先暂无样本”是缺少满足
+  全部证据门槛的样本，不是故障。
+- 本任务只增加只读统计与展示，没有改变正式主线筛选、排序、评分、冻结快照或预测档案。
