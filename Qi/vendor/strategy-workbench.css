@@ -327,6 +327,27 @@ body.view-strategy .ml-hitrate.is-empty {
   color: var(--st-faint);
   cursor: default;
 }
+/* ≤430px 窄屏修正(Local #292 阻断:nowrap 徽标把同花顺标题挤成两行;其量测页断点
+   400→390,换真实 .ml-cols 单列规则复测为 405–420,阈值取 430 留余量):
+   列头改为可折行,标题 span(本身是 flex 容器,含标题文本与徽标)flex-basis 100% 独占整行,
+   副标签退到下一行——标题与徽标同行且都不再被挤压,徽标 white-space 放开必要时内部折行。
+   标题文本 nowrap 防 CJK 单字竖排。桌面(>430)保持行内形态不变。
+   实测 340–430 全区间:标题 1 行、副标签 1 行、零横向溢出。 */
+@media (max-width: 430px) {
+  body.view-strategy .ml-col-title {
+    flex-wrap: wrap !important;
+  }
+  body.view-strategy .ml-col-title > span {
+    flex: 1 1 100%;
+    white-space: nowrap;
+  }
+  body.view-strategy .ml-hitrate {
+    display: block;
+    margin-left: 0;
+    margin-top: 4px;
+    white-space: normal;
+  }
+}
 
 body.view-strategy .ml-grid {
   display: grid !important;

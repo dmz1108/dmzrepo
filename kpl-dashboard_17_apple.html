@@ -9925,7 +9925,7 @@
     }
   }
 </style>
-<link href="/vendor/strategy-workbench.css?v=20260726c" rel="stylesheet">
+<link href="/vendor/strategy-workbench.css?v=20260726d" rel="stylesheet">
 <link href="/vendor/review-workbench.css?v=20260718d" rel="stylesheet">
 <link href="/vendor/realtime-workbench.css?v=20260720" rel="stylesheet">
 </head>
@@ -13600,7 +13600,7 @@ function renderStrategyMainlinesHTML(d) {
       const hr = d.predictHitRates && d.predictHitRates.bySource && d.predictHitRates.bySource[srcKey];
       if (!hr) return '';
       const win = Number(d.predictHitRates.windowDays) || 10;
-      if (!Number(hr.total)) return `<span class="ml-hitrate is-empty" title="按预判回看口径:盘后主因库缺失或该源无当日预测记录的日子不计分母">近${win}日暂无样本</span>`;
+      if (!Number(hr.total) || hr.top1Rate == null) return `<span class="ml-hitrate is-empty" title="按预判回看口径:盘后主因库缺失或该源无当日预测记录的日子不计分母">近${win}日暂无样本</span>`;
       return `<span class="ml-hitrate" title="与预判回看同源:top1=预测第一家族即当日实际第一;top3=实际第一落在预测前三。近${win}日,分母 ${Number(hr.total)} 个有效样本日">命中 top1 <b>${hr.top1Rate}%</b> · top3 <b>${hr.top3Rate}%</b></span>`;
     };
     const renderColumn = (title, src, zsLabel, srcKey) => {
@@ -13662,7 +13662,7 @@ function renderStrategyMainlinesHTML(d) {
     const hr = d && d.predictHitRates && d.predictHitRates.overall;
     if (!hr) return '';
     const win = Number(d.predictHitRates.windowDays) || 10;
-    if (!Number(hr.total)) return `<span class="ml-hitrate is-empty">近${win}日暂无样本</span>`;
+    if (!Number(hr.total) || hr.top1Rate == null) return `<span class="ml-hitrate is-empty">近${win}日暂无样本</span>`;
     return `<span class="ml-hitrate" title="与预判回看同源,近${win}日,分母为有效样本日">命中 top1 <b>${hr.top1Rate}%</b> · top3 <b>${hr.top3Rate}%</b></span>`;
   })();
   const cards = lines.slice(0, 8).map(renderCard).join('');

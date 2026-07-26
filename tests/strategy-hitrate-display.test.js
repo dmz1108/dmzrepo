@@ -101,10 +101,10 @@ function assertIncludes(s, sub) { assert(s.includes(sub), `missing: ${sub}`); re
 assert(html.includes('if (!hr) return \'\';'), '字段缺失(旧快照/缓存未就绪)整行静默不渲染');
 assert(html.includes('暂无样本'), '零样本必须如实显示"暂无样本"');
 const hitBlock = html.slice(html.indexOf('const hitRateLine'), html.indexOf('const renderColumn'));
-assert(hitBlock.includes('if (!Number(hr.total))'), '零样本分支必须在渲染数字之前短路');
+assert(hitBlock.includes('if (!Number(hr.total) || hr.top1Rate == null)'), '零样本分支必须在渲染数字之前短路,且 rate 为 null 时直连兜底');
 // 变异验证补锁(首版此处被"零样本分支改渲染 0%"的变异逃过):
 // 双列 hitRateLine 块内零样本分支必须落在"暂无样本"文案上,且块内不得出现任何字面 0%。
-assert(/if \(!Number\(hr\.total\)\)[^;]*暂无样本/.test(hitBlock), '零样本分支必须渲染"暂无样本"文案');
+assert(/if \(!Number\(hr\.total\) \|\| hr\.top1Rate == null\)[^;]*暂无样本/.test(hitBlock), '零样本分支必须渲染"暂无样本"文案');
 assert(!/0%/.test(hitBlock), 'hitRateLine 块内禁止出现任何字面 0%(动态率由数据渲染,静态 0% 即伪造)');
 assert(html.includes('ml-hitrate is-empty'), '暂无样本使用弱化样式');
 // Owner 二次修订:结果直接进标题行——命中率必须渲染在列标题 span 内部,与"××主线预测"同行
@@ -112,11 +112,14 @@ assert(html.includes('<span>${escapeHTML(title)}${hitRateLine(srcKey)}</span>'),
 assert(html.includes('<span>今日主线榜${overallHitLine}</span>'), '单列整体命中率位于主标题行内');
 // 单列兼容路径同样受三态约束
 const overallBlock = html.slice(html.indexOf('const overallHitLine'), html.indexOf('const cards = lines.slice'));
-assert(/if \(!Number\(hr\.total\)\)[^;]*暂无样本/.test(overallBlock) && !/0%/.test(overallBlock),
+assert(/if \(!Number\(hr\.total\) \|\| hr\.top1Rate == null\)[^;]*暂无样本/.test(overallBlock) && !/0%/.test(overallBlock),
   '单列整体命中率同样禁止 0% 伪造');
 
 // ---- 5. CSS 与缓存版本 ----
 assert(css.includes('body.view-strategy .ml-hitrate {') && css.includes('.ml-hitrate.is-empty'), '命中率行样式存在');
-assert(html.includes('strategy-workbench.css?v=20260726c'), 'CSS 缓存版本已升号');
+// Local #292 阻断修正:≤430px 徽标退回独立一行(nowrap 徽标会把标题挤成两行;真实单列规则下断点 405–420,取 430 留余量)
+assert(/@media \(max-width: 430px\) \{[\s\S]{0,240}?\.ml-hitrate \{[\s\S]{0,120}?display: block;[\s\S]{0,120}?white-space: normal;/.test(css),
+  '≤400px 命中率徽标必须退回块级独立行,恢复标题单行');
+assert(html.includes('strategy-workbench.css?v=20260726d'), 'CSS 缓存版本已升号');
 
 console.log('strategy hit-rate display checks passed');

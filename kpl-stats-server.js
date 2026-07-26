@@ -24753,12 +24753,11 @@ function strategyPredictHitRatesCompact(stats, windowDays) {
   return {
     windowDays: Number(windowDays) || 0,
     basis: 'predict-review',       // 口径声明:与预判回看同源,盘后主因库缺失的日子不计分母
+    // 只带前端实际渲染的字段(明星胜率留待 Owner 批准的后续步骤,不预置)
     overall: {
       total: Number(stats.mainlineTotal || 0),
       top1Rate: stats.mainlineTop1Rate ?? null,
       top3Rate: stats.mainlineTop3Rate ?? null,
-      starWinRate: stats.starWinRate ?? null,
-      starTotal: Number(stats.starTotal || 0),
     },
     bySource: { eastmoney: src('eastmoney'), ths: src('ths') },
   };
@@ -24788,7 +24787,10 @@ function getStrategyPredictHitRatesCached() {
         strategyPredictHitRatesCache.value = strategyPredictHitRatesCompact(review?.stats, STRATEGY_HIT_RATES_WINDOW_DAYS);
         strategyPredictHitRatesCache.at = Date.now();
       })
-      .catch(() => { strategyPredictHitRatesCache.at = Date.now(); })   // 失败也记时间,避免每次轮询都重试重活
+      .catch(err => {
+        strategyPredictHitRatesCache.at = Date.now();   // 失败也记时间:10 分钟退避,不随轮询重试重活
+        console.warn('strategy hit-rates refresh failed (badge stays hidden):', err?.message || err);
+      })
       .finally(() => { strategyPredictHitRatesCache.inflight = null; });
   }
   return strategyPredictHitRatesCache.value;
