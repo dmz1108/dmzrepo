@@ -24763,6 +24763,18 @@ function strategyPredictHitRatesCompact(stats, windowDays) {
     bySource: { eastmoney: src('eastmoney'), ths: src('ths') },
   };
 }
+// 命中率只随"今天"的页面走(Codex #292 P1):历史日期页面若挂上按当前锚点算的
+// 近10日命中率,会被自然误读成"截至该历史日的成绩"——日期穿越。回看统计固定以
+// 中国时区今天为锚,且缓存只有一份全局值,所以历史请求一律不附加;响应带 asOfDay
+// 显式声明锚点。错误载荷与缓存未就绪同样原样返回,前端三态里的"字段缺失"分支静默。
+function attachPredictHitRatesIfToday(payload, requestedDay) {
+  if (!payload || payload.error) return payload;
+  const todayIso = isoFromCompactDate(chinaNowParts().day);
+  if (isoFromCompactDate(requestedDay) !== todayIso) return payload;
+  const predictHitRates = getStrategyPredictHitRatesCached();
+  if (!predictHitRates) return payload;
+  return { ...payload, predictHitRates: { ...predictHitRates, asOfDay: todayIso } };
+}
 // stale-while-revalidate:回看计算含收盘价库/日K读取,不能同步挂在主线榜热路径上。
 // 命中缓存直接返回;过期时后台异步刷新、本次先用旧值(或首轮返回 null,前端静默不显示)。
 const STRATEGY_HIT_RATES_TTL_MS = 10 * 60 * 1000;
@@ -28050,11 +28062,10 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/limit-up-main-reason-db/pending') return await getLimitUpMainReasonPending(url, req, res);
     if (url.pathname === '/api/limit-up-main-reason-db/hot-themes') return await getLimitUpMainReasonHotThemes(url, req, res);
     if (url.pathname === '/api/strategy-mainlines') {
-      const payload = await getStrategyMainlinesVisible(url.searchParams.get('day') || chinaNowParts().day)
+      const requestedDay = url.searchParams.get('day') || chinaNowParts().day;
+      const payload = await getStrategyMainlinesVisible(requestedDay)
         .catch(e => ({ ok: false, error: String(e && e.message || e) }));
-      // 命中率块只在响应层附加,绝不写入冻结快照文件;缓存未就绪时返回原载荷,前端静默。
-      const predictHitRates = getStrategyPredictHitRatesCached();
-      return send(res, 200, predictHitRates && payload && !payload.error ? { ...payload, predictHitRates } : payload);
+      return send(res, 200, attachPredictHitRatesIfToday(payload, requestedDay));
     }
     if (url.pathname === '/api/admin/strategy-realtime-context') return await getStrategyRealtimeContextApi(url, req, res);
     if (url.pathname === '/api/admin/strategy-daily-events') return await getStrategyDailyEventsApi(url, req, res);

@@ -47,10 +47,44 @@ const missingSource = strategyPredictHitRatesCompact({ mainlineTotal: 3, mainlin
 assert.strictEqual(missingSource.bySource.eastmoney.total, 0, '无 bySource 的旧统计降级为零样本而非报错');
 assert.strictEqual(missingSource.bySource.eastmoney.top1Rate, null);
 
-// ---- 2. 附加位置:仅路由层,不进冻结快照 ----
+// ---- 2. 附加位置与日期锚点(Codex #292 P1:历史日期不得挂当前命中率) ----
+// 行为测试:真实调用附加函数,today 与 historical 双请求分别断言,不做纯字符串推断。
+{
+  // eslint-disable-next-line no-unused-vars
+  const isoFromCompactDate = (d) => {
+    const digits = String(d || '').replace(/\D/g, '');
+    return digits.length === 8 ? `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}` : String(d || '');
+  };
+  // eslint-disable-next-line no-unused-vars
+  const chinaNowParts = () => ({ day: '2026-07-26' });
+  // eslint-disable-next-line no-unused-vars
+  const getStrategyPredictHitRatesCached = () => ({ windowDays: 10, overall: { total: 5, top1Rate: 60 } });
+  // eslint-disable-next-line no-eval
+  const attach = eval(`(${extractFn('attachPredictHitRatesIfToday')})`);
+
+  const todayRes = attach({ ok: true, day: '2026-07-26' }, '2026-07-26');
+  assert(todayRes.predictHitRates, '今天的请求必须附加命中率');
+  assert.strictEqual(todayRes.predictHitRates.asOfDay, '2026-07-26', '附加块必须显式声明锚点 asOfDay');
+
+  const compactToday = attach({ ok: true }, '20260726');
+  assert(compactToday.predictHitRates, '紧凑日期格式的今天同样附加');
+
+  const historical = attach({ ok: true, day: '2026-07-08' }, '2026-07-08');
+  assert.strictEqual(historical.predictHitRates, undefined, '历史日期请求绝不附加当前锚点的命中率(日期穿越)');
+
+  const errored = attach({ ok: false, error: 'boom' }, '2026-07-26');
+  assert.strictEqual(errored.predictHitRates, undefined, '错误载荷不得附加命中率');
+
+  const noCacheAttach = (() => {
+    // eslint-disable-next-line no-shadow
+    const getStrategyPredictHitRatesCached = () => null;
+    // eslint-disable-next-line no-eval
+    return eval(`(${extractFn('attachPredictHitRatesIfToday')})`)({ ok: true }, '2026-07-26');
+  })();
+  assert.strictEqual(noCacheAttach.predictHitRates, undefined, '缓存未就绪时原样返回,前端静默');
+}
 const route = server.slice(server.indexOf("url.pathname === '/api/strategy-mainlines'"), server.indexOf("url.pathname === '/api/admin/strategy-realtime-context'"));
-assert(route.includes('getStrategyPredictHitRatesCached()'), '路由层必须附加命中率缓存');
-assert(route.includes('predictHitRates && payload && !payload.error'), '错误载荷不得附加命中率');
+assert(route.includes('attachPredictHitRatesIfToday(payload, requestedDay)'), '路由必须经由日期锚点守卫附加命中率');
 const visibleFn = extractFn('getStrategyMainlinesVisible');
 assert(!visibleFn.includes('predictHitRates'), '冻结快照/可见载荷生成路径不得写入命中率(只在响应层附加)');
 
