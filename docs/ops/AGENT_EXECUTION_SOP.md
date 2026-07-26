@@ -61,6 +61,12 @@ performing an independent review in this repository.
   mark every cell as *tested*, *inferred*, or *not covered*, and attach the matrix to the
   verdict. A single tested corner never justifies a whole-boundary ✅. (Origin: a corrupt
   non-TGB manual artifact was overwritable; the reviewer had tested only the TGB corner.)
+  For deletion changes the matrix has a second question: not only "is everything removed
+  safe to remove" but "does anything of the same class remain un-removed". Sweep for
+  same-class remnants — full deleted-symbol back-scan, sibling-implementation search —
+  before confirming a removal complete. (Origin: PR #286 deleted the Qwen vision subtree
+  but left a same-class WinRT OCR subtree; both reviewers' first instinct verified only
+  the safety of what was deleted, and the remnant surfaced only through a full sweep.)
 - **Fail-safe is the default for unidentifiable files.** A file that is corrupt, unmarked,
   or of unknown origin must be treated as the highest-value asset class it could be —
   reject writes first, ask later. "It was backed up" does not make overwriting acceptable:
