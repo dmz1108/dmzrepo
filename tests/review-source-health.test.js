@@ -3,6 +3,9 @@
 // the stored evidence payload already contains a partial sourceStats list.
 const fsReal = require('fs');
 const pathReal = require('path');
+const {
+  summarizeReviewSourceRows,
+} = require('../review-source-health-manifest');
 const src = fsReal.readFileSync(pathReal.join(__dirname, '..', 'kpl-stats-server.js'), 'utf8');
 
 function extractFn(name) {
