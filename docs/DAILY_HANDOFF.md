@@ -10916,3 +10916,35 @@ Deployment:
 Notes for next agent:
 - PR `#289` 已完成并部署，不要重复发布。
 - 当前端点仍是 P1 影子观察层。接 UI、改变健康判定或驱动自动修复必须另开阶段和独立评审。
+
+## 2026-07-26 - Codex - 复盘来源差异修复与管理员只读健康接入
+
+Changed:
+- 按正式证据修正 `2026-06-15` 淘股吧人工底稿中的三处名称正确、代码抄录错误：长源东谷、恒尚节能、安德利分别改为终盘池唯一对应代码 `603950/603137/605198`；行数保持 144。
+- 从韭研 `2026-07-03` 官方涨停简图及 Action API 补回漏行 `002496 辉丰股份`；原始行 `106 -> 107`，按统一规则过滤后的唯一股票 `103 -> 104`。
+- 两日均先备份正式来源和综合库，再以 `--reuse-source` 仅使用已核验正式来源重建综合主因库；没有重新抓取或覆盖其他来源。
+- 管理员运维中心改读 `/api/admin/review-source-health-shadow?days=30`，直接展示只读 manifest 的同日、过滤后、去重后口径，并区分完整、等待发布、缺失、异常、跨日和无需检查。
+- 管理员页明确说明健康验收不会写文件，“补齐”仍是单独动作；本阶段没有让影子清单驱动同步或修复。
+
+Files:
+- `panda-admin.html`
+- `tests/admin-review-health-shadow-ui.test.js`
+- `tests/review-source-p0-health.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 修复后两日终盘池、四个正式来源和综合主因库均精确对齐，复盘与主因覆盖率均为 100%。
+- 淘股吧来源 SHA-256：`ed6402d92f43a6afb9254272dd44a5fb2427d38d00b4fc4b323a3aeb760ffdef -> b78c091f1ef8ddc329f3d062f744a1ef5bfb8e5e35b7f40a1016b8b2a49a79c6`。
+- 韭研来源 SHA-256：`384f1cfd62b44b065cae85760c96f5c6eaa16b44856e626de731dca8b9dc4f60 -> c05f535d7f8d3c9bd70dec5a13a901748739dbe124d9e67a661311666b271886`。
+- 管理员鉴权下调用影子端点返回 HTTP 200：最近 30 个交易日 `healthy=30`，无状态差异、池成员差异或身份错配；接口仍为 `shadow-read-only` 且 `writesAllowed=false`。
+- 管理员 UI 专项、影子 manifest、P0 健康测试及全仓 `68/68` 个 `tests/*.test.js` 文件通过；内联脚本 `node --check` 与 `git diff --check` 通过。
+
+Deployment:
+- 运行时数据修复已在 `C:\PandaDashboard` 完成；回退备份为 `C:\PandaDashboard\backups\review-source-repair-20260726T094022Z`，两份云端日志均已记录。
+- 运行时修复没有部署代码，也没有重启 Node、Caddy、娱乐服务或公司端 L2 worker。
+- 本条中的管理员 UI 代码尚未部署，须经 Local Claude 与 Remote Claude 独立复核、合并后再发布静态 `panda-admin.html`。
+
+Notes for next agent:
+- 云端正式来源和综合库现已修复，不要再次覆盖这两个日期；淘股吧仍是受保护的人工来源。
+- 本阶段只切换管理员验收展示，不改变 `/api/limit-up-main-reason-db/sync?mode=missing&days=30` 的写入语义。下一阶段若要让 manifest 驱动修复，必须另开 PR 并先实现逐项写保护与回退。
+- 证据图片、运行时数据库、认证信息和临时脚本均未进入 Git；云端与本地临时脚本已清理。
