@@ -70,12 +70,49 @@ assert.strictEqual(failed.status, 'failed');
 const root = path.join(__dirname, '..');
 const server = fs.readFileSync(path.join(root, 'kpl-stats-server.js'), 'utf8');
 const admin = fs.readFileSync(path.join(root, 'panda-admin.html'), 'utf8');
+function functionSource(name) {
+  const match = server.match(new RegExp(`async function ${name}\\(`));
+  assert(match, `missing function ${name}`);
+  const start = match.index;
+  const bodyStart = server.indexOf('{', server.indexOf(')', start));
+  let depth = 0;
+  for (let index = bodyStart; index < server.length; index += 1) {
+    if (server[index] === '{') depth += 1;
+    if (server[index] === '}') depth -= 1;
+    if (depth === 0) return server.slice(start, index + 1);
+  }
+  throw new Error(`unterminated function ${name}`);
+}
+
 const syncMode = server.match(/if \(mode === 'missing'\) \{([\s\S]*?)return send\(res, 200,/);
 assert(syncMode, 'missing sync branch must remain identifiable');
 assert(!syncMode[1].includes('forceSources: true'), 'missing sync must not force-refresh every source');
 assert(server.includes('sourceDay = reviewSourceArtifactPayloadDay(payload)'), 'artifact status must inspect the payload day');
-assert(server.includes('if (before.protectedManual) {'), 'all protected manual artifacts must stop before a source generator runs');
+assert(
+  server.includes('if (before.writeProtected || before.protectedManual) {'),
+  'protected or unreadable artifacts must stop before a source generator runs',
+);
 assert(server.includes('protected manual source artifact already complete'), 'generic sync must skip a complete protected manual artifact');
+assert(
+  functionSource('buildJiuyangongsheStructuredArtifactFromAction').includes('writeGeneratedReviewSourceArtifact'),
+  'Jiuyangongshe formal writes must use the guarded writer',
+);
+assert(
+  functionSource('buildTonghuashunStructuredArtifactFromOfficialApis').includes('writeGeneratedReviewSourceArtifact'),
+  'Tonghuashun formal writes must use the guarded writer',
+);
+assert(
+  functionSource('ensureKaipanlaFupanlaSourceDay').match(/writeGeneratedReviewSourceArtifact/g)?.length === 2,
+  'both Kaipanla formal write branches must use the guarded writer',
+);
+assert(
+  functionSource('ensureXuangubaoLimitUpSourceDay').includes('reviewSourceArtifactPayloadDay(cached) === isoDay'),
+  'Xuangubao cache reuse must validate its internal trading day',
+);
+assert(
+  functionSource('ensureXuangubaoLimitUpSourceDay').includes('writeGeneratedReviewSourceArtifact'),
+  'Xuangubao formal writes must use the guarded writer',
+);
 assert(admin.includes("const reviewStatus = row.status ||"), 'admin UI must render the backend verdict');
 assert(!admin.includes("(row.needsSync ? '待补齐' : '完整')"), 'admin UI must not infer complete only from needsSync');
 

@@ -10695,7 +10695,10 @@ Notes for next agent:
 Changed:
 - 给复盘来源候选导入增加内部交易日硬校验；错误日期或缺少日期的候选不得写入正式来源文件。
 - 通用同步路径现在保护已存在的人工来源成果；TGB 正式文件以及带人工来源标记的其他文件在任何 force 级别下都不会被自动生成器覆盖，异常人工文件会明确要求人工修复。
-- 允许替换非人工来源文件时，先写入 `backups/review-source-artifact-import` 回退备份，再使用临时文件完成原子替换。
+- 两轮 Claude 独立复审后收紧保护：任何已存在但无法解析的正式来源文件都按 fail-safe 保留原字节、不得自动覆盖；人工候选导入正式目录时写入可持续识别的人工 provenance。
+- 来源数量不再信任 payload 自报的 `count/stockRows`；复盘啦从 `boards[].rows`、其他来源从实际 `rows` 重新计算，空行文件不能用陈旧 count 形成假绿。
+- 复盘啦、选股宝、韭研和同花顺四条自动正式写入路径统一进入受保护写入器；允许替换非人工来源文件时先写回退备份，再同步临时文件并以一次同目录 rename 提交，不再先移走可见目标。
+- 选股宝缓存复用增加内部交易日校验，跨日缓存会重新抓取而不是在 `mode=missing` 下原样返回。
 - `mode=missing` 不再固定对所有来源传 `forceSources:true`，已有健康来源会保持文件内容和修改时间不变；显式 `force=1` 的既有语义保留。
 - 来源文件健康状态开始校验 payload 内部日期；跨日文件不再贡献目标日计数，并返回 `cross-day-artifact`。
 - 管理员运维中心不再把 `needsSync=false` 直接等同绿色“完整”，明确区分完整、等待发布、缺失、异常、检查失败和无需检查；这套展示判定没有接入同步重建决策。
@@ -10711,7 +10714,7 @@ Files:
 - `docs/DAILY_HANDOFF.md`
 
 Validated:
-- 新增行为测试覆盖同日导入、跨日拒写、缺日期拒写、人工 TGB 字节不变、非人工替换备份和管理员假绿回归。
+- 新增行为测试覆盖同日导入、跨日拒写、缺日期拒写、人工 TGB 字节不变、人工候选 provenance、损坏目标原字节保护、陈旧 count 不可信、替换失败旧目标不变、非人工替换备份和管理员假绿回归。
 - `node --check` 通过主服务及两个新模块；管理员页内联脚本可编译。
 - 复盘来源、人工 TGB 专项测试通过；全仓 `66/66` 个 `tests/*.test.js` 文件通过。
 - `git diff --check` 通过；未触碰原有未跟踪的 `panda-discovery-db.json`，未加入任何运行时数据库或秘密。
@@ -10721,5 +10724,6 @@ Deployment:
 - 部署时 `kpl-stats-server.js`、`review-source-artifact-guard.js`、`review-source-health.js` 必须作为同一后端版本原子发布并重启主服务；`panda-admin.html` 同批发布。
 
 Notes for next agent:
-- 本次仅为 P0 安全止血，不改变行情页 `/api/after-close-status` 和四源精确对账口径，也没有让更严格的管理员展示状态驱动自动重建。
+- 本次仅为 P0 安全止血，不改变行情页 `/api/after-close-status`、四源精确对账口径或策略逻辑。管理员 verdict 本身只读；内部日期/可解析性属于正式产物有效性，因而会按设计影响同步 readiness。受保护来源待人工时，其他自动来源仍逐项修复并报告，但不得把缺少必需来源的综合库标成已完成。
+- 两个历史无调用方的 TGB Qwen/vision builder 仍由既有测试锁定为不可达；删除死代码属于后续独立 P2，不在本次安全修订中扩大主服务 diff。
 - 下一阶段 P1 应新增纯读取的影子 health manifest，与现有结果并行比较最近 30 个交易日后再决定切换。

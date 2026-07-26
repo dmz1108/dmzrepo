@@ -44,6 +44,7 @@ const {
 } = require('./strategy-observation-report');
 const {
   guardedImportReviewSourceArtifact,
+  guardedWriteReviewSourceArtifact,
   isProtectedManualReviewArtifact,
   reviewSourceArtifactCount,
   reviewSourceArtifactPayloadDay,
@@ -5406,6 +5407,8 @@ async function syncMissingLimitUpMainReasonDbDays(endDay, apiKey, needed = MAIN_
         sourceFill,
         missingSourceGroups: sourceFill.missingGroups,
         missingSourceLabels: sourceFill.missingLabels,
+        protectedSourceGroups: sourceFill.protectedGroups || [],
+        protectedSourceLabels: sourceFill.protectedLabels || [],
         sourceMissingCount: sourceFill.missingGroups.length,
         error: sourceFill.message,
       });
@@ -14255,8 +14258,12 @@ async function buildJiuyangongsheStructuredArtifactFromAction(day, stocks, optio
       error: `Jiuyangongshe structured generator coverage mismatch: ${coverage.actualCount}/${coverage.expectedCount}`,
     };
   }
-  await fs.mkdir(path.dirname(jiuyangongsheStructuredSourcePath(isoDay)), { recursive: true });
-  await fs.writeFile(jiuyangongsheStructuredSourcePath(isoDay), JSON.stringify(payload, null, 2), 'utf8');
+  await writeGeneratedReviewSourceArtifact(
+    'jiuyangongshe',
+    jiuyangongsheStructuredSourcePath(isoDay),
+    isoDay,
+    payload,
+  );
   return {
     ok: true,
     method: payload.method,
@@ -14648,6 +14655,7 @@ async function readReviewSourceArtifactStatus(day, group) {
       savedAt: payload?.savedAt || payload?.generatedAt || '',
       source: payload?.source || '',
       protectedManual,
+      writeProtected: protectedManual,
       outdated: observedCount > 0 && !sourceModeCurrent,
       stale: observedCount > 0 && !dayMatch,
       reasonCode: !dayMatch
@@ -14658,7 +14666,23 @@ async function readReviewSourceArtifactStatus(day, group) {
     if (err.code === 'ENOENT') {
       return { group, exists: false, count: 0, ok: false, path: filePath, savedAt: '', source: '' };
     }
-    return { group, exists: false, count: 0, ok: false, path: filePath, error: err.message, savedAt: '', source: '' };
+    return {
+      group,
+      exists: true,
+      count: 0,
+      ok: false,
+      path: filePath,
+      day: isoDay,
+      sourceDay: '',
+      dayMatch: false,
+      error: err.message,
+      savedAt: '',
+      source: '',
+      protectedManual: group === 'tgb',
+      writeProtected: true,
+      reasonCode: 'artifact-json-invalid',
+      protectionReason: 'unreadable-existing-target',
+    };
   }
 }
 
@@ -14729,8 +14753,26 @@ async function tryCopyReviewSourceArtifact(group, sourceFile, targetFile, target
     sourceFile,
     targetFile,
     targetDay,
+    manualCandidate: true,
     backupRoot: path.join(__dirname, 'backups', 'review-source-artifact-import'),
   });
+}
+
+async function writeGeneratedReviewSourceArtifact(group, targetFile, targetDay, payload) {
+  const result = await guardedWriteReviewSourceArtifact({
+    group,
+    targetFile,
+    targetDay,
+    payload,
+    backupRoot: path.join(__dirname, 'backups', 'review-source-artifact-generated'),
+  });
+  if (!result.ok) {
+    const error = new Error(result.error || `review source artifact write failed: ${group}`);
+    error.code = result.reasonCode || 'REVIEW_SOURCE_ARTIFACT_WRITE_FAILED';
+    error.reviewSourceWrite = result;
+    throw error;
+  }
+  return result;
 }
 
 async function tryImportReviewSourceArtifactFromCandidates(group, day, targetFile) {
@@ -15922,16 +15964,20 @@ async function ensureReviewSourceArtifactDay(day, group, apiKey, options = {}) {
     };
   }
   const before = await readReviewSourceArtifactStatus(isoDay, group);
-  if (before.protectedManual) {
+  if (before.writeProtected || before.protectedManual) {
+    const protectionReason = before.protectionReason || (before.protectedManual ? 'manual-source' : 'protected-existing-target');
     const message = before.ok
       ? 'protected manual source artifact already complete'
-      : 'protected manual source artifact requires manual repair';
+      : (protectionReason === 'unreadable-existing-target'
+        ? 'existing source artifact is unreadable and requires manual repair'
+        : 'protected manual source artifact requires manual repair');
     return {
       group,
       label,
       ok: !!before.ok,
       skipped: true,
       protected: true,
+      protectionReason,
       day: isoDay,
       before,
       after: before,
@@ -16000,12 +16046,15 @@ async function ensureReviewSourceArtifactsForDay(day, apiKey, options = {}) {
     results.push(result);
   }
   const missing = results.filter(item => !item.ok);
+  const protectedPending = missing.filter(item => item.protected);
   return {
     ok: missing.length === 0,
     day: isoDay,
     results,
     missingGroups: missing.map(item => item.group),
     missingLabels: missing.map(item => item.label),
+    protectedGroups: protectedPending.map(item => item.group),
+    protectedLabels: protectedPending.map(item => item.label),
     message: missing.length
       ? `source artifacts not ready: ${missing.map(item => `${item.label}: ${item.message || item.error || 'missing'}`).join('; ')}`
       : 'all source artifacts ready',
@@ -17045,8 +17094,12 @@ async function buildTonghuashunStructuredArtifactFromOfficialApis(day, stocks, o
       uniqueStockCount: new Set(blockRows.map(row => row.code).filter(Boolean)).size,
     },
   };
-  await fs.mkdir(path.dirname(tonghuashunStructuredSourcePath(isoDay)), { recursive: true });
-  await fs.writeFile(tonghuashunStructuredSourcePath(isoDay), JSON.stringify(payload, null, 2), 'utf8');
+  await writeGeneratedReviewSourceArtifact(
+    'ths',
+    tonghuashunStructuredSourcePath(isoDay),
+    isoDay,
+    payload,
+  );
   return {
     ok: true,
     method: candidate.method,
@@ -17664,8 +17717,12 @@ async function ensureKaipanlaFupanlaSourceDay(day, options = {}) {
   if (html && latestDay === isoDay) {
     const payload = parseKaipanlaFupanlaHtml(html, isoDay);
     if (payload.stockRows) {
-      await fs.mkdir(KAIPANLA_FUPANLA_SOURCE_DIR, { recursive: true });
-      await fs.writeFile(kaipanlaFupanlaSourcePath(isoDay), JSON.stringify(payload, null, 2), 'utf8');
+      await writeGeneratedReviewSourceArtifact(
+        'kaipanla',
+        kaipanlaFupanlaSourcePath(isoDay),
+        isoDay,
+        payload,
+      );
       return payload;
     }
     htmlError = new Error('fupanla public page has no parsed non-ST rows');
@@ -17683,8 +17740,12 @@ async function ensureKaipanlaFupanlaSourceDay(day, options = {}) {
     if (apiError?.message) parts.push(`historical api: ${apiError.message}`);
     throw new Error(`fupanla source unavailable for ${isoDay}${parts.length ? ` (${parts.join('; ')})` : ''}`);
   }
-  await fs.mkdir(KAIPANLA_FUPANLA_SOURCE_DIR, { recursive: true });
-  await fs.writeFile(kaipanlaFupanlaSourcePath(isoDay), JSON.stringify(payload, null, 2), 'utf8');
+  await writeGeneratedReviewSourceArtifact(
+    'kaipanla',
+    kaipanlaFupanlaSourcePath(isoDay),
+    isoDay,
+    payload,
+  );
   return payload;
 }
 
@@ -18064,12 +18125,19 @@ async function ensureXuangubaoLimitUpSourceDay(day, options = {}) {
   const isoDay = isoFromCompactDate(day);
   if (!options.force) {
     const cached = await readXuangubaoLimitUpSourceDay(isoDay).catch(() => null);
-    if (cached?.rows?.length) return cached;
+    if (
+      cached?.rows?.length
+      && reviewSourceArtifactPayloadDay(cached) === isoDay
+    ) return cached;
   }
   const payload = await fetchXuangubaoLimitUpPayload(isoDay, options);
   if (!payload?.rows?.length) throw new Error(`Xuangubao limit-up pool has no parsed non-ST rows for ${isoDay}`);
-  await fs.mkdir(XUANGUBAO_LIMIT_UP_SOURCE_DIR, { recursive: true });
-  await fs.writeFile(xuangubaoLimitUpSourcePath(isoDay), JSON.stringify(payload, null, 2), 'utf8');
+  await writeGeneratedReviewSourceArtifact(
+    'xuangubao',
+    xuangubaoLimitUpSourcePath(isoDay),
+    isoDay,
+    payload,
+  );
   return payload;
 }
 

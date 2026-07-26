@@ -18,19 +18,17 @@ function reviewSourceArtifactPayloadDay(payload) {
     || payload.sourceDay
     || payload.tradeDay
     || payload.tradeDate
-    || payload.date
     || payload.targetDay
     || '',
   );
 }
 
 function reviewSourceArtifactCount(group, payload) {
-  if (!payload) return 0;
+  if (!payload || typeof payload !== 'object') return 0;
   if (group === 'kaipanla') {
-    if (Number(payload.stockRows || 0) > 0) return Number(payload.stockRows);
     return (payload.boards || []).reduce((sum, board) => sum + Number(board?.rows?.length || 0), 0);
   }
-  return Number(payload.count || payload.rows?.length || 0);
+  return Array.isArray(payload.rows) ? payload.rows.length : 0;
 }
 
 function isProtectedManualReviewArtifact(group, payload, options = {}) {
@@ -45,7 +43,11 @@ function isProtectedManualReviewArtifact(group, payload, options = {}) {
     payload.provenance?.method,
   ].map(value => String(value || '').toLowerCase());
   if (provenance.some(value => value.includes('manual'))) return true;
-  if (payload.validation?.manualSecondPassReviewed === true || payload.evidence?.manualTranscription === true) {
+  if (
+    payload.provenance?.manualImport === true
+    || payload.validation?.manualSecondPassReviewed === true
+    || payload.evidence?.manualTranscription === true
+  ) {
     return true;
   }
   return (Array.isArray(payload.rows) ? payload.rows : [])
@@ -89,26 +91,133 @@ async function backupReviewSourceArtifact(targetFile, group, targetDay, backupRo
 async function atomicReplaceJson(targetFile, payload) {
   const nonce = `${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const tempFile = `${targetFile}.${nonce}.tmp`;
-  const oldFile = `${targetFile}.${nonce}.old`;
   await fs.mkdir(path.dirname(targetFile), { recursive: true });
   await fs.writeFile(tempFile, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
-  let movedOld = false;
   try {
+    const tempHandle = await fs.open(tempFile, 'r+');
     try {
-      await fs.rename(targetFile, oldFile);
-      movedOld = true;
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
+      await tempHandle.sync();
+    } finally {
+      await tempHandle.close();
     }
+    // Same-directory rename is the only commit step. On supported Node/libuv
+    // platforms it replaces an existing file without first removing the
+    // visible target, so an interrupted write cannot strand the target under
+    // a nonce-only .old name.
     await fs.rename(tempFile, targetFile);
-    if (movedOld) await fs.rm(oldFile, { force: true });
   } catch (error) {
     await fs.rm(tempFile, { force: true }).catch(() => {});
-    if (movedOld) {
-      await fs.rm(targetFile, { force: true }).catch(() => {});
-      await fs.rename(oldFile, targetFile).catch(() => {});
-    }
     throw error;
+  }
+  return { mode: 'same-directory-rename' };
+}
+
+function manualImportPayload(payload) {
+  const provenance = payload?.provenance && typeof payload.provenance === 'object'
+    ? payload.provenance
+    : {};
+  return {
+    ...payload,
+    provenance: {
+      ...provenance,
+      origin: provenance.origin || 'manual-structured-import',
+      manualImport: true,
+    },
+  };
+}
+
+async function guardedWriteReviewSourceArtifact(options = {}) {
+  const group = String(options.group || '');
+  const targetFile = String(options.targetFile || '');
+  const targetDay = normalizeReviewSourceDay(options.targetDay);
+  const rawPayload = options.payload;
+  if (!group || !targetFile || !targetDay || !rawPayload || typeof rawPayload !== 'object') {
+    return {
+      ok: false,
+      reasonCode: 'invalid-write-request',
+      error: 'review source write requires group, target, target day and payload',
+      targetFile,
+    };
+  }
+
+  const payload = options.manualCandidate ? manualImportPayload(rawPayload) : rawPayload;
+  const sourceDay = reviewSourceArtifactPayloadDay(payload);
+  if (!sourceDay) {
+    return {
+      ok: false,
+      reasonCode: 'candidate-day-missing',
+      error: 'source artifact has no valid internal day',
+      targetFile,
+    };
+  }
+  if (sourceDay !== targetDay) {
+    return {
+      ok: false,
+      reasonCode: 'cross-day-candidate',
+      error: `source artifact day ${sourceDay} does not match target day ${targetDay}`,
+      sourceDay,
+      targetDay,
+      targetFile,
+    };
+  }
+
+  const count = reviewSourceArtifactCount(group, payload);
+  if (count <= 0) {
+    return {
+      ok: false,
+      reasonCode: 'source-artifact-empty',
+      error: 'source artifact has no rows',
+      targetFile,
+      count,
+    };
+  }
+
+  const targetState = await readJsonState(targetFile);
+  if (targetState.error) {
+    return {
+      ok: false,
+      skipped: true,
+      protected: true,
+      reasonCode: 'unreadable-existing-target',
+      error: 'existing source artifact is unreadable and was not overwritten',
+      targetFile,
+      count,
+    };
+  }
+  if (isProtectedManualReviewArtifact(group, targetState.payload, { targetExists: targetState.exists })) {
+    return {
+      ok: false,
+      skipped: true,
+      protected: true,
+      reasonCode: 'protected-manual-target',
+      error: 'protected manual source artifact was not overwritten',
+      targetFile,
+      count,
+    };
+  }
+
+  const backupRoot = String(options.backupRoot || path.join(path.dirname(targetFile), '..', '..', 'backups', 'review-source-artifact-import'));
+  const backupFile = await backupReviewSourceArtifact(targetFile, group, targetDay, backupRoot);
+  try {
+    const replacement = await atomicReplaceJson(targetFile, payload);
+    return {
+      ok: true,
+      count,
+      sourceDay,
+      targetDay,
+      targetFile,
+      backupFile,
+      replacement,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reasonCode: 'atomic-replace-failed',
+      error: error.message,
+      targetFile,
+      backupFile,
+      count,
+    };
   }
 }
 
@@ -140,72 +249,24 @@ async function guardedImportReviewSourceArtifact(options = {}) {
     };
   }
 
-  const payload = sourceState.payload;
-  const sourceDay = reviewSourceArtifactPayloadDay(payload);
-  if (!sourceDay) {
-    return {
-      ok: false,
-      reasonCode: 'candidate-day-missing',
-      error: 'source artifact has no valid internal day',
-      sourceFile,
-      targetFile,
-    };
-  }
-  if (sourceDay !== targetDay) {
-    return {
-      ok: false,
-      reasonCode: 'cross-day-candidate',
-      error: `source artifact day ${sourceDay} does not match target day ${targetDay}`,
-      sourceDay,
-      targetDay,
-      sourceFile,
-      targetFile,
-    };
-  }
-
-  const count = reviewSourceArtifactCount(group, payload);
-  if (count <= 0) {
-    return {
-      ok: false,
-      reasonCode: 'source-artifact-empty',
-      error: 'source artifact has no rows',
-      sourceFile,
-      targetFile,
-      count,
-    };
-  }
-
-  const targetState = await readJsonState(targetFile);
-  if (isProtectedManualReviewArtifact(group, targetState.payload, { targetExists: targetState.exists })) {
-    return {
-      ok: false,
-      skipped: true,
-      protected: true,
-      reasonCode: 'protected-manual-target',
-      error: 'protected manual source artifact was not overwritten',
-      sourceFile,
-      targetFile,
-      count,
-    };
-  }
-
-  const backupRoot = String(options.backupRoot || path.join(path.dirname(targetFile), '..', '..', 'backups', 'review-source-artifact-import'));
-  const backupFile = await backupReviewSourceArtifact(targetFile, group, targetDay, backupRoot);
-  await atomicReplaceJson(targetFile, payload);
-  return {
-    ok: true,
-    count,
-    sourceDay,
-    targetDay,
-    sourceFile,
+  const writeResult = await guardedWriteReviewSourceArtifact({
+    group,
     targetFile,
-    backupFile,
+    targetDay,
+    payload: sourceState.payload,
+    manualCandidate: options.manualCandidate === true,
+    backupRoot: options.backupRoot,
+  });
+  return {
+    ...writeResult,
+    sourceFile,
   };
 }
 
 module.exports = {
   atomicReplaceJson,
   guardedImportReviewSourceArtifact,
+  guardedWriteReviewSourceArtifact,
   isProtectedManualReviewArtifact,
   normalizeReviewSourceDay,
   reviewSourceArtifactCount,
