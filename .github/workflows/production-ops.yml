@@ -116,6 +116,19 @@ jobs:
           chmod 600 "$HOME/.ssh/dreamerqi_ops"
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
+          cat > "$HOME/.ssh/config" <<'EOF'
+          Host *
+            BatchMode yes
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            ConnectTimeout 15
+            ServerAliveInterval 30
+            ServerAliveCountMax 3
+            ControlMaster auto
+            ControlPersist 10m
+            ControlPath ~/.ssh/dreamerqi-control-%C
+          EOF
+          chmod 600 "$HOME/.ssh/config"
 
       - name: Verify administrator connection
         shell: bash
@@ -125,8 +138,22 @@ jobs:
           USER: ${{ secrets.DREAMERQI_CLOUD_USER }}
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-            -i "$HOME/.ssh/dreamerqi_ops" -p "$PORT" "$USER@$HOST" whoami
+          remote_status=255
+          for attempt in $(seq 1 20); do
+            if ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              -i "$HOME/.ssh/dreamerqi_ops" -p "$PORT" "$USER@$HOST" whoami; then
+              remote_status=0
+              break
+            else
+              remote_status=$?
+            fi
+            if [[ "$remote_status" -ne 255 || "$attempt" -ge 20 ]]; then
+              break
+            fi
+            echo "Initial SSH connection failed (attempt $attempt/20); retrying in 15s."
+            sleep 15
+          done
+          exit "$remote_status"
 
       - name: Upload approved script and source archive
         id: upload
@@ -299,6 +326,12 @@ jobs:
           REMOTE_PAYLOAD: ${{ steps.upload.outputs.remote_payload }}
         run: |
           set +e
+          close_control_master() {
+            ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              -i "$HOME/.ssh/dreamerqi_ops" -p "$PORT" -O exit "$USER@$HOST" \
+              >/dev/null 2>&1 || true
+          }
+          trap close_control_master EXIT
           known_payload="dreamerqi-tgb-payload-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.b64"
           cleanup_command="Remove-Item -LiteralPath 'C:/Windows/Temp/${known_payload}' -Force -ErrorAction SilentlyContinue"
           if [[ -n "$REMOTE_PAYLOAD" ]]; then

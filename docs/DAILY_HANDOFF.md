@@ -11144,3 +11144,35 @@ Notes for next agent:
 - PR `#295` 已完成并上线，不要重复部署。上线初期某来源显示“领先暂无样本”是缺少满足
   全部证据门槛的样本，不是故障。
 - 本任务只增加只读统计与展示，没有改变正式主线筛选、排序、评分、冻结快照或预测档案。
+
+## 2026-07-26 - Codex - SSH 并发诊断通道
+
+Changed:
+- 针对云端持续返回 `Exceeded MaxStartups` 的问题，先修复受保护生产工作流的连接模型：
+  首次认证成功后通过 OpenSSH `ControlMaster` / `ControlPersist` 在上传、执行和清理步骤间
+  复用同一条连接，不再为每一步重复争抢未认证连接名额。
+- 首次认证改为最多 20 次、每 15 秒一次的有界低频重试；清理步骤无论成功失败都会关闭
+  控制连接。
+- 新增只读 SSH 并发诊断脚本，只输出有效安全配置、连接状态计数、来源集中度和近 15 分钟
+  OpenSSH 事件数量；不输出远端 IP、完整配置、密钥或认证材料。
+
+Files:
+- `.github/workflows/production-ops.yml`
+- `ops/production/diagnose-ssh-concurrency.ps1`
+- `tests/production-ops-workflow.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `tests/*.test.js` 共 69 份测试全部通过，包括生产运维工作流与 5 份日期绑定 TGB
+  生产请求测试。
+- GitHub Actions YAML 可解析，`git diff --check` 通过。
+
+Deployment:
+- 本条提交时尚未运行诊断脚本、未修改云端 `sshd_config`、未重启 `sshd` 或任何网站服务。
+- 下一步须先合并本变更，从精确 `main` 运行只读诊断；再根据云端实际 OpenSSH 版本和有效
+  配置设计加固值，禁止未验证指令直接写入生产配置。
+
+Notes for next agent:
+- 当前网站健康不受 SSH 饱和影响；问题只影响新的运维 SSH 握手。
+- 不要通过盲目无限提高 `MaxStartups` 掩盖问题。优先缩短未认证连接占用、限制单来源占用，
+  并在 `sshd.exe -t` 校验候选配置后才替换。
