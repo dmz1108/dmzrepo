@@ -10727,3 +10727,31 @@ Notes for next agent:
 - 本次仅为 P0 安全止血，不改变行情页 `/api/after-close-status`、四源精确对账口径或策略逻辑。管理员 verdict 本身只读；内部日期/可解析性属于正式产物有效性，因而会按设计影响同步 readiness。受保护来源待人工时，其他自动来源仍逐项修复并报告，但不得把缺少必需来源的综合库标成已完成。
 - 两个历史无调用方的 TGB Qwen/vision builder 仍由既有测试锁定为不可达；删除死代码属于后续独立 P2，不在本次安全修订中扩大主服务 diff。
 - 下一阶段 P1 应新增纯读取的影子 health manifest，与现有结果并行比较最近 30 个交易日后再决定切换。
+
+## 2026-07-25 - Codex - PR #284 复盘健康 P0 已合并部署
+
+Changed:
+- PR `#284` 经 Local Claude 与 Remote Claude 对同一提交 `bf8f77e` 二次复审通过，已用 merge commit `4f220e0` 合入 `main`。
+- 已从该 `main` 提交发布主服务、管理员页和两个复盘健康模块；未触发管理员同步、来源重建或运行时数据库写入。
+
+Files:
+- `kpl-stats-server.js`
+- `panda-admin.html`
+- `review-source-artifact-guard.js`
+- `review-source-health.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 部署前后均只读盘点最近 30 个交易日：复盘啦、选股宝、韭研、TGB 四源各 30/30 文件存在，均可解析、内部日期一致且实际行非空；没有跨日、损坏或缺失产物。
+- 旧 TGB 产物中有 5 天顶层 `count=0`，但实际 `rows` 分别为 132、94、98、85、60；新口径按真实 `rows` 重算，因此不构成缺失或阻断。
+- 云端 Windows Node `v24.17.0` 的同目录 `renameSync` 覆盖冒烟成功；部署文件 SHA-256 与 `main` 完全一致。
+- 云端与公网 `/health` 返回 200/`ok=true`，公网 `/kpl`、`/admin` 返回 200。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`，仅重启 `Panda Dashboard Server`；未重启 Caddy、娱乐服务或公司端 L2 worker。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-pr284-4f220e0-20260725T2019`。
+- 两份云端运维日志均已记录本次发布。
+
+Notes for next agent:
+- PR `#284` 已完成，不要重复部署，也不要因 5 份旧 TGB 顶层 `count` 缺失而重建人工库。
+- 下一阶段仍是独立 P1：先做只读影子 health manifest 和 30 日新旧判定对账，再讨论替换现有健康面板；不要直接改同步按钮。
