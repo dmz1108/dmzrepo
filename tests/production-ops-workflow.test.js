@@ -6,6 +6,7 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 const workflow = read('.github/workflows/production-ops.yml');
 const deploy = read('ops/production/deploy-from-main.ps1');
 const verify = read('ops/production/verify-access.ps1');
+const diagnoseSsh = read('ops/production/diagnose-ssh-concurrency.ps1');
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -18,6 +19,11 @@ assert(workflow.includes('refs/heads/main'), 'production workflow must reject no
 assert(workflow.includes('RUN_PRODUCTION'), 'production workflow must require explicit confirmation');
 assert(workflow.includes('expected_sha256'), 'production workflow must pin the approved script hash');
 assert(workflow.includes('StrictHostKeyChecking=yes'), 'production SSH must pin the host identity');
+assert(workflow.includes('ControlMaster auto'), 'production SSH must reuse one authenticated control connection');
+assert(workflow.includes('ControlPersist 10m'), 'production SSH control connection must survive between workflow steps');
+assert(workflow.includes('ControlPath ~/.ssh/dreamerqi-control-%C'), 'production SSH must use a deterministic per-target control socket');
+assert(workflow.includes('for attempt in $(seq 1 20)'), 'initial SSH handshake must use bounded low-frequency retries');
+assert(workflow.includes('trap close_control_master EXIT'), 'production cleanup must always close the persistent SSH control connection');
 assert(workflow.includes('actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5'), 'checkout action must be commit pinned');
 assert(workflow.includes('ops/production/'), 'operation scripts must be tracked under the approved directory');
 assert(workflow.includes('archive_paths=("$MANIFEST_PATH")'), 'deployment archives must start from the reviewed manifest');
@@ -42,5 +48,13 @@ assert(deploy.includes("'\\Panda Dashboard Server'"), 'main restart must use the
 assert(verify.includes('isAdministrator'), 'access test must verify administrator membership');
 assert(verify.includes('projectWriteAndDelete'), 'access test must verify project write/delete capability');
 assert(verify.includes('runtimeDataDirsReadable'), 'access test must verify runtime database readability');
+
+assert(diagnoseSsh.includes("$ProgressPreference = 'SilentlyContinue'"), 'SSH diagnosis must suppress noisy progress output');
+assert(diagnoseSsh.includes('& $sshdPath -T -f $configPath'), 'SSH diagnosis must read the effective validated configuration');
+assert(diagnoseSsh.includes('maxConnectionsFromOneSource'), 'SSH diagnosis must measure per-source concentration without exposing addresses');
+assert(diagnoseSsh.includes("readOnly = $true"), 'SSH diagnosis must declare read-only behavior');
+assert(!diagnoseSsh.includes('RemoteAddress ='), 'SSH diagnosis must not emit remote source addresses');
+assert(!diagnoseSsh.includes('Set-Content'), 'SSH diagnosis must not rewrite configuration');
+assert(!diagnoseSsh.includes('Restart-Service'), 'SSH diagnosis must not restart sshd');
 
 console.log('production ops workflow tests passed');
