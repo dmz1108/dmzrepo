@@ -42,8 +42,26 @@ const rawCli = functionSource('runTgbHunanRawEvidenceCli');
 assert(rawCli.includes('manualRequired: true'), 'raw evidence CLI must announce the manual transcription requirement');
 assert(rawCli.includes('automaticStructuringDisabled: true'), 'raw evidence CLI must announce that automatic structuring is disabled');
 
-const visionBuilderReferences = server.match(/buildTgbHunanStructuredArtifactFromVision\s*\(/g) || [];
-assert.strictEqual(visionBuilderReferences.length, 1, 'legacy vision builder must have no production caller');
+for (const removedSymbol of [
+  'buildTgbHunanStructuredArtifactFromVision',
+  'buildTgbHunanStructuredArtifactFromQwenOcr',
+  'buildTgbHunanStructuredFromVision',
+  'readTgbQwenOcrConfig',
+  'TGB_VISION_ALLOW_QWEN',
+  'readTgbHunanOcrImage',
+  'runWinRtOcr',
+  'fetchTgbHunanOcrRows',
+  'WINRT_OCR_SCRIPT',
+]) {
+  assert(!server.includes(removedSymbol), `legacy TGB Qwen/vision code must stay deleted: ${removedSymbol}`);
+}
+assert(!/\bqwen\b/i.test(server), 'main server must not retain an unused Qwen TGB implementation');
+assert(!/\bwinrt\b/i.test(server), 'main server must not retain an unused WinRT TGB OCR implementation');
+assert(!fs.existsSync(path.join(root, 'winrt-ocr.ps1')), 'the unused WinRT OCR helper script must stay deleted');
+
+const structuredReader = functionSource('fetchTgbHunanStructuredRows');
+assert(structuredReader.includes('官方复盘原图人工逐行结构化'), 'TGB structured rows must identify the manual official-image source');
+assert(!structuredReader.includes('视觉识别+涨停池对账'), 'TGB structured rows must not claim the removed vision path');
 
 assert(sop.includes('--tgb-hunan-raw-evidence'), 'TGB SOP must use the raw evidence command');
 assert(!/node\s+\.\\kpl-stats-server\.js\s+--tgb-vision-sync/.test(sop), 'TGB SOP must not instruct operators to run vision sync');

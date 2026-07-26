@@ -10755,3 +10755,32 @@ Deployment:
 Notes for next agent:
 - PR `#284` 已完成，不要重复部署，也不要因 5 份旧 TGB 顶层 `count` 缺失而重建人工库。
 - 下一阶段仍是独立 P1：先做只读影子 health manifest 和 30 日新旧判定对账，再讨论替换现有健康面板；不要直接改同步按钮。
+
+## 2026-07-25 - Codex - 删除 TGB Qwen/vision 不可达正式写入链路
+
+Changed:
+- 删除两个无生产调用方的 TGB vision builder，以及仅由它们引用的 Qwen OCR、WinRT OCR、视觉识别、图片解析、校验和正式文件直写子树。
+- 保留官方文章与原图 raw evidence 抓取、人工逐行转录正式库、旧 `--tgb-vision-sync` raw-evidence 兼容别名；不改变每日手动 TGB 流程。
+- TGB 正式来源说明统一为“官方复盘原图人工逐行结构化”，不再声称由视觉识别生成。
+- manual-only 回归测试现在要求旧 builder、Qwen 配置入口、WinRT OCR 执行链和 `TGB_VISION_ALLOW_QWEN` 保持彻底不存在。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/tgb-manual-only.test.js`
+- `winrt-ocr.ps1`（删除）
+- `docs/FILE_INVENTORY.json`
+- `docs/ops/TGB_HUNAN_DAILY_SOP.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 删除前逐个核对调用图；两个顶层 builder 与 WinRT OCR 执行链均无生产调用，被删除函数只在不可达子树内部互相引用；复审发现并一并删除了调用链移除后新产生的孤立 `hashPart`。
+- `node --check kpl-stats-server.js`、TGB manual-only、复盘来源保护与 P0 健康专项测试通过。
+- 全仓 `66/66` 个 `tests/*.test.js` 文件通过，`git diff --check` 通过。
+- SOP 明确人工正式文件纠错必须先备份与记录哈希，再受控替换、重折和验证；普通同步与 `force` 继续禁止覆盖。
+
+Deployment:
+- 未部署、未重启、未读取或写入任何云端复盘数据库。
+
+Notes for next agent:
+- 本次是 PR `#284` 记录的独立 P2 死代码清理；不要恢复 Qwen/OCR 自动生成 TGB 正式行。
+- `runAutoTgbVisionSyncIfDue` 与 `--tgb-vision-sync` 名称为历史兼容，但其行为仅抓 raw evidence 并明确要求人工转录。
