@@ -290,6 +290,16 @@ jobs:
           \$env:DREAMERQI_OPS_MANIFEST_PATH = '$MANIFEST_PATH'
           \$env:DREAMERQI_OPS_SOURCE_ARCHIVE = '$source_archive'
           \$env:DREAMERQI_TGB_MANUAL_PAYLOAD_FILE = '$payload_file'
+          \$tokens = \$null
+          \$parseErrors = \$null
+          \$null = [System.Management.Automation.Language.Parser]::ParseFile(
+            'C:/Windows/Temp/${REMOTE_SCRIPT}',
+            [ref]\$tokens,
+            [ref]\$parseErrors
+          )
+          if (@(\$parseErrors).Count -gt 0) {
+            throw ('Approved operation has PowerShell syntax errors: ' + ((\$parseErrors | ForEach-Object Message) -join '; '))
+          }
           & 'C:/Windows/Temp/${REMOTE_SCRIPT}'
           EOF
           encoded=$(iconv -f UTF-8 -t UTF-16LE "$launcher" | base64 -w 0)

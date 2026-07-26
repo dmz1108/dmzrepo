@@ -11176,3 +11176,40 @@ Notes for next agent:
 - 当前网站健康不受 SSH 饱和影响；问题只影响新的运维 SSH 握手。
 - 不要通过盲目无限提高 `MaxStartups` 掩盖问题。优先缩短未认证连接占用、限制单来源占用，
   并在 `sshd.exe -t` 校验候选配置后才替换。
+
+## 2026-07-26 - Codex - SSH 并发饱和诊断与加固
+
+Changed:
+- 通过受保护生产工作流运行只读诊断，确认不是网站服务故障，也不是运维工作流自身创建了
+  大量连接。诊断时 `sshd` 有 87 个进程、81 条 Established 连接；仅 2 个远端来源，
+  单一来源占 85 条，近 15 分钟有 121 次认证失败。
+- 确认原有效配置仍是 `LoginGraceTime 120`、`MaxAuthTries 6`、
+  `MaxStartups 10:30:100`、`PerSourceMaxStartups none`。这使一个来源可长期占用绝大多数
+  未认证槽位，正常密钥登录被随机丢弃。
+- 新增加固操作：候选配置先经过 PowerShell 语法检查、`sshd -T` 有效值检查和 `sshd -t`
+  语法检查；只管理登录宽限、认证尝试、全局/单来源未认证连接和键盘交互认证五项。
+- 加固操作保留现有端口、公钥认证和密码认证设置，写入前备份；重启失败或监听未恢复时
+  自动按原始字节回滚并再次启动 `sshd`。重复执行会识别已经由新监听进程加载的配置，
+  不会反复重启。
+
+Files:
+- `.github/workflows/production-ops.yml`
+- `ops/production/harden-ssh-concurrency.ps1`
+- `tests/production-ops-workflow.test.js`
+- `tests/ssh-concurrency-hardening.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 只读诊断工作流 run `30208864143` 成功；未输出来源 IP、密钥或完整配置。
+- 诊断确认云端 OpenSSH 版本 `9.5.5.1` 支持 `PerSourceMaxStartups`。
+- 本地全部测试、工作流 YAML 解析和 `git diff --check` 须在合并前通过。
+
+Deployment:
+- 只读诊断没有改云端配置，也没有重启任何服务。
+- 本条提交时加固脚本尚未执行；合并后须从精确 `main` 运行。预期只重启 `sshd`，
+  不重启主站、Caddy、娱乐服务或公司端 L2 worker。
+
+Notes for next agent:
+- 目标配置是 `LoginGraceTime 20`、`MaxAuthTries 3`、`MaxStartups 20:30:60`、
+  `PerSourceMaxStartups 3`、`KbdInteractiveAuthentication no`。
+- 修复后必须用一条全新的 SSH 握手复测，不能只依赖修复前建立的 ControlMaster 连接。
