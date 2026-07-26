@@ -13263,6 +13263,14 @@ function strategyMainlineFundLabel(displayInflow, negative = false) {
   }
   return negative ? '净流出' : '净流入';
 }
+function strategyMainlineLeadDurationText(value) {
+  const minutes = Math.round(Number(value));
+  if (!Number.isFinite(minutes) || minutes <= 0) return '';
+  if (minutes < 60) return `${minutes}分`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return `${hours}时${rest ? `${rest}分` : ''}`;
+}
 function renderStrategyMainlinesHTML(d) {
   const lines = (d && d.mainlines) || [];
   const usingFallbackDay = d && d.requestedDay && d.day && d.requestedDay !== d.day;
@@ -13601,7 +13609,15 @@ function renderStrategyMainlinesHTML(d) {
       if (!hr) return '';
       const win = Number(d.predictHitRates.windowDays) || 10;
       if (!Number(hr.total) || hr.top1Rate == null) return `<span class="ml-hitrate is-empty" title="按预判回看口径:盘后主因库缺失或该源无当日预测记录的日子不计分母">近${win}日暂无样本</span>`;
-      return `<span class="ml-hitrate" title="与预判回看同源:top1=预测第一家族即当日实际第一;top3=实际第一落在预测前三。近${win}日,分母 ${Number(hr.total)} 个有效样本日">命中 top1 <b>${hr.top1Rate}%</b> · top3 <b>${hr.top3Rate}%</b></span>`;
+      const lead = strategyMainlineLeadDurationText(hr.leadMedianMinutes);
+      const leadSamples = Number(hr.leadSamples) || 0;
+      const leadText = lead && leadSamples
+        ? ` · 领先中位 <b>${escapeHTML(lead)}</b>`
+        : ' · 领先暂无样本';
+      const leadTitle = lead && leadSamples
+        ? `；领先=同源top1命中日，预期明星首次出现至同股真实首次封板，${leadSamples}个日级样本取中位数`
+        : '；暂没有同时满足同源top1命中、预期明星后续真实封板且封板时间可核验的样本';
+      return `<span class="ml-hitrate" title="与预判回看同源:top1=预测第一家族即当日实际第一;top3=实际第一落在预测前三。近${win}日,分母 ${Number(hr.total)} 个有效样本日${leadTitle}">命中 top1 <b>${hr.top1Rate}%</b> · top3 <b>${hr.top3Rate}%</b>${leadText}</span>`;
     };
     const renderColumn = (title, src, zsLabel, srcKey) => {
       // 三态区分(Codex 二审 P2):有主线 / 源可用但无合格主线(有效零结果,展示真实资金/L2/无候选原因) / 源暂缺(不可用)。
@@ -13663,7 +13679,15 @@ function renderStrategyMainlinesHTML(d) {
     if (!hr) return '';
     const win = Number(d.predictHitRates.windowDays) || 10;
     if (!Number(hr.total) || hr.top1Rate == null) return `<span class="ml-hitrate is-empty">近${win}日暂无样本</span>`;
-    return `<span class="ml-hitrate" title="与预判回看同源,近${win}日,分母为有效样本日">命中 top1 <b>${hr.top1Rate}%</b> · top3 <b>${hr.top3Rate}%</b></span>`;
+    const lead = strategyMainlineLeadDurationText(hr.leadMedianMinutes);
+    const leadSamples = Number(hr.leadSamples) || 0;
+    const leadText = lead && leadSamples
+      ? ` · 领先中位 <b>${escapeHTML(lead)}</b>`
+      : ' · 领先暂无样本';
+    const leadTitle = lead && leadSamples
+      ? `；领先=top1命中日，预期明星首次出现至同股真实首次封板，${leadSamples}个日级样本取中位数`
+      : '；领先时长暂无可核验样本';
+    return `<span class="ml-hitrate" title="与预判回看同源,近${win}日,分母为有效样本日${leadTitle}">命中 top1 <b>${hr.top1Rate}%</b> · top3 <b>${hr.top3Rate}%</b>${leadText}</span>`;
   })();
   const cards = lines.slice(0, 8).map(renderCard).join('');
   return `<section class="mainline-wrap">

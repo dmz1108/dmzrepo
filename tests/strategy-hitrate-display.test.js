@@ -24,6 +24,17 @@ function extractFn(name) {
   }
   throw new Error(`unterminated ${name}`);
 }
+function extractHtmlFn(name) {
+  const m = html.match(new RegExp(`function ${name}\\(`));
+  assert(m, `missing html function ${name}`);
+  const bodyBrace = html.indexOf('{', html.indexOf(')', m.index));
+  let depth = 0;
+  for (let i = bodyBrace; i < html.length; i += 1) {
+    if (html[i] === '{') depth += 1;
+    else if (html[i] === '}') { depth -= 1; if (depth === 0) return html.slice(m.index, i + 1); }
+  }
+  throw new Error(`unterminated html function ${name}`);
+}
 
 // ---- 1. 紧凑块纯函数行为 ----
 // eslint-disable-next-line no-eval
@@ -31,21 +42,29 @@ const strategyPredictHitRatesCompact = eval(`(${extractFn('strategyPredictHitRat
 
 const full = strategyPredictHitRatesCompact({
   mainlineTotal: 8, mainlineTop1Rate: 62.5, mainlineTop3Rate: 87.5,
+  mainlineLeadSamples: 3, mainlineLeadMedianMinutes: 183.6,
   starWinRate: 71.4, starTotal: 7,
   bySource: {
-    eastmoney: { mainlineTotal: 8, mainlineTop1Rate: 62.5, mainlineTop3Rate: 87.5 },
+    eastmoney: { mainlineTotal: 8, mainlineTop1Rate: 62.5, mainlineTop3Rate: 87.5,
+      mainlineLeadSamples: 2, mainlineLeadMedianMinutes: 183.6 },
     ths: { mainlineTotal: 0, mainlineTop1Rate: null, mainlineTop3Rate: null },
   },
 }, 10);
 assert.strictEqual(full.windowDays, 10);
 assert.strictEqual(full.overall.total, 8);
 assert.strictEqual(full.bySource.eastmoney.top1Rate, 62.5);
+assert.strictEqual(full.overall.leadSamples, 3);
+assert.strictEqual(full.overall.leadMedianMinutes, 183.6);
+assert.strictEqual(full.bySource.eastmoney.leadSamples, 2);
 assert.strictEqual(full.bySource.ths.total, 0, '零样本源 total 必须为 0');
 assert.strictEqual(full.bySource.ths.top1Rate, null, '零样本源 rate 必须保持 null,不得变 0');
+assert.strictEqual(full.bySource.ths.leadSamples, 0, '无领先样本源必须保持 0');
+assert.strictEqual(full.bySource.ths.leadMedianMinutes, null, '无领先样本源中位数必须保持 null');
 assert.strictEqual(strategyPredictHitRatesCompact(null, 10), null, 'stats 缺失返回 null,不返回空壳');
 const missingSource = strategyPredictHitRatesCompact({ mainlineTotal: 3, mainlineTop1Rate: 33.3, mainlineTop3Rate: 66.7 }, 10);
 assert.strictEqual(missingSource.bySource.eastmoney.total, 0, '无 bySource 的旧统计降级为零样本而非报错');
 assert.strictEqual(missingSource.bySource.eastmoney.top1Rate, null);
+assert.strictEqual(missingSource.overall.leadMedianMinutes, null, '旧统计无领先字段时必须诚实降级为 null');
 
 // ---- 2. 附加位置与日期锚点(Codex #292 P1:历史日期不得挂当前命中率) ----
 // 行为测试:真实调用附加函数,today 与 historical 双请求分别断言,不做纯字符串推断。
@@ -157,7 +176,17 @@ assert(hitBlock.includes('if (!Number(hr.total) || hr.top1Rate == null)'), '零�
 // 双列 hitRateLine 块内零样本分支必须落在"暂无样本"文案上,且块内不得出现任何字面 0%。
 assert(/if \(!Number\(hr\.total\) \|\| hr\.top1Rate == null\)[^;]*暂无样本/.test(hitBlock), '零样本分支必须渲染"暂无样本"文案');
 assert(!/0%/.test(hitBlock), 'hitRateLine 块内禁止出现任何字面 0%(动态率由数据渲染,静态 0% 即伪造)');
+assert(hitBlock.includes('领先中位') && hitBlock.includes('领先暂无样本'),
+  '有可核验样本展示领先中位，无样本必须明确显示暂无样本');
+assert(hitBlock.includes('真实首次封板') && !hitBlock.includes('confirmedAt'),
+  '领先口径必须说明使用真实首次封板，前端不得把盘后确认写入时点当口径');
 assert(html.includes('ml-hitrate is-empty'), '暂无样本使用弱化样式');
+// 183.6 分钟四舍五入后应显示 3时4分；缺值不装作 0 分。
+// eslint-disable-next-line no-eval
+const strategyMainlineLeadDurationText = eval(`(${extractHtmlFn('strategyMainlineLeadDurationText')})`);
+assert.strictEqual(strategyMainlineLeadDurationText(183.6), '3时4分');
+assert.strictEqual(strategyMainlineLeadDurationText(59.2), '59分');
+assert.strictEqual(strategyMainlineLeadDurationText(null), '');
 // Owner 二次修订:结果直接进标题行——命中率必须渲染在列标题 span 内部,与"××主线预测"同行
 assert(html.includes('<span>${escapeHTML(title)}${hitRateLine(srcKey)}</span>'), '双列命中率位于列标题行内');
 assert(html.includes('<span>今日主线榜${overallHitLine}</span>'), '单列整体命中率位于主标题行内');
@@ -165,6 +194,8 @@ assert(html.includes('<span>今日主线榜${overallHitLine}</span>'), '单列�
 const overallBlock = html.slice(html.indexOf('const overallHitLine'), html.indexOf('const cards = lines.slice'));
 assert(/if \(!Number\(hr\.total\) \|\| hr\.top1Rate == null\)[^;]*暂无样本/.test(overallBlock) && !/0%/.test(overallBlock),
   '单列整体命中率同样禁止 0% 伪造');
+assert(overallBlock.includes('领先中位') && overallBlock.includes('领先时长暂无可核验样本'),
+  '单列兼容路径同样展示或诚实缺省领先时长');
 
 // ---- 5. CSS 与缓存版本 ----
 assert(css.includes('body.view-strategy .ml-hitrate {') && css.includes('.ml-hitrate.is-empty'), '命中率行样式存在');

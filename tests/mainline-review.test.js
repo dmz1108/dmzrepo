@@ -58,7 +58,11 @@ const STRATEGY_MAINLINE_INTRADAY_PHASES = extractSet('STRATEGY_MAINLINE_INTRADAY
 
 // ---- 待测函数 + 可控 IO/时钟 stub ----
 eval(extractFn('strategyMainlineActualFamilyRanking'));
+eval(extractFn('normalizeReviewFirstLimitTime'));
 eval(extractFn('strategyMainlineExpectedStarTransitions'));
+eval(extractFn('strategyMainlineChinaEventTimeMs'));
+eval(extractFn('strategyMainlineLeadSample'));
+eval(extractFn('strategyMedianNumber'));
 eval(extractFn('strategyMainlineReserveStarOutcomes'));   // 三要件预备层盘后结果(#201)
 eval(extractFn('strategyMainlineReviewFormalTop'));
 eval(extractFn('strategyMainlineReviewHasRecord'));
@@ -66,7 +70,17 @@ eval(extractFn('strategyMainlineReviewHasRecord'));
 let TODAY = '2026-07-14';           // 次日:全部夹具交易日都算已收盘
 let TODAY_CLOSED = true;            // 仅当 day===TODAY 时用
 const readSavedApiKey = async () => 'k';
-const chinaNowParts = () => ({ day: TODAY, hour: 16, minute: 0 });
+const chinaNowParts = (date) => {
+  if (date instanceof Date) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    }).formatToParts(date);
+    const map = Object.fromEntries(parts.map(part => [part.type, part.value]));
+    return { day: `${map.year}-${map.month}-${map.day}`, hour: Number(map.hour), minute: Number(map.minute) };
+  }
+  return { day: TODAY, hour: 16, minute: 0 };
+};
 const isoFromCompactDate = d => String(d);
 const isAfterMarketClose = (day) => day < TODAY ? true : (day > TODAY ? false : TODAY_CLOSED);
 let TRADING_DAYS = ['2026-07-02', '2026-07-03', '2026-07-06', '2026-07-07', '2026-07-08', '2026-07-09', '2026-07-10', '2026-07-13', '2026-07-14'];
@@ -99,10 +113,25 @@ eval(extractFn('strategyKlineBarForDay'));
 eval(extractFn('strategyKlineCoversDay'));
 eval(extractFn('getStrategyMainlineReview'));
 
-const finalLimitDb = (codes) => ({ savedAtOK: true, reliable: true, stocks: codes.map(code => ({ code, name: 'N' + code })) });
+const finalLimitDb = (codes) => ({
+  savedAtOK: true,
+  reliable: true,
+  stocks: codes.map(item => typeof item === 'object'
+    ? { ...item, name: item.name || ('N' + item.code) }
+    : { code: item, name: 'N' + item }),
+});
 const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
 
 (async () => {
+  const legacyTransitions = strategyMainlineExpectedStarTransitions(
+    { savedAt: '2026-07-09T01:40:00.000Z', starTransitions: [] },
+    { key: '算力', theme: '算力', star: { code: '002396', name: '星网', level: 'expected' } }
+  );
+  A(legacyTransitions[0]?.transitionEvidence === 'legacy-snapshot'
+    && strategyMainlineLeadSample('2026-07-09', legacyTransitions,
+      finalLimitDb([{ code: '002396', firstLimitTime: 131000 }])) === null,
+  '领先时长不采信仅从旧最终快照反推的 expected，必须有首次事件轨迹');
+
   // ---------- 夹具时间线(TODAY=07-12 周日,全部为已收盘历史日) ----------
   // 07-02(午后,有效):明星 expected,终盘涨停库【缺失】→ sealStatus=noData、sealedSameDay=null(④);
   //                   主因覆盖也因涨停库缺失无法验证 → 命中 null 不计分母。
@@ -159,8 +188,9 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   PREDICTS['2026-07-09'] = { sessionPhase: '尾盘', confirmedKey: '', top: [
     { key: '算力', theme: '算力', star: { code: '002396', name: '星网', level: 'confirmed' }, leader: { code: '000938', name: '紫光' } }],
     starTransitions: [{ mainlineKey: '算力', mainlineTheme: '算力', code: '002396', name: '星网',
-      firstExpectedAt: '2026-07-09T01:40:00.000Z', confirmedAt: '2026-07-09T05:10:00.000Z', lastLevel: 'confirmed' }] };
-  LIMIT_UP['2026-07-09'] = finalLimitDb(['002396', '600009']);
+      firstExpectedAt: '2026-07-09T01:40:00.000Z', confirmedAt: '2026-07-09T07:30:00.000Z',
+      confirmedBy: 'final-limit-up-db', lastLevel: 'confirmed' }] };
+  LIMIT_UP['2026-07-09'] = finalLimitDb([{ code: '002396', firstLimitTime: 131000 }, '600009']);
   MAIN_REASON['2026-07-09'] = reasonDb([
     { code: '002396', name: '星网', finalBoardTopic: '算力' },
     { code: '600009', name: 'I', finalBoardTopic: '算力' }]);
@@ -236,7 +266,10 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   A(d9.star.predictLevel === 'confirmed' && d9.mainlineStarQualified === true,
     '③命中真实第一家族的最终快照允许显示 confirmed 明星');
   A(d9.expectedStars.length === 1 && d9.expectedStars[0].sealStatus === 'sealed'
-    && !!d9.expectedStars[0].confirmedAt, '③expected→confirmed 轨迹保留并计封板成功');
+    && d9.expectedStars[0].confirmedBy === 'final-limit-up-db', '③expected→confirmed 轨迹保留确认依据并计封板成功');
+  A(d9.mainlineLead?.leadMinutes === 210 && d9.mainlineLead.firstLimitTime === '13:10:00'
+    && d9.mainlineLead.confirmedAt === '2026-07-09T05:10:00.000Z',
+  '③领先时长使用同股真实首次封板时间，不使用盘后15:30入库时间');
   A(d3.star.predictLevel === 'expected' && d3.star.sealStatus === 'notSealed' && d3.star.sealedSameDay === false
     && d3.mainlineStarQualified === null,
     '③expected+未封且主因不完整 → notSealed 计败，正式主线明星资格保持未知');
@@ -271,6 +304,8 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   //    07-08(已收盘)/07-02/07-03(数据不完整)不计。
   const s = out.stats;
   A(s.mainlineTotal === 4 && s.mainlineTop1Hits === 3, '⑦分母只含有效盘中样本:4 天,top1=3(已收盘/不完整均剔除)');
+  A(s.mainlineLeadSamples === 1 && s.mainlineLeadMedianMinutes === 210,
+    '⑦领先时长一来源/一日一个样本，近窗统计取中位数');
   A(s.expectedSealTotal === 2 && s.expectedSealWins === 1 && s.expectedSealRate === 50, '⑦预期明星封板统计:仅 expected 计入 = 1/2(confirmed/active/无level 不计)');
   // 明星/龙头次日胜率也只计有效样本:d6 leader +10% 胜,d9 star +10% 胜,d9 leader -5% 败;
   // d8(已收盘)有次日数据但不计。
@@ -337,16 +372,23 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
     schemaVersion: 3, sessionPhase: '尾盘', confirmedKey: '', top: [
       { key: 'theme:半导体', theme: '半导体', star: { code: '603986', name: '兆易创新', level: 'expected' } },
     ],
+    starTransitions: [{ mainlineKey: 'theme:半导体', mainlineTheme: '半导体', code: '603986', name: '兆易创新',
+      firstExpectedAt: '2026-07-21T03:04:29.468Z', confirmedAt: '2026-07-21T07:30:00.000Z',
+      confirmedBy: 'final-limit-up-db', lastLevel: 'confirmed' }],
     bySource: {
       eastmoney: { available: true, hasMainlines: true, top: [
         { key: 'theme:半导体', theme: '半导体', star: { code: '603986', name: '兆易创新', level: 'expected' } },
-      ], candidates: [], starTransitions: [] },
+      ], candidates: [], starTransitions: [
+        { mainlineKey: 'theme:半导体', mainlineTheme: '半导体', code: '603986', name: '兆易创新',
+          firstExpectedAt: '2026-07-21T03:04:29.468Z', confirmedAt: '2026-07-21T07:30:00.000Z',
+          confirmedBy: 'final-limit-up-db', lastLevel: 'confirmed' },
+      ] },
       ths: { available: true, hasMainlines: true, top: [
         { key: 'theme:消费电子', theme: '消费电子', l2VerificationStatus: 'qi', star: null },
       ], candidates: [{ key: 'theme:消费电子', l2VerificationStatus: 'qi' }], starTransitions: [] },
     },
   };
-  LIMIT_UP['2026-07-21'] = finalLimitDb(['603986', '600021']);
+  LIMIT_UP['2026-07-21'] = finalLimitDb([{ code: '603986', firstLimitTime: 140805 }, '600021']);
   MAIN_REASON['2026-07-21'] = reasonDb([
     { code: '603986', name: '兆易创新', finalBoardTopic: '半导体' },
     { code: '600021', name: 'A', finalBoardTopic: '半导体' },
@@ -369,6 +411,13 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   const owner22 = out7.days.find(r => r.day === '2026-07-22');
   A(owner21?.bySource?.eastmoney?.mainlineHitTop1 === true && owner21.mainlineStarQualified === true,
     'Owner:7月21日东财同源命中半导体且有明星 → 正式主线明星资格成立');
+  A(owner21?.bySource?.eastmoney?.mainlineLead?.leadMinutes === 183.6
+    && out7.stats.bySource.eastmoney.mainlineLeadSamples === 1
+    && out7.stats.bySource.eastmoney.mainlineLeadMedianMinutes === 183.6,
+  'Owner:东财独立统计真实领先时长，7月21日兆易创新为183.6分钟');
+  A(out7.stats.bySource.ths.mainlineLeadSamples === 0
+    && out7.stats.bySource.ths.mainlineLeadMedianMinutes === null,
+  'Owner:同花顺未命中且无可核验轨迹时保持零样本/null，不借东财数据');
   A(owner22?.bySource?.eastmoney?.mainlineHitTop1 === false && owner22.mainlineStarQualified === false,
     'Owner:7月22日东财算力未命中且同花顺无主线 → 正式主线明星资格不成立');
   A(owner22?.star?.predictLevel === 'confirmed',
