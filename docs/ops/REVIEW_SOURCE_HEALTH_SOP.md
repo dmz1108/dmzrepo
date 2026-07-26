@@ -60,6 +60,22 @@ For each trading day and each source:
 
 The current regression contract is covered by `tests/review-source-health.test.js`: existing 复盘啦 and 选股宝 statistics remain, a non-empty 韭研 tab creates fresh statistics, an empty TGB tab does not create healthy statistics, and a stale error is removed only for a source that now has real rows.
 
+## P1 Shadow Manifest
+
+The P1 manifest is a read-only comparison layer. It does not replace the current admin panel, trigger collection, rebuild the combined database, or change sync readiness.
+
+- Pure rules live in `review-source-health-manifest.js`.
+- The source-view tab calculation and the manifest both use `summarizeReviewSourceRows`, so filtering, row count, unique-code count, duplicates, weak reasons, and excluded rows cannot silently diverge.
+- `GET /api/admin/review-source-health-shadow?days=30` is admin-only and reads formal files directly. It must not call any `ensure*`, fetch, generator, or write path.
+- `tools/audit-review-health-manifest.js --root=<project-root> --days=30` performs the same audit without starting the service. It selects the recent trading calendar even when an entire day's files are absent, writes nothing, and prints evidence to stdout.
+- Wrong-day artifacts expose their observed metadata only; their target-day `actual` value is `null`.
+- Pool reconciliation compares code membership and detects a source name mapped to a different terminal-pool code, so equal row counts cannot hide a transcription error. Same-code display-name variants are not treated as identity failures.
+- If one terminal-pool display name maps to multiple codes, the identity check stays neutral rather than blaming a source for an ambiguous reference.
+- TGB is graded as a source-faithful artifact. Its terminal-pool difference is diagnostic and does not by itself make the TGB artifact invalid.
+- The four-source combined database is reconciled strictly against the filtered terminal limit-up pool.
+
+Run the shadow comparison for 30 trading days before connecting this manifest to the visible admin panel or any repair decision. Record status changes, count changes, excluded rows, duplicates, missing/extra codes, and any invalid or stale file. A stricter shadow result is evidence to investigate, not permission to rewrite source files.
+
 ## Manual Sync Behavior
 
 The health-source sync action should repair only missing, invalid, or stale source artifacts. It must not blindly regenerate and overwrite already valid source-faithful files.

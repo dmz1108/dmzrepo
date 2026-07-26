@@ -10854,3 +10854,39 @@ Deployment:
 Notes for next agent:
 - PR `#286` 已完成并部署，不要重复发布。
 - TGB 正式库仍必须来自湖南人官方复盘原图的人工逐行结构化；纠错按 `docs/ops/TGB_HUNAN_DAILY_SOP.md` 的备份、哈希、受控替换和双日志流程执行。
+
+## 2026-07-26 - Codex - 复盘来源 P1 只读影子健康清单
+
+Changed:
+- 先解决 `docs/DAILY_HANDOFF.md` 的唯一冲突并合并纯文档 PR `#287`；双方交接内容均保留。
+- 新增纯函数模块 `review-source-health-manifest.js`，统一复盘页与影子清单的过滤、行数、唯一代码、重复项和低置信统计口径。
+- 新增管理员只读端点 `/api/admin/review-source-health-shadow?days=30` 与离线只读工具；两者按最近交易日历读取正式文件，不调用采集、生成、同步或写入路径。
+- 影子结果区分原始行、过滤后行、唯一代码、跨日、损坏、缺失、来源与终盘池差异，以及“名称对应到另一股票代码”的身份错配。
+- 两位 Claude 首轮复核后保持历史 `ocrFallback` truthy 口径、跳过终盘池同名多代码的歧义身份判断，并把 `reasonReady` 发布窗口加入新旧状态比较，避免影子假差异。
+- 本阶段没有接入现有数据源健康 UI、同步按钮或修复决策；TGB 与终盘池差异仅作诊断，四源综合主因库继续严格对齐过滤后的终盘涨停池。
+
+Files:
+- `review-source-health-manifest.js`
+- `kpl-stats-server.js`
+- `tools/audit-review-health-manifest.js`
+- `tests/review-source-health-manifest.test.js`
+- `tests/review-source-health.test.js`
+- `docs/ops/REVIEW_SOURCE_HEALTH_SOP.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check` 通过：主服务、新纯函数模块、离线审计工具。
+- 新影子清单、现有复盘来源统计与 P0 健康专项测试通过；全仓 `67/67` 个 `tests/*.test.js` 文件通过，`git diff --check` 通过。
+- 旧新低置信口径 648 组合差分为 0；历史 `ocrFallback: 1/'true'`、终盘池同名多代码及发布窗口前后状态均有回归断言。
+- 云端最近 30 个交易日（`2026-06-12` 至 `2026-07-24`）使用复核修正版完成只读审计；证据 JSON 未入 Git，SHA-256 为 `0d154e1d8ac586e4e235a0182784c0729b3efa7c57db90f7448afc7493901ebd`。
+- 30 日四源综合主因库均与终盘涨停池完全一致；复盘啦与选股宝均为 30/30 完全一致。韭研有 10 日原始行数高于过滤后行数，均为北交所/ST 等既定排除项，不再造成 101% 覆盖率。
+- 两项待人工确认的真实差异：`2026-06-15` TGB 中长源东谷、恒尚节能、安德利名称正确但代码分别写成 `600950/601137/601598`，终盘池代码为 `603950/603137/605198`；`2026-07-03` 韭研相对终盘池缺 `002496`。
+
+Deployment:
+- 未部署 P1 代码、未重启任何服务、未修改前端可见页面。
+- 云端仅在用户目录临时运行只读工具；临时目录与一次命令转义产生的空目录均已删除。
+- `C:\PandaDashboard` 只被读取；未同步来源、未重建综合主因库、未改写任何正式复盘或策略数据。
+
+Notes for next agent:
+- P1 必须先由 Local Claude 与 Remote Claude 独立复核；复核通过前不得接入现有健康面板、同步按钮或自动修复。
+- 30 日差异是调查证据，不是自动覆写授权。TGB 三个代码若纠错，必须另走人工库备份、哈希、受控替换和双日志流程。

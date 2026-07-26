@@ -52,6 +52,14 @@ const {
 const {
   adminReviewSourceHealthVerdict,
 } = require('./review-source-health');
+const {
+  REVIEW_HEALTH_MANIFEST_RULE_VERSION,
+  buildLegacyReviewHealthProjection,
+  buildReviewHealthManifest,
+  compareReviewHealthProjection,
+  isExcludedReviewStock,
+  summarizeReviewSourceRows,
+} = require('./review-source-health-manifest');
 
 // 只读诊断的环境级错误/超时收集器(六审):低层读取函数在遭遇 JSON 损坏/权限/网络错误时,
 // 无论调用方是否 .catch 吞掉,都把真实错误写进当前诊断上下文;正常缺文件(ENOENT)只记 missing。
@@ -4730,6 +4738,56 @@ async function adminReviewSourceHealth(url, req, res) {
   });
 }
 
+function recentReviewHealthTradingDays(endDay, count) {
+  const normalizedEndDay = isoFromCompactDate(endDay || chinaNowParts().day);
+  const days = [];
+  for (let offset = 0; offset < 120 && days.length < count; offset += 1) {
+    const candidate = shiftDay(normalizedEndDay, -offset);
+    if (isChinaMarketTradingDay(candidate)) days.unshift(candidate);
+  }
+  return days.slice(-count);
+}
+
+async function adminReviewSourceHealthShadow(url, req, res) {
+  if (!requireAdmin(req, res)) return;
+  if (req.method !== 'GET') return send(res, 405, { error: 'method not allowed' });
+  const requestedDays = Number(url.searchParams.get('days') || MAIN_REASON_SYNC_MAX_DAYS);
+  const days = Math.max(1, Math.min(
+    MAIN_REASON_SYNC_MAX_DAYS,
+    Number.isFinite(requestedDays) ? Math.floor(requestedDays) : MAIN_REASON_SYNC_MAX_DAYS,
+  ));
+  const requestedEndDay = isoFromCompactDate(url.searchParams.get('day') || chinaNowParts().day);
+  const tradingDays = recentReviewHealthTradingDays(requestedEndDay, days);
+  const rows = await mapLimit(tradingDays, 3, buildReviewSourceHealthShadowDay);
+  const statusCounts = rows.reduce((counts, row) => {
+    const status = row.manifest?.status || 'invalid';
+    counts[status] = Number(counts[status] || 0) + 1;
+    return counts;
+  }, {});
+  return send(res, 200, {
+    ok: true,
+    mode: 'shadow-read-only',
+    writesAllowed: false,
+    checkedAt: authNowIso(),
+    ruleVersion: REVIEW_HEALTH_MANIFEST_RULE_VERSION,
+    requestedEndDay,
+    endDay: tradingDays.at(-1) || requestedEndDay,
+    scanned: rows.length,
+    statusCounts,
+    changedStatusDays: rows.filter(row => row.comparison?.statusChanged).map(row => row.day),
+    changedCountDays: rows
+      .filter(row => row.comparison?.changedGroups?.length)
+      .map(row => ({ day: row.day, groups: row.comparison.changedGroups })),
+    poolDifferenceDays: rows
+      .filter(row => row.comparison?.poolDifferenceGroups?.length)
+      .map(row => ({ day: row.day, groups: row.comparison.poolDifferenceGroups })),
+    identityMismatchDays: rows
+      .filter(row => row.comparison?.identityMismatchGroups?.length)
+      .map(row => ({ day: row.day, groups: row.comparison.identityMismatchGroups })),
+    rows,
+  });
+}
+
 async function getSnapshot(url, req, res) {
   const day = url.searchParams.get('day');
   const zsType = url.searchParams.get('zs_type') || 'default';
@@ -6754,10 +6812,13 @@ function recomputeReviewSourceStatsFromTabs(payload) {
   if (!payload || !Array.isArray(payload.tabs)) return payload;
   payload.tabs = payload.tabs.filter(tab => !isDisabledReviewSource('', tab.key));
   for (const tab of payload.tabs) {
-    const rows = (tab.rows || []).filter(row => !isExcludedFromReview(row?.code, row?.name));
-    tab.rows = rows;
-    tab.count = rows.length;
-    tab.topics = limitUpMainReasonSourceViewTopics(rows);
+    const summary = summarizeReviewSourceRows(tab.rows, {
+      normalizeCode: normalizeReasonSourceCode,
+      excludeRow: row => isExcludedFromReview(row?.code, row?.name),
+    });
+    tab.rows = summary.rows;
+    tab.count = summary.rowCount;
+    tab.topics = limitUpMainReasonSourceViewTopics(summary.rows);
   }
   const codesOf = rows => {
     const set = new Set();
@@ -6801,27 +6862,26 @@ function recomputeReviewSourceStatsFromTabs(payload) {
       const tab = tabByGroup.get(group);
       if (!tab) return stat;
       const rows = tab.rows || [];
-      const stockCodes = new Set();
+      const summary = summarizeReviewSourceRows(rows, {
+        normalizeCode: normalizeReasonSourceCode,
+        excludeRow: row => isExcludedFromReview(row?.code, row?.name),
+      });
       const mainReasonCodes = new Set();
-      const lowConfidenceCodes = new Set();
       for (const row of rows) {
         const code = normalizeReasonSourceCode(row?.code);
-        if (code) stockCodes.add(code);
         const quality = String(row?.reasonQuality || '').toLowerCase();
-        const confidence = Number(row?.confidence || 0);
         if (code && quality !== 'fallback' && (row?.primaryRawTopic || row?.reasonText)) mainReasonCodes.add(code);
-        if (code && (quality === 'fallback' || confidence < 0.8 || row?.ocrFallback)) lowConfidenceCodes.add(code);
       }
       return {
         ...stat,
         group,
         source: stat?.source || sourceByGroup[group] || `review/${group}`,
-        rowCount: rows.length,
-        stockCount: stockCodes.size,
-        coveragePct: reviewTotal ? Number(((stockCodes.size / reviewTotal) * 100).toFixed(2)) : 0,
+        rowCount: summary.rowCount,
+        stockCount: summary.uniqueCodeCount,
+        coveragePct: reviewTotal ? Number(((summary.uniqueCodeCount / reviewTotal) * 100).toFixed(2)) : 0,
         mainReasonStockCount: mainReasonCodes.size,
         mainReasonCoveragePct: reviewTotal ? Number(((mainReasonCodes.size / reviewTotal) * 100).toFixed(2)) : 0,
-        lowConfidenceStockCount: lowConfidenceCodes.size,
+        lowConfidenceStockCount: summary.lowConfidenceCodeCount,
       };
     })
     .filter(Boolean);
@@ -14615,7 +14675,7 @@ function summarizeRequiredReviewSources(autoPayload, stocks) {
   };
 }
 
-async function readReviewSourceArtifactStatus(day, group) {
+function reviewSourceArtifactPath(day, group) {
   const isoDay = isoFromCompactDate(day);
   const paths = {
     tgb: tgbHunanStructuredSourcePath(isoDay),
@@ -14625,7 +14685,12 @@ async function readReviewSourceArtifactStatus(day, group) {
     ths: tonghuashunStructuredSourcePath(isoDay),
     eastmoney: eastmoneyFplLimitReasonSourcePath(isoDay),
   };
-  const filePath = paths[group] || '';
+  return paths[group] || '';
+}
+
+async function readReviewSourceArtifactStatus(day, group) {
+  const isoDay = isoFromCompactDate(day);
+  const filePath = reviewSourceArtifactPath(isoDay, group);
   if (!filePath) return { group, exists: false, count: 0, path: '' };
   try {
     const payload = JSON.parse(await fs.readFile(filePath, 'utf8'));
@@ -14693,6 +14758,104 @@ async function summarizeRequiredReviewSourceArtifacts(day) {
     required: statuses,
     missing: statuses.filter(item => !item.ok).map(item => item.group),
     missingLabels: statuses.filter(item => !item.ok).map(item => item.label),
+  };
+}
+
+async function readReviewHealthObservation(filePath) {
+  const relativeFile = filePath ? path.relative(__dirname, filePath).replace(/\\/g, '/') : '';
+  if (!filePath) {
+    return {
+      exists: false,
+      payload: null,
+      error: '',
+      file: relativeFile,
+      byteSize: 0,
+      modifiedAt: '',
+      contentHash: '',
+    };
+  }
+  try {
+    const [body, stat] = await Promise.all([
+      fs.readFile(filePath, 'utf8'),
+      fs.stat(filePath),
+    ]);
+    let payload;
+    try {
+      payload = JSON.parse(body);
+    } catch {
+      return {
+        exists: true,
+        payload: null,
+        error: 'invalid JSON',
+        file: relativeFile,
+        byteSize: Number(stat.size || Buffer.byteLength(body)),
+        modifiedAt: stat.mtime?.toISOString?.() || '',
+        contentHash: crypto.createHash('sha256').update(body).digest('hex'),
+      };
+    }
+    return {
+      exists: true,
+      payload,
+      error: '',
+      file: relativeFile,
+      byteSize: Number(stat.size || Buffer.byteLength(body)),
+      modifiedAt: stat.mtime?.toISOString?.() || '',
+      contentHash: crypto.createHash('sha256').update(body).digest('hex'),
+    };
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return {
+        exists: false,
+        payload: null,
+        error: '',
+        file: relativeFile,
+        byteSize: 0,
+        modifiedAt: '',
+        contentHash: '',
+      };
+    }
+    return {
+      exists: true,
+      payload: null,
+      error: strategyMainlineDiagErrorText(error),
+      file: relativeFile,
+      byteSize: 0,
+      modifiedAt: '',
+      contentHash: '',
+    };
+  }
+}
+
+async function buildReviewSourceHealthShadowDay(day) {
+  const isoDay = isoFromCompactDate(day);
+  const [terminal, combined, sources] = await Promise.all([
+    readReviewHealthObservation(limitUpDbPath(isoDay)),
+    readReviewHealthObservation(limitUpMainReasonDbPath(isoDay)),
+    mapLimit(REQUIRED_REVIEW_SOURCE_GROUPS, 4, async source => ({
+      ...source,
+      ...await readReviewHealthObservation(reviewSourceArtifactPath(isoDay, source.group)),
+    })),
+  ]);
+  const manifest = buildReviewHealthManifest({
+    day: isoDay,
+    generatedAt: authNowIso(),
+    isTradingDay: isChinaMarketTradingDay(isoDay),
+    afterMarketClose: isAfterMarketClose(isoDay),
+    terminal,
+    combined,
+    sources,
+  }, {
+    normalizeCode: normalizeReasonSourceCode,
+    excludeRow: row => isExcludedFromReview(row?.code, row?.name),
+  });
+  const reasonReady = isMainReasonReviewReady(isoDay);
+  const legacy = buildLegacyReviewHealthProjection(manifest, { reasonReady });
+  return {
+    day: isoDay,
+    legacyContext: { reasonReady },
+    legacy,
+    manifest,
+    comparison: compareReviewHealthProjection(legacy, manifest),
   };
 }
 
@@ -18808,19 +18971,9 @@ function isStStock(name) {
   return /(^|\W)\*?ST/i.test(n) || /退市|退$/.test(n);
 }
 
-function isNewListingStockName(name) {
-  return /^[NC][\u4e00-\u9fa5A-Z0-9]/i.test(String(name || '').trim());
-}
-
-// 北交所/北证个股：代码以 8、9、4 开头（与 eastmoneySecid 的 bj 归类一致）。
-// 沪深 A 股代码以 6/0/3 开头，不会落入此判断。
-function isBeijingStock(code) {
-  return /^[489]/.test(String(code || '').replace(/\D/g, ''));
-}
-
 // 复盘数据统一排除标准：北交所个股 + ST/退市整理 + 新股前缀，一律不进涨停复盘。
 function isExcludedFromReview(code, name) {
-  return isBeijingStock(code) || isStStock(name) || isNewListingStockName(name);
+  return isExcludedReviewStock(code, name);
 }
 
 function addBoardRow(board, stock, hitDay) {
@@ -27795,6 +27948,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/admin/cloud-health') return await adminCloudHealth(url, req, res);
     if (url.pathname === '/api/admin/ops-log') return await adminOpsLog(url, req, res);
     if (url.pathname === '/api/admin/review-source-health') return await adminReviewSourceHealth(url, req, res);
+    if (url.pathname === '/api/admin/review-source-health-shadow') return await adminReviewSourceHealthShadow(url, req, res);
     if (url.pathname === '/api/admin/discovery/poi-config') return await discoveryPoiConfigApi(url, req, res);
     if (url.pathname === '/api/auth/register/request-code') return await authRegisterRequestCode(url, req, res);
     if (url.pathname === '/api/auth/register') return await authRegister(url, req, res);
