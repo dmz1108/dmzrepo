@@ -11052,3 +11052,31 @@ Notes for next agent:
   修法:失败也推进锚点日;同日失败保留旧值继续 SWR,跨日/首次失败清空旧值不冒充今日。
   按要求补 rejection 行为测试三场景(首启退避/同日保留/跨日清空,真实调用计数),
   变异验证:退回旧 catch 场景 1 立即失败。
+
+## 2026-07-26 - Codex - PR #292 命中率随行展示已合并部署
+
+Changed:
+- PR `#292` 已以 merge commit `d2aa58f0279a9470dbf137a523d8bbc98440c999` 合入 `main`。
+- 已将命中率响应逻辑、策略页行内展示和对应样式发布到云端正式环境。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 发布前校验暂存文件 SHA-256、`node --check` 和 HTML CSS 版本引用；发布后三份正式文件哈希与 Git 完全一致。
+- 云端本机及公网 `https://market.dreamerqi.com/health` 均返回 `{"ok":true}`，行情页引用 `strategy-workbench.css?v=20260726d`。
+- 今日主线接口的 SWR 缓存刷新后返回 `predictHitRates.asOfDay=2026-07-26`：整体 5 个有效样本，top1/top3 均为 40%；东财 4 个样本，均为 50%；同花顺 3 个样本，均为 33.3%。
+- 历史请求 `day=2026-07-08` 不包含 `predictHitRates`，日期隔离行为正确。
+- 新主服务 PID 为 `15896`，端口 `8765` 监听正常。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`；回退备份为 `C:\PandaDashboard\_deploy-backups\github-pr292-d2aa58f-20260726T113037Z`。
+- 仅重启 `Panda Dashboard Server`；未重启 Caddy、娱乐服务或公司端 L2 worker，未触发来源同步、运行时数据库写入或同步配置变更。
+- 两份云端运维日志均已追加本次部署记录，远端暂存目录和本地一次性部署脚本均已清理。
+
+Notes for next agent:
+- PR `#292` 已完成并上线，不要重复发布。首次请求或缓存刷新失败时命中率字段可暂时缺失，这是既定三态行为；不要用 `0%` 代替无样本。
+- 命中率与预判回看同源，只允许今日请求携带；历史日期不得附加以今天为锚点的统计。
