@@ -50,6 +50,39 @@ Also avoid printing an entire large API response. Filter it with `jq` or a small
 - Record code work in `docs/DAILY_HANDOFF.md`. Record production state changes in the cloud operation logs as well.
 - Never print or commit secrets, private keys, cookies, user records, raw databases, or captured evidence bundles.
 
+## Independent Review Discipline
+
+Lessons captured from the PR #284 three-party review (2026-07-26). These bind any agent
+performing an independent review in this repository.
+
+- **Matrix verification before any pass verdict.** When a review boundary names a class
+  ("TGB/manual sources", "all generators"), first enumerate the full matrix of
+  asset-class × file-state (healthy / corrupt / wrong-day / unmarked) × write-path,
+  mark every cell as *tested*, *inferred*, or *not covered*, and attach the matrix to the
+  verdict. A single tested corner never justifies a whole-boundary ✅. (Origin: a corrupt
+  non-TGB manual artifact was overwritable; the reviewer had tested only the TGB corner.)
+- **Fail-safe is the default for unidentifiable files.** A file that is corrupt, unmarked,
+  or of unknown origin must be treated as the highest-value asset class it could be —
+  reject writes first, ask later. "It was backed up" does not make overwriting acceptable:
+  manual transcription work is not regenerable. (Origin: same finding.)
+- **No platform-semantics claims from memory.** Statements about Windows rename, file
+  locking, timezones, or similar must cite the actual call chain (e.g. Node → libuv
+  `MoveFileExW(MOVEFILE_REPLACE_EXISTING)`) or be stated as conditional with a minimal
+  production smoke test attached. Never grade a design "safe" on recalled platform
+  behavior. (Origin: a redundant rename-away step was endorsed as "Windows-safe" and had
+  actually introduced a crash window.)
+- **Worst-case composition before severity grading.** For every behavioral change found,
+  answer "what is the worst legitimate system state this composes with" before assigning
+  severity. A fact filed as a wording nit by one reviewer was correctly graded red by
+  another via exactly this step. (Origin: strict artifact validity silently blocking a
+  whole day's combined rebuild when composed with a protected wrong-day source.)
+- **Adversarial cases become repository tests.** Any case that demonstrated a defect
+  during review must be committed under `tests/` by the fixing party as a regression
+  lock. Reviewer-side adversarial scripts die with the session; tests do not.
+- **Second-round reviewers replay the other reviewer's first-round cases** and confirm
+  reproduction or state the difference. A payload-shape mistake in one reviewer's fixture
+  survived a round because nobody re-ran it.
+
 ## Recovery From A Stalled Task
 
 1. Identify the last completed command or stage.

@@ -10755,3 +10755,25 @@ Deployment:
 Notes for next agent:
 - PR `#284` 已完成，不要重复部署，也不要因 5 份旧 TGB 顶层 `count` 缺失而重建人工库。
 - 下一阶段仍是独立 P1：先做只读影子 health manifest 和 30 日新旧判定对账，再讨论替换现有健康面板；不要直接改同步按钮。
+
+---
+
+## 2026-07-26 评审守则入库(Remote Claude)
+
+Owner 在 PR #284 三方评审复盘后要求把教训固化,使后续会话的 agent 自动继承。
+
+Changed:
+- `docs/ops/AGENT_EXECUTION_SOP.md` 新增 "Independent Review Discipline" 一节,六条约束:
+  矩阵式验证后才可给通过、不可识别文件默认 fail-safe、平台语义必须给调用链或标注未验证、
+  定级前先做最坏组合推演、评审实证用例必须固化进 tests/、二轮复审必须重放对方一轮用例。
+  每条都标注了出处(PR #284 评审中真实踩过的坑),不是抽象原则。
+
+Validated:
+- 纯文档变更;`git diff --check` 通过。
+
+Deployment:
+- 无需部署(SOP 只在 Git 侧被 agent 读取)。
+
+Notes for next agent:
+- 你开工必读的 SOP 里现在有这一节;做独立评审时逐条执行,特别是矩阵覆盖表——
+  任何 ✅ 结论必须附"实测/推断/未覆盖"标注。
