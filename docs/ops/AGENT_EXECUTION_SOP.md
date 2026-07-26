@@ -50,6 +50,64 @@ Also avoid printing an entire large API response. Filter it with `jq` or a small
 - Record code work in `docs/DAILY_HANDOFF.md`. Record production state changes in the cloud operation logs as well.
 - Never print or commit secrets, private keys, cookies, user records, raw databases, or captured evidence bundles.
 
+## Independent Review Discipline
+
+Lessons captured from the PR #284 three-party review (2026-07-26). These bind any agent
+performing an independent review in this repository.
+
+- **Matrix verification before any pass verdict.** When a review boundary names a class
+  ("TGB/manual sources", "all generators"), first enumerate the full matrix of
+  asset-class × file-state (healthy / corrupt / wrong-day / unmarked) × write-path,
+  mark every cell as *tested*, *inferred*, or *not covered*, and attach the matrix to the
+  verdict. A single tested corner never justifies a whole-boundary ✅. (Origin: a corrupt
+  non-TGB manual artifact was overwritable; the reviewer had tested only the TGB corner.)
+  For deletion changes the matrix has a second question: not only "is everything removed
+  safe to remove" but "is the removal complete". The strongest known check is an
+  **orphan-set diff**: compute the set of defined-but-never-called functions on the base
+  and on the branch, then compare — orphans eliminated show what the deletion cleaned up,
+  orphans created show what it left behind. This catches both same-class remnants
+  (a sibling subtree never touched) and newly stranded helpers (a survivor whose only
+  caller was deleted); a back-scan of deleted symbols alone catches neither. (Origin:
+  PR #286 deleted the Qwen vision subtree but left a same-class WinRT OCR subtree, and
+  the WinRT removal in turn stranded a helper — the first surfaced only through a full
+  reference sweep, the second only through the orphan-set diff.)
+- **Fail-safe is the default for unidentifiable files.** A file that is corrupt, unmarked,
+  or of unknown origin must be treated as the highest-value asset class it could be —
+  reject writes first, ask later. "It was backed up" does not make overwriting acceptable:
+  manual transcription work is not regenerable. (Origin: same finding.)
+- **No platform-semantics claims from memory.** Statements about Windows rename, file
+  locking, timezones, or similar must cite the actual call chain (e.g. Node → libuv
+  `MoveFileExW(MOVEFILE_REPLACE_EXISTING)`) or be stated as conditional with a minimal
+  production smoke test attached. Never grade a design "safe" on recalled platform
+  behavior. (Origin: a redundant rename-away step was endorsed as "Windows-safe" and had
+  actually introduced a crash window.)
+- **Worst-case composition before severity grading.** For every behavioral change found,
+  answer "what is the worst legitimate system state this composes with" before assigning
+  severity. (Origin: both reviewers saw the same underlying change — strict artifact
+  validity feeding sync readiness. The reviewer who stopped at the observation filed it
+  as a boundary-wording correction plus an ops note, and never saw the worst case at all;
+  the reviewer who ran the composition forward — protected wrong-day required source →
+  whole day's combined rebuild silently blocked — correctly graded it red. The composition
+  step, not the observation, was the difference.)
+- **Adversarial cases become repository tests.** Any case that demonstrated a defect
+  during review must be committed under `tests/` by the fixing party as a regression
+  lock. Reviewer-side adversarial scripts die with the session; tests do not.
+- **Second-round reviewers replay the other reviewer's first-round cases** and confirm
+  reproduction or state the difference. (Origin: a fixture-shape mistake in an adversarial
+  case silently short-circuited the protection logic under test — the wrong payload shape
+  hit an earlier gate, so the assertion passed without exercising what it claimed to.
+  The author caught it in their own pre-publication re-check; replay exists so that
+  single-party self-checking is never the only line of defense.)
+- **Deferral and non-applicability claims are verified, not accepted.** When the authoring
+  party marks an item as out of scope, unreachable, or deferred ("tests prove there is no
+  caller", "dead code, separate P2"), the reviewer independently confirms the claim —
+  call-graph search, reference sweep, test-coverage inspection — and states the evidence.
+  A cited regression test must itself be read: confirm it covers every symbol claimed, not
+  just one representative. (Origin: a PR #284 deferral cited "existing tests prove no
+  production caller"; independent inspection showed the test locked only one of the two
+  builders, and the follow-up deletion PR #286 was found to have left a third uncovered
+  dead subtree of the same class.)
+
 ## Recovery From A Stalled Task
 
 1. Identify the last completed command or stage.
