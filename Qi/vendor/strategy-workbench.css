@@ -304,32 +304,27 @@ body.view-strategy .ml-col-title small {
   opacity: 1 !important;
 }
 
-/* 命中率随行(2026-07-26 第一步):列头下一行,数字与预判回看同源。
-   Owner 反馈首版 11px + muted 看不清——改为标签中性、数字主角(13.5px 亮色加粗),
-   仍不用金/红(那两色在本页有确认态语义);暂无样本用更淡的 is-empty,不许用 0% 冒充。 */
+/* 命中率随行(2026-07-26,Owner 二次修订:直接进标题行,跟在"××主线预测"后面)。
+   标签中性小字、数字亮色加粗主角(Owner 反馈首版 11px 全灰看不清);
+   仍不用金/红(那两色在本页有确认态语义);暂无样本弱化,不许用 0% 冒充。 */
 body.view-strategy .ml-hitrate {
-  margin: 8px 2px 0;
-  padding: 5px 10px;
-  display: inline-block;
-  border: 1px solid var(--st-line-strong);
-  border-radius: 7px;
-  background: var(--st-panel-2);
+  margin-left: 10px;
+  display: inline;
   color: var(--st-muted);
-  font-size: 12px;
-  font-weight: 640;
+  font-size: 11px;
+  font-weight: 600;
   letter-spacing: .02em;
   cursor: help;
+  white-space: nowrap;
 }
 body.view-strategy .ml-hitrate b {
   color: var(--st-text);
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 820;
   letter-spacing: 0;
 }
 body.view-strategy .ml-hitrate.is-empty {
   color: var(--st-faint);
-  border-color: var(--st-line);
-  border-style: dashed;
   cursor: default;
 }
 

@@ -73,6 +73,9 @@ assert(hitBlock.includes('if (!Number(hr.total))'), '零样本分支必须在渲
 assert(/if \(!Number\(hr\.total\)\)[^;]*暂无样本/.test(hitBlock), '零样本分支必须渲染"暂无样本"文案');
 assert(!/0%/.test(hitBlock), 'hitRateLine 块内禁止出现任何字面 0%(动态率由数据渲染,静态 0% 即伪造)');
 assert(html.includes('ml-hitrate is-empty'), '暂无样本使用弱化样式');
+// Owner 二次修订:结果直接进标题行——命中率必须渲染在列标题 span 内部,与"××主线预测"同行
+assert(html.includes('<span>${escapeHTML(title)}${hitRateLine(srcKey)}</span>'), '双列命中率位于列标题行内');
+assert(html.includes('<span>今日主线榜${overallHitLine}</span>'), '单列整体命中率位于主标题行内');
 // 单列兼容路径同样受三态约束
 const overallBlock = html.slice(html.indexOf('const overallHitLine'), html.indexOf('const cards = lines.slice'));
 assert(/if \(!Number\(hr\.total\)\)[^;]*暂无样本/.test(overallBlock) && !/0%/.test(overallBlock),
@@ -80,6 +83,6 @@ assert(/if \(!Number\(hr\.total\)\)[^;]*暂无样本/.test(overallBlock) && !/0%
 
 // ---- 5. CSS 与缓存版本 ----
 assert(css.includes('body.view-strategy .ml-hitrate {') && css.includes('.ml-hitrate.is-empty'), '命中率行样式存在');
-assert(html.includes('strategy-workbench.css?v=20260726b'), 'CSS 缓存版本已升号');
+assert(html.includes('strategy-workbench.css?v=20260726c'), 'CSS 缓存版本已升号');
 
 console.log('strategy hit-rate display checks passed');
