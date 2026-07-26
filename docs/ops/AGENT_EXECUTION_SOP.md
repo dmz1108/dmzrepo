@@ -80,8 +80,20 @@ performing an independent review in this repository.
   during review must be committed under `tests/` by the fixing party as a regression
   lock. Reviewer-side adversarial scripts die with the session; tests do not.
 - **Second-round reviewers replay the other reviewer's first-round cases** and confirm
-  reproduction or state the difference. A payload-shape mistake in one reviewer's fixture
-  survived a round because nobody re-ran it.
+  reproduction or state the difference. (Origin: a fixture-shape mistake in an adversarial
+  case silently short-circuited the protection logic under test — the wrong payload shape
+  hit an earlier gate, so the assertion passed without exercising what it claimed to.
+  The author caught it in their own pre-publication re-check; replay exists so that
+  single-party self-checking is never the only line of defense.)
+- **Deferral and non-applicability claims are verified, not accepted.** When the authoring
+  party marks an item as out of scope, unreachable, or deferred ("tests prove there is no
+  caller", "dead code, separate P2"), the reviewer independently confirms the claim —
+  call-graph search, reference sweep, test-coverage inspection — and states the evidence.
+  A cited regression test must itself be read: confirm it covers every symbol claimed, not
+  just one representative. (Origin: a PR #284 deferral cited "existing tests prove no
+  production caller"; independent inspection showed the test locked only one of the two
+  builders, and the follow-up deletion PR #286 was found to have left a third uncovered
+  dead subtree of the same class.)
 
 ## Recovery From A Stalled Task
 
