@@ -34,6 +34,11 @@ assert(!runtime.includes('RemoteAddress'), 'runtime must not expose remote addre
 assert(installer.includes('/SC MINUTE /MO 5'), 'cleanup must run every five minutes');
 assert(installer.includes('/RU SYSTEM /RL HIGHEST'), 'cleanup task must run as SYSTEM');
 assert(installer.includes('System.Management.Automation.Language.Parser'), 'runtime must pass syntax parsing');
+assert(installer.includes("Get-ScheduledTask -TaskName $taskName -TaskPath '\\' -ErrorAction SilentlyContinue"), 'a missing task must be a normal first-install state');
+assert(!installer.includes('schtasks.exe /Query'), 'first-install detection must not treat a missing task as a native-command error');
+assert(installer.includes('Export-ScheduledTask'), 'an existing task must be backed up before replacement');
+assert(installer.includes('Register-ScheduledTask'), 'rollback must restore a backed-up task');
+assert(installer.includes('Unregister-ScheduledTask'), 'rollback must remove a newly-created task');
 assert(installer.includes("principal -notin @('SYSTEM', 'S-1-5-18')"), 'installer must verify SYSTEM principal');
 assert(installer.includes("$interval -ne 'PT5M'"), 'installer must verify five-minute recurrence');
 assert(installer.includes('task registration was rolled back'), 'installer must roll task registration back');
