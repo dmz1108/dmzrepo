@@ -61,6 +61,8 @@ eval(extractFn('strategyMainlineActualFamilyRanking'));
 eval(extractFn('normalizeReviewFirstLimitTime'));
 eval(extractFn('strategyMainlineExpectedStarTransitions'));
 eval(extractFn('strategyMainlineChinaEventTimeMs'));
+eval(extractFn('strategyMainlineTradingMinutesBetween'));
+eval(extractFn('strategyMainlineLeadAssessment'));
 eval(extractFn('strategyMainlineLeadSample'));
 eval(extractFn('strategyMedianNumber'));
 eval(extractFn('strategyMainlineReserveStarOutcomes'));   // 三要件预备层盘后结果(#201)
@@ -131,6 +133,15 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
     && strategyMainlineLeadSample('2026-07-09', legacyTransitions,
       finalLimitDb([{ code: '002396', firstLimitTime: 131000 }])) === null,
   '领先时长不采信仅从旧最终快照反推的 expected，必须有首次事件轨迹');
+  const eventMs = value => strategyMainlineChinaEventTimeMs('2026-07-09', value);
+  A(strategyMainlineTradingMinutesBetween('2026-07-09', eventMs('09:40:00'), eventMs('11:10:00')) === 90,
+    '领先时长同在上午时等于自然分钟');
+  A(strategyMainlineTradingMinutesBetween('2026-07-09', eventMs('13:10:00'), eventMs('14:40:00')) === 90,
+    '领先时长同在下午时等于自然分钟');
+  A(strategyMainlineTradingMinutesBetween('2026-07-09', eventMs('11:00:00'), eventMs('13:30:00')) === 60,
+    '领先时长跨午休只累计可交易60分钟，不虚增90分钟');
+  A(strategyMainlineTradingMinutesBetween('2026-07-09', eventMs('09:20:00'), eventMs('09:30:00')) === 0,
+    '开盘前至一字板首次封板按可交易时间收敛为0分钟');
 
   // ---------- 夹具时间线(TODAY=07-12 周日,全部为已收盘历史日) ----------
   // 07-02(午后,有效):明星 expected,终盘涨停库【缺失】→ sealStatus=noData、sealedSameDay=null(④);
@@ -267,9 +278,9 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
     '③命中真实第一家族的最终快照允许显示 confirmed 明星');
   A(d9.expectedStars.length === 1 && d9.expectedStars[0].sealStatus === 'sealed'
     && d9.expectedStars[0].confirmedBy === 'final-limit-up-db', '③expected→confirmed 轨迹保留确认依据并计封板成功');
-  A(d9.mainlineLead?.leadMinutes === 210 && d9.mainlineLead.firstLimitTime === '13:10:00'
+  A(d9.mainlineLead?.leadMinutes === 120 && d9.mainlineLead.firstLimitTime === '13:10:00'
     && d9.mainlineLead.confirmedAt === '2026-07-09T05:10:00.000Z',
-  '③领先时长使用同股真实首次封板时间，不使用盘后15:30入库时间');
+  '③领先时长使用同股真实首次封板并剔除午休，不使用盘后15:30入库时间');
   A(d3.star.predictLevel === 'expected' && d3.star.sealStatus === 'notSealed' && d3.star.sealedSameDay === false
     && d3.mainlineStarQualified === null,
     '③expected+未封且主因不完整 → notSealed 计败，正式主线明星资格保持未知');
@@ -304,7 +315,7 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   //    07-08(已收盘)/07-02/07-03(数据不完整)不计。
   const s = out.stats;
   A(s.mainlineTotal === 4 && s.mainlineTop1Hits === 3, '⑦分母只含有效盘中样本:4 天,top1=3(已收盘/不完整均剔除)');
-  A(s.mainlineLeadSamples === 1 && s.mainlineLeadMedianMinutes === 210,
+  A(s.mainlineLeadSamples === 1 && s.mainlineLeadMedianMinutes === 120,
     '⑦领先时长一来源/一日一个样本，近窗统计取中位数');
   A(s.expectedSealTotal === 2 && s.expectedSealWins === 1 && s.expectedSealRate === 50, '⑦预期明星封板统计:仅 expected 计入 = 1/2(confirmed/active/无level 不计)');
   // 明星/龙头次日胜率也只计有效样本:d6 leader +10% 胜,d9 star +10% 胜,d9 leader -5% 败;
@@ -411,10 +422,10 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   const owner22 = out7.days.find(r => r.day === '2026-07-22');
   A(owner21?.bySource?.eastmoney?.mainlineHitTop1 === true && owner21.mainlineStarQualified === true,
     'Owner:7月21日东财同源命中半导体且有明星 → 正式主线明星资格成立');
-  A(owner21?.bySource?.eastmoney?.mainlineLead?.leadMinutes === 183.6
+  A(owner21?.bySource?.eastmoney?.mainlineLead?.leadMinutes === 93.6
     && out7.stats.bySource.eastmoney.mainlineLeadSamples === 1
-    && out7.stats.bySource.eastmoney.mainlineLeadMedianMinutes === 183.6,
-  'Owner:东财独立统计真实领先时长，7月21日兆易创新为183.6分钟');
+    && out7.stats.bySource.eastmoney.mainlineLeadMedianMinutes === 93.6,
+  'Owner:东财独立统计可交易领先时长，7月21日兆易创新为93.6分钟');
   A(out7.stats.bySource.ths.mainlineLeadSamples === 0
     && out7.stats.bySource.ths.mainlineLeadMedianMinutes === null,
   'Owner:同花顺未命中且无可核验轨迹时保持零样本/null，不借东财数据');
@@ -422,6 +433,41 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
     'Owner:7月22日东财算力未命中且同花顺无主线 → 正式主线明星资格不成立');
   A(owner22?.star?.predictLevel === 'confirmed',
     'Owner:7月22日原始L2确认候选仍保留用于审计，不因正式资格失败而丢证据');
+
+  // ---------- Local Claude #295 阻断修正:首次封板后才出现预期的命中日单独计数 ----------
+  TODAY = '2026-07-24'; TODAY_CLOSED = true;
+  TRADING_DAYS = ['2026-07-23'];
+  const lateTransition = {
+    mainlineKey: 'group:算力AI', mainlineTheme: '算力', code: '002396', name: '星网',
+    firstExpectedAt: '2026-07-23T02:00:00.000Z', confirmedAt: '2026-07-23T07:30:00.000Z',
+    confirmedBy: 'final-limit-up-db', lastLevel: 'confirmed',
+  };
+  PREDICTS['2026-07-23'] = {
+    schemaVersion: 3, sessionPhase: '上午盘', confirmedKey: '',
+    top: [{ key: 'group:算力AI', theme: '算力', star: { code: '002396', name: '星网', level: 'expected' } }],
+    starTransitions: [lateTransition],
+    bySource: {
+      eastmoney: {
+        available: true, hasMainlines: true,
+        top: [{ key: 'group:算力AI', theme: '算力', star: { code: '002396', name: '星网', level: 'expected' } }],
+        candidates: [], starTransitions: [lateTransition],
+      },
+      ths: { available: true, hasMainlines: false, top: [], candidates: [], starTransitions: [] },
+    },
+  };
+  LIMIT_UP['2026-07-23'] = finalLimitDb([{ code: '002396', firstLimitTime: 93000 }]);
+  MAIN_REASON['2026-07-23'] = reasonDb([{ code: '002396', name: '星网', finalBoardTopic: '算力' }]);
+  const out8 = await getStrategyMainlineReview(10);
+  const late23 = out8.days.find(row => row.day === '2026-07-23');
+  A(late23?.mainlineHitTop1 === true && late23.mainlineLead === null
+    && late23.mainlineLeadStatus === 'after-first-limit',
+  '封板后才出现预期的命中日不伪造负数或正数领先时长');
+  A(out8.stats.mainlineLeadSamples === 0 && out8.stats.mainlineLeadMedianMinutes === null
+    && out8.stats.mainlineLeadAfterFirstLimitSamples === 1,
+  '整体统计将封板后识别单独计数，不混入领先中位数');
+  A(out8.stats.bySource.eastmoney.mainlineLeadSamples === 0
+    && out8.stats.bySource.eastmoney.mainlineLeadAfterFirstLimitSamples === 1,
+  '分源统计同样披露封板后识别日，不借另一来源或静默丢弃');
 
   if (process.exitCode) console.error('\nSOME MAINLINE-REVIEW CHECKS FAILED');
   else console.log('\nALL MAINLINE-REVIEW CHECKS PASSED');
