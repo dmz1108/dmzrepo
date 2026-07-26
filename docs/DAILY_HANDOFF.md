@@ -10948,3 +10948,27 @@ Notes for next agent:
 - 云端正式来源和综合库现已修复，不要再次覆盖这两个日期；淘股吧仍是受保护的人工来源。
 - 本阶段只切换管理员验收展示，不改变 `/api/limit-up-main-reason-db/sync?mode=missing&days=30` 的写入语义。下一阶段若要让 manifest 驱动修复，必须另开 PR 并先实现逐项写保护与回退。
 - 证据图片、运行时数据库、认证信息和临时脚本均未进入 Git；云端与本地临时脚本已清理。
+
+## 2026-07-26 - Codex - PR #291 管理员只读健康界面已合并部署
+
+Changed:
+- Local Claude 与 Remote Claude 均在提交 `6f3b44f` 上独立复核并 approved；PR `#291` 以 merge commit `e0b7e0bd8a258a5d429abb168483a06e1d12dc31` 合入 `main`。
+- 仅发布静态管理员页面 `panda-admin.html`，管理员“涨停复盘数据源健康”现以只读 manifest 为唯一显示口径。
+
+Files:
+- `panda-admin.html`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 云端与公网管理员页 SHA-256 均为 `9983047ccd1d066be0e691e4b63f8a44540e1379b1bcc6fbbd3f48d8db8cb9e4`，与合并后的 Git 文件完全一致。
+- 公网 `/admin` 返回 HTTP 200、`cache-control: no-cache`，公网 `/health` 返回 `ok=true`。
+- 管理员鉴权下影子端点发布后复验：HTTP 200、`shadow-read-only`、`writesAllowed=false`、最近 30 个交易日 `healthy=30`，无状态、池成员或身份错配差异。
+- 两份云端运维日志均已追加运行时修复与 PR #291 静态部署记录。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`；回退备份为 `C:\PandaDashboard\_deploy-backups\github-pr291-e0b7e0b-20260726T102419Z`。
+- 静态发布未重启 Node、Caddy、娱乐服务或公司端 L2 worker；未触发来源同步或运行时数据库写入。
+
+Notes for next agent:
+- PR `#291` 已完成并部署，不要重复发布。现阶段健康面板只负责验收，补齐按钮继续沿用旧的显式写入路径。
+- Local Claude 的非阻断建议：后续可把 `refreshOpsCenter()` 的 `Promise.all` 改为局部失败隔离，避免单个健康端点失败连带其他运维卡片；另须在 `2026-12-31` 前补齐 2027 年法定休市日，防止 2027 元旦被误判为交易日。
