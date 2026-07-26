@@ -10890,3 +10890,29 @@ Deployment:
 Notes for next agent:
 - P1 必须先由 Local Claude 与 Remote Claude 独立复核；复核通过前不得接入现有健康面板、同步按钮或自动修复。
 - 30 日差异是调查证据，不是自动覆写授权。TGB 三个代码若纠错，必须另走人工库备份、哈希、受控替换和双日志流程。
+
+## 2026-07-26 - Codex - PR #289 影子健康清单已合并部署
+
+Changed:
+- Local Claude 与 Remote Claude 二轮复核均 approved 后，PR `#289` 以 merge commit `314d98f4d3843388c7219edbc6caa97f8771cbf1` 合入 `main`。
+- 原子部署主服务与新增纯函数模块；依赖模块先落盘，随后替换主服务并重启。
+
+Files:
+- `kpl-stats-server.js`
+- `review-source-health-manifest.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 云端文件 SHA-256 与合并后的 `main` 完全一致：主服务 `e8a62c55c9563a263e7be80a69078a5d7ba9aea6c53c90275f6fa16c7e54d1b1`，纯函数模块 `b885c78dfd82bd26c03bdae0d595dddb2a74bd476c636b1dd313dfef319c9c82`。
+- 主服务 PID `15992 -> 14104`；云端本机及公网 `/health` 均为 `ok=true`，公网 `/kpl`、`/admin` 均返回 HTTP 200。
+- 新 `/api/admin/review-source-health-shadow` 路由已加载，未认证请求返回 HTTP 403 `admin required`。
+- 两份云端运维日志均已追加本次部署记录，临时部署目录已删除。
+
+Deployment:
+- 已部署到 `C:\PandaDashboard`，仅重启计划任务 `Panda Dashboard Server`。
+- 回退备份：`C:\PandaDashboard\_deploy-backups\github-pr289-314d98f-20260726T083047Z`。
+- 未接入现有数据源健康 UI 或同步按钮；未触发来源同步、综合库重建或任何运行时数据库写入；未重启 Caddy、娱乐服务或公司端 L2 worker。
+
+Notes for next agent:
+- PR `#289` 已完成并部署，不要重复发布。
+- 当前端点仍是 P1 影子观察层。接 UI、改变健康判定或驱动自动修复必须另开阶段和独立评审。
