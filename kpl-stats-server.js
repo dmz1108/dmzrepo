@@ -110,7 +110,8 @@ const LIMIT_UP_MAIN_REASON_EVIDENCE_DIR = path.join(__dirname, 'kpl-limitup-main
 const LIMIT_UP_MAIN_REASON_QUALITY_DIR = path.join(__dirname, 'kpl-limitup-main-reason-quality');
 const LIMIT_UP_MAIN_REASON_SOURCE_DIR = path.join(__dirname, 'kpl-limitup-main-reason-sources');
 const LIMIT_UP_MAIN_REASON_AUTO_SOURCE_DIR = path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, 'auto');
-const TGB_HUNAN_OCR_CACHE_DIR = path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, 'tgb-hunan-ocr-cache');
+// Cleanup-only path for historical OCR cache files. No producer remains.
+const LEGACY_TGB_HUNAN_OCR_CACHE_DIR = path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, 'tgb-hunan-ocr-cache');
 const TGB_HUNAN_STRUCTURED_SOURCE_DIR = path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, 'tgb-hunan-structured');
 const TGB_HUNAN_RAW_SOURCE_DIR = path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, 'tgb-hunan-raw');
 const JIUYANGONGSHE_STRUCTURED_SOURCE_DIR = path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, 'jiuyangongshe-structured');
@@ -121,7 +122,6 @@ const TONGHUASHUN_API_CANDIDATE_SOURCE_DIR = path.join(LIMIT_UP_MAIN_REASON_SOUR
 const KAIPANLA_FUPANLA_SOURCE_DIR = path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, 'kaipanla-fupanla');
 const EASTMONEY_FPL_LIMIT_REASON_SOURCE_DIR = path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, 'eastmoney-fpl-limit-reason');
 const XUANGUBAO_LIMIT_UP_SOURCE_DIR = path.join(LIMIT_UP_MAIN_REASON_SOURCE_DIR, 'xuangubao-limit-up');
-const WINRT_OCR_SCRIPT = path.join(__dirname, 'winrt-ocr.ps1');
 const EASTMONEY_CONCEPT_DIR = path.join(__dirname, 'eastmoney-concepts-db');
 const EASTMONEY_CONCEPT_BOARD_DIR = path.join(EASTMONEY_CONCEPT_DIR, 'boards');
 const EASTMONEY_CLOSE_DIR = path.join(__dirname, 'eastmoney-close-db');
@@ -424,7 +424,6 @@ const SITE_SYNC_BACKEND_ENTRIES = [
   'strategy-leader-scoring-v3.js',
   'tools/reconstruct-board-fund-flow.js',
   'wind-close-db-sync.py',
-  'winrt-ocr.ps1',
   'package.json',
   'package-lock.json',
 ];
@@ -15344,22 +15343,6 @@ async function fetchTgbHunanReviewArticles(day) {
   return [...new Map(links.map(item => [item.url, item])).values()].slice(0, 3);
 }
 
-function resolvePowerShell() {
-  const systemRoot = process.env.SystemRoot || process.env.windir || '';
-  const bundled = systemRoot ? path.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe') : '';
-  return bundled && fsSync.existsSync(bundled) ? bundled : 'powershell.exe';
-}
-
-function tgbHunanOcrCachePaths(day, imageUrl) {
-  const dir = path.join(TGB_HUNAN_OCR_CACHE_DIR, safePart(isoFromCompactDate(day)));
-  const hash = hashPart(imageUrl);
-  return {
-    dir,
-    imagePath: path.join(dir, `${hash}.png`),
-    jsonPath: path.join(dir, `${hash}.json`),
-  };
-}
-
 function extractTgbReviewImageUrls(html, articleUrl) {
   const urls = [];
   for (const tagMatch of String(html || '').matchAll(/<img\b[^>]*>/gi)) {
@@ -15594,10 +15577,6 @@ function combineBoardAndDetailTopic(boardTopic, detailTopic, fallbackTopic = '')
   return detail || board || fallback || '';
 }
 
-function combineTgbBoardAndDetailTopic(boardTopic, detailTopic, fallbackTopic = '') {
-  return combineBoardAndDetailTopic(boardTopic, detailTopic, fallbackTopic);
-}
-
 function cleanTgbOcrReason(reason) {
   let text = normalizeTgbOcrText(reason)
     .replace(/^[：:]+/u, '')
@@ -15611,233 +15590,6 @@ function cleanTgbOcrReason(reason) {
   if (/[^\u4e00-\u9fa5A-Za-z0-9.+\-+/]/u.test(text)) return '';
   if (text.length > 80) text = text.slice(0, 80);
   return text;
-}
-
-function clusterOcrWordsByLine(words) {
-  const normalized = (words || [])
-    .map(word => ({
-      text: String(word?.text || '').trim(),
-      x: Number(word?.x || 0),
-      y: Number(word?.y || 0),
-      w: Number(word?.w || 0),
-      h: Number(word?.h || 0),
-    }))
-    .filter(word => word.text && Number.isFinite(word.x) && Number.isFinite(word.y))
-    .map(word => ({ ...word, cy: word.y + Math.max(1, word.h) / 2 }))
-    .sort((a, b) => a.cy - b.cy || a.x - b.x);
-  const groups = [];
-  for (const word of normalized) {
-    const last = groups[groups.length - 1];
-    if (!last || Math.abs(word.cy - last.cy) > 11) {
-      groups.push({ cy: word.cy, words: [word] });
-      continue;
-    }
-    last.words.push(word);
-    last.cy = (last.cy * (last.words.length - 1) + word.cy) / last.words.length;
-  }
-  return groups
-    .map(group => ({
-      y: group.cy,
-      words: group.words.sort((a, b) => a.x - b.x),
-    }))
-    .sort((a, b) => a.y - b.y);
-}
-
-function ocrLineText(words) {
-  return normalizeTgbOcrText((words || []).sort((a, b) => a.x - b.x).map(word => word.text).join(''));
-}
-
-function parseTgbOcrHeader(lineText) {
-  const text = normalizeTgbOcrText(lineText);
-  if (!text.includes('只') || !text.includes('亿') || /\d{6}/.test(text)) return '';
-  if (/炸板|开板|跌停/u.test(text)) return '';
-  const bracketMatch = text.match(/[【〖\[(（]?([A-Za-z0-9\u4e00-\u9fa5《》（）()]{1,24})[】〗\])）](\d{1,3})只/u);
-  const looseMatch = bracketMatch || text.match(/^([A-Za-z0-9\u4e00-\u9fa5《》（）()]{2,18})(\d{1,3})只[\d.]+亿/u);
-  return cleanTgbOcrTopic(looseMatch?.[1] || '');
-}
-
-function extractNameFromOcrRow(words) {
-  return normalizeTgbOcrText((words || [])
-    .filter(word => word.x >= 78 && word.x <= 190)
-    .sort((a, b) => a.x - b.x)
-    .map(word => word.text)
-    .join(''))
-    .replace(/股份$/u, '股份')
-    .trim();
-}
-
-function extractTgbHunanOcrRowsFromWords(words, stocks, sourceMeta) {
-  const stockNameByCode = new Map((stocks || [])
-    .map(stock => [normalizeReasonSourceCode(stock?.code), String(stock?.name || '').trim()])
-    .filter(([code, name]) => code && name));
-  const rows = [];
-  let currentTopic = '';
-  for (const line of clusterOcrWordsByLine(words)) {
-    const lineText = ocrLineText(line.words);
-    const headerTopic = parseTgbOcrHeader(lineText);
-    if (headerTopic) {
-      currentTopic = headerTopic;
-      continue;
-    }
-    const codeWord = line.words.find(word => word.x <= 82 && /^\d{6}$/.test(String(word.text || '').trim()));
-    const code = normalizeReasonSourceCode(codeWord?.text);
-    if (!code || !currentTopic) continue;
-    if (!stockNameByCode.has(code)) continue;
-    const reason = cleanTgbOcrReason(line.words
-      .filter(word => word.x >= 300)
-      .sort((a, b) => a.x - b.x)
-      .map(word => word.text)
-      .join(''));
-    if (!reason) continue;
-    const name = stockNameByCode.get(code) || extractNameFromOcrRow(line.words);
-    if (!name) continue;
-    const rawTopic = combineTgbBoardAndDetailTopic(currentTopic, reason);
-    rows.push({
-      code,
-      name,
-      source: 'review/tgb-hunan-ocr',
-      primaryRawTopic: rawTopic,
-      primaryTopic: canonicalTopicName(rawTopic),
-      reasonText: `${currentTopic}: ${name} - ${reason}`,
-      reasonHeadline: sourceMeta.title || currentTopic,
-      confidence: 0.96,
-      url: sourceMeta.url,
-      title: sourceMeta.title,
-      imageUrl: sourceMeta.imageUrl,
-      boardTopic: currentTopic,
-      detailReason: reason,
-      matchType: 'structured-row',
-      reasonQuality: 'clear',
-      qualityNote: 'OCR识别到TGB横向板块、股票代码和右侧个股细分原因，按板块+个股原因入库',
-    });
-  }
-  return rows;
-}
-
-function stockFallbackTopic(stock) {
-  return mainReasonTokenList(stock?.reason)
-    .map(token => cleanTgbOcrTopic(token) || cleanReviewTopic(token))
-    .find(Boolean) || 'TGB复盘';
-}
-
-function tgbLineTopic(lineWords, stock) {
-  const rightText = ocrLineText((lineWords || []).filter(word => Number(word.x || 0) >= 300));
-  const fullText = ocrLineText(lineWords || []);
-  return cleanTgbOcrTopic(rightText) || cleanTgbOcrTopic(fullText) || stockFallbackTopic(stock);
-}
-
-function extractTgbHunanOcrRowsByCode(words, stocks, sourceMeta) {
-  const stockByCode = new Map((stocks || [])
-    .map(stock => [normalizeReasonSourceCode(stock?.code), stock])
-    .filter(([code, stock]) => code && stock?.name));
-  const rows = [];
-  const seen = new Set();
-  let currentTopic = '';
-  for (const line of clusterOcrWordsByLine(words)) {
-    const lineText = ocrLineText(line.words);
-    const headerTopic = parseTgbOcrHeader(lineText);
-    if (headerTopic) {
-      currentTopic = headerTopic;
-      continue;
-    }
-    const codes = [...new Set([...lineText.matchAll(/\d{6}/g)].map(match => normalizeReasonSourceCode(match[0])))];
-    for (const code of codes) {
-      const stock = stockByCode.get(code);
-      if (!stock || seen.has(code)) continue;
-      const rightText = ocrLineText((line.words || []).filter(word => Number(word.x || 0) >= 300));
-      const readableTopic = cleanTgbOcrTopic(rightText);
-      const fallbackTopic = stockFallbackTopic(stock);
-      const detailReason = cleanTgbOcrReason(rightText);
-      const topic = combineTgbBoardAndDetailTopic(currentTopic, readableTopic || detailReason, fallbackTopic);
-      const reasonQuality = readableTopic || detailReason ? (currentTopic ? 'weak' : 'fallback') : 'fallback';
-      seen.add(code);
-      rows.push({
-        code,
-        name: String(stock.name || '').trim(),
-        source: 'review/tgb-hunan-ocr',
-        primaryRawTopic: topic,
-        primaryTopic: canonicalTopicName(topic),
-        reasonText: rightText && rightText !== topic
-          ? `${topic}: ${stock.name} - ${rightText}`
-          : `${topic}: ${stock.name}`,
-        reasonHeadline: sourceMeta.title || topic,
-        confidence: readableTopic ? 0.84 : 0.74,
-        url: sourceMeta.url,
-        title: sourceMeta.title,
-        imageUrl: sourceMeta.imageUrl,
-        boardTopic: currentTopic,
-        detailReason,
-        ocrFallback: true,
-        matchType: currentTopic ? 'code-with-board' : 'code',
-        reasonQuality,
-        qualityNote: readableTopic
-          ? 'OCR按股票代码命中，并结合最近的TGB横向板块标题和右侧个股文字，但未通过完整结构化行校验'
-          : (currentTopic
-            ? 'OCR按股票代码命中，并结合最近的TGB横向板块标题；右侧个股细分原因不清晰'
-            : 'OCR只命中股票代码，中文主因未清晰识别，使用涨停底库原因兜底'),
-      });
-    }
-  }
-  return rows;
-}
-
-async function runWinRtOcr(imagePath) {
-  if (!fsSync.existsSync(WINRT_OCR_SCRIPT)) throw new Error('missing winrt-ocr.ps1');
-  const { stdout } = await execFileAsync(resolvePowerShell(), [
-    '-NoProfile',
-    '-ExecutionPolicy',
-    'Bypass',
-    '-File',
-    WINRT_OCR_SCRIPT,
-    '-ImagePath',
-    imagePath,
-  ], {
-    cwd: __dirname,
-    windowsHide: true,
-    timeout: 120 * 1000,
-    maxBuffer: 16 * 1024 * 1024,
-    encoding: 'utf8',
-  });
-  return JSON.parse(String(stdout || '').trim());
-}
-
-async function readTgbHunanOcrImage(day, articleUrl, imageUrl) {
-  const paths = tgbHunanOcrCachePaths(day, imageUrl);
-  try {
-    return JSON.parse(await fs.readFile(paths.jsonPath, 'utf8'));
-  } catch (err) {
-    if (err.code !== 'ENOENT') throw err;
-  }
-  await fs.mkdir(paths.dir, { recursive: true });
-  if (!fsSync.existsSync(paths.imagePath)) {
-    await fs.writeFile(paths.imagePath, await fetchSourceBuffer(imageUrl, articleUrl));
-  }
-  const result = await runWinRtOcr(paths.imagePath);
-  const payload = {
-    version: 1,
-    day: isoFromCompactDate(day),
-    articleUrl,
-    imageUrl,
-    savedAt: new Date().toISOString(),
-    width: result.width,
-    height: result.height,
-    language: result.language,
-    text: result.text,
-    words: result.words || [],
-  };
-  await fs.writeFile(paths.jsonPath, JSON.stringify(payload, null, 2), 'utf8');
-  return payload;
-}
-
-async function fetchTgbHunanOcrRows(day, stocks) {
-  return {
-    rows: [],
-    sourceErrors: [{
-      source: 'review/tgb-hunan-ocr',
-      skipped: true,
-      error: 'TGB Hunan OCR is disabled; official TGB data only comes from structured red-board source files',
-    }],
-  };
 }
 
 async function fetchTonghuashunReviewArticles(day) {
@@ -19881,7 +19633,7 @@ async function cleanupOldLocalData(options = {}) {
     ...closeDbCleanupOptions,
     keepNames: new Set(['_tmp']),
   }));
-  results.push(await cleanupDateNamedEntries(TGB_HUNAN_OCR_CACHE_DIR, retentionDays, nowDay, dateCleanupOptions));
+  results.push(await cleanupDateNamedEntries(LEGACY_TGB_HUNAN_OCR_CACHE_DIR, retentionDays, nowDay, dateCleanupOptions));
   results.push(await cleanupDateNamedEntries(TGB_HUNAN_STRUCTURED_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));
   results.push(await cleanupDateNamedEntries(TGB_HUNAN_RAW_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));
   results.push(await cleanupDateNamedEntries(KAIPANLA_FUPANLA_SOURCE_DIR, retentionDays, nowDay, dateCleanupOptions));

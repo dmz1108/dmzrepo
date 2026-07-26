@@ -48,10 +48,16 @@ for (const removedSymbol of [
   'buildTgbHunanStructuredFromVision',
   'readTgbQwenOcrConfig',
   'TGB_VISION_ALLOW_QWEN',
+  'readTgbHunanOcrImage',
+  'runWinRtOcr',
+  'fetchTgbHunanOcrRows',
+  'WINRT_OCR_SCRIPT',
 ]) {
   assert(!server.includes(removedSymbol), `legacy TGB Qwen/vision code must stay deleted: ${removedSymbol}`);
 }
 assert(!/\bqwen\b/i.test(server), 'main server must not retain an unused Qwen TGB implementation');
+assert(!/\bwinrt\b/i.test(server), 'main server must not retain an unused WinRT TGB OCR implementation');
+assert(!fs.existsSync(path.join(root, 'winrt-ocr.ps1')), 'the unused WinRT OCR helper script must stay deleted');
 
 const structuredReader = functionSource('fetchTgbHunanStructuredRows');
 assert(structuredReader.includes('官方复盘原图人工逐行结构化'), 'TGB structured rows must identify the manual official-image source');

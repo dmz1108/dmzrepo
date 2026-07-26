@@ -10759,18 +10759,20 @@ Notes for next agent:
 ## 2026-07-25 - Codex - 删除 TGB Qwen/vision 不可达正式写入链路
 
 Changed:
-- 删除两个无生产调用方的 TGB vision builder，以及仅由它们引用的 Qwen OCR、视觉识别、图片解析、校验和正式文件直写子树。
+- 删除两个无生产调用方的 TGB vision builder，以及仅由它们引用的 Qwen OCR、WinRT OCR、视觉识别、图片解析、校验和正式文件直写子树。
 - 保留官方文章与原图 raw evidence 抓取、人工逐行转录正式库、旧 `--tgb-vision-sync` raw-evidence 兼容别名；不改变每日手动 TGB 流程。
 - TGB 正式来源说明统一为“官方复盘原图人工逐行结构化”，不再声称由视觉识别生成。
-- manual-only 回归测试现在要求旧 builder、Qwen 配置入口和 `TGB_VISION_ALLOW_QWEN` 保持彻底不存在。
+- manual-only 回归测试现在要求旧 builder、Qwen 配置入口、WinRT OCR 执行链和 `TGB_VISION_ALLOW_QWEN` 保持彻底不存在。
 
 Files:
 - `kpl-stats-server.js`
 - `tests/tgb-manual-only.test.js`
+- `winrt-ocr.ps1`（删除）
+- `docs/FILE_INVENTORY.json`
 - `docs/DAILY_HANDOFF.md`
 
 Validated:
-- 删除前逐个核对调用图；两个顶层 builder 均无生产调用，其下被删除函数只在同一不可达子树内部互相引用。
+- 删除前逐个核对调用图；两个顶层 builder 与 WinRT OCR 执行链均无生产调用，被删除函数只在不可达子树内部互相引用。
 - `node --check kpl-stats-server.js`、TGB manual-only、复盘来源保护与 P0 健康专项测试通过。
 - 全仓 `66/66` 个 `tests/*.test.js` 文件通过，`git diff --check` 通过。
 
