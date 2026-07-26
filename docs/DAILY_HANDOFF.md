@@ -11282,3 +11282,44 @@ Deployment:
 Notes for next agent:
 - 安装成功后必须核验计划任务为 SYSTEM、周期 `PT5M`，并核验状态文件由计划任务实际更新；
   不能只以 `schtasks /Create` 返回成功作为完成标准。
+
+## 2026-07-26 - Codex - SSH 并发饱和治理完成
+
+Changed:
+- 根因确认并分层处理：单一来源的大量未认证连接占满旧
+  `MaxStartups 10:30:100`，Win32 OpenSSH 9.5 同时遗留失去父进程的
+  `sshd.exe -y` 未认证子进程。
+- 有效配置已收紧为 `LoginGraceTime 20`、`MaxAuthTries 3`、
+  `MaxStartups 20:30:60`、`PerSourceMaxStartups 3`、
+  `KbdInteractiveAuthentication no`；公钥认证保持开启、密码认证保持关闭。
+- `Panda SSH Orphan Cleanup` 已安装为 SYSTEM 计划任务，每 5 分钟运行。它只清理父进程
+  不存在、仍为 `sshd.exe -y` 且存活至少 60 秒的进程，不触碰监听器、`-R`、`-z`，
+  不重启 `sshd`。
+
+Files:
+- 本条只更新 `docs/DAILY_HANDOFF.md`；实现文件已由 PR #297、#298、#299、#300 合入。
+
+Validated:
+- 加固前只读诊断 run `30208864143`：87 个 `sshd` 进程、81 条 Established 连接，
+  单一来源占 85 条，近 15 分钟 121 次认证失败。
+- 配置加固 run `30209256211` 成功；加固后 GitHub 新连接诊断
+  run `30209440991` 从约 2 分 38 秒缩短至约 16 秒。
+- 清理运行时部署 run `30210006671` 成功，`restart=none`。
+- 修复首次安装误判后，计划任务安装 run `30210246972` 成功：首轮检查并清理 55 个
+  合格孤立 `-y`，清理后合格孤儿为 0；任务身份 SYSTEM、周期 `PT5M`、实际运行结果 0。
+- 增强诊断 run `30210321844` 成功：`sshd` 进程降至 8，服务 Running、监听器 1；
+  随后自然调度再次检查 3 个孤儿，清理 2 个超过 60 秒的进程，只保留 1 个年轻进程，
+  `skippedChanged=0`，证明周期任务和 60 秒保护窗口均生效。
+- 家里主机全新 SSH 握手约 0.36 秒；`https://market.dreamerqi.com/health` 返回
+  HTTP 200 / `{"ok":true}`。
+
+Deployment:
+- 已部署并生效。云端两份操作日志由安装器写入 run `30210246972` 的成功记录。
+- 本次没有重启主站、Caddy、娱乐服务或公司端 L2 worker；任务清理也不重启 `sshd`。
+
+Notes for next agent:
+- 状态文件：
+  `C:\PandaDashboard\ops\ssh-orphan-cleanup-status.json`。持续遭遇新握手时，
+  `remainingOrphans` 可短暂为正；只有 `skippedYoung` 对应的未满 60 秒进程属于预期。
+- 若再次出现握手饱和，先运行只读 `diagnose-ssh-concurrency.ps1`，不要扩大
+  `MaxStartups`，也不要按名称批量结束全部 `sshd.exe`。
