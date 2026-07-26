@@ -83,9 +83,12 @@ performing an independent review in this repository.
   actually introduced a crash window.)
 - **Worst-case composition before severity grading.** For every behavioral change found,
   answer "what is the worst legitimate system state this composes with" before assigning
-  severity. A fact filed as a wording nit by one reviewer was correctly graded red by
-  another via exactly this step. (Origin: strict artifact validity silently blocking a
-  whole day's combined rebuild when composed with a protected wrong-day source.)
+  severity. (Origin: both reviewers saw the same underlying change — strict artifact
+  validity feeding sync readiness. The reviewer who stopped at the observation filed it
+  as a boundary-wording correction plus an ops note, and never saw the worst case at all;
+  the reviewer who ran the composition forward — protected wrong-day required source →
+  whole day's combined rebuild silently blocked — correctly graded it red. The composition
+  step, not the observation, was the difference.)
 - **Adversarial cases become repository tests.** Any case that demonstrated a defect
   during review must be committed under `tests/` by the fixing party as a regression
   lock. Reviewer-side adversarial scripts die with the session; tests do not.
