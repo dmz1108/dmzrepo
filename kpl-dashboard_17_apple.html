@@ -9925,7 +9925,7 @@
     }
   }
 </style>
-<link href="/vendor/strategy-workbench.css?v=20260726d" rel="stylesheet">
+<link href="/vendor/strategy-workbench.css?v=20260726e" rel="stylesheet">
 <link href="/vendor/review-workbench.css?v=20260718d" rel="stylesheet">
 <link href="/vendor/realtime-workbench.css?v=20260720" rel="stylesheet">
 </head>
@@ -13272,8 +13272,50 @@ function strategyMainlineLeadDurationText(value) {
   const rest = minutes % 60;
   return `${hours}时${rest ? `${rest}分` : ''}`;
 }
+function strategyMainlineActionTimeText(value) {
+  if (!value) return '';
+  try {
+    return new Date(value).toLocaleTimeString('zh-CN', {
+      timeZone: 'Asia/Shanghai',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  } catch (_) { return ''; }
+}
+function strategyMainlineStarActionPresentation(star, actionIsToday, showAdmin) {
+  const s = star || {};
+  const missed = s.expectedOutcome === 'not-confirmed';
+  const confirmationIsLive = s.confirmedBy === 'live-l2-scan' || s.actionState === 'buy-point-confirmed';
+  const confirmationIsReviewOnly = !confirmationIsLive;
+  const confirmedTime = confirmationIsLive
+    ? strategyMainlineActionTimeText(s.confirmedAt || s.observedAt)
+    : '';
+  const adminState = missed
+    ? '未兑现'
+    : (s.level === 'confirmed'
+      ? (actionIsToday && !confirmationIsReviewOnly
+        ? `封板买点${confirmedTime ? ` ${confirmedTime}` : ''}`
+        : `当日确认${confirmedTime ? ` ${confirmedTime}` : ''}`)
+      : (actionIsToday ? '仅观察' : '当日观察'));
+  return {
+    stateText: showAdmin
+      ? adminState
+      : (missed ? '未兑现' : (s.level === 'confirmed' ? '已确认' : '预期')),
+    actionClass: showAdmin
+      ? (s.level === 'confirmed'
+        ? (actionIsToday && !confirmationIsReviewOnly ? ' is-buy' : ' is-review')
+        : ' is-watch')
+      : '',
+    confirmationIsLive,
+    confirmationIsReviewOnly,
+  };
+}
 function renderStrategyMainlinesHTML(d) {
   const lines = (d && d.mainlines) || [];
+  const actionDay = String((d && d.day) || state.date || '');
+  const actionIsToday = actionDay === chinaToday();
+  const showAdminActionSemantics = !!state.adminLoggedIn;
   const usingFallbackDay = d && d.requestedDay && d.day && d.requestedDay !== d.day;
   const dayNote = usingFallbackDay ? ` · 数据日 ${escapeHTML(d.day)}` : '';
   const realtimeDay = d && d.sourceDay && d.sourceDay.realtime;
@@ -13377,6 +13419,7 @@ function renderStrategyMainlinesHTML(d) {
     const combinedBadge = badgeText
       ? `<span class="ml-stage ml-stage-${escapeHTML(badgeStageKey || 'confirm')}" title="${escapeHTML(badgeTitle)}">${escapeHTML(badgeText)}</span>`
       : '';
+    const isFormalActionCard = m.qiTier === 'formal';
     const newThemeBadge = m.isNewTheme ? `<span class="ml-newtheme" title="首日新题材:暂无历史主因属正常,以盘面与资金信号为准">首日</span>` : '';
     const historicalPredictionBadge = predictionSummaryOnly
       ? '<span class="ml-newtheme" title="原收盘快照过早冻结；本卡只读恢复当日已经落盘的主线、明星与龙头，不补造缺失盘面数据">历史预测档案</span>'
@@ -13413,7 +13456,10 @@ function renderStrategyMainlinesHTML(d) {
     const leaderChips = (m.leaders || []).slice(0, 3).map((l, idx) => {
       const lb = Array.isArray(l.basis) ? l.basis.slice(0, idx === 0 ? 3 : 2).join(' · ') : '';
       const marks = `${idx === 0 ? '👑' : ''}${starCodeSet.has(String(l.code || '')) ? '⭐' : ''}`;
-      return `<span class="ml-stock ml-leaderstock${idx === 0 ? ' top' : ''}" title="${escapeHTML((l.basis || []).join(' · '))}">${marks}${escapeHTML(l.name || l.code || '')}<i>${escapeHTML(lb)}</i></span>`;
+      const actionTag = showAdminActionSemantics && isFormalActionCard && idx === 0
+        ? `<em class="ml-action-tag is-leader">${actionIsToday ? '主线内随时' : '当日龙头'}</em>`
+        : '';
+      return `<span class="ml-stock ml-leaderstock${idx === 0 ? ' top' : ''}" title="${escapeHTML((l.basis || []).join(' · '))}">${marks}${escapeHTML(l.name || l.code || '')}${actionTag}<i>${escapeHTML(lb)}</i></span>`;
     }).join('');
     const leaderRow = leaderChips
       ? `<div class="ml-proof-row"><span class="ml-proof-lbl" title="按10日涨停次数/10日30日涨幅池内排名+主因门槛综合打分,最多3个可能龙头;每次涨停14分不封顶,未板涨幅≥5%加6分,连板与早封仅展示;⭐=同时是明星;10/30日窗口盘中含当日实时、盘后含当日收盘">龙头</span>${leaderChips}</div>`
@@ -13428,15 +13474,21 @@ function renderStrategyMainlinesHTML(d) {
     const starChips = visibleStars
       .map(s => {
         const missed = s.expectedOutcome === 'not-confirmed';
-        const stateText = missed ? '未兑现' : (s.level === 'confirmed' ? '已确认' : '预期');
+        const actionPresentation = strategyMainlineStarActionPresentation(
+          s,
+          actionIsToday,
+          showAdminActionSemantics
+        );
+        const stateText = actionPresentation.stateText;
         const stateClass = s.level === 'confirmed' ? 'confirmed' : 'expected';
+        const actionClass = actionPresentation.actionClass;
         const missedClass = s.expectedOutcome === 'not-confirmed' ? ' missed' : '';
         const leaderMark = leaderCodeSet.has(String(s.code || '')) ? '<em class="ml-star-role">龙头</em>' : '';
         const hasRatios = s.ratios && [s.ratios.activeRatio, s.ratios.passiveRatio, s.ratios.supportRatio]
           .some(value => value != null && value !== '');
         return `<span class="ml-stock ml-starstock ${stateClass}${s.historicalExpected ? ' historical' : ''}${missedClass}" title="${escapeHTML(`${s.firstExpectedAt ? `首次预期 ${s.firstExpectedAt} · ` : ''}L2:主动比${s.ratios?.activeRatio ?? '-'} 被动比${s.ratios?.passiveRatio ?? '-'} 合计比${s.ratios?.supportRatio ?? '-'}` + starMaxBucketAdminInfo(s))}">
           <span class="ml-star-identity"><b class="ml-star-name">${escapeHTML(s.name || s.code || '')}</b>${leaderMark}</span>
-          <strong class="ml-star-state">${stateText}</strong>
+          <strong class="ml-star-state${actionClass}">${stateText}</strong>
           ${hasRatios ? `<span class="ml-star-ratios">
             <span><i>主动</i><b>${s.ratios?.activeRatio ?? '-'}</b></span>
             <span><i>被动</i><b>${s.ratios?.passiveRatio ?? '-'}</b></span>
@@ -13478,6 +13530,26 @@ function renderStrategyMainlinesHTML(d) {
         : l2State === 'not-eligible' ? '未达自动扫描门槛,今日未扫描'
         : '暂无 L2 明星证据')}</span></div>
     </div>`);
+    const hasLiveBuyPoint = visibleStars.some(s =>
+      s.level === 'confirmed' && (s.confirmedBy === 'live-l2-scan' || s.actionState === 'buy-point-confirmed')
+    );
+    const hasReviewOnlyConfirmation = visibleStars.some(s =>
+      s.level === 'confirmed' && !(s.confirmedBy === 'live-l2-scan' || s.actionState === 'buy-point-confirmed')
+    );
+    const actionGuide = showAdminActionSemantics && !predictionSummaryOnly && (visibleStars.length || isFormalActionCard)
+      ? `<div class="ml-action-guide ${
+        !actionIsToday ? 'is-review'
+        : (isFormalActionCard && hasLiveBuyPoint ? 'is-action' : 'is-watch')
+      }"><span class="ml-action-guide-label">策略口径</span><b>${
+        !actionIsToday
+          ? '历史复盘：确认时点只作当日记录，不是当前信号'
+          : (isFormalActionCard && hasLiveBuyPoint
+            ? '可操作仅限：确认明星（封板确认点）· 首位龙头（正式主线有效期）'
+            : (isFormalActionCard && hasReviewOnlyConfirmation
+              ? '收盘补确认只作复盘，不补造盘中买点'
+              : '预期明星仅观察，确认封板前无买点'))
+      }</b></div>`
+      : '';
     const l2Actual = [];
     if (l2Detail.maxNetInflow != null) l2Actual.push(`最高净流入${fmtInflow(l2Detail.maxNetInflow)}`);
     if (l2Detail.maxZt != null) l2Actual.push(`最多涨停${Number(l2Detail.maxZt)}只`);
@@ -13556,6 +13628,7 @@ function renderStrategyMainlinesHTML(d) {
       ${signalStrip}
       ${leaderRow}
       ${starRow}
+      ${actionGuide}
 
       ${reasonLine ? `<div class="ml-reason">${escapeHTML(reasonLine)}</div>` : ''}
       <div class="ml-card-actions">

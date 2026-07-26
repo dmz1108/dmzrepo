@@ -35,6 +35,7 @@ eval(extractFn('strategyMainlineIsStyleBoard'));
 eval(extractFn('strategyMainlineHasQiStarEvidence'));
 eval(extractFn('strategyMainlineHasConfirmedStar'));
 eval(extractFn('strategyMainlineHasQualifiedLeader'));
+eval(extractFn('strategyMainlineStarActionState'));
 eval(extractFn('strategyMainlineReserveReasons'));
 eval(extractFn('strategyMainlineL2RejectReason'));
 eval(extractFn('strategyMainlineApplyL2StarGate'));

@@ -22557,6 +22557,39 @@ function strategyMainlineStarStatus(row) {
   return null;
 }
 
+// 明星操作状态只描述系统已经观察到的事实，不参与明星判定、主线评分或排序。
+// expected 只能观察；实时 L2 首次确认封板才形成盘中确认点；盘后涨停库补确认只用于复盘。
+function strategyMainlineStarActionState(level, confirmedBy = '') {
+  const normalizedLevel = String(level || '').trim();
+  const source = String(confirmedBy || '').trim();
+  if (normalizedLevel === 'expected') return 'watch-only';
+  if (normalizedLevel !== 'confirmed') return 'none';
+  return source === 'live-l2-scan' ? 'buy-point-confirmed' : 'review-confirmed';
+}
+
+function strategyMainlineIsTradingSessionObservation(day, observedAt) {
+  const targetDay = String(day || '').trim();
+  const value = String(observedAt || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDay) || !value) return false;
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return false;
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const map = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  const observedDay = `${map.year}-${map.month}-${map.day}`;
+  const minuteOfDay = Number(map.hour) * 60 + Number(map.minute);
+  return observedDay === targetDay &&
+    ((minuteOfDay >= 9 * 60 + 25 && minuteOfDay <= 11 * 60 + 30) ||
+      (minuteOfDay >= 13 * 60 && minuteOfDay <= 15 * 60));
+}
+
 // 读取主线相关板块当日已有的 L2 扫描结果（只消费，不在这里触发扫描），产出 code -> 明星判定。
 function strategyMainlineCollectStars(boards, day, options = {}) {
   const byCode = new Map();
@@ -22633,11 +22666,19 @@ function strategyMainlineCollectStars(boards, day, options = {}) {
       if (jobDone) completedCoveredCodes.add(code);
       if (byCode.has(code)) continue;
       const star = strategyMainlineStarStatus(row);
+      const observedAt = String(job?.updatedAt || job?.endedAt || row?.priceAsOf || row?.asOf || '').trim();
+      const confirmedBy = star?.level === 'confirmed'
+        ? (strategyMainlineIsTradingSessionObservation(day, observedAt) ? 'live-l2-scan' : 'l2-scan-outside-session')
+        : '';
       if (star) byCode.set(code, {
         ...star,
         code,
         name: String(row?.name || ''),
         boardName: String(boardByPlate.get(plateId)?.name || job.boardName || ''),
+        observedAt: observedAt || null,
+        confirmedAt: star.level === 'confirmed' ? (observedAt || null) : null,
+        confirmedBy,
+        actionState: strategyMainlineStarActionState(star.level, confirmedBy),
       });
     }
   }
@@ -23481,6 +23522,7 @@ function strategyPredictStarTransitions(existingRows, mainlines, observedAt) {
       firstExpectedAt,
       lastSeenAt: String(raw?.lastSeenAt || firstExpectedAt).trim(),
       confirmedAt: String(raw?.confirmedAt || '').trim() || null,
+      confirmedBy: String(raw?.confirmedBy || '').trim(),
       lastLevel: String(raw?.lastLevel || 'expected').trim() || 'expected',
       firstGain: isFiniteNumeric(raw?.firstGain) ? Number(raw.firstGain) : null,
       ratios: raw?.ratios && typeof raw.ratios === 'object' ? raw.ratios : null,
@@ -23510,6 +23552,7 @@ function strategyPredictStarTransitions(existingRows, mainlines, observedAt) {
         firstExpectedAt: observedAt,
         lastSeenAt: observedAt,
         confirmedAt: null,
+        confirmedBy: '',
         lastLevel: 'expected',
         firstGain: isFiniteNumeric(star?.gain) ? Number(star.gain) : null,
         ratios: star?.ratios && typeof star.ratios === 'object' ? star.ratios : null,
@@ -23525,7 +23568,10 @@ function strategyPredictStarTransitions(existingRows, mainlines, observedAt) {
       }
       next.lastSeenAt = observedAt;
       next.lastLevel = level;
-      if (level === 'confirmed' && !next.confirmedAt) next.confirmedAt = observedAt;
+      if (level === 'confirmed' && !next.confirmedAt) {
+        next.confirmedAt = observedAt;
+        next.confirmedBy = String(star?.confirmedBy || 'live-l2-scan').trim() || 'live-l2-scan';
+      }
       byKey.set(key, next);
     }
   }
@@ -23557,6 +23603,7 @@ function strategyMainlineExpectedTransitionMap(predict, source = '') {
       firstExpectedAt,
       lastSeenAt: String(raw?.lastSeenAt || firstExpectedAt).trim(),
       confirmedAt: String(raw?.confirmedAt || '').trim() || null,
+      confirmedBy: String(raw?.confirmedBy || '').trim(),
       lastLevel: String(raw?.lastLevel || 'expected').trim() || 'expected',
       firstGain: isFiniteNumeric(raw?.firstGain) ? Number(raw.firstGain) : null,
       ratios: raw?.ratios && typeof raw.ratios === 'object' ? raw.ratios : null,
@@ -23613,6 +23660,9 @@ function strategyMainlineAttachExpectedHistory(item, transitionMap, sessionPhase
   const historicalStars = history.map(row => {
     const current = currentByCode.get(row.code) || {};
     const confirmed = !!row.confirmedAt || current?.level === 'confirmed';
+    const confirmedBy = String(row.confirmedBy || current?.confirmedBy || '').trim();
+    const confirmedAt = row.confirmedAt ||
+      (current?.level === 'confirmed' ? (current?.confirmedAt || current?.observedAt || null) : null);
     return {
       ...current,
       code: row.code,
@@ -23624,7 +23674,9 @@ function strategyMainlineAttachExpectedHistory(item, transitionMap, sessionPhase
       maxBucket: row.maxBucket || current?.maxBucket || null,
       historicalExpected: true,
       firstExpectedAt: row.firstExpectedAt,
-      confirmedAt: row.confirmedAt,
+      confirmedAt,
+      confirmedBy,
+      actionState: strategyMainlineStarActionState(confirmed ? 'confirmed' : 'expected', confirmedBy),
       expectedOutcome: confirmed ? 'confirmed' : (settled ? 'not-confirmed' : 'pending'),
     };
   });
@@ -26410,7 +26462,14 @@ function strategyMainlineUpgradeStarsWithFinalSeal(items, sealedCodes) {
       return item;
     }
     const upgrade = star => (star?.level === 'expected' && sealedCodes.has(normalizeReasonSourceCode(star?.code)))
-      ? { ...star, level: 'confirmed', label: '明星确认', confirmedBy: 'final-limit-up-db', expectedOutcome: 'confirmed' }
+      ? {
+        ...star,
+        level: 'confirmed',
+        label: '明星确认',
+        confirmedBy: 'final-limit-up-db',
+        actionState: strategyMainlineStarActionState('confirmed', 'final-limit-up-db'),
+        expectedOutcome: 'confirmed',
+      }
       : star;
     return {
       ...item,
