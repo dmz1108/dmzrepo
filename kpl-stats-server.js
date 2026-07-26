@@ -24739,6 +24739,49 @@ async function getStrategyMainlineReview(days = 10) {
   };
 }
 
+// ===== 主线榜命中率随行展示(Owner 2026-07-26 第一步:把回看命中率搬到决策现场) =====
+// 只做展示层搬运:数字与预判回看完全同源(getStrategyMainlineReview 的 stats),不新增口径。
+// 提取为紧凑块,不带逐日明细,避免撑大高频轮询的主线榜响应。
+// 分母为 0 时各 rate 保持 null——前端必须显示"暂无样本",禁止渲染成 0%(不装有数据)。
+function strategyPredictHitRatesCompact(stats, windowDays) {
+  if (!stats) return null;
+  const src = key => ({
+    total: Number(stats.bySource?.[key]?.mainlineTotal || 0),
+    top1Rate: stats.bySource?.[key]?.mainlineTop1Rate ?? null,
+    top3Rate: stats.bySource?.[key]?.mainlineTop3Rate ?? null,
+  });
+  return {
+    windowDays: Number(windowDays) || 0,
+    basis: 'predict-review',       // 口径声明:与预判回看同源,盘后主因库缺失的日子不计分母
+    overall: {
+      total: Number(stats.mainlineTotal || 0),
+      top1Rate: stats.mainlineTop1Rate ?? null,
+      top3Rate: stats.mainlineTop3Rate ?? null,
+      starWinRate: stats.starWinRate ?? null,
+      starTotal: Number(stats.starTotal || 0),
+    },
+    bySource: { eastmoney: src('eastmoney'), ths: src('ths') },
+  };
+}
+// stale-while-revalidate:回看计算含收盘价库/日K读取,不能同步挂在主线榜热路径上。
+// 命中缓存直接返回;过期时后台异步刷新、本次先用旧值(或首轮返回 null,前端静默不显示)。
+const STRATEGY_HIT_RATES_TTL_MS = 10 * 60 * 1000;
+const STRATEGY_HIT_RATES_WINDOW_DAYS = 10;
+const strategyPredictHitRatesCache = { at: 0, value: null, inflight: null };
+function getStrategyPredictHitRatesCached() {
+  const now = Date.now();
+  if (now - strategyPredictHitRatesCache.at > STRATEGY_HIT_RATES_TTL_MS && !strategyPredictHitRatesCache.inflight) {
+    strategyPredictHitRatesCache.inflight = getStrategyMainlineReview(STRATEGY_HIT_RATES_WINDOW_DAYS)
+      .then(review => {
+        strategyPredictHitRatesCache.value = strategyPredictHitRatesCompact(review?.stats, STRATEGY_HIT_RATES_WINDOW_DAYS);
+        strategyPredictHitRatesCache.at = Date.now();
+      })
+      .catch(() => { strategyPredictHitRatesCache.at = Date.now(); })   // 失败也记时间,避免每次轮询都重试重活
+      .finally(() => { strategyPredictHitRatesCache.inflight = null; });
+  }
+  return strategyPredictHitRatesCache.value;
+}
+
 // 最终输出前的预判增强：广度分、动能分、潜力个股、明星股、首日题材、确定性分级都在这一处挂载。
 // trendKeyPrefix(Owner v2 两套独立预测):盘中动能采样必须按来源隔离,否则东财/同花顺同题材共用
 // 同一趋势键,先跑的一边写入基线后,另一边会拿它当基线算 delta,串改两边分数与排名(Codex 二审 P1)。
@@ -28006,8 +28049,13 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/limit-up-main-reason-db/recent-universe') return await getLimitUpMainReasonRecentUniverse(url, req, res);
     if (url.pathname === '/api/limit-up-main-reason-db/pending') return await getLimitUpMainReasonPending(url, req, res);
     if (url.pathname === '/api/limit-up-main-reason-db/hot-themes') return await getLimitUpMainReasonHotThemes(url, req, res);
-    if (url.pathname === '/api/strategy-mainlines') return send(res, 200, await getStrategyMainlinesVisible(url.searchParams.get('day') || chinaNowParts().day)
-      .catch(e => ({ ok: false, error: String(e && e.message || e) })));
+    if (url.pathname === '/api/strategy-mainlines') {
+      const payload = await getStrategyMainlinesVisible(url.searchParams.get('day') || chinaNowParts().day)
+        .catch(e => ({ ok: false, error: String(e && e.message || e) }));
+      // 命中率块只在响应层附加,绝不写入冻结快照文件;缓存未就绪时返回原载荷,前端静默。
+      const predictHitRates = getStrategyPredictHitRatesCached();
+      return send(res, 200, predictHitRates && payload && !payload.error ? { ...payload, predictHitRates } : payload);
+    }
     if (url.pathname === '/api/admin/strategy-realtime-context') return await getStrategyRealtimeContextApi(url, req, res);
     if (url.pathname === '/api/admin/strategy-daily-events') return await getStrategyDailyEventsApi(url, req, res);
     if (url.pathname === '/api/detail-evidence-index') return await getDetailEvidenceIndexApi(url, req, res);

@@ -10916,3 +10916,49 @@ Deployment:
 Notes for next agent:
 - PR `#289` 已完成并部署，不要重复发布。
 - 当前端点仍是 P1 影子观察层。接 UI、改变健康判定或驱动自动修复必须另开阶段和独立评审。
+
+---
+
+## 2026-07-26 主线榜命中率随行展示(Remote Claude,策略页第一步)
+
+Owner 决策:策略页下一步只做"把分源命中率搬到决策现场"。让用户在看预测的同一时刻
+看到这套预测的历史可信度,而不是去回看页翻历史报表。
+
+Changed:
+- `kpl-stats-server.js`
+  - 新增 `strategyPredictHitRatesCompact`(纯提取,与预判回看 stats 同源,零新口径);
+  - 新增 stale-while-revalidate 缓存 `getStrategyPredictHitRatesCached`(TTL 10 分钟,
+    过期后台刷新不阻塞热路径——回看计算含收盘价库/日K读取,不能同步挂在主线榜轮询上);
+  - `/api/strategy-mainlines` 路由改为先取 payload 再在**响应层**附加 `predictHitRates`,
+    绝不写入冻结快照文件;错误载荷/缓存未就绪不附加。
+- `kpl-dashboard_17_apple.html`
+  - 双列列头下各加一行命中率:`近10日 N样本 · top1 命中 X% · top3 Y%`,东财/同花顺各读
+    自己的 `bySource` 块;单列兼容路径展示整体口径;
+  - 三态:字段缺失(旧快照/缓存未就绪)整行静默;样本 0 如实"暂无样本";有样本才显示数字。
+    **禁止用 0% 冒充无样本**(不装有数据,与回看 null 口径一致);
+  - CSS 缓存版本 `20260725c → 20260726a`。
+- `Qi/vendor/strategy-workbench.css` — `.ml-hitrate` 中性小徽标 + `.is-empty` 虚线弱化样式。
+- `tests/strategy-hitrate-display.test.js`(新增)— 锁:紧凑块 null 语义、路由层附加且
+  `getStrategyMainlinesVisible` 不含命中率(冻结零污染)、缓存读取无 await(热路径非阻塞)、
+  前端三态、双列/单列块内禁止字面 0%、CSS 版本。
+- `tests/mainline-confirm.test.js` — 路由形式锁更新(意图不变:必须走 getStrategyMainlinesVisible)。
+- `tests/strategy-workbench-ui.test.js` — CSS 版本锁更新。
+
+Validated:
+- 全仓 68/68 测试文件通过;`node --check`、内联脚本解析、`git diff --check` 通过。
+- 变异验证 ×2:把零样本分支改成渲染 0% → 测试立即失败;把命中率字样塞进
+  getStrategyMainlinesVisible → 冻结零污染锁立即失败。
+  (首版测试曾被 0% 变异逃过,已补强 hitBlock 级断言后复测。)
+- Playwright 用仓库 CSS 实渲染:1280/390 无溢出,有样本徽标与暂无样本弱化态符合预期。
+
+Deployment:
+- 未部署。需发布 `kpl-stats-server.js` + `kpl-dashboard_17_apple.html` +
+  `Qi/vendor/strategy-workbench.css`,**需重启主 Node 服务**(服务端有新函数)。
+  先 CSS → HTML → 重启服务顺序;发布后核对线上引用 `?v=20260726a`、
+  主线榜列头出现命中率行(或首轮缓存未就绪时暂不出现,10 分钟内自动补上)。
+
+Notes for next agent:
+- 命中率数字与预判回看完全同源,不要另算一套;改回看口径时这里自动跟随。
+- predictHitRates 只存在于 API 响应,冻结快照文件里没有也不该有。
+- 第二步(双源一致性条件命中率)与第三步(领先时长)见 2026-07-26 会话记录的策略页规划,
+  Owner 暂只批了第一步。

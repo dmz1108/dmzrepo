@@ -304,6 +304,27 @@ body.view-strategy .ml-col-title small {
   opacity: 1 !important;
 }
 
+/* 命中率随行(2026-07-26 第一步):列头下的一行小字,数字与预判回看同源。
+   中性色不抢卡片视觉;暂无样本用更淡的 is-empty,不许用 0% 冒充。 */
+body.view-strategy .ml-hitrate {
+  margin: 6px 2px 0;
+  padding: 3px 8px;
+  display: inline-block;
+  border: 1px solid var(--st-line);
+  border-radius: 6px;
+  background: var(--st-panel-2);
+  color: var(--st-muted);
+  font-size: 11px;
+  font-weight: 620;
+  letter-spacing: .02em;
+  cursor: help;
+}
+body.view-strategy .ml-hitrate.is-empty {
+  color: var(--st-faint);
+  border-style: dashed;
+  cursor: default;
+}
+
 body.view-strategy .ml-grid {
   display: grid !important;
   grid-template-columns: 1fr !important;
