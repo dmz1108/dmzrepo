@@ -10773,7 +10773,7 @@ Files:
 - `docs/DAILY_HANDOFF.md`
 
 Validated:
-- 删除前逐个核对调用图；两个顶层 builder 与 WinRT OCR 执行链均无生产调用，被删除函数只在不可达子树内部互相引用。
+- 删除前逐个核对调用图；两个顶层 builder 与 WinRT OCR 执行链均无生产调用，被删除函数只在不可达子树内部互相引用；复审发现并一并删除了调用链移除后新产生的孤立 `hashPart`。
 - `node --check kpl-stats-server.js`、TGB manual-only、复盘来源保护与 P0 健康专项测试通过。
 - 全仓 `66/66` 个 `tests/*.test.js` 文件通过，`git diff --check` 通过。
 - SOP 明确人工正式文件纠错必须先备份与记录哈希，再受控替换、重折和验证；普通同步与 `force` 继续禁止覆盖。

@@ -2196,10 +2196,6 @@ async function cleanupOldFilesByMtime(dir, maxAgeDays, now = new Date()) {
   return result;
 }
 
-function hashPart(value) {
-  return crypto.createHash('sha1').update(String(value || '')).digest('hex');
-}
-
 function snapshotPath(day, zsType) {
   return path.join(SNAPSHOT_DIR, safePart(String(zsType || 'default')), `${safePart(day)}.json`);
 }
