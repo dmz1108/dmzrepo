@@ -93,7 +93,7 @@ function summarizeReviewSourceRows(rows, options = {}) {
     const confidence = Number(row?.confidence || 0);
     if (
       quality === 'fallback'
-      || row?.ocrFallback === true
+      || !!row?.ocrFallback
       || confidence < 0.8
     ) {
       lowConfidenceCodes.add(code);
@@ -210,17 +210,21 @@ function compareReviewSummaries(referenceSummary = {}, actualSummary = {}) {
   const actual = new Set(actualSummary.codes || []);
   const missingCodes = [...reference].filter(code => !actual.has(code)).sort();
   const extraCodes = [...actual].filter(code => !reference.has(code)).sort();
-  const referenceCodeByName = new Map();
+  const referenceCodesByName = new Map();
   for (const identity of referenceSummary.identities || []) {
     const name = normalizedIdentityName(identity?.name);
-    if (name && !referenceCodeByName.has(name)) referenceCodeByName.set(name, identity.code);
+    if (!name || !identity?.code) continue;
+    const codes = referenceCodesByName.get(name) || new Set();
+    codes.add(identity.code);
+    referenceCodesByName.set(name, codes);
   }
   const identityMismatches = [];
   for (const identity of actualSummary.identities || []) {
     const code = String(identity?.code || '');
     const name = normalizedIdentityName(identity?.name);
     if (!code || !name) continue;
-    const expectedCode = referenceCodeByName.get(name) || '';
+    const referenceCodes = referenceCodesByName.get(name);
+    const expectedCode = referenceCodes?.size === 1 ? [...referenceCodes][0] : '';
     if (expectedCode && expectedCode !== code) {
       identityMismatches.push({
         code,
@@ -392,12 +396,13 @@ function buildReviewHealthManifest(input = {}, options = {}) {
   };
 }
 
-function buildLegacyReviewHealthProjection(manifest = {}) {
+function buildLegacyReviewHealthProjection(manifest = {}, options = {}) {
   const sources = (manifest.sources || []).map(source => {
     const observedCount = Number(source?.observed?.rawRowCount || 0);
     return {
       group: source.group,
       ok: source.exists && source.dayMatch && observedCount > 0 && !source.error,
+      exists: !!source.exists,
       count: source.dayMatch ? observedCount : 0,
       observedCount,
     };
@@ -405,12 +410,19 @@ function buildLegacyReviewHealthProjection(manifest = {}) {
   const terminalCount = Number(manifest.terminal?.observed?.uniqueCodeCount || 0);
   const combinedCount = Number(manifest.combined?.observed?.uniqueCodeCount || 0);
   const combinedComparison = manifest.combined?.poolComparison;
+  const artifactsComplete = sources.length > 0 && sources.every(source => source.ok);
+  const combinedComplete = terminalCount > 0 && artifactsComplete && combinedComparison?.exact === true;
   let status = 'healthy';
   if (!manifest.isTradingDay) status = 'not-required';
-  else if (!manifest.afterMarketClose && (!terminalCount || sources.some(source => !source.ok))) status = 'pending';
+  else if (combinedComplete) status = 'healthy';
+  else if (!manifest.afterMarketClose || options.reasonReady !== true) status = 'pending';
   else if (!terminalCount) status = 'missing';
-  else if (sources.some(source => !source.ok)) status = 'missing';
-  else if (!combinedComparison?.exact) status = 'invalid';
+  else if (
+    ['invalid', 'stale'].includes(manifest.combined?.status)
+    || sources.some(source => source.exists && !source.ok)
+    || combinedComparison?.exact === false
+  ) status = 'invalid';
+  else status = 'missing';
   return {
     status,
     limitUpCount: terminalCount,

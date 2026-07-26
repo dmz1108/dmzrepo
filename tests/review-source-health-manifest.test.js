@@ -138,6 +138,26 @@ const identityMismatchComparison = compareReviewHealthProjection(
 );
 assert(identityMismatchComparison.identityMismatchGroups.includes('tgb'));
 
+const ambiguousNameInput = baseInput();
+ambiguousNameInput.terminal = observation({
+  day: DAY,
+  stocks: [row('600001', '同名样本'), row('600002', '同名样本')],
+});
+ambiguousNameInput.combined = observation({
+  day: DAY,
+  stocks: [row('600001', '同名样本'), row('600002', '同名样本')],
+});
+ambiguousNameInput.sources[3] = source('tgb', '淘股吧', {
+  day: DAY,
+  rows: [row('600002', '同名样本')],
+});
+const ambiguousNameManifest = buildReviewHealthManifest(ambiguousNameInput);
+assert.strictEqual(
+  ambiguousNameManifest.sources.find(item => item.group === 'tgb').poolComparison.identityMismatchCount,
+  0,
+  'an ambiguous terminal-pool name must not be blamed on a source code',
+);
+
 const legacy = buildLegacyReviewHealthProjection(manifest);
 const comparison = compareReviewHealthProjection(legacy, manifest);
 assert.strictEqual(legacy.sourceArtifactStats.find(item => item.group === 'kaipanla').count, 4);
@@ -168,6 +188,26 @@ missingBeforeCloseInput.sources[2] = {
 const pending = buildReviewHealthManifest(missingBeforeCloseInput);
 assert.strictEqual(pending.sources.find(item => item.group === 'xuangubao').status, 'pending');
 assert.strictEqual(pending.status, 'pending');
+
+const publicationWindowInput = baseInput();
+publicationWindowInput.sources[2] = {
+  group: 'xuangubao',
+  label: '选股宝',
+  exists: false,
+  payload: null,
+  error: '',
+};
+const publicationWindow = buildReviewHealthManifest(publicationWindowInput);
+assert.strictEqual(
+  buildLegacyReviewHealthProjection(publicationWindow, { reasonReady: false }).status,
+  'pending',
+  'legacy comparison must preserve the source publication window',
+);
+assert.strictEqual(
+  buildLegacyReviewHealthProjection(publicationWindow, { reasonReady: true }).status,
+  'missing',
+  'a missing source becomes actionable only after the publication window',
+);
 
 const invalidJsonInput = baseInput();
 invalidJsonInput.sources[2] = {
@@ -208,6 +248,16 @@ assert.strictEqual(summary.rawRowCount, 4);
 assert.strictEqual(summary.excludedRowCount, 2);
 assert.strictEqual(summary.rowCount, 2);
 assert.strictEqual(summary.uniqueCodeCount, 1);
+
+const historicalOcrFallbackSummary = summarizeReviewSourceRows([
+  row('600004', '历史数值标记', { confidence: 0.8, ocrFallback: 1 }),
+  row('600005', '历史字符串标记', { confidence: 0.8, ocrFallback: 'true' }),
+]);
+assert.strictEqual(
+  historicalOcrFallbackSummary.lowConfidenceCodeCount,
+  2,
+  'historical truthy ocrFallback values must preserve the deployed classification',
+);
 
 const root = path.join(__dirname, '..');
 const server = fs.readFileSync(path.join(root, 'kpl-stats-server.js'), 'utf8');

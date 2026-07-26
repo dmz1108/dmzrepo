@@ -14848,9 +14848,11 @@ async function buildReviewSourceHealthShadowDay(day) {
     normalizeCode: normalizeReasonSourceCode,
     excludeRow: row => isExcludedFromReview(row?.code, row?.name),
   });
-  const legacy = buildLegacyReviewHealthProjection(manifest);
+  const reasonReady = isMainReasonReviewReady(isoDay);
+  const legacy = buildLegacyReviewHealthProjection(manifest, { reasonReady });
   return {
     day: isoDay,
+    legacyContext: { reasonReady },
     legacy,
     manifest,
     comparison: compareReviewHealthProjection(legacy, manifest),

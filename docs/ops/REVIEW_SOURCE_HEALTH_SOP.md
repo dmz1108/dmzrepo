@@ -70,6 +70,7 @@ The P1 manifest is a read-only comparison layer. It does not replace the current
 - `tools/audit-review-health-manifest.js --root=<project-root> --days=30` performs the same audit without starting the service. It selects the recent trading calendar even when an entire day's files are absent, writes nothing, and prints evidence to stdout.
 - Wrong-day artifacts expose their observed metadata only; their target-day `actual` value is `null`.
 - Pool reconciliation compares code membership and detects a source name mapped to a different terminal-pool code, so equal row counts cannot hide a transcription error. Same-code display-name variants are not treated as identity failures.
+- If one terminal-pool display name maps to multiple codes, the identity check stays neutral rather than blaming a source for an ambiguous reference.
 - TGB is graded as a source-faithful artifact. Its terminal-pool difference is diagnostic and does not by itself make the TGB artifact invalid.
 - The four-source combined database is reconciled strictly against the filtered terminal limit-up pool.
 

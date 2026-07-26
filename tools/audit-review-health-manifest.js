@@ -70,6 +70,12 @@ function afterMarketClose(day) {
   return day < now.day || (day === now.day && now.hour >= 15);
 }
 
+function mainReasonReviewReady(day) {
+  const readyDay = shiftDay(day, 1);
+  const now = chinaNow();
+  return now.day > readyDay || (now.day === readyDay && now.hour >= 9);
+}
+
 async function readObservation(root, relativeFile) {
   const filePath = path.join(root, relativeFile);
   try {
@@ -162,9 +168,11 @@ async function buildDay(root, day) {
   }, {
     excludeRow: row => isExcludedReviewStock(row?.code, row?.name),
   });
-  const legacy = buildLegacyReviewHealthProjection(manifest);
+  const reasonReady = mainReasonReviewReady(day);
+  const legacy = buildLegacyReviewHealthProjection(manifest, { reasonReady });
   return {
     day,
+    legacyContext: { reasonReady },
     legacy,
     manifest,
     comparison: compareReviewHealthProjection(legacy, manifest),
