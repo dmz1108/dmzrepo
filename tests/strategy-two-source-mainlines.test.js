@@ -121,6 +121,40 @@ A(bySourceReviewHTML.includes('<span class="mlr-source-name">同花顺</span><st
 A(bySourceReviewHTML.includes('同花顺 成立 1/1(100%)'), 'P2 回看统计:同花顺独立显示正式主线成立率');
 A(bySourceReviewHTML.includes('<span class="mlr-actual"') && bySourceReviewHTML.includes('>算力<i>3涨停</i>'), 'P2 回看页:双源有主线记录继续显示盘后实际第一家族');
 A(!bySourceReviewHTML.includes('<span class="mlr-card-state quiet">今日无主线</span>') && !bySourceReviewHTML.includes('候选未通过 L2'), 'P2 回看页:东财空+同花顺有预测时不再输出无来源的整体“今日无主线”误导');
+const finalStarMetricsHTML = renderMainlineReviewHTML({
+  days: [{
+    day: '2026-07-14', phase: '尾盘', sampleValid: true, pendingReview: false,
+    noMainline: false, theme: 'PCB', mainlineQualified: true, mainlineStarQualified: true,
+    star: { code: '600183', name: '生益科技', predictLevel: 'confirmed',
+      nextHighGain: 8.38, nextCloseGain: 3.06, threeDayGain: -10.55 },
+    leaders: [], expectedStars: [], actualTop: [{ theme: '机器人', count: 10 }],
+    finalConfirmedMainline: {
+      theme: 'PCB',
+      stars: [{ code: '600183', name: '生益科技', level: 'confirmed' }],
+    },
+  }],
+  stats: {},
+});
+const finalStarSummary = (finalStarMetricsHTML.match(/<summary class="mlr-line-sum">([\s\S]*?)<\/summary>/) || [])[1] || '';
+A(finalStarSummary.includes('+8.38%') && finalStarSummary.includes('+3.06%') && finalStarSummary.includes('-10.55%'),
+  '最终确认明星与预测明星代码一致时，摘要保留生益科技次高/次收/3日收益');
+const correctedStarMetricsHTML = renderMainlineReviewHTML({
+  days: [{
+    day: '2026-07-27', phase: '尾盘', sampleValid: true, pendingReview: false,
+    noMainline: false, theme: 'PCB', mainlineQualified: true, mainlineStarQualified: true,
+    star: { code: '600183', name: '生益科技', predictLevel: 'confirmed',
+      nextHighGain: 8.38, nextCloseGain: 3.06, threeDayGain: -10.55 },
+    leaders: [], expectedStars: [], actualTop: [{ theme: '机器人', count: 20 }],
+    finalConfirmedMainline: {
+      theme: '半导体',
+      stars: [{ code: '600667', name: '太极实业', level: 'confirmed' }],
+    },
+  }],
+  stats: {},
+});
+const correctedStarSummary = (correctedStarMetricsHTML.match(/<summary class="mlr-line-sum">([\s\S]*?)<\/summary>/) || [])[1] || '';
+A(!correctedStarSummary.includes('+8.38%') && (correctedStarSummary.match(/<b class="na">--<\/b>/g) || []).length === 3,
+  '最终确认改为另一只明星时，不得把旧预测明星收益错配给新明星');
 const bothNoMainlineReviewHTML = renderMainlineReviewHTML({
   days: [{
     day: '2026-07-16', phase: '尾盘', sampleValid: true, pendingReview: false,

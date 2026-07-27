@@ -14132,10 +14132,19 @@ function renderMainlineReviewHTML(d) {
     const compactOut = finalConclusion
       ? `最终确认 ${String(finalConclusion.theme || finalConclusion.key || '')}${actualTopRow ? ` · 主因${String(actualTopRow.theme || '')}${Number(actualTopRow.count) || 0}涨停` : ''}`
       : r.pendingReview ? '待盘后验证' : (actualTopRow ? `主因分布首位 ${String(actualTopRow.theme || '')} ${Number(actualTopRow.count) || 0}涨停` : '暂无结果');
-    const lineStock = finalConclusion ? null : (reviewStarStock || null);
-    const finalStarNames = finalConclusion
+    const finalStars = finalConclusion
       ? (Array.isArray(finalConclusion.stars) ? finalConclusion.stars : [])
         .filter(star => star && (star.level === 'confirmed' || star.level === 'expected'))
+      : [];
+    // 最终确认与冻结预测并列展示时，不能无条件抹掉已经算好的明星收益；但也不能
+    // 把旧预测明星的收益错安到盘后修正出的另一只明星。只有股票代码一致才复用。
+    const finalStarCodes = new Set(finalStars.map(star => String(star?.code || '')).filter(Boolean));
+    const lineStock = finalConclusion
+      ? [reviewStarStock, r.star, ...(Array.isArray(r.expectedStars) ? r.expectedStars : []), ...leaders]
+        .find(stock => stock?.code && finalStarCodes.has(String(stock.code))) || null
+      : (reviewStarStock || null);
+    const finalStarNames = finalConclusion
+      ? finalStars
         .map(star => star.name || star.code)
         .filter(Boolean)
         .join(' / ')
