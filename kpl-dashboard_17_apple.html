@@ -13682,7 +13682,7 @@ function renderStrategyMainlinesHTML(d) {
       const hr = d.predictHitRates && d.predictHitRates.bySource && d.predictHitRates.bySource[srcKey];
       if (!hr) return '';
       const win = Number(d.predictHitRates.windowDays) || 10;
-      if (!Number(hr.total) || hr.top1Rate == null) return `<span class="ml-hitrate is-empty" title="按预判回看口径:盘后主因库缺失或该源无当日预测记录的日子不计分母">近${win}日暂无样本</span>`;
+      if (!Number(hr.total) || hr.qualifiedRate == null) return `<span class="ml-hitrate is-empty" title="按预判回看口径:盘后主因库缺失或该源无当日预测记录的日子不计分母">近${win}日暂无样本</span>`;
       const lead = strategyMainlineLeadDurationText(hr.leadMedianMinutes);
       const leadSamples = Number(hr.leadSamples) || 0;
       const afterFirstLimit = Number(hr.leadAfterFirstLimitSamples) || 0;
@@ -13690,9 +13690,9 @@ function renderStrategyMainlinesHTML(d) {
         ? ` · 领先中位 <b>${escapeHTML(lead)}</b>`
         : ' · 领先暂无样本';
       const leadTitle = lead && leadSamples
-        ? `；领先=同源top1命中日，预期明星首次出现至同股真实首次封板，仅累计09:30–11:30、13:00–15:00可交易分钟，${leadSamples}个日级样本取中位数${afterFirstLimit ? `；另有${afterFirstLimit}日预期在首次封板后才出现，未计入中位数` : ''}`
-        : `；暂没有同时满足同源top1命中、预期明星后续真实封板且封板时间可核验的样本${afterFirstLimit ? `；其中${afterFirstLimit}日预期在首次封板后才出现` : ''}`;
-      return `<span class="ml-hitrate" title="与预判回看同源:top1=预测第一家族即当日实际第一;top3=实际第一落在预测前三。近${win}日,分母 ${Number(hr.total)} 个有效样本日${leadTitle}">命中 top1 <b>${hr.top1Rate}%</b> · top3 <b>${hr.top3Rate}%</b>${leadText}</span>`;
+        ? `；领先=同源正式主线成立日，预期明星首次出现至同股真实首次封板，仅累计09:30–11:30、13:00–15:00可交易分钟，${leadSamples}个日级样本取中位数${afterFirstLimit ? `；另有${afterFirstLimit}日预期在首次封板后才出现，未计入中位数` : ''}`
+        : `；暂没有同时满足正式主线成立、预期明星后续真实封板且封板时间可核验的样本${afterFirstLimit ? `；其中${afterFirstLimit}日预期在首次封板后才出现` : ''}`;
+      return `<span class="ml-hitrate" title="与预判回看同源:正式主线必须有同家族确认明星股且当日涨停至少3只；涨停数量排名不决定主线。近${win}日,分母 ${Number(hr.total)} 个有效样本日${leadTitle}">主线成立 <b>${hr.qualifiedRate}%</b>${leadText}</span>`;
     };
     const renderColumn = (title, src, zsLabel, srcKey) => {
       // 三态区分(Codex 二审 P2):有主线 / 源可用但无合格主线(有效零结果,展示真实资金/L2/无候选原因) / 源暂缺(不可用)。
@@ -13703,7 +13703,7 @@ function renderStrategyMainlinesHTML(d) {
         body = `<div class="ml-grid">${src.mainlines.slice(0, 8).map(renderCard).join('')}</div>`;
         tag = ` · ${Number(src.count) || 0} 条`;
       } else if (src && src.available) {
-        body = `<div class="rht-loading">${escapeHTML(src.message || '本源已完成计算，当前暂无满足确认明星与龙头条件的正式主线。')}</div>`;
+        body = `<div class="rht-loading">${escapeHTML(src.message || '本源已完成计算，当前暂无满足确认明星、龙头与至少3只涨停条件的正式主线。')}</div>`;
         tag = reserves.length ? ` · 正式0/预备${reserves.length}` : ' · 无合格主线';
       } else {
         body = `<div class="rht-loading">${escapeHTML((src && src.message) || '该源暂缺：暂无该来源的实时板块/主线数据，不借用另一来源补值。')}</div>`;
@@ -13713,9 +13713,11 @@ function renderStrategyMainlinesHTML(d) {
       // 与预判回看的"未兑现候选"层同构;缺件状态用流式状态栏置于卡片上方,不做绝对定位角标
       // (Codex #201 补充意见:绝对角标会压住卡片右上角的预判分/主线分)。预备卡走紧凑样式。
       const reserveNote = (row) => (Array.isArray(row?.reserveReasons) ? row.reserveReasons : [])
-        .map(r => r === 'no-confirmed-star' ? '待明星确认' : (r === 'no-qualified-leader' ? '待龙头形成' : r)).join(' · ');
+        .map(r => r === 'no-confirmed-star' ? '待明星确认'
+          : r === 'no-qualified-leader' ? '待龙头形成'
+            : r === 'insufficient-limit-up-count' ? '待涨停扩散至3只' : r).join(' · ');
       const reserveBlock = reserves.length ? `<div class="ml-reserve">
-        <div class="ml-reserve-head"><span>预备主线</span><small>明星或龙头单项条件待补齐 · 补齐后升正式榜</small></div>
+        <div class="ml-reserve-head"><span>预备主线</span><small>明星、龙头或3只涨停下限待补齐 · 补齐后升正式榜</small></div>
         <div class="ml-grid">${(() => {
           const reserveList = reserves.slice(0, 4);
           return reserveList.map((row, idx) => `<div class="ml-reserve-card">
@@ -13737,7 +13739,7 @@ function renderStrategyMainlinesHTML(d) {
     return `<section class="mainline-wrap">
       <div class="ml-title">
         <span>今日主线榜</span>
-        <small title="东财与同花顺各自使用本源板块、成员、涨幅和资金，不跨源拼接；KPL 不参与主线预测；正式主线三要件：确认明星+合格龙头+题材板（风格板不参选）">实时强度 × 资金 × 成分股 × 历史主因 · 确认明星+龙头三要件${sourceSuffix}${dayNote}</small>
+        <small title="东财与同花顺各自使用本源板块、成员、涨幅和资金，不跨源拼接；KPL 不参与主线预测；正式主线：确认明星+合格龙头+同家族至少3只涨停+题材板（风格板不参选）">实时强度 × 资金 × 成分股 × 历史主因 · 明星+龙头+3只涨停下限${sourceSuffix}${dayNote}</small>
       </div>
       ${statusHtml}
       ${dualNote}
@@ -13753,7 +13755,7 @@ function renderStrategyMainlinesHTML(d) {
     const hr = d && d.predictHitRates && d.predictHitRates.overall;
     if (!hr) return '';
     const win = Number(d.predictHitRates.windowDays) || 10;
-    if (!Number(hr.total) || hr.top1Rate == null) return `<span class="ml-hitrate is-empty">近${win}日暂无样本</span>`;
+    if (!Number(hr.total) || hr.qualifiedRate == null) return `<span class="ml-hitrate is-empty">近${win}日暂无样本</span>`;
     const lead = strategyMainlineLeadDurationText(hr.leadMedianMinutes);
     const leadSamples = Number(hr.leadSamples) || 0;
     const afterFirstLimit = Number(hr.leadAfterFirstLimitSamples) || 0;
@@ -13761,9 +13763,9 @@ function renderStrategyMainlinesHTML(d) {
       ? ` · 领先中位 <b>${escapeHTML(lead)}</b>`
       : ' · 领先暂无样本';
     const leadTitle = lead && leadSamples
-      ? `；领先=top1命中日，预期明星首次出现至同股真实首次封板，仅累计09:30–11:30、13:00–15:00可交易分钟，${leadSamples}个日级样本取中位数${afterFirstLimit ? `；另有${afterFirstLimit}日预期在首次封板后才出现，未计入中位数` : ''}`
+      ? `；领先=正式主线成立日，预期明星首次出现至同股真实首次封板，仅累计09:30–11:30、13:00–15:00可交易分钟，${leadSamples}个日级样本取中位数${afterFirstLimit ? `；另有${afterFirstLimit}日预期在首次封板后才出现，未计入中位数` : ''}`
       : `；领先时长暂无可核验样本${afterFirstLimit ? `；其中${afterFirstLimit}日预期在首次封板后才出现` : ''}`;
-    return `<span class="ml-hitrate" title="与预判回看同源,近${win}日,分母为有效样本日${leadTitle}">命中 top1 <b>${hr.top1Rate}%</b> · top3 <b>${hr.top3Rate}%</b>${leadText}</span>`;
+    return `<span class="ml-hitrate" title="正式主线=同家族确认明星股+至少3只涨停；涨停数量排名不决定主线。近${win}日,分母为有效样本日${leadTitle}">主线成立 <b>${hr.qualifiedRate}%</b>${leadText}</span>`;
   })();
   const cards = lines.slice(0, 8).map(renderCard).join('');
   return `<section class="mainline-wrap">
@@ -13878,19 +13880,22 @@ function renderMainlineReviewHTML(d) {
     ].join('');
     return `<span class="mlr-stock-review"><span class="mlr-stock-review-head"><span class="mlr-name">${escapeHTML(s.name || s.code || '')}</span>${extra}</span><span class="mlr-performance">${performance}</span></span>`;
   };
-  // 主线命中徽标(口径:盘后涨停主因家族格局,非"整个市场实际主线"):
-  // ✓=预判命中(并列)第一家族;△=第一家族在预判前三;✗=脱靶;待盘后验证=当日盘中;—=盘后数据不完整
+  // 正式主线徽标:同家族确认明星股 + 当日涨停至少3只。
+  // 涨停数量只作准入下限，盘后主因数量排名只在旁边展示，不决定谁是真主线。
   const hitCell = (r) => {
-    if (r.noMainline) return '<span class="mlr-hit na" title="候选方向没有L2预期明星或明星确认，不计主线命中率">未形成</span>';
-    if (r.pendingReview) return '<span class="mlr-hit wait" title="当日尚未收盘,待盘后验证,不计命中率">待盘后验证</span>';
-    if (r.mainlineHitTop1 == null) {
+    if (r.noMainline) return '<span class="mlr-hit na" title="候选方向没有L2确认明星，不计正式主线成立率">未形成</span>';
+    if (r.pendingReview) return '<span class="mlr-hit wait" title="当日尚未收盘,待盘后验证,不计正式主线成立率">待盘后验证</span>';
+    if (r.mainlineQualified == null) {
       const miss = Number(r.mainReasonMissingCount);
       const why = Number.isFinite(miss) && miss > 0 ? `盘后主因库缺 ${miss} 只涨停股` : '盘后主因库未生成或不完整';
-      return `<span class="mlr-hit na" title="${why},不计命中率" aria-label="${why}，不计命中率">数据不足</span>`;
+      return `<span class="mlr-hit na" title="${why},不计成立率" aria-label="${why}，不计成立率">数据不足</span>`;
     }
-    if (r.mainlineHitTop1) return `<span class="mlr-hit ok" title="预判主线命中盘后涨停主因${r.actualFirstTied ? '并列' : ''}第一家族">主线命中</span>`;
-    if (r.mainlineHitTop3) return '<span class="mlr-hit near" title="盘后第一家族在预判前三内">进入前三</span>';
-    return '<span class="mlr-hit miss" title="盘后第一家族不在预判前三">未命中</span>';
+    if (r.mainlineQualified) return '<span class="mlr-hit ok" title="同家族已有确认明星股，且当日涨停不少于3只">主线成立</span>';
+    const reasons = Array.isArray(r.mainlineQualification?.reasons) ? r.mainlineQualification.reasons : [];
+    const why = reasons.includes('no-confirmed-star') ? '没有确认明星股'
+      : reasons.includes('insufficient-limit-up-count') ? '同家族涨停少于3只'
+        : '正式条件未满足';
+    return `<span class="mlr-hit miss" title="${escapeHTML(why)}">${escapeHTML(why)}</span>`;
   };
   const sourceReviewHTML = (r) => {
     if (!r || !r.bySource) return '';
@@ -13944,7 +13949,7 @@ function renderMainlineReviewHTML(d) {
     const tied = r.actualFirstTied ? '<i class="mlr-tied" title="最大涨停数相同的家族并列第一">并列第一</i>' : '';
     const detail = top.map(t => `${escapeHTML(t.theme)}${t.count}`).join(' · ');
     const label = shown.map(t => escapeHTML(t.theme)).join('/');
-    return `<span class="mlr-actual" title="盘后涨停主因家族格局(前三层级):${detail}">${label}<i>${shown[0].count}涨停</i></span>${tied}`;
+    return `<span class="mlr-actual" title="盘后涨停主因分布(前三层级，仅描述分布，不决定主线):${detail}">${label}<i>${shown[0].count}涨停</i></span>${tied}`;
   };
   const sampleTag = (r) => {
     if (r.sampleValid === false) {
@@ -13969,7 +13974,7 @@ function renderMainlineReviewHTML(d) {
   const reviewStarVisual = (r) => {
     const star = r && r.star;
     const expected = Array.isArray(r && r.expectedStars) ? r.expectedStars : [];
-    // 盘中 L2 确认不等于盘后真主线明星。明确未命中第一主因家族时，
+    // 盘中 L2 确认不等于盘后真主线明星。正式主线条件未满足时，
     // 原始候选证据继续保留，但不能显示“明星确认”或进入红色真主线分组。
     const mayBeMainlineStar = r?.mainlineStarQualified !== false;
     if (mayBeMainlineStar && star && star.predictLevel === 'confirmed') {
@@ -14039,25 +14044,24 @@ function renderMainlineReviewHTML(d) {
     }).join('');
     return `<details class="mlr-reserve-line"><summary><span><b>预备层</b><small>非正式候选，不计正式命中率</small></span><em>${list.length}条</em></summary><div class="mlr-reserve-items">${items}</div></details>`;
   };
-  // 行级结果配色(与 hitCell 同口径):驱动左侧强调条颜色,一眼可扫命中/前三/脱靶/待验证
+  // 行级结果配色(与 hitCell 同口径):红色只表示“确认明星 + 同家族至少3只涨停”的正式主线。
   const rowHitClass = (r, starVisual) => {
     if (r.bySource) {
       if (r.sampleValid === false) return 'hit-invalid';
       if (r.pendingReview) return 'hit-wait';
-      const sourceRows = Object.values(r.bySource).filter(src => src && src.status !== 'unavailable' && src.status !== 'unknown' && !src.noMainline && src.mainlineHitTop1 != null);
-      const outcomes = new Set(sourceRows.map(src => src.mainlineHitTop1 === true ? 'ok' : src.mainlineHitTop3 === true ? 'near' : 'miss'));
-      // 双源各自独立评估；只要任一来源命中盘后第一家族，并且当日已有确认明星，
+      const sourceRows = Object.values(r.bySource).filter(src => src && src.status !== 'unavailable' && src.status !== 'unknown' && !src.noMainline && src.mainlineQualified != null);
+      const outcomes = new Set(sourceRows.map(src => src.mainlineQualified === true ? 'ok' : 'miss'));
+      // 双源各自独立评估；只要任一来源满足正式主线条件，并且当日已有确认明星，
       // 整日即具备一条完整的“单源主线 + 明星”证据链，应使用红色真主线状态。
       if (starVisual?.key === 'confirmed' && outcomes.has('ok')) return 'hit-ok';
       if (outcomes.size !== 1) return 'hit-na';
-      return outcomes.has('ok') ? 'hit-ok' : outcomes.has('near') ? 'hit-near' : 'hit-miss';
+      return outcomes.has('ok') ? 'hit-ok' : 'hit-miss';
     }
     if (r.noMainline) return 'hit-na';
     if (r.sampleValid === false) return 'hit-invalid';
     if (r.pendingReview) return 'hit-wait';
-    if (r.mainlineHitTop1 == null) return 'hit-na';
-    if (r.mainlineHitTop1) return 'hit-ok';
-    if (r.mainlineHitTop3) return 'hit-near';
+    if (r.mainlineQualified == null) return 'hit-na';
+    if (r.mainlineQualified) return 'hit-ok';
     return 'hit-miss';
   };
   const rowModels = rows.map(r => ({ r, starVisual: reviewStarVisual(r) }));
@@ -14113,21 +14117,21 @@ function renderMainlineReviewHTML(d) {
               : (src?.available === true && src?.noMainline === true) ? 'no-mainline' : 'unknown');
           const t = status === 'unavailable' ? '暂缺' : (status === 'unknown' ? '状态未知' : (status === 'no-mainline' ? '无主线' : String(src.theme || '')));
           const hit = status === 'mainline'
-            ? (src.mainlineHitTop1 === true ? '命中' : (src.mainlineHitTop3 === true ? '前三' : (src.mainlineHitTop1 === false ? '未命中' : '')))
+            ? (src.mainlineQualified === true ? '成立' : (src.mainlineQualified === false ? '未成立' : ''))
             : '';
           return `${label}${t}${hit ? ` ${hit}` : ''}`;
         };
         return `${part('eastmoney', '东财 ')} / ${part('ths', '同花顺 ')}`;
       }
       if (r.noMainline) return '今日无主线';
-      const hit = r.pendingReview ? '' : (r.mainlineHitTop1 === true ? ' 命中' : (r.mainlineHitTop3 === true ? ' 前三' : (r.mainlineHitTop1 === false ? ' 未命中' : '')));
+      const hit = r.pendingReview ? '' : (r.mainlineQualified === true ? ' 成立' : (r.mainlineQualified === false ? ' 未成立' : ''));
       return `${String(r.theme || '')}${hit}`;
     })();
     const actualTopRow = Array.isArray(r.actualTop) && r.actualTop.length ? r.actualTop[0] : null;
     const finalConclusion = r.finalConfirmedMainline || null;
     const compactOut = finalConclusion
       ? `最终确认 ${String(finalConclusion.theme || finalConclusion.key || '')}${actualTopRow ? ` · 主因${String(actualTopRow.theme || '')}${Number(actualTopRow.count) || 0}涨停` : ''}`
-      : r.pendingReview ? '待盘后验证' : (actualTopRow ? `${String(actualTopRow.theme || '')} ${Number(actualTopRow.count) || 0}涨停` : '暂无结果');
+      : r.pendingReview ? '待盘后验证' : (actualTopRow ? `主因分布首位 ${String(actualTopRow.theme || '')} ${Number(actualTopRow.count) || 0}涨停` : '暂无结果');
     const lineStock = finalConclusion ? null : (reviewStarStock || null);
     const finalStarNames = finalConclusion
       ? (Array.isArray(finalConclusion.stars) ? finalConclusion.stars : [])
@@ -14186,12 +14190,12 @@ function renderMainlineReviewHTML(d) {
   const rate = (wins, total, pct) => total ? `${wins}/${total}${pct != null ? `(${pct}%)` : ''}` : '--';
   const sourceStats = stats.bySource || {};
   const hasSourceReview = rows.some(r => r && r.bySource)
-    || Number(sourceStats.eastmoney?.mainlineTotal) > 0 || Number(sourceStats.ths?.mainlineTotal) > 0;
-  const sourceStatChip = (label, s, cls = '') => `<b class="mlr-chip${cls ? ` ${cls}` : ''}">${label} 命中 ${rate(s?.mainlineTop1Hits, s?.mainlineTotal, s?.mainlineTop1Rate)} · 前三 ${rate(s?.mainlineTop3Hits, s?.mainlineTotal, s?.mainlineTop3Rate)}</b>`;
+    || Number(sourceStats.eastmoney?.mainlineQualifiedTotal) > 0 || Number(sourceStats.ths?.mainlineQualifiedTotal) > 0;
+  const sourceStatChip = (label, s, cls = '') => `<b class="mlr-chip${cls ? ` ${cls}` : ''}" title="正式主线=同家族确认明星股+至少3只涨停；不按涨停数量排名决定">${label} 成立 ${rate(s?.mainlineQualifiedHits, s?.mainlineQualifiedTotal, s?.mainlineQualifiedRate)}</b>`;
   const mlChips = hasSourceReview
     ? `${sourceStatChip('东财', sourceStats.eastmoney)}${sourceStatChip('同花顺', sourceStats.ths, 'near')}`
-    : (stats.mainlineTotal
-      ? `<b class="mlr-chip">主线命中 ${rate(stats.mainlineTop1Hits, stats.mainlineTotal, stats.mainlineTop1Rate)}</b><b class="mlr-chip near">前三 ${rate(stats.mainlineTop3Hits, stats.mainlineTotal, stats.mainlineTop3Rate)}</b>`
+    : (stats.mainlineQualifiedTotal
+      ? `<b class="mlr-chip" title="正式主线=同家族确认明星股+至少3只涨停">主线成立 ${rate(stats.mainlineQualifiedHits, stats.mainlineQualifiedTotal, stats.mainlineQualifiedRate)}</b>`
       : '');
   const sealChipStat = stats.expectedSealTotal
     ? `<b class="mlr-chip near">预期明星封板${hasSourceReview ? '（兼容口径）' : ''} ${rate(stats.expectedSealWins, stats.expectedSealTotal, stats.expectedSealRate)}</b>`

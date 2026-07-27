@@ -1,5 +1,6 @@
 // 主线题材三要件测试(node tests/strategy-three-requirements.test.js)——Owner 定稿 2026-07-21。
-// 正式主线(真主线)= 确认明星≥1(confirmed) 且 合格龙头≥1 且 非风格板;expected-only 降级预备主线;
+// 正式主线(真主线)= 确认明星≥1(confirmed)、合格龙头≥1、同家族涨停≥3且非风格板;
+// expected-only 或涨停不足3只降级预备主线;
 // 风格板不参与评选与扫描配额;2026-07-21 前的历史日维持旧口径不追溯。
 // 生产证据:2026-07-21 14:59 正式榜 4 卡中 大盘成长/基金重仓 为无龙头风格板(剔除)。
 // 盘中口径:半导体/消费电子·显示 仅 expected → 预备;终盘事实(四审反例):兆易创新 603986
@@ -24,6 +25,7 @@ const isFiniteNumeric = v => Number.isFinite(Number(v)) && v !== null && v !== '
 const normalizeReasonSourceCode = c => String(c || '').replace(/\D/g, '').slice(0, 6);
 const isoFromCompactDate = d => String(d);
 const STRATEGY_MAINLINE_THREE_REQ_START_DAY = '2026-07-21';
+const STRATEGY_MAINLINE_FORMAL_MIN_ZT = 3;
 eval(extractFn('strategyMainlineUsesThreeRequirements'));
 const STRATEGY_MAINLINE_STYLE_BOARD_NAMES = new Set([
   '大盘成长', '大盘价值', '基金重仓', '机构重仓', '证金持股', '茅指数', '宁组合',
@@ -64,17 +66,19 @@ const gate = strategyMainlineApplyL2StarGate([
   mk('确认+龙头', [{ code: '000001', level: 'confirmed' }], leaders),               // → formal
   mk('半导体', [{ code: '603986', level: 'expected' }], leaders),                    // → reserve(缺确认)
   mk('确认无龙头', [{ code: '000002', level: 'confirmed' }], []),                    // → reserve(缺龙头)
+  mk('确认龙头但2板', [{ code: '000004', level: 'confirmed' }], leaders, { count: 2 }), // → reserve(缺涨停扩散)
   mk('全缺', [{ code: '000003', level: 'expected' }], []),                           // → excluded(双缺,仅诊断)
   { theme: '无证据', familyKey: 'theme:无证据', l2VerificationStatus: 'scanned-no-star', l2ScanState: 'scanned-no-star', starStocks: [], leaders },
 ], { threeRequirements: true });
 A(gate.kept.length === 1 && gate.kept[0].theme === '确认+龙头' && gate.kept[0].qiTier === 'formal',
   '正式榜:仅确认明星+合格龙头同时满足者(qiTier=formal)');
-A(gate.reserve.length === 2, '单缺(expected-only 有龙头 / 确认无龙头)降级预备层');
+A(gate.reserve.length === 3, '单缺(expected-only 有龙头 / 确认无龙头 / 仅2只涨停)降级预备层');
 const rsv = Object.fromEntries(gate.reserve.map(r => [r.theme, r.reserveReasons.join(',')]));
 A(rsv['半导体'] === 'no-confirmed-star', '预备缺件如实:半导体缺确认明星(2026-07-21 实盘形态)');
 A(rsv['确认无龙头'] === 'no-qualified-leader', '预备缺件如实:有确认明星但无龙头');
+A(rsv['确认龙头但2板'] === 'insufficient-limit-up-count', '预备缺件如实:明星和龙头齐全但涨停未扩散至3只');
 const exc = Object.fromEntries(gate.excluded.map(r => [r.theme, r.reason]));
-A(gate.excluded.length === 2 && exc['全缺'] === 'missing-confirmed-star-and-leader',
+A(gate.excluded.length === 2 && exc['全缺'] === 'missing-formal-mainline-requirements',
   '双缺不占预备位,如实转诊断(Codex #201 P2:reserve 只留单缺)');
 A(exc['无证据'] === 'completed-scan-without-star', '无 L2 证据者仍走原 excluded 诊断,不混入预备层');
 
@@ -139,7 +143,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     '合同b:重算超时(>1.2s 场景)不产生任何正式主线——旧 provisional leaders 不算合格龙头');
   A(r2.gate.reserve.some(m => m.theme === '确认+旧龙头' && m.reserveReasons.includes('no-qualified-leader')),
     '合同b:确认明星者超时降预备(待龙头形成),不消失');
-  A(r2.gate.excluded.some(e => e.theme === '仅预期' && e.reason === 'missing-confirmed-star-and-leader'),
+  A(r2.gate.excluded.some(e => e.theme === '仅预期' && e.reason === 'missing-formal-mainline-requirements'),
     '合同b:expected-only 超时按双缺落诊断');
   await sleep(220);
   A(bgDone === true && provisional.leaders.length === 1,
@@ -180,7 +184,7 @@ const frozenPayload = {
   mainlines: [],
   reserveMainlines: [mk('半导体', [{ code: '603986', name: '兆易创新', level: 'expected' }], leaders, { qiTier: 'reserve', reserveReasons: ['no-confirmed-star'] })],
   reason: 'no-confirmed-mainline',
-  message: '今日暂无同时具备确认明星与合格龙头的正式主线；1 条预备主线待明星确认。',
+  message: '今日暂无同时具备确认明星、合格龙头与至少3只涨停的正式主线；1 条预备主线待条件补齐。',
   mainlinesBySource: {
     eastmoney: { available: true, hasMainlines: false, mainlines: [],
       reserveMainlines: [mk('半导体', [{ code: '603986', name: '兆易创新', level: 'expected' }], leaders)],
@@ -351,7 +355,7 @@ A(/boardPayload\.boards = boardPayload\.boards\.filter\(b => !strategyMainlineIs
   '静态:风格板在种子/扫描消费前统一剔除(不占扫描配额)');
 A(/strategyMainlineApplyL2StarGate\(inflowGate\.kept, \{ threeRequirements: useThreeRequirements \}\)/.test(src),
   '静态:正式构建按日切界启用三要件');
-A(/reason: 'no-confirmed-mainline'/.test(src) && /条预备主线待明星确认/.test(src),
+A(/reason: 'no-confirmed-mainline'/.test(src) && /条预备主线待条件补齐/.test(src),
   '静态:正式榜空但有预备时输出专属空态文案');
 A(/const threeReq = strategyMainlineUsesThreeRequirements\(payload\.day\)/.test(src),
   '静态:缓存/冻结返回层按载荷日期同样执行三要件重过滤');

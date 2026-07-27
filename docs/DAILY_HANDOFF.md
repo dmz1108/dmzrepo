@@ -11672,3 +11672,38 @@ Deployment:
 Notes for next agent:
 - 预判回看的 `theme/bySource` 是当时冻结预测；`finalConfirmedMainline` 是盘后最终
   结论。两者并列是刻意设计，不应再合并为同一个字段。
+
+## 2026-07-27 - Codex - 主线改为明星股与三只涨停准入
+
+Changed:
+- 修正正式主线口径：同一家族必须存在确认明星股，且当日涨停数至少为 3；涨停
+  数量只作准入下限，不再用“谁涨停最多”决定谁是真主线。
+- 保留盘中提前发现能力：自动 L2 扫描仍可在 2 只涨停时启动，扫描门槛与正式
+  主线门槛明确分离。
+- 预判回看和随行统计改为绝对“主线成立率”；盘后涨停家族 top1/top3 仅保留为
+  历史兼容和主因分布审计字段，不再作为前端正式主线结论。
+- 增加回归样本：涨停 20 只但没有明星股的家族不能压过涨停 10 只且有确认明星
+  的家族；明星、龙头齐全但仅 2 只涨停只能进入预备层。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/mainline-review.test.js`
+- `tests/qi-mainline-states.test.js`
+- `tests/strategy-hitrate-display.test.js`
+- `tests/strategy-three-requirements.test.js`
+- `tests/strategy-two-source-mainlines.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- 全部 `tests/*.test.js` 通过。
+- `git diff --check`
+
+Deployment:
+- 本条提交时仅为 GitHub 代码变更；生产尚未部署，服务尚未重启。
+
+Notes for next agent:
+- 不要把 L2 自动扫描的 2 只涨停提前量提高为 3；否则会延迟盘中发现预期明星。
+- 正式主线仍沿用既有的确认明星、合格龙头和非风格板约束，并新增同家族至少
+  3 只涨停下限。涨停数量超过 3 后不因数量更多自动获得“主线”资格。

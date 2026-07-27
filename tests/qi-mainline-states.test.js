@@ -50,8 +50,8 @@ A(src.includes("scannedNoStar: l2VerificationStatus === 'scanned-no-star'"), 'ce
 A(!src.includes('isConfirmedMainline = l2') && src.includes('const l2VerificationStatus'), '独立字段,不复用 isConfirmedMainline');
 A(src.includes(': strategyMainlineApplyL2StarGate(inflowGate.kept, { threeRequirements: useThreeRequirements });')
   && src.includes("'visible-mainline-requires-expected-or-confirmed-star'")
-  && src.includes("rule: useThreeRequirements") && src.includes("'formal-mainline-requires-confirmed-star-and-leader'"),
-  '正式主线榜严格要求 L2 明星验证;三要件日切换为确认明星+龙头规则标识');
+  && src.includes("rule: useThreeRequirements") && src.includes("'formal-mainline-requires-confirmed-star-leader-and-three-limit-ups'"),
+  '正式主线榜严格要求 L2 明星验证;实施日切换为确认明星+龙头+至少3只涨停规则标识');
 A(src.includes("const STRATEGY_MAINLINE_STRICT_QI_START_DAY = '2026-07-16'")
   && src.includes('options?.leaderDebug || !strategyMainlineUsesStrictQi(isoDay)')
   && src.includes('if (!strategyMainlineUsesStrictQi(predictDay)) return payload;'), '严格 QI 门槛仅从 2026-07-16 起在构建层和返回层生效,不倒溯清空旧历史');
