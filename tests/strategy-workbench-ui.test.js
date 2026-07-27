@@ -329,15 +329,15 @@ assert(!/\.ml-qi-mark[^}]*(#fff8e6|rgba\(255, 233, 168|rgba\(239, 185, 79|rgba\(
   assert(html.includes('const showAdminActionSemantics = !!state.adminLoggedIn'),
     '操作口径仅在 Panda 管理员会话开启');
   assert(html.includes("actionIsToday ? '仅观察' : '当日观察'")
-    && html.includes("`封板买点${confirmedTime ? ` ${confirmedTime}` : ''}`"),
-    '预期明星只观察，实时确认明星显示封板买点与确认时间');
+    && html.includes("`扫描确认${confirmedTime ? ` ${confirmedTime}` : ''}`"),
+    '预期明星只观察，实时确认明星显示 L2 扫描确认时间');
   assert(html.includes("s.confirmedBy === 'live-l2-scan' || s.actionState === 'buy-point-confirmed'")
     && html.includes('const confirmationIsReviewOnly = !confirmationIsLive'),
     '只有显式实时 L2 确认可显示买点，盘后补确认或旧未知来源均不冒充盘中买点');
   assert(cardFn.includes("actionIsToday ? '主线内随时' : '当日龙头'")
     && cardFn.includes("isFormalActionCard && idx === 0"),
     '只有正式主线首位龙头获得主线内操作角色，其他候选不误标');
-  assert(cardFn.includes('可操作仅限：确认明星（封板确认点）· 首位龙头（正式主线有效期）')
+  assert(cardFn.includes('可操作仅限：确认明星（L2首次确认封板时）· 首位龙头（正式主线有效期）')
     && cardFn.includes('预期明星仅观察，确认封板前无买点')
     && cardFn.includes('历史复盘：确认时点只作当日记录，不是当前信号'),
     '卡片明确两类可操作角色，并把历史记录与当前信号隔离');
@@ -383,8 +383,8 @@ assert(!/\.ml-qi-mark[^}]*(#fff8e6|rgba\(255, 233, 168|rgba\(239, 185, 79|rgba\(
   );
   assert(expectedView.stateText === '仅观察' && expectedView.actionClass === ' is-watch',
     '运行时:预期明星对管理员只显示观察');
-  assert(liveConfirmedView.stateText === '封板买点 10:18' && liveConfirmedView.actionClass === ' is-buy',
-    '运行时:盘中 L2 确认显示上海时间的封板买点');
+  assert(liveConfirmedView.stateText === '扫描确认 10:18' && liveConfirmedView.actionClass === ' is-buy',
+    '运行时:盘中 L2 确认显示上海时间的扫描确认点');
   assert(finalReviewView.stateText === '当日确认' && finalReviewView.actionClass === ' is-review',
     '运行时:盘后涨停库补确认不展示伪造的盘中时间或买点');
   assert(normalUserView.stateText === '已确认' && normalUserView.actionClass === '',

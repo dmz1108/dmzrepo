@@ -23570,7 +23570,9 @@ function strategyPredictStarTransitions(existingRows, mainlines, observedAt) {
       next.lastLevel = level;
       if (level === 'confirmed' && !next.confirmedAt) {
         next.confirmedAt = observedAt;
-        next.confirmedBy = String(star?.confirmedBy || 'live-l2-scan').trim() || 'live-l2-scan';
+        // 来源缺失时必须保持未知并在展示层降级为复盘确认；只有 collectStars
+        // 显式写入 live-l2-scan 才能形成盘中操作确认点。
+        next.confirmedBy = String(star?.confirmedBy || '').trim();
       }
       byKey.set(key, next);
     }

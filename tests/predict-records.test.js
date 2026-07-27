@@ -117,6 +117,15 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
   const transition = confirmedWritten.starTransitions[0];
   A(transition.firstExpectedAt === firstExpectedAt, '后续覆盖保留 firstExpectedAt');
   A(transition.lastLevel === 'confirmed' && !!transition.confirmedAt, 'expected→confirmed 写入确认轨迹');
+  A(transition.confirmedBy === '', '确认来源缺失时保持未知，不兜底冒充实时 L2 买点');
+  const explicitLiveTransition = strategyPredictStarTransitions(
+    firstWritten.starTransitions,
+    [{ familyKey: 'fam-t', key: 'k-t', theme: '事件主线', rank: 1,
+      starStocks: [{ code: '600011', name: '预期星', level: 'confirmed', confirmedBy: 'live-l2-scan' }] }],
+    '2026-07-14T02:20:00.000Z'
+  )[0];
+  A(explicitLiveTransition.confirmedBy === 'live-l2-scan',
+    '只有显式 live-l2-scan 来源才持久化为盘中确认');
 
   // 2. 收盘后已有记录不覆盖
   existingPredict = out;

@@ -13295,7 +13295,7 @@ function strategyMainlineStarActionPresentation(star, actionIsToday, showAdmin) 
     ? '未兑现'
     : (s.level === 'confirmed'
       ? (actionIsToday && !confirmationIsReviewOnly
-        ? `封板买点${confirmedTime ? ` ${confirmedTime}` : ''}`
+        ? `扫描确认${confirmedTime ? ` ${confirmedTime}` : ''}`
         : `当日确认${confirmedTime ? ` ${confirmedTime}` : ''}`)
       : (actionIsToday ? '仅观察' : '当日观察'));
   return {
@@ -13544,7 +13544,7 @@ function renderStrategyMainlinesHTML(d) {
         !actionIsToday
           ? '历史复盘：确认时点只作当日记录，不是当前信号'
           : (isFormalActionCard && hasLiveBuyPoint
-            ? '可操作仅限：确认明星（封板确认点）· 首位龙头（正式主线有效期）'
+            ? '可操作仅限：确认明星（L2首次确认封板时）· 首位龙头（正式主线有效期）'
             : (isFormalActionCard && hasReviewOnlyConfirmation
               ? '收盘补确认只作复盘，不补造盘中买点'
               : '预期明星仅观察，确认封板前无买点'))
