@@ -11366,3 +11366,36 @@ Notes for next agent:
   `live-l2-scan`。
 - 当前策略仍只允许正式主线中的确认明星和首位龙头具备操作角色；不要将这一展示语义
   扩展到预备主线或改变既有评分。
+
+## 2026-07-27 - Codex - 主线操作语义部署完成
+
+Changed:
+- PR #302 经 Local Claude 与 Remote Claude 对修正提交 `eb9cf98` 独立复核通过后合入
+  `main`，合并提交为 `600dc4a`。
+- 使用既有三文件原子清单部署策略操作语义：管理员可见预期明星“仅观察”、盘中
+  “扫描确认 HH:mm”、盘后“当日确认”，以及正式主线首位龙头“主线内随时”。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- GitHub production run `30229308580` 成功，批准提交为
+  `600dc4aa8776ada0081df3ce21ac542b240008b7`；部署器完成源文件语法检查、哈希核验、
+  主服务重启和本机健康检查。
+- `https://market.dreamerqi.com/health` 返回 HTTP 200 / `{"ok":true}`，
+  `/kpl` 返回 HTTP 200，并加载 `strategy-workbench.css?v=20260726e`。
+- 生产页面已确认包含 `strategyMainlineStarActionPresentation`、“扫描确认”和
+  “L2首次确认封板时”；历史策略 API 返回 HTTP 200。
+
+Deployment:
+- 已部署并生效。云端备份：
+  `C:\PandaDashboard\_deploy-backups\github-30229308580-1`。
+- 只重启 `Panda Dashboard Server`；未重启 Caddy、娱乐服务、SSH 或公司端 L2 worker。
+- 通用部署器已把本次操作追加到云端两份操作日志。
+
+Notes for next agent:
+- 线上操作语义基线是 `main@600dc4a`。后续若调整真实首封时间展示，必须继续区分
+  L2 扫描确认时点与终盘涨停库 `firstLimitTime`，不得互相替代。
