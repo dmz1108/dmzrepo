@@ -21257,6 +21257,158 @@ function strategyMainlineFamilyInfo(item) {
   }
   return { key: fineKey, label: theme, group: '', taxonomy: info };
 }
+function strategyMainlineReasonFamilyEvidence(values) {
+  const keys = new Set();
+  const topics = [];
+  for (const raw of (Array.isArray(values) ? values : [values])) {
+    for (const token of thsReasonTokens(raw)) {
+      if (!token || THS_EVENT_NOISE.test(token)) continue;
+      const theme = canonicalTopicName(token);
+      const taxonomy = strategyThemeTaxonomyInfo(theme);
+      if (!taxonomy) continue;
+      const familyKey = strategyMainlineFamilyInfo({ theme }).key;
+      if (!familyKey) continue;
+      keys.add(familyKey);
+      topics.push(theme);
+    }
+  }
+  return {
+    keys,
+    topics: [...new Set(topics)],
+    classified: keys.size > 0,
+  };
+}
+function strategyMainlineBuildStarAttributionContext(priorByCode, liveReasonByCode) {
+  const out = new Map();
+  const ensure = code => {
+    if (!out.has(code)) {
+      out.set(code, {
+        currentReason: '',
+        currentFamilies: new Set(),
+        currentTopics: [],
+        priorFamilies: new Set(),
+        priorTopics: [],
+      });
+    }
+    return out.get(code);
+  };
+  if (priorByCode instanceof Map) {
+    for (const [rawCode, prior] of priorByCode) {
+      const code = normalizeReasonSourceCode(rawCode || prior?.code);
+      if (!code) continue;
+      const themes = [
+        prior?.theme,
+        ...(Array.isArray(prior?.topics) ? prior.topics.map(topic => topic?.theme) : []),
+      ].filter(Boolean);
+      const evidence = strategyMainlineReasonFamilyEvidence(themes);
+      const row = ensure(code);
+      row.priorFamilies = evidence.keys;
+      row.priorTopics = evidence.topics;
+    }
+  }
+  if (liveReasonByCode instanceof Map) {
+    for (const [rawCode, live] of liveReasonByCode) {
+      const code = normalizeReasonSourceCode(rawCode || live?.code);
+      const reason = String(live?.reason || live?.reasonType || '').trim();
+      if (!code || !reason) continue;
+      const evidence = strategyMainlineReasonFamilyEvidence(reason);
+      const row = ensure(code);
+      row.currentReason = reason;
+      row.currentFamilies = evidence.keys;
+      row.currentTopics = evidence.topics;
+    }
+  }
+  return out;
+}
+function strategyMainlineStarAttributionDecision(item, star, attributionByCode) {
+  const code = normalizeReasonSourceCode(star?.code);
+  const familyKey = String(item?.familyKey || strategyMainlineFamilyInfo(item).key || '').trim();
+  if (!code || !familyKey || !(attributionByCode instanceof Map)) {
+    return { allowed: true, basis: 'board-membership-only', conflict: '' };
+  }
+  const evidence = attributionByCode.get(code);
+  if (!evidence) return { allowed: true, basis: 'board-membership-only', conflict: '' };
+  if (evidence.currentFamilies instanceof Set && evidence.currentFamilies.size) {
+    if (evidence.currentFamilies.has(familyKey)) {
+      return { allowed: true, basis: 'current-limit-reason', conflict: '' };
+    }
+    return {
+      allowed: false,
+      basis: 'current-limit-reason-conflict',
+      conflict: evidence.currentTopics.join('、'),
+    };
+  }
+  if (evidence.priorFamilies instanceof Set && evidence.priorFamilies.size) {
+    if (evidence.priorFamilies.has(familyKey)) {
+      return { allowed: true, basis: 'prior-main-reason', conflict: '' };
+    }
+    return {
+      allowed: false,
+      basis: 'prior-main-reason-conflict',
+      conflict: evidence.priorTopics.join('、'),
+    };
+  }
+  return { allowed: true, basis: 'board-membership-only', conflict: '' };
+}
+function strategyMainlineFilterAttributedStars(item, attributionByCode) {
+  if (!item || !(attributionByCode instanceof Map)) return item;
+  const stars = Array.isArray(item?.starStocks) ? item.starStocks : [];
+  const rejected = [];
+  const filterStars = rows => (Array.isArray(rows) ? rows : []).flatMap(star => {
+    const decision = strategyMainlineStarAttributionDecision(item, star, attributionByCode);
+    if (!decision.allowed) {
+      rejected.push({
+        code: normalizeReasonSourceCode(star?.code),
+        name: String(star?.name || star?.code || ''),
+        boardName: String(star?.boardName || ''),
+        reason: decision.basis,
+        conflict: decision.conflict || '',
+      });
+      return [];
+    }
+    return [{ ...star, attributionBasis: star?.attributionBasis || decision.basis }];
+  });
+  const kept = filterStars(stars);
+  const history = filterStars(item?.expectedStarHistory);
+  if (!rejected.length) return item;
+  const hasQiStar = kept.some(star => star?.level === 'confirmed' || star?.level === 'expected');
+  const scoreParts = { ...(item?.scoreParts || {}) };
+  const oldStarScore = Number(scoreParts.star) || 0;
+  if (kept.length) {
+    scoreParts.star = Number(Math.min(40, kept.reduce(
+      (sum, star) => sum + (star?.level === 'confirmed' ? 15 : 8),
+      0,
+    )).toFixed(1));
+  } else {
+    delete scoreParts.star;
+  }
+  const score = Object.keys(scoreParts).length
+    ? Number(Object.values(scoreParts).reduce((sum, value) => sum + (Number(value) || 0), 0).toFixed(1))
+    : item?.score;
+  const newStarScore = Number(scoreParts.star) || 0;
+  const predictScore = isFiniteNumeric(item?.predictScore)
+    ? Number(Math.max(0, Number(item.predictScore) - oldStarScore + newStarScore).toFixed(1))
+    : item?.predictScore;
+  const oldVerification = String(item?.l2VerificationStatus || '');
+  const oldScanState = String(item?.l2ScanState || '');
+  return {
+    ...item,
+    starStocks: kept,
+    expectedStarHistory: history,
+    hadExpectedStarToday: history.length > 0 || kept.some(star => star?.level === 'expected'),
+    l2VerificationStatus: hasQiStar ? 'qi' : (oldVerification === 'qi' ? 'scanned-no-star' : oldVerification),
+    l2ScanState: hasQiStar ? 'qi' : (oldScanState === 'qi' ? 'scanned-no-star' : oldScanState),
+    l2QualifiedBy: hasQiStar ? item?.l2QualifiedBy : '',
+    scoreParts,
+    score,
+    predictScore,
+    l2ScanDetail: {
+      ...(item?.l2ScanDetail || {}),
+      attributionRejectedCount: rejected.length,
+      attributionRejected: rejected.slice(0, 6),
+    },
+  };
+}
 function strategyDedupeByCode(rows, limit = 5) {
   const seen = new Set();
   const out = [];
@@ -22590,6 +22742,110 @@ function strategyMainlineIsTradingSessionObservation(day, observedAt) {
       (minuteOfDay >= 13 * 60 && minuteOfDay <= 15 * 60));
 }
 
+const strategyMainlineLiveReasonCache = {
+  day: '',
+  at: 0,
+  value: new Map(),
+  inflight: null,
+};
+async function strategyMainlineLiveLimitReasonByCode(day) {
+  const isoDay = isoFromCompactDate(day);
+  const now = Date.now();
+  if (
+    strategyMainlineLiveReasonCache.day === isoDay
+    && strategyMainlineLiveReasonCache.value instanceof Map
+    && now - strategyMainlineLiveReasonCache.at < 60 * 1000
+  ) return strategyMainlineLiveReasonCache.value;
+  if (strategyMainlineLiveReasonCache.day === isoDay && strategyMainlineLiveReasonCache.inflight) {
+    return strategyMainlineLiveReasonCache.inflight;
+  }
+  const task = fetchTonghuashunApiJson(tonghuashunLimitUpPoolUrl(isoDay))
+    .then(json => {
+      const byCode = new Map();
+      for (const row of (Array.isArray(json?.data?.info) ? json.data.info : [])) {
+        const code = normalizeReasonSourceCode(row?.code);
+        const reason = String(row?.reason_type || '').trim();
+        if (!code || !reason) continue;
+        byCode.set(code, { code, reason, source: 'ths-limit-up-pool' });
+      }
+      strategyMainlineLiveReasonCache.day = isoDay;
+      strategyMainlineLiveReasonCache.at = Date.now();
+      strategyMainlineLiveReasonCache.value = byCode;
+      return byCode;
+    })
+    .catch(err => {
+      strategyMainlineLiveReasonCache.day = isoDay;
+      strategyMainlineLiveReasonCache.at = Date.now() - 45 * 1000;
+      strategyMainlineLiveReasonCache.value = new Map();
+      throw err;
+    })
+    .finally(() => {
+      strategyMainlineLiveReasonCache.inflight = null;
+    });
+  strategyMainlineLiveReasonCache.day = isoDay;
+  strategyMainlineLiveReasonCache.inflight = task;
+  return task;
+}
+const strategyMainlineVisibleAttributionCache = new Map();
+async function strategyMainlineAttributionContextForCodes(day, codes) {
+  const isoDay = isoFromCompactDate(day);
+  const normalizedCodes = [...new Set((codes || [])
+    .map(normalizeReasonSourceCode)
+    .filter(Boolean))]
+    .sort();
+  if (!normalizedCodes.length) return new Map();
+  const cacheKey = `${isoDay}:${normalizedCodes.join(',')}`;
+  const cached = strategyMainlineVisibleAttributionCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < 60 * 1000) return cached.value;
+  const prior = await buildStrategyMainlinePriorReasonContext(isoDay, new Set(normalizedCodes), 30)
+    .catch(() => ({ byCode: new Map() }));
+  const isToday = isoDay === isoFromCompactDate(chinaNowParts().day);
+  const live = isToday
+    ? await strategyMainlineWithTimeout(
+      strategyMainlineLiveLimitReasonByCode(isoDay).catch(() => new Map()),
+      1500,
+      new Map(),
+      'visible-live-limit-reason')
+    : new Map();
+  const value = strategyMainlineBuildStarAttributionContext(prior?.byCode, live);
+  strategyMainlineVisibleAttributionCache.set(cacheKey, { at: Date.now(), value });
+  if (strategyMainlineVisibleAttributionCache.size > 20) {
+    const oldestKey = strategyMainlineVisibleAttributionCache.keys().next().value;
+    strategyMainlineVisibleAttributionCache.delete(oldestKey);
+  }
+  return value;
+}
+function strategyMainlinePayloadStarCodes(payload, predict) {
+  const codes = new Set();
+  const addStar = star => {
+    const code = normalizeReasonSourceCode(star?.code);
+    if (code) codes.add(code);
+  };
+  const addItems = items => {
+    for (const item of (Array.isArray(items) ? items : [])) {
+      for (const star of (Array.isArray(item?.starStocks) ? item.starStocks : [])) addStar(star);
+      for (const star of (Array.isArray(item?.expectedStarHistory) ? item.expectedStarHistory : [])) addStar(star);
+    }
+  };
+  addItems(payload?.mainlines);
+  addItems(payload?.reserveMainlines);
+  addItems(payload?.mainlinesBySource?.eastmoney?.mainlines);
+  addItems(payload?.mainlinesBySource?.eastmoney?.reserveMainlines);
+  addItems(payload?.mainlinesBySource?.ths?.mainlines);
+  addItems(payload?.mainlinesBySource?.ths?.reserveMainlines);
+  const addPredictBlock = block => {
+    for (const row of (Array.isArray(block?.starTransitions) ? block.starTransitions : [])) addStar(row);
+    for (const item of (Array.isArray(block?.candidates) ? block.candidates : [])) {
+      for (const star of (Array.isArray(item?.stars) ? item.stars : [])) addStar(star);
+      addStar(item?.star);
+    }
+  };
+  addPredictBlock(predict);
+  addPredictBlock(predict?.bySource?.eastmoney);
+  addPredictBlock(predict?.bySource?.ths);
+  return [...codes];
+}
+
 // 读取主线相关板块当日已有的 L2 扫描结果（只消费，不在这里触发扫描），产出 code -> 明星判定。
 function strategyMainlineCollectStars(boards, day, options = {}) {
   const byCode = new Map();
@@ -22675,6 +22931,7 @@ function strategyMainlineCollectStars(boards, day, options = {}) {
         code,
         name: String(row?.name || ''),
         boardName: String(boardByPlate.get(plateId)?.name || job.boardName || ''),
+        scanPlateId: plateId,
         observedAt: observedAt || null,
         confirmedAt: star.level === 'confirmed' ? (observedAt || null) : null,
         confirmedBy,
@@ -23627,17 +23884,20 @@ function strategyMainlineExpectedTransitionMap(predict, source = '') {
 // 1) 双方主题经当前题材归类(strategyMainlineFamilyInfo)重新规范化后同族;
 // 2) 轨迹记录的当时成分板 plateId 与当前候选的成分板有交集(同一批板=同一方向,最精确)。
 // 不做任何模糊字符串匹配,避免把不相干题材误粘。
-function strategyMainlineResolveExpectedHistory(item, transitionMap) {
+function strategyMainlineResolveExpectedHistory(item, transitionMap, options = {}) {
   if (!item || !(transitionMap instanceof Map) || !transitionMap.size) return [];
+  const attributionByCode = options?.attributionByCode;
+  const attributionSafe = rows => (Array.isArray(rows) ? rows : []).filter(row =>
+    strategyMainlineStarAttributionDecision(item, row, attributionByCode).allowed);
   const mainlineKey = String(item?.familyKey || item?.key || '').trim();
   const direct = mainlineKey ? transitionMap.get(mainlineKey) : null;
-  if (Array.isArray(direct) && direct.length) return direct;
+  if (Array.isArray(direct) && direct.length) return attributionSafe(direct);
   const rows = Array.isArray(transitionMap.rows) ? transitionMap.rows : [...transitionMap.values()].flat();
   if (!rows.length) return [];
   const itemFamilyKey = strategyMainlineFamilyInfo({ theme: item?.theme }).key;
   const itemBoardIds = new Set((Array.isArray(item?.resonanceBoards) ? item.resonanceBoards : [])
     .map(b => String(b?.plateId || '').trim()).filter(Boolean));
-  const matched = rows.filter(row => {
+  const matched = attributionSafe(rows).filter(row => {
     if (row.mainlineTheme && strategyMainlineFamilyInfo({ theme: row.mainlineTheme }).key === itemFamilyKey) return true;
     return (row.mainlineBoardIds || []).some(id => itemBoardIds.has(String(id)));
   });
@@ -23649,9 +23909,9 @@ function strategyMainlineResolveExpectedHistory(item, transitionMap) {
   });
 }
 
-function strategyMainlineAttachExpectedHistory(item, transitionMap, sessionPhase = '') {
+function strategyMainlineAttachExpectedHistory(item, transitionMap, sessionPhase = '', options = {}) {
   if (!item || !(transitionMap instanceof Map)) return item;
-  const history = strategyMainlineResolveExpectedHistory(item, transitionMap);
+  const history = strategyMainlineResolveExpectedHistory(item, transitionMap, options);
   if (!history.length) return item;
   const currentStars = Array.isArray(item?.starStocks) ? item.starStocks : [];
   const currentByCode = new Map(currentStars
@@ -25016,7 +25276,7 @@ function getStrategyPredictHitRatesCached() {
 // 最终输出前的预判增强：广度分、动能分、潜力个股、明星股、首日题材、确定性分级都在这一处挂载。
 // trendKeyPrefix(Owner v2 两套独立预测):盘中动能采样必须按来源隔离,否则东财/同花顺同题材共用
 // 同一趋势键,先跑的一边写入基线后,另一边会拿它当基线算 delta,串改两边分数与排名(Codex 二审 P1)。
-function strategyMainlineAugmentPrediction(item, isToday, day, recordTrend = true, trendKeyPrefix = '') {
+function strategyMainlineAugmentPrediction(item, isToday, day, recordTrend = true, trendKeyPrefix = '', options = {}) {
   const breadth = strategyMainlineBestBreadth(item?.resonanceBoards);
   const scoreParts = { ...(item?.scoreParts || {}) };
   const breadthScore = strategyMainlineBreadthScore(breadth);
@@ -25044,8 +25304,26 @@ function strategyMainlineAugmentPrediction(item, isToday, day, recordTrend = tru
     familyKey: item?.familyKey || item?.key || '',
   });
   const starByCode = l2Stars.byCode;
+  const attributionRejected = [];
   const starStocks = [...starByCode.values()]
-    .filter(star => themeCodes.has(star.code) && star.level !== 'sealedWeak')
+    .map(star => ({
+      star,
+      decision: strategyMainlineStarAttributionDecision(item, star, options?.attributionByCode),
+    }))
+    .filter(({ star, decision }) => {
+      const eligible = themeCodes.has(star.code) && star.level !== 'sealedWeak';
+      if (eligible && !decision.allowed) {
+        attributionRejected.push({
+          code: star.code,
+          name: star.name || star.code,
+          boardName: star.boardName || '',
+          reason: decision.basis,
+          conflict: decision.conflict || '',
+        });
+      }
+      return eligible && decision.allowed;
+    })
+    .map(({ star, decision }) => ({ ...star, attributionBasis: decision.basis }))
     .sort((a, b) => (STRATEGY_MAINLINE_STAR_LEVEL_ORDER[a.level] ?? 9) - (STRATEGY_MAINLINE_STAR_LEVEL_ORDER[b.level] ?? 9) || (Number(b.gain) || 0) - (Number(a.gain) || 0))
     .slice(0, 4);
   const starConfirmed = starStocks.some(star => star.level === 'confirmed');
@@ -25074,6 +25352,8 @@ function strategyMainlineAugmentPrediction(item, isToday, day, recordTrend = tru
     eligibleCodeCount: l2Coverage.eligibleCodeCount,
     coveredCodeCount: l2Coverage.coveredCodeCount,
     requiredCount: l2Coverage.requiredCount,
+    attributionRejectedCount: attributionRejected.length,
+    attributionRejected: attributionRejected.slice(0, 6),
   };
   if (starStocks.length) {
     scoreParts.star = Number(Math.min(40, starStocks.reduce((sum, star) => sum + (star.level === 'confirmed' ? 15 : 8), 0)).toFixed(1));
@@ -25764,6 +26044,17 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     buildStrategyMainlinePriorReasonContext(isoDay, intradaySignalCodes, 30),
     debugErrors,
     { byCode: new Map(), byTheme: new Map(), tradingDays: [], endDay: '' });
+  const liveReasonByCode = (!diagHistorical && isoDay === diagTodayIso)
+    ? await strategyMainlineWithTimeout(
+      strategyMainlineLiveLimitReasonByCode(isoDay).catch(() => new Map()),
+      1500,
+      new Map(),
+      'live-limit-reason')
+    : new Map();
+  const starAttributionByCode = strategyMainlineBuildStarAttributionContext(
+    priorReason?.byCode,
+    liveReasonByCode,
+  );
   for (const prior of priorReason.byCode.values()) {
     const seed = strategyMainlineEnsureSeed(seedByKey, prior.theme, prior.key);
     if (!seed) continue;
@@ -26100,8 +26391,20 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     : null;
   const expectedTransitionMap = strategyMainlineExpectedTransitionMap(priorPredict, predictSource);
   const augmentedMainlines = strategyMergeMainlineFamilies(rawMainlines)
-    .map(item => strategyMainlineAugmentPrediction(item, isTodayQuery, isoDay, !diagMode, trendKeyPrefix))
-    .map(item => strategyMainlineAttachExpectedHistory(item, expectedTransitionMap, sessionPhaseNow));
+    .map(item => strategyMainlineAugmentPrediction(
+      item,
+      isTodayQuery,
+      isoDay,
+      !diagMode,
+      trendKeyPrefix,
+      { attributionByCode: starAttributionByCode },
+    ))
+    .map(item => strategyMainlineAttachExpectedHistory(
+      item,
+      expectedTransitionMap,
+      sessionPhaseNow,
+      { attributionByCode: starAttributionByCode },
+    ));
   const inflowGate = strategyMainlineApplyInflowGate(
     augmentedMainlines,
     mainlineConfirm,
@@ -26982,10 +27285,21 @@ function strategyMainlineHistoricalPredictRow(row, predictBlock, options = {}) {
     String(item?.key || item?.familyKey || '').trim() === key
   ) || null;
   const finalSealedCodes = options.finalSealedCodes instanceof Set ? options.finalSealedCodes : null;
+  const attributionItem = {
+    key,
+    familyKey: String(candidate?.familyKey || key).trim(),
+    theme: String(row.theme || candidate?.theme || '').trim(),
+  };
   const starRows = [];
   const pushStar = raw => {
     const code = normalizeReasonSourceCode(raw?.code);
     if (!code || starRows.some(star => star.code === code)) return;
+    const attribution = strategyMainlineStarAttributionDecision(
+      attributionItem,
+      raw,
+      options?.attributionByCode,
+    );
+    if (!attribution.allowed) return;
     const confirmed = String(raw?.level || raw?.lastLevel || '') === 'confirmed'
       || !!raw?.confirmedAt
       || !!finalSealedCodes?.has(code);
@@ -26998,6 +27312,7 @@ function strategyMainlineHistoricalPredictRow(row, predictBlock, options = {}) {
       historicalPrediction: true,
       firstExpectedAt: String(raw?.firstExpectedAt || ''),
       confirmedAt: String(raw?.confirmedAt || '') || null,
+      attributionBasis: attribution.basis,
     });
   };
   for (const star of (Array.isArray(candidate?.stars) ? candidate.stars : [])) {
@@ -27005,6 +27320,7 @@ function strategyMainlineHistoricalPredictRow(row, predictBlock, options = {}) {
   }
   if (row.star && ['expected', 'confirmed'].includes(String(row.star.level || ''))) pushStar(row.star);
   for (const transition of strategyMainlineExpectedStarTransitions(predictBlock, row)) pushStar(transition);
+  if (!starRows.length) return null;
 
   const rawLeaders = Array.isArray(candidate?.leaders) && candidate.leaders.length
     ? candidate.leaders
@@ -27078,6 +27394,7 @@ function strategyMainlineRestoreHistoricalPrediction(payload, predict, options =
         source,
         savedAt: predict.savedAt,
         finalSealedCodes,
+        attributionByCode: options?.attributionByCode,
       }))
       .filter(Boolean);
   };
@@ -27281,32 +27598,51 @@ function strategyMainlineRestrictToQiPayload(payload, options = {}) {
 
 // 正式接口可能命中部署前写下的内存/文件缓存或冻结快照；返回前用同日预测轨迹补回
 // “盘中曾出现预期明星”证据。只补展示资格和证据标签，不改写原缓存/快照文件。
-function strategyMainlineAttachExpectedHistoryPayload(payload, predict) {
-  if (!payload || typeof payload !== 'object' || !predict) return payload;
+function strategyMainlineAttachExpectedHistoryPayload(payload, predict, options = {}) {
+  if (!payload || typeof payload !== 'object') return payload;
   const sessionPhase = String(payload?.sessionPhase || '');
-  const maps = {
-    root: strategyMainlineExpectedTransitionMap(predict, ''),
-    eastmoney: strategyMainlineExpectedTransitionMap(predict, 'eastmoney'),
-    ths: strategyMainlineExpectedTransitionMap(predict, 'ths'),
-  };
+  const maps = predict ? {
+      root: strategyMainlineExpectedTransitionMap(predict, ''),
+      eastmoney: strategyMainlineExpectedTransitionMap(predict, 'eastmoney'),
+      ths: strategyMainlineExpectedTransitionMap(predict, 'ths'),
+    } : {
+      root: new Map(),
+      eastmoney: new Map(),
+      ths: new Map(),
+    };
   const attachList = (list, source = '') => (Array.isArray(list) ? list : []).map(item => {
     const itemSource = String(item?.source || source || '');
-    return strategyMainlineAttachExpectedHistory(item, maps[itemSource] || maps.root, sessionPhase);
+    const filtered = strategyMainlineFilterAttributedStars(item, options?.attributionByCode);
+    return strategyMainlineAttachExpectedHistory(
+      filtered,
+      maps[itemSource] || maps.root,
+      sessionPhase,
+      options,
+    );
   });
   const mainlinesBySource = payload.mainlinesBySource
     ? {
         ...payload.mainlinesBySource,
         eastmoney: payload.mainlinesBySource.eastmoney
-          ? { ...payload.mainlinesBySource.eastmoney, mainlines: attachList(payload.mainlinesBySource.eastmoney.mainlines, 'eastmoney') }
+          ? {
+              ...payload.mainlinesBySource.eastmoney,
+              mainlines: attachList(payload.mainlinesBySource.eastmoney.mainlines, 'eastmoney'),
+              reserveMainlines: attachList(payload.mainlinesBySource.eastmoney.reserveMainlines, 'eastmoney'),
+            }
           : payload.mainlinesBySource.eastmoney,
         ths: payload.mainlinesBySource.ths
-          ? { ...payload.mainlinesBySource.ths, mainlines: attachList(payload.mainlinesBySource.ths.mainlines, 'ths') }
+          ? {
+              ...payload.mainlinesBySource.ths,
+              mainlines: attachList(payload.mainlinesBySource.ths.mainlines, 'ths'),
+              reserveMainlines: attachList(payload.mainlinesBySource.ths.reserveMainlines, 'ths'),
+            }
           : payload.mainlinesBySource.ths,
       }
     : payload.mainlinesBySource;
   return {
     ...payload,
     mainlines: attachList(payload.mainlines),
+    reserveMainlines: attachList(payload.reserveMainlines),
     ...(mainlinesBySource ? { mainlinesBySource } : {}),
   };
 }
@@ -27352,11 +27688,18 @@ async function getStrategyMainlinesVisible(day) {
   // [Codex #201 四审 P1] 冻结返回路径同样保证 confirmed 转换落盘(按日单例,等待完成):
   // 部署前已冻结的当日快照也能把 starTransitions 升级持久化,不依赖 live build 是否执行。
   if (finalSealedCodes) await strategyPredictPersistFinalSealUpgradesOnce(predictDay, finalSealedCodes).catch(() => {});
+  const attributionByCode = await strategyMainlineAttributionContextForCodes(
+    predictDay,
+    strategyMainlinePayloadStarCodes(payload, predict),
+  ).catch(() => new Map());
   const restricted = strategyMainlineRestrictToQiPayload(
-    strategyMainlineAttachExpectedHistoryPayload(payload, predict),
+    strategyMainlineAttachExpectedHistoryPayload(payload, predict, { attributionByCode }),
     { finalSealedCodes }
   );
-  return strategyMainlineRestoreHistoricalPrediction(restricted, predict, { finalSealedCodes });
+  return strategyMainlineRestoreHistoricalPrediction(restricted, predict, {
+    finalSealedCodes,
+    attributionByCode,
+  });
 }
 
 async function readAiReadOnlyToken() {
