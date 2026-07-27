@@ -11534,3 +11534,45 @@ Deployment:
 Notes for next agent:
 - 写入脚本必须从合入后的 `main` 通过受保护生产环境执行；不得从分支直写生产。
 - payload 只存在于生产环境加密 secret，不进入 Git、日志或 PR。
+
+## 2026-07-27 - Codex - 当日 TGB 湖南人复盘入库完成
+
+Changed:
+- PR #306 合入并通过受保护运行 `30262706867` 强制刷新官方原文和原始图片证据。
+- PR #307 合入后，通过受保护运行 `30263637774` 写入 Codex 人工双遍复核的 111 行
+  TGB 正式来源，随后重折 2026-07-27 综合主因库并完成公开接口复核。
+- 生产脚本已把操作结果写入云端两份运维日志；没有部署应用代码到运行目录，也没有
+  重启主站、Caddy、娱乐服务、SSH 或公司端 L2 worker。
+
+Files:
+- 本条仅更新 `docs/DAILY_HANDOFF.md`；正式 TGB、综合主因、证据、质量和 auto
+  折叠文件均为云端运行时数据，未进入 Git。
+
+Validated:
+- 文章：`https://www.tgb.cn/a/2tM2uLbdlIs`；官方原图：
+  `image-01-06.png`，SHA-256
+  `7ae39e7b6227e2eb98abbdfb92473aea0ed84cd559e9eb3623b0c4d2e8be773c`。
+- 正式写前与写后质量闸一致：111 行、111 个唯一代码、`missingCodes=[]`、
+  `extraCodes=[]`、无重复、`weakCount=0`、`nameMismatches=[]`，15 个题材块合计 111。
+- 来源忠实名称差异已按固定代码显式记录：`001248` 原图“华润新能源”/终盘池
+  “华润新能”；`002029` 原图“七匹狼”/终盘池“七 匹 狼”。
+- 公开 `source-view` 与主因 day 接口均返回淘股吧 111、综合归纳 111、覆盖率 100%、
+  主因覆盖率 100%、低置信 0、`sourceErrors=[]`；独立代码集合复核缺失/多余均为空。
+- 复盘啦与选股宝各 111；韭研独立来源当时仍为 0，不影响本次 TGB 质量闸。
+- `/health` 返回 `{"ok":true}`。
+- 生产哈希：终盘池
+  `1e26cbfc53b12ee2dadecaa44685535b09e85c90c6bca541b63c5ab2583b6cb2`；
+  正式 TGB
+  `261f2f4ca79665d0ae78759736b32d51831a40950f71f8d15d92d9fb6f9357af`；
+  综合主因
+  `d3e2de396d30c401f06a4c397e1639e79a43ac29ff7f42afc534ab38081ff128`。
+
+Deployment:
+- 云端运行时数据已更新并生效；综合主因已重折。
+- 备份目录：
+  `C:\PandaDashboard\backups\tgb-hunan-manual-20260727-20260727115350`。
+- 服务重启：无。
+
+Notes for next agent:
+- 2026-07-27 TGB 正式文件是受保护人工来源；普通同步和 force 均不得覆盖。
+- 后续若韭研同日来源补齐，只按其独立来源 SOP 处理，不得改写已完成的 TGB 文件。
