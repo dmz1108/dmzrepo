@@ -11643,3 +11643,32 @@ Notes for next agent:
 - 不得用最终确认覆盖冻结预测或重算预测命中率；它是并列展示的盘后事实。
 - 部署后应核验 2026-07-27 回看行：原预测仍为 PCB，最终确认为半导体，并显示
   太极实业、雅克科技两只确认明星。
+
+## 2026-07-27 - Codex - 预判回看最终确认已部署
+
+Changed:
+- PR #310 已合入 `main`，并通过受保护生产流程部署回看最终确认叠加功能。
+- 云端主服务已重启；生产部署脚本已自动写入两份云端运维日志。
+
+Files:
+- 本条仅更新 `docs/DAILY_HANDOFF.md`；部署文件为 `kpl-stats-server.js` 和
+  `kpl-dashboard_17_apple.html`。
+
+Validated:
+- GitHub Actions production run `30266972779` 成功，批准提交
+  `439360a58f3f71b53b4545b5c9a65655a6c3bed9`。
+- `https://market.dreamerqi.com/health` 返回 `{"ok":true}`。
+- 生产回看接口 2026-07-27 行仍保留原始预测 `theme=PCB`、东财 PCB、同花顺无主线。
+- 同一行新增 `finalConfirmedMainline.theme=半导体`、
+  `correctedFromPrediction=true`、`excludedFromPredictionStats=true`。
+- 最终确认明星为太极实业 `600667`、雅克科技 `002409`；生产行情 HTML 已包含
+  “最终确认”渲染标记。
+
+Deployment:
+- 已部署并生效；主服务已重启，健康检查通过。
+- 生产备份：
+  `C:\PandaDashboard\_deploy-backups\github-30266972779-1`。
+
+Notes for next agent:
+- 预判回看的 `theme/bySource` 是当时冻结预测；`finalConfirmedMainline` 是盘后最终
+  结论。两者并列是刻意设计，不应再合并为同一个字段。
