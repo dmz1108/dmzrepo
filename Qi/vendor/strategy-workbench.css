@@ -5578,3 +5578,84 @@ body.view-strategy .ml-star-proof .ml-stock.ml-starstock:not(.confirmed) .ml-sta
   background: transparent !important;
   color: #b9cde4 !important;
 }
+
+/* =========================================================================
+   Panda 管理员操作口径(2026-07-26)
+   预期明星只观察；确认明星只在实时 L2 首次封板确认点形成买点；
+   正式主线的首位龙头在主线有效期内保留操作角色。历史回看不生成当前信号。
+   ========================================================================= */
+body.view-strategy .ml-action-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 19px;
+  margin-left: 3px;
+  padding: 1px 6px;
+  border: 1px solid rgba(74, 155, 255, .34);
+  border-radius: 4px;
+  background: rgba(74, 155, 255, .10);
+  color: #8fc1ff;
+  font-size: 9.5px;
+  font-style: normal;
+  font-weight: 760;
+  line-height: 1;
+  white-space: nowrap;
+}
+body.view-strategy .ml-star-proof .ml-stock.ml-starstock .ml-star-state.is-watch {
+  border-color: rgba(127, 155, 189, .45) !important;
+  background: transparent !important;
+  color: #b9cde4 !important;
+}
+body.view-strategy .ml-star-proof .ml-stock.ml-starstock.confirmed .ml-star-state.is-buy {
+  border-color: rgba(240, 192, 74, .8) !important;
+  background: var(--st-gold) !important;
+  color: #17130b !important;
+  box-shadow: 0 0 0 2px rgba(240, 192, 74, .09) !important;
+}
+body.view-strategy .ml-star-proof .ml-stock.ml-starstock.confirmed .ml-star-state.is-review {
+  border-color: rgba(240, 192, 74, .38) !important;
+  background: rgba(240, 192, 74, .08) !important;
+  color: #f0cf8a !important;
+  box-shadow: none !important;
+}
+body.view-strategy .ml-action-guide {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  margin-top: 8px;
+  padding: 6px 9px;
+  border: 1px solid var(--st-line);
+  border-left: 3px solid var(--st-slate);
+  border-radius: 5px;
+  background: rgba(127, 155, 189, .045);
+}
+body.view-strategy .ml-action-guide-label {
+  flex: 0 0 auto;
+  color: var(--st-faint);
+  font-size: 9.5px;
+  font-weight: 760;
+}
+body.view-strategy .ml-action-guide b {
+  min-width: 0;
+  color: var(--st-muted);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+body.view-strategy .ml-action-guide.is-action {
+  border-left-color: var(--st-gold);
+  background: linear-gradient(90deg, rgba(240, 192, 74, .09), rgba(74, 155, 255, .035));
+}
+body.view-strategy .ml-action-guide.is-action b { color: #f3ddb1; }
+body.view-strategy .ml-action-guide.is-review {
+  border-left-color: var(--st-line-strong);
+  background: transparent;
+}
+
+@media (max-width: 760px) {
+  body.view-strategy .ml-action-guide {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+}

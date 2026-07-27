@@ -42,6 +42,8 @@ const code = [
   extractFn('strategyMainlinePerOrderShareCap'),
   extractFn('strategyMainlineMaxObservableBucket'),
   extractFn('strategyMainlineStarStatus'),
+  extractFn('strategyMainlineStarActionState'),
+  extractFn('strategyMainlineIsTradingSessionObservation'),
 ].join('\n');
 eval(code);
 
@@ -174,6 +176,7 @@ const strategyMainlineFamilyInfo = item => ({
 const successfulCrossSourceJob = {
   jobId: 'auto-good', plateId: '308014', boardName: '创新药', familyKey: 'group:医药',
   day: '2026-07-13', status: 'done', createdAt: '2026-07-13T02:35:10.000Z',
+  updatedAt: '2026-07-13T02:36:20.000Z',
   results: [{ ...rowExpected, code: '600001', name: '跨源明星' }],
 };
 const emptyNewerJob = {
@@ -197,6 +200,16 @@ const crossSourceStars = strategyMainlineCollectStars(
 A(crossSourceStars.byCode.get('600001')?.level === 'expected', '同一主线家族跨板块ID仍消费有效L2结果');
 A(!crossSourceStars.byCode.has('600002'), '不同主线家族的扫描结果不会错挂');
 A(crossSourceStars.completedPlates.has('308014'), '后一次空任务不遮蔽同板块较早的有效完成任务');
+A(crossSourceStars.byCode.get('600001')?.actionState === 'watch-only'
+  && crossSourceStars.byCode.get('600001')?.observedAt === '2026-07-13T02:36:20.000Z',
+  '预期明星只标观察，并保留 L2 结果提交时点');
+A(strategyMainlineStarActionState('confirmed', 'live-l2-scan') === 'buy-point-confirmed'
+  && strategyMainlineStarActionState('confirmed', 'final-limit-up-db') === 'review-confirmed'
+  && strategyMainlineStarActionState('confirmed', 'l2-scan-outside-session') === 'review-confirmed',
+  '盘中实时 L2 确认与盘后扫描/涨停库补确认严格区分，后两者不得冒充盘中买点');
+A(strategyMainlineIsTradingSessionObservation('2026-07-13', '2026-07-13T02:36:20.000Z')
+  && !strategyMainlineIsTradingSessionObservation('2026-07-13', '2026-07-13T07:30:00.000Z'),
+  '确认时点必须属于目标交易日的可交易时段，收盘后扫描只作复盘');
 
 // 13. 扫描覆盖率分母只计算 worker 实际允许扫描的股票。
 eval(extractFn('strategyMainlineDeriveL2Status'));

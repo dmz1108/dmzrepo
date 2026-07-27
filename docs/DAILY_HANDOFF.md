@@ -11323,3 +11323,46 @@ Notes for next agent:
   `remainingOrphans` 可短暂为正；只有 `skippedYoung` 对应的未满 60 秒进程属于预期。
 - 若再次出现握手饱和，先运行只读 `diagnose-ssh-concurrency.ps1`，不要扩大
   `MaxStartups`，也不要按名称批量结束全部 `sshd.exe`。
+
+## 2026-07-26 - Codex - 明确主线内两类操作角色
+
+Changed:
+- 固化 Owner 口径：预期明星在确认前只能观察；只有交易时段内 L2 扫描首次观察到
+  `confirmed` 才记录为盘中“封板买点”；收盘涨停库或非交易时段扫描补确认只用于复盘，
+  不倒推盘中买点。
+- 正式主线的首位合格龙头增加“主线内随时”角色；预备主线龙头、其他龙头候选和普通
+  资金活跃股均不获得该角色。该变化不修改明星阈值、扫描门槛、主线评分、龙头评分或排序。
+- 管理员策略页显示“仅观察 / 扫描确认 HH:mm / 当日确认”和操作口径说明；普通用户继续
+  使用中性的“预期 / 已确认”文案，不暴露管理员操作语义。
+- 明星轨迹新增 `confirmedBy`，并以 `live-l2-scan`、`l2-scan-outside-session`、
+  `final-limit-up-db` 区分确认来源；旧未知来源按复盘确认处理，保持 fail-closed。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `tests/star-l2-layers.test.js`
+- `tests/strategy-workbench-ui.test.js`
+- `tests/strategy-expected-star-sticky.test.js`
+- `tests/qi-mainline-states.test.js`
+- `tests/strategy-three-requirements.test.js`
+- `tests/strategy-hitrate-display.test.js`
+- `docs/strategy/discussions/2026-07-21-qi-mainline-three-requirements.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js` 与前端操作语义运行时测试通过。
+- `tests/*.test.js` 共 71 份测试全部通过，`git diff --check` 通过。
+- 本地 `/health` 返回 `{"ok":true}`，`/kpl` 正确加载
+  `strategy-workbench.css?v=20260726e`，`/admin` 返回 HTTP 200。
+
+Deployment:
+- 尚未部署云端，未重启任何服务。
+
+Notes for next agent:
+- “扫描确认”是系统在交易时段 L2 结果中首次确认封板的观察时点，可能晚于交易所真实
+  首封数分钟；不得用盘后涨停库 `savedAt`、历史未知来源或非交易时段扫描时间代替。
+- 若明星轨迹缺少 `confirmedBy`，必须保持未知并按复盘确认展示，不得兜底写成
+  `live-l2-scan`。
+- 当前策略仍只允许正式主线中的确认明星和首位龙头具备操作角色；不要将这一展示语义
+  扩展到预备主线或改变既有评分。

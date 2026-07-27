@@ -31,6 +31,7 @@ const strategyMainlineFamilyInfo = (x) => {
 eval(extractFn('strategyPredictStarTransitions'));
 eval(extractFn('strategyMainlineExpectedTransitionMap'));
 eval(extractFn('strategyMainlineResolveExpectedHistory'));
+eval(extractFn('strategyMainlineStarActionState'));
 eval(extractFn('strategyMainlineAttachExpectedHistory'));
 
 // ---- 1. 轨迹落库携带当时成分板 plateId ----
