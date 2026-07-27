@@ -13916,6 +13916,26 @@ function renderMainlineReviewHTML(d) {
     }).join('');
     return `<span class="mlr-source-grid">${items}</span>`;
   };
+  const finalConfirmationHTML = (r, actualResult = '') => {
+    const final = r && r.finalConfirmedMainline;
+    if (!final) return '';
+    const stars = (Array.isArray(final.stars) ? final.stars : [])
+      .filter(star => star && (star.level === 'confirmed' || star.level === 'expected'));
+    const starText = stars.length
+      ? ` · ${stars.map(star => `${star.name || star.code}${star.level === 'confirmed' ? ' 明星确认' : ' 预期明星'}`).join(' / ')}`
+      : '';
+    const status = final.available
+      ? (final.correctedFromPrediction ? '口径修正' : '已确认')
+      : '确认记录';
+    return `<span class="mlr-source-grid">
+      <span class="mlr-source-row mainline" title="管理员最终确认与修正后正式主线；独立于盘中预测保存，不改写预测命中率">
+        <span class="mlr-source-name">最终确认</span>
+        <strong>${escapeHTML(final.theme || final.key || '')}${escapeHTML(starText)}</strong>
+        <span class="mlr-hit ok">${status}</span>
+      </span>
+      ${actualResult ? `<span class="mlr-source-row"><span class="mlr-source-name">主因格局</span><strong>${actualResult}</strong><span></span></span>` : ''}
+    </span>`;
+  };
   const actualCell = (r) => {
     const top = Array.isArray(r.actualTop) ? r.actualTop : [];
     if (!top.length) return '';
@@ -14069,7 +14089,8 @@ function renderMainlineReviewHTML(d) {
     ].filter(Boolean);
     const detail = evidenceCells.length ? `<div class="mlr-evidence-grid">${evidenceCells.join('')}</div>` : '';
     const actualResult = actualCell(r);
-    const result = sourceReview ? actualResult : `${r.noMainline ? '' : hitCell(r)}${actualResult}`;
+    const finalResult = finalConfirmationHTML(r, actualResult);
+    const result = finalResult || (sourceReview ? actualResult : `${r.noMainline ? '' : hitCell(r)}${actualResult}`);
     const sourceStates = r.bySource ? Object.values(r.bySource).map(src => String(src?.status || '')) : [];
     const sourceHasMainline = sourceStates.includes('mainline');
     const sourceAllNoMainline = sourceStates.length > 0 && sourceStates.every(status => status === 'no-mainline');
@@ -14103,14 +14124,26 @@ function renderMainlineReviewHTML(d) {
       return `${String(r.theme || '')}${hit}`;
     })();
     const actualTopRow = Array.isArray(r.actualTop) && r.actualTop.length ? r.actualTop[0] : null;
-    const compactOut = r.pendingReview ? '待盘后验证' : (actualTopRow ? `${String(actualTopRow.theme || '')} ${Number(actualTopRow.count) || 0}涨停` : '暂无结果');
-    const lineStock = reviewStarStock || null;
+    const finalConclusion = r.finalConfirmedMainline || null;
+    const compactOut = finalConclusion
+      ? `最终确认 ${String(finalConclusion.theme || finalConclusion.key || '')}${actualTopRow ? ` · 主因${String(actualTopRow.theme || '')}${Number(actualTopRow.count) || 0}涨停` : ''}`
+      : r.pendingReview ? '待盘后验证' : (actualTopRow ? `${String(actualTopRow.theme || '')} ${Number(actualTopRow.count) || 0}涨停` : '暂无结果');
+    const lineStock = finalConclusion ? null : (reviewStarStock || null);
+    const finalStarNames = finalConclusion
+      ? (Array.isArray(finalConclusion.stars) ? finalConclusion.stars : [])
+        .filter(star => star && (star.level === 'confirmed' || star.level === 'expected'))
+        .map(star => star.name || star.code)
+        .filter(Boolean)
+        .join(' / ')
+      : '';
     const linePerf = (v) => {
       if (v == null) return '<b class="na">--</b>';
       const n = Number(v);
       return `<b class="${n > 0 ? 'up' : (n < 0 ? 'down' : '')}">${n > 0 ? '+' : ''}${n}%</b>`;
     };
-    const lineBadge = starVisual.key
+    const lineBadge = finalConclusion
+      ? `<span class="mlr-line-badge">最终确认</span>`
+      : starVisual.key
       ? `<span class="mlr-line-badge ${starVisual.key}">${escapeHTML(starVisual.label)}</span>`
       : `<span class="mlr-line-badge quiet">${r.noMainline || !r.theme ? '今日无主线' : escapeHTML(r.theme)}</span>`;
     return `<details class="mlr-line ${hitClass}${starVisual.rowClass ? ` ${starVisual.rowClass}` : ''}${r.sampleValid === false ? ' invalid' : ''}">
@@ -14118,7 +14151,7 @@ function renderMainlineReviewHTML(d) {
       <time class="mlr-line-day">${escapeHTML(String(r.day || '').slice(5).replace('-', '.'))}</time>
       ${lineBadge}
       <span class="mlr-line-flow">${escapeHTML(compactPred)} <i>→</i> <b>${escapeHTML(compactOut)}</b>${r.sampleValid === false ? '<em class="mlr-line-invalid">不计样本</em>' : ''}</span>
-      <span class="mlr-line-star">${starVisual.name ? escapeHTML(starVisual.name) : '<i>—</i>'}</span>
+      <span class="mlr-line-star">${finalStarNames ? escapeHTML(finalStarNames) : (starVisual.name ? escapeHTML(starVisual.name) : '<i>—</i>')}</span>
       <span class="mlr-line-perf">${linePerf(lineStock?.nextHighGain)}</span>
       <span class="mlr-line-perf">${linePerf(lineStock?.nextCloseGain)}</span>
       <span class="mlr-line-perf">${linePerf(lineStock?.threeDayGain)}</span>

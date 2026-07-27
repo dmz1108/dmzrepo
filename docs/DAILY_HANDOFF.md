@@ -11608,3 +11608,38 @@ Deployment:
 Notes for next agent:
 - 2026-07-27 TGB 正式文件是受保护人工来源；普通同步和 force 均不得覆盖。
 - 后续若韭研同日来源补齐，只按其独立来源 SOP 处理，不得改写已完成的 TGB 文件。
+
+## 2026-07-27 - Codex - 预判回看叠加盘后最终确认
+
+Changed:
+- 修复“盘后已确认主线，但预判回看仍只显示冻结盘中预测”的展示缺口。
+- 后端在回看行中新增独立 `finalConfirmedMainline`：从管理员确认记录和修正后的正式
+  主线读取最终主题、来源、确认明星和龙头，不覆盖 `predict.top`。
+- 前端在同一回看行中显示“最终确认”与确认明星；原始盘中预测继续保留用于审计，
+  最终确认明确标记为不进入预测命中率统计。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/mainline-review.test.js`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- `node tests/mainline-review.test.js`
+- `node tests/mainline-confirm.test.js`
+- `node tests/strategy-two-source-mainlines.test.js`
+- `node tests/strategy-historical-conclusion.test.js`
+- `node tests/strategy-hitrate-display.test.js`
+- `node tests/strategy-workbench-ui.test.js`
+- 新回归夹具确认：原始预测保持“医药”，盘后最终确认独立显示“半导体”及两只确认
+  明星；`correctedFromPrediction=true`、`excludedFromPredictionStats=true`。
+
+Deployment:
+- 本条提交时仅为 GitHub 代码变更；生产尚未部署，服务尚未重启。
+
+Notes for next agent:
+- 不得用最终确认覆盖冻结预测或重算预测命中率；它是并列展示的盘后事实。
+- 部署后应核验 2026-07-27 回看行：原预测仍为 PCB，最终确认为半导体，并显示
+  太极实业、雅克科技两只确认明星。
