@@ -55,6 +55,12 @@ const numOrNull = value => {
   return Number.isFinite(number) ? number : null;
 };
 const isFiniteNumeric = value => value !== null && value !== '' && Number.isFinite(Number(value));
+const isoFromCompactDate = value => {
+  const text = String(value || '').trim();
+  return /^\d{8}$/.test(text)
+    ? `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`
+    : text.slice(0, 10);
+};
 const STRATEGY_MAINLINE_STAR_LEVEL_ORDER = { confirmed: 0, expected: 1, active: 2 };
 
 const THEME_TAXONOMY = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'theme-taxonomy.json'), 'utf8'));
@@ -80,6 +86,7 @@ eval(extractFn('strategyMainlineReasonFamilyEvidence'));
 eval(extractFn('strategyMainlineBuildStarAttributionContext'));
 eval(extractFn('strategyMainlineStarAttributionDecision'));
 eval(extractFn('strategyMainlineFilterAttributedStars'));
+eval(extractFn('strategyMainlineMainReasonDbAttribution'));
 eval(extractFn('strategyMainlineExpectedTransitionMap'));
 eval(extractFn('strategyMainlineResolveExpectedHistory'));
 
@@ -134,6 +141,19 @@ const newTheme = strategyMainlineStarAttributionDecision(
 );
 A(newTheme.allowed && newTheme.basis === 'board-membership-only',
   '完全没有主因证据时保留板块候选能力，避免错杀首日新题材');
+
+const historicalSameDay = strategyMainlineMainReasonDbAttribution('2026-07-27', {
+  day: '2026-07-27',
+  stocks: [{ code: '002409', finalBoardTopic: '半导体' }],
+}, ['002409']);
+const historicalAttribution = strategyMainlineBuildStarAttributionContext(new Map(), historicalSameDay);
+const historicalWrong = strategyMainlineStarAttributionDecision(electric, yaKe, historicalAttribution);
+A(!historicalWrong.allowed && historicalWrong.basis === 'current-main-reason-conflict',
+  '历史回看使用目标日四源综合主因，不拿更早主题臆测目标日归属');
+A(strategyMainlineMainReasonDbAttribution('2026-07-27', {
+  day: '2026-07-24',
+  stocks: [{ code: '002409', finalBoardTopic: '电力' }],
+}, ['002409']).size === 0, '跨日主因文件不能参与目标日明星归属');
 
 const filtered = strategyMainlineFilterAttributedStars({
   theme: '电力',

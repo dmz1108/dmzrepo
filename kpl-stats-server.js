@@ -21284,6 +21284,7 @@ function strategyMainlineBuildStarAttributionContext(priorByCode, liveReasonByCo
     if (!out.has(code)) {
       out.set(code, {
         currentReason: '',
+        currentSource: '',
         currentFamilies: new Set(),
         currentTopics: [],
         priorFamilies: new Set(),
@@ -21314,6 +21315,7 @@ function strategyMainlineBuildStarAttributionContext(priorByCode, liveReasonByCo
       const evidence = strategyMainlineReasonFamilyEvidence(reason);
       const row = ensure(code);
       row.currentReason = reason;
+      row.currentSource = String(live?.source || '');
       row.currentFamilies = evidence.keys;
       row.currentTopics = evidence.topics;
     }
@@ -21329,12 +21331,15 @@ function strategyMainlineStarAttributionDecision(item, star, attributionByCode) 
   const evidence = attributionByCode.get(code);
   if (!evidence) return { allowed: true, basis: 'board-membership-only', conflict: '' };
   if (evidence.currentFamilies instanceof Set && evidence.currentFamilies.size) {
+    const currentBasis = evidence.currentSource === 'four-source-main-reason-db'
+      ? 'current-main-reason'
+      : 'current-limit-reason';
     if (evidence.currentFamilies.has(familyKey)) {
-      return { allowed: true, basis: 'current-limit-reason', conflict: '' };
+      return { allowed: true, basis: currentBasis, conflict: '' };
     }
     return {
       allowed: false,
-      basis: 'current-limit-reason-conflict',
+      basis: `${currentBasis}-conflict`,
       conflict: evidence.currentTopics.join('、'),
     };
   }
@@ -22787,6 +22792,19 @@ async function strategyMainlineLiveLimitReasonByCode(day) {
   return task;
 }
 const strategyMainlineVisibleAttributionCache = new Map();
+function strategyMainlineMainReasonDbAttribution(day, payload, codes) {
+  const isoDay = isoFromCompactDate(day);
+  if (!payload || isoFromCompactDate(payload?.day) !== isoDay) return new Map();
+  const wanted = new Set((codes || []).map(normalizeReasonSourceCode).filter(Boolean));
+  const out = new Map();
+  for (const stock of (Array.isArray(payload?.stocks) ? payload.stocks : [])) {
+    const code = normalizeReasonSourceCode(stock?.code);
+    const reason = String(stock?.finalBoardTopic || '').trim();
+    if (!code || !reason || (wanted.size && !wanted.has(code))) continue;
+    out.set(code, { code, reason, source: 'four-source-main-reason-db' });
+  }
+  return out;
+}
 async function strategyMainlineAttributionContextForCodes(day, codes) {
   const isoDay = isoFromCompactDate(day);
   const normalizedCodes = [...new Set((codes || [])
@@ -22797,17 +22815,28 @@ async function strategyMainlineAttributionContextForCodes(day, codes) {
   const cacheKey = `${isoDay}:${normalizedCodes.join(',')}`;
   const cached = strategyMainlineVisibleAttributionCache.get(cacheKey);
   if (cached && Date.now() - cached.at < 60 * 1000) return cached.value;
-  const prior = await buildStrategyMainlinePriorReasonContext(isoDay, new Set(normalizedCodes), 30)
-    .catch(() => ({ byCode: new Map() }));
   const isToday = isoDay === isoFromCompactDate(chinaNowParts().day);
-  const live = isToday
+  const [prior, targetDayDb] = await Promise.all([
+    isToday
+      ? buildStrategyMainlinePriorReasonContext(isoDay, new Set(normalizedCodes), 30)
+        .catch(() => ({ byCode: new Map() }))
+      : Promise.resolve({ byCode: new Map() }),
+    readLimitUpMainReasonDbDay(isoDay).catch(() => null),
+  ]);
+  const targetDayReasons = strategyMainlineMainReasonDbAttribution(
+    isoDay,
+    targetDayDb,
+    normalizedCodes,
+  );
+  const officialReasons = isToday
     ? await strategyMainlineWithTimeout(
       strategyMainlineLiveLimitReasonByCode(isoDay).catch(() => new Map()),
       1500,
       new Map(),
       'visible-live-limit-reason')
     : new Map();
-  const value = strategyMainlineBuildStarAttributionContext(prior?.byCode, live);
+  const currentReasons = new Map([...targetDayReasons, ...officialReasons]);
+  const value = strategyMainlineBuildStarAttributionContext(prior?.byCode, currentReasons);
   strategyMainlineVisibleAttributionCache.set(cacheKey, { at: Date.now(), value });
   if (strategyMainlineVisibleAttributionCache.size > 20) {
     const oldestKey = strategyMainlineVisibleAttributionCache.keys().next().value;
