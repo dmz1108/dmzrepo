@@ -11437,3 +11437,35 @@ Notes for next agent:
   主因时必须保留 `board-membership-only`，不得把首日新题材全部清空。
 - 部署后复核 `/api/strategy-mainlines`：`600667` 不得再成为光伏明星，
   `002409` 不得再成为电力/电网设备明星；随后核验 `/health`。
+
+## 2026-07-27 - Codex - 策略明星股归属修复部署完成
+
+Changed:
+- PR #304 已合入 `main`，合并提交为 `205c9e1`。
+- 通过受控生产工作流部署明星股主因归属修复，不改运行时数据库和冻结快照。
+
+Files:
+- `kpl-stats-server.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- GitHub production run `30244167289` 成功，批准提交为
+  `205c9e17a639a4c85a42359dbcf388352ae99337`；部署器完成哈希核验、备份、主服务
+  重启和本机健康检查。
+- `https://market.dreamerqi.com/health` 返回 HTTP 200 / `{"ok":true}`。
+- 生产 `/api/strategy-mainlines` 返回 `ok=true`，策略质量覆盖率均为 100%；全量响应中
+  不再出现 `600667` 作为光伏明星，也不再出现 `002409` 作为电力或电网设备明星。
+- 修复未清空正式结果：验证时仍返回 1 条有效主线和 12 只候选股票。
+
+Deployment:
+- 已部署并生效。云端备份：
+  `C:\PandaDashboard\_deploy-backups\github-30244167289-1`。
+- 只部署 `kpl-stats-server.js` 并重启 `Panda Dashboard Server`；未重启 Caddy、娱乐
+  服务、SSH 或公司端 L2 worker。
+- 通用部署器已把本次操作追加到云端操作日志。
+
+Notes for next agent:
+- 明星股归属必须继续遵守“主因证据优先于静态成分股归属”；不可仅因股票属于某个
+  概念板块，就把它作为该板块当日明星。
+- 后续抽查其他错挂案例时，先核对当日官方涨停原因和目标日四源主因，再检查静态板块
+  成分，不得倒置证据优先级。
