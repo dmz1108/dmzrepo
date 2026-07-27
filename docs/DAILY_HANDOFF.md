@@ -11672,3 +11672,45 @@ Deployment:
 Notes for next agent:
 - 预判回看的 `theme/bySource` 是当时冻结预测；`finalConfirmedMainline` 是盘后最终
   结论。两者并列是刻意设计，不应再合并为同一个字段。
+
+## 2026-07-27 - Codex - 修复 catalog 板块未进入 L2 自动扫描
+
+Changed:
+- 修复实时目录补入的高资金板块只有资金/涨幅、没有成分股和涨停数，导致统一 L2
+  派单长期误判为 `limit-up-below-threshold` 的链路缺口。
+- 目录板块仅在同源匹配、已有至少 2 个当日信号股且资金可能过闸时补取成分股；
+  随后用当日涨停底库与实时涨停阈值精确回填板级涨停数，并并入原有双源统一派单池。
+- 保持既有门槛不变：东财仍要求超大单净流入至少 5 亿元且至少 2 只涨停；同花顺仍
+  要求 DDE 活跃度至少 5 亿元、`zjjlr>0` 且至少 2 只涨停。成员取数失败时保持未知，
+  不伪造 0、不派单。
+- 紧凑策略卡新增“成员已就绪”审计标记，页面状态与真实派单前置条件保持一致；
+  合并状态保留各来源拒绝原因。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/strategy-catalog-l2-hydration.test.js`
+- `tests/strategy-source-catalog-boards.test.js`
+- `tests/qi-mainline-states.test.js`
+- `tests/scan-priority.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- 全量 74 个 `tests/*.test.js` 均通过。
+- 新回归覆盖：高资金目录板完成成员补水、精确回填 `zt=2`、进入统一派单；少于
+  2 个信号股时不发成员请求；成员接口无数据时保持 `zt=null`；紧凑展示板不能冒充
+  实际派单载荷。
+- 生产只读证据参数：`day=2026-07-27`，
+  `codes=000862,001248,001258,002310,002775`，`themes=电力`，`window=10`。
+- 证据包 `complete=true`、`missingSources=[]`、`sourceErrors=[]`；
+  `bundleSha256=a1c05bbc85d8ce2b6362d9e117c6f57190844255bbf23c40a5a1bfb9aff91688`；
+  本地离线回放以 `--require-complete --expect-sha` 通过。
+
+Deployment:
+- 本条提交时仅为 GitHub 代码变更；生产代码尚未部署，服务尚未重启。
+- 只在生产忽略目录保存了脱敏证据包用于复核，未修改市场数据库、配置或正式快照。
+
+Notes for next agent:
+- 复审应使用上述相同日期、代码、主题和窗口重新抓取或校验同一证据哈希。
+- 部署后需在下一交易日用真实候选验证：目录补入板若满足原有资金与涨停门槛，应显示
+  “等待公司端/扫描中”，并生成带真实 `memberRows` 的 L2 任务；不合格板仍不得扫描。
