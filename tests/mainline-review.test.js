@@ -68,6 +68,8 @@ eval(extractFn('strategyMedianNumber'));
 eval(extractFn('strategyMainlineReserveStarOutcomes'));   // 三要件预备层盘后结果(#201)
 eval(extractFn('strategyMainlineReviewFormalTop'));
 eval(extractFn('strategyMainlineReviewHasRecord'));
+eval(extractFn('strategyMainlineMatchesConfirm'));
+eval(extractFn('strategyMainlineReviewConfirmedConclusion'));
 
 let TODAY = '2026-07-14';           // 次日:全部夹具交易日都算已收盘
 let TODAY_CLOSED = true;            // 仅当 day===TODAY 时用
@@ -93,6 +95,10 @@ const readEastmoneyCloseDbDay = async d => CLOSE[d]
   : null;
 const PREDICTS = {};
 const readMainlinePredict = async d => PREDICTS[d] || null;
+const CONFIRMS = {};
+const readMainlineConfirm = async d => CONFIRMS[d] || null;
+const VISIBLE_MAINLINES = {};
+const getStrategyMainlinesVisible = async d => VISIBLE_MAINLINES[d] || null;
 const MAIN_REASON = {};
 const readLimitUpMainReasonDbDay = async d => MAIN_REASON[d] || null;
 const LIMIT_UP = {};
@@ -213,6 +219,25 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   //        明星 confirmed → 只展示"当时已确认",不进封板统计(③)。
   PREDICTS['2026-07-10'] = { sessionPhase: '尾盘', confirmedKey: '', top: [
     { key: '医药', theme: '医药', star: { code: '600010', name: '已封星', level: 'confirmed' }, leader: { code: '600011', name: '医药龙' } }] };
+  // 管理员收盘后修正最终主线为半导体：回看应保留原“医药”预测用于命中审计，
+  // 同时独立返回修正后的最终主线与明星，不得用盘后答案覆盖预测或改变统计。
+  CONFIRMS['2026-07-10'] = {
+    key: 'group:半导体', theme: '半导体', at: '2026-07-10T08:10:00.000Z',
+  };
+  VISIBLE_MAINLINES['2026-07-10'] = {
+    mainlines: [{
+      familyKey: 'group:半导体', theme: '半导体', source: 'eastmoney',
+      starStocks: [
+        { code: '600667', name: '太极实业', level: 'confirmed', label: '明星确认', attributionBasis: 'current-main-reason' },
+        { code: '002409', name: '雅克科技', level: 'confirmed', label: '明星确认', attributionBasis: 'current-main-reason' },
+      ],
+      leaders: [{ code: '000938', name: '紫光股份', leadScore: 88 }],
+    }],
+    mainlinesBySource: {
+      eastmoney: { mainlines: [{ familyKey: 'group:半导体', theme: '半导体', starStocks: [] }] },
+      ths: { mainlines: [] },
+    },
+  };
   LIMIT_UP['2026-07-10'] = finalLimitDb(['600010', '600012', '600013']);
   MAIN_REASON['2026-07-10'] = reasonDb([
     { code: '600010', name: 'J', finalBoardTopic: '商业航天' },
@@ -268,6 +293,13 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   A(!!d10 && d10.nextDay === '2026-07-13', '①07-10 正确锚定下一交易日 07-13');
   A(d10.leader && d10.leader.nextCloseGain === null && d10.leader.win === null, '①次日收盘数据缺失 → nextCloseGain=null 不装有数据');
   A(d10.mainlineHitTop1 === false && d10.mainlineHitTop3 === false, '①次日数据缺失不影响当日主线命中评判(照常=脱靶)');
+  A(d10.theme === '医药' && d10.finalConfirmedMainline?.theme === '半导体',
+    '①盘中预测保持医药，收盘后最终确认半导体以独立字段叠加');
+  A(d10.finalConfirmedMainline?.correctedFromPrediction === true
+    && d10.finalConfirmedMainline?.excludedFromPredictionStats === true,
+  '①最终确认明确标记口径修正且不进入盘中预测统计');
+  A(d10.finalConfirmedMainline?.stars?.map(row => row.code).join(',') === '600667,002409',
+    '①最终确认携带修正后主线的两只确认明星');
 
   // ② 已收盘不计样本(7-08 真实镜像)
   A(d8.sampleValid === false && d8.sampleInvalidReason === 'phase:已收盘', '②07-08 已收盘 → sampleValid=false + 明确原因');

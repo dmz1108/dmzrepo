@@ -24884,6 +24884,83 @@ function strategyMainlineReviewHasRecord(predict) {
   if (predict.hasMainlines === false || predict.recordState === 'no-mainline') return true;
   return sourceBlocks.some(block => typeof block.hasMainlines === 'boolean');
 }
+// 管理员最终确认与盘中预测是两类事实：前者可在收盘后修正，后者必须冻结用于命中率审计。
+// 回看同时返回二者，但绝不拿最终确认覆盖 predict.top，也不把它计入预测命中率分母。
+function strategyMainlineReviewConfirmedConclusion(payload, confirm, predictedMain = null) {
+  if (!confirm || typeof confirm !== 'object') return null;
+  const confirmKey = String(confirm.key || '').trim();
+  const confirmTheme = String(confirm.theme || '').trim();
+  if (!confirmKey && !confirmTheme) return null;
+
+  const matched = [];
+  const addMatches = (rows, source = '') => {
+    for (const row of (Array.isArray(rows) ? rows : [])) {
+      if (!strategyMainlineMatchesConfirm(row, confirm)) continue;
+      matched.push({ row, source: String(row?.source || source || '').trim() });
+    }
+  };
+  addMatches(payload?.mainlines);
+  addMatches(payload?.mainlinesBySource?.eastmoney?.mainlines, 'eastmoney');
+  addMatches(payload?.mainlinesBySource?.ths?.mainlines, 'ths');
+
+  matched.sort((a, b) => {
+    const confirmedStars = item => (Array.isArray(item?.row?.starStocks) ? item.row.starStocks : [])
+      .filter(star => String(star?.level || '') === 'confirmed').length;
+    return confirmedStars(b) - confirmedStars(a);
+  });
+  const primary = matched[0]?.row || null;
+  const stars = [];
+  const starCodes = new Set();
+  for (const { row } of matched) {
+    for (const star of (Array.isArray(row?.starStocks) ? row.starStocks : [])) {
+      const code = normalizeReasonSourceCode(star?.code);
+      const level = String(star?.level || '').trim();
+      if (!code || starCodes.has(code) || !['expected', 'confirmed'].includes(level)) continue;
+      starCodes.add(code);
+      stars.push({
+        code,
+        name: String(star?.name || code),
+        level,
+        label: String(star?.label || (level === 'confirmed' ? '明星确认' : '预期明星')),
+        attributionBasis: String(star?.attributionBasis || ''),
+      });
+    }
+  }
+  const leaders = (Array.isArray(primary?.leaders) && primary.leaders.length
+    ? primary.leaders
+    : (primary?.mainLeader ? [primary.mainLeader] : []))
+    .filter(stock => normalizeReasonSourceCode(stock?.code))
+    .slice(0, 2)
+    .map(stock => ({
+      code: normalizeReasonSourceCode(stock.code),
+      name: String(stock?.name || stock?.code || ''),
+      leadScore: isFiniteNumeric(stock?.leadScore) ? Number(stock.leadScore) : null,
+    }));
+  const confirmedFamily = strategyMainlineFamilyInfo({
+    key: confirmKey || primary?.familyKey || primary?.key || '',
+    theme: confirmTheme || primary?.theme || '',
+  }).key;
+  const predictedFamily = predictedMain
+    ? strategyMainlineFamilyInfo({
+        key: predictedMain?.key || predictedMain?.familyKey || '',
+        theme: predictedMain?.theme || '',
+      }).key
+    : '';
+
+  return {
+    key: confirmKey || String(primary?.familyKey || primary?.key || ''),
+    theme: confirmTheme || String(primary?.theme || ''),
+    confirmedAt: String(confirm.at || ''),
+    available: !!primary,
+    sources: [...new Set(matched.map(item => item.source).filter(Boolean))],
+    stars: stars.slice(0, 4),
+    leaders,
+    predictionTheme: String(predictedMain?.theme || ''),
+    correctedFromPrediction: !!(confirmedFamily && predictedFamily && confirmedFamily !== predictedFamily),
+    basis: primary ? 'admin-confirm+visible-final-mainline' : 'admin-confirm-record-only',
+    excludedFromPredictionStats: true,
+  };
+}
 // 只有真实盘中阶段生成的预测才是"预判"(Codex 复审 PR#25 二审):
 // 盘前/集合竞价没有盘面信号、已收盘是答案不是预测——这三类记录展示但不计任何命中率分母。
 const STRATEGY_MAINLINE_INTRADAY_PHASES = new Set(['早盘', '上午盘', '午间休市', '午后', '尾盘']);
@@ -24929,7 +25006,10 @@ async function getStrategyMainlineReview(days = 10) {
     const day = tradingDays[i];
     const nextDay = i + 1 < tradingDays.length ? tradingDays[i + 1] : null;
     const thirdDay = i + 3 < tradingDays.length ? tradingDays[i + 3] : null;
-    const predict = await readMainlinePredict(day);
+    const [predict, confirm] = await Promise.all([
+      readMainlinePredict(day),
+      readMainlineConfirm(day).catch(() => null),
+    ]);
     // 两套独立预测(schema v3):有主题与明确“来源可用但无主线”都属于有效回看记录。
     // 不能再用 top 非空作日期门槛，否则双源都无主线的交易日会整天消失。
     if (!strategyMainlineReviewHasRecord(predict)) continue;
@@ -25174,6 +25254,13 @@ async function getStrategyMainlineReview(days = 10) {
         mainlineStarQualified = mainlineHitTop1 === true;
       }
     }
+    // 收盘后修正/管理员最终确认可能晚于盘中预测档案。最终确认只作为独立结论叠加，
+    // 原 prediction、命中判断和所有统计继续使用当时真实落盘值，避免盘后答案穿越。
+    let finalConfirmedMainline = null;
+    if (confirm && !pendingReview) {
+      const finalPayload = await getStrategyMainlinesVisible(day).catch(() => null);
+      finalConfirmedMainline = strategyMainlineReviewConfirmedConclusion(finalPayload, confirm, main);
+    }
     rows.push({
       day, nextDay, thirdDay,
       theme: main?.theme || '', confirmed: !!(main && predict.confirmedKey && main.key === predict.confirmedKey),
@@ -25183,6 +25270,7 @@ async function getStrategyMainlineReview(days = 10) {
       phase, sampleValid, sampleInvalidReason, pendingReview,
       actualTop, actualFirstTied, mainlineHitTop1, mainlineHitTop3, mainReasonMissingCount,
       mainlineLead, mainlineLeadStatus, star, mainlineStarQualified, expectedStars, reserveStarOutcomes, leader, leaders,
+      ...(finalConfirmedMainline ? { finalConfirmedMainline } : {}),
       ...(reviewBySource ? { bySource: reviewBySource } : {}),
     });
   }

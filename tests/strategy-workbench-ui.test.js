@@ -61,6 +61,11 @@ assert(html.includes('class="mlr-compare"'));
 assert(html.includes('class="mlr-source-grid"'));
 assert(html.includes('class="mlr-evidence-grid"'));
 assert(html.includes('<details class="mlr-reserve-line">'));
+assert(html.includes('const finalConfirmationHTML =') && html.includes('r.finalConfirmedMainline'),
+  '预判回看可独立展示管理员最终确认，不覆盖盘中预测');
+assert(html.includes('<span class="mlr-source-name">最终确认</span>')
+  && html.includes('管理员最终确认与修正后正式主线；独立于盘中预测保存，不改写预测命中率'),
+  '最终确认在盘后验证区明确标注且声明不计预测命中率');
 // 逐档明细 6 列紧凑表(2026-07-24 重设计):买/卖合并成对,比值为主角。
 assert(html.includes('<th colspan="2" class="grp grp-active">主动成交</th><th colspan="2" class="grp grp-passive">被动成交</th><th rowspan="2" class="col-support">合力比</th>'));
 assert(html.includes('<th class="col-amt">买入 / 卖出</th><th class="col-ratio">主动比</th>'));
