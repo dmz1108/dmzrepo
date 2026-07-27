@@ -11399,3 +11399,41 @@ Deployment:
 Notes for next agent:
 - 线上操作语义基线是 `main@600dc4a`。后续若调整真实首封时间展示，必须继续区分
   L2 扫描确认时点与终盘涨停库 `firstLimitTime`，不得互相替代。
+
+## 2026-07-27 - Codex - 修复策略明星股跨主因错挂
+
+Changed:
+- 当日明星股归属改为“当日官方涨停原因优先、近 30 日四源综合主因次之、静态板块成员
+  仅作无主因证据时的候选依据”；已有明确跨家族主因时 fail-closed。
+- 历史回看只用目标日四源综合主因裁定，不拿目标日前旧主因否定真实题材切换；目标日
+  主因缺失时保持原卡。目标日文件内部日期必须匹配，跨日文件不得参与。
+- 同一归属闸同时接入实时构建、盘中预期轨迹、旧缓存、预备主线、冻结快照和历史预测
+  恢复，防止错误明星在缓存或回看路径重新出现。
+- 生产证据复现：太极实业的官方涨停原因和四源历史主因均为半导体/存储/先进封装，
+  不应归入光伏；雅克科技为 HBM 前驱体/半导体材料/存储芯片，不应归入电力或电网设备。
+- 拒绝项保留 `attributionRejected` 审计明细；移除错误明星时同步撤销 QI 状态及明星
+  对总分、预判分的加分。无任何可分类主因的新题材继续允许板块候选，不影响首日发现。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/strategy-star-attribution.test.js`
+- `tests/strategy-expected-star-sticky.test.js`
+- `tests/strategy-historical-conclusion.test.js`
+- `tests/qi-mainline-states.test.js`
+- `tests/leader-pool-debug.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 新增真实题材分类回归，覆盖太极实业/光伏、雅克科技/电力、正确半导体归属、当日题材
+  切换、首日无主因候选、目标日历史主因、跨日文件拒绝、旧缓存与粘性轨迹清理。
+- `node --check kpl-stats-server.js`、`git diff --check` 通过。
+- `tests/*.test.js` 共 72 份全部通过。
+
+Deployment:
+- 尚未部署云端，未重启任何服务。
+
+Notes for next agent:
+- 评审重点是 fail-closed 边界：当日原因只在可分类时覆盖历史；当日与历史均无可分类
+  主因时必须保留 `board-membership-only`，不得把首日新题材全部清空。
+- 部署后复核 `/api/strategy-mainlines`：`600667` 不得再成为光伏明星，
+  `002409` 不得再成为电力/电网设备明星；随后核验 `/health`。

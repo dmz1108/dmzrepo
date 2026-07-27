@@ -30,6 +30,7 @@ const strategyMainlineFamilyInfo = (x) => {
 };
 eval(extractFn('strategyPredictStarTransitions'));
 eval(extractFn('strategyMainlineExpectedTransitionMap'));
+eval(extractFn('strategyMainlineStarAttributionDecision'));
 eval(extractFn('strategyMainlineResolveExpectedHistory'));
 eval(extractFn('strategyMainlineStarActionState'));
 eval(extractFn('strategyMainlineAttachExpectedHistory'));
@@ -83,7 +84,7 @@ A(strategyMainlineResolveExpectedHistory({ familyKey: 'theme:机器人', theme: 
 // ---- 6. 静态:Map 形状契约保持(既有调用按 key 直查仍有效),rows 仅为附加索引 ----
 A(map instanceof Map && map.has('group:算力AI') && Array.isArray(map.rows),
   '契约:TransitionMap 仍是 Map(附加 rows 索引,不破坏既有直查)');
-A(/history = strategyMainlineResolveExpectedHistory\(item, transitionMap\)/.test(src),
+A(/history = strategyMainlineResolveExpectedHistory\(item, transitionMap, options\)/.test(src),
   '静态:attach 走漂移安全解析器');
 
 console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL STRATEGY-EXPECTED-STAR-STICKY CHECKS PASSED');

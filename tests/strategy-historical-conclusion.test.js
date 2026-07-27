@@ -44,6 +44,7 @@ const STRATEGY_MAINLINE_SNAPSHOT_FREEZE_MINUTE = 15 * 60 + 30;
 
 eval(extractFunction('strategyMainlineExpectedStarTransitions'));
 eval(extractFunction('strategyMainlineReviewFormalTop'));
+eval(extractFunction('strategyMainlineStarAttributionDecision'));
 eval(extractFunction('strategyMainlineHistoricalPredictRow'));
 eval(extractFunction('strategyMainlineRestoreHistoricalPrediction'));
 eval(extractFunction('strategyMainlineSnapshotFreezeReady'));
