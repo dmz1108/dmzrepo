@@ -11707,3 +11707,35 @@ Notes for next agent:
 - 不要把 L2 自动扫描的 2 只涨停提前量提高为 3；否则会延迟盘中发现预期明星。
 - 正式主线仍沿用既有的确认明星、合格龙头和非风格板约束，并新增同家族至少
   3 只涨停下限。涨停数量超过 3 后不因数量更多自动获得“主线”资格。
+
+## 2026-07-27 - Codex - 明星股与三只涨停主线口径已部署
+
+Changed:
+- PR #313 已合入 `main`，并通过受保护生产流程发布
+  `kpl-stats-server.js` 与 `kpl-dashboard_17_apple.html`。
+- 云端主服务已重启，部署器已自动写入两份云端运维日志。
+
+Files:
+- 本条仅更新 `docs/DAILY_HANDOFF.md`；部署文件为 `kpl-stats-server.js` 和
+  `kpl-dashboard_17_apple.html`。
+
+Validated:
+- GitHub Actions production run `30278767931` 成功，批准提交为
+  `1c0375015e6e719a1d304b28e93b6135dbe6f23c`。
+- `https://market.dreamerqi.com/health` 返回 `{"ok":true}`。
+- 生产行情 HTML 已包含“正式主线=同家族确认明星股+至少3只涨停”和“涨停数量
+  排名不决定主线”。
+- 生产 2026-07-27 回看验证：机器人家族 20 只涨停但没有确认明星，不能凭数量
+  成为主线；PCB 与连接家族 10 只涨停且贤丰控股为确认明星，
+  `mainlineQualified=true`。
+
+Deployment:
+- 已部署并生效；主服务已重启，健康检查通过。
+- 生产备份：
+  `C:\PandaDashboard\_deploy-backups\github-30278767931-1`。
+
+Notes for next agent:
+- 旧 `mainlineHitTop1/mainlineHitTop3` 字段只供历史兼容和分布审计；前端正式
+  结论与随行统计使用 `mainlineQualified`。
+- 正式主线按绝对条件独立成立，因此同一天可以存在不止一个满足条件的主线，
+  不再强制从涨停数量排名中选唯一第一名。
