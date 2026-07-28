@@ -11739,3 +11739,30 @@ Notes for next agent:
   结论与随行统计使用 `mainlineQualified`。
 - 正式主线按绝对条件独立成立，因此同一天可以存在不止一个满足条件的主线，
   不再强制从涨停数量排名中选唯一第一名。
+
+## 2026-07-27 - Codex - 修复最终确认明星摘要收益被隐藏
+
+Changed:
+- 修复预判回看存在 `finalConfirmedMainline` 时无条件清空摘要收益对象的问题。
+- 最终确认明星与已计算收益的预测明星代码一致时，继续显示次高、次收和3日；
+  最终确认改成另一只股票时保持空值，禁止错配收益。
+- 增加 2026-07-14 生益科技生产镜像回归，以及盘后换星不得沿用旧收益的反例。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `tests/strategy-two-source-mainlines.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 生产接口已经返回生益科技次高 `8.38%`、次收 `3.06%`、3日 `-10.55%`；
+  缺失仅发生在前端摘要选择。
+- `node tests/strategy-two-source-mainlines.test.js`
+- 全部 `tests/*.test.js`
+- `git diff --check`
+
+Deployment:
+- 本条提交时仅为 GitHub 代码变更；生产尚未部署，服务尚未重启。
+
+Notes for next agent:
+- `finalConfirmedMainline` 与冻结预测可能属于不同主线、不同明星；摘要收益只能按
+  股票代码精确复用，不能按题材名或显示顺序猜测。
