@@ -21020,6 +21020,10 @@ const STRATEGY_MAINLINE_AUTO_SCAN_WINDOW_MS = 5 * 60 * 1000;
 const STRATEGY_MAINLINE_AUTO_SCAN_MAX_PER_WINDOW = 2;
 const STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW = 5e8;   // Owner 2026-07-15:8亿→5亿(救钱不够8亿的中小主线)
 const STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT = 2;
+// 扫描需要提前量，2 只涨停即可启动；正式主线是更严格的独立口径：
+// 必须有确认明星，且同主线家族当日涨停至少 3 只。涨停数只作为准入下限，
+// 不能再用“谁涨停最多”直接定义谁是真主线。
+const STRATEGY_MAINLINE_FORMAL_MIN_ZT = 3;
 const STRATEGY_MAINLINE_AUTO_RESCAN_MIN_INFLOW_DELTA = 1e8;
 const STRATEGY_MAINLINE_AUTO_RESCAN_MIN_GAIN_DELTA = 0.5;
 // (已移除)高流入直通 STRATEGY_MAINLINE_AUTO_SCAN_HIGH_INFLOW_OVERRIDE:Owner 2026-07-16 定稿
@@ -24702,9 +24706,9 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay, options = {}) {
 
 // ===== 预判回看：盘中预判的主线/明星/龙头,盘后与次日实际表现如何(命中率+胜率统计) =====
 // 收盘涨幅用收盘价库（可靠）；最高涨幅需确认 K 线 bar 的 high 字段索引后再补，先输出 null 不装有数据。
-// 主线命中口径:当日盘后主因库按「主线家族」(strategyMainlineFamilyInfo,与主线榜合并口径一致)
-// 统计涨停数排名 = 当日实际格局;预判主线家族 == 实际第一家族 → top1 命中;实际第一家族落在
-// 预判前三家族内 → top3 命中。盘后主因库缺失(含当日盘中)→ 命中记 null,不计入分母(不装有数据)。
+// 正式主线成立口径:同一主线家族必须有确认明星股，且当日涨停至少3只。
+// 涨停数排名只描述盘后主因分布，不能再用“涨停最多”替代主线结论。
+// 盘后主因库或终盘涨停库缺失时成立状态记 null，不装有数据。
 function strategyMainlineActualFamilyRanking(mainReasonDb) {
   const byFamily = new Map();
   for (const s of (mainReasonDb?.stocks || [])) {
@@ -24719,6 +24723,77 @@ function strategyMainlineActualFamilyRanking(mainReasonDb) {
   }
   return [...byFamily.values()].sort((a, b) =>
     b.count - a.count || String(a.label).localeCompare(String(b.label), 'zh-Hans-CN'));
+}
+function strategyMainlineReviewStarCandidates(predict, main) {
+  if (!main) return [];
+  const mainFamily = strategyMainlineFamilyInfo({
+    key: main?.key || main?.familyKey || '',
+    theme: main?.theme || '',
+  }).key;
+  const rows = [];
+  const add = (star, levelOverride = '') => {
+    const code = normalizeReasonSourceCode(star?.code);
+    const level = String(levelOverride || star?.level || star?.lastLevel || '').trim();
+    if (!code || !['expected', 'confirmed'].includes(level)) return;
+    rows.push({ code, name: String(star?.name || code), level });
+  };
+  add(main?.star);
+  for (const candidate of (Array.isArray(predict?.candidates) ? predict.candidates : [])) {
+    const candidateFamily = strategyMainlineFamilyInfo({
+      key: candidate?.key || candidate?.familyKey || '',
+      theme: candidate?.theme || '',
+    }).key;
+    if (!mainFamily || candidateFamily !== mainFamily) continue;
+    for (const star of (Array.isArray(candidate?.stars) ? candidate.stars : [])) add(star);
+  }
+  for (const transition of strategyMainlineExpectedStarTransitions(predict, main)) {
+    add(transition, transition.lastLevel || 'expected');
+  }
+  const deduped = new Map();
+  for (const row of rows) {
+    const previous = deduped.get(row.code);
+    if (!previous || row.level === 'confirmed') deduped.set(row.code, row);
+  }
+  return [...deduped.values()];
+}
+function strategyMainlineReviewQualification(predict, main, actualRanking, finalSealedCodes, evidenceComplete) {
+  const family = strategyMainlineFamilyInfo({
+    key: main?.key || main?.familyKey || '',
+    theme: main?.theme || '',
+  });
+  const familyRow = (Array.isArray(actualRanking) ? actualRanking : [])
+    .find(row => row?.familyKey && row.familyKey === family.key) || null;
+  const limitUpCount = familyRow ? Number(familyRow.count) || 0 : 0;
+  const base = {
+    familyKey: family.key || '',
+    familyLabel: family.label || String(main?.theme || ''),
+    limitUpCount,
+    minLimitUpCount: STRATEGY_MAINLINE_FORMAL_MIN_ZT,
+    limitUpPass: limitUpCount >= STRATEGY_MAINLINE_FORMAL_MIN_ZT,
+    confirmedStar: null,
+    confirmedStarCodes: [],
+    basis: 'confirmed-star-and-family-limit-up-floor',
+    reasons: [],
+  };
+  if (!main) return { ...base, qualified: false, reasons: ['no-predicted-mainline'] };
+  if (!evidenceComplete || !(finalSealedCodes instanceof Set)) {
+    return { ...base, qualified: null, reasons: ['post-close-evidence-incomplete'] };
+  }
+  const stars = strategyMainlineReviewStarCandidates(predict, main);
+  if (!stars.length) {
+    return { ...base, qualified: null, reasons: ['historical-star-evidence-unavailable'] };
+  }
+  const confirmedStars = stars.filter(star => finalSealedCodes.has(star.code));
+  const reasons = [];
+  if (!confirmedStars.length) reasons.push('no-confirmed-star');
+  if (!base.limitUpPass) reasons.push('insufficient-limit-up-count');
+  return {
+    ...base,
+    qualified: reasons.length === 0,
+    confirmedStar: confirmedStars[0] || null,
+    confirmedStarCodes: confirmedStars.map(star => star.code),
+    reasons,
+  };
 }
 function strategyMainlineExpectedStarTransitions(predict, main) {
   const mainlineKey = String(main?.key || '').trim();
@@ -25043,6 +25118,55 @@ function strategyMainlineReviewConfirmedConclusion(payload, confirm, predictedMa
     excludedFromPredictionStats: true,
   };
 }
+function strategyMainlineReviewFinalQualification(finalMainline, actualRanking, evidenceComplete) {
+  if (!finalMainline || typeof finalMainline !== 'object') return null;
+  const family = strategyMainlineFamilyInfo({
+    key: finalMainline?.key || '',
+    theme: finalMainline?.theme || '',
+  });
+  const familyRow = (Array.isArray(actualRanking) ? actualRanking : [])
+    .find(row => row?.familyKey && row.familyKey === family.key) || null;
+  const confirmedStars = (Array.isArray(finalMainline?.stars) ? finalMainline.stars : [])
+    .filter(star => String(star?.level || '').trim() === 'confirmed');
+  const base = {
+    familyKey: family.key || '',
+    familyLabel: family.label || String(finalMainline?.theme || ''),
+    sameFamilyLimitUpCount: evidenceComplete ? (familyRow ? Number(familyRow.count) || 0 : 0) : null,
+    minSameFamilyLimitUpCount: STRATEGY_MAINLINE_FORMAL_MIN_ZT,
+    confirmedStarCodes: confirmedStars
+      .map(star => normalizeReasonSourceCode(star?.code))
+      .filter(Boolean),
+    formalQualificationBasis: 'confirmed-star-and-family-limit-up-floor',
+    formalQualificationReasons: [],
+  };
+  if (!finalMainline.available) {
+    return {
+      ...base,
+      formalQualified: null,
+      formalQualificationReasons: ['final-mainline-evidence-unavailable'],
+    };
+  }
+  if (!confirmedStars.length) {
+    return {
+      ...base,
+      formalQualified: false,
+      formalQualificationReasons: ['no-confirmed-star'],
+    };
+  }
+  if (!evidenceComplete) {
+    return {
+      ...base,
+      formalQualified: null,
+      formalQualificationReasons: ['post-close-evidence-incomplete'],
+    };
+  }
+  const limitUpPass = base.sameFamilyLimitUpCount >= STRATEGY_MAINLINE_FORMAL_MIN_ZT;
+  return {
+    ...base,
+    formalQualified: limitUpPass,
+    formalQualificationReasons: limitUpPass ? [] : ['insufficient-limit-up-count'],
+  };
+}
 // 只有真实盘中阶段生成的预测才是"预判"(Codex 复审 PR#25 二审):
 // 盘前/集合竞价没有盘面信号、已收盘是答案不是预测——这三类记录展示但不计任何命中率分母。
 const STRATEGY_MAINLINE_INTRADAY_PHASES = new Set(['早盘', '上午盘', '午间休市', '午后', '尾盘']);
@@ -25072,6 +25196,7 @@ async function getStrategyMainlineReview(days = 10) {
   const rows = [];
   let starWins = 0, starTotal = 0, leaderWins = 0, leaderTotal = 0;
   let mainlineTop1Hits = 0, mainlineTop3Hits = 0, mainlineTotal = 0;
+  let mainlineQualifiedHits = 0, mainlineQualifiedTotal = 0;
   let expectedSealWins = 0, expectedSealTotal = 0;
   // 三要件预备主线的预期明星封板统计(Codex #201 P1-3):独立分母,不与正式 expectedSeal 混算。
   let reserveSealWins = 0, reserveSealTotal = 0;
@@ -25079,8 +25204,8 @@ async function getStrategyMainlineReview(days = 10) {
   let mainlineLeadAfterFirstLimitSamples = 0;
   // 两套独立预测(Owner v2)的按来源主线命中统计——各自评各自的第 1 主线是否命中当日真实第一家族。
   const srcStat = {
-    eastmoney: { total: 0, top1: 0, top3: 0, leadMinutes: [], leadAfterFirstLimit: 0 },
-    ths: { total: 0, top1: 0, top3: 0, leadMinutes: [], leadAfterFirstLimit: 0 },
+    eastmoney: { total: 0, top1: 0, top3: 0, qualified: 0, qualifiedTotal: 0, leadMinutes: [], leadAfterFirstLimit: 0 },
+    ths: { total: 0, top1: 0, top3: 0, qualified: 0, qualifiedTotal: 0, leadMinutes: [], leadAfterFirstLimit: 0 },
   };
   // 从最新交易日开始(修复:旧循环从 length-2 起,最新收盘日因无次日收盘价被整行丢弃,
   // 连当日主线命中与封板结果也不展示;现在无次日数据只置 nextCloseGain=null)。
@@ -25228,6 +25353,13 @@ async function getStrategyMainlineReview(days = 10) {
     const actualTop = [...tier1, ...tier23.slice(0, Math.max(0, 8 - tier1.length))]
       .map(f => ({ theme: f.label, count: f.count, rankTier: f.rankTier }));
     const actualFirstTied = tier1.length > 1;
+    const finalSealedCodes = limitDbFinal
+      ? new Set((limitDb.stocks || []).map(stock => normalizeReasonSourceCode(stock?.code)).filter(Boolean))
+      : null;
+    const mainlineQualification = main && !pendingReview
+      ? strategyMainlineReviewQualification(predict, main, actualRanking, finalSealedCodes, reasonComplete)
+      : null;
+    const mainlineQualified = mainlineQualification?.qualified ?? null;
     let mainlineHitTop1 = null, mainlineHitTop3 = null;
     let mainlineLead = null;
     let mainlineLeadStatus = null;
@@ -25245,7 +25377,11 @@ async function getStrategyMainlineReview(days = 10) {
         if (mainlineHitTop1) mainlineTop1Hits += 1;
         if (mainlineHitTop3) mainlineTop3Hits += 1;
       }
-      if (sampleValid && !pendingReview && mainlineHitTop1 === true && limitDbFinal) {
+      if (sampleValid && !pendingReview && mainlineQualified != null) {
+        mainlineQualifiedTotal += 1;
+        if (mainlineQualified) mainlineQualifiedHits += 1;
+      }
+      if (sampleValid && !pendingReview && mainlineQualified === true && limitDbFinal) {
         const assessment = strategyMainlineLeadAssessment(
           day,
           strategyMainlineExpectedStarTransitions(predict, main),
@@ -25268,7 +25404,14 @@ async function getStrategyMainlineReview(days = 10) {
       reviewBySource = {};
       for (const skey of ['eastmoney', 'ths']) {
         const block = predict.bySource[skey] || {};
-        const blockPredict = { top: block.top || [], candidates: block.candidates || [], starTransitions: block.starTransitions || [], confirmedKey: predict.confirmedKey, schemaVersion: predict.schemaVersion };
+        const blockPredict = {
+          top: block.top || [],
+          candidates: block.candidates || [],
+          starTransitions: block.starTransitions || [],
+          confirmedKey: predict.confirmedKey,
+          schemaVersion: predict.schemaVersion,
+          savedAt: block.savedAt || predict.savedAt,
+        };
         const fTop = strategyMainlineReviewFormalTop(blockPredict);
         const sMain = fTop.find(t => predict.confirmedKey && t.key === predict.confirmedKey) || fTop[0] || null;
         // 新 schema v3 明确保存 available；早期 v3 没有该字段，空块只能诚实标为 unknown，
@@ -25278,6 +25421,8 @@ async function getStrategyMainlineReview(days = 10) {
           : sMain ? 'mainline'
             : sourceAvailable === true ? 'no-mainline' : 'unknown';
         let hitTop1 = null, hitTop3 = null;
+        let sourceQualification = null;
+        let sourceQualified = null;
         let leadTime = null;
         let leadTimeStatus = null;
         if (sourceStatus === 'mainline' && actualRanking.length) {
@@ -25290,10 +25435,18 @@ async function getStrategyMainlineReview(days = 10) {
             if (hitTop1) srcStat[skey].top1 += 1;
             if (hitTop3) srcStat[skey].top3 += 1;
           }
-          if (sampleValid && !pendingReview && hitTop1 === true && limitDbFinal) {
+          sourceQualification = !pendingReview
+            ? strategyMainlineReviewQualification(blockPredict, sMain, actualRanking, finalSealedCodes, reasonComplete)
+            : null;
+          sourceQualified = sourceQualification?.qualified ?? null;
+          if (sampleValid && !pendingReview && sourceQualified != null) {
+            srcStat[skey].qualifiedTotal += 1;
+            if (sourceQualified) srcStat[skey].qualified += 1;
+          }
+          if (sampleValid && !pendingReview && sourceQualified === true && limitDbFinal) {
             const assessment = strategyMainlineLeadAssessment(
               day,
-              strategyMainlineExpectedStarTransitions({ ...blockPredict, savedAt: block.savedAt || predict.savedAt }, sMain),
+              strategyMainlineExpectedStarTransitions(blockPredict, sMain),
               limitDb
             );
             leadTime = assessment.sample;
@@ -25313,6 +25466,8 @@ async function getStrategyMainlineReview(days = 10) {
             ? strategyMainlineFamilyInfo({ theme: sMain?.theme || '', key: sMain?.key || '' }).key
             : '',
           noMainline: sourceStatus === 'no-mainline',
+          mainlineQualified: sourceQualified,
+          mainlineQualification: sourceQualification,
           mainlineHitTop1: hitTop1,
           mainlineHitTop3: hitTop3,
           mainlineLead: leadTime,
@@ -25321,7 +25476,7 @@ async function getStrategyMainlineReview(days = 10) {
       }
     }
     // 明星必须属于盘后实际成立的同一条主线。L2 盘中曾确认只说明扫描信号成立；
-    // 若该候选主线最终没有命中第一主因家族，回看不得继续称其为“明星确认”。
+    // 正式成立只看“同家族确认明星 + 至少3只涨停”，不再要求涨停数量排名第一。
     // null 表示当日盘后主因尚未完成，保留候选证据但不提前下正式结论。
     let mainlineStarQualified = null;
     if (star && !pendingReview) {
@@ -25329,11 +25484,11 @@ async function getStrategyMainlineReview(days = 10) {
         const mainFamily = strategyMainlineFamilyInfo({ theme: main.theme || '', key: main.key || '' }).key;
         const matchingSources = Object.values(reviewBySource)
           .filter(src => src?.status === 'mainline' && src.familyKey && src.familyKey === mainFamily);
-        if (matchingSources.some(src => src.mainlineHitTop1 === true)) mainlineStarQualified = true;
-        else if (matchingSources.length && matchingSources.every(src => src.mainlineHitTop1 === false)) mainlineStarQualified = false;
-        else if (!matchingSources.length && mainlineHitTop1 != null) mainlineStarQualified = mainlineHitTop1 === true;
-      } else if (mainlineHitTop1 != null) {
-        mainlineStarQualified = mainlineHitTop1 === true;
+        if (matchingSources.some(src => src.mainlineQualified === true)) mainlineStarQualified = true;
+        else if (matchingSources.length && matchingSources.every(src => src.mainlineQualified === false)) mainlineStarQualified = false;
+        else if (!matchingSources.length) mainlineStarQualified = mainlineQualified;
+      } else {
+        mainlineStarQualified = mainlineQualified;
       }
     }
     // 收盘后修正/管理员最终确认可能晚于盘中预测档案。最终确认只作为独立结论叠加，
@@ -25342,6 +25497,12 @@ async function getStrategyMainlineReview(days = 10) {
     if (confirm && !pendingReview) {
       const finalPayload = await getStrategyMainlinesVisible(day).catch(() => null);
       finalConfirmedMainline = strategyMainlineReviewConfirmedConclusion(finalPayload, confirm, main);
+      if (finalConfirmedMainline) {
+        finalConfirmedMainline = {
+          ...finalConfirmedMainline,
+          ...strategyMainlineReviewFinalQualification(finalConfirmedMainline, actualRanking, reasonComplete),
+        };
+      }
     }
     rows.push({
       day, nextDay, thirdDay,
@@ -25350,7 +25511,9 @@ async function getStrategyMainlineReview(days = 10) {
       noMainline, noMainlineReason: noMainline ? 'no-l2-star-evidence' : '',
       candidateThemes: noMainline ? predict.top.slice(0, 3).map(row => String(row?.theme || '')).filter(Boolean) : [],
       phase, sampleValid, sampleInvalidReason, pendingReview,
-      actualTop, actualFirstTied, mainlineHitTop1, mainlineHitTop3, mainReasonMissingCount,
+      actualTop, actualFirstTied,
+      mainlineQualified, mainlineQualification,
+      mainlineHitTop1, mainlineHitTop3, mainReasonMissingCount,
       mainlineLead, mainlineLeadStatus, star, mainlineStarQualified, expectedStars, reserveStarOutcomes, leader, leaders,
       ...(finalConfirmedMainline ? { finalConfirmedMainline } : {}),
       ...(reviewBySource ? { bySource: reviewBySource } : {}),
@@ -25362,6 +25525,9 @@ async function getStrategyMainlineReview(days = 10) {
     stats: {
       starWins, starTotal, starWinRate: starTotal ? Number((starWins / starTotal * 100).toFixed(1)) : null,
       leaderWins, leaderTotal, leaderWinRate: leaderTotal ? Number((leaderWins / leaderTotal * 100).toFixed(1)) : null,
+      mainlineQualifiedHits, mainlineQualifiedTotal,
+      mainlineQualifiedRate: mainlineQualifiedTotal
+        ? Number((mainlineQualifiedHits / mainlineQualifiedTotal * 100).toFixed(1)) : null,
       mainlineTop1Hits, mainlineTop3Hits, mainlineTotal,
       mainlineTop1Rate: mainlineTotal ? Number((mainlineTop1Hits / mainlineTotal * 100).toFixed(1)) : null,
       mainlineTop3Rate: mainlineTotal ? Number((mainlineTop3Hits / mainlineTotal * 100).toFixed(1)) : null,
@@ -25376,12 +25542,16 @@ async function getStrategyMainlineReview(days = 10) {
       // 两套独立预测各自的主线命中率(schema v3 起有 bySource 记录才累计;旧记录不参与)。
       bySource: {
         eastmoney: { mainlineTotal: srcStat.eastmoney.total, mainlineTop1Hits: srcStat.eastmoney.top1, mainlineTop3Hits: srcStat.eastmoney.top3,
+          mainlineQualifiedHits: srcStat.eastmoney.qualified, mainlineQualifiedTotal: srcStat.eastmoney.qualifiedTotal,
+          mainlineQualifiedRate: srcStat.eastmoney.qualifiedTotal ? Number((srcStat.eastmoney.qualified / srcStat.eastmoney.qualifiedTotal * 100).toFixed(1)) : null,
           mainlineTop1Rate: srcStat.eastmoney.total ? Number((srcStat.eastmoney.top1 / srcStat.eastmoney.total * 100).toFixed(1)) : null,
           mainlineTop3Rate: srcStat.eastmoney.total ? Number((srcStat.eastmoney.top3 / srcStat.eastmoney.total * 100).toFixed(1)) : null,
           mainlineLeadSamples: srcStat.eastmoney.leadMinutes.length,
           mainlineLeadMedianMinutes: strategyMedianNumber(srcStat.eastmoney.leadMinutes),
           mainlineLeadAfterFirstLimitSamples: srcStat.eastmoney.leadAfterFirstLimit },
         ths: { mainlineTotal: srcStat.ths.total, mainlineTop1Hits: srcStat.ths.top1, mainlineTop3Hits: srcStat.ths.top3,
+          mainlineQualifiedHits: srcStat.ths.qualified, mainlineQualifiedTotal: srcStat.ths.qualifiedTotal,
+          mainlineQualifiedRate: srcStat.ths.qualifiedTotal ? Number((srcStat.ths.qualified / srcStat.ths.qualifiedTotal * 100).toFixed(1)) : null,
           mainlineTop1Rate: srcStat.ths.total ? Number((srcStat.ths.top1 / srcStat.ths.total * 100).toFixed(1)) : null,
           mainlineTop3Rate: srcStat.ths.total ? Number((srcStat.ths.top3 / srcStat.ths.total * 100).toFixed(1)) : null,
           mainlineLeadSamples: srcStat.ths.leadMinutes.length,
@@ -25389,7 +25559,7 @@ async function getStrategyMainlineReview(days = 10) {
           mainlineLeadAfterFirstLimitSamples: srcStat.ths.leadAfterFirstLimit },
       },
     },
-    note: '回看只将存在L2预期明星或明星确认正证据的方向认定为正式主线；未扫描、覆盖不足或已扫描无明星的候选显示为今日无主线且不计命中率。领先时长只统计主线top1命中日中有完整事件轨迹的预期明星，从首次预期至同股真实首次封板，仅累计09:30–11:30与13:00–15:00可交易分钟，一来源一日一个样本并取窗口中位数；预期在首次封板后才出现的日期单独计数，不混入中位数。回看同时统计次日最高涨幅、次日收盘涨幅和第三个后续交易日收盘涨跌幅；收盘指标来自每日收盘价库，次日最高来自复权日K。',
+    note: '正式主线必须同时具备同家族确认明星股与至少3只当日涨停；涨停数量只作准入下限，不按谁涨停最多决定主线。未扫描、覆盖不足或已扫描无明星的候选显示为今日无主线且不计成立率。领先时长只统计正式主线成立日中有完整事件轨迹的预期明星，从首次预期至同股真实首次封板，仅累计09:30–11:30与13:00–15:00可交易分钟，一来源一日一个样本并取窗口中位数；预期在首次封板后才出现的日期单独计数，不混入中位数。回看同时统计次日最高涨幅、次日收盘涨幅和第三个后续交易日收盘涨跌幅；收盘指标来自每日收盘价库，次日最高来自复权日K。',
   };
 }
 
@@ -25400,7 +25570,9 @@ async function getStrategyMainlineReview(days = 10) {
 function strategyPredictHitRatesCompact(stats, windowDays) {
   if (!stats) return null;
   const src = key => ({
-    total: Number(stats.bySource?.[key]?.mainlineTotal || 0),
+    total: Number(stats.bySource?.[key]?.mainlineQualifiedTotal ?? stats.bySource?.[key]?.mainlineTotal ?? 0),
+    qualifiedRate: stats.bySource?.[key]?.mainlineQualifiedRate ?? stats.bySource?.[key]?.mainlineTop1Rate ?? null,
+    qualifiedHits: Number(stats.bySource?.[key]?.mainlineQualifiedHits ?? stats.bySource?.[key]?.mainlineTop1Hits ?? 0),
     top1Rate: stats.bySource?.[key]?.mainlineTop1Rate ?? null,
     top3Rate: stats.bySource?.[key]?.mainlineTop3Rate ?? null,
     leadSamples: Number(stats.bySource?.[key]?.mainlineLeadSamples || 0),
@@ -25412,7 +25584,9 @@ function strategyPredictHitRatesCompact(stats, windowDays) {
     basis: 'predict-review',       // 口径声明:与预判回看同源,盘后主因库缺失的日子不计分母
     // 只带前端实际渲染的字段(明星胜率留待 Owner 批准的后续步骤,不预置)
     overall: {
-      total: Number(stats.mainlineTotal || 0),
+      total: Number(stats.mainlineQualifiedTotal ?? stats.mainlineTotal ?? 0),
+      qualifiedRate: stats.mainlineQualifiedRate ?? stats.mainlineTop1Rate ?? null,
+      qualifiedHits: Number(stats.mainlineQualifiedHits ?? stats.mainlineTop1Hits ?? 0),
       top1Rate: stats.mainlineTop1Rate ?? null,
       top3Rate: stats.mainlineTop3Rate ?? null,
       leadSamples: Number(stats.mainlineLeadSamples || 0),
@@ -26644,21 +26818,22 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     debugErrors,
   };
   let mainlines;
-  // 预备主线:有 L2 明星证据但缺确认明星/缺龙头,独立层展示,不计正式口径(三要件 2026-07-21)。
+  // 预备主线:有 L2 明星证据，但确认明星/龙头/至少3只涨停任一未满足时，
+  // 独立层展示且不计正式口径。2只涨停仍可提前触发扫描，不能冒充正式主线。
   let reserveMainlines = [];
   const threeReqActive = useThreeRequirements && !options?.leaderDebug && strategyMainlineUsesStrictQi(isoDay);
   if (threeReqActive) {
     // [Codex #201 三审 P1] 重算对象=未截断的 QI 星证据全集,先重算、唯一一次分闸、最后才排序截断。
     // 首闸(上方 l2Gate)只保留非 QI 证据的诊断行;它的双缺判定基于重算前 leaders,不作数。
     // [Codex #201 四审 P1] 分闸前先消费终盘封板事实:盘后 expected 星若在最终可靠涨停库中,
-    // 升级 confirmed(603986 反例)——正式三条件门槛必须读最终状态,不是冻结的盘中等级。
+    // 升级 confirmed(603986 反例)——正式条件门槛必须读最终状态,不是冻结的盘中等级。
     const finalSealedCodes = await strategyMainlineFinalSealedCodes(isoDay).catch(() => null);
     const qiPool = strategyMainlineUpgradeStarsWithFinalSeal(
       inflowGate.kept.filter(item => strategyMainlineHasQiStarEvidence(item)),
       finalSealedCodes
     );
     if (finalSealedCodes) strategyPredictPersistFinalSealUpgradesOnce(isoDay, finalSealedCodes).catch(() => {});
-    const nonQiExcluded = l2Gate.excluded.filter(row => row.reason !== 'missing-confirmed-star-and-leader');
+    const nonQiExcluded = l2Gate.excluded.filter(row => row.provisionalFormalRequirements !== true);
     let reworkOutcome;
     if (diagMode) {
       try {
@@ -26716,7 +26891,7 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     : (reserveMainlines.length
     ? {
         reason: 'no-confirmed-mainline',
-        message: `今日暂无同时具备确认明星与合格龙头的正式主线；${reserveMainlines.length} 条预备主线待明星确认。`,
+        message: `今日暂无同时具备确认明星、合格龙头与至少3只涨停的正式主线；${reserveMainlines.length} 条预备主线待条件补齐。`,
       }
     : (l2Gate.excluded.length
     ? {
@@ -26809,7 +26984,7 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     },
     l2Gate: {
       rule: useThreeRequirements
-        ? 'formal-mainline-requires-confirmed-star-and-leader'
+        ? 'formal-mainline-requires-confirmed-star-leader-and-three-limit-ups'
         : 'visible-mainline-requires-expected-or-confirmed-star',
       excluded: l2Gate.excluded.slice(0, 10),
     },
@@ -26915,7 +27090,8 @@ function strategyMainlineHasQiStarEvidence(item) {
 }
 
 // ===== 主线题材三要件(Owner 定稿 2026-07-21,详见 docs/strategy/discussions/2026-07-21-qi-mainline-three-requirements.md) =====
-// 正式主线(真主线)= 确认明星≥1(confirmed,封板+三项取二) 且 合格龙头≥1 且 非风格板题材。
+// 正式主线(真主线)= 确认明星≥1(confirmed,封板+三项取二)、合格龙头≥1、
+// 同家族当日涨停≥3 且为非风格板题材。涨停数只作下限，不按数量多少决定主线。
 // expected-only 且有 L2 证据的候选降级为「预备主线」(独立层展示,与 #200 回看层"未兑现候选"同构);
 // 自实施日起生效,2026-07-16~20 的历史日维持"expected 或 confirmed"旧口径,不追溯改写。
 const STRATEGY_MAINLINE_THREE_REQ_START_DAY = '2026-07-21';
@@ -27009,6 +27185,7 @@ function strategyMainlineReserveReasons(item) {
   const reasons = [];
   if (!strategyMainlineHasConfirmedStar(item)) reasons.push('no-confirmed-star');
   if (!strategyMainlineHasQualifiedLeader(item)) reasons.push('no-qualified-leader');
+  if ((Number(item?.count) || 0) < STRATEGY_MAINLINE_FORMAL_MIN_ZT) reasons.push('insufficient-limit-up-count');
   return reasons;
 }
 
@@ -27024,9 +27201,9 @@ function strategyMainlineL2RejectReason(item) {
   return 'l2-star-evidence-missing';
 }
 
-// options.threeRequirements=true(2026-07-21 起的当日/回看重过滤)时按三要件分层:
-//   kept   = 正式主线(确认明星≥1 且 合格龙头≥1);
-//   reserve= 预备主线(有 L2 明星证据但缺确认明星或缺龙头,qiTier='reserve'+缺件原因);
+// options.threeRequirements=true(2026-07-21 起的当日/回看重过滤)时按正式条件分层:
+//   kept   = 正式主线(确认明星≥1、合格龙头≥1、同家族涨停≥3);
+//   reserve= 预备主线(有 L2 明星证据但任一正式条件未满足,qiTier='reserve'+缺件原因);
 //   excluded 与旧口径一致(无 L2 明星证据的候选,只留诊断)。
 // 旧口径(false):kept=有 expected/confirmed 证据者,reserve 恒空——历史日兼容。
 function strategyMainlineApplyL2StarGate(items, options = {}) {
@@ -27047,10 +27224,10 @@ function strategyMainlineApplyL2StarGate(items, options = {}) {
       if (!reasons.length) {
         kept.push({ ...item, qiTier: 'formal' });
       } else if (reasons.length === 1) {
-        // 单缺进预备层:待明星确认(expected+龙头) / 待龙头形成(confirmed+无龙头)。
+        // 单缺进预备层:待明星确认 / 待龙头形成 / 待涨停扩散到3只。
         reserve.push({ ...item, qiTier: 'reserve', reserveReasons: reasons });
       } else {
-        // 双缺仅诊断(Codex #201 P2):既无确认明星也无合格龙头,不占预备位。
+        // 多项未满足只留诊断，不占预备位；具体缺项保存在 reserveReasons。
         excluded.push({
           theme: String(item?.theme || ''),
           familyKey: String(item?.familyKey || item?.key || ''),
@@ -27058,7 +27235,9 @@ function strategyMainlineApplyL2StarGate(items, options = {}) {
           boardCount: Number(item?.boardCount) || 0,
           l2VerificationStatus: String(item?.l2VerificationStatus || ''),
           l2ScanState: String(item?.l2ScanState || ''),
-          reason: 'missing-confirmed-star-and-leader',
+          reason: 'missing-formal-mainline-requirements',
+          reserveReasons: reasons,
+          provisionalFormalRequirements: true,
         });
       }
       continue;
@@ -27686,7 +27865,8 @@ function strategyMainlineRestoreHistoricalPrediction(payload, predict, options =
 function strategyMainlineRestrictToQiPayload(payload, options = {}) {
   if (!payload || typeof payload !== 'object') return payload;
   // 三要件按 payload 自身日期切界:旧内存/文件缓存与冻结快照重过滤时,2026-07-21 起的当日
-  // 载荷同样执行"确认明星+龙头"分层,预备主线以 reserveMainlines 透出;更早的日子保持旧口径。
+  // 载荷同样执行"确认明星+龙头+至少3只涨停"分层,预备主线以 reserveMainlines 透出;
+  // 更早的日子保持旧口径。
   const threeReq = strategyMainlineUsesThreeRequirements(payload.day);
   // [Codex #201 四审 P1] 终盘封板事实升级(603986 反例):冻结载荷的 expected 星若已在最终
   // 可靠涨停库,升级 confirmed 后再分闸——旧的盘中等级不得覆盖最终涨停事实。
@@ -27763,7 +27943,7 @@ function strategyMainlineRestrictToQiPayload(payload, options = {}) {
       ...clearStaleEmptyState(sourcePayload, strict.length > 0),
       ...(removedCandidates && !strict.length ? (srcReserve.length ? {
         reason: 'no-confirmed-mainline',
-        message: `该来源暂无同时具备确认明星与合格龙头的正式主线；${srcReserve.length} 条预备主线待明星确认。`,
+        message: `该来源暂无同时具备确认明星、合格龙头与至少3只涨停的正式主线；${srcReserve.length} 条预备主线待条件补齐。`,
       } : {
         reason: 'no-l2-qualified-mainline',
         message: '该来源当前没有出现 L2 预期明星或明星确认，候选方向不进入正式主线榜。',
@@ -27800,14 +27980,14 @@ function strategyMainlineRestrictToQiPayload(payload, options = {}) {
     l2Gate: {
       ...(payload.l2Gate || {}),
       rule: threeReq
-        ? 'formal-mainline-requires-confirmed-star-and-leader'
+        ? 'formal-mainline-requires-confirmed-star-leader-and-three-limit-ups'
         : 'visible-mainline-requires-expected-or-confirmed-star',
       excluded: combinedExcluded.slice(0, 20),
     },
     ...clearStaleEmptyState(payload, mainlines.length > 0),
     ...(payload.ok && removedCandidates && !mainlines.length ? (reserveMainlines.length ? {
       reason: 'no-confirmed-mainline',
-      message: `今日暂无同时具备确认明星与合格龙头的正式主线；${reserveMainlines.length} 条预备主线待明星确认。`,
+      message: `今日暂无同时具备确认明星、合格龙头与至少3只涨停的正式主线；${reserveMainlines.length} 条预备主线待条件补齐。`,
     } : {
       reason: 'no-l2-qualified-mainline',
       message: '当前尚无通过 L2 明星验证的方向，候选方向不会进入正式主线榜。',

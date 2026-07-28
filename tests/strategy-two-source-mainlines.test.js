@@ -107,20 +107,67 @@ const bySourceReviewHTML = renderMainlineReviewHTML({
     day: '2026-07-13', phase: '早盘', sampleValid: true, pendingReview: false,
     noMainline: true, theme: '', leaders: [], expectedStars: [], actualTop: [{ theme: '算力', count: 3, rankTier: 1 }],
     bySource: {
-      eastmoney: { available: true, status: 'no-mainline', theme: '', noMainline: true, mainlineHitTop1: null, mainlineHitTop3: null },
-      ths: { available: true, status: 'mainline', theme: '算力', noMainline: false, mainlineHitTop1: true, mainlineHitTop3: true },
+      eastmoney: { available: true, status: 'no-mainline', theme: '', noMainline: true, mainlineQualified: null, mainlineHitTop1: null, mainlineHitTop3: null },
+      ths: { available: true, status: 'mainline', theme: '算力', noMainline: false, mainlineQualified: true, mainlineHitTop1: true, mainlineHitTop3: true },
     },
   }],
   stats: { bySource: {
-    eastmoney: { mainlineTotal: 0, mainlineTop1Hits: 0, mainlineTop3Hits: 0, mainlineTop1Rate: null, mainlineTop3Rate: null },
-    ths: { mainlineTotal: 1, mainlineTop1Hits: 1, mainlineTop3Hits: 1, mainlineTop1Rate: 100, mainlineTop3Rate: 100 },
+    eastmoney: { mainlineQualifiedTotal: 0, mainlineQualifiedHits: 0, mainlineQualifiedRate: null },
+    ths: { mainlineQualifiedTotal: 1, mainlineQualifiedHits: 1, mainlineQualifiedRate: 100 },
   } },
 });
 A(bySourceReviewHTML.includes('<span class="mlr-source-name">东财</span><strong>无主线</strong>'), 'P2 回看页:东财明确显示无主线');
 A(bySourceReviewHTML.includes('<span class="mlr-source-name">同花顺</span><strong>算力</strong>'), 'P2 回看页:同花顺独立显示算力主线');
-A(bySourceReviewHTML.includes('同花顺 命中 1/1(100%) · 前三 1/1(100%)'), 'P2 回看统计:同花顺独立显示命中/前三数据');
+A(bySourceReviewHTML.includes('同花顺 成立 1/1(100%)'), 'P2 回看统计:同花顺独立显示正式主线成立率');
 A(bySourceReviewHTML.includes('<span class="mlr-actual"') && bySourceReviewHTML.includes('>算力<i>3涨停</i>'), 'P2 回看页:双源有主线记录继续显示盘后实际第一家族');
 A(!bySourceReviewHTML.includes('<span class="mlr-card-state quiet">今日无主线</span>') && !bySourceReviewHTML.includes('候选未通过 L2'), 'P2 回看页:东财空+同花顺有预测时不再输出无来源的整体“今日无主线”误导');
+const finalStarMetricsHTML = renderMainlineReviewHTML({
+  days: [{
+    day: '2026-07-14', phase: '尾盘', sampleValid: true, pendingReview: false,
+    noMainline: false, theme: 'PCB', mainlineQualified: true, mainlineStarQualified: true,
+    star: { code: '600183', name: '生益科技', predictLevel: 'confirmed',
+      nextHighGain: 8.38, nextCloseGain: 3.06, threeDayGain: -10.55 },
+    leaders: [], expectedStars: [], actualTop: [{ theme: '机器人', count: 10 }],
+    finalConfirmedMainline: {
+      theme: 'PCB',
+      available: true,
+      formalQualified: true,
+      sameFamilyLimitUpCount: 10,
+      stars: [{ code: '600183', name: '生益科技', level: 'confirmed' }],
+    },
+  }],
+  stats: {},
+});
+const finalStarSummary = (finalStarMetricsHTML.match(/<summary class="mlr-line-sum">([\s\S]*?)<\/summary>/) || [])[1] || '';
+A(finalStarSummary.includes('+8.38%') && finalStarSummary.includes('+3.06%') && finalStarSummary.includes('-10.55%'),
+  '最终确认明星与预测明星代码一致时，摘要保留生益科技次高/次收/3日收益');
+A(finalStarSummary.includes('正式主线 PCB · 同家族10只涨停')
+  && !finalStarSummary.includes('主因机器人10涨停')
+  && !finalStarSummary.includes('主因分布首位'),
+  '最终摘要只展示确认明星所在正式主线及同家族涨停数，不再把全市场主因分布首位当结论');
+const correctedStarMetricsHTML = renderMainlineReviewHTML({
+  days: [{
+    day: '2026-07-27', phase: '尾盘', sampleValid: true, pendingReview: false,
+    noMainline: false, theme: 'PCB', mainlineQualified: true, mainlineStarQualified: true,
+    star: { code: '600183', name: '生益科技', predictLevel: 'confirmed',
+      nextHighGain: 8.38, nextCloseGain: 3.06, threeDayGain: -10.55 },
+    leaders: [], expectedStars: [], actualTop: [{ theme: '机器人', count: 20 }],
+    finalConfirmedMainline: {
+      theme: '半导体',
+      available: true,
+      formalQualified: false,
+      sameFamilyLimitUpCount: 2,
+      stars: [{ code: '600667', name: '太极实业', level: 'confirmed' }],
+    },
+  }],
+  stats: {},
+});
+const correctedStarSummary = (correctedStarMetricsHTML.match(/<summary class="mlr-line-sum">([\s\S]*?)<\/summary>/) || [])[1] || '';
+A(!correctedStarSummary.includes('+8.38%') && (correctedStarSummary.match(/<b class="na">--<\/b>/g) || []).length === 3,
+  '最终确认改为另一只明星时，不得把旧预测明星收益错配给新明星');
+A(correctedStarSummary.includes('今日无正式主线')
+  && !correctedStarSummary.includes('主因机器人20涨停'),
+  '确认明星所在家族不足3只涨停时，摘要明确显示今日无正式主线');
 const bothNoMainlineReviewHTML = renderMainlineReviewHTML({
   days: [{
     day: '2026-07-16', phase: '尾盘', sampleValid: true, pendingReview: false,
@@ -164,7 +211,7 @@ A(mixedReviewHTML.includes('预期明星封板（兼容口径）') && mixedRevie
 A(!mixedReviewHTML.includes('东财明星次日胜率') && !mixedReviewHTML.includes('东财龙头1次日胜率'), '终审P2:混合窗口不把旧 schema 聚合收益错误冠名为东财');
 const mixedOutcomeHTML = renderMainlineReviewHTML({
   days: [{ day: '2026-07-13', phase: '尾盘', sampleValid: true, noMainline: false, theme: '算力', leaders: [], expectedStars: [], actualTop: [{ theme: '算力', count: 2 }],
-    bySource: { eastmoney: { available: true, status: 'mainline', theme: '算力', noMainline: false, mainlineHitTop1: true, mainlineHitTop3: true }, ths: { available: true, status: 'mainline', theme: '医药', noMainline: false, mainlineHitTop1: false, mainlineHitTop3: false } } }],
+    bySource: { eastmoney: { available: true, status: 'mainline', theme: '算力', noMainline: false, mainlineQualified: true, mainlineHitTop1: true, mainlineHitTop3: true }, ths: { available: true, status: 'mainline', theme: '医药', noMainline: false, mainlineQualified: false, mainlineHitTop1: false, mainlineHitTop3: false } } }],
   stats: { bySource: { eastmoney: { mainlineTotal: 1 }, ths: { mainlineTotal: 1 } } },
 });
 A(mixedOutcomeHTML.includes('<div class="mlr-row hit-na'), '终审P3:一源命中一源脱靶时整行用中性强调，不用“最好结果”绿色误导');
@@ -174,7 +221,7 @@ const mixedOutcomeWithStarHTML = renderMainlineReviewHTML({
     mainlineStarQualified: true,
     expectedStars: [{ code: '603986', name: '兆易创新', sealStatus: 'sealed' }],
     actualTop: [{ theme: '半导体', count: 39 }],
-    bySource: { eastmoney: { available: true, status: 'mainline', theme: '半导体', noMainline: false, mainlineHitTop1: true, mainlineHitTop3: true }, ths: { available: true, status: 'mainline', theme: '消费电子/显示', noMainline: false, mainlineHitTop1: false, mainlineHitTop3: false } } }],
+    bySource: { eastmoney: { available: true, status: 'mainline', theme: '半导体', noMainline: false, mainlineQualified: true, mainlineHitTop1: true, mainlineHitTop3: true }, ths: { available: true, status: 'mainline', theme: '消费电子/显示', noMainline: false, mainlineQualified: false, mainlineHitTop1: false, mainlineHitTop3: false } } }],
   stats: { bySource: { eastmoney: { mainlineTotal: 1 }, ths: { mainlineTotal: 1 } } },
 });
 A(mixedOutcomeWithStarHTML.includes('<details class="mlr-line hit-ok star-confirmed')
@@ -189,7 +236,7 @@ const missedOutcomeWithStarHTML = renderMainlineReviewHTML({
       { code: '000063', name: '中兴通讯', sealStatus: 'notSealed' },
     ],
     actualTop: [{ theme: '电力', count: 10 }],
-    bySource: { eastmoney: { available: true, status: 'mainline', theme: '算力', noMainline: false, mainlineHitTop1: false, mainlineHitTop3: false }, ths: { available: true, status: 'no-mainline', theme: '', noMainline: true, mainlineHitTop1: null, mainlineHitTop3: null } } }],
+    bySource: { eastmoney: { available: true, status: 'mainline', theme: '算力', noMainline: false, mainlineQualified: false, mainlineHitTop1: false, mainlineHitTop3: false }, ths: { available: true, status: 'no-mainline', theme: '', noMainline: true, mainlineQualified: null, mainlineHitTop1: null, mainlineHitTop3: null } } }],
   stats: { bySource: { eastmoney: { mainlineTotal: 1 }, ths: { mainlineTotal: 0 } } },
 });
 A(missedOutcomeWithStarHTML.includes('<div class="mlr-row hit-miss')
@@ -211,15 +258,15 @@ A(!legacyReviewHTML.includes('候选未通过 L2 明星验证，不计正式主�
 // ---- 4c. 回看明星状态视觉:确认/预期必须成为可扫描的行级信号,普通记录不误着色 ----
 const starVisualReviewHTML = renderMainlineReviewHTML({
   days: [
-    { day: '2026-07-08', phase: '已收盘', sampleValid: false, sampleInvalidReason: 'phase:已收盘', noMainline: false, theme: '算力AI', mainlineHitTop1: true,
+    { day: '2026-07-08', phase: '已收盘', sampleValid: false, sampleInvalidReason: 'phase:已收盘', noMainline: false, theme: '算力AI', mainlineQualified: true, mainlineHitTop1: true,
       star: { code: '000938', name: '紫光股份', predictLevel: 'confirmed' }, leaders: [], expectedStars: [], actualTop: [] },
-    { day: '2026-07-14', phase: '盘中', sampleValid: true, noMainline: false, theme: '创新药', mainlineHitTop3: true,
+    { day: '2026-07-14', phase: '盘中', sampleValid: true, noMainline: false, theme: '创新药', mainlineQualified: true, mainlineHitTop3: true,
       star: { code: '300760', name: '迈瑞医疗', predictLevel: 'expected', sealStatus: 'sealed' }, leaders: [],
       expectedStars: [{ code: '300760', name: '迈瑞医疗', sealStatus: 'sealed' }], actualTop: [] },
-    { day: '2026-07-15', phase: '盘中', sampleValid: true, noMainline: false, theme: '白酒', mainlineHitTop3: false,
+    { day: '2026-07-15', phase: '盘中', sampleValid: true, noMainline: false, theme: '白酒', mainlineQualified: false, mainlineHitTop3: false,
       star: { code: '600519', name: '贵州茅台', predictLevel: 'expected', sealStatus: 'notSealed' }, leaders: [],
       expectedStars: [{ code: '600519', name: '贵州茅台', sealStatus: 'notSealed' }], actualTop: [] },
-    { day: '2026-07-16', phase: '盘中', sampleValid: true, noMainline: false, theme: '半导体', mainlineHitTop1: null,
+    { day: '2026-07-16', phase: '盘中', sampleValid: true, noMainline: false, theme: '半导体', mainlineQualified: null, mainlineHitTop1: null,
       star: { code: '603986', name: '兆易创新', predictLevel: 'expected', sealStatus: 'noData' }, leaders: [],
       expectedStars: [{ code: '603986', name: '兆易创新', sealStatus: 'noData' }], actualTop: [] },
     { day: '2026-07-13', phase: '盘中', sampleValid: true, noMainline: false, theme: '消费电子', mainlineHitTop3: true,
@@ -240,8 +287,8 @@ A((starVisualReviewHTML.match(/star-confirmed/g) || []).length === 4
   && (starVisualReviewHTML.match(/star-pending/g) || []).length === 2, '普通回看记录不会误套明星结果样式');
 // A+C 重构:分组改为按日期倒序统一表,分组语义由行级 star-* 强调色与结果徽章承担。
 A(starVisualReviewHTML.includes('mlr-table-head') && !starVisualReviewHTML.includes('mlr-group '), '回看使用统一日期表,不再分组分节');
-A((starVisualReviewHTML.match(/主线命中/g) || []).length >= 2 && !starVisualReviewHTML.includes('✓命中'), '主线命中使用独立结论文案,不再与明星阶段混为同一状态');
-A(/mlr-row hit-invalid star-confirmed invalid[\s\S]*?主线命中/.test(starVisualReviewHTML), '不计样本标记、主线命中与明星确认可在同一记录中独立共存');
+A((starVisualReviewHTML.match(/主线成立/g) || []).length >= 2 && !starVisualReviewHTML.includes('✓命中'), '主线成立使用独立结论文案,不再与明星阶段混为同一状态');
+A(/mlr-row hit-invalid star-confirmed invalid[\s\S]*?主线成立/.test(starVisualReviewHTML), '不计样本标记、主线成立与明星确认可在同一记录中独立共存');
 A(html.includes('body.view-strategy .mlr-row.star-confirmed.invalid') && html.includes('opacity: 1;'), '明星证据高亮覆盖 invalid 全行透明度，7月8日不再被变灰');
 
 // ---- 5. 静态锁定:每源只用自己的 zsType 取板;KPL(7) 不进任一边,也不进策略辅助指标 ----

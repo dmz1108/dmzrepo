@@ -55,9 +55,12 @@ eval(extractFn('normalizeReasonSourceCode'));
 const isExcludedFromReview = (code) => String(code || '').startsWith('8');  // 夹具:8 开头视作北交所剔除
 function isDroppedThemeWord(raw) { return /测试剔除词/.test(String(raw || '')); }
 const STRATEGY_MAINLINE_INTRADAY_PHASES = extractSet('STRATEGY_MAINLINE_INTRADAY_PHASES');
+const STRATEGY_MAINLINE_FORMAL_MIN_ZT = 3;
 
 // ---- 待测函数 + 可控 IO/时钟 stub ----
 eval(extractFn('strategyMainlineActualFamilyRanking'));
+eval(extractFn('strategyMainlineReviewStarCandidates'));
+eval(extractFn('strategyMainlineReviewQualification'));
 eval(extractFn('normalizeReviewFirstLimitTime'));
 eval(extractFn('strategyMainlineExpectedStarTransitions'));
 eval(extractFn('strategyMainlineChinaEventTimeMs'));
@@ -70,6 +73,7 @@ eval(extractFn('strategyMainlineReviewFormalTop'));
 eval(extractFn('strategyMainlineReviewHasRecord'));
 eval(extractFn('strategyMainlineMatchesConfirm'));
 eval(extractFn('strategyMainlineReviewConfirmedConclusion'));
+eval(extractFn('strategyMainlineReviewFinalQualification'));
 
 let TODAY = '2026-07-14';           // 次日:全部夹具交易日都算已收盘
 let TODAY_CLOSED = true;            // 仅当 day===TODAY 时用
@@ -131,6 +135,42 @@ const finalLimitDb = (codes) => ({
 const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
 
 (async () => {
+  const absoluteMainline = strategyMainlineReviewQualification(
+    {
+      schemaVersion: 3,
+      candidates: [{ key: 'theme:PCB', theme: 'PCB', stars: [{ code: '002141', name: '贤丰控股', level: 'confirmed' }] }],
+      starTransitions: [],
+    },
+    { key: 'theme:PCB', theme: 'PCB', star: { code: '002141', name: '贤丰控股', level: 'confirmed' } },
+    [
+      { familyKey: strategyMainlineFamilyInfo({ theme: '机器人' }).key, label: '机器人', count: 20 },
+      { familyKey: strategyMainlineFamilyInfo({ theme: 'PCB' }).key, label: 'PCB', count: 10 },
+    ],
+    new Set(['002141']),
+    true
+  );
+  A(absoluteMainline.qualified === true && absoluteMainline.limitUpCount === 10,
+    '新口径:PCB虽少于机器人20只，但有确认明星且自身10只涨停，仍是正式主线');
+  const noConfirmedFinal = strategyMainlineReviewFinalQualification({
+    available: true,
+    key: 'theme:PCB',
+    theme: 'PCB',
+    stars: [{ code: '002141', name: '贤丰控股', level: 'expected' }],
+  }, [{ familyKey: strategyMainlineFamilyInfo({ theme: 'PCB' }).key, label: 'PCB', count: 10 }], true);
+  A(noConfirmedFinal.formalQualified === false
+    && noConfirmedFinal.formalQualificationReasons.includes('no-confirmed-star'),
+  '最终复核只有预期明星、没有确认明星时，即使同家族涨停很多也不是正式主线');
+  const incompleteFinal = strategyMainlineReviewFinalQualification({
+    available: true,
+    key: 'theme:PCB',
+    theme: 'PCB',
+    stars: [{ code: '002141', name: '贤丰控股', level: 'confirmed' }],
+  }, [], false);
+  A(incompleteFinal.formalQualified === null
+    && incompleteFinal.sameFamilyLimitUpCount === null
+    && incompleteFinal.formalQualificationReasons.includes('post-close-evidence-incomplete'),
+  '有确认明星但盘后主因证据不完整时保持待核验，不把缺数据误判成无主线');
+
   const legacyTransitions = strategyMainlineExpectedStarTransitions(
     { savedAt: '2026-07-09T01:40:00.000Z', starTransitions: [] },
     { key: '算力', theme: '算力', star: { code: '002396', name: '星网', level: 'expected' } }
@@ -207,10 +247,11 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
     starTransitions: [{ mainlineKey: '算力', mainlineTheme: '算力', code: '002396', name: '星网',
       firstExpectedAt: '2026-07-09T01:40:00.000Z', confirmedAt: '2026-07-09T07:30:00.000Z',
       confirmedBy: 'final-limit-up-db', lastLevel: 'confirmed' }] };
-  LIMIT_UP['2026-07-09'] = finalLimitDb([{ code: '002396', firstLimitTime: 131000 }, '600009']);
+  LIMIT_UP['2026-07-09'] = finalLimitDb([{ code: '002396', firstLimitTime: 131000 }, '600009', '600019']);
   MAIN_REASON['2026-07-09'] = reasonDb([
     { code: '002396', name: '星网', finalBoardTopic: '算力' },
-    { code: '600009', name: 'I', finalBoardTopic: '算力' }]);
+    { code: '600009', name: 'I', finalBoardTopic: '算力' },
+    { code: '600019', name: 'I2', finalBoardTopic: '算力' }]);
   CLOSE['2026-07-09'] = { ...CLOSE['2026-07-09'], '002396': 10, '000938': 20 };
   CLOSE['2026-07-10'] = { '002396': 11, '000938': 19 };
 
@@ -300,6 +341,10 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   '①最终确认明确标记口径修正且不进入盘中预测统计');
   A(d10.finalConfirmedMainline?.stars?.map(row => row.code).join(',') === '600667,002409',
     '①最终确认携带修正后主线的两只确认明星');
+  A(d10.finalConfirmedMainline?.formalQualified === false
+    && d10.finalConfirmedMainline?.sameFamilyLimitUpCount === 0
+    && d10.finalConfirmedMainline?.formalQualificationReasons?.includes('insufficient-limit-up-count'),
+  '①最终确认主题不在完整主因库中达到3只涨停时，不得因全市场主因分布或人工确认冒充正式主线');
 
   // ② 已收盘不计样本(7-08 真实镜像)
   A(d8.sampleValid === false && d8.sampleInvalidReason === 'phase:已收盘', '②07-08 已收盘 → sampleValid=false + 明确原因');
@@ -431,10 +476,11 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
       ], candidates: [{ key: 'theme:消费电子', l2VerificationStatus: 'qi' }], starTransitions: [] },
     },
   };
-  LIMIT_UP['2026-07-21'] = finalLimitDb([{ code: '603986', firstLimitTime: 140805 }, '600021']);
+  LIMIT_UP['2026-07-21'] = finalLimitDb([{ code: '603986', firstLimitTime: 140805 }, '600021', '600023']);
   MAIN_REASON['2026-07-21'] = reasonDb([
     { code: '603986', name: '兆易创新', finalBoardTopic: '半导体' },
     { code: '600021', name: 'A', finalBoardTopic: '半导体' },
+    { code: '600023', name: 'A2', finalBoardTopic: '半导体' },
   ]);
   PREDICTS['2026-07-22'] = {
     schemaVersion: 3, sessionPhase: '尾盘', confirmedKey: '', top: [
@@ -487,8 +533,12 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
       ths: { available: true, hasMainlines: false, top: [], candidates: [], starTransitions: [] },
     },
   };
-  LIMIT_UP['2026-07-23'] = finalLimitDb([{ code: '002396', firstLimitTime: 93000 }]);
-  MAIN_REASON['2026-07-23'] = reasonDb([{ code: '002396', name: '星网', finalBoardTopic: '算力' }]);
+  LIMIT_UP['2026-07-23'] = finalLimitDb([{ code: '002396', firstLimitTime: 93000 }, '600031', '600032']);
+  MAIN_REASON['2026-07-23'] = reasonDb([
+    { code: '002396', name: '星网', finalBoardTopic: '算力' },
+    { code: '600031', name: '算力A', finalBoardTopic: '算力' },
+    { code: '600032', name: '算力B', finalBoardTopic: '算力' },
+  ]);
   const out8 = await getStrategyMainlineReview(10);
   const late23 = out8.days.find(row => row.day === '2026-07-23');
   A(late23?.mainlineHitTop1 === true && late23.mainlineLead === null

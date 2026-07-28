@@ -2,7 +2,7 @@
 // 主线榜命中率随行展示(Owner 2026-07-26 第一步)行为锁:
 // 1) 紧凑块与预判回看同源,分母 0 时 rate 保持 null,禁止编造 0%;
 // 2) 命中率只在路由响应层附加,绝不进入冻结快照生成路径;
-// 3) 前端三态:字段缺失静默 / 零样本如实"暂无样本" / 有样本展示 top1/top3;
+// 3) 前端三态:字段缺失静默 / 零样本如实"暂无样本" / 有样本展示正式主线成立率;
 // 4) 热路径不因缓存未命中而同步等待回看计算(stale-while-revalidate)。
 const assert = require('assert');
 const fs = require('fs');
@@ -52,6 +52,7 @@ const full = strategyPredictHitRatesCompact({
 }, 10);
 assert.strictEqual(full.windowDays, 10);
 assert.strictEqual(full.overall.total, 8);
+assert.strictEqual(full.overall.qualifiedRate, 62.5);
 assert.strictEqual(full.bySource.eastmoney.top1Rate, 62.5);
 assert.strictEqual(full.overall.leadSamples, 3);
 assert.strictEqual(full.overall.leadMedianMinutes, 93.6);
@@ -174,10 +175,10 @@ function assertIncludes(s, sub) { assert(s.includes(sub), `missing: ${sub}`); re
 assert(html.includes('if (!hr) return \'\';'), '字段缺失(旧快照/缓存未就绪)整行静默不渲染');
 assert(html.includes('暂无样本'), '零样本必须如实显示"暂无样本"');
 const hitBlock = html.slice(html.indexOf('const hitRateLine'), html.indexOf('const renderColumn'));
-assert(hitBlock.includes('if (!Number(hr.total) || hr.top1Rate == null)'), '零样本分支必须在渲染数字之前短路,且 rate 为 null 时直连兜底');
+assert(hitBlock.includes('if (!Number(hr.total) || hr.qualifiedRate == null)'), '零样本分支必须在渲染数字之前短路,且成立率为 null 时直连兜底');
 // 变异验证补锁(首版此处被"零样本分支改渲染 0%"的变异逃过):
 // 双列 hitRateLine 块内零样本分支必须落在"暂无样本"文案上,且块内不得出现任何字面 0%。
-assert(/if \(!Number\(hr\.total\) \|\| hr\.top1Rate == null\)[^;]*暂无样本/.test(hitBlock), '零样本分支必须渲染"暂无样本"文案');
+assert(/if \(!Number\(hr\.total\) \|\| hr\.qualifiedRate == null\)[^;]*暂无样本/.test(hitBlock), '零样本分支必须渲染"暂无样本"文案');
 assert(!/0%/.test(hitBlock), 'hitRateLine 块内禁止出现任何字面 0%(动态率由数据渲染,静态 0% 即伪造)');
 assert(hitBlock.includes('领先中位') && hitBlock.includes('领先暂无样本'),
   '有可核验样本展示领先中位，无样本必须明确显示暂无样本');
@@ -185,6 +186,8 @@ assert(hitBlock.includes('真实首次封板') && !hitBlock.includes('confirmedA
   '领先口径必须说明使用真实首次封板，前端不得把盘后确认写入时点当口径');
 assert(hitBlock.includes('09:30–11:30、13:00–15:00') && hitBlock.includes('预期在首次封板后才出现'),
   '提示必须说明只累计可交易时段，并披露封板后才识别的排除样本');
+assert(hitBlock.includes('主线成立') && hitBlock.includes('至少3只'),
+  '标题行展示正式主线成立率，并明确确认明星+至少3只涨停口径');
 assert(html.includes('ml-hitrate is-empty'), '暂无样本使用弱化样式');
 // 93.6 可交易分钟四舍五入后应显示 1时34分；0分钟是一字板的诚实样本，缺值不装作 0。
 // eslint-disable-next-line no-eval
@@ -198,7 +201,7 @@ assert(html.includes('<span>${escapeHTML(title)}${hitRateLine(srcKey)}</span>'),
 assert(html.includes('<span>今日主线榜${overallHitLine}</span>'), '单列整体命中率位于主标题行内');
 // 单列兼容路径同样受三态约束
 const overallBlock = html.slice(html.indexOf('const overallHitLine'), html.indexOf('const cards = lines.slice'));
-assert(/if \(!Number\(hr\.total\) \|\| hr\.top1Rate == null\)[^;]*暂无样本/.test(overallBlock) && !/0%/.test(overallBlock),
+assert(/if \(!Number\(hr\.total\) \|\| hr\.qualifiedRate == null\)[^;]*暂无样本/.test(overallBlock) && !/0%/.test(overallBlock),
   '单列整体命中率同样禁止 0% 伪造');
 assert(overallBlock.includes('领先中位') && overallBlock.includes('领先时长暂无可核验样本'),
   '单列兼容路径同样展示或诚实缺省领先时长');

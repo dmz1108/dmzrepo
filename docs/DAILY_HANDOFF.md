@@ -11673,7 +11673,197 @@ Notes for next agent:
 - 预判回看的 `theme/bySource` 是当时冻结预测；`finalConfirmedMainline` 是盘后最终
   结论。两者并列是刻意设计，不应再合并为同一个字段。
 
-## 2026-07-27 - Codex - 修复 catalog 板块未进入 L2 自动扫描
+## 2026-07-27 - Codex - 主线改为明星股与三只涨停准入
+
+Changed:
+- 修正正式主线口径：同一家族必须存在确认明星股，且当日涨停数至少为 3；涨停
+  数量只作准入下限，不再用“谁涨停最多”决定谁是真主线。
+- 保留盘中提前发现能力：自动 L2 扫描仍可在 2 只涨停时启动，扫描门槛与正式
+  主线门槛明确分离。
+- 预判回看和随行统计改为绝对“主线成立率”；盘后涨停家族 top1/top3 仅保留为
+  历史兼容和主因分布审计字段，不再作为前端正式主线结论。
+- 增加回归样本：涨停 20 只但没有明星股的家族不能压过涨停 10 只且有确认明星
+  的家族；明星、龙头齐全但仅 2 只涨停只能进入预备层。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/mainline-review.test.js`
+- `tests/qi-mainline-states.test.js`
+- `tests/strategy-hitrate-display.test.js`
+- `tests/strategy-three-requirements.test.js`
+- `tests/strategy-two-source-mainlines.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- 全部 `tests/*.test.js` 通过。
+- `git diff --check`
+
+Deployment:
+- 本条提交时仅为 GitHub 代码变更；生产尚未部署，服务尚未重启。
+
+Notes for next agent:
+- 不要把 L2 自动扫描的 2 只涨停提前量提高为 3；否则会延迟盘中发现预期明星。
+- 正式主线仍沿用既有的确认明星、合格龙头和非风格板约束，并新增同家族至少
+  3 只涨停下限。涨停数量超过 3 后不因数量更多自动获得“主线”资格。
+
+## 2026-07-27 - Codex - 明星股与三只涨停主线口径已部署
+
+Changed:
+- PR #313 已合入 `main`，并通过受保护生产流程发布
+  `kpl-stats-server.js` 与 `kpl-dashboard_17_apple.html`。
+- 云端主服务已重启，部署器已自动写入两份云端运维日志。
+
+Files:
+- 本条仅更新 `docs/DAILY_HANDOFF.md`；部署文件为 `kpl-stats-server.js` 和
+  `kpl-dashboard_17_apple.html`。
+
+Validated:
+- GitHub Actions production run `30278767931` 成功，批准提交为
+  `1c0375015e6e719a1d304b28e93b6135dbe6f23c`。
+- `https://market.dreamerqi.com/health` 返回 `{"ok":true}`。
+- 生产行情 HTML 已包含“正式主线=同家族确认明星股+至少3只涨停”和“涨停数量
+  排名不决定主线”。
+- 生产 2026-07-27 回看验证：机器人家族 20 只涨停但没有确认明星，不能凭数量
+  成为主线；PCB 与连接家族 10 只涨停且贤丰控股为确认明星，
+  `mainlineQualified=true`。
+
+Deployment:
+- 已部署并生效；主服务已重启，健康检查通过。
+- 生产备份：
+  `C:\PandaDashboard\_deploy-backups\github-30278767931-1`。
+
+Notes for next agent:
+- 旧 `mainlineHitTop1/mainlineHitTop3` 字段只供历史兼容和分布审计；前端正式
+  结论与随行统计使用 `mainlineQualified`。
+- 正式主线按绝对条件独立成立，因此同一天可以存在不止一个满足条件的主线，
+  不再强制从涨停数量排名中选唯一第一名。
+
+## 2026-07-27 - Codex - 修复最终确认明星摘要收益被隐藏
+
+Changed:
+- 修复预判回看存在 `finalConfirmedMainline` 时无条件清空摘要收益对象的问题。
+- 最终确认明星与已计算收益的预测明星代码一致时，继续显示次高、次收和3日；
+  最终确认改成另一只股票时保持空值，禁止错配收益。
+- 增加 2026-07-14 生益科技生产镜像回归，以及盘后换星不得沿用旧收益的反例。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `tests/strategy-two-source-mainlines.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 生产接口已经返回生益科技次高 `8.38%`、次收 `3.06%`、3日 `-10.55%`；
+  缺失仅发生在前端摘要选择。
+- `node tests/strategy-two-source-mainlines.test.js`
+- 全部 `tests/*.test.js`
+- `git diff --check`
+
+Deployment:
+- 本条提交时仅为 GitHub 代码变更；生产尚未部署，服务尚未重启。
+
+Notes for next agent:
+- `finalConfirmedMainline` 与冻结预测可能属于不同主线、不同明星；摘要收益只能按
+  股票代码精确复用，不能按题材名或显示顺序猜测。
+
+## 2026-07-28 - Codex - 部署最终确认明星回看收益修复
+
+Changed:
+- 两份 Claude 独立复核均批准 PR #315，确认股票代码精确匹配和换星失败方向安全。
+- PR #315 合并到 `main`，并通过受保护生产工作流发布行情前端。
+
+Files:
+- `kpl-dashboard_17_apple.html`（生产发布）
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- PR #315 合并提交：
+  `c826641714ca180d9460d2c3db0929eb6e41aa40`。
+- 生产工作流：
+  `https://github.com/dmz1108/dmzrepo/actions/runs/30317360805`，结果 `success`。
+- `https://market.dreamerqi.com/health` 返回 `{"ok":true}`。
+- 生产行情 HTML 已包含最终确认明星按股票代码复用收益的新逻辑。
+- 生产接口 2026-07-14 生益科技继续返回次高 `8.38%`、次收 `3.06%`、
+  3日 `-10.55%`，最终确认明星代码同为 `600183`。
+
+Deployment:
+- 已部署并生效；主服务已重启，健康检查通过。
+- 本次仅发布 `kpl-dashboard_17_apple.html`，未修改业务数据库、L2 运行时数据、
+  Caddy 或公司端 worker。
+
+Notes for next agent:
+- `expected` 明星是否应出现在“最终确认”收益摘要，以及多明星时三项收益应标注
+  所属股票，属于后续独立展示议题，不阻断本次已上线修复。
+
+## 2026-07-28 - Codex - 预判回看以明星正式主线取代主因分布首位
+
+Changed:
+- 预判回看摘要不再把全市场“主因分布首位”显示成盘后结论。
+- 管理员收盘复核新增正式资格结果：必须有确认明星股，且该明星所在主线家族
+  当日至少 3 只涨停；主因证据不完整时保持待核验，不把缺数据判成无主线。
+- 摘要改为显示正式主线及同家族涨停数量；没有正式资格时显示“今日无正式
+  主线”。
+- 全市场主因分布仍保留在展开详情，改名为“市场分布（诊断）”，不删除底层
+  数据，也不参与正式主线结论。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/mainline-review.test.js`
+- `tests/strategy-two-source-mainlines.test.js`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- `node tests/mainline-review.test.js`
+- `node tests/strategy-two-source-mainlines.test.js`
+- 全部 73 个 `tests/*.test.js`
+- `git diff --check`
+
+Deployment:
+- 本条提交时仅为 GitHub 代码变更；生产尚未部署，服务尚未重启。
+
+Notes for next agent:
+- 请重点复核 `finalConfirmedMainline.formalQualified` 的三态：有确认明星且同家族
+  至少 3 只为 `true`；明确缺确认明星或数量不足为 `false`；主因覆盖不完整为
+  `null`。
+- `actualTop` 继续用于市场分布审计和旧命中统计，但不得重新进入摘要正式结论。
+
+## 2026-07-28 - Codex - 部署预判回看正式主线结论
+
+Changed:
+- PR #317 已合并到 `main`，并通过受保护生产流程发布后端与行情前端。
+- 生产预判回看摘要现以“确认明星 + 同家族至少 3 只涨停”判断正式主线；
+  全市场主因数量首位只保留为展开后的诊断信息。
+
+Files:
+- `kpl-stats-server.js`（生产发布）
+- `kpl-dashboard_17_apple.html`（生产发布）
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- PR #317 合并提交：
+  `4315c3b860428a3e3a68e9fc14fcbeac88533431`。
+- GitHub Actions production run `30319403770` 成功。
+- `https://market.dreamerqi.com/health` 返回 `{"ok":true}`。
+- 生产接口 2026-07-14 PCB 返回 `formalQualified=true`、同家族 7 只涨停；
+  2026-07-15 肝炎因没有确认明星返回 `formalQualified=false`。
+- 生产行情 HTML 已包含“收盘复核”“正式主线”和“今日无正式主线”新文案。
+
+Deployment:
+- 已部署并生效；主服务已重启，健康检查通过。
+- 生产备份：
+  `C:\PandaDashboard\_deploy-backups\github-30319403770-1`。
+- 未修改业务数据库、历史预测档、L2 运行时数据、Caddy 或公司端 worker。
+
+Notes for next agent:
+- 后续不要再把 `actualTop` 或“主因分布首位”恢复成正式主线结论。
+- 历史预测档仍保持原样；回看归因冲突的只读审计应单独处理，不得通过改写
+  已落盘预测档来美化历史统计。
+
+## 2026-07-28 - Codex - 补齐 catalog 板块 L2 自动扫描链路
 
 Changed:
 - 修复实时目录补入的高资金板块只有资金/涨幅、没有成分股和涨停数，导致统一 L2
@@ -11683,8 +11873,9 @@ Changed:
 - 保持既有门槛不变：东财仍要求超大单净流入至少 5 亿元且至少 2 只涨停；同花顺仍
   要求 DDE 活跃度至少 5 亿元、`zjjlr>0` 且至少 2 只涨停。成员取数失败时保持未知，
   不伪造 0、不派单。
-- 紧凑策略卡新增“成员已就绪”审计标记，页面状态与真实派单前置条件保持一致；
-  合并状态保留各来源拒绝原因。
+- 紧凑策略卡新增“成员已就绪”审计标记，合并状态保留各来源拒绝原因。
+- 已把原 PR #312 功能提交重新集成到最新 `main`，保留后续正式主线和回看改动；
+  交接日志冲突按两边记录全部保留的原则解决。
 
 Files:
 - `kpl-stats-server.js`
@@ -11696,21 +11887,14 @@ Files:
 
 Validated:
 - `node --check kpl-stats-server.js`
-- 全量 74 个 `tests/*.test.js` 均通过。
-- 新回归覆盖：高资金目录板完成成员补水、精确回填 `zt=2`、进入统一派单；少于
-  2 个信号股时不发成员请求；成员接口无数据时保持 `zt=null`；紧凑展示板不能冒充
-  实际派单载荷。
-- 生产只读证据参数：`day=2026-07-27`，
-  `codes=000862,001248,001258,002310,002775`，`themes=电力`，`window=10`。
-- 证据包 `complete=true`、`missingSources=[]`、`sourceErrors=[]`；
-  `bundleSha256=a1c05bbc85d8ce2b6362d9e117c6f57190844255bbf23c40a5a1bfb9aff91688`；
-  本地离线回放以 `--require-complete --expect-sha` 通过。
+- 全部 `tests/*.test.js`
+- `git diff --check`
 
 Deployment:
 - 本条提交时仅为 GitHub 代码变更；生产代码尚未部署，服务尚未重启。
-- 只在生产忽略目录保存了脱敏证据包用于复核，未修改市场数据库、配置或正式快照。
+- 未修改市场数据库、历史预测档、L2 运行时数据、Caddy 或公司端 worker。
 
 Notes for next agent:
-- 复审应使用上述相同日期、代码、主题和窗口重新抓取或校验同一证据哈希。
 - 部署后需在下一交易日用真实候选验证：目录补入板若满足原有资金与涨停门槛，应显示
   “等待公司端/扫描中”，并生成带真实 `memberRows` 的 L2 任务；不合格板仍不得扫描。
+- PR #319 是独立的回看归因过滤修复；两个 PR 应分别复审、分别合并。
