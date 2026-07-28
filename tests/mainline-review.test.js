@@ -71,6 +71,10 @@ eval(extractFn('strategyMedianNumber'));
 eval(extractFn('strategyMainlineReserveStarOutcomes'));   // 三要件预备层盘后结果(#201)
 eval(extractFn('strategyMainlineReviewFormalTop'));
 eval(extractFn('strategyMainlineReviewHasRecord'));
+eval(extractFn('strategyMainlineStarAttributionDecision'));
+eval(extractFn('strategyMainlineReviewPredictionStarCodes'));
+eval(extractFn('strategyMainlineReviewFilterAttributionBlock'));
+eval(extractFn('strategyMainlineReviewFilterPredictionAttribution'));
 eval(extractFn('strategyMainlineMatchesConfirm'));
 eval(extractFn('strategyMainlineReviewConfirmedConclusion'));
 eval(extractFn('strategyMainlineReviewFinalQualification'));
@@ -120,9 +124,12 @@ const isFiniteNumeric = value => value != null && value !== '' && Number.isFinit
 const isSavedAfterMarketClose = (payload) => payload?.savedAtOK === true;
 const isReliableLimitUpDbPayload = (payload) => Array.isArray(payload?.stocks) && payload.stocks.length > 0 && payload.reliable !== false;
 const isCompatibleMainReasonDb = (payload) => !!payload?.stocks?.length && String(payload?.ruleVersion || '') === 'vOK';
+let ATTRIBUTION_CONTEXT = new Map();
+const strategyMainlineAttributionContextForCodes = async () => ATTRIBUTION_CONTEXT;
 
 eval(extractFn('strategyKlineBarForDay'));
 eval(extractFn('strategyKlineCoversDay'));
+eval(extractFn('strategyMainlineReviewPredictionAttribution'));
 eval(extractFn('getStrategyMainlineReview'));
 
 const finalLimitDb = (codes) => ({
@@ -550,6 +557,76 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   A(out8.stats.bySource.eastmoney.mainlineLeadSamples === 0
     && out8.stats.bySource.eastmoney.mainlineLeadAfterFirstLimitSamples === 1,
   '分源统计同样披露封板后识别日，不借另一来源或静默丢弃');
+
+  // ---------- PR #304 回看补口:只在内存中剔除明确归因冲突，不改历史预测档 ----------
+  TODAY = '2026-07-28'; TODAY_CLOSED = true;
+  TRADING_DAYS = ['2026-07-27'];
+  const wrongStar = { code: '002409', name: '雅克科技', level: 'confirmed' };
+  const wrongTransition = {
+    mainlineKey: 'theme:电力', mainlineTheme: '电力', code: '002409', name: '雅克科技',
+    firstExpectedAt: '2026-07-27T02:00:00.000Z', confirmedAt: '2026-07-27T07:30:00.000Z',
+    confirmedBy: 'final-limit-up-db', lastLevel: 'confirmed',
+  };
+  PREDICTS['2026-07-27'] = {
+    schemaVersion: 3, sessionPhase: '上午盘', confirmedKey: '',
+    top: [{ key: 'theme:电力', theme: '电力', l2VerificationStatus: 'qi', star: wrongStar }],
+    candidates: [{ key: 'theme:电力', theme: '电力', l2VerificationStatus: 'qi', stars: [wrongStar] }],
+    starTransitions: [wrongTransition],
+    bySource: {
+      eastmoney: {
+        available: true, hasMainlines: true,
+        top: [{ key: 'theme:电力', theme: '电力', l2VerificationStatus: 'qi', star: wrongStar }],
+        candidates: [{ key: 'theme:电力', theme: '电力', l2VerificationStatus: 'qi', stars: [wrongStar] }],
+        starTransitions: [wrongTransition],
+      },
+      ths: {
+        available: true, hasMainlines: true,
+        top: [{ key: 'theme:电力', theme: '电力', l2VerificationStatus: 'qi', star: wrongStar }],
+        candidates: [{ key: 'theme:电力', theme: '电力', l2VerificationStatus: 'qi', stars: [wrongStar] }],
+        starTransitions: [wrongTransition],
+      },
+    },
+  };
+  LIMIT_UP['2026-07-27'] = finalLimitDb(['002409', '600041', '600042', '600043']);
+  MAIN_REASON['2026-07-27'] = reasonDb([
+    { code: '002409', name: '雅克科技', finalBoardTopic: '半导体' },
+    { code: '600041', name: '电力A', finalBoardTopic: '电力' },
+    { code: '600042', name: '电力B', finalBoardTopic: '电力' },
+    { code: '600043', name: '电力C', finalBoardTopic: '电力' },
+  ]);
+  const originalWrongPredict = JSON.stringify(PREDICTS['2026-07-27']);
+  ATTRIBUTION_CONTEXT = new Map([[
+    '002409',
+    {
+      currentReason: '半导体',
+      currentSource: 'four-source-main-reason-db',
+      currentFamilies: new Set([strategyMainlineFamilyInfo({ theme: '半导体' }).key]),
+      currentTopics: ['半导体'],
+      priorFamilies: new Set(),
+      priorTopics: [],
+    },
+  ]]);
+  const filteredReview = await getStrategyMainlineReview(10);
+  const filtered27 = filteredReview.days.find(row => row.day === '2026-07-27');
+  A(filtered27?.noMainline === true && filtered27?.bySource?.eastmoney?.noMainline === true
+    && filtered27?.bySource?.ths?.noMainline === true,
+  '明确主因归因冲突时，根预测、东财与同花顺都不再把错误明星当正式主线');
+  A(filtered27?.expectedStars?.length === 0
+    && filtered27?.attributionReview?.rejectedCount === 9,
+  '冲突明星从 top、候选和事件轨迹全部剔除，并返回可审计的拒绝计数');
+  A(filteredReview.stats.mainlineQualifiedTotal === 0
+    && filteredReview.stats.expectedSealTotal === 0
+    && filteredReview.stats.mainlineLeadSamples === 0,
+  '被拒绝的错误归因不进入成立率、封板率或领先时长统计');
+  A(JSON.stringify(PREDICTS['2026-07-27']) === originalWrongPredict,
+    '回看归因过滤只操作内存副本，不改写历史预测档案');
+
+  ATTRIBUTION_CONTEXT = new Map();
+  const unknownReview = await getStrategyMainlineReview(10);
+  const unknown27 = unknownReview.days.find(row => row.day === '2026-07-27');
+  A(unknown27?.theme === '电力' && unknown27?.star?.code === '002409'
+    && !unknown27?.attributionReview,
+  '没有主因归因证据时保留旧记录，不把未知误删成冲突');
 
   if (process.exitCode) console.error('\nSOME MAINLINE-REVIEW CHECKS FAILED');
   else console.log('\nALL MAINLINE-REVIEW CHECKS PASSED');
