@@ -43,7 +43,8 @@ const imageUrl = 'https://image.tgb.cn/img/2026/07/28/5quc5womtgll.png_760w.png'
 const expectedImageLength = 731872;
 const expectedImageSha256 = 'e328eeeb794dff1e1a32c1bbd50e3ccb453f70f1c6922508e28801d5ae7490bd';
 const expectedCount = 60;
-const expectedRawPoolCount = 60;
+const expectedRawPoolCount = 61;
+const expectedExcludedCodes = ['920690'];
 const operationId = 'tgb-hunan-manual-20260728';
 const fixedSource = 'review/tgb-hunan-structured';
 const fixedQualityNote = 'Manual transcription from @TGB\u6e56\u5357\u4eba official table image; source-faithful board block and stock detail reason.';
@@ -187,16 +188,32 @@ function validateBaseline(payload) {
   const rawRows = baselineRows(payload);
   const rawCodes = toSet(rawRows.map(row => row.code));
   const excludedRows = rawRows.filter(row => excludedFromReview(row.code, row.name));
+  const excludedCodes = toSet(excludedRows.map(row => row.code));
+  const pinnedExcludedCodes = toSet(expectedExcludedCodes);
+  const eligibleRows = rawRows.filter(row => !excludedFromReview(row.code, row.name));
+  const eligibleCodes = toSet(eligibleRows.map(row => row.code));
   if (rawRows.length !== expectedRawPoolCount
       || rawCodes.size !== expectedRawPoolCount
-      || excludedRows.length !== 0) {
+      || eligibleRows.length !== expectedCount
+      || eligibleCodes.size !== expectedCount
+      || setDiff(pinnedExcludedCodes, excludedCodes).length
+      || setDiff(excludedCodes, pinnedExcludedCodes).length) {
     throw new Error(`terminal pool gate failed: ${JSON.stringify({
-      count: rawRows.length,
-      uniqueCount: rawCodes.size,
+      rawCount: rawRows.length,
+      rawUniqueCount: rawCodes.size,
+      eligibleCount: eligibleRows.length,
+      eligibleUniqueCount: eligibleCodes.size,
       excludedRows,
     })}`);
   }
-  return { rows: rawRows, count: rawRows.length, uniqueCount: rawCodes.size, excludedRows };
+  return {
+    rows: eligibleRows,
+    count: eligibleRows.length,
+    uniqueCount: eligibleCodes.size,
+    rawCount: rawRows.length,
+    rawUniqueCount: rawCodes.size,
+    excludedRows,
+  };
 }
 
 function validatePayload(payload, baselineGate) {
@@ -567,7 +584,8 @@ async function verifyPublic(expectedCodes, previouslyHealthySources) {
   finalPayload.savedAt = completedAt;
   finalPayload.validation = {
     ...gate,
-    rawPoolCount: baselineGate.count,
+    rawPoolCount: baselineGate.rawCount,
+    eligiblePoolCount: baselineGate.count,
     excludedRawPoolRows: baselineGate.excludedRows,
     manualSecondPassReviewed: true,
   };
@@ -671,6 +689,7 @@ async function verifyPublic(expectedCodes, previouslyHealthySources) {
       imageSha256: expectedImageSha256,
       inputSha256,
       count: expectedCount,
+      baselineGate,
       gate,
       storedGate,
       combinedSetGate,
