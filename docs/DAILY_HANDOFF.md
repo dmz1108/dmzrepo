@@ -11766,3 +11766,32 @@ Deployment:
 Notes for next agent:
 - `finalConfirmedMainline` 与冻结预测可能属于不同主线、不同明星；摘要收益只能按
   股票代码精确复用，不能按题材名或显示顺序猜测。
+
+## 2026-07-28 - Codex - 部署最终确认明星回看收益修复
+
+Changed:
+- 两份 Claude 独立复核均批准 PR #315，确认股票代码精确匹配和换星失败方向安全。
+- PR #315 合并到 `main`，并通过受保护生产工作流发布行情前端。
+
+Files:
+- `kpl-dashboard_17_apple.html`（生产发布）
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- PR #315 合并提交：
+  `c826641714ca180d9460d2c3db0929eb6e41aa40`。
+- 生产工作流：
+  `https://github.com/dmz1108/dmzrepo/actions/runs/30317360805`，结果 `success`。
+- `https://market.dreamerqi.com/health` 返回 `{"ok":true}`。
+- 生产行情 HTML 已包含最终确认明星按股票代码复用收益的新逻辑。
+- 生产接口 2026-07-14 生益科技继续返回次高 `8.38%`、次收 `3.06%`、
+  3日 `-10.55%`，最终确认明星代码同为 `600183`。
+
+Deployment:
+- 已部署并生效；主服务已重启，健康检查通过。
+- 本次仅发布 `kpl-dashboard_17_apple.html`，未修改业务数据库、L2 运行时数据、
+  Caddy 或公司端 worker。
+
+Notes for next agent:
+- `expected` 明星是否应出现在“最终确认”收益摘要，以及多明星时三项收益应标注
+  所属股票，属于后续独立展示议题，不阻断本次已上线修复。
