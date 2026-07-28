@@ -11527,6 +11527,45 @@ Notes for next agent:
 - raw evidence 成功不代表 TGB 完成；只有匹配标题、日期、白底表格和
   `@TGB湖南人` 水印的官方原图可进入后续人工双遍转录。
 
+## 2026-07-28 - Codex - 准备写入当日 TGB 湖南人人工复盘
+
+Changed:
+- 受保护生产运行 `30355531306` 已强制刷新官方原文与 20 张原始图片；没有写正式行、
+  没有重折综合主因库、没有重启服务。
+- 人工筛选 `image-01-06.png`：标题、日期、白底题材表格和 `@TGB湖南人` 水印均匹配；
+  排除同花顺红图、其他复盘表、头像、二维码、回帖/消息图，以及原图顶部重复的
+  “市场连板股”和底部“涨停炸板”区。
+- Codex 已按原图 10 个正式题材块逐行录入并完成第二遍逐字段人工复核，共 60 行；
+  全程未使用 Qwen、OCR 或其他自动视觉结果生成、补全或校验正式行。
+- 新增日期绑定写入脚本与加密 payload 接线；脚本在写前重读生产终盘池，要求 60 行、
+  60 个唯一代码、`missingCodes=[]`、`extraCodes=[]`、`weakCount=0`，并固定题材块
+  顺序和计数总和。通过后先备份、原子写正式 TGB、重折当日综合主因库、验证公开
+  `source-view`/主因库/健康接口；任一步失败均回滚。
+
+Files:
+- `.github/workflows/production-ops.yml`
+- `ops/production/requests/2026-07-28-tgb-hunan-write.ps1`
+- `tests/tgb-20260728-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 文章：`https://www.tgb.cn/a/2tNGSu2WSSN`，标题：
+  `7.28湖南人涨停复盘+晚间消息汇总`。
+- 官方原图：`image-01-06.png`，731,872 字节，SHA-256
+  `e328eeeb794dff1e1a32c1bbd50e3ccb453f70f1c6922508e28801d5ae7490bd`。
+- 人工块计数：光刻机 11、大消费 8、AI应用 6、脑机接口 6、机器人 5、智能电网 4、
+  算力 3、摘帽 3、其他热点 6、其他个股 8；合计 60。
+- 写前本地代码对账：60 行、60 个唯一代码、无缺失、无多余、无重复、无空字段。
+  来源忠实保留 `000045` 原图“深纺织A”/终盘池“深纺织Ａ”的全半角差异；脚本只按
+  固定代码和明确的 `NFKC` 规范化匹配，不改写来源名称。
+
+Deployment:
+- raw evidence 已刷新；正式 TGB 写入与综合主因重折尚未运行，服务未重启。
+
+Notes for next agent:
+- 写入脚本必须从合入后的 `main` 通过受保护生产环境执行；不得从分支直写生产。
+- payload 只存在于生产环境加密 secret，不进入 Git、日志或 PR。
+
 ## 2026-07-27 - Codex - 准备写入当日 TGB 湖南人人工复盘
 
 Changed:
