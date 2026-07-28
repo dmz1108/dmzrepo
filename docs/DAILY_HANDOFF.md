@@ -11566,6 +11566,35 @@ Notes for next agent:
 - 写入脚本必须从合入后的 `main` 通过受保护生产环境执行；不得从分支直写生产。
 - payload 只存在于生产环境加密 secret，不进入 Git、日志或 PR。
 
+## 2026-07-28 - Codex - 修正 TGB 写入前终盘池过滤闸
+
+Changed:
+- 首次正式写入运行 `30356379645` 在任何备份或写入之前安全停止；生产原始终盘池为
+  61 行，其中 `920690 捷众科技` 属北交所，按 SOP 应排除后得到 60 行正式对账池。
+- 修正日期绑定脚本：同时钉死 61 行原始池与 60 行非 ST、非北交所、非新股前缀的
+  review-eligible 池；正式行只与过滤后的 60 只代码集合对账，并显式记录被排除行。
+- 未改变任何人工转录内容、块计数、文章或原图证据。
+
+Files:
+- `ops/production/requests/2026-07-28-tgb-hunan-write.ps1`
+- `tests/tgb-20260728-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 失败输出明确为：
+  `terminal pool gate failed: count=61; excludedRows=[920690 捷众科技]`。
+- 失败发生在正式文件备份、写入和综合主因重折之前；工作流完成远端脚本与 payload
+  清理，正式 TGB、综合主因库和服务进程均未改变。
+- 修正后的闸要求 raw count/unique 均为 61，eligible count/unique 均为 60，且正式
+  `missingCodes=[]`、`extraCodes=[]`、无重复、`weakCount=0` 的全部条件不变。
+
+Deployment:
+- 本条提交时修正尚未重新执行生产；服务未重启。
+
+Notes for next agent:
+- 当终盘原始池含北交所或其他 SOP 排除项时，必须先显式过滤并记录；不能把被排除项
+  补进湖南人正式库，也不能把原始总数直接当作正式口径总数。
+
 ## 2026-07-27 - Codex - 准备写入当日 TGB 湖南人人工复盘
 
 Changed:

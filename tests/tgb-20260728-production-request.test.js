@@ -21,7 +21,11 @@ assert(request.includes("articleUrl = 'https://www.tgb.cn/a/2tNGSu2WSSN'"), 'req
 assert(request.includes("expectedImageSha256 = 'e328eeeb794dff1e1a32c1bbd50e3ccb453f70f1c6922508e28801d5ae7490bd'"), 'request must pin the official image hash');
 assert(request.includes('const expectedImageLength = 731872'), 'request must pin the official image length');
 assert(request.includes('const expectedCount = 60'), 'request must require the 60-stock formal pool');
-assert(request.includes('const expectedRawPoolCount = 60'), 'request must require the 60-stock terminal pool');
+assert(request.includes('const expectedRawPoolCount = 61'), 'request must pin the 61-row raw terminal pool');
+assert(request.includes("const expectedExcludedCodes = ['920690']"), 'request must pin the excluded Beijing Exchange code');
+assert(request.includes('eligibleRows.length !== expectedCount'), 'request must reconcile the 60 review-eligible rows');
+assert(request.includes('rows: eligibleRows'), 'formal reconciliation must exclude ineligible raw-pool rows');
+assert(request.includes('excludedRawPoolRows: baselineGate.excludedRows'), 'request must record excluded raw-pool rows');
 assert(request.includes("'\\u5149\\u523b\\u673a': 11"), 'request must pin the lithography block count');
 assert(request.includes("'\\u5927\\u6d88\\u8d39': 8"), 'request must pin the consumer block count');
 assert(request.includes("'AI\\u5e94\\u7528': 6"), 'request must pin the AI application block count');
