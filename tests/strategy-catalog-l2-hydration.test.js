@@ -161,6 +161,8 @@ function makeSeed(codes) {
     name: '光刻机(胶)',
     zsType: 6,
     netInflow: 5.52e8,
+    netInflowMetric: 'eastmoney-super-large-net-inflow',
+    netInflowLegacy: false,
     gainPct: 0.87,
     zt: null,
   }];
@@ -181,6 +183,26 @@ function makeSeed(codes) {
     '独立补水板只用实时涨停成员交集回填 codes/zt，不靠历史 seed 猜测');
   A(strategyMainlineBoardAutoScanEligibility(direct[0], { requireMembers: true }).eligible === true,
     '独立发现板仍须真实成分、5 亿资金和至少 2 只涨停后才能派单');
+
+  memberFetchCount = 0;
+  const legacyCatalog = [{
+    plateId: 'BK0884',
+    name: '光刻机(胶)',
+    zsType: 6,
+    netInflow: 8e8,
+    netInflowMetric: 'eastmoney-main-net-inflow-legacy',
+    netInflowLegacy: true,
+    gainPct: 2,
+    zt: null,
+  }];
+  const legacy = await strategyMainlineHydrateCatalogBoardsForScan(
+    new Map(),
+    legacyCatalog,
+    '2026-07-27',
+    limitUpByCode
+  );
+  A(legacy.length === 0 && memberFetchCount === 0,
+    '东财旧主力净流入口径不得冒充超大单净流入触发独立发现');
 
   const missingSeed = makeSeed(['000001', '000002']);
   membersByPlate = new Map();

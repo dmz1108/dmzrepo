@@ -22358,6 +22358,8 @@ async function strategyMainlineHydrateCatalogBoardsForScan(seedByKey, catalogBoa
     if (!board || Number(board?.zsType) !== 6 || strategyMainlineIsStyleBoard(board?.name)) continue;
     const gainPct = numOrNull(board?.gainPct ?? board?.gain);
     const netInflow = numOrNull(board?.netInflow);
+    const netInflowMetric = String(board?.netInflowMetric || '');
+    if (board?.netInflowLegacy === true || netInflowMetric !== 'eastmoney-super-large-net-inflow') continue;
     if (gainPct == null || gainPct <= 0 || netInflow == null || netInflow < STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW) continue;
     const boardKey = strategyMainlineBoardIdentity(board);
     if (!boardKey || selectedByKey.has(boardKey)) continue;
@@ -22914,6 +22916,18 @@ function strategyMainlineMainReasonDbAttribution(day, payload, codes) {
   }
   return out;
 }
+function strategyMainlineMergeCurrentAttributionReasons(targetDayReasons, officialReasons) {
+  const out = new Map(targetDayReasons instanceof Map ? targetDayReasons : []);
+  for (const [rawCode, row] of (officialReasons instanceof Map ? officialReasons : [])) {
+    const code = normalizeReasonSourceCode(rawCode || row?.code);
+    const reason = String(row?.reason || row?.reasonType || '').trim();
+    // 实时涨停池允许先返回股票行、稍后再补主因；空主因只用于确认“今日已涨停”，
+    // 不能覆盖四源综合主因库里已经存在的正式归属证据。
+    if (!code || !reason) continue;
+    out.set(code, row);
+  }
+  return out;
+}
 async function strategyMainlineAttributionContextForCodes(day, codes) {
   const isoDay = isoFromCompactDate(day);
   const normalizedCodes = [...new Set((codes || [])
@@ -22944,7 +22958,7 @@ async function strategyMainlineAttributionContextForCodes(day, codes) {
       new Map(),
       'visible-live-limit-reason')
     : new Map();
-  const currentReasons = new Map([...targetDayReasons, ...officialReasons]);
+  const currentReasons = strategyMainlineMergeCurrentAttributionReasons(targetDayReasons, officialReasons);
   const value = strategyMainlineBuildStarAttributionContext(prior?.byCode, currentReasons);
   strategyMainlineVisibleAttributionCache.set(cacheKey, { at: Date.now(), value });
   if (strategyMainlineVisibleAttributionCache.size > 20) {
