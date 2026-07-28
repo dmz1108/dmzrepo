@@ -11863,6 +11863,41 @@ Notes for next agent:
 - 历史预测档仍保持原样；回看归因冲突的只读审计应单独处理，不得通过改写
   已落盘预测档来美化历史统计。
 
+## 2026-07-28 - Codex - 预判回看复用明星主因归因过滤
+
+Changed:
+- 补齐 PR #304 未覆盖的预判回看读取链路：回看现在对根预测、东财和同花顺
+  三个预测块统一复用明星主因归因规则。
+- 只剔除目标日主因家族明确冲突的 `top.star`、候选明星和明星事件轨迹；
+  没有目标日主因证据的旧记录继续保留，不把未知误判为冲突。
+- 过滤只作用于内存副本，历史预测 JSON 不回写、不删除、不覆盖；被拒绝项以
+  `attributionReview` 返回精简审计信息。
+- 当某家族的唯一明星正证据被剔除时，同步撤销该内存副本中的 `qi` 状态，
+  防止空明星家族继续进入成立率、预期封板率或领先时长统计。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/mainline-review.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- `node tests/mainline-review.test.js`
+- `node tests/strategy-two-source-mainlines.test.js`
+- `node tests/strategy-star-attribution.test.js`
+- 全部 73 个 `tests/*.test.js`
+- `git diff --check`
+
+Deployment:
+- 本条提交时仅为 GitHub 代码变更；生产尚未部署，服务尚未重启。
+- 未修改历史预测档、业务数据库、L2 运行时数据、Caddy 或公司端 worker。
+
+Notes for next agent:
+- PR #312 是独立的 catalog 板块 L2 成分补齐问题，当前仍需单独解决与最新
+  `main` 的冲突并复跑 L2 回归；不得与本次回看归因修复混合。
+- 生产发布后应只读核对 2026-07-27：雅克科技不得再以“电力/电网设备”明星
+  进入回看统计，但原始预测档仍应保持原字节内容。
+
 ## 2026-07-28 - Codex - 补齐 catalog 板块 L2 自动扫描链路
 
 Changed:
@@ -11887,6 +11922,7 @@ Files:
 - `kpl-stats-server.js`
 - `tests/strategy-catalog-l2-hydration.test.js`
 - `tests/strategy-source-catalog-boards.test.js`
+- `tests/strategy-star-attribution.test.js`
 - `tests/qi-mainline-states.test.js`
 - `tests/scan-priority.test.js`
 - `docs/DAILY_HANDOFF.md`
@@ -11915,4 +11951,3 @@ Notes for next agent:
 - 部署后需在下一交易日用真实候选验证：`BK0884` 这类 catalog 排名靠后但满足原有
   资金与涨停门槛的板，应显示“等待公司端/扫描中”，并生成带真实 `memberRows` 的
   L2 任务；不合格板仍不得扫描。
-- PR #319 是独立的回看归因过滤修复；两个 PR 应分别复审、分别合并。

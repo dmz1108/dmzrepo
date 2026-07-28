@@ -25078,6 +25078,166 @@ function strategyMainlineReviewHasRecord(predict) {
   if (predict.hasMainlines === false || predict.recordState === 'no-mainline') return true;
   return sourceBlocks.some(block => typeof block.hasMainlines === 'boolean');
 }
+function strategyMainlineReviewPredictionStarCodes(predict) {
+  const codes = new Set();
+  const addStar = star => {
+    const code = normalizeReasonSourceCode(star?.code);
+    if (code) codes.add(code);
+  };
+  const addBlock = block => {
+    if (!block || typeof block !== 'object') return;
+    for (const row of (Array.isArray(block.top) ? block.top : [])) addStar(row?.star);
+    for (const row of (Array.isArray(block.candidates) ? block.candidates : [])) {
+      addStar(row?.star);
+      for (const star of (Array.isArray(row?.stars) ? row.stars : [])) addStar(star);
+    }
+    for (const row of (Array.isArray(block.starTransitions) ? block.starTransitions : [])) addStar(row);
+  };
+  addBlock(predict);
+  addBlock(predict?.bySource?.eastmoney);
+  addBlock(predict?.bySource?.ths);
+  return [...codes];
+}
+function strategyMainlineReviewFilterAttributionBlock(block, attributionByCode, source = 'root') {
+  if (!block || typeof block !== 'object' || !(attributionByCode instanceof Map)) {
+    return { block, rejected: [] };
+  }
+  const hasTop = Array.isArray(block.top);
+  const hasCandidates = Array.isArray(block.candidates);
+  const hasTransitions = Array.isArray(block.starTransitions);
+  const rejected = [];
+  const rejectedFamilies = new Set();
+  const familyOf = item => strategyMainlineFamilyInfo({
+    key: item?.key || item?.familyKey || item?.mainlineKey || '',
+    theme: item?.theme || item?.mainlineTheme || '',
+  }).key;
+  const keepStar = (item, star, location) => {
+    if (!star || typeof star !== 'object') return star;
+    const decision = strategyMainlineStarAttributionDecision(item, star, attributionByCode);
+    if (decision.allowed) return star;
+    const familyKey = familyOf(item);
+    if (familyKey) rejectedFamilies.add(familyKey);
+    rejected.push({
+      source,
+      location,
+      familyKey,
+      theme: String(item?.theme || item?.mainlineTheme || ''),
+      code: normalizeReasonSourceCode(star?.code),
+      name: String(star?.name || star?.code || ''),
+      reason: decision.basis,
+      conflict: decision.conflict || '',
+    });
+    return null;
+  };
+  let top = (hasTop ? block.top : []).map(row => {
+    const next = { ...row };
+    if (row?.star) next.star = keepStar(row, row.star, 'top-star');
+    return next;
+  });
+  let candidates = (hasCandidates ? block.candidates : []).map(row => {
+    const next = { ...row };
+    if (row?.star) next.star = keepStar(row, row.star, 'candidate-star');
+    if (Array.isArray(row?.stars)) {
+      next.stars = row.stars
+        .map(star => keepStar(row, star, 'candidate-stars'))
+        .filter(Boolean);
+    }
+    return next;
+  });
+  const starTransitions = (hasTransitions ? block.starTransitions : [])
+    .filter(row => keepStar({
+      key: row?.mainlineKey || '',
+      theme: row?.mainlineTheme || '',
+    }, row, 'star-transition'));
+  if (!rejected.length) {
+    const nextBlock = { ...block };
+    if (hasTop) nextBlock.top = top;
+    if (hasCandidates) nextBlock.candidates = candidates;
+    if (hasTransitions) nextBlock.starTransitions = starTransitions;
+    return {
+      block: nextBlock,
+      rejected,
+    };
+  }
+  const positiveFamilies = new Set();
+  const addPositive = (item, star) => {
+    const level = String(star?.level || star?.lastLevel || '').trim();
+    const familyKey = familyOf(item);
+    if (familyKey && ['expected', 'confirmed'].includes(level)) positiveFamilies.add(familyKey);
+  };
+  for (const row of top) addPositive(row, row?.star);
+  for (const row of candidates) {
+    addPositive(row, row?.star);
+    for (const star of (Array.isArray(row?.stars) ? row.stars : [])) addPositive(row, star);
+  }
+  for (const row of starTransitions) {
+    if (!normalizeReasonSourceCode(row?.code) || !String(row?.firstExpectedAt || '').trim()) continue;
+    const familyKey = familyOf({
+      key: row?.mainlineKey || '',
+      theme: row?.mainlineTheme || '',
+    });
+    if (familyKey) positiveFamilies.add(familyKey);
+  }
+  const downgradeRejectedFamily = row => {
+    const familyKey = familyOf(row);
+    if (!rejectedFamilies.has(familyKey) || positiveFamilies.has(familyKey)) return row;
+    return {
+      ...row,
+      l2VerificationStatus: row?.l2VerificationStatus === 'qi'
+        ? 'scanned-no-star'
+        : row?.l2VerificationStatus,
+      l2ScanState: row?.l2ScanState === 'qi'
+        ? 'scanned-no-star'
+        : row?.l2ScanState,
+    };
+  };
+  top = top.map(downgradeRejectedFamily);
+  candidates = candidates.map(downgradeRejectedFamily);
+  const nextBlock = { ...block };
+  if (hasTop) nextBlock.top = top;
+  if (hasCandidates) nextBlock.candidates = candidates;
+  if (hasTransitions) nextBlock.starTransitions = starTransitions;
+  return {
+    block: nextBlock,
+    rejected,
+  };
+}
+function strategyMainlineReviewFilterPredictionAttribution(predict, attributionByCode) {
+  if (!predict || typeof predict !== 'object' || !(attributionByCode instanceof Map)) {
+    return { predict, rejected: [] };
+  }
+  const root = strategyMainlineReviewFilterAttributionBlock(predict, attributionByCode, 'root');
+  const bySource = predict.bySource && typeof predict.bySource === 'object'
+    ? { ...predict.bySource }
+    : null;
+  const rejected = [...root.rejected];
+  if (bySource) {
+    for (const source of ['eastmoney', 'ths']) {
+      if (!predict.bySource?.[source]) continue;
+      const filtered = strategyMainlineReviewFilterAttributionBlock(
+        predict.bySource[source],
+        attributionByCode,
+        source,
+      );
+      bySource[source] = filtered.block;
+      rejected.push(...filtered.rejected);
+    }
+  }
+  return {
+    predict: {
+      ...root.block,
+      ...(bySource ? { bySource } : {}),
+    },
+    rejected,
+  };
+}
+async function strategyMainlineReviewPredictionAttribution(day, predict) {
+  const codes = strategyMainlineReviewPredictionStarCodes(predict);
+  if (!codes.length) return { predict, rejected: [] };
+  const attributionByCode = await strategyMainlineAttributionContextForCodes(day, codes)
+    .catch(() => new Map());
+  return strategyMainlineReviewFilterPredictionAttribution(predict, attributionByCode);
+}
 // 管理员最终确认与盘中预测是两类事实：前者可在收盘后修正，后者必须冻结用于命中率审计。
 // 回看同时返回二者，但绝不拿最终确认覆盖 predict.top，也不把它计入预测命中率分母。
 function strategyMainlineReviewConfirmedConclusion(payload, confirm, predictedMain = null) {
@@ -25250,13 +25410,18 @@ async function getStrategyMainlineReview(days = 10) {
     const day = tradingDays[i];
     const nextDay = i + 1 < tradingDays.length ? tradingDays[i + 1] : null;
     const thirdDay = i + 3 < tradingDays.length ? tradingDays[i + 3] : null;
-    const [predict, confirm] = await Promise.all([
+    const [rawPredict, confirm] = await Promise.all([
       readMainlinePredict(day),
       readMainlineConfirm(day).catch(() => null),
     ]);
     // 两套独立预测(schema v3):有主题与明确“来源可用但无主线”都属于有效回看记录。
     // 不能再用 top 非空作日期门槛，否则双源都无主线的交易日会整天消失。
-    if (!strategyMainlineReviewHasRecord(predict)) continue;
+    if (!strategyMainlineReviewHasRecord(rawPredict)) continue;
+    // 历史预测文件是“当时展示了什么”的不可变审计证据，不回写、不覆盖。
+    // 回看计算只在内存副本上复用 PR #304 的主因归因规则：明确家族冲突的明星证据
+    // 不得进入正式主线、封板率或领先时长；没有主因证据的旧记录继续保留为未知。
+    const attributionReview = await strategyMainlineReviewPredictionAttribution(day, rawPredict);
+    const predict = attributionReview.predict;
     const phase = String(predict.sessionPhase || '');
     const sampleValid = STRATEGY_MAINLINE_INTRADAY_PHASES.has(phase);
     const sampleInvalidReason = sampleValid ? '' : (phase ? `phase:${phase}` : 'phase:unknown');
@@ -25552,6 +25717,13 @@ async function getStrategyMainlineReview(days = 10) {
       mainlineQualified, mainlineQualification,
       mainlineHitTop1, mainlineHitTop3, mainReasonMissingCount,
       mainlineLead, mainlineLeadStatus, star, mainlineStarQualified, expectedStars, reserveStarOutcomes, leader, leaders,
+      ...(attributionReview.rejected.length ? {
+        attributionReview: {
+          filtered: true,
+          rejectedCount: attributionReview.rejected.length,
+          rejected: attributionReview.rejected.slice(0, 12),
+        },
+      } : {}),
       ...(finalConfirmedMainline ? { finalConfirmedMainline } : {}),
       ...(reviewBySource ? { bySource: reviewBySource } : {}),
     });
