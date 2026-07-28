@@ -25036,6 +25036,55 @@ function strategyMainlineReviewConfirmedConclusion(payload, confirm, predictedMa
     excludedFromPredictionStats: true,
   };
 }
+function strategyMainlineReviewFinalQualification(finalMainline, actualRanking, evidenceComplete) {
+  if (!finalMainline || typeof finalMainline !== 'object') return null;
+  const family = strategyMainlineFamilyInfo({
+    key: finalMainline?.key || '',
+    theme: finalMainline?.theme || '',
+  });
+  const familyRow = (Array.isArray(actualRanking) ? actualRanking : [])
+    .find(row => row?.familyKey && row.familyKey === family.key) || null;
+  const confirmedStars = (Array.isArray(finalMainline?.stars) ? finalMainline.stars : [])
+    .filter(star => String(star?.level || '').trim() === 'confirmed');
+  const base = {
+    familyKey: family.key || '',
+    familyLabel: family.label || String(finalMainline?.theme || ''),
+    sameFamilyLimitUpCount: evidenceComplete ? (familyRow ? Number(familyRow.count) || 0 : 0) : null,
+    minSameFamilyLimitUpCount: STRATEGY_MAINLINE_FORMAL_MIN_ZT,
+    confirmedStarCodes: confirmedStars
+      .map(star => normalizeReasonSourceCode(star?.code))
+      .filter(Boolean),
+    formalQualificationBasis: 'confirmed-star-and-family-limit-up-floor',
+    formalQualificationReasons: [],
+  };
+  if (!finalMainline.available) {
+    return {
+      ...base,
+      formalQualified: null,
+      formalQualificationReasons: ['final-mainline-evidence-unavailable'],
+    };
+  }
+  if (!confirmedStars.length) {
+    return {
+      ...base,
+      formalQualified: false,
+      formalQualificationReasons: ['no-confirmed-star'],
+    };
+  }
+  if (!evidenceComplete) {
+    return {
+      ...base,
+      formalQualified: null,
+      formalQualificationReasons: ['post-close-evidence-incomplete'],
+    };
+  }
+  const limitUpPass = base.sameFamilyLimitUpCount >= STRATEGY_MAINLINE_FORMAL_MIN_ZT;
+  return {
+    ...base,
+    formalQualified: limitUpPass,
+    formalQualificationReasons: limitUpPass ? [] : ['insufficient-limit-up-count'],
+  };
+}
 // 只有真实盘中阶段生成的预测才是"预判"(Codex 复审 PR#25 二审):
 // 盘前/集合竞价没有盘面信号、已收盘是答案不是预测——这三类记录展示但不计任何命中率分母。
 const STRATEGY_MAINLINE_INTRADAY_PHASES = new Set(['早盘', '上午盘', '午间休市', '午后', '尾盘']);
@@ -25366,6 +25415,12 @@ async function getStrategyMainlineReview(days = 10) {
     if (confirm && !pendingReview) {
       const finalPayload = await getStrategyMainlinesVisible(day).catch(() => null);
       finalConfirmedMainline = strategyMainlineReviewConfirmedConclusion(finalPayload, confirm, main);
+      if (finalConfirmedMainline) {
+        finalConfirmedMainline = {
+          ...finalConfirmedMainline,
+          ...strategyMainlineReviewFinalQualification(finalConfirmedMainline, actualRanking, reasonComplete),
+        };
+      }
     }
     rows.push({
       day, nextDay, thirdDay,

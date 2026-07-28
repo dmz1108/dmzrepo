@@ -13929,16 +13929,19 @@ function renderMainlineReviewHTML(d) {
     const starText = stars.length
       ? ` · ${stars.map(star => `${star.name || star.code}${star.level === 'confirmed' ? ' 明星确认' : ' 预期明星'}`).join(' / ')}`
       : '';
-    const status = final.available
-      ? (final.correctedFromPrediction ? '口径修正' : '已确认')
-      : '确认记录';
+    const status = final.formalQualified === true ? '正式主线'
+      : final.formalQualified === false ? '未形成正式主线'
+        : '正式资格待核验';
+    const familyCount = final.sameFamilyLimitUpCount == null
+      ? ''
+      : ` · 同家族${Number(final.sameFamilyLimitUpCount) || 0}只涨停`;
     return `<span class="mlr-source-grid">
-      <span class="mlr-source-row mainline" title="管理员最终确认与修正后正式主线；独立于盘中预测保存，不改写预测命中率">
-        <span class="mlr-source-name">最终确认</span>
-        <strong>${escapeHTML(final.theme || final.key || '')}${escapeHTML(starText)}</strong>
-        <span class="mlr-hit ok">${status}</span>
+      <span class="mlr-source-row ${final.formalQualified === true ? 'mainline' : ''}" title="管理员收盘复核独立于盘中预测，不改写预测命中率；正式主线仍须满足确认明星股且同家族至少3只涨停">
+        <span class="mlr-source-name">收盘复核</span>
+        <strong>${escapeHTML(final.theme || final.key || '')}${escapeHTML(familyCount)}${escapeHTML(starText)}</strong>
+        <span class="mlr-hit ${final.formalQualified === true ? 'ok' : (final.formalQualified === false ? 'miss' : 'na')}">${status}</span>
       </span>
-      ${actualResult ? `<span class="mlr-source-row"><span class="mlr-source-name">主因格局</span><strong>${actualResult}</strong><span></span></span>` : ''}
+      ${actualResult ? `<span class="mlr-source-row"><span class="mlr-source-name">市场分布（诊断）</span><strong>${actualResult}</strong><span></span></span>` : ''}
     </span>`;
   };
   const actualCell = (r) => {
@@ -14127,11 +14130,33 @@ function renderMainlineReviewHTML(d) {
       const hit = r.pendingReview ? '' : (r.mainlineQualified === true ? ' 成立' : (r.mainlineQualified === false ? ' 未成立' : ''));
       return `${String(r.theme || '')}${hit}`;
     })();
-    const actualTopRow = Array.isArray(r.actualTop) && r.actualTop.length ? r.actualTop[0] : null;
     const finalConclusion = r.finalConfirmedMainline || null;
+    const qualifiedSourceThemes = r.bySource
+      ? [...new Map(Object.values(r.bySource)
+        .filter(src => src?.status === 'mainline' && src?.mainlineQualified === true)
+        .map(src => {
+          const theme = String(src?.theme || '').trim();
+          const count = src?.mainlineQualification?.limitUpCount;
+          return [theme, {
+            theme,
+            limitUpCount: count == null ? null : Number(count) || 0,
+          }];
+        })
+        .filter(([theme]) => theme)).values()]
+      : [];
+    const legacyQualified = r.mainlineQualified === true
+      ? String(r.theme || '').trim()
+      : '';
+    const legacyLimitUpCount = r.mainlineQualification?.limitUpCount;
+    const qualifiedThemeText = item => `${item.theme}${item.limitUpCount == null ? '' : `（同家族${item.limitUpCount}只涨停）`}`;
     const compactOut = finalConclusion
-      ? `最终确认 ${String(finalConclusion.theme || finalConclusion.key || '')}${actualTopRow ? ` · 主因${String(actualTopRow.theme || '')}${Number(actualTopRow.count) || 0}涨停` : ''}`
-      : r.pendingReview ? '待盘后验证' : (actualTopRow ? `主因分布首位 ${String(actualTopRow.theme || '')} ${Number(actualTopRow.count) || 0}涨停` : '暂无结果');
+      ? finalConclusion.formalQualified === true
+        ? `正式主线 ${String(finalConclusion.theme || finalConclusion.key || '')}${finalConclusion.sameFamilyLimitUpCount == null ? '' : ` · 同家族${Number(finalConclusion.sameFamilyLimitUpCount) || 0}只涨停`}`
+        : finalConclusion.formalQualified === false ? '今日无正式主线' : '正式主线待核验'
+      : r.pendingReview ? '待盘后验证'
+        : qualifiedSourceThemes.length ? `正式主线 ${qualifiedSourceThemes.map(qualifiedThemeText).join(' / ')}`
+          : legacyQualified ? `正式主线 ${legacyQualified}${legacyLimitUpCount == null ? '' : ` · 同家族${Number(legacyLimitUpCount) || 0}只涨停`}`
+            : (r.mainlineQualified == null && !r.noMainline ? '正式主线待核验' : '今日无正式主线');
     const finalStars = finalConclusion
       ? (Array.isArray(finalConclusion.stars) ? finalConclusion.stars : [])
         .filter(star => star && (star.level === 'confirmed' || star.level === 'expected'))
@@ -14155,7 +14180,7 @@ function renderMainlineReviewHTML(d) {
       return `<b class="${n > 0 ? 'up' : (n < 0 ? 'down' : '')}">${n > 0 ? '+' : ''}${n}%</b>`;
     };
     const lineBadge = finalConclusion
-      ? `<span class="mlr-line-badge">最终确认</span>`
+      ? `<span class="mlr-line-badge${finalConclusion.formalQualified === true ? '' : ' quiet'}">${finalConclusion.formalQualified === true ? '正式主线' : (finalConclusion.formalQualified === false ? '无正式主线' : '待核验')}</span>`
       : starVisual.key
       ? `<span class="mlr-line-badge ${starVisual.key}">${escapeHTML(starVisual.label)}</span>`
       : `<span class="mlr-line-badge quiet">${r.noMainline || !r.theme ? '今日无主线' : escapeHTML(r.theme)}</span>`;

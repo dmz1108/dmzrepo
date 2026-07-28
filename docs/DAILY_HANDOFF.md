@@ -11795,3 +11795,38 @@ Deployment:
 Notes for next agent:
 - `expected` 明星是否应出现在“最终确认”收益摘要，以及多明星时三项收益应标注
   所属股票，属于后续独立展示议题，不阻断本次已上线修复。
+
+## 2026-07-28 - Codex - 预判回看以明星正式主线取代主因分布首位
+
+Changed:
+- 预判回看摘要不再把全市场“主因分布首位”显示成盘后结论。
+- 管理员收盘复核新增正式资格结果：必须有确认明星股，且该明星所在主线家族
+  当日至少 3 只涨停；主因证据不完整时保持待核验，不把缺数据判成无主线。
+- 摘要改为显示正式主线及同家族涨停数量；没有正式资格时显示“今日无正式
+  主线”。
+- 全市场主因分布仍保留在展开详情，改名为“市场分布（诊断）”，不删除底层
+  数据，也不参与正式主线结论。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/mainline-review.test.js`
+- `tests/strategy-two-source-mainlines.test.js`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- `node tests/mainline-review.test.js`
+- `node tests/strategy-two-source-mainlines.test.js`
+- 全部 73 个 `tests/*.test.js`
+- `git diff --check`
+
+Deployment:
+- 本条提交时仅为 GitHub 代码变更；生产尚未部署，服务尚未重启。
+
+Notes for next agent:
+- 请重点复核 `finalConfirmedMainline.formalQualified` 的三态：有确认明星且同家族
+  至少 3 只为 `true`；明确缺确认明星或数量不足为 `false`；主因覆盖不完整为
+  `null`。
+- `actualTop` 继续用于市场分布审计和旧命中统计，但不得重新进入摘要正式结论。
