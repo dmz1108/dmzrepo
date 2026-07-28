@@ -22349,6 +22349,22 @@ async function strategyMainlineHydrateCatalogBoardsForScan(seedByKey, catalogBoa
     best.scanChannel = best.scanChannel || 'catalog';
     selectedByKey.set(boardKey, best);
   }
+  // 首日突发方向可能只在全市场 catalog 里出现：板块涨幅排名靠后、又尚无历史 seed，
+  // 但东财超大单净流入和实时涨停成员已经同时满足旧门槛。只依赖 seed 会形成循环：
+  // “没有 seed → 不补成员 → zt 永远 null → 不派 L2 → 永远没有明星/主线”。
+  // 东财 catalog 的超大单净流入就是正式计分口径，因此允许资金已过 5 亿的正涨板独立补水；
+  // 补水后仍必须用真实成分逐股得到 zt>=2，且实际派单仍要求 memberRows，不提供任何豁免。
+  for (const board of (Array.isArray(catalogBoards) ? catalogBoards : [])) {
+    if (!board || Number(board?.zsType) !== 6 || strategyMainlineIsStyleBoard(board?.name)) continue;
+    const gainPct = numOrNull(board?.gainPct ?? board?.gain);
+    const netInflow = numOrNull(board?.netInflow);
+    if (gainPct == null || gainPct <= 0 || netInflow == null || netInflow < STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW) continue;
+    const boardKey = strategyMainlineBoardIdentity(board);
+    if (!boardKey || selectedByKey.has(boardKey)) continue;
+    board.scanChannel = board.scanChannel || 'catalog';
+    board.catalogDiscovery = 'eastmoney-fund-threshold';
+    selectedByKey.set(boardKey, board);
+  }
   const selected = [...selectedByKey.values()];
   if (!selected.length) return [];
   try {
@@ -22377,7 +22393,11 @@ async function strategyMainlineHydrateCatalogBoardsForScan(seedByKey, catalogBoa
       .sort((a, b) => Number(b.gain) - Number(a.gain));
     if (!normalized.length) return;
     const limitCodes = new Set(limitUpByCode instanceof Map ? limitUpByCode.keys() : []);
+    const boardLimitCodes = normalized
+      .filter(stock => limitCodes.has(stock.code) || Number(stock.gain) >= limitUpThreshold(stock.code, stock.name))
+      .map(stock => stock.code);
     board.memberRows = normalized.slice(0, 120);
+    board.codes = [...new Set(boardLimitCodes)];
     board.risingStocks = normalized
       .filter(stock => Number(stock.gain) >= STRATEGY_MAINLINE_BIG_GAIN_PCT)
       .slice(0, 40);
@@ -22856,7 +22876,10 @@ async function strategyMainlineLiveLimitReasonByCode(day) {
       for (const row of (Array.isArray(json?.data?.info) ? json.data.info : [])) {
         const code = normalizeReasonSourceCode(row?.code);
         const reason = String(row?.reason_type || '').trim();
-        if (!code || !reason) continue;
+        // 涨停成员资格与主因文本是两件事。盘中来源偶尔先给股票行、稍后才补 reason_type；
+        // 这里必须先保留 code，供 catalog 成分交集精确回填板级涨停数。主因归属构建函数
+        // 本身仍会跳过空 reason，不会把“只有涨停事实”冒充成主因证据。
+        if (!code) continue;
         byCode.set(code, { code, reason, source: 'ths-limit-up-pool' });
       }
       strategyMainlineLiveReasonCache.day = isoDay;
@@ -26380,6 +26403,18 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     const code = normalizeReasonSourceCode(s?.code);
     if (code) limitUpByCode.set(code, s);
   }
+  // 盘中正式涨停底库通常尚未落盘。用同花顺实时涨停池只补“今日已涨停”事实，
+  // 让 catalog 板可以通过成分交集得到精确 zt；空主因文本不参与归属判断。
+  const liveReasonByCode = (!diagHistorical && isoDay === diagTodayIso)
+    ? await strategyMainlineWithTimeout(
+      strategyMainlineLiveLimitReasonByCode(isoDay).catch(() => new Map()),
+      1500,
+      new Map(),
+      'live-limit-reason')
+    : new Map();
+  for (const [code, live] of liveReasonByCode) {
+    if (!limitUpByCode.has(code)) limitUpByCode.set(code, live);
+  }
   // 板级涨停数精确回填(Owner 2026-07-16):盘中实时板块榜的 ztCount 经常未知(null),旧行为
   // Number(null)=0 会让自动扫描门槛的「涨停≥2」腿盘中形同虚设——5~10亿 区间的主线板(如医药
   // 9.67亿)永远不被 L2 验证。Owner 定稿:不是把 unknown 当 0 或绕过门槛,而是用成份股逐只
@@ -26418,13 +26453,6 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     buildStrategyMainlinePriorReasonContext(isoDay, intradaySignalCodes, 30),
     debugErrors,
     { byCode: new Map(), byTheme: new Map(), tradingDays: [], endDay: '' });
-  const liveReasonByCode = (!diagHistorical && isoDay === diagTodayIso)
-    ? await strategyMainlineWithTimeout(
-      strategyMainlineLiveLimitReasonByCode(isoDay).catch(() => new Map()),
-      1500,
-      new Map(),
-      'live-limit-reason')
-    : new Map();
   const starAttributionByCode = strategyMainlineBuildStarAttributionContext(
     priorReason?.byCode,
     liveReasonByCode,
@@ -26501,6 +26529,13 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     if (debugErrors) debugErrors.push(`catalog-hydrate: ${String(e && e.message || e)}`);
     return [];
   });
+  // catalog 独立发现的首日板必须进入正常 seed 管线，才能在 L2 结果返回后挂回同一题材；
+  // seed 已存在的匹配板仍走下方 attach，避免“绿色电力/电力”一类同义板重复建族。
+  for (const board of catalogScanBoards) {
+    if (board?.catalogDiscovery !== 'eastmoney-fund-threshold') continue;
+    const eligibility = strategyMainlineBoardAutoScanEligibility(board, { requireMembers: true });
+    if (eligibility.eligible) strategyMainlineAddRealtimeBoardSeed(seedByKey, board);
+  }
   for (const seed of seedByKey.values()) {
     strategyMainlineAttachBestCatalogBoard(seed, catalogBoardsForSource);
   }

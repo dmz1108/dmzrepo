@@ -47,6 +47,7 @@ const numOrNull = value => {
   return Number.isFinite(n) ? n : null;
 };
 const strategyMainlineBoardIdentity = board => `${Number(board?.zsType)}:${String(board?.plateId || '')}`;
+const strategyMainlineIsStyleBoard = () => false;
 const strategyMainlineCatalogBoardScore = (board, seed) =>
   String(seed?.theme || '') === '电力' && String(board?.name || '') === '绿色电力' ? 120 : 0;
 const strategyApplyThsDdeFundFlow = async () => {};
@@ -143,7 +144,7 @@ function makeSeed(codes) {
     plateId: 'BK1024',
     name: '绿色电力',
     zsType: 6,
-    netInflow: 20.6e8,
+    netInflow: 4.9e8,
     gainPct: 3.5,
     zt: null,
   }];
@@ -153,7 +154,33 @@ function makeSeed(codes) {
     '2026-07-27',
     limitUpByCode
   );
-  A(lowSignal.length === 0 && memberFetchCount === 0, '少于 2 个当日信号股不拉成分、不勉强扫描');
+  A(lowSignal.length === 0 && memberFetchCount === 0, 'seed 少于 2 个信号且 catalog 资金未过门槛时不拉成分、不勉强扫描');
+
+  const directCatalog = [{
+    plateId: 'BK0884',
+    name: '光刻机(胶)',
+    zsType: 6,
+    netInflow: 5.52e8,
+    gainPct: 0.87,
+    zt: null,
+  }];
+  membersByPlate = new Map([['BK0884', [
+    { code: '000001', name: 'A', gain: 10.01 },
+    { code: '000002', name: 'B', gain: 9.98 },
+    { code: '000003', name: 'C', gain: 2.1 },
+  ]]]);
+  const direct = await strategyMainlineHydrateCatalogBoardsForScan(
+    new Map(),
+    directCatalog,
+    '2026-07-27',
+    limitUpByCode
+  );
+  A(direct.length === 1 && direct[0].catalogDiscovery === 'eastmoney-fund-threshold',
+    '无既有 seed 的东财 catalog 板可按正式资金门槛独立补水');
+  A(direct[0].zt === 2 && direct[0].codes.join(',') === '000001,000002',
+    '独立补水板只用实时涨停成员交集回填 codes/zt，不靠历史 seed 猜测');
+  A(strategyMainlineBoardAutoScanEligibility(direct[0], { requireMembers: true }).eligible === true,
+    '独立发现板仍须真实成分、5 亿资金和至少 2 只涨停后才能派单');
 
   const missingSeed = makeSeed(['000001', '000002']);
   membersByPlate = new Map();
@@ -174,6 +201,9 @@ function makeSeed(codes) {
   A(missing.length === 0 && missingCatalog[0].zt === null, '成分接口无数据时保持 zt=null，不伪造 0 或派单');
 
   A(/\.\.\.\(catalogScanBoards \|\| \[\]\)/.test(src), '静态:直接派单与 deferAutoScan 返回都并入 catalog 补水板');
+  A(src.includes("catalogDiscovery !== 'eastmoney-fund-threshold'"), '静态:仅独立发现板新建 seed，匹配既有 seed 的 catalog 板不重复建族');
+  A(/if \(!code\) continue;\s*byCode\.set\(code, \{ code, reason, source: 'ths-limit-up-pool' \}\)/.test(src),
+    '静态:实时涨停池即使主因文本暂空也保留 code 供板级涨停交集');
   console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL STRATEGY-CATALOG-L2-HYDRATION CHECKS PASSED');
 })().catch(err => {
   console.error(err);
