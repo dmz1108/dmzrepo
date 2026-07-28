@@ -73,6 +73,7 @@ eval(extractFn('strategyMainlineReviewFormalTop'));
 eval(extractFn('strategyMainlineReviewHasRecord'));
 eval(extractFn('strategyMainlineMatchesConfirm'));
 eval(extractFn('strategyMainlineReviewConfirmedConclusion'));
+eval(extractFn('strategyMainlineReviewFinalQualification'));
 
 let TODAY = '2026-07-14';           // 次日:全部夹具交易日都算已收盘
 let TODAY_CLOSED = true;            // 仅当 day===TODAY 时用
@@ -150,6 +151,25 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   );
   A(absoluteMainline.qualified === true && absoluteMainline.limitUpCount === 10,
     '新口径:PCB虽少于机器人20只，但有确认明星且自身10只涨停，仍是正式主线');
+  const noConfirmedFinal = strategyMainlineReviewFinalQualification({
+    available: true,
+    key: 'theme:PCB',
+    theme: 'PCB',
+    stars: [{ code: '002141', name: '贤丰控股', level: 'expected' }],
+  }, [{ familyKey: strategyMainlineFamilyInfo({ theme: 'PCB' }).key, label: 'PCB', count: 10 }], true);
+  A(noConfirmedFinal.formalQualified === false
+    && noConfirmedFinal.formalQualificationReasons.includes('no-confirmed-star'),
+  '最终复核只有预期明星、没有确认明星时，即使同家族涨停很多也不是正式主线');
+  const incompleteFinal = strategyMainlineReviewFinalQualification({
+    available: true,
+    key: 'theme:PCB',
+    theme: 'PCB',
+    stars: [{ code: '002141', name: '贤丰控股', level: 'confirmed' }],
+  }, [], false);
+  A(incompleteFinal.formalQualified === null
+    && incompleteFinal.sameFamilyLimitUpCount === null
+    && incompleteFinal.formalQualificationReasons.includes('post-close-evidence-incomplete'),
+  '有确认明星但盘后主因证据不完整时保持待核验，不把缺数据误判成无主线');
 
   const legacyTransitions = strategyMainlineExpectedStarTransitions(
     { savedAt: '2026-07-09T01:40:00.000Z', starTransitions: [] },
@@ -321,6 +341,10 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   '①最终确认明确标记口径修正且不进入盘中预测统计');
   A(d10.finalConfirmedMainline?.stars?.map(row => row.code).join(',') === '600667,002409',
     '①最终确认携带修正后主线的两只确认明星');
+  A(d10.finalConfirmedMainline?.formalQualified === false
+    && d10.finalConfirmedMainline?.sameFamilyLimitUpCount === 0
+    && d10.finalConfirmedMainline?.formalQualificationReasons?.includes('insufficient-limit-up-count'),
+  '①最终确认主题不在完整主因库中达到3只涨停时，不得因全市场主因分布或人工确认冒充正式主线');
 
   // ② 已收盘不计样本(7-08 真实镜像)
   A(d8.sampleValid === false && d8.sampleInvalidReason === 'phase:已收盘', '②07-08 已收盘 → sampleValid=false + 明确原因');

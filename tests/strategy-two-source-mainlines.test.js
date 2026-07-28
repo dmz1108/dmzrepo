@@ -130,6 +130,9 @@ const finalStarMetricsHTML = renderMainlineReviewHTML({
     leaders: [], expectedStars: [], actualTop: [{ theme: '机器人', count: 10 }],
     finalConfirmedMainline: {
       theme: 'PCB',
+      available: true,
+      formalQualified: true,
+      sameFamilyLimitUpCount: 10,
       stars: [{ code: '600183', name: '生益科技', level: 'confirmed' }],
     },
   }],
@@ -138,6 +141,10 @@ const finalStarMetricsHTML = renderMainlineReviewHTML({
 const finalStarSummary = (finalStarMetricsHTML.match(/<summary class="mlr-line-sum">([\s\S]*?)<\/summary>/) || [])[1] || '';
 A(finalStarSummary.includes('+8.38%') && finalStarSummary.includes('+3.06%') && finalStarSummary.includes('-10.55%'),
   '最终确认明星与预测明星代码一致时，摘要保留生益科技次高/次收/3日收益');
+A(finalStarSummary.includes('正式主线 PCB · 同家族10只涨停')
+  && !finalStarSummary.includes('主因机器人10涨停')
+  && !finalStarSummary.includes('主因分布首位'),
+  '最终摘要只展示确认明星所在正式主线及同家族涨停数，不再把全市场主因分布首位当结论');
 const correctedStarMetricsHTML = renderMainlineReviewHTML({
   days: [{
     day: '2026-07-27', phase: '尾盘', sampleValid: true, pendingReview: false,
@@ -147,6 +154,9 @@ const correctedStarMetricsHTML = renderMainlineReviewHTML({
     leaders: [], expectedStars: [], actualTop: [{ theme: '机器人', count: 20 }],
     finalConfirmedMainline: {
       theme: '半导体',
+      available: true,
+      formalQualified: false,
+      sameFamilyLimitUpCount: 2,
       stars: [{ code: '600667', name: '太极实业', level: 'confirmed' }],
     },
   }],
@@ -155,6 +165,9 @@ const correctedStarMetricsHTML = renderMainlineReviewHTML({
 const correctedStarSummary = (correctedStarMetricsHTML.match(/<summary class="mlr-line-sum">([\s\S]*?)<\/summary>/) || [])[1] || '';
 A(!correctedStarSummary.includes('+8.38%') && (correctedStarSummary.match(/<b class="na">--<\/b>/g) || []).length === 3,
   '最终确认改为另一只明星时，不得把旧预测明星收益错配给新明星');
+A(correctedStarSummary.includes('今日无正式主线')
+  && !correctedStarSummary.includes('主因机器人20涨停'),
+  '确认明星所在家族不足3只涨停时，摘要明确显示今日无正式主线');
 const bothNoMainlineReviewHTML = renderMainlineReviewHTML({
   days: [{
     day: '2026-07-16', phase: '尾盘', sampleValid: true, pendingReview: false,
