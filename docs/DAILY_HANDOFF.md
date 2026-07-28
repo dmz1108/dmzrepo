@@ -11951,3 +11951,40 @@ Notes for next agent:
 - 部署后需在下一交易日用真实候选验证：`BK0884` 这类 catalog 排名靠后但满足原有
   资金与涨停门槛的板，应显示“等待公司端/扫描中”，并生成带真实 `memberRows` 的
   L2 任务；不合格板仍不得扫描。
+
+## 2026-07-28 - Codex - 合并并部署回看归因与 catalog L2 补链
+
+Changed:
+- 按依赖顺序先合并 PR #319（预判回看明星归因过滤），再把 PR #312 更新到最新
+  `main`、保留双方交接记录并合并 catalog 板块 L2 成分与涨停补链。
+- 从精确 `main` 提交 `3ba7f602b2da92d58265586f698eee9adac1d138` 通过受保护
+  GitHub Actions 生产流程发布 `kpl-stats-server.js`。
+
+Files:
+- `kpl-stats-server.js`（生产发布）
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- PR #319 合并提交：
+  `b7c8b467900ae2253cbc3b1b5fad5adb29841d9b`。
+- PR #312 合并提交及发布时 `main`：
+  `3ba7f602b2da92d58265586f698eee9adac1d138`。
+- GitHub Actions production run `30337862754` 成功。
+- 本地精确 `main` 与云端 `C:\PandaDashboard\kpl-stats-server.js` 的 SHA-256
+  均为 `a8cc0fe586395499957b53c13ac451876d5924a831144b6e554afe03f79c901e`。
+- `https://market.dreamerqi.com/health` 返回 `{"ok":true}`。
+- 正式 `/api/strategy-mainlines?day=2026-07-28` 返回当日来源日期与
+  `no-l2-qualified-mainline` 业务结论，确认服务和策略接口均正常响应。
+- 云端变更日志已记录 run、commit、文件、重启、健康状态与备份目录。
+
+Deployment:
+- 已部署并生效；主服务已重启，健康检查通过。
+- 生产备份：
+  `C:\PandaDashboard\_deploy-backups\github-30337862754-1`。
+- 未修改业务数据库、历史预测档、L2 运行时数据、Caddy 或公司端 worker。
+
+Notes for next agent:
+- 下一交易日重点核对低排名但满足既有资金与涨停门槛的 catalog 板是否进入 L2
+  派单，并记录候选规模、补取耗时、任务状态及明星判定。
+- 不要用 top-K 硬截断重新制造低排名合格板漏扫；如候选规模扩大，应采用轮转预算。
+- 2026-07-28 早盘已经错过的历史扫描时点不能由本次发布伪造重建，只能验证后续实盘。
