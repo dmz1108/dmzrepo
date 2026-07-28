@@ -34,6 +34,7 @@ const strategyMainlineRecordNetInflow = (seed, board, netInflow) => {
 // 题材匹配:板名===seed 题材即满分(真实 strategyMainlineCatalogBoardScore 更复杂,此处聚焦来源维度)
 const strategyMainlineCatalogBoardScore = (board, seed) => (String(board?.name || '') === String(seed?.theme || '') ? 100 : 0);
 eval(extractFn('strategyMainlineAttachRealtimeBoardToSeed'));
+eval(extractFn('strategyMainlinePickBestCatalogBoard'));
 eval(extractFn('strategyMainlineAttachBestCatalogBoard'));
 
 const mkSeed = () => ({ theme: 'AI手机', key: 'AI手机', boardKeySet: new Set(), boards: [], codeSet: new Set(), realtimeCodeSet: new Set(), maxGainPct: null, netInflow: null, netInflowZsType: null });

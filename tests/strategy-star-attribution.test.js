@@ -87,6 +87,7 @@ eval(extractFn('strategyMainlineBuildStarAttributionContext'));
 eval(extractFn('strategyMainlineStarAttributionDecision'));
 eval(extractFn('strategyMainlineFilterAttributedStars'));
 eval(extractFn('strategyMainlineMainReasonDbAttribution'));
+eval(extractFn('strategyMainlineMergeCurrentAttributionReasons'));
 eval(extractFn('strategyMainlineExpectedTransitionMap'));
 eval(extractFn('strategyMainlineResolveExpectedHistory'));
 
@@ -154,6 +155,18 @@ A(strategyMainlineMainReasonDbAttribution('2026-07-27', {
   day: '2026-07-24',
   stocks: [{ code: '002409', finalBoardTopic: '电力' }],
 }, ['002409']).size === 0, '跨日主因文件不能参与目标日明星归属');
+const mergedCurrentReasons = strategyMainlineMergeCurrentAttributionReasons(
+  new Map([['002409', { code: '002409', reason: '半导体', source: 'four-source-main-reason-db' }]]),
+  new Map([['002409', { code: '002409', reason: '', source: 'ths-limit-up-pool' }]]),
+);
+A(mergedCurrentReasons.get('002409')?.reason === '半导体',
+  '实时涨停池空主因不得覆盖当天四源综合主因证据');
+const mergedPublishedReason = strategyMainlineMergeCurrentAttributionReasons(
+  mergedCurrentReasons,
+  new Map([['002409', { code: '002409', reason: '光伏', source: 'ths-limit-up-pool' }]]),
+);
+A(mergedPublishedReason.get('002409')?.reason === '光伏',
+  '实时来源发布非空主因后仍可按当日证据覆盖综合库旧值');
 
 const filtered = strategyMainlineFilterAttributedStars({
   theme: '电力',

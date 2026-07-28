@@ -100,7 +100,8 @@ eval(extractFn('strategyNormRealtimeStocks'));
     '同阶段下补选来源仍优先(仅派发优先级,非门槛豁免)');
   A(src.includes('bigGainOf(b.board) - bigGainOf(a.board)'), '同阶段板块字典序保留大涨数');
   A(src.includes('strategyMainlineScanPriorityCodes(board, priorByCode)'), '派发时传入真实主因上下文');
-  A(src.includes('sessionPhaseNow, priorReason?.byCode)'), '调用点接线 priorReason.byCode');
+  A(/strategyMainlineMaybeAutoScan\(\s*\[\.\.\.\(boardPayload\?\.boards \|\| \[\]\), \.\.\.\(catalogScanBoards \|\| \[\]\)\],\s*isoDay,\s*isTodayQuery,\s*sessionPhaseNow,\s*priorReason\?\.byCode\s*\)/.test(src),
+    '调用点接线:原板块池与 catalog 补水板统一携带 priorReason.byCode 派单');
 
   // 3. 队列:分组后截断(评审修正1)——limitStocks=2,优先股原排第4 也必须入选
   const tmp = fsReal.mkdtempSync(pathReal.join(os.tmpdir(), 'l2q-'));

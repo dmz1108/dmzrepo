@@ -61,7 +61,8 @@ A(/const requestedDay = url\.searchParams\.get\('day'\) \|\| chinaNowParts\(\)\.
   && src.includes('strategyMainlineAttachExpectedHistoryPayload(payload, predict, { attributionByCode })'),
   '正式页面接口对旧缓存与冻结快照先做明星主因归属校验，再补历史预期证据并执行严格 QI 过滤');
 A(src.includes("options?.leaderDebug || !strategyMainlineUsesStrictQi(isoDay)\n    ? { kept: inflowGate.kept, reserve: [], excluded: [] }"), '管理员复核保留完整候选池,旧历史日期也不受新门槛影响(含预备层空位)');
-const autoScanAt = src.indexOf('strategyMainlineMaybeAutoScan(boardPayload?.boards || []');
+const autoScanMatch = src.match(/strategyMainlineMaybeAutoScan\(\s*\[\.\.\.\(boardPayload\?\.boards \|\| \[\]\), \.\.\.\(catalogScanBoards \|\| \[\]\)\]/);
+const autoScanAt = autoScanMatch ? autoScanMatch.index : -1;
 const strictGateAt = src.indexOf(': strategyMainlineApplyL2StarGate(inflowGate.kept, { threeRequirements: useThreeRequirements });');
 A(autoScanAt >= 0 && strictGateAt > autoScanAt, '后台先派发符合条件的 L2 扫描，再执行用户可见主线硬闸');
 

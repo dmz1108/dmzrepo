@@ -21079,7 +21079,8 @@ function strategyMainlineBoardAutoScanEligibility(board, options = {}) {
   const plateId = String(board?.plateId || '');
   const netInflow = numOrNull(board?.netInflow);
   const zt = numOrNull(board?.zt ?? board?.ztCount);
-  const hasMembers = Array.isArray(board?.memberRows) && board.memberRows.length > 0;
+  const hasMemberRows = Array.isArray(board?.memberRows) && board.memberRows.length > 0;
+  const hasMembers = hasMemberRows || board?.hasMembers === true;
   const requireMembers = options.requireMembers === true;
   const thsComposite = strategyMainlineThsCompositeEligibility(board, { limitUpCount: zt });
   const inflowPass = thsComposite.applies
@@ -21087,7 +21088,7 @@ function strategyMainlineBoardAutoScanEligibility(board, options = {}) {
     : netInflow != null && netInflow >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW;
   const ztPass = zt != null && zt >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT;
   return {
-    eligible: !!plateId && (thsComposite.applies ? thsComposite.eligible : (inflowPass && ztPass)) && (!requireMembers || hasMembers),
+    eligible: !!plateId && (thsComposite.applies ? thsComposite.eligible : (inflowPass && ztPass)) && (!requireMembers || hasMemberRows),
     plateId,
     boardName: String(board?.name || ''),
     netInflow,
@@ -21136,6 +21137,12 @@ function strategyMainlineMergeAutoScanEligibility(items) {
   const inflows = summaries.map(summary => summary.maxNetInflow).filter(Number.isFinite);
   const ztCounts = summaries.map(summary => summary.maxZt).filter(Number.isFinite);
   const directionValues = summaries.map(summary => summary.maxDirectionNetInflow).filter(Number.isFinite);
+  const rejectedReasons = summaries.reduce((out, summary) => {
+    for (const [reason, count] of Object.entries(summary?.rejectedReasons || {})) {
+      out[reason] = (out[reason] || 0) + (Number(count) || 0);
+    }
+    return out;
+  }, {});
   return {
     eligible: summaries.some(summary => summary.eligible),
     dispatchable: summaries.some(summary => summary.dispatchable),
@@ -21145,6 +21152,7 @@ function strategyMainlineMergeAutoScanEligibility(items) {
     maxNetInflow: inflows.length ? Math.max(...inflows) : null,
     maxZt: ztCounts.length ? Math.max(...ztCounts) : null,
     maxDirectionNetInflow: directionValues.length ? Math.max(...directionValues) : null,
+    rejectedReasons,
   };
 }
 function strategyResonanceTopicKey(raw) {
@@ -22303,8 +22311,8 @@ async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day, options
   return list;
 }
 
-function strategyMainlineAttachBestCatalogBoard(seed, catalogBoards) {
-  if (!seed || !Array.isArray(catalogBoards) || !catalogBoards.length) return false;
+function strategyMainlinePickBestCatalogBoard(seed, catalogBoards) {
+  if (!seed || !Array.isArray(catalogBoards) || !catalogBoards.length) return null;
   const candidates = catalogBoards
     .map(board => ({ board, score: strategyMainlineCatalogBoardScore(board, seed) }))
     .filter(item => item.score >= 90)
@@ -22313,7 +22321,101 @@ function strategyMainlineAttachBestCatalogBoard(seed, catalogBoards) {
       (numOrNull(b.board.netInflow) != null ? 1 : 0) - (numOrNull(a.board.netInflow) != null ? 1 : 0) ||
       Math.abs(Number(b.board.gainPct) || 0) - Math.abs(Number(a.board.gainPct) || 0)
     );
-  const best = candidates[0]?.board;
+  return candidates[0]?.board || null;
+}
+
+// 实时 catalog 是全市场概念榜，能补到主通道未覆盖的高资金板，但原始行没有成分股和涨停数。
+// 自动扫描严格要求「5 亿资金 + 2 只涨停 + 可派发成分」，因此先只对已有至少 2 个当日信号股、
+// 且资金方向可能过闸的最佳同源 catalog 板补成分，再用当日涨停底库精确回填 zt。
+// 取不到成分时保持未知，不把 null 伪造成 0，也不降低任何 L2 门槛。
+async function strategyMainlineHydrateCatalogBoardsForScan(seedByKey, catalogBoards, day, limitUpByCode, options = {}) {
+  if (isoFromCompactDate(day) !== isoFromCompactDate(chinaNowParts().day)) return [];
+  const selectedByKey = new Map();
+  for (const seed of (seedByKey instanceof Map ? seedByKey.values() : [])) {
+    const best = strategyMainlinePickBestCatalogBoard(seed, catalogBoards);
+    if (!best) continue;
+    const todaySignalCount = new Set([...(seed?.codeSet || [])]
+      .map(normalizeReasonSourceCode)
+      .filter(Boolean)).size;
+    if (todaySignalCount < STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT) continue;
+    const netInflow = numOrNull(best?.netInflow);
+    const zsType = Number(best?.zsType);
+    const fundCanQualify = zsType === Number(THS_ZS_TYPE)
+      ? netInflow != null && netInflow > 0
+      : netInflow != null && netInflow >= STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW;
+    if (!fundCanQualify) continue;
+    const boardKey = strategyMainlineBoardIdentity(best);
+    if (!boardKey || selectedByKey.has(boardKey)) continue;
+    best.scanChannel = best.scanChannel || 'catalog';
+    selectedByKey.set(boardKey, best);
+  }
+  // 首日突发方向可能只在全市场 catalog 里出现：板块涨幅排名靠后、又尚无历史 seed，
+  // 但东财超大单净流入和实时涨停成员已经同时满足旧门槛。只依赖 seed 会形成循环：
+  // “没有 seed → 不补成员 → zt 永远 null → 不派 L2 → 永远没有明星/主线”。
+  // 东财 catalog 的超大单净流入就是正式计分口径，因此允许资金已过 5 亿的正涨板独立补水；
+  // 补水后仍必须用真实成分逐股得到 zt>=2，且实际派单仍要求 memberRows，不提供任何豁免。
+  for (const board of (Array.isArray(catalogBoards) ? catalogBoards : [])) {
+    if (!board || Number(board?.zsType) !== 6 || strategyMainlineIsStyleBoard(board?.name)) continue;
+    const gainPct = numOrNull(board?.gainPct ?? board?.gain);
+    const netInflow = numOrNull(board?.netInflow);
+    const netInflowMetric = String(board?.netInflowMetric || '');
+    if (board?.netInflowLegacy === true || netInflowMetric !== 'eastmoney-super-large-net-inflow') continue;
+    if (gainPct == null || gainPct <= 0 || netInflow == null || netInflow < STRATEGY_MAINLINE_AUTO_SCAN_MIN_INFLOW) continue;
+    const boardKey = strategyMainlineBoardIdentity(board);
+    if (!boardKey || selectedByKey.has(boardKey)) continue;
+    board.scanChannel = board.scanChannel || 'catalog';
+    board.catalogDiscovery = 'eastmoney-fund-threshold';
+    selectedByKey.set(boardKey, board);
+  }
+  const selected = [...selectedByKey.values()];
+  if (!selected.length) return [];
+  try {
+    await strategyApplyThsDdeFundFlow(selected, day);
+  } catch (e) {
+    if (Array.isArray(options.debugErrors)) {
+      options.debugErrors.push(`catalog-dde: ${String(e && e.message || e)}`);
+    }
+  }
+  await mapLimit(selected, 6, async board => {
+    const plateId = String(board?.plateId || '');
+    if (!plateId) return;
+    const fetchRows = getStrategyBoardRealtimeStocks(plateId, day, board)
+      .catch(e => {
+        if (Array.isArray(options.debugErrors)) {
+          options.debugErrors.push(`catalog-members ${plateId}: ${String(e && e.message || e)}`);
+        }
+        return [];
+      });
+    const rows = options.fullWait
+      ? await fetchRows
+      : await strategyMainlineWithTimeout(fetchRows, STRATEGY_MAINLINE_RISING_FETCH_TIMEOUT_MS, []);
+    const normalized = (rows || [])
+      .map(strategyMainlineNormalizeRisingStock)
+      .filter(Boolean)
+      .sort((a, b) => Number(b.gain) - Number(a.gain));
+    if (!normalized.length) return;
+    const limitCodes = new Set(limitUpByCode instanceof Map ? limitUpByCode.keys() : []);
+    const boardLimitCodes = normalized
+      .filter(stock => limitCodes.has(stock.code) || Number(stock.gain) >= limitUpThreshold(stock.code, stock.name))
+      .map(stock => stock.code);
+    board.memberRows = normalized.slice(0, 120);
+    board.codes = [...new Set(boardLimitCodes)];
+    board.risingStocks = normalized
+      .filter(stock => Number(stock.gain) >= STRATEGY_MAINLINE_BIG_GAIN_PCT)
+      .slice(0, 40);
+    board.risingCodes = board.risingStocks.map(stock => stock.code);
+    board.nearLimitStocks = normalized
+      .filter(stock => strategyMainlineIsNearLimitStock(stock, limitCodes))
+      .slice(0, 20);
+    board.nearLimitCodes = board.nearLimitStocks.map(stock => stock.code);
+    board.breadth = strategyMainlineBoardBreadth(normalized);
+  });
+  strategyMainlineBackfillBoardZt(selected, limitUpByCode);
+  return selected.filter(board => Array.isArray(board?.memberRows) && board.memberRows.length > 0);
+}
+
+function strategyMainlineAttachBestCatalogBoard(seed, catalogBoards) {
+  const best = strategyMainlinePickBestCatalogBoard(seed, catalogBoards);
   if (!best) return false;
   return strategyMainlineAttachRealtimeBoardToSeed(seed, best, []);
 }
@@ -22365,6 +22467,8 @@ function strategyMainlineAttachRealtimeBoardToSeed(seed, board, matchedCodes = n
     bigGainCount: risingStocks.length,
     nearLimitCount: nearLimitStocks.length,
     breadth: board?.breadth || null,
+    hasMembers: Array.isArray(board?.memberRows) && board.memberRows.length > 0,
+    ztSource: String(board?.ztSource || ''),
   });
   return true;
 }
@@ -22774,7 +22878,10 @@ async function strategyMainlineLiveLimitReasonByCode(day) {
       for (const row of (Array.isArray(json?.data?.info) ? json.data.info : [])) {
         const code = normalizeReasonSourceCode(row?.code);
         const reason = String(row?.reason_type || '').trim();
-        if (!code || !reason) continue;
+        // 涨停成员资格与主因文本是两件事。盘中来源偶尔先给股票行、稍后才补 reason_type；
+        // 这里必须先保留 code，供 catalog 成分交集精确回填板级涨停数。主因归属构建函数
+        // 本身仍会跳过空 reason，不会把“只有涨停事实”冒充成主因证据。
+        if (!code) continue;
         byCode.set(code, { code, reason, source: 'ths-limit-up-pool' });
       }
       strategyMainlineLiveReasonCache.day = isoDay;
@@ -22809,6 +22916,18 @@ function strategyMainlineMainReasonDbAttribution(day, payload, codes) {
   }
   return out;
 }
+function strategyMainlineMergeCurrentAttributionReasons(targetDayReasons, officialReasons) {
+  const out = new Map(targetDayReasons instanceof Map ? targetDayReasons : []);
+  for (const [rawCode, row] of (officialReasons instanceof Map ? officialReasons : [])) {
+    const code = normalizeReasonSourceCode(rawCode || row?.code);
+    const reason = String(row?.reason || row?.reasonType || '').trim();
+    // 实时涨停池允许先返回股票行、稍后再补主因；空主因只用于确认“今日已涨停”，
+    // 不能覆盖四源综合主因库里已经存在的正式归属证据。
+    if (!code || !reason) continue;
+    out.set(code, row);
+  }
+  return out;
+}
 async function strategyMainlineAttributionContextForCodes(day, codes) {
   const isoDay = isoFromCompactDate(day);
   const normalizedCodes = [...new Set((codes || [])
@@ -22839,7 +22958,7 @@ async function strategyMainlineAttributionContextForCodes(day, codes) {
       new Map(),
       'visible-live-limit-reason')
     : new Map();
-  const currentReasons = new Map([...targetDayReasons, ...officialReasons]);
+  const currentReasons = strategyMainlineMergeCurrentAttributionReasons(targetDayReasons, officialReasons);
   const value = strategyMainlineBuildStarAttributionContext(prior?.byCode, currentReasons);
   strategyMainlineVisibleAttributionCache.set(cacheKey, { at: Date.now(), value });
   if (strategyMainlineVisibleAttributionCache.size > 20) {
@@ -25808,6 +25927,7 @@ function strategyMainlineAugmentPrediction(item, isToday, day, recordTrend = tru
     maxZt: numOrNull(autoScanEligibility?.maxZt),
     qualifyingCount: Number(autoScanEligibility?.qualifyingCount) || 0,
     qualifyingBoards: Array.isArray(autoScanEligibility?.qualifyingBoards) ? autoScanEligibility.qualifyingBoards.slice(0, 5) : [],
+    rejectedReasons: autoScanEligibility?.rejectedReasons || {},
     queuedCount: l2Stars?.queuedPlates?.size || 0,
     runningCount: l2Stars?.runningPlates?.size || 0,
     completedCount: l2Stars?.completedPlates?.size || 0,
@@ -26469,6 +26589,18 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     const code = normalizeReasonSourceCode(s?.code);
     if (code) limitUpByCode.set(code, s);
   }
+  // 盘中正式涨停底库通常尚未落盘。用同花顺实时涨停池只补“今日已涨停”事实，
+  // 让 catalog 板可以通过成分交集得到精确 zt；空主因文本不参与归属判断。
+  const liveReasonByCode = (!diagHistorical && isoDay === diagTodayIso)
+    ? await strategyMainlineWithTimeout(
+      strategyMainlineLiveLimitReasonByCode(isoDay).catch(() => new Map()),
+      1500,
+      new Map(),
+      'live-limit-reason')
+    : new Map();
+  for (const [code, live] of liveReasonByCode) {
+    if (!limitUpByCode.has(code)) limitUpByCode.set(code, live);
+  }
   // 板级涨停数精确回填(Owner 2026-07-16):盘中实时板块榜的 ztCount 经常未知(null),旧行为
   // Number(null)=0 会让自动扫描门槛的「涨停≥2」腿盘中形同虚设——5~10亿 区间的主线板(如医药
   // 9.67亿)永远不被 L2 验证。Owner 定稿:不是把 unknown 当 0 或绕过门槛,而是用成份股逐只
@@ -26507,13 +26639,6 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     buildStrategyMainlinePriorReasonContext(isoDay, intradaySignalCodes, 30),
     debugErrors,
     { byCode: new Map(), byTheme: new Map(), tradingDays: [], endDay: '' });
-  const liveReasonByCode = (!diagHistorical && isoDay === diagTodayIso)
-    ? await strategyMainlineWithTimeout(
-      strategyMainlineLiveLimitReasonByCode(isoDay).catch(() => new Map()),
-      1500,
-      new Map(),
-      'live-limit-reason')
-    : new Map();
   const starAttributionByCode = strategyMainlineBuildStarAttributionContext(
     priorReason?.byCode,
     liveReasonByCode,
@@ -26580,6 +26705,23 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
   // 默认合并口径 activeBoardZsTypes=[6,5] 仍保留两源,行为不变;单源 [6]/[5] 只贴本源。
   const catalogBoardsForSource = (Array.isArray(catalogBoards) ? catalogBoards : [])
     .filter(b => activeBoardZsTypes.includes(Number(b?.zsType)));
+  const catalogScanBoards = await strategyMainlineHydrateCatalogBoardsForScan(
+    seedByKey,
+    catalogBoardsForSource,
+    isoDay,
+    limitUpByCode,
+    { fullWait: diagMode, debugErrors }
+  ).catch(e => {
+    if (debugErrors) debugErrors.push(`catalog-hydrate: ${String(e && e.message || e)}`);
+    return [];
+  });
+  // catalog 独立发现的首日板必须进入正常 seed 管线，才能在 L2 结果返回后挂回同一题材；
+  // seed 已存在的匹配板仍走下方 attach，避免“绿色电力/电力”一类同义板重复建族。
+  for (const board of catalogScanBoards) {
+    if (board?.catalogDiscovery !== 'eastmoney-fund-threshold') continue;
+    const eligibility = strategyMainlineBoardAutoScanEligibility(board, { requireMembers: true });
+    if (eligibility.eligible) strategyMainlineAddRealtimeBoardSeed(seedByKey, board);
+  }
   for (const seed of seedByKey.values()) {
     strategyMainlineAttachBestCatalogBoard(seed, catalogBoardsForSource);
   }
@@ -26841,7 +26983,13 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
   // deferAutoScan(两套独立预测配对构建):本 impl 不各自派发,由外层用两源合并候选统一协调一次,
   // 按既有跨源字典序排序,避免异步完成顺序决定 L2 优先级(Codex 三审 P1)。
   if (!options.leaderDebug && !options.deferAutoScan) {
-    strategyMainlineMaybeAutoScan(boardPayload?.boards || [], isoDay, isTodayQuery, sessionPhaseNow, priorReason?.byCode);
+    strategyMainlineMaybeAutoScan(
+      [...(boardPayload?.boards || []), ...(catalogScanBoards || [])],
+      isoDay,
+      isTodayQuery,
+      sessionPhaseNow,
+      priorReason?.byCode
+    );
   }
   const mainlineConfirm = await readMainlineConfirm(isoDay).catch(() => null);
   // 动能采样按本次预测来源隔离(东财 zs6 / 同花顺 zs5 各自一套基线序列),两套独立预测不互相串改。
@@ -27071,7 +27219,10 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     mainlines,
     reserveMainlines,
     // deferAutoScan:把本源富化后的候选板(含 zsType/memberRows)交给外层统一派发;外层用后即删,不入缓存。
-    ...(options.deferAutoScan ? { __autoScanBoards: boardPayload?.boards || [], __autoScanPriorByCode: priorReason?.byCode || null } : {}),
+    ...(options.deferAutoScan ? {
+      __autoScanBoards: [...(boardPayload?.boards || []), ...(catalogScanBoards || [])],
+      __autoScanPriorByCode: priorReason?.byCode || null,
+    } : {}),
   };
 }
 
