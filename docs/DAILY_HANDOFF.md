@@ -11830,3 +11830,35 @@ Notes for next agent:
   至少 3 只为 `true`；明确缺确认明星或数量不足为 `false`；主因覆盖不完整为
   `null`。
 - `actualTop` 继续用于市场分布审计和旧命中统计，但不得重新进入摘要正式结论。
+
+## 2026-07-28 - Codex - 部署预判回看正式主线结论
+
+Changed:
+- PR #317 已合并到 `main`，并通过受保护生产流程发布后端与行情前端。
+- 生产预判回看摘要现以“确认明星 + 同家族至少 3 只涨停”判断正式主线；
+  全市场主因数量首位只保留为展开后的诊断信息。
+
+Files:
+- `kpl-stats-server.js`（生产发布）
+- `kpl-dashboard_17_apple.html`（生产发布）
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- PR #317 合并提交：
+  `4315c3b860428a3e3a68e9fc14fcbeac88533431`。
+- GitHub Actions production run `30319403770` 成功。
+- `https://market.dreamerqi.com/health` 返回 `{"ok":true}`。
+- 生产接口 2026-07-14 PCB 返回 `formalQualified=true`、同家族 7 只涨停；
+  2026-07-15 肝炎因没有确认明星返回 `formalQualified=false`。
+- 生产行情 HTML 已包含“收盘复核”“正式主线”和“今日无正式主线”新文案。
+
+Deployment:
+- 已部署并生效；主服务已重启，健康检查通过。
+- 生产备份：
+  `C:\PandaDashboard\_deploy-backups\github-30319403770-1`。
+- 未修改业务数据库、历史预测档、L2 运行时数据、Caddy 或公司端 worker。
+
+Notes for next agent:
+- 后续不要再把 `actualTop` 或“主因分布首位”恢复成正式主线结论。
+- 历史预测档仍保持原样；回看归因冲突的只读审计应单独处理，不得通过改写
+  已落盘预测档来美化历史统计。
