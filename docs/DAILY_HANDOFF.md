@@ -11527,6 +11527,37 @@ Notes for next agent:
 - raw evidence 成功不代表 TGB 完成；只有匹配标题、日期、白底表格和
   `@TGB湖南人` 水印的官方原图可进入后续人工双遍转录。
 
+## 2026-07-30 - Codex - 上线 L2 终盘确认核验
+
+Changed:
+- PR #339 已合并；生产同步发布其后端接口和页面改动。
+- PR #340 增加原子部署清单，确保主服务器、策略后端和行情页面来自同一提交。
+
+Files:
+- `kpl-stats-server.js`
+- `strategy-backend.js`
+- `kpl-dashboard_17_apple.html`
+- `ops/production/manifests/strategy-l2-final-confirmed-20260730.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- GitHub Actions 生产运行 `30558460261` 成功。
+- 云端主服务重启后 `/health` 返回 `{"ok":true}`。
+- 线上 `/kpl` 已包含“最近扫描确认”“终盘确认”和 `finalSeal` 消费逻辑。
+- 2026-07-30 可靠终盘涨停池不含永鼎股份与利欧股份；当天正确口径为
+  “终盘确认 0 / 盘中曾确认 2”。
+
+Deployment:
+- 已部署提交 `60157b70a4114e42693b3dba37ac2a0792604d86`。
+- 主服务已重启，健康检查通过。
+- 生产备份：
+  `C:\PandaDashboard\_deploy-backups\github-30558460261-1`。
+- 未改写 L2 历史任务、涨停库、主因库、冻结快照或公司端 worker。
+
+Notes for next agent:
+- 盘中无可靠终盘池时显示“最近扫描确认”；可靠终盘池形成后自动切换为“终盘确认”。
+- “盘中曾确认”保留盘中达到确认门槛的事实，不代表最终封板。
+
 ## 2026-07-30 - Codex - 当前确认改用终盘封板事实核验
 
 Changed:
