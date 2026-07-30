@@ -271,6 +271,33 @@ A(historySummary.currentConfirmedStars === 1
   && historySummary.everConfirmedStars === 2
   && historySummary.expectedStars === 1,
 'L2汇总用最新扫描计算当前确认，并保留盘中曾确认去重数');
+const finalHistorySummary = historySummaryForTest([
+  {
+    createdAt: '2026-07-30T06:00:00.000Z',
+    results: [
+      { code: '002131', testStar: null },
+      { code: '600105', testStar: { level: 'confirmed' } },
+    ],
+  },
+  {
+    createdAt: '2026-07-30T02:00:00.000Z',
+    results: [
+      { code: '002131', testStar: { level: 'confirmed' } },
+      { code: '600105', testStar: { level: 'expected' } },
+    ],
+  },
+], new Set());
+A(finalHistorySummary.currentConfirmedStars === 0
+  && finalHistorySummary.everConfirmedStars === 2
+  && finalHistorySummary.currentConfirmedBasis === 'final-limit-up-db',
+'可靠终盘涨停池形成后，盘中曾确认但最终炸板的股票不得继续计入当前确认');
+A(historySummaryForTest([
+  {
+    createdAt: '2026-07-30T06:00:00.000Z',
+    results: [{ code: '600105', testStar: { level: 'confirmed' } }],
+  },
+], new Set(['600105'])).currentConfirmedStars === 1,
+'可靠终盘涨停池中的盘中确认股票保留为当前确认');
 A(html.includes('function starMaxBucketAdminInfo(s)') && html.includes("if (!state.adminLoggedIn || !s || !s.maxBucket) return ''"), '管理员证据函数存在且非管理员返回空串');
 A((html.match(/starMaxBucketAdminInfo\(s\)/g) || []).length >= 2, '两处明星 tooltip 均拼接管理员证据');
 A(html.includes('被动买${passiveBuyYi}') && html.includes('主买>1.5亿或被买>2亿')
@@ -311,9 +338,10 @@ A(l2HistoryRenderer.includes('<details class="ml-l2-job')
   && l2HistoryRenderer.includes('ml-l2-job-stars'), '展开总览后按板块显示紧凑摘要，明星状态不被隐藏');
 A(l2HistoryRenderer.includes('<i>当前确认</i>')
   && l2HistoryRenderer.includes('<i>盘中曾确认</i>')
+  && l2HistoryRenderer.includes("data?.finalSeal?.available === true")
   && html.includes('<i>当前确认</i><b>${currentConfirmedStars}</b>')
   && html.includes('<i>盘中曾确认</i><b>${everConfirmedStars}</b>'),
-'L2顶部KPI与折叠总览均区分当前确认和盘中曾确认');
+'L2顶部KPI与折叠总览均区分当前确认和盘中曾确认，终盘后使用可靠涨停池核验');
 A(html.includes("return { level: 'expected', label: '预期明星', maxBucket }")
   && html.includes('ml-l2-star ${star.level}')
   && html.includes('.ml-l2-stock.is-expected'), '预期明星在折叠状态优先入列并高亮');

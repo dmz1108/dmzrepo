@@ -195,6 +195,9 @@ function createStrategyBackend(opts = {}) {
   const getBoardRealtimeStocks = opts.getBoardRealtimeStocks || getBoardStocks;
   const l2FocusScanner = opts.l2FocusScanner || null;
   const localL2TaskQueue = opts.localL2TaskQueue || null;
+  const getFinalSealedCodes = typeof opts.getFinalSealedCodes === 'function'
+    ? opts.getFinalSealedCodes
+    : null;
   const isAdmin = opts.isAdmin || (() => false);
   const canRunL2Scan = typeof opts.canRunL2Scan === 'function' ? opts.canRunL2Scan : isAdmin;
   const canReadL2Scan = typeof opts.canReadL2Scan === 'function' ? opts.canReadL2Scan : canRunL2Scan;
@@ -457,9 +460,19 @@ function createStrategyBackend(opts = {}) {
           const day = url.searchParams.get('day') || nowParts().day;
           if (!DATE_RE.test(day)) { sendJson(res, 400, { error: 'bad day' }); return true; }
           const jobs = typeof scanBackend.listDay === 'function' ? scanBackend.listDay(day) : [];
+          let finalSealedCodes = null;
+          if (getFinalSealedCodes) {
+            const sealed = await getFinalSealedCodes(day);
+            if (sealed instanceof Set) finalSealedCodes = [...sealed].map(String).filter(Boolean);
+            else if (Array.isArray(sealed)) finalSealedCodes = sealed.map(String).filter(Boolean);
+          }
           sendJson(res, 200, {
             day,
             jobs: jobs.slice(0, 50).map(job => l2ScanForViewer(job, true)).filter(Boolean),
+            finalSeal: {
+              available: finalSealedCodes !== null,
+              codes: finalSealedCodes || [],
+            },
           });
           return true;
         }

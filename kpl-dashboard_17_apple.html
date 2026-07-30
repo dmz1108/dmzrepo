@@ -12698,7 +12698,7 @@ function strategyL2HistoryStarStatus(row) {
   if (gain >= 5) return { level: 'expected', label: '预期明星', maxBucket };
   return null;
 }
-function strategyL2HistoryStarSummary(jobs) {
+function strategyL2HistoryStarSummary(jobs, finalSealedCodes = null) {
   const currentByCode = new Map();
   const strongestByCode = new Map();
   const orderedJobs = [...(Array.isArray(jobs) ? jobs : [])]
@@ -12717,8 +12717,15 @@ function strategyL2HistoryStarSummary(jobs) {
       }
     }
   }
+  const finalSealAvailable = finalSealedCodes instanceof Set;
+  const currentConfirmedStars = finalSealAvailable
+    ? [...strongestByCode.entries()].filter(([code, star]) => (
+      star?.level === 'confirmed' && finalSealedCodes.has(code)
+    )).length
+    : [...currentByCode.values()].filter(star => star?.level === 'confirmed').length;
   return {
-    currentConfirmedStars: [...currentByCode.values()].filter(star => star?.level === 'confirmed').length,
+    currentConfirmedStars,
+    currentConfirmedBasis: finalSealAvailable ? 'final-limit-up-db' : 'latest-l2-scan',
     everConfirmedStars: [...strongestByCode.values()].filter(star => star?.level === 'confirmed').length,
     expectedStars: [...strongestByCode.values()].filter(star => star?.level === 'expected').length,
   };
@@ -12806,14 +12813,20 @@ function renderStrategyL2History(data) {
     if (kpiL2) kpiL2.innerHTML = '<div class="kpi-label">今日 L2 扫描</div><div class="kpi-main quiet">今日暂无扫描记录</div>';
     return '';
   }
-  const starSummary = strategyL2HistoryStarSummary(jobs);
+  const finalSealedCodes = data?.finalSeal?.available === true
+    ? new Set((Array.isArray(data?.finalSeal?.codes) ? data.finalSeal.codes : []).map(String))
+    : null;
+  const starSummary = strategyL2HistoryStarSummary(jobs, finalSealedCodes);
   const completedJobs = jobs.filter(job => String(job?.status || '') === 'done').length;
   const runningJobs = jobs.filter(job => ['queued', 'running'].includes(String(job?.status || ''))).length;
   const currentConfirmedStars = starSummary.currentConfirmedStars;
   const everConfirmedStars = starSummary.everConfirmedStars;
   const expectedStars = starSummary.expectedStars;
   if (kpiL2) {
-    kpiL2.innerHTML = `<div class="kpi-label">今日 L2 扫描</div><div class="kpi-row"><span><i>板块</i><b>${jobs.length}</b></span><span><i>完成</i><b>${completedJobs}</b></span>${runningJobs ? `<span><i>处理中</i><b>${runningJobs}</b></span>` : ''}<span class="hot"><i>当前确认</i><b>${currentConfirmedStars}</b></span><span class="trace"><i>盘中曾确认</i><b>${everConfirmedStars}</b></span><span class="amb"><i>预期明星</i><b>${expectedStars}</b></span></div>`;
+    const currentTitle = starSummary.currentConfirmedBasis === 'final-limit-up-db'
+      ? '按可靠终盘涨停池核验'
+      : '终盘涨停池尚未形成，按该股最近一次 L2 扫描核验';
+    kpiL2.innerHTML = `<div class="kpi-label">今日 L2 扫描</div><div class="kpi-row"><span><i>板块</i><b>${jobs.length}</b></span><span><i>完成</i><b>${completedJobs}</b></span>${runningJobs ? `<span><i>处理中</i><b>${runningJobs}</b></span>` : ''}<span class="hot" title="${currentTitle}"><i>当前确认</i><b>${currentConfirmedStars}</b></span><span class="trace"><i>盘中曾确认</i><b>${everConfirmedStars}</b></span><span class="amb"><i>预期明星</i><b>${expectedStars}</b></span></div>`;
   }
   const cards = jobs.map(job => {
     const picked = Array.isArray(job?.picked) ? job.picked : [];
