@@ -94,8 +94,12 @@ eval(extractFn('strategyNormRealtimeStocks'));
   '自动派发复用共享门槛并要求真实成分股；仅预期明星封板确认可穿透瞬时资金回落');
   A(!src.includes("b?.scanChannel === 'supplement' || Number(b?.zt)"), '补选豁免已移除(补选板同样过涨停门槛)');
   A(!src.includes('Number(b?.netInflow) >= STRATEGY_MAINLINE_AUTO_SCAN_HIGH_INFLOW_OVERRIDE'), '10亿高流入直通已移除');
-  A(src.includes("const stageOrder = { confirmation: 0, retry: 1, discovery: 2, strengthening: 3 }"),
-    '公平复扫优先级=封板确认>错误重试>首次发现>增强复扫');
+  A(src.includes("const preferStrengthening = st.lastNonUrgentStage === 'discovery'")
+    && src.includes('? { confirmation: 0, retry: 1, strengthening: 2, discovery: 3 }')
+    && src.includes(': { confirmation: 0, retry: 1, discovery: 2, strengthening: 3 }'),
+  '公平复扫优先级=确认/重试固定优先，首次发现与增强复扫轮换普通名额');
+  A(src.includes('st.lastNonUrgentStage = decision.scanStage'),
+    '派发后记录普通阶段，下一次在 discovery/strengthening 均存在时切换方向');
   A(src.includes('item.familyCoveredBoardCount = coveredBoardsByFamily.get(item.familyKey)?.size || 0')
     && src.includes('const familyCoverageDiff = a.familyCoveredBoardCount - b.familyCoveredBoardCount'),
   '同阶段先覆盖尚未获得扫描机会的家族，避免高频增强复扫挤占新家族');

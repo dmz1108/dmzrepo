@@ -41,7 +41,12 @@ const STRATEGY_MAINLINE_AUTO_SCAN_MIN_ZT = 2;
 const STRATEGY_MAINLINE_AUTO_RESCAN_MIN_INFLOW_DELTA = 1e8;
 const STRATEGY_MAINLINE_AUTO_RESCAN_MIN_GAIN_DELTA = 0.5;
 const STRATEGY_MAINLINE_AUTO_SCAN_LIMIT_STOCKS = 50;
-const strategyMainlineAutoScanState = { windowStart: 0, dispatched: 0, lastJobId: '' };
+const strategyMainlineAutoScanState = {
+  windowStart: 0,
+  dispatched: 0,
+  lastJobId: '',
+  lastNonUrgentStage: '',
+};
 const numOrNull = value => {
   if (value == null || value === '') return null;
   const number = Number(value);
@@ -158,6 +163,7 @@ A(dispatched.length === 1 && dispatched[0].scanStage === 'strengthening'
 strategyMainlineAutoScanState.windowStart = 0;
 strategyMainlineAutoScanState.dispatched = 0;
 strategyMainlineAutoScanState.lastJobId = '';
+strategyMainlineAutoScanState.lastNonUrgentStage = '';
 dispatched.length = 0;
 latestJob = expectedJob;
 strategyMainlineMaybeAutoScan([{
@@ -176,6 +182,7 @@ A(dispatched.length === 1 && dispatched[0].scanStage === 'confirmation'
 strategyMainlineAutoScanState.windowStart = 0;
 strategyMainlineAutoScanState.dispatched = 0;
 strategyMainlineAutoScanState.lastJobId = '';
+strategyMainlineAutoScanState.lastNonUrgentStage = '';
 dispatched.length = 0;
 latestJobsByPlate = {
   HOT: {
@@ -206,10 +213,35 @@ A(dispatched.length === 1 && dispatched[0].plateId === 'NEW'
   && dispatched[0].scanStage === 'discovery',
   '公平调度:首次合格板块优先于20亿高流入板的重复增强扫描');
 
+// 同一窗口仍有普通名额时切回 strengthening，避免目录发现候选持续出现后反向饿死增强复扫。
+strategyMainlineAutoScanState.lastJobId = '';
+strategyMainlineMaybeAutoScan([
+  {
+    plateId: 'HOT',
+    name: '高频复扫',
+    netInflow: 20e8,
+    gainPct: 3,
+    zt: 3,
+    memberRows: [{ code: '600010', name: '复扫股', gain: 8 }],
+  },
+  {
+    plateId: 'NEW-2',
+    name: '另一个首次覆盖',
+    netInflow: 12e8,
+    gainPct: 2.5,
+    zt: 2,
+    memberRows: [{ code: '600012', name: '另一新板股', gain: 7 }],
+  },
+], '2026-07-29', true, '上午盘', null);
+A(dispatched.length === 2 && dispatched[1].plateId === 'HOT'
+  && dispatched[1].scanStage === 'strengthening',
+  '双向公平:首扫占用一个普通名额后，下一个普通名额回到真实增强复扫');
+
 // 两个都是首次扫描时，先给完全未覆盖的家族；同一家族已有其它板扫过，不能仅凭资金更高继续抢位。
 strategyMainlineAutoScanState.windowStart = 0;
 strategyMainlineAutoScanState.dispatched = 0;
 strategyMainlineAutoScanState.lastJobId = '';
+strategyMainlineAutoScanState.lastNonUrgentStage = '';
 dispatched.length = 0;
 latestJobsByPlate = {
   'CONSUMER-OLD': {

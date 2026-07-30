@@ -21045,7 +21045,12 @@ const STRATEGY_MAINLINE_AUTO_RESCAN_MIN_GAIN_DELTA = 0.5;
 // (已移除)高流入直通 STRATEGY_MAINLINE_AUTO_SCAN_HIGH_INFLOW_OVERRIDE:Owner 2026-07-16 定稿
 // 门槛无豁免——净流入≥5亿 且 涨停≥2;涨停数缺失由成份股精确回填解决,不再用金额直通绕过涨停腿。
 const STRATEGY_MAINLINE_AUTO_SCAN_LIMIT_STOCKS = 50;
-const strategyMainlineAutoScanState = { windowStart: 0, dispatched: 0, lastJobId: '' };
+const strategyMainlineAutoScanState = {
+  windowStart: 0,
+  dispatched: 0,
+  lastJobId: '',
+  lastNonUrgentStage: '',
+};
 function strategyMainlineThsCompositeEligibility(record, options = {}) {
   const zsType = Number(options.zsType ?? record?.netInflowZsType ?? record?.zsType);
   const metric = String(options.metric ?? record?.netInflowMetric ?? '');
@@ -23336,13 +23341,17 @@ function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase, prior
       const last = localL2TaskQueue.get(st.lastJobId);
       if (last && (last.status === 'queued' || last.status === 'running')) return;
     }
-    // 板块级字典序:封板确认 > 错误重试 > 首次发现 > 增强复扫。
+    // 板块级字典序:封板确认 > 错误重试；首次发现与增强复扫交替使用普通名额。
     // 同阶段优先尚未获得扫描机会的家族，再按补选来源 > 净流入 > 大涨数。
+    // 冷启动先发现；之后若两类候选同时存在，则轮换，避免任一方向长期饥饿。
     // 这只调整合格候选的公平顺序：门槛、确认穿透与不限复扫轮次保持不变。
     // 门槛:东财超大单净流入≥5亿；同花顺须 DDE 活跃度≥5亿 且 zjjlr>0；两源均要求涨停≥2。
     // 同板不限轮次；是否复扫只看相对上次扫描的增强事件，10亿直通与补选豁免仍保持移除。
     const bigGainOf = b => (Array.isArray(b?.memberRows) ? b.memberRows.filter(r => Number(r?.gain) >= STRATEGY_MAINLINE_BIG_GAIN_PCT).length : 0);
-    const stageOrder = { confirmation: 0, retry: 1, discovery: 2, strengthening: 3 };
+    const preferStrengthening = st.lastNonUrgentStage === 'discovery';
+    const stageOrder = preferStrengthening
+      ? { confirmation: 0, retry: 1, strengthening: 2, discovery: 3 }
+      : { confirmation: 0, retry: 1, discovery: 2, strengthening: 3 };
     const candidateRows = (Array.isArray(boards) ? boards : [])
       .map(board => {
         const eligibility = strategyMainlineBoardAutoScanEligibility(board, { requireMembers: true });
@@ -23411,6 +23420,9 @@ function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase, prior
       });
       st.dispatched += 1;
       st.lastJobId = String(job?.jobId || '');
+      if (decision.scanStage === 'discovery' || decision.scanStage === 'strengthening') {
+        st.lastNonUrgentStage = decision.scanStage;
+      }
       break;
     }
   } catch {}
