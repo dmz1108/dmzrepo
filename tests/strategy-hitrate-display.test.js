@@ -213,7 +213,7 @@ assert(css.includes('body.view-strategy .ml-hitrate {') && css.includes('.ml-hit
 // Local #292 阻断修正:≤430px 徽标退回独立一行(nowrap 徽标会把标题挤成两行;真实单列规则下断点 405–420,取 430 留余量)
 assert(/@media \(max-width: 430px\) \{[\s\S]{0,240}?\.ml-hitrate \{[\s\S]{0,120}?display: block;[\s\S]{0,120}?white-space: normal;/.test(css),
   '≤400px 命中率徽标必须退回块级独立行,恢复标题单行');
-assert(html.includes('strategy-workbench.css?v=20260726e'), 'CSS 缓存版本已升号');
+assert(html.includes('strategy-workbench.css?v=20260730a'), 'CSS 缓存版本已升号');
 
 backoffTests.then(() => {
   console.log('strategy hit-rate display checks passed');

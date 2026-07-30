@@ -231,6 +231,46 @@ A(strategyMainlineDeriveL2Status(
 
 // 14. 前端管理员证据(静态断言 + 内联脚本编译)
 const html = fsReal.readFileSync(pathReal.join(__dirname, '..', 'kpl-dashboard_17_apple.html'), 'utf8');
+function extractHtmlFn(name) {
+  const signature = new RegExp(`(?:async )?function ${name}\\(`);
+  const match = html.match(signature);
+  if (!match) throw new Error('html function not found: ' + name);
+  const bodyBrace = html.indexOf('{', html.indexOf(')', match.index));
+  let depth = 0, index = bodyBrace;
+  for (; index < html.length; index += 1) {
+    if (html[index] === '{') depth += 1;
+    else if (html[index] === '}') {
+      depth -= 1;
+      if (depth === 0) break;
+    }
+  }
+  return html.slice(match.index, index + 1);
+}
+const historySummaryForTest = Function(
+  'strategyL2HistoryStarStatus',
+  `return (${extractHtmlFn('strategyL2HistoryStarSummary')});`
+)(row => row?.testStar || null);
+const historySummary = historySummaryForTest([
+  {
+    createdAt: '2026-07-30T06:00:00.000Z',
+    results: [
+      { code: '002131', testStar: null },
+      { code: '600105', testStar: { level: 'confirmed' } },
+    ],
+  },
+  {
+    createdAt: '2026-07-30T02:00:00.000Z',
+    results: [
+      { code: '002131', testStar: { level: 'confirmed' } },
+      { code: '600105', testStar: { level: 'expected' } },
+      { code: '600001', testStar: { level: 'expected' } },
+    ],
+  },
+]);
+A(historySummary.currentConfirmedStars === 1
+  && historySummary.everConfirmedStars === 2
+  && historySummary.expectedStars === 1,
+'L2汇总用最新扫描计算当前确认，并保留盘中曾确认去重数');
 A(html.includes('function starMaxBucketAdminInfo(s)') && html.includes("if (!state.adminLoggedIn || !s || !s.maxBucket) return ''"), '管理员证据函数存在且非管理员返回空串');
 A((html.match(/starMaxBucketAdminInfo\(s\)/g) || []).length >= 2, '两处明星 tooltip 均拼接管理员证据');
 A(html.includes('被动买${passiveBuyYi}') && html.includes('主买>1.5亿或被买>2亿')
@@ -269,6 +309,11 @@ A(l2HistoryRenderer.includes('<details class="ml-l2-history-disclosure">')
 A(l2HistoryRenderer.includes('<details class="ml-l2-job')
   && l2HistoryRenderer.includes('<summary class="ml-l2-job-summary"')
   && l2HistoryRenderer.includes('ml-l2-job-stars'), '展开总览后按板块显示紧凑摘要，明星状态不被隐藏');
+A(l2HistoryRenderer.includes('<i>当前确认</i>')
+  && l2HistoryRenderer.includes('<i>盘中曾确认</i>')
+  && html.includes('<i>当前确认</i><b>${currentConfirmedStars}</b>')
+  && html.includes('<i>盘中曾确认</i><b>${everConfirmedStars}</b>'),
+'L2顶部KPI与折叠总览均区分当前确认和盘中曾确认');
 A(html.includes("return { level: 'expected', label: '预期明星', maxBucket }")
   && html.includes('ml-l2-star ${star.level}')
   && html.includes('.ml-l2-stock.is-expected'), '预期明星在折叠状态优先入列并高亮');

@@ -2439,6 +2439,8 @@ body.view-strategy .ml-l2-history-overview b { color: var(--st-text); font-size:
 body.view-strategy .ml-l2-history-overview i { color: var(--st-faint); font-size: 10px; font-style: normal; }
 body.view-strategy .ml-l2-history-overview .confirmed b,
 body.view-strategy .ml-l2-history-overview .confirmed i { color: #ff766f; }
+body.view-strategy .ml-l2-history-overview .confirmed-history b,
+body.view-strategy .ml-l2-history-overview .confirmed-history i { color: #f19a82; }
 body.view-strategy .ml-l2-history-overview .expected b,
 body.view-strategy .ml-l2-history-overview .expected i { color: #eab451; }
 body.view-strategy .ml-l2-history-overview .running b,
@@ -4492,6 +4494,7 @@ body.view-strategy .strategy-kpi .kpi-row span { font-size: 11px; color: #748397
 body.view-strategy .strategy-kpi .kpi-row span i { font-style: normal; display: block; }
 body.view-strategy .strategy-kpi .kpi-row span b { display: block; margin-top: 1px; color: #edf3f9; font-size: 16px; font-weight: 760; }
 body.view-strategy .strategy-kpi .kpi-row span.hot b { color: #ff6864; }
+body.view-strategy .strategy-kpi .kpi-row span.trace b { color: #f19a82; }
 body.view-strategy .strategy-kpi .kpi-row span.amb b { color: #e7b557; }
 
 /* 今日结论:东财 / 同花顺两源分开成行,各自独立不合并 */

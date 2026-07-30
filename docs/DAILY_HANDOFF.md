@@ -11527,6 +11527,36 @@ Notes for next agent:
 - raw evidence 成功不代表 TGB 完成；只有匹配标题、日期、白底表格和
   `@TGB湖南人` 水印的官方原图可进入后续人工双遍转录。
 
+## 2026-07-30 - Codex - 区分 L2 当前确认与盘中曾确认
+
+Changed:
+- 今日 L2 汇总不再用当天最强历史状态统一显示“明星确认”。
+- 每只股票最新一次扫描决定“当前确认”；当天任意时点达到确认标准则计入
+  “盘中曾确认”。两项均按股票代码去重。
+- 顶部 KPI 和折叠扫描总览统一展示两套口径；不改变单次扫描证据、明星判定门槛、
+  主线资格或历史 L2 任务。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `tests/star-l2-layers.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 回归样本覆盖“股票先封板确认、后开板”：当前确认减少，盘中曾确认保留。
+- `node tests/star-l2-layers.test.js`
+- `node tests/strategy-date-request-guard.test.js`
+- `node tests/strategy-l2-rescan.test.js`
+- 全部 76 个 `tests/*.test.js`
+- 前端内联脚本编译和 `git diff --check` 通过。
+
+Deployment:
+- 本条提交时尚未部署生产，服务未重启。
+
+Notes for next agent:
+- 2026-07-30 生产证据预期由模糊的“明星确认 2”改为
+  “当前确认 1 / 盘中曾确认 2”；正式主线判定仍独立执行。
+
 ## 2026-07-30 - Codex - 当日 TGB 湖南人复盘入库完成
 
 Changed:
