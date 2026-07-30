@@ -12270,3 +12270,34 @@ Notes for next agent:
 - 部署后公开 `/api/strategy-mainline-review` 应同时包含 2026-07-28 与
   2026-07-29，并将两日显示为“今日无主线”，而不是空白。
 - 不要通过新建或改写历史预测档修复显示；两日原始档已经正确，缺陷只在日期窗口。
+
+## 2026-07-30 - Codex - 部署预判回看交易日补齐修复
+
+Changed:
+- PR #328 已合并到 `main`，并从精确合并提交
+  `1621d6be4b5b1f5693d9b21c06344a274e6318c1` 通过受保护生产流程发布后端。
+
+Files:
+- `kpl-stats-server.js`（生产发布）
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- GitHub Actions production run `30525265720` 成功。
+- 本地精确 `main` 与云端 `C:\PandaDashboard\kpl-stats-server.js` 的 SHA-256
+  均为 `efd81822a58bf57588902b5f66a8fd6c8bc1b52efeb09ab067b0dabcf4da288b`。
+- `https://market.dreamerqi.com/health` 返回 `{"ok":true}`。
+- 正式 `/api/strategy-mainline-review?days=15` 的日期顺序已包含
+  `2026-07-30、07-29、07-28、07-27`；07-28 与 07-29 均返回
+  `noMainline=true`、`noMainlineReason=no-l2-star-evidence`，两来源都明确为
+  `available=true`、`hasMainlines=false`。
+
+Deployment:
+- 已部署并生效；主服务已重启，健康检查通过。
+- 生产备份：
+  `C:\PandaDashboard\_deploy-backups\github-30525265720-1`。
+- 未改写 07-28/29 历史预测档，也未修改业务数据库、L2 数据、Caddy 或公司端
+  worker。
+
+Notes for next agent:
+- 若页面仍保留旧空白，先做浏览器强制刷新；正式接口已经返回两天的“今日无主线”
+  记录，不应再通过补写历史档处理。
