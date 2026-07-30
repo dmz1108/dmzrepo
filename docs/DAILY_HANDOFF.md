@@ -11527,6 +11527,37 @@ Notes for next agent:
 - raw evidence 成功不代表 TGB 完成；只有匹配标题、日期、白底表格和
   `@TGB湖南人` 水印的官方原图可进入后续人工双遍转录。
 
+## 2026-07-30 - Codex - 上线 L2 当前确认与盘中曾确认
+
+Changed:
+- PR #336 经 Remote Claude 与 Local Claude 在最新提交上复审通过后合并。
+- 新增最小生产部署清单，仅发布行情 HTML 与策略页样式；不携带后端文件。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `ops/production/manifests/strategy-l2-current-ever-confirmed-20260730.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- GitHub Actions 生产运行 `30556648500` 成功。
+- 线上 `/health` 返回 `{"ok":true}`。
+- 线上 `/kpl` 已包含“当前确认”“盘中曾确认”和
+  `/vendor/strategy-workbench.css?v=20260730a`。
+- 线上策略 CSS 已包含 `confirmed-history` 样式。
+
+Deployment:
+- 已部署提交 `dc908a6ff8a1e7d8c16e4e44f218aed0210918ed`。
+- 仅替换上述两个静态页面文件，`restart=none`，主服务未重启。
+- 生产备份：
+  `C:\PandaDashboard\_deploy-backups\github-30556648500-1`。
+
+Notes for next agent:
+- “当前确认”取每只股票最新一次扫描状态；“盘中曾确认”保留当天任意时点的确认
+  事实。旧确认后开板的股票只计入后者。
+- “预期明星”仍沿用原有历史最强状态口径；如需拆成“当前预期/盘中曾预期”，应另
+  开独立任务，不要混入本次已上线口径。
+
 ## 2026-07-30 - Codex - 区分 L2 当前确认与盘中曾确认
 
 Changed:
