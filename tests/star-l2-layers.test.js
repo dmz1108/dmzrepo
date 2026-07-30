@@ -336,12 +336,13 @@ A(l2HistoryRenderer.includes('<details class="ml-l2-history-disclosure">')
 A(l2HistoryRenderer.includes('<details class="ml-l2-job')
   && l2HistoryRenderer.includes('<summary class="ml-l2-job-summary"')
   && l2HistoryRenderer.includes('ml-l2-job-stars'), '展开总览后按板块显示紧凑摘要，明星状态不被隐藏');
-A(l2HistoryRenderer.includes('<i>当前确认</i>')
+A(l2HistoryRenderer.includes("'终盘确认'")
+  && l2HistoryRenderer.includes("'最近扫描确认'")
   && l2HistoryRenderer.includes('<i>盘中曾确认</i>')
   && l2HistoryRenderer.includes("data?.finalSeal?.available === true")
-  && html.includes('<i>当前确认</i><b>${currentConfirmedStars}</b>')
+  && html.includes('<i>${currentConfirmedLabel}</i><b>${currentConfirmedStars}</b>')
   && html.includes('<i>盘中曾确认</i><b>${everConfirmedStars}</b>'),
-'L2顶部KPI与折叠总览均区分当前确认和盘中曾确认，终盘后使用可靠涨停池核验');
+'L2顶部KPI与折叠总览均区分最近扫描/终盘确认和盘中曾确认');
 A(html.includes("return { level: 'expected', label: '预期明星', maxBucket }")
   && html.includes('ml-l2-star ${star.level}')
   && html.includes('.ml-l2-stock.is-expected'), '预期明星在折叠状态优先入列并高亮');
