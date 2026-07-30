@@ -12301,3 +12301,28 @@ Deployment:
 Notes for next agent:
 - 若页面仍保留旧空白，先做浏览器强制刷新；正式接口已经返回两天的“今日无主线”
   记录，不应再通过补写历史档处理。
+
+## 2026-07-30 - Codex - 准备强刷当日 TGB 湖南人原始证据
+
+Changed:
+- 新增受保护、日期绑定的一次性生产脚本，用于强制刷新 2026-07-30 `@TGB湖南人`
+  官方原文与原始图片证据。
+- 脚本只输出公开文章和原图元数据；明确不调用 OCR、Qwen 或视觉识别，不写正式 TGB
+  行、不重折综合主因库、不重启服务。
+
+Files:
+- `ops/production/requests/2026-07-30-tgb-hunan-raw-evidence.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 北京时间目标日为 2026-07-30（周四）；公开 `source-view` 已有当日复盘啦、选股宝
+  和韭研各 51 条正式记录，按交易日处理。
+- 脚本固定校验目标日、官方 `tgb.cn/a/` 链接、标题含“湖南人涨停复盘”、
+  `raw-evidence-saved` 状态和至少一张成功下载的图片。
+
+Deployment:
+- 本条提交时尚未运行生产脚本；正式 TGB、综合主因库和服务进程均未改变。
+
+Notes for next agent:
+- raw evidence 成功不代表 TGB 完成；只有匹配标题、日期、白底表格和
+  `@TGB湖南人` 水印的官方原图可进入后续人工双遍转录。
