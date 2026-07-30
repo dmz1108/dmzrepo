@@ -11565,6 +11565,36 @@ Notes for next agent:
 - 必须以受保护写入脚本在正式写入前重新读取生产终盘池并完成同一质量闸；任一差异
   都应停止并回滚，不得为凑数修改人工来源行。
 
+## 2026-07-30 - Codex - 部署 PR #330 L2 双向公平调度
+
+Changed:
+- PR #330 经 Remote Claude 与 Local Claude 对最新功能提交 `ca3b6eb` 独立复审
+  通过后合并至 `main`，merge commit 为 `fec8152`。
+- 通过受保护的 GitHub production environment 将合并后
+  `kpl-stats-server.js` 原子部署到云端，并重启主服务。
+
+Files:
+- `kpl-stats-server.js`（生产发布）
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- GitHub Actions production run `30539938625` 成功。
+- 工作流完成脚本与清单校验、SSH 验证、部署前备份、Node 语法检查、部署后
+  SHA 校验、主服务重启、内网健康检查和远端临时文件清理。
+- `https://market.dreamerqi.com/health` 返回 `{"ok":true}`。
+- `https://market.dreamerqi.com/` 返回 HTTP 200。
+
+Deployment:
+- 已部署并生效；主服务已重启，健康检查通过。
+- 生产备份：
+  `C:\PandaDashboard\_deploy-backups\github-30539938625-1`。
+- 未改写业务数据库、历史主因库、预测档、L2 运行时任务或公司端 worker。
+
+Notes for next agent:
+- 下一个交易日观察不同板块覆盖数、重复复扫率、
+  `coverage-insufficient` 家族数及预期明星首次出现时间；确认普通名额轮换同时
+  避免首次覆盖和增强复扫两个方向的饥饿。
+
 ## 2026-07-28 - Codex - 当日 TGB 湖南人复盘入库完成
 
 Changed:
