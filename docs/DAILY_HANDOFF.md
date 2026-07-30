@@ -12301,3 +12301,50 @@ Deployment:
 Notes for next agent:
 - 若页面仍保留旧空白，先做浏览器强制刷新；正式接口已经返回两天的“今日无主线”
   记录，不应再通过补写历史档处理。
+
+## 2026-07-30 - Codex - L2 自动扫描家族公平调度
+
+Changed:
+- 根据 2026-07-29 生产任务证据修正自动派发顺序：确认扫描与错误重试优先级不变，
+  首次发现改为优先于增强复扫，避免已扫板块持续增强时压住新合格板块。
+- 同为首次发现或增强复扫时，优先当日已覆盖板块更少的主线家族；同为增强复扫时，
+  再优先扫描轮次较少的板块。保留来源感知的 5 亿元且 2 只涨停门槛、串行 worker、
+  确认穿透和同板不限日复扫轮次。
+- 将公平调度契约写入 L2 运维说明。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/scan-priority.test.js`
+- `tests/strategy-l2-rescan.test.js`
+- `docs/ops/L2_WORKER_RUNBOOK.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 2026-07-29 云端任务安全摘录 SHA-256：
+  `2e83905c47a4c9f565292d44df549adfdab8a56b67b6a88393778da69d820433`；
+  原始运行时证据未进入 Git。
+- 当日 74 个 L2 任务全部完成，但仅覆盖 18 个不同板块，56 个为重复复扫；
+  任务平均耗时 25.1 秒、中位数 20.1 秒，证明主要问题是派发公平性而非 worker
+  原始计算吞吐。消费家族只对预制菜派发 3 次，最终仍为
+  `coverage-insufficient`。
+- 新增回归反例：20 亿元高流入板的增强复扫不得压住 6 亿元首次合格板；同一家族
+  已有板块覆盖时，不得凭更高资金继续抢占零覆盖家族的首次机会。
+- `node --check kpl-stats-server.js`
+- `node tests/scan-priority.test.js`
+- `node tests/strategy-l2-rescan.test.js`
+- `node tests/strategy-two-source-mainlines.test.js`
+- `node tests/strategy-board-zt-backfill.test.js`
+- `node tests/qi-mainline-states.test.js`
+- 全部 76 个 `tests/*.test.js`
+- `git diff --check`
+
+Deployment:
+- 本条仅为 GitHub 分支代码与文档变更；生产未部署，服务未重启。
+- 未重建或覆盖 2026-07-28/29 主因库、历史预测档、L2 运行时任务或公司端 worker。
+
+Notes for next agent:
+- 复审重点：确认首次覆盖优先不会越过 5 亿元且 2 只涨停门槛，不会降低预期明星
+  封板确认优先级，也不会给同板增加日复扫上限。
+- 部署后首个交易日比较不同板块数、重复复扫率和
+  `coverage-insufficient` 家族；扫描完成只允许变为 `scanned-no-star` 或产生真实
+  明星证据，不能因为“补齐覆盖”直接成为正式主线。

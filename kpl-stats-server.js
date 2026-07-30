@@ -23336,27 +23336,58 @@ function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase, prior
       const last = localL2TaskQueue.get(st.lastJobId);
       if (last && (last.status === 'queued' || last.status === 'running')) return;
     }
-    // 板块级字典序:封板确认 > 错误重试 > 增强复扫 > 首次发现，再按补选来源 > 净流入 > 大涨数。
+    // 板块级字典序:封板确认 > 错误重试 > 首次发现 > 增强复扫。
+    // 同阶段优先尚未获得扫描机会的家族，再按补选来源 > 净流入 > 大涨数。
+    // 这只调整合格候选的公平顺序：门槛、确认穿透与不限复扫轮次保持不变。
     // 门槛:东财超大单净流入≥5亿；同花顺须 DDE 活跃度≥5亿 且 zjjlr>0；两源均要求涨停≥2。
     // 同板不限轮次；是否复扫只看相对上次扫描的增强事件，10亿直通与补选豁免仍保持移除。
     const bigGainOf = b => (Array.isArray(b?.memberRows) ? b.memberRows.filter(r => Number(r?.gain) >= STRATEGY_MAINLINE_BIG_GAIN_PCT).length : 0);
-    const stageOrder = { confirmation: 0, retry: 1, strengthening: 2, discovery: 3 };
-    const candidates = (Array.isArray(boards) ? boards : [])
+    const stageOrder = { confirmation: 0, retry: 1, discovery: 2, strengthening: 3 };
+    const candidateRows = (Array.isArray(boards) ? boards : [])
       .map(board => {
         const eligibility = strategyMainlineBoardAutoScanEligibility(board, { requireMembers: true });
         const existing = localL2TaskQueue.latest(String(board.plateId), day);
-        return { board, existing, eligibility, decision: strategyMainlineAutoScanDecision(board, existing) };
-      })
+        const familyKey = String(strategyMainlineFamilyInfo({ theme: board?.name }).key || '');
+        return {
+          board,
+          existing,
+          familyKey,
+          eligibility,
+          decision: strategyMainlineAutoScanDecision(board, existing),
+        };
+      });
+    const coveredBoardsByFamily = new Map();
+    for (const item of candidateRows) {
+      if (!item.existing || !item.familyKey) continue;
+      if (!coveredBoardsByFamily.has(item.familyKey)) coveredBoardsByFamily.set(item.familyKey, new Set());
+      coveredBoardsByFamily.get(item.familyKey).add(
+        `${item.board?.zsType ?? ''}:${String(item.board?.plateId || item.board?.name || '')}`
+      );
+    }
+    for (const item of candidateRows) {
+      item.familyCoveredBoardCount = coveredBoardsByFamily.get(item.familyKey)?.size || 0;
+    }
+    const candidates = candidateRows
       // 预期明星已经封板时，即使板块资金瞬时回落也要完成确认扫描；其它阶段仍必须满足板块门槛。
       .filter(item => item.decision.dispatch
         && (item.eligibility.eligible || item.decision.scanStage === 'confirmation'))
-      .sort((a, b) =>
-        (stageOrder[a.decision.scanStage] ?? 9) - (stageOrder[b.decision.scanStage] ?? 9) ||
-        ((a.board?.scanChannel === 'supplement') ? 0 : 1) - ((b.board?.scanChannel === 'supplement') ? 0 : 1) ||
-        (Number(b.board?.netInflow) || 0) - (Number(a.board?.netInflow) || 0) ||
-        bigGainOf(b.board) - bigGainOf(a.board));
+      .sort((a, b) => {
+        const stageDiff = (stageOrder[a.decision.scanStage] ?? 9) - (stageOrder[b.decision.scanStage] ?? 9);
+        if (stageDiff) return stageDiff;
+        if (a.decision.scanStage === 'discovery' || a.decision.scanStage === 'strengthening') {
+          const familyCoverageDiff = a.familyCoveredBoardCount - b.familyCoveredBoardCount;
+          if (familyCoverageDiff) return familyCoverageDiff;
+        }
+        if (a.decision.scanStage === 'strengthening') {
+          const sequenceDiff = (Number(a.decision.scanSequence) || 1) - (Number(b.decision.scanSequence) || 1);
+          if (sequenceDiff) return sequenceDiff;
+        }
+        return ((a.board?.scanChannel === 'supplement') ? 0 : 1) - ((b.board?.scanChannel === 'supplement') ? 0 : 1) ||
+          (Number(b.board?.netInflow) || 0) - (Number(a.board?.netInflow) || 0) ||
+          bigGainOf(b.board) - bigGainOf(a.board);
+      });
     for (const item of candidates) {
-      const { board, decision } = item;
+      const { board, decision, familyKey } = item;
       const priorityCodes = [...new Set([
         ...(decision.confirmationCodes || []),
         ...strategyMainlineScanPriorityCodes(board, priorByCode),
@@ -23366,7 +23397,7 @@ function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase, prior
         boardName: String(board.name || ''),
         day,
         trigger: 'strategy-auto',
-        familyKey: strategyMainlineFamilyInfo({ theme: board.name }).key,
+        familyKey,
         scanChannel: String(board?.scanChannel || ''),
         zsType: board?.zsType ?? null,
         stocks: board.memberRows,

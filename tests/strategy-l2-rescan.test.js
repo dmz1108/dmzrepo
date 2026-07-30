@@ -50,7 +50,9 @@ const numOrNull = value => {
 const normalizeReasonSourceCode = value => String(value || '').replace(/\D/g, '').slice(0, 6);
 const limitUpThreshold = code => /^(30|68)/.test(String(code || '')) ? 19.5 : 9.75;
 const strategyMainlineStarStatus = row => row?.mockLevel ? { level: row.mockLevel } : null;
-const strategyMainlineFamilyInfo = item => ({ key: `group:${String(item?.theme || '')}` });
+const strategyMainlineFamilyInfo = item => ({
+  key: `group:${String(item?.theme || '').split('/')[0]}`,
+});
 const strategyMainlineScanPriorityCodes = () => ['600099'];
 const strategyMainlineBoardAutoScanEligibility = board => ({
   eligible: Number(board?.netInflow) >= 5e8 && Number(board?.zt) >= 2 && Array.isArray(board?.memberRows) && board.memberRows.length > 0,
@@ -135,10 +137,11 @@ A(strategyMainlineAutoScanDecision(baseBoard, {
 
 const dispatched = [];
 let latestJob = baselineJob;
+let latestJobsByPlate = null;
 const localL2TaskQueue = {
   configured: () => true,
   get: () => null,
-  latest: () => latestJob,
+  latest: plateId => latestJobsByPlate ? (latestJobsByPlate[plateId] || null) : latestJob,
   start: payload => {
     const job = { ...payload, jobId: `AUTO${dispatched.length + 1}`, status: 'queued' };
     dispatched.push(job);
@@ -168,6 +171,82 @@ strategyMainlineMaybeAutoScan([{
 A(dispatched.length === 1 && dispatched[0].scanStage === 'confirmation'
   && dispatched[0].priorityCodes[0] === '600001',
   '确认扫描优先预期明星封板股，且不被板块资金瞬时回落阻断');
+
+// 生产 07-29 反例:已扫板块反复增强不能挤占另一个刚满足门槛板块的首次扫描。
+strategyMainlineAutoScanState.windowStart = 0;
+strategyMainlineAutoScanState.dispatched = 0;
+strategyMainlineAutoScanState.lastJobId = '';
+dispatched.length = 0;
+latestJobsByPlate = {
+  HOT: {
+    ...baselineJob,
+    jobId: 'HOT-1',
+    strengthSnapshot: { netInflow: 6e8, gainPct: 2, zt: 2 },
+  },
+};
+strategyMainlineMaybeAutoScan([
+  {
+    plateId: 'HOT',
+    name: '高频复扫',
+    netInflow: 20e8,
+    gainPct: 3,
+    zt: 3,
+    memberRows: [{ code: '600010', name: '复扫股', gain: 8 }],
+  },
+  {
+    plateId: 'NEW',
+    name: '首次覆盖',
+    netInflow: 6e8,
+    gainPct: 2,
+    zt: 2,
+    memberRows: [{ code: '600011', name: '新板股', gain: 7 }],
+  },
+], '2026-07-29', true, '上午盘', null);
+A(dispatched.length === 1 && dispatched[0].plateId === 'NEW'
+  && dispatched[0].scanStage === 'discovery',
+  '公平调度:首次合格板块优先于20亿高流入板的重复增强扫描');
+
+// 两个都是首次扫描时，先给完全未覆盖的家族；同一家族已有其它板扫过，不能仅凭资金更高继续抢位。
+strategyMainlineAutoScanState.windowStart = 0;
+strategyMainlineAutoScanState.dispatched = 0;
+strategyMainlineAutoScanState.lastJobId = '';
+dispatched.length = 0;
+latestJobsByPlate = {
+  'CONSUMER-OLD': {
+    ...baselineJob,
+    jobId: 'CONSUMER-1',
+    strengthSnapshot: { netInflow: 7e8, gainPct: 2, zt: 2 },
+  },
+};
+strategyMainlineMaybeAutoScan([
+  {
+    plateId: 'CONSUMER-OLD',
+    name: '消费/已覆盖',
+    netInflow: 7e8,
+    gainPct: 2,
+    zt: 2,
+    memberRows: [{ code: '600020', name: '旧消费股', gain: 6 }],
+  },
+  {
+    plateId: 'CONSUMER-NEW',
+    name: '消费/新板',
+    netInflow: 18e8,
+    gainPct: 3,
+    zt: 3,
+    memberRows: [{ code: '600021', name: '新消费股', gain: 8 }],
+  },
+  {
+    plateId: 'TECH-NEW',
+    name: '科技/新板',
+    netInflow: 6e8,
+    gainPct: 2,
+    zt: 2,
+    memberRows: [{ code: '600022', name: '新科技股', gain: 7 }],
+  },
+], '2026-07-29', true, '午后', null);
+A(dispatched.length === 1 && dispatched[0].plateId === 'TECH-NEW',
+  '家族公平:先给零覆盖家族首扫机会，再回到已有覆盖家族的第二个板块');
+latestJobsByPlate = null;
 
 const queue = createLocalL2TaskQueue({ token: '0123456789abcdef', batchSize: 5 });
 const queued = queue.start({
