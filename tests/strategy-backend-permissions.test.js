@@ -27,7 +27,9 @@ function makeResponse() {
       },
       l2FocusScanner: {
         status: async () => ({ available: true }),
+        listDay: () => [],
       },
+      getFinalSealedCodes: async () => new Set(['600105']),
     });
 
     const adminResponse = makeResponse();
@@ -39,6 +41,20 @@ function makeResponse() {
     assert.strictEqual(adminHandled, true);
     assert.strictEqual(adminResponse.status, 200);
     assert.deepStrictEqual(JSON.parse(adminResponse.body), { available: true });
+
+    const historyResponse = makeResponse();
+    const historyHandled = await backend.handle(
+      { method: 'GET', isAdmin: true },
+      historyResponse,
+      new URL('http://localhost/api/strategy/focus-l2-scan?history=1&day=2026-07-30'),
+    );
+    assert.strictEqual(historyHandled, true);
+    assert.strictEqual(historyResponse.status, 200);
+    assert.deepStrictEqual(JSON.parse(historyResponse.body), {
+      day: '2026-07-30',
+      jobs: [],
+      finalSeal: { available: true, codes: ['600105'] },
+    });
 
     const userResponse = makeResponse();
     await backend.handle(

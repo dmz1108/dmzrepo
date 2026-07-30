@@ -29171,6 +29171,7 @@ const strategy = createStrategyBackend({
   getBoardRealtimeStocks: getStrategyBoardRealtimeStocks,
   localL2TaskQueue,
   l2FocusScanner,
+  getFinalSealedCodes: strategyMainlineFinalSealedCodes,
   getQiAggregate: (day, boards) => getStrategyQiBoard(day, boards),   // QI 龙头作战室聚合(引领/梯队/新晋)
   // getOrderStats 不注入 → 智能选股返回 available:false(逐笔/L2 数据源待接入)
 });
