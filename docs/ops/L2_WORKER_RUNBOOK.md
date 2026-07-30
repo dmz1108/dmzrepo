@@ -39,6 +39,19 @@ The queue records `resultRows`, `rowsWithPrice`, and `rowsWithAllBuckets`. A com
 
 When the company computer pauses at lunch or shuts down, preserve queued jobs. The worker should continue them after it reconnects rather than creating a false empty result.
 
+## Automatic Scan Fairness
+
+Automatic dispatch keeps the existing per-board eligibility gate and serial worker contract. It always ranks urgent work first:
+
+1. expected-star seal confirmation;
+2. retry after an explicit worker error;
+
+The remaining ordinary opportunities alternate between first discovery and strengthening rescans. A cold start gives discovery the first opportunity; after dispatching either ordinary stage, the next opportunity prefers the other stage when both are present. This prevents repeated strengthening from starving new eligible coverage without allowing an unbounded catalog-discovery pool to starve genuine intraday strengthening.
+
+Within the same ordinary stage, a family with fewer already-scanned boards receives the next opportunity first. Among strengthening rescans, the lower scan sequence wins before fund-flow and gain tie-breakers.
+
+This ordering does not relax the source-aware `5亿元 + 2只涨停` gate, does not force ineligible boards into L2, and does not impose a maximum daily rescan count. Confirmation still takes precedence when an expected star reaches its limit-up threshold.
+
 ## Maximum Observable Bucket
 
 The strategy calculates each stock's own maximum observable order bucket from its price and exchange single-order share limit, then chooses the highest configured bucket that is actually reachable.
