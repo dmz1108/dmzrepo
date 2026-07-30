@@ -5243,7 +5243,10 @@ function isoFromCompactDate(text) {
 }
 
 function recentTradingWindowDayList(kline, endDay, period = 10) {
-  const dates = Array.isArray(kline?.x) ? kline.x.map(compactDate).filter(Boolean) : [];
+  const wanted = Math.max(1, Number(period) || 10);
+  const dates = Array.isArray(kline?.x)
+    ? [...new Set(kline.x.map(compactDate).filter(Boolean))].sort()
+    : [];
   if (!dates.length) return [];
   const endDateText = compactDate(endDay);
   let lastIndex = dates.length - 1;
@@ -5252,11 +5255,24 @@ function recentTradingWindowDayList(kline, endDay, period = 10) {
   }
   if (lastIndex < 0) return [];
   const lastKlineDate = dates[lastIndex];
-  const hasRealtimeEndDay = endDateText && lastKlineDate && endDateText > lastKlineDate;
-  const startIndex = Math.max(0, hasRealtimeEndDay ? lastIndex - (period - 2) : lastIndex - (period - 1));
-  const windowDates = dates.slice(startIndex, lastIndex + 1);
-  if (hasRealtimeEndDay && isChinaMarketTradingDay(endDateText)) windowDates.push(endDateText);
-  return windowDates.map(isoFromCompactDate).filter(isChinaMarketTradingDay);
+  const windowDates = dates.slice(0, lastIndex + 1);
+
+  // KPL 日 K 在收盘后偶尔仍停在数个交易日前。旧逻辑只把 endDay 追加到尾部，
+  // 会把中间交易日整体跳过（例如 07-27 后直接变成 07-30，漏掉 07-28/29）。
+  // 已有 K 线日仍是事实来源；仅对它的陈旧尾部按项目交易日历补齐，且不补内部缺口。
+  if (endDateText && lastKlineDate && endDateText > lastKlineDate) {
+    let cursor = shiftDay(isoFromCompactDate(lastKlineDate), 1);
+    for (let guard = 0; guard < 370 && compactDate(cursor) <= endDateText; guard += 1) {
+      if (isChinaMarketTradingDay(cursor)) windowDates.push(compactDate(cursor));
+      cursor = shiftDay(cursor, 1);
+    }
+  }
+
+  return [...new Set(windowDates)]
+    .sort()
+    .slice(-wanted)
+    .map(isoFromCompactDate)
+    .filter(isChinaMarketTradingDay);
 }
 
 async function getRecentTradingDays(endDay, apiKey, needed = 10) {

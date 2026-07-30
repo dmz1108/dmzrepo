@@ -12236,3 +12236,37 @@ Deployment:
 Notes for next agent:
 - 2026-07-29 TGB 正式文件是受保护人工来源；普通同步和 force 均不得覆盖。
 - 后续若韭研同日来源补齐，只按其独立来源 SOP 处理，不得改写已完成的 TGB 文件。
+
+## 2026-07-30 - Codex - 修复预判回看遗漏中间交易日
+
+Changed:
+- 修复 `recentTradingWindowDayList` 对陈旧 K 线尾部的处理：KPL 上证指数日 K
+  停在 2026-07-27 时，不再只追加请求日 2026-07-30 而跳过 07-28/29。
+- 保留已有 K 线交易日为事实来源，仅用现有中国交易日规则补齐“最后 K 线日到
+  请求日”之间的尾部交易日；不补 K 线内部缺口，并严格截取调用方要求的窗口长度。
+- 新增独立回归测试，覆盖陈旧尾部、历史请求日、周末和新鲜 K 线四种情况。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/recent-trading-days.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 生产只读核验：`mainline-predict-2026-07-28.json` 与
+  `mainline-predict-2026-07-29.json` 均存在，都是 schema v3、
+  `recordState=no-mainline`、两来源 `available=true` 且 `hasMainlines=false`。
+- 生产 `kpl-persist-cache/kline60/000001.json` 保存于 2026-07-28，但最后 K 线日
+  仍为 2026-07-27；正式回看接口日期列表因此从 07-30 直接跳到 07-27。
+- `node --check kpl-stats-server.js`
+- `node tests/recent-trading-days.test.js`
+- 全部 76 个 `tests/*.test.js`
+- `git diff --check`
+
+Deployment:
+- 本条提交时仅为 GitHub 代码变更；生产尚未部署，服务尚未重启。
+- 未修改 07-28/29 历史预测档、业务数据库、L2 数据、Caddy 或公司端 worker。
+
+Notes for next agent:
+- 部署后公开 `/api/strategy-mainline-review` 应同时包含 2026-07-28 与
+  2026-07-29，并将两日显示为“今日无主线”，而不是空白。
+- 不要通过新建或改写历史预测档修复显示；两日原始档已经正确，缺陷只在日期窗口。
