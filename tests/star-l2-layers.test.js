@@ -171,7 +171,11 @@ A(strategyMainlineStarStatus(rowExpected)?.level === 'expected', 'rowExpected �
 // 12. 跨来源任务挂载:KPL 创新药扫描可挂回东财医药卡片,后一次空任务不遮蔽有效结果。
 const normalizeReasonSourceCode = value => String(value || '').replace(/\D/g, '').slice(0, 6);
 const strategyMainlineFamilyInfo = item => ({
-  key: /医药|创新药|中药/.test(String(item?.theme || '')) ? 'group:医药' : `theme:${String(item?.theme || '')}`,
+  key: /医药|创新药|中药/.test(String(item?.theme || ''))
+    ? 'group:医药'
+    : (/短剧|AI视频|快手|小红书|文化传媒/.test(String(item?.theme || ''))
+      ? 'theme:短剧游戏'
+      : `theme:${String(item?.theme || '')}`),
 });
 const successfulCrossSourceJob = {
   jobId: 'auto-good', plateId: '308014', boardName: '创新药', familyKey: 'group:医药',
@@ -212,9 +216,9 @@ A(strategyMainlineIsTradingSessionObservation('2026-07-13', '2026-07-13T02:36:20
   && !strategyMainlineIsTradingSessionObservation('2026-07-13', '2026-07-13T07:30:00.000Z'),
   '确认时点必须属于目标交易日的可交易时段，收盘后扫描只作复盘');
 
-// 13. 个股在其他板块得到的最新股票级 L2 预期/确认状态，可回挂到包含该股的真实主线；
-// 通用板任务不能冒充该主线的扫描覆盖率。复现 2026-07-31 蓝色光标：
-// 10:30 在快手概念已是预期明星，10:45 只随深股通复扫后涨停确认。
+// 13. 蓝色光标在快手概念里于涨停前成为预期明星；快手、AI视频等同属短剧游戏，
+// 该预期事实应直接进入正确家族。10:45 随深股通封板确认时，只复用股票级确认，
+// 通用板任务仍不能冒充短剧游戏家族的扫描覆盖率。
 const blueFocusConfirmed = {
   code: '300058',
   name: '蓝色光标',
@@ -249,31 +253,32 @@ const blueFocusGenericExpectedJob = {
 };
 queuedDayJobs = [blueFocusGenericExpectedJob];
 const blueFocusExpected = strategyMainlineCollectStars(
-  [{ plateId: 'BK1629', name: 'AI应用' }],
+  [{ plateId: '309118', name: 'AI视频' }],
   '2026-07-31',
-  { familyKey: 'group:算力AI', candidateCodes: new Set(['300058']) },
+  { familyKey: 'theme:短剧游戏', candidateCodes: new Set(['300058']) },
 );
 A(blueFocusExpected.byCode.get('300058')?.level === 'expected'
-  && blueFocusExpected.byCode.get('300058')?.evidenceScope === 'candidate-code-latest-state',
-'蓝色光标在其他板块得到的预期明星股票级证据，可提前回挂候选主线供盘中观察');
-A(blueFocusExpected.completedPlates.size === 0
-  && blueFocusExpected.completedCoveredCodes.size === 0,
-'跨板预期明星不把其他板块任务伪装成算力AI板块扫描完成或覆盖完成');
+  && blueFocusExpected.byCode.get('300058')?.evidenceScope === 'related-board'
+  && blueFocusExpected.byCode.get('300058')?.boardName === '快手概念',
+'蓝色光标在快手概念涨停前成为预期明星，并直接挂入同族短剧游戏供盘中观察');
+A(blueFocusExpected.completedPlates.has('308659')
+  && blueFocusExpected.completedCoveredCodes.has('300058'),
+'快手概念扫描属于短剧游戏同族覆盖，不再被割裂成无关板块');
 
 queuedDayJobs = [blueFocusGenericConfirmedJob, blueFocusGenericExpectedJob];
 const blueFocusCrossBoard = strategyMainlineCollectStars(
-  [{ plateId: 'BK1629', name: 'AI应用' }],
+  [{ plateId: '309118', name: 'AI视频' }],
   '2026-07-31',
-  { familyKey: 'group:算力AI', candidateCodes: new Set(['300058']) },
+  { familyKey: 'theme:短剧游戏', candidateCodes: new Set(['300058']) },
 );
 const blueFocusStar = blueFocusCrossBoard.byCode.get('300058');
 A(blueFocusStar?.level === 'confirmed'
   && blueFocusStar?.evidenceScope === 'candidate-code-latest-state'
   && blueFocusStar?.scanPlateId === 'BK0804',
 '蓝色光标在通用板完成的最新盘中封板确认，可作为候选股票级证据回挂真实主线');
-A(blueFocusCrossBoard.completedPlates.size === 0
-  && blueFocusCrossBoard.completedCoveredCodes.size === 0,
-'跨板个股确认不把深股通任务伪装成算力AI板块扫描完成或覆盖完成');
+A(blueFocusCrossBoard.completedPlates.has('308659')
+  && !blueFocusCrossBoard.completedPlates.has('BK0804'),
+'跨板个股确认不把深股通任务伪装成短剧游戏板块扫描完成');
 
 const blueFocusAfterCloseReviewJob = {
   ...blueFocusGenericConfirmedJob,
@@ -284,9 +289,9 @@ const blueFocusAfterCloseReviewJob = {
 };
 queuedDayJobs = [blueFocusAfterCloseReviewJob, blueFocusGenericConfirmedJob];
 const blueFocusIgnoresAfterClose = strategyMainlineCollectStars(
-  [{ plateId: 'BK1629', name: 'AI应用' }],
+  [{ plateId: '309118', name: 'AI视频' }],
   '2026-07-31',
-  { familyKey: 'group:算力AI', candidateCodes: new Set(['300058']) },
+  { familyKey: 'theme:短剧游戏', candidateCodes: new Set(['300058']) },
 );
 A(blueFocusIgnoresAfterClose.byCode.get('300058')?.level === 'confirmed'
   && blueFocusIgnoresAfterClose.byCode.get('300058')?.observedAt === '2026-07-31T02:45:18.646Z',
@@ -302,17 +307,17 @@ const blueFocusLaterOpenedJob = {
 const blueFocusRelatedConfirmedJob = {
   ...blueFocusGenericConfirmedJob,
   jobId: 'blue-related-confirmed',
-  plateId: 'BK1629',
-  boardName: 'AI应用',
-  familyKey: 'group:算力AI',
+  plateId: '309118',
+  boardName: 'AI视频',
+  familyKey: 'theme:短剧游戏',
   createdAt: '2026-07-31T02:45:30.000Z',
   updatedAt: '2026-07-31T02:45:50.000Z',
 };
 queuedDayJobs = [blueFocusLaterOpenedJob, blueFocusRelatedConfirmedJob, blueFocusGenericConfirmedJob];
 const blueFocusOpened = strategyMainlineCollectStars(
-  [{ plateId: 'BK1629', name: 'AI应用' }],
+  [{ plateId: '309118', name: 'AI视频' }],
   '2026-07-31',
-  { familyKey: 'group:算力AI', candidateCodes: new Set(['300058']) },
+  { familyKey: 'theme:短剧游戏', candidateCodes: new Set(['300058']) },
 );
 A(blueFocusOpened.byCode.get('300058')?.level === 'expected'
   && blueFocusOpened.byCode.get('300058')?.evidenceScope === 'candidate-code-latest-state',
@@ -334,9 +339,9 @@ const blueFocusLaterActiveJob = {
 };
 queuedDayJobs = [blueFocusLaterActiveJob, blueFocusRelatedConfirmedJob, blueFocusGenericConfirmedJob];
 const blueFocusNoLongerStar = strategyMainlineCollectStars(
-  [{ plateId: 'BK1629', name: 'AI应用' }],
+  [{ plateId: '309118', name: 'AI视频' }],
   '2026-07-31',
-  { familyKey: 'group:算力AI', candidateCodes: new Set(['300058']) },
+  { familyKey: 'theme:短剧游戏', candidateCodes: new Set(['300058']) },
 );
 A(!blueFocusNoLongerStar.byCode.has('300058'),
 '候选股票最新跨板观测只剩普通资金活跃时，必须撤销较早的预期/确认状态，且不跨板传播 active');

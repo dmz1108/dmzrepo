@@ -21274,6 +21274,7 @@ const STRATEGY_MAINLINE_MERGE_GROUPS = new Set([
 ]);
 const STRATEGY_MAINLINE_KEEP_FINE_THEMES = new Set([
   '短剧游戏',
+  'AI应用',
 ]);
 function strategyMainlineFamilyInfo(item) {
   const theme = String(item?.theme || '').trim();
@@ -21283,7 +21284,8 @@ function strategyMainlineFamilyInfo(item) {
     ? rawKey
     : `theme:${rawKey || strategyMainlineTopicKey(theme) || theme}`;
   if (info?.standard && STRATEGY_MAINLINE_KEEP_FINE_THEMES.has(info.standard)) {
-    return { key: fineKey, label: info.standard, group: '', taxonomy: info };
+    const canonicalFineKey = strategyMainlineTopicKey(info.standard) || info.standard;
+    return { key: `theme:${canonicalFineKey}`, label: info.standard, group: '', taxonomy: info };
   }
   if (info?.group && STRATEGY_MAINLINE_MERGE_GROUPS.has(info.group)) {
     return { key: `group:${info.group}`, label: info.group, group: info.group, taxonomy: info };
@@ -21291,24 +21293,37 @@ function strategyMainlineFamilyInfo(item) {
   return { key: fineKey, label: theme, group: '', taxonomy: info };
 }
 function strategyMainlineReasonFamilyEvidence(values) {
-  const keys = new Set();
-  const topics = [];
+  const evidenceRows = [];
   for (const raw of (Array.isArray(values) ? values : [values])) {
     for (const token of thsReasonTokens(raw)) {
       if (!token || THS_EVENT_NOISE.test(token)) continue;
-      const theme = canonicalTopicName(token);
+      // 先按原始细分词查标准库；若先走 canonicalTopicName，会把“存储芯片”
+      // 提前压成“半导体”，丢掉用于压过宽口径词的细分层级。
+      const theme = String(token || '').trim();
       const taxonomy = strategyThemeTaxonomyInfo(theme);
       if (!taxonomy) continue;
       const familyKey = strategyMainlineFamilyInfo({ theme }).key;
       if (!familyKey) continue;
-      keys.add(familyKey);
-      topics.push(theme);
+      evidenceRows.push({
+        familyKey,
+        theme: themeDisplayName(taxonomy.standard) || theme,
+        broad: taxonomy.broad === true,
+      });
     }
   }
+  // “AI应用/人工智能”之类宽口径只在没有更具体题材时兜底。若同一条原因同时写着
+  // “AI应用+出海广告”，应采用更具体的传媒/短剧游戏证据，不能让宽口径把明星股
+  // 排他地归到算力 AI。
+  const specificRows = evidenceRows.filter(row => !row.broad);
+  const selectedRows = specificRows.length ? specificRows : evidenceRows;
+  const keys = new Set(selectedRows.map(row => row.familyKey));
+  const topics = selectedRows.map(row => row.theme);
   return {
     keys,
     topics: [...new Set(topics)],
     classified: keys.size > 0,
+    broadOnly: evidenceRows.length > 0 && specificRows.length === 0,
+    broadKeys: new Set(evidenceRows.filter(row => row.broad).map(row => row.familyKey)),
   };
 }
 function strategyMainlineBuildStarAttributionContext(priorByCode, liveReasonByCode) {
@@ -23055,7 +23070,13 @@ function strategyMainlineCollectStars(boards, day, options = {}) {
     for (const job of dayJobs) {
       const plateId = String(job?.plateId || '');
       if (!plateId) continue;
-      const jobFamilyKey = String(job?.familyKey || strategyMainlineFamilyInfo({ theme: job?.boardName }).key || '');
+      // 持久化任务保留了创建当时的 familyKey。题材词典修正后应按 boardName 重新归一，
+      // 否则当天稍早的“快手概念”任务仍写着 theme:快手，无法被短剧游戏消费。
+      const normalizedJobFamilyKey = strategyMainlineFamilyInfo({
+        theme: job?.boardName,
+        key: job?.familyKey,
+      }).key;
+      const jobFamilyKey = String(normalizedJobFamilyKey || job?.familyKey || '');
       const exactBoard = boardByPlate.has(plateId);
       const sameFamily = !!(familyKey && jobFamilyKey && familyKey === jobFamilyKey);
       if (!exactBoard && !sameFamily) continue;
@@ -23158,7 +23179,7 @@ function strategyMainlineCollectStars(boards, day, options = {}) {
       const observedAt = String(evidence.job?.updatedAt || evidence.job?.endedAt ||
         evidence.row?.priceAsOf || evidence.row?.asOf || '').trim();
       const evidenceAt = observedAt ? Date.parse(observedAt) : NaN;
-      if (current && Number.isFinite(currentAt) && Number.isFinite(evidenceAt) && currentAt > evidenceAt) continue;
+      if (current && Number.isFinite(currentAt) && Number.isFinite(evidenceAt) && currentAt >= evidenceAt) continue;
       if (record?.level === 'confirmed' && record.confirmedBy === 'live-l2-scan') {
         byCode.set(code, record);
       } else if (record?.level === 'expected') {

@@ -128,6 +128,39 @@ A(strategyMainlineStarAttributionDecision(semiconductor, taiJi, attribution).all
 A(strategyMainlineStarAttributionDecision(semiconductor, yaKe, attribution).allowed,
   '雅克科技在半导体家族通过历史四源主因归属');
 
+const shortDramaFamily = strategyMainlineFamilyInfo({ theme: '短剧游戏' }).key;
+A(shortDramaFamily === 'theme:短剧游戏'
+  && strategyMainlineFamilyInfo({ theme: 'AI视频' }).key === shortDramaFamily
+  && strategyMainlineFamilyInfo({ theme: '快手概念' }).key === shortDramaFamily
+  && strategyMainlineFamilyInfo({ theme: '小红书概念' }).key === shortDramaFamily
+  && strategyMainlineFamilyInfo({ theme: '文化传媒概念' }).key === shortDramaFamily,
+'AI视频、快手、小红书与文化传媒统一归入短剧游戏细分家族');
+A(strategyMainlineFamilyInfo({ theme: 'AI应用' }).key === 'theme:AI应用'
+  && strategyMainlineFamilyInfo({ theme: 'AI应用' }).key !== strategyMainlineFamilyInfo({ theme: '算力AI' }).key,
+'宽口径AI应用保持独立，不再等同于算力AI');
+const blueFocusAttribution = strategyMainlineBuildStarAttributionContext(new Map(), new Map([
+  ['300058', {
+    code: '300058',
+    reason: 'AI应用+出海广告+一季报增长',
+    source: 'ths-limit-up-pool',
+  }],
+]));
+const blueFocus = { code: '300058', name: '蓝色光标', level: 'confirmed', boardName: '快手概念' };
+const blueShortDrama = strategyMainlineStarAttributionDecision(
+  { theme: '短剧游戏', familyKey: shortDramaFamily },
+  blueFocus,
+  blueFocusAttribution,
+);
+A(blueShortDrama.allowed && blueShortDrama.basis === 'current-limit-reason',
+'蓝色光标“AI应用+出海广告”采用更具体的出海广告证据，封板后确认归属短剧游戏');
+const blueCompute = strategyMainlineStarAttributionDecision(
+  { theme: '算力AI', familyKey: 'group:算力AI' },
+  blueFocus,
+  blueFocusAttribution,
+);
+A(!blueCompute.allowed && blueCompute.basis === 'current-limit-reason-conflict',
+'宽口径AI应用不得再把蓝色光标排他归入算力AI');
+
 const rotatedLive = strategyMainlineBuildStarAttributionContext(priorByCode, new Map([
   ['002409', { code: '002409', reason: '光伏' }],
 ]));
