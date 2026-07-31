@@ -275,6 +275,23 @@ A(blueFocusCrossBoard.completedPlates.size === 0
   && blueFocusCrossBoard.completedCoveredCodes.size === 0,
 '跨板个股确认不把深股通任务伪装成算力AI板块扫描完成或覆盖完成');
 
+const blueFocusAfterCloseReviewJob = {
+  ...blueFocusGenericConfirmedJob,
+  jobId: 'blue-after-close-review',
+  createdAt: '2026-07-31T07:30:00.000Z',
+  updatedAt: '2026-07-31T07:30:20.000Z',
+  results: [{ ...blueFocusConfirmed, gainPct: 19.98 }],
+};
+queuedDayJobs = [blueFocusAfterCloseReviewJob, blueFocusGenericConfirmedJob];
+const blueFocusIgnoresAfterClose = strategyMainlineCollectStars(
+  [{ plateId: 'BK1629', name: 'AI应用' }],
+  '2026-07-31',
+  { familyKey: 'group:算力AI', candidateCodes: new Set(['300058']) },
+);
+A(blueFocusIgnoresAfterClose.byCode.get('300058')?.level === 'confirmed'
+  && blueFocusIgnoresAfterClose.byCode.get('300058')?.observedAt === '2026-07-31T02:45:18.646Z',
+'最新收盘后复盘任务不得遮蔽更早的盘中有效确认');
+
 const blueFocusLaterOpenedJob = {
   ...blueFocusGenericConfirmedJob,
   jobId: 'blue-later-opened',

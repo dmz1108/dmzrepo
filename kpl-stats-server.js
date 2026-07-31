@@ -23142,6 +23142,11 @@ function strategyMainlineCollectStars(boards, day, options = {}) {
       for (const row of job.results) {
         const code = normalizeReasonSourceCode(row?.code);
         if (!candidateCodes.has(code) || latestCandidateObservation.has(code)) continue;
+        const observedAt = String(job?.updatedAt || job?.endedAt ||
+          row?.priceAsOf || row?.asOf || '').trim();
+        // listDay 按最新任务倒序；收盘后复盘任务不能先占住 code 后又因时段无效被丢弃，
+        // 从而遮蔽更早的盘中有效确认。这里只收“最新的盘中有效观测”。
+        if (!strategyMainlineIsTradingSessionObservation(day, observedAt)) continue;
         latestCandidateObservation.set(code, { job, row });
       }
       if (latestCandidateObservation.size >= candidateCodes.size) break;
@@ -23152,7 +23157,6 @@ function strategyMainlineCollectStars(boards, day, options = {}) {
       const currentAt = current?.observedAt ? Date.parse(current.observedAt) : NaN;
       const observedAt = String(evidence.job?.updatedAt || evidence.job?.endedAt ||
         evidence.row?.priceAsOf || evidence.row?.asOf || '').trim();
-      if (!strategyMainlineIsTradingSessionObservation(day, observedAt)) continue;
       const evidenceAt = observedAt ? Date.parse(observedAt) : NaN;
       if (current && Number.isFinite(currentAt) && Number.isFinite(evidenceAt) && currentAt > evidenceAt) continue;
       if (record?.level === 'confirmed' && record.confirmedBy === 'live-l2-scan') {
