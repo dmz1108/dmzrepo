@@ -23129,8 +23129,9 @@ function strategyMainlineCollectStars(boards, day, options = {}) {
   // 涨停后却只随“深股通/指数成分”等通用板被再次扫描；若仍只认同板/同家族任务，
   // 确认事实就无法回挂到该股实际所在的主线卡片。
   //
-  // 这里只跨板新增“该候选股票最新一次盘中观测已经确认”的强事实；若后续观测已经开板，
-  // 也会撤销较早的当前确认。板块扫描完成度、覆盖率、待处理状态仍只由上面的相关任务计算；
+  // 这里只复用该候选股票最新一次盘中观测的股票级状态：预期明星可提前观察，
+  // 封板且确认门槛达标后升级为明星确认；若后续观测已经开板或不再达标，则按最新状态
+  // 降级/撤销。板块扫描完成度、覆盖率、待处理状态仍只由上面的相关任务计算；
   // 调用方还会继续经过 themeCodes 成分交集与 strategyMainlineStarAttributionDecision
   // 主因归属校验，不能凭通用板扫描跨题材错挂。
   if (candidateCodes.size && dayJobs.length) {
@@ -23156,11 +23157,12 @@ function strategyMainlineCollectStars(boards, day, options = {}) {
       if (current && Number.isFinite(currentAt) && Number.isFinite(evidenceAt) && currentAt > evidenceAt) continue;
       if (record?.level === 'confirmed' && record.confirmedBy === 'live-l2-scan') {
         byCode.set(code, record);
-      } else if (current?.level === 'confirmed') {
-        // 盘中后续任意板块扫描已经观察到开板时，不能继续保留较早的“当前确认”。
-        // 预期/活跃状态仍可作为当前状态；完全不满足明星层级则移除当前明星。
-        if (record && ['expected', 'active'].includes(record.level)) byCode.set(code, record);
-        else byCode.delete(code);
+      } else if (record?.level === 'expected') {
+        byCode.set(code, record);
+      } else if (current) {
+        // 最新观测只剩普通资金活跃或已不满足明星层级时，不能继续保留较早的
+        // 预期/确认状态。active 不作为 QI 明星跨板传播，避免通用板普通活跃股扩散到题材卡。
+        byCode.delete(code);
       }
     }
   }

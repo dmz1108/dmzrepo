@@ -212,9 +212,9 @@ A(strategyMainlineIsTradingSessionObservation('2026-07-13', '2026-07-13T02:36:20
   && !strategyMainlineIsTradingSessionObservation('2026-07-13', '2026-07-13T07:30:00.000Z'),
   '确认时点必须属于目标交易日的可交易时段，收盘后扫描只作复盘');
 
-// 13. 个股在通用板的最新盘中扫描完成封板确认时，可回挂到包含该股的真实主线；
+// 13. 个股在其他板块得到的最新股票级 L2 预期/确认状态，可回挂到包含该股的真实主线；
 // 通用板任务不能冒充该主线的扫描覆盖率。复现 2026-07-31 蓝色光标：
-// 10:30 在快手概念仍为预期明星，10:45 只随深股通复扫后涨停确认。
+// 10:30 在快手概念已是预期明星，10:45 只随深股通复扫后涨停确认。
 const blueFocusConfirmed = {
   code: '300058',
   name: '蓝色光标',
@@ -236,7 +236,31 @@ const blueFocusGenericConfirmedJob = {
   updatedAt: '2026-07-31T02:45:18.646Z',
   results: [blueFocusConfirmed],
 };
-queuedDayJobs = [blueFocusGenericConfirmedJob];
+const blueFocusGenericExpectedJob = {
+  ...blueFocusGenericConfirmedJob,
+  jobId: 'blue-expected-generic',
+  plateId: '308659',
+  boardName: '快手概念',
+  familyKey: 'theme:快手',
+  zsType: 5,
+  createdAt: '2026-07-31T02:30:27.003Z',
+  updatedAt: '2026-07-31T02:31:04.136Z',
+  results: [{ ...blueFocusConfirmed, gainPct: 17.81 }],
+};
+queuedDayJobs = [blueFocusGenericExpectedJob];
+const blueFocusExpected = strategyMainlineCollectStars(
+  [{ plateId: 'BK1629', name: 'AI应用' }],
+  '2026-07-31',
+  { familyKey: 'group:算力AI', candidateCodes: new Set(['300058']) },
+);
+A(blueFocusExpected.byCode.get('300058')?.level === 'expected'
+  && blueFocusExpected.byCode.get('300058')?.evidenceScope === 'candidate-code-latest-state',
+'蓝色光标在其他板块得到的预期明星股票级证据，可提前回挂候选主线供盘中观察');
+A(blueFocusExpected.completedPlates.size === 0
+  && blueFocusExpected.completedCoveredCodes.size === 0,
+'跨板预期明星不把其他板块任务伪装成算力AI板块扫描完成或覆盖完成');
+
+queuedDayJobs = [blueFocusGenericConfirmedJob, blueFocusGenericExpectedJob];
 const blueFocusCrossBoard = strategyMainlineCollectStars(
   [{ plateId: 'BK1629', name: 'AI应用' }],
   '2026-07-31',
@@ -276,6 +300,29 @@ const blueFocusOpened = strategyMainlineCollectStars(
 A(blueFocusOpened.byCode.get('300058')?.level === 'expected'
   && blueFocusOpened.byCode.get('300058')?.evidenceScope === 'candidate-code-latest-state',
 '候选股票最新观测已开板时，较早相关板确认必须降回最新预期状态');
+
+const blueFocusLaterActiveJob = {
+  ...blueFocusLaterOpenedJob,
+  jobId: 'blue-later-active',
+  createdAt: '2026-07-31T03:05:00.000Z',
+  updatedAt: '2026-07-31T03:05:20.000Z',
+  results: [{
+    ...blueFocusConfirmed,
+    gainPct: 8,
+    thresholds: {
+      '500000': th(0.8e8, 0.9e8, 0.7e8, 0.8e8),
+      '3000000': th(1.1e8, 0.9e8, 0.8e8, 0.7e8),
+    },
+  }],
+};
+queuedDayJobs = [blueFocusLaterActiveJob, blueFocusRelatedConfirmedJob, blueFocusGenericConfirmedJob];
+const blueFocusNoLongerStar = strategyMainlineCollectStars(
+  [{ plateId: 'BK1629', name: 'AI应用' }],
+  '2026-07-31',
+  { familyKey: 'group:算力AI', candidateCodes: new Set(['300058']) },
+);
+A(!blueFocusNoLongerStar.byCode.has('300058'),
+'候选股票最新跨板观测只剩普通资金活跃时，必须撤销较早的预期/确认状态，且不跨板传播 active');
 
 // 14. 扫描覆盖率分母只计算 worker 实际允许扫描的股票。
 eval(extractFn('strategyMainlineDeriveL2Status'));
