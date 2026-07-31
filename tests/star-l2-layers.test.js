@@ -173,7 +173,7 @@ const normalizeReasonSourceCode = value => String(value || '').replace(/\D/g, ''
 const strategyMainlineFamilyInfo = item => ({
   key: /医药|创新药|中药/.test(String(item?.theme || ''))
     ? 'group:医药'
-    : (/短剧|AI视频|快手|小红书|文化传媒/.test(String(item?.theme || ''))
+    : (/短剧|快手|小红书|文化传媒/.test(String(item?.theme || ''))
       ? 'theme:短剧游戏'
       : `theme:${String(item?.theme || '')}`),
 });
@@ -216,8 +216,8 @@ A(strategyMainlineIsTradingSessionObservation('2026-07-13', '2026-07-13T02:36:20
   && !strategyMainlineIsTradingSessionObservation('2026-07-13', '2026-07-13T07:30:00.000Z'),
   '确认时点必须属于目标交易日的可交易时段，收盘后扫描只作复盘');
 
-// 13. 蓝色光标在快手概念里于涨停前成为预期明星；快手、AI视频等同属短剧游戏，
-// 该预期事实应直接进入正确家族。10:45 随深股通封板确认时，只复用股票级确认，
+// 13. 蓝色光标在快手概念里于涨停前成为预期明星；快手与短剧游戏同属一个家族，
+// 但同花顺 AI视频 886068 保持独立。10:45 随深股通封板确认时，只复用股票级确认，
 // 通用板任务仍不能冒充短剧游戏家族的扫描覆盖率。
 const blueFocusConfirmed = {
   code: '300058',
@@ -253,7 +253,7 @@ const blueFocusGenericExpectedJob = {
 };
 queuedDayJobs = [blueFocusGenericExpectedJob];
 const blueFocusExpected = strategyMainlineCollectStars(
-  [{ plateId: '309118', name: 'AI视频' }],
+  [{ plateId: '309093', name: '短剧游戏' }],
   '2026-07-31',
   { familyKey: 'theme:短剧游戏', candidateCodes: new Set(['300058']) },
 );
@@ -267,7 +267,7 @@ A(blueFocusExpected.completedPlates.has('308659')
 
 queuedDayJobs = [blueFocusGenericConfirmedJob, blueFocusGenericExpectedJob];
 const blueFocusCrossBoard = strategyMainlineCollectStars(
-  [{ plateId: '309118', name: 'AI视频' }],
+  [{ plateId: '309093', name: '短剧游戏' }],
   '2026-07-31',
   { familyKey: 'theme:短剧游戏', candidateCodes: new Set(['300058']) },
 );
@@ -289,7 +289,7 @@ const blueFocusAfterCloseReviewJob = {
 };
 queuedDayJobs = [blueFocusAfterCloseReviewJob, blueFocusGenericConfirmedJob];
 const blueFocusIgnoresAfterClose = strategyMainlineCollectStars(
-  [{ plateId: '309118', name: 'AI视频' }],
+  [{ plateId: '309093', name: '短剧游戏' }],
   '2026-07-31',
   { familyKey: 'theme:短剧游戏', candidateCodes: new Set(['300058']) },
 );
@@ -307,15 +307,15 @@ const blueFocusLaterOpenedJob = {
 const blueFocusRelatedConfirmedJob = {
   ...blueFocusGenericConfirmedJob,
   jobId: 'blue-related-confirmed',
-  plateId: '309118',
-  boardName: 'AI视频',
+  plateId: '309093',
+  boardName: '短剧游戏',
   familyKey: 'theme:短剧游戏',
   createdAt: '2026-07-31T02:45:30.000Z',
   updatedAt: '2026-07-31T02:45:50.000Z',
 };
 queuedDayJobs = [blueFocusLaterOpenedJob, blueFocusRelatedConfirmedJob, blueFocusGenericConfirmedJob];
 const blueFocusOpened = strategyMainlineCollectStars(
-  [{ plateId: '309118', name: 'AI视频' }],
+  [{ plateId: '309093', name: '短剧游戏' }],
   '2026-07-31',
   { familyKey: 'theme:短剧游戏', candidateCodes: new Set(['300058']) },
 );
@@ -339,7 +339,7 @@ const blueFocusLaterActiveJob = {
 };
 queuedDayJobs = [blueFocusLaterActiveJob, blueFocusRelatedConfirmedJob, blueFocusGenericConfirmedJob];
 const blueFocusNoLongerStar = strategyMainlineCollectStars(
-  [{ plateId: '309118', name: 'AI视频' }],
+  [{ plateId: '309093', name: '短剧游戏' }],
   '2026-07-31',
   { familyKey: 'theme:短剧游戏', candidateCodes: new Set(['300058']) },
 );

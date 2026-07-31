@@ -21273,6 +21273,7 @@ const STRATEGY_MAINLINE_MERGE_GROUPS = new Set([
   '消费电子/显示',
 ]);
 const STRATEGY_MAINLINE_KEEP_FINE_THEMES = new Set([
+  'AI视频',
   '短剧游戏',
   'AI应用',
 ]);

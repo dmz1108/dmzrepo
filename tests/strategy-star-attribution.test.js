@@ -130,11 +130,13 @@ A(strategyMainlineStarAttributionDecision(semiconductor, yaKe, attribution).allo
 
 const shortDramaFamily = strategyMainlineFamilyInfo({ theme: '短剧游戏' }).key;
 A(shortDramaFamily === 'theme:短剧游戏'
-  && strategyMainlineFamilyInfo({ theme: 'AI视频' }).key === shortDramaFamily
   && strategyMainlineFamilyInfo({ theme: '快手概念' }).key === shortDramaFamily
   && strategyMainlineFamilyInfo({ theme: '小红书概念' }).key === shortDramaFamily
   && strategyMainlineFamilyInfo({ theme: '文化传媒概念' }).key === shortDramaFamily,
-'AI视频、快手、小红书与文化传媒统一归入短剧游戏细分家族');
+'快手、小红书与文化传媒统一归入短剧游戏细分家族');
+A(strategyMainlineFamilyInfo({ theme: 'AI视频' }).key === 'theme:AI视频'
+  && strategyMainlineFamilyInfo({ theme: 'AI视频' }).key !== shortDramaFamily,
+'同花顺涨幅第一的AI视频保持独立主线，不被短剧游戏吞并');
 A(strategyMainlineFamilyInfo({ theme: 'AI应用' }).key === 'theme:AI应用'
   && strategyMainlineFamilyInfo({ theme: 'AI应用' }).key !== strategyMainlineFamilyInfo({ theme: '算力AI' }).key,
 '宽口径AI应用保持独立，不再等同于算力AI');
