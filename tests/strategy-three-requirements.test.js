@@ -93,6 +93,8 @@ A(legacy.kept.length === 1 && legacy.reserve.length === 0 && legacy.kept[0].qiTi
 eval(extractFn('strategyPredictStarTransitions'));
 eval(extractFn('strategyPredictPickTop'));
 eval(extractFn('strategyPredictCandidateRecord'));
+eval(extractFn('strategyPredictCandidateKey'));
+eval(extractFn('strategyPredictMergeStickyCandidates'));
 eval(extractFn('strategyPredictBuildBlock'));
 const block = strategyPredictBuildBlock(
   [mk('确认+龙头', [{ code: '000001', name: '正星', level: 'confirmed' }], leaders, { rank: 1 })],

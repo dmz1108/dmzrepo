@@ -23978,12 +23978,13 @@ function strategyMainlineEmptyPayload(day, requestedDay, reason, message, sessio
 // 盘中持续覆盖当天预判快照；收盘后不再覆盖已有快照（保留“收盘前最后一次预判”作为回测基准）。
 // P1-C(讨论批准 2026-07-10):在 top/confirmedKey 之外增记 candidates 全量展示候选,
 // 供第二阶段用真实样本定胜率去重/低置信规则。只扩记录:top 结构与回看统计均不动。
-function strategyPredictCandidateRecord(m) {
+function strategyPredictCandidateRecord(m, observedAt = '') {
   if (!m) return null;
   const stock = s => s ? {
     code: s.code || '', name: s.name || '',
     gain: isFiniteNumeric(s.gain) ? Number(s.gain) : null,
   } : null;
+  const recordAt = String(observedAt || m.lastObservedAt || m.observedAt || '').trim();
   return {
     key: m.familyKey || m.key || '',
     familyKey: m.familyKey || '',          // 族归属(现状=归并族键;active node 细分待第二阶段)
@@ -24003,6 +24004,13 @@ function strategyPredictCandidateRecord(m) {
     reserveReasons: Array.isArray(m.reserveReasons) ? m.reserveReasons.slice(0, 4) : [],
     lowConfidence: null,                   // 低置信通道未上线,先记 null 占位(false=成熟,true=低置信)
     netInflow: isFiniteNumeric(m.netInflow) ? Number(m.netInflow) : null,
+    netInflowBoard: String(m.netInflowBoard || ''),
+    netInflowZsType: isFiniteNumeric(m.netInflowZsType) ? Number(m.netInflowZsType) : null,
+    netInflowZjjlr: isFiniteNumeric(m.netInflowZjjlr) ? Number(m.netInflowZjjlr) : null,
+    netInflowMetric: String(m.netInflowMetric || ''),
+    ddeBigOrderAmount: isFiniteNumeric(m.ddeBigOrderAmount) ? Number(m.ddeBigOrderAmount) : null,
+    fundDirection: m.fundDirection && typeof m.fundDirection === 'object' ? m.fundDirection : null,
+    thsEligibilityGate: m.thsEligibilityGate && typeof m.thsEligibilityGate === 'object' ? m.thsEligibilityGate : null,
     boardCount: Number(m.boardCount) || 0,
     limitUpCount: Number(m.count) || 0,
     bigGainCount: Number(m.bigGainCount) || 0,
@@ -24021,13 +24029,129 @@ function strategyPredictCandidateRecord(m) {
       gain30: isFiniteNumeric(r.gain30) ? Number(r.gain30) : null,
     })),
     stars: (Array.isArray(m.starStocks) ? m.starStocks : []).slice(0, 4).map(s => ({
-      ...stock(s), level: s.level || '', label: s.label || '',
+      ...stock(s),
+      level: s.level || '',
+      label: s.label || '',
+      observedAt: String(s.observedAt || recordAt || '').trim() || null,
+      confirmedAt: String(s.confirmedAt || '').trim() || null,
+      confirmedBy: String(s.confirmedBy || '').trim(),
+      ratios: s.ratios && typeof s.ratios === 'object' ? s.ratios : null,
+      maxBucket: s.maxBucket && typeof s.maxBucket === 'object' ? s.maxBucket : null,
     })),
     focusStocks: (Array.isArray(m.focusStocks) ? m.focusStocks : []).slice(0, 6).map(s => ({
       ...stock(s), basis: Array.isArray(s.basis) ? s.basis.slice(0, 4) : [],
     })),
     todayLimitCodes: (Array.isArray(m.todayCodes) ? m.todayCodes : []).slice(0, 16),   // 主要贡献股票(当日涨停)
+    resonanceBoards: (Array.isArray(m.resonanceBoards) ? m.resonanceBoards : []).slice(0, 8).map(board => ({
+      name: String(board?.name || ''),
+      plateId: String(board?.plateId || ''),
+      zsType: isFiniteNumeric(board?.zsType) ? Number(board.zsType) : null,
+      ztCount: isFiniteNumeric(board?.ztCount) ? Number(board.ztCount) : null,
+      gainPct: isFiniteNumeric(board?.gainPct) ? Number(board.gainPct) : null,
+      netInflow: isFiniteNumeric(board?.netInflow) ? Number(board.netInflow) : null,
+      netInflowZjjlr: isFiniteNumeric(board?.netInflowZjjlr) ? Number(board.netInflowZjjlr) : null,
+      netInflowMetric: String(board?.netInflowMetric || ''),
+    })),
+    firstObservedAt: String(m.firstObservedAt || recordAt || '').trim(),
+    lastObservedAt: recordAt,
+    intradaySticky: false,
   };
+}
+
+function strategyPredictCandidateKey(row) {
+  return String(row?.familyKey || row?.key || row?.theme || '').trim();
+}
+
+function strategyPredictMergeStickyCandidates(currentRows, existingRows, transitions, savedAt, existingSavedAt = '') {
+  const current = Array.isArray(currentRows) ? currentRows : [];
+  const existing = Array.isArray(existingRows) ? existingRows : [];
+  const transitionRows = Array.isArray(transitions) ? transitions : [];
+  const levelRank = level => ({ confirmed: 0, expected: 1, active: 2 }[String(level || '')] ?? 9);
+  const transitionByKey = new Map();
+  for (const row of transitionRows) {
+    const key = String(row?.mainlineKey || '').trim();
+    if (!key) continue;
+    if (!transitionByKey.has(key)) transitionByKey.set(key, []);
+    transitionByKey.get(key).push({
+      code: normalizeReasonSourceCode(row?.code),
+      name: String(row?.name || ''),
+      gain: isFiniteNumeric(row?.firstGain) ? Number(row.firstGain) : null,
+      level: row?.confirmedAt || String(row?.lastLevel || '') === 'confirmed' ? 'confirmed' : 'expected',
+      label: row?.confirmedAt || String(row?.lastLevel || '') === 'confirmed' ? '明星确认' : '预期明星',
+      observedAt: String(row?.lastSeenAt || row?.firstExpectedAt || '').trim() || null,
+      confirmedAt: String(row?.confirmedAt || '').trim() || null,
+      confirmedBy: String(row?.confirmedBy || '').trim(),
+      ratios: row?.ratios && typeof row.ratios === 'object' ? row.ratios : null,
+      maxBucket: row?.maxBucket && typeof row.maxBucket === 'object' ? row.maxBucket : null,
+    });
+  }
+  const stickyStars = (candidate, key) => {
+    const byCode = new Map();
+    const add = star => {
+      const code = normalizeReasonSourceCode(star?.code);
+      const level = String(star?.level || '');
+      if (!code || !['expected', 'confirmed'].includes(level)) return;
+      const previous = byCode.get(code);
+      if (!previous || levelRank(level) < levelRank(previous.level)) byCode.set(code, { ...star, code });
+    };
+    for (const star of (Array.isArray(candidate?.stars) ? candidate.stars : [])) add(star);
+    for (const star of (transitionByKey.get(key) || [])) add(star);
+    return [...byCode.values()];
+  };
+  const mergeStars = (nowStars, oldStickyStars) => {
+    const byCode = new Map();
+    const add = star => {
+      const code = normalizeReasonSourceCode(star?.code);
+      if (!code) return;
+      const previous = byCode.get(code);
+      if (!previous || levelRank(star?.level) < levelRank(previous?.level)) byCode.set(code, { ...star, code });
+    };
+    for (const star of (Array.isArray(nowStars) ? nowStars : [])) add(star);
+    for (const star of oldStickyStars) add({ ...star, historicalIntradayObserved: true });
+    return [...byCode.values()]
+      .sort((a, b) => levelRank(a?.level) - levelRank(b?.level) || String(a?.code || '').localeCompare(String(b?.code || '')))
+      .slice(0, 4);
+  };
+  const existingByKey = new Map(existing.map(row => [strategyPredictCandidateKey(row), row]).filter(([key]) => key));
+  const currentKeys = new Set();
+  const mergedCurrent = current.map(row => {
+    const key = strategyPredictCandidateKey(row);
+    if (key) currentKeys.add(key);
+    const old = existingByKey.get(key);
+    if (!old) return {
+      ...row,
+      firstObservedAt: String(row?.firstObservedAt || savedAt || '').trim(),
+      lastObservedAt: String(savedAt || row?.lastObservedAt || '').trim(),
+      intradaySticky: false,
+    };
+    const oldStickyStars = stickyStars(old, key);
+    return {
+      ...row,
+      stars: mergeStars(row?.stars, oldStickyStars),
+      firstObservedAt: String(old?.firstObservedAt || old?.lastObservedAt || existingSavedAt || row?.firstObservedAt || savedAt || '').trim(),
+      lastObservedAt: String(savedAt || row?.lastObservedAt || '').trim(),
+      intradaySticky: false,
+      stickyStarHistory: oldStickyStars.length > 0,
+    };
+  });
+  const retained = [];
+  for (const old of existing) {
+    const key = strategyPredictCandidateKey(old);
+    if (!key || currentKeys.has(key)) continue;
+    const stars = stickyStars(old, key);
+    if (!stars.length) continue;
+    retained.push({
+      ...old,
+      stars: mergeStars(old?.stars, stars),
+      firstObservedAt: String(old?.firstObservedAt || old?.lastObservedAt || existingSavedAt || '').trim(),
+      lastObservedAt: String(old?.lastObservedAt || existingSavedAt || '').trim(),
+      intradaySticky: true,
+      stickyReason: 'star-observed-today',
+    });
+  }
+  // candidates 的既有契约仍是最多 12 条；明星轨迹优先保留，必要时让最低位普通当前候选退出档案。
+  const stickyKeep = retained.slice(0, 12);
+  return [...mergedCurrent.slice(0, Math.max(0, 12 - stickyKeep.length)), ...stickyKeep];
 }
 function strategyPredictStarTransitions(existingRows, mainlines, observedAt) {
   const byKey = new Map();
@@ -24257,16 +24381,214 @@ function strategyPredictPickTop(m) {
   } : null;
 }
 // 一套预测(单来源或旧合并口径)的落库块:top3 / candidates12 / 明星轨迹。各来源独立成块,同题材不跨源覆盖。
-function strategyPredictBuildBlock(mainlines, existingStarTransitions, savedAt, reserveMainlines = []) {
+function strategyPredictBuildBlock(
+  mainlines,
+  existingStarTransitions,
+  savedAt,
+  reserveMainlines = [],
+  existingCandidates = [],
+  existingSavedAt = '',
+) {
   // 三要件(2026-07-21)后正式 top 只含真主线;但预备主线的预期明星轨迹必须照常落档——
   // 命中率复盘("预期明星→次日表现")的样本正来自这些尚未确认的卡,不能因分层而断粮。
   const combined = [...(mainlines || []), ...(Array.isArray(reserveMainlines) ? reserveMainlines : [])];
+  const starTransitions = strategyPredictStarTransitions(existingStarTransitions, combined, savedAt);
+  const currentCandidates = combined.slice(0, 12)
+    .map(item => strategyPredictCandidateRecord(item, savedAt))
+    .filter(Boolean);
   return {
     top: (mainlines || []).slice(0, 3).map(strategyPredictPickTop).filter(Boolean),
-    candidates: combined.slice(0, 12).map(strategyPredictCandidateRecord).filter(Boolean),
-    starTransitions: strategyPredictStarTransitions(existingStarTransitions, combined, savedAt),
+    candidates: strategyPredictMergeStickyCandidates(
+      currentCandidates,
+      existingCandidates,
+      starTransitions,
+      savedAt,
+      existingSavedAt,
+    ),
+    starTransitions,
   };
 }
+
+function strategyMainlineIntradayStickyCandidateRow(candidate, source, predictSavedAt = '') {
+  const key = strategyPredictCandidateKey(candidate);
+  const theme = String(candidate?.theme || '').trim();
+  if (!key || !theme) return null;
+  const stars = (Array.isArray(candidate?.stars) ? candidate.stars : [])
+    .filter(star => ['expected', 'confirmed'].includes(String(star?.level || '')))
+    .map(star => ({
+      ...star,
+      code: normalizeReasonSourceCode(star?.code),
+      name: String(star?.name || star?.code || ''),
+      label: String(star?.level || '') === 'confirmed' ? '明星确认' : '预期明星·盘中出现',
+      historicalIntradayObserved: true,
+      actionState: strategyMainlineStarActionState(star?.level, star?.confirmedBy),
+    }))
+    .filter(star => star.code);
+  if (!stars.length) return null;
+  const leaders = (Array.isArray(candidate?.leaders) ? candidate.leaders : [])
+    .map(stock => ({
+      ...stock,
+      code: normalizeReasonSourceCode(stock?.code),
+      name: String(stock?.name || stock?.code || ''),
+    }))
+    .filter(stock => stock.code)
+    .slice(0, 3);
+  const stageLabel = String(candidate?.stage || '').trim();
+  const certaintyLabel = String(candidate?.certainty || '').trim();
+  const lastObservedAt = String(candidate?.lastObservedAt || predictSavedAt || '').trim();
+  return {
+    key,
+    familyKey: String(candidate?.familyKey || key),
+    theme,
+    mergedThemes: Array.isArray(candidate?.mergedThemes) ? candidate.mergedThemes.slice(0, 8) : [],
+    source: String(source || ''),
+    rank: Number(candidate?.rank) || 0,
+    score: isFiniteNumeric(candidate?.score) ? Number(candidate.score) : null,
+    predictScore: isFiniteNumeric(candidate?.predictScore) ? Number(candidate.predictScore) : null,
+    stage: stageLabel ? { key: 'intraday-sticky', label: stageLabel, advice: '当日盘中明星轨迹保留' } : null,
+    certainty: certaintyLabel ? {
+      level: certaintyLabel.includes('高') ? 'high' : (certaintyLabel.includes('中') ? 'medium' : 'watch'),
+      label: certaintyLabel,
+      signals: [],
+    } : null,
+    isNewTheme: !!candidate?.isNewTheme,
+    qiTier: String(candidate?.qiTier || 'reserve'),
+    reserveReasons: Array.isArray(candidate?.reserveReasons) ? candidate.reserveReasons.slice(0, 4) : [],
+    l2VerificationStatus: 'qi',
+    l2ScanState: 'qi',
+    l2QualifiedBy: 'intraday-predict-sticky',
+    hadExpectedStarToday: stars.some(star => star.level === 'expected'),
+    starStocks: stars.slice(0, 4),
+    expectedStarHistory: stars.filter(star => star.level === 'expected'),
+    netInflow: isFiniteNumeric(candidate?.netInflow) ? Number(candidate.netInflow) : null,
+    netInflowBoard: String(candidate?.netInflowBoard || ''),
+    netInflowZsType: isFiniteNumeric(candidate?.netInflowZsType)
+      ? Number(candidate.netInflowZsType)
+      : (source === 'ths' ? 5 : (source === 'eastmoney' ? 6 : null)),
+    netInflowZjjlr: isFiniteNumeric(candidate?.netInflowZjjlr) ? Number(candidate.netInflowZjjlr) : null,
+    netInflowMetric: String(candidate?.netInflowMetric || ''),
+    ddeBigOrderAmount: isFiniteNumeric(candidate?.ddeBigOrderAmount) ? Number(candidate.ddeBigOrderAmount) : null,
+    fundDirection: candidate?.fundDirection && typeof candidate.fundDirection === 'object' ? candidate.fundDirection : null,
+    thsEligibilityGate: candidate?.thsEligibilityGate && typeof candidate.thsEligibilityGate === 'object'
+      ? candidate.thsEligibilityGate : null,
+    boardCount: Number(candidate?.boardCount) || 0,
+    count: Number(candidate?.limitUpCount) || 0,
+    bigGainCount: Number(candidate?.bigGainCount) || 0,
+    nearLimitCount: Number(candidate?.nearLimitCount) || 0,
+    todayCodes: (Array.isArray(candidate?.todayLimitCodes) ? candidate.todayLimitCodes : [])
+      .map(normalizeReasonSourceCode).filter(Boolean).slice(0, 16),
+    risingStocks: (Array.isArray(candidate?.focusStocks) ? candidate.focusStocks : []).slice(0, 6),
+    focusStocks: (Array.isArray(candidate?.focusStocks) ? candidate.focusStocks : []).slice(0, 6),
+    resonanceBoards: (Array.isArray(candidate?.resonanceBoards) ? candidate.resonanceBoards : []).slice(0, 8),
+    mainLeader: leaders[0] || null,
+    leaders,
+    leaderBasisMode: String(candidate?.leaderBasisMode || ''),
+    leaderNote: String(candidate?.leaderNote || ''),
+    intradaySticky: true,
+    currentObservation: false,
+    firstObservedAt: String(candidate?.firstObservedAt || lastObservedAt),
+    lastObservedAt,
+    stickyReason: 'star-observed-today',
+    explain: [
+      `该方向盘中已出现${stars.some(star => star.level === 'confirmed') ? '明星确认' : '预期明星'}；当前实时板块池未返回该卡，保留当日轨迹供持续观察。`,
+    ],
+  };
+}
+
+function strategyMainlineRestoreIntradayStickyPrediction(payload, predict, options = {}) {
+  if (!payload || typeof payload !== 'object' || !predict || payload.snapshot || payload.frozen) return payload;
+  const day = isoFromCompactDate(payload.day || '');
+  const predictDay = isoFromCompactDate(predict.day || '');
+  const today = isoFromCompactDate(chinaNowParts().day);
+  if (!day || day !== predictDay || day !== today) return payload;
+  const keyOf = row => String(row?.familyKey || row?.key || row?.theme || '').trim();
+  const starRank = level => ({ confirmed: 0, expected: 1, active: 2 }[String(level || '')] ?? 9);
+  const mergeStars = (current, sticky) => {
+    const byCode = new Map();
+    for (const star of [...(Array.isArray(current) ? current : []), ...(Array.isArray(sticky) ? sticky : [])]) {
+      const code = normalizeReasonSourceCode(star?.code);
+      if (!code) continue;
+      const previous = byCode.get(code);
+      if (!previous || starRank(star?.level) < starRank(previous?.level)) byCode.set(code, { ...star, code });
+    }
+    return [...byCode.values()].sort((a, b) =>
+      starRank(a?.level) - starRank(b?.level) || String(a?.code || '').localeCompare(String(b?.code || ''))
+    ).slice(0, 4);
+  };
+  const restoreSource = (sourcePayload, predictBlock, source) => {
+    if (!sourcePayload || !predictBlock) return { payload: sourcePayload, restored: [] };
+    const mainlines = Array.isArray(sourcePayload.mainlines) ? sourcePayload.mainlines.slice() : [];
+    const reserves = Array.isArray(sourcePayload.reserveMainlines) ? sourcePayload.reserveMainlines.slice() : [];
+    const currentByKey = new Map();
+    for (const row of [...mainlines, ...reserves]) {
+      const key = keyOf(row);
+      if (key) currentByKey.set(key, row);
+    }
+    const stickyRows = [];
+    for (const candidate of (Array.isArray(predictBlock.candidates) ? predictBlock.candidates : [])) {
+      const sticky = strategyMainlineIntradayStickyCandidateRow(candidate, source, predict.savedAt);
+      if (!sticky) continue;
+      const key = keyOf(sticky);
+      const current = currentByKey.get(key);
+      if (current) {
+        const starStocks = mergeStars(current?.starStocks, sticky.starStocks);
+        const merged = strategyMainlineFilterAttributedStars({
+          ...current,
+          starStocks,
+          hadExpectedStarToday: current?.hadExpectedStarToday || sticky?.hadExpectedStarToday,
+          l2VerificationStatus: starStocks.some(star => ['expected', 'confirmed'].includes(star?.level))
+            ? 'qi' : current?.l2VerificationStatus,
+          l2ScanState: starStocks.some(star => ['expected', 'confirmed'].includes(star?.level))
+            ? 'qi' : current?.l2ScanState,
+          stickyStarHistory: true,
+          firstObservedAt: String(candidate?.firstObservedAt || sticky.firstObservedAt || ''),
+        }, options?.attributionByCode);
+        for (let i = 0; i < mainlines.length; i += 1) if (keyOf(mainlines[i]) === key) mainlines[i] = merged;
+        for (let i = 0; i < reserves.length; i += 1) if (keyOf(reserves[i]) === key) reserves[i] = merged;
+        currentByKey.set(key, merged);
+        continue;
+      }
+      const filtered = strategyMainlineFilterAttributedStars(sticky, options?.attributionByCode);
+      if (!strategyMainlineHasQiStarEvidence(filtered)) continue;
+      reserves.push(filtered);
+      currentByKey.set(key, filtered);
+      stickyRows.push(filtered);
+    }
+    return {
+      payload: {
+        ...sourcePayload,
+        mainlines,
+        reserveMainlines: reserves,
+        reserveCount: reserves.length,
+      },
+      restored: stickyRows,
+    };
+  };
+  if (!payload.mainlinesBySource || !predict.bySource) return payload;
+  const east = restoreSource(payload.mainlinesBySource.eastmoney, predict.bySource.eastmoney, 'eastmoney');
+  const ths = restoreSource(payload.mainlinesBySource.ths, predict.bySource.ths, 'ths');
+  const rootMain = Array.isArray(payload.mainlines) ? payload.mainlines.slice() : [];
+  const rootReserve = Array.isArray(payload.reserveMainlines) ? payload.reserveMainlines.slice() : [];
+  const rootKeys = new Set([...rootMain, ...rootReserve].map(keyOf).filter(Boolean));
+  for (const row of [...east.restored, ...ths.restored]) {
+    const key = keyOf(row);
+    if (!key || rootKeys.has(key)) continue;
+    rootKeys.add(key);
+    rootReserve.push(row);
+  }
+  return {
+    ...payload,
+    mainlines: rootMain,
+    reserveMainlines: rootReserve,
+    reserveCount: rootReserve.length,
+    mainlinesBySource: {
+      ...payload.mainlinesBySource,
+      eastmoney: east.payload,
+      ths: ths.payload,
+    },
+  };
+}
+
 async function writeMainlinePredict(day, sessionPhase, mainlines, confirm, reserveMainlines = []) {
   try {
     // 已收盘阶段既不覆盖也不首次创建(Codex 复审 PR#25:旧逻辑只挡覆盖,盘后首次生成会把
@@ -24274,7 +24596,14 @@ async function writeMainlinePredict(day, sessionPhase, mainlines, confirm, reser
     if (sessionPhase === '已收盘') return;
     const savedAt = new Date().toISOString();
     const existing = await readMainlinePredict(day);
-    const block = strategyPredictBuildBlock(mainlines, existing?.starTransitions, savedAt, reserveMainlines);
+    const block = strategyPredictBuildBlock(
+      mainlines,
+      existing?.starTransitions,
+      savedAt,
+      reserveMainlines,
+      existing?.candidates,
+      existing?.savedAt,
+    );
     // 三要件后正式 top 可为空而预备轨迹仍有预期明星——整份轨迹不得因 top 空而不落盘(Codex #201 P1-3)。
     if (!block.top.length && !block.starTransitions.length && !block.candidates.length) return;
     await fs.mkdir(STRATEGY_MAINLINE_DATA_DIR, { recursive: true });
@@ -24346,11 +24675,18 @@ async function writeMainlinePredictBySource(day, sessionPhase, mainlinesBySource
     if (sessionPhase === '已收盘') return;
     const savedAt = new Date().toISOString();
     const existing = await readMainlinePredict(day);
-    const sourceBlock = (source, existingTransitions, fallbackZsType) => {
+    const sourceBlock = (source, existingBlock, fallbackZsType) => {
       const list = (source && Array.isArray(source.mainlines)) ? source.mainlines : [];
       // 预备主线一并进入 candidates/starTransitions(不进 top):预期明星轨迹是命中率复盘的粮。
       const reserveList = (source && Array.isArray(source.reserveMainlines)) ? source.reserveMainlines : [];
-      const block = strategyPredictBuildBlock(list, existingTransitions, savedAt, reserveList);
+      const block = strategyPredictBuildBlock(
+        list,
+        existingBlock?.starTransitions,
+        savedAt,
+        reserveList,
+        existingBlock?.candidates,
+        existing?.savedAt,
+      );
       // availability/reason 必须随预测块落库；否则“来源暂缺”和“来源可用但无正式主线”都会
       // 退化成同一个空 top，历史回看无法区分。旧调用未传 available 时按存在 source 兼容为可用。
       const available = typeof source?.available === 'boolean' ? source.available : !!source;
@@ -24368,8 +24704,8 @@ async function writeMainlinePredictBySource(day, sessionPhase, mainlinesBySource
     const thSource = mainlinesBySource && mainlinesBySource.ths;
     const emList = (emSource && Array.isArray(emSource.mainlines)) ? emSource.mainlines : [];
     const thList = (thSource && Array.isArray(thSource.mainlines)) ? thSource.mainlines : [];
-    const eastBlock = sourceBlock(emSource, existing?.bySource?.eastmoney?.starTransitions, 6);
-    const thBlock = sourceBlock(thSource, existing?.bySource?.ths?.starTransitions, 5);
+    const eastBlock = sourceBlock(emSource, existing?.bySource?.eastmoney, 6);
+    const thBlock = sourceBlock(thSource, existing?.bySource?.ths, 5);
     // “来源成功返回零结果”是有效结论，必须持久化供回看显示“今日无主线”。
     // 两源都不可用时仍不写，避免把取数故障冒充无主线。
     const hasResolvedSource = [eastBlock, thBlock].some(block => block.available === true);
@@ -24388,7 +24724,9 @@ async function writeMainlinePredictBySource(day, sessionPhase, mainlinesBySource
     // 盘中观测:按 family 去重的两源并集(mergeIntradayObservation 本身按 familyKey 聚合,东财优先)。
     const seen = new Set();
     const obsList = [];
-    for (const m of [...emList, ...thList]) {
+    const emReserve = (emSource && Array.isArray(emSource.reserveMainlines)) ? emSource.reserveMainlines : [];
+    const thReserve = (thSource && Array.isArray(thSource.reserveMainlines)) ? thSource.reserveMainlines : [];
+    for (const m of [...emList, ...emReserve, ...thList, ...thReserve]) {
       const k = String(m?.familyKey || m?.key || m?.theme || '');
       if (k && !seen.has(k)) { seen.add(k); obsList.push(m); }
     }
@@ -28426,8 +28764,13 @@ async function getStrategyMainlinesVisible(day) {
     predictDay,
     strategyMainlinePayloadStarCodes(payload, predict),
   ).catch(() => new Map());
+  const withIntradaySticky = strategyMainlineRestoreIntradayStickyPrediction(
+    payload,
+    predict,
+    { attributionByCode },
+  );
   const restricted = strategyMainlineRestrictToQiPayload(
-    strategyMainlineAttachExpectedHistoryPayload(payload, predict, { attributionByCode }),
+    strategyMainlineAttachExpectedHistoryPayload(withIntradaySticky, predict, { attributionByCode }),
     { finalSealedCodes }
   );
   return strategyMainlineRestoreHistoricalPrediction(restricted, predict, {

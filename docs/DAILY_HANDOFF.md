@@ -11569,6 +11569,60 @@ Notes for next agent:
   且普通 `active` 不得跨板传播。
 - 本次不修改明星金额、比值、涨停或主线成立门槛。
 
+## 2026-07-31 - Codex - 保留当日明星候选与同花顺 AI 视频轨迹
+
+Changed:
+- 修复实时板块池换榜后把当天已经出现过预期明星或明星确认的候选从预测档案和策略页
+  一并抹掉的问题。当前候选优先；消失候选只有存在 `expected/confirmed` 正证据时才
+  粘性保留，普通 `active` 候选不保留。
+- 候选重新出现但最新股票状态只剩 `active` 时，当天已经发生过的
+  `expected/confirmed` 事实仍保留在轨迹；页面恢复卡明确标为
+  `intradaySticky/currentObservation=false`，不冒充当前实时板块值。
+- 东财、同花顺各自在自己的预测块内合并候选，禁止跨源串线；恢复后仍经过现有主因
+  归属过滤和正式三要件。AI 视频有确认明星但无合格龙头时仍是预备主线，不放宽门槛。
+- 预测候选补存来源资金口径、原始明星 L2 证据、板块 ID 与首末观察时点；每日盘中
+  观察同时记录正式与预备主线，便于后续审计。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/predict-records.test.js`
+- `tests/qi-mainline-states.test.js`
+- `tests/strategy-three-requirements.test.js`
+- `tests/strategy-intraday-sticky-candidate.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 生产只读证据显示蓝色光标不是 worker 漏扫：10:45 “深股通”任务已盘中确认，
+  13:11 才被“人工智能/算力AI”任务重新挂入主线；问题在消费层，不在 L2 识别层。
+- 同花顺 AI 视频曾以 8 只涨停、DDE 大单活动约 11.47 亿元进入预备主线，含
+  昆仑万维确认明星、天龙集团预期明星；05:30 预测档仍有该候选，06:06 新写档案
+  已删除候选但保留两条 AI 视频 `starTransitions`，证明是覆盖丢卡。
+- 两份预测档安全摘录 SHA-256：
+  `a775ca6ea4f5d4c095cd7a94e6d11f2091f695f482e45110517a03bb80cba7b7`
+  与 `74f0a4fcf6cb87dbb47b3a4ad61bdca3c194210e1e535f206a26b3d3528b734c`；
+  运行时 JSON 未进入 Git。
+- `node --check kpl-stats-server.js`
+- `node tests/predict-records.test.js`
+- `node tests/strategy-intraday-sticky-candidate.test.js`
+- `node tests/star-l2-layers.test.js`
+- `node tests/strategy-star-attribution.test.js`
+- `node tests/strategy-three-requirements.test.js`
+- `node tests/qi-mainline-states.test.js`
+- 全部 77 个 `tests/*.test.js`
+- `git diff --check`
+
+Deployment:
+- 本条仅为 GitHub 分支代码、测试与交接记录；生产未部署，服务未重启。
+- 未修改正式预测档、L2 运行时任务、主因库、收盘价库或公司端 worker。
+
+Notes for next agent:
+- 复审重点：候选粘性只在同一交易日、同一来源生效；仅 `expected/confirmed` 可恢复；
+  恢复卡仍须通过归属过滤与“确认明星 + 合格龙头 + 至少 3 只同家族涨停”正式门槛。
+- 蓝色光标属于算力 AI 的主因归属证据，不应因它在通用板被扫描而强塞进 AI 视频。
+- 部署时若要恢复 2026-07-31 已被旧代码覆盖掉的 AI 视频卡，只能用部署前已捕获且
+  SHA 固定的真实预测片段做一次有备份的合并；不得从 `starTransitions` 猜造资金、
+  涨停数或确认明星。
+
 ## 2026-07-30 - Codex - 上线 L2 终盘确认核验
 
 Changed:

@@ -34,6 +34,8 @@ async function recordStrategyDailyIntradayObservation() {}
 `;
 const code = stubs + extractFn('strategyPredictCandidateRecord') + '\n' +
   extractFn('strategyPredictStarTransitions') + '\n' +
+  extractFn('strategyPredictCandidateKey') + '\n' +
+  extractFn('strategyPredictMergeStickyCandidates') + '\n' +
   extractFn('strategyPredictPickTop') + '\n' + extractFn('strategyPredictBuildBlock') + '\n' +
   extractFn('writeMainlinePredict') + '\n' + extractFn('writeMainlinePredictBySource');
 eval(code);
@@ -81,6 +83,7 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
   A(JSON.stringify(c0.todayLimitCodes) === JSON.stringify(['600001','600005']), '当日贡献股票');
   A(c0.lowConfidence === null, '低置信占位为 null(通道未上线)');
   A(c0.limitUpCount === 5 && c0.bigGainCount === 9 && c0.nearLimitCount === 4, '盘面上下文信号');
+  A(c0.lastObservedAt && c0.intradaySticky === false, '当前候选记录观测时点且不标为粘性恢复');
   const c1 = out.candidates[1];
   A(c1.theme === '示例主线B' && c1.leaders.length === 0 && c1.stars.length === 0, '最小主线不报错、空数组');
 
@@ -127,6 +130,42 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
   A(explicitLiveTransition.confirmedBy === 'live-l2-scan',
     '只有显式 live-l2-scan 来源才持久化为盘中确认');
 
+  // 1d. 当天已出现过 expected/confirmed 的候选不能被后续板块池刷新抹掉。
+  existingPredict = {
+    savedAt: '2026-07-14T02:30:00.000Z',
+    candidates: [
+      { key: 'theme:AI视频', familyKey: 'theme:AI视频', theme: 'AI视频', qiTier: 'reserve',
+        reserveReasons: ['no-qualified-leader'], limitUpCount: 8, netInflow: 11e8,
+        stars: [{ code: '300418', name: '昆仑万维', level: 'confirmed' }],
+        lastObservedAt: '2026-07-14T02:30:00.000Z' },
+      { key: 'theme:普通候选', familyKey: 'theme:普通候选', theme: '普通候选',
+        stars: [{ code: '300001', name: '普通活跃', level: 'active' }] },
+    ],
+    starTransitions: [],
+  };
+  await writeMainlinePredict('2026-07-14', '午后', [
+    { familyKey: 'group:算力AI', key: 'group:算力AI', theme: '算力AI', rank: 1,
+      starStocks: [{ code: '300058', name: '蓝色光标', level: 'confirmed' }] },
+  ], null);
+  const stickyWritten = written['/fake/mainline-predict-2026-07-14.json'];
+  const stickyAiVideo = stickyWritten.candidates.find(row => row.theme === 'AI视频');
+  A(stickyAiVideo && stickyAiVideo.intradaySticky === true
+    && stickyAiVideo.stars.some(star => star.code === '300418' && star.level === 'confirmed'),
+  '实时板块池不再返回 AI视频时，保留当天已确认明星的候选档案');
+  A(!stickyWritten.candidates.some(row => row.theme === '普通候选'),
+    '仅 active 的普通候选不会被粘性保留');
+
+  // 当前候选重新出现但最新扫描仅 active 时，已发生的 confirmed 事实仍保留在同日轨迹。
+  existingPredict = stickyWritten;
+  await writeMainlinePredict('2026-07-14', '午后', [
+    { familyKey: 'theme:AI视频', key: 'theme:AI视频', theme: 'AI视频', rank: 1,
+      starStocks: [{ code: '300418', name: '昆仑万维', level: 'active' }] },
+  ], null);
+  const reappeared = written['/fake/mainline-predict-2026-07-14.json'].candidates[0];
+  A(reappeared.intradaySticky === false && reappeared.stickyStarHistory === true
+    && reappeared.stars.some(star => star.code === '300418' && star.level === 'confirmed'),
+  '候选重新出现时当前数据优先，但同日 confirmed 历史不会被 active 覆盖');
+
   // 2. 收盘后已有记录不覆盖
   existingPredict = out;
   delete written['/fake/mainline-predict-2026-07-10.json'];
@@ -164,6 +203,27 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
   // 顶层兼容层=东财单源(非跨源并集),不出现"算力AI×2"的重复占位
   A(p.top.map(t => t.theme).join(',') === '算力AI,医药', '顶层兼容层=东财单源,不是跨源并集(无同题材重复占位)');
   A(p.top.length === 2 && !p.top.some((t, i) => p.top.findIndex(x => x.theme === t.theme) !== i), '顶层无重复题材占位');
+
+  // 4b. 粘性候选严格按来源保存：同花顺 AI视频不能串入东财块。
+  existingPredict = {
+    savedAt: '2026-07-14T03:00:00.000Z',
+    bySource: {
+      eastmoney: { candidates: [], starTransitions: [] },
+      ths: {
+        candidates: [{ key: 'theme:AI视频', familyKey: 'theme:AI视频', theme: 'AI视频',
+          stars: [{ code: '300418', name: '昆仑万维', level: 'confirmed' }] }],
+        starTransitions: [],
+      },
+    },
+  };
+  await writeMainlinePredictBySource('2026-07-14', '午后', {
+    eastmoney: { available: true, hasMainlines: false, zsType: 6, mainlines: [] },
+    ths: { available: true, hasMainlines: false, zsType: 5, mainlines: [] },
+  }, { key: '' });
+  const isolated = written['/fake/mainline-predict-2026-07-14.json'];
+  A(!isolated.bySource.eastmoney.candidates.some(row => row.theme === 'AI视频')
+    && isolated.bySource.ths.candidates.some(row => row.theme === 'AI视频' && row.intradaySticky === true),
+  '同花顺粘性候选只留在同花顺预测块，不跨源污染东财');
 
   // 5. 来源暂缺必须与“来源可用但无主线”分开落库，供回看永久解释。
   existingPredict = null;
