@@ -11527,6 +11527,46 @@ Notes for next agent:
 - raw evidence 成功不代表 TGB 完成；只有匹配标题、日期、白底表格和
   `@TGB湖南人` 水印的官方原图可进入后续人工双遍转录。
 
+## 2026-07-31 - Codex - 修复明星股跨板块确认延迟
+
+Changed:
+- 修复候选股已经在其他板块完成 L2 封板确认、却必须等待目标主线再次扫描后才显示
+  “明星确认”的延迟。目标主线现在可复用该候选股当日最新的股票级 L2 状态。
+- 板块扫描完成度仍只认同板或同主线家族任务；跨板块证据不能把未扫描主线伪装成
+  已覆盖。候选股仍须属于目标主线成分池，并通过现有主因归属冲突校验。
+- 若候选股后来开板，最新股票级观察会撤销较早的当前确认，降为预期/观察状态，
+  防止历史封板证据长期冒充当前明星。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/star-l2-layers.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 生产只读证据：2026-07-31、股票 `300058`（蓝色光标）。10:45 的“深股通”
+  扫描已经满足确认明星条件，但原逻辑直到 13:11 “算力AI”同家族任务再次扫描才
+  挂入主线，延迟约 146 分钟。
+- 安全摘录 SHA-256：
+  `3ed428948b51bc8bf4606d7f55d2a82b4ac8e4f6a65401ac961b1bb41eda83d6`；
+  原始 L2 运行时证据未进入 Git。
+- 新增生产形状回归：通用板块确认可立即挂回候选股，但不改变目标板块覆盖率；
+  后续开板观察会撤销旧确认。
+- `node --check kpl-stats-server.js`
+- `node tests/star-l2-layers.test.js`
+- `node tests/strategy-star-attribution.test.js`
+- `node tests/strategy-two-source-mainlines.test.js`
+- `node tests/qi-mainline-states.test.js`
+- 全部 76 个 `tests/*.test.js`
+- `git diff --check`
+
+Deployment:
+- 本条仅为 GitHub 分支代码、测试与交接记录；生产未修改，服务未重启。
+
+Notes for next agent:
+- 复审重点：确认股票级复用只适用于目标主线候选成分股，不绕过主因归属校验；
+  通用板块任务不能提高目标主线扫描完成度；最新开板状态必须覆盖较早封板状态。
+- 本次不修改明星金额、比值、涨停或主线成立门槛。
+
 ## 2026-07-30 - Codex - 上线 L2 终盘确认核验
 
 Changed:

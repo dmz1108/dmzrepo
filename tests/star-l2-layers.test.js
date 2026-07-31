@@ -27,7 +27,7 @@ function extractConstLine(name) {
 }
 
 const numOrNull = v => (v == null || v === '' || !Number.isFinite(Number(v))) ? null : Number(v);
-const limitUpThreshold = (code) => /^(30|68)/.test(String(code || '')) ? 20 : 10;
+const limitUpThreshold = (code) => /^(30|68|43|83|87|92)/.test(String(code || '')) ? 19.5 : 9.75;
 
 const code = [
   extractConstLine('STRATEGY_MAINLINE_STAR_BUCKETS'),
@@ -188,8 +188,9 @@ const unrelatedJob = {
   day: '2026-07-13', status: 'done', createdAt: '2026-07-13T03:00:00.000Z',
   results: [{ ...rowExpected, code: '600002', name: '无关明星' }],
 };
+let queuedDayJobs = [emptyNewerJob, unrelatedJob, successfulCrossSourceJob];
 const localL2TaskQueue = {
-  listDay: () => [emptyNewerJob, unrelatedJob, successfulCrossSourceJob],
+  listDay: () => queuedDayJobs,
 };
 eval(extractFn('strategyMainlineCollectStars'));
 const crossSourceStars = strategyMainlineCollectStars(
@@ -211,7 +212,72 @@ A(strategyMainlineIsTradingSessionObservation('2026-07-13', '2026-07-13T02:36:20
   && !strategyMainlineIsTradingSessionObservation('2026-07-13', '2026-07-13T07:30:00.000Z'),
   '确认时点必须属于目标交易日的可交易时段，收盘后扫描只作复盘');
 
-// 13. 扫描覆盖率分母只计算 worker 实际允许扫描的股票。
+// 13. 个股在通用板的最新盘中扫描完成封板确认时，可回挂到包含该股的真实主线；
+// 通用板任务不能冒充该主线的扫描覆盖率。复现 2026-07-31 蓝色光标：
+// 10:30 在快手概念仍为预期明星，10:45 只随深股通复扫后涨停确认。
+const blueFocusConfirmed = {
+  code: '300058',
+  name: '蓝色光标',
+  price: 14.35,
+  gainPct: 19.98,
+  thresholds: {
+    '500000': th(5.0e8, 0.9e8, 1.2e8, 0.8e8),
+    '3000000': th(931748809, 47304935, 230002381, 88003739),
+  },
+};
+const blueFocusGenericConfirmedJob = {
+  jobId: 'blue-confirmed-generic',
+  plateId: 'BK0804',
+  boardName: '深股通',
+  familyKey: 'theme:深股通',
+  day: '2026-07-31',
+  status: 'done',
+  createdAt: '2026-07-31T02:45:00.000Z',
+  updatedAt: '2026-07-31T02:45:18.646Z',
+  results: [blueFocusConfirmed],
+};
+queuedDayJobs = [blueFocusGenericConfirmedJob];
+const blueFocusCrossBoard = strategyMainlineCollectStars(
+  [{ plateId: 'BK1629', name: 'AI应用' }],
+  '2026-07-31',
+  { familyKey: 'group:算力AI', candidateCodes: new Set(['300058']) },
+);
+const blueFocusStar = blueFocusCrossBoard.byCode.get('300058');
+A(blueFocusStar?.level === 'confirmed'
+  && blueFocusStar?.evidenceScope === 'candidate-code-latest-state'
+  && blueFocusStar?.scanPlateId === 'BK0804',
+'蓝色光标在通用板完成的最新盘中封板确认，可作为候选股票级证据回挂真实主线');
+A(blueFocusCrossBoard.completedPlates.size === 0
+  && blueFocusCrossBoard.completedCoveredCodes.size === 0,
+'跨板个股确认不把深股通任务伪装成算力AI板块扫描完成或覆盖完成');
+
+const blueFocusLaterOpenedJob = {
+  ...blueFocusGenericConfirmedJob,
+  jobId: 'blue-later-opened',
+  createdAt: '2026-07-31T03:00:00.000Z',
+  updatedAt: '2026-07-31T03:00:20.000Z',
+  results: [{ ...blueFocusConfirmed, gainPct: 10 }],
+};
+const blueFocusRelatedConfirmedJob = {
+  ...blueFocusGenericConfirmedJob,
+  jobId: 'blue-related-confirmed',
+  plateId: 'BK1629',
+  boardName: 'AI应用',
+  familyKey: 'group:算力AI',
+  createdAt: '2026-07-31T02:45:30.000Z',
+  updatedAt: '2026-07-31T02:45:50.000Z',
+};
+queuedDayJobs = [blueFocusLaterOpenedJob, blueFocusRelatedConfirmedJob, blueFocusGenericConfirmedJob];
+const blueFocusOpened = strategyMainlineCollectStars(
+  [{ plateId: 'BK1629', name: 'AI应用' }],
+  '2026-07-31',
+  { familyKey: 'group:算力AI', candidateCodes: new Set(['300058']) },
+);
+A(blueFocusOpened.byCode.get('300058')?.level === 'expected'
+  && blueFocusOpened.byCode.get('300058')?.evidenceScope === 'candidate-code-latest-state',
+'候选股票最新观测已开板时，较早相关板确认必须降回最新预期状态');
+
+// 14. 扫描覆盖率分母只计算 worker 实际允许扫描的股票。
 eval(extractFn('strategyMainlineDeriveL2Status'));
 const completeEligibleCoverage = {
   completedPlates: new Set(['BK0986']),
@@ -229,7 +295,7 @@ A(strategyMainlineDeriveL2Status(
   new Set(['688621', '688062'])
 ) === 'unscanned', '主题仅含 worker 排除代码时仍保持未扫描，不伪造完成');
 
-// 14. 前端管理员证据(静态断言 + 内联脚本编译)
+// 15. 前端管理员证据(静态断言 + 内联脚本编译)
 const html = fsReal.readFileSync(pathReal.join(__dirname, '..', 'kpl-dashboard_17_apple.html'), 'utf8');
 function extractHtmlFn(name) {
   const signature = new RegExp(`(?:async )?function ${name}\\(`);

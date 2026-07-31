@@ -23033,6 +23033,11 @@ function strategyMainlineCollectStars(boards, day, options = {}) {
   const boardRows = Array.isArray(boards) ? boards : [];
   const boardByPlate = new Map(boardRows.map(board => [String(board?.plateId || ''), board]).filter(([plateId]) => plateId));
   const familyKey = String(options?.familyKey || '');
+  const candidateCodes = new Set((options?.candidateCodes instanceof Set
+    ? [...options.candidateCodes]
+    : (Array.isArray(options?.candidateCodes) ? options.candidateCodes : []))
+    .map(normalizeReasonSourceCode)
+    .filter(Boolean));
   const selectedJobs = [];
   const seenJobs = new Set();
   const addJob = (job) => {
@@ -23077,6 +23082,28 @@ function strategyMainlineCollectStars(boards, day, options = {}) {
       addJob(job);
     }
   }
+  const starRecord = (job, row, evidenceScope = 'related-board') => {
+    const code = normalizeReasonSourceCode(row?.code);
+    const star = code ? strategyMainlineStarStatus(row) : null;
+    if (!code || !star) return null;
+    const plateId = String(job?.plateId || '');
+    const observedAt = String(job?.updatedAt || job?.endedAt || row?.priceAsOf || row?.asOf || '').trim();
+    const confirmedBy = star.level === 'confirmed'
+      ? (strategyMainlineIsTradingSessionObservation(day, observedAt) ? 'live-l2-scan' : 'l2-scan-outside-session')
+      : '';
+    return {
+      ...star,
+      code,
+      name: String(row?.name || ''),
+      boardName: String(boardByPlate.get(plateId)?.name || job?.boardName || ''),
+      scanPlateId: plateId,
+      observedAt: observedAt || null,
+      confirmedAt: star.level === 'confirmed' ? (observedAt || null) : null,
+      confirmedBy,
+      actionState: strategyMainlineStarActionState(star.level, confirmedBy),
+      evidenceScope,
+    };
+  };
   for (const job of selectedJobs) {
     const plateId = String(job?.plateId || '');
     const jobStatus = String(job.status || '');
@@ -23094,22 +23121,47 @@ function strategyMainlineCollectStars(boards, day, options = {}) {
       coveredCodes.add(code);
       if (jobDone) completedCoveredCodes.add(code);
       if (byCode.has(code)) continue;
-      const star = strategyMainlineStarStatus(row);
-      const observedAt = String(job?.updatedAt || job?.endedAt || row?.priceAsOf || row?.asOf || '').trim();
-      const confirmedBy = star?.level === 'confirmed'
-        ? (strategyMainlineIsTradingSessionObservation(day, observedAt) ? 'live-l2-scan' : 'l2-scan-outside-session')
-        : '';
-      if (star) byCode.set(code, {
-        ...star,
-        code,
-        name: String(row?.name || ''),
-        boardName: String(boardByPlate.get(plateId)?.name || job.boardName || ''),
-        scanPlateId: plateId,
-        observedAt: observedAt || null,
-        confirmedAt: star.level === 'confirmed' ? (observedAt || null) : null,
-        confirmedBy,
-        actionState: strategyMainlineStarActionState(star.level, confirmedBy),
-      });
+      const record = starRecord(job, row);
+      if (record) byCode.set(code, record);
+    }
+  }
+  // L2 金额、买卖比和封板状态是个股级事实。股票可能先在真实题材板里成为预期明星，
+  // 涨停后却只随“深股通/指数成分”等通用板被再次扫描；若仍只认同板/同家族任务，
+  // 确认事实就无法回挂到该股实际所在的主线卡片。
+  //
+  // 这里只跨板新增“该候选股票最新一次盘中观测已经确认”的强事实；若后续观测已经开板，
+  // 也会撤销较早的当前确认。板块扫描完成度、覆盖率、待处理状态仍只由上面的相关任务计算；
+  // 调用方还会继续经过 themeCodes 成分交集与 strategyMainlineStarAttributionDecision
+  // 主因归属校验，不能凭通用板扫描跨题材错挂。
+  if (candidateCodes.size && dayJobs.length) {
+    const latestCandidateObservation = new Map();
+    for (const job of dayJobs) {
+      const status = String(job?.status || '');
+      if (!['done', 'running'].includes(status) || !Array.isArray(job?.results)) continue;
+      for (const row of job.results) {
+        const code = normalizeReasonSourceCode(row?.code);
+        if (!candidateCodes.has(code) || latestCandidateObservation.has(code)) continue;
+        latestCandidateObservation.set(code, { job, row });
+      }
+      if (latestCandidateObservation.size >= candidateCodes.size) break;
+    }
+    for (const [code, evidence] of latestCandidateObservation) {
+      const record = starRecord(evidence.job, evidence.row, 'candidate-code-latest-state');
+      const current = byCode.get(code);
+      const currentAt = current?.observedAt ? Date.parse(current.observedAt) : NaN;
+      const observedAt = String(evidence.job?.updatedAt || evidence.job?.endedAt ||
+        evidence.row?.priceAsOf || evidence.row?.asOf || '').trim();
+      if (!strategyMainlineIsTradingSessionObservation(day, observedAt)) continue;
+      const evidenceAt = observedAt ? Date.parse(observedAt) : NaN;
+      if (current && Number.isFinite(currentAt) && Number.isFinite(evidenceAt) && currentAt > evidenceAt) continue;
+      if (record?.level === 'confirmed' && record.confirmedBy === 'live-l2-scan') {
+        byCode.set(code, record);
+      } else if (current?.level === 'confirmed') {
+        // 盘中后续任意板块扫描已经观察到开板时，不能继续保留较早的“当前确认”。
+        // 预期/活跃状态仍可作为当前状态；完全不满足明星层级则移除当前明星。
+        if (record && ['expected', 'active'].includes(record.level)) byCode.set(code, record);
+        else byCode.delete(code);
+      }
     }
   }
   return {
@@ -25943,6 +25995,7 @@ function strategyMainlineAugmentPrediction(item, isToday, day, recordTrend = tru
   // 跨来源板块 ID 不同导致任务已完成却无法挂回卡片的问题；最终仍以 themeCodes 交集防止错挂。
   const l2Stars = strategyMainlineCollectStars(item?.resonanceBoards, day, {
     familyKey: item?.familyKey || item?.key || '',
+    candidateCodes: themeCodes,
   });
   const starByCode = l2Stars.byCode;
   const attributionRejected = [];
