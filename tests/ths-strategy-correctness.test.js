@@ -63,6 +63,14 @@ eval(extractFn('strategyMainlineRepresentativeBoardInflow'));
 assert(strategyMainlineRealtimeThemeName('医药电商') === '医药电商', '细分板块医药电商不再泛化成医药');
 assert(strategyMainlineRealtimeThemeName('创新药') === '创新药', '明确细分题材创新药保持原名');
 assert(strategyMainlineRealtimeThemeName('医药概念') === '医药', '纯宽口径医药概念仍规范为医药');
+assert(strategyMainlineRealtimeThemeName('AI视频') === '短剧游戏',
+  '同花顺AI视频统一归入短剧游戏实时主线');
+assert(strategyMainlineRealtimeThemeName('快手概念') === '短剧游戏'
+  && strategyMainlineRealtimeThemeName('小红书概念') === '短剧游戏'
+  && strategyMainlineRealtimeThemeName('文化传媒概念') === '短剧游戏',
+'同花顺快手、小红书和文化传媒实时板统一显示为短剧游戏');
+assert(strategyMainlineRealtimeThemeName('AI应用') === 'AI应用',
+  '宽口径AI应用保持独立显示，不冒充算力AI或短剧游戏');
 
 const seed = strategyCreateMainlineSeed('医药电商', '医药电商');
 strategyMainlineRecordNetInflow(seed, { name: '创新药', zsType: 5 }, 5e8);

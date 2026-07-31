@@ -25,9 +25,10 @@ const STRATEGY_MAINLINE_STAR_LEVEL_ORDER = { confirmed: 0, expected: 1, active: 
 // 题材归类 stub:模拟生产漂移场景——"算力AI"与"算力"同归 group:算力AI;"白酒"独立;未知词原样。
 const strategyMainlineFamilyInfo = (x) => {
   const theme = String(x?.theme || '').trim();
-  if (theme === '算力AI' || theme === '算力') return { key: 'group:算力AI' };
-  return { key: `theme:${theme}` };
+  if (theme === '算力AI' || theme === '算力') return { key: 'group:算力AI', label: '算力AI' };
+  return { key: String(x?.key || `theme:${theme}`), label: theme };
 };
+eval(extractFn('strategyPredictCandidateKey'));
 eval(extractFn('strategyPredictStarTransitions'));
 eval(extractFn('strategyMainlineExpectedTransitionMap'));
 eval(extractFn('strategyMainlineStarAttributionDecision'));

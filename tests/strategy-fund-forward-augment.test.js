@@ -38,7 +38,7 @@ const readSavedApiKey = async () => 'test-key';
 const strategyApplyThsDdeFundFlow = async () => {};
 const snapshotPath = (day, z) => `snap:${z}:${day}`;
 // zs6 当日快照:7 块涨幅前排,不含 BK1008/BK0579(2026-07-20 云端实况)
-const zs6Snapshot = { boards: [1, 2, 3, 4, 5, 6, 7].map(i => ({
+const zs6Snapshot = { day: '2026-07-20', savedAt: '2026-07-20T06:00:00.000Z', boards: [1, 2, 3, 4, 5, 6, 7].map(i => ({
   plateId: `BKS${i}`, name: `快照板${i}`, gain: 4 - i * 0.2, ztCount: 1, netInflow: 1e8, superLargeNetInflow: 1e8,
 })), cardData: {} };
 const fsWrites = [];
@@ -87,6 +87,11 @@ const strategyMainlineWithTimeout = async (p) => p;
 const strategyMainlineNormalizeRisingStock = () => null;
 const strategyMainlineIsNearLimitStock = () => false;
 const strategyMainlineBoardBreadth = () => null;
+const strategyMainlineBoardAutoScanEligibility = board => {
+  const netInflow = numOrNull(board?.netInflow);
+  const zt = numOrNull(board?.zt ?? board?.ztCount);
+  return { eligible: !!board?.plateId && netInflow >= 5e8 && zt >= 2, netInflow, zt };
+};
 eval(extractFn('strategyMainlineEnrichBoardsWithRisingStocks'));
 
 (async () => {
@@ -100,8 +105,11 @@ eval(extractFn('strategyMainlineEnrichBoardsWithRisingStocks'));
     '快照非空时,f66 前排的国资云概念/云计算仍被补进策略板池——Codex P1 核心场景');
   A([1, 2, 3, 4, 5, 6, 7].every(i => names.includes(`快照板${i}`)), '快照原有 7 块全部保留');
   const gzy = out.boards.find(b => b.name === '国资云概念');
-  A(gzy.fundForward === true && out.boards.find(b => b.name === '快照板1').fundForward !== true,
-    '补进的板带 fundForward 标记;快照原有板不带(供补选通道与诊断区分)');
+  A(gzy.fundForward === true && out.boards.find(b => b.name === '快照板1').fundForward === true,
+    '补进的板与实时榜再次命中的既有快照板都带 fundForward 标记');
+  A(out.boards.find(b => b.name === '快照板1').sourceDay === '2026-07-20'
+    && out.boards.find(b => b.name === '快照板1').sourceKind === 'snapshot',
+  '快照板保留 payload 内部日期和来源形态，供跨日防污染');
   A(!names.includes('流出板'), 'f66 净流出板不入资金补选(带符号语义)');
   A(hydrated.length === 2, '仅对缺失的 2 块做成分补水(不重复拉快照已有板)');
   A(fsWrites.length === 0, '绝不回写快照文件(只补内存板池)');

@@ -58,8 +58,9 @@ A(src.includes("const STRATEGY_MAINLINE_STRICT_QI_START_DAY = '2026-07-16'")
 // 2026-07-26 命中率日期锚点修正:路由先取 requestedDay(源于 url.searchParams.get('day'))再传入 Visible,
 // 锁的意图不变——正式页面接口必须把请求日传给 getStrategyMainlinesVisible。
 A(/const requestedDay = url\.searchParams\.get\('day'\) \|\| chinaNowParts\(\)\.day;\s*\n\s*const payload = await getStrategyMainlinesVisible\(requestedDay\)/.test(src)
-  && src.includes('strategyMainlineAttachExpectedHistoryPayload(payload, predict, { attributionByCode })'),
-  '正式页面接口对旧缓存与冻结快照先做明星主因归属校验，再补历史预期证据并执行严格 QI 过滤');
+  && src.includes('strategyMainlineRestoreIntradayStickyPrediction(')
+  && src.includes('strategyMainlineAttachExpectedHistoryPayload(withIntradaySticky, predict, { attributionByCode })'),
+  '正式页面接口先恢复同日明星候选并做主因归属校验，再补历史预期证据并执行严格 QI 过滤');
 A(src.includes("options?.leaderDebug || !strategyMainlineUsesStrictQi(isoDay)\n    ? { kept: inflowGate.kept, reserve: [], excluded: [] }"), '管理员复核保留完整候选池,旧历史日期也不受新门槛影响(含预备层空位)');
 const autoScanMatch = src.match(/strategyMainlineMaybeAutoScan\(\s*\[\.\.\.\(boardPayload\?\.boards \|\| \[\]\), \.\.\.\(catalogScanBoards \|\| \[\]\)\]/);
 const autoScanAt = autoScanMatch ? autoScanMatch.index : -1;
@@ -144,9 +145,13 @@ A(gated.excluded.some(x => x.theme === '半导体' && x.reason === 'l2-scan-wait
 A(gated.excluded.some(x => x.theme === '消费' && x.reason === 'qi-status-without-star-evidence'), '只有 active 不能冒充 QI 正证据');
 
 // 6a. 盘中一旦出现预期明星，当日资格不可逆；收盘未确认只标“未兑现”，不删除主线卡。
-eval(extractFn('strategyMainlineExpectedTransitionMap'));
 // 漂移回退匹配依赖题材归类;测试用直通 stub(theme 原样归类),漂移专项在 strategy-expected-star-sticky.test.js
-const strategyMainlineFamilyInfo = (x) => ({ key: `theme:${String(x?.theme || '').trim()}` });
+const strategyMainlineFamilyInfo = (x) => ({
+  key: String(x?.key || `theme:${String(x?.theme || '').trim()}`),
+  label: String(x?.theme || '').trim(),
+});
+eval(extractFn('strategyPredictCandidateKey'));
+eval(extractFn('strategyMainlineExpectedTransitionMap'));
 eval(extractFn('strategyMainlineStarAttributionDecision'));
 eval(extractFn('strategyMainlineResolveExpectedHistory'));
 eval(extractFn('strategyMainlineStarActionState'));
