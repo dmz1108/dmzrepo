@@ -63,8 +63,8 @@ eval(extractFn('strategyMainlineRepresentativeBoardInflow'));
 assert(strategyMainlineRealtimeThemeName('医药电商') === '医药电商', '细分板块医药电商不再泛化成医药');
 assert(strategyMainlineRealtimeThemeName('创新药') === '创新药', '明确细分题材创新药保持原名');
 assert(strategyMainlineRealtimeThemeName('医药概念') === '医药', '纯宽口径医药概念仍规范为医药');
-assert(strategyMainlineRealtimeThemeName('AI视频') === 'AI视频',
-  '同花顺AI视频保持独立实时主线名称');
+assert(strategyMainlineRealtimeThemeName('AI视频') === '短剧游戏',
+  '同花顺AI视频统一归入短剧游戏实时主线');
 assert(strategyMainlineRealtimeThemeName('快手概念') === '短剧游戏'
   && strategyMainlineRealtimeThemeName('小红书概念') === '短剧游戏'
   && strategyMainlineRealtimeThemeName('文化传媒概念') === '短剧游戏',

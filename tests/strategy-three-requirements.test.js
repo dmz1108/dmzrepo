@@ -24,6 +24,10 @@ const numOrNull = v => { const n = Number(v); return Number.isFinite(n) ? n : nu
 const isFiniteNumeric = v => Number.isFinite(Number(v)) && v !== null && v !== '';
 const normalizeReasonSourceCode = c => String(c || '').replace(/\D/g, '').slice(0, 6);
 const isoFromCompactDate = d => String(d);
+const strategyMainlineFamilyInfo = item => ({
+  key: String(item?.key || (item?.theme ? `theme:${item.theme}` : '')).trim(),
+  label: String(item?.theme || '').trim(),
+});
 const STRATEGY_MAINLINE_THREE_REQ_START_DAY = '2026-07-21';
 const STRATEGY_MAINLINE_FORMAL_MIN_ZT = 3;
 eval(extractFn('strategyMainlineUsesThreeRequirements'));

@@ -23,6 +23,14 @@ let existingPredict = null;
 const stubs = `
 const isFiniteNumeric = v => Number.isFinite(Number(v)) && v !== null && v !== '' && v !== undefined;
 const normalizeReasonSourceCode = v => String(v || '').replace(/\\D/g, '').trim();
+const strategyMainlineFamilyInfo = item => {
+  const theme = String(item?.theme || '').trim();
+  if (theme === 'AI视频') return { key: 'theme:短剧游戏', label: '短剧游戏' };
+  return {
+    key: String(item?.key || (theme ? 'theme:' + theme : '')).trim(),
+    label: theme,
+  };
+};
 const STRATEGY_MAINLINE_DATA_DIR = '/fake';
 const strategyMainlinePredictPath = d => '/fake/mainline-predict-' + d + '.json';
 const fs = {
@@ -148,10 +156,11 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
       starStocks: [{ code: '300058', name: '蓝色光标', level: 'confirmed' }] },
   ], null);
   const stickyWritten = written['/fake/mainline-predict-2026-07-14.json'];
-  const stickyAiVideo = stickyWritten.candidates.find(row => row.theme === 'AI视频');
+  const stickyAiVideo = stickyWritten.candidates.find(row => row.theme === '短剧游戏');
   A(stickyAiVideo && stickyAiVideo.intradaySticky === true
+    && stickyAiVideo.mergedThemes.includes('AI视频')
     && stickyAiVideo.stars.some(star => star.code === '300418' && star.level === 'confirmed'),
-  '实时板块池不再返回 AI视频时，保留当天已确认明星的候选档案');
+  '实时板块池不再返回 AI视频时，按短剧游戏统一家族保留当天已确认明星的候选档案');
   A(!stickyWritten.candidates.some(row => row.theme === '普通候选'),
     '仅 active 的普通候选不会被粘性保留');
 
@@ -204,7 +213,7 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
   A(p.top.map(t => t.theme).join(',') === '算力AI,医药', '顶层兼容层=东财单源,不是跨源并集(无同题材重复占位)');
   A(p.top.length === 2 && !p.top.some((t, i) => p.top.findIndex(x => x.theme === t.theme) !== i), '顶层无重复题材占位');
 
-  // 4b. 粘性候选严格按来源保存：同花顺 AI视频不能串入东财块。
+  // 4b. 粘性候选严格按来源保存：同花顺 AI视频归入短剧游戏后仍不能串入东财块。
   existingPredict = {
     savedAt: '2026-07-14T03:00:00.000Z',
     bySource: {
@@ -221,8 +230,9 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
     ths: { available: true, hasMainlines: false, zsType: 5, mainlines: [] },
   }, { key: '' });
   const isolated = written['/fake/mainline-predict-2026-07-14.json'];
-  A(!isolated.bySource.eastmoney.candidates.some(row => row.theme === 'AI视频')
-    && isolated.bySource.ths.candidates.some(row => row.theme === 'AI视频' && row.intradaySticky === true),
+  A(!isolated.bySource.eastmoney.candidates.some(row => row.theme === '短剧游戏')
+    && isolated.bySource.ths.candidates.some(row => row.theme === '短剧游戏'
+      && row.mergedThemes.includes('AI视频') && row.intradaySticky === true),
   '同花顺粘性候选只留在同花顺预测块，不跨源污染东财');
 
   // 5. 来源暂缺必须与“来源可用但无主线”分开落库，供回看永久解释。

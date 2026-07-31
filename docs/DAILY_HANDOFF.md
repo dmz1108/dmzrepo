@@ -11580,12 +11580,18 @@ Changed:
   `expected/confirmed` 事实仍保留在轨迹；页面恢复卡明确标为
   `intradaySticky/currentObservation=false`，不冒充当前实时板块值。
 - 东财、同花顺各自在自己的预测块内合并候选，禁止跨源串线；恢复后仍经过现有主因
-  归属过滤和正式三要件。AI 视频有确认明星但无合格龙头时仍是预备主线，不放宽门槛。
+  归属过滤和正式三要件，不放宽确认明星、合格龙头或至少 3 只涨停的正式门槛。
+- 修复策略候选只取前 5 个主通道和 3 个补选造成的强板漏检：同日来源快照中已经满足
+  现有自动 L2 硬门槛的板块，不再受展示候选数量截断；昨日或内部日期缺失的快照仍
+  拒绝进入。实时资金榜再次命中的既有快照板也会正确携带 `fundForward`。
 - 预测候选补存来源资金口径、原始明星 L2 证据、板块 ID 与首末观察时点；每日盘中
   观察同时记录正式与预备主线，便于后续审计。
-- `AI视频` 保持独立细分主线，不被短剧游戏或算力 AI 吞并；快手概念、小红书概念、
-  文化传媒概念、出海广告等归入短剧游戏。`AI应用` 保持独立宽口径，主因同时包含
-  宽词和具体词时具体词优先，避免“AI应用+出海广告”被宽词错误吸收。
+- 按 Owner 最终口径把 `AI视频/文生视频/视频生成/Sora` 与快手、小红书、短剧互动
+  游戏、文化传媒、出海广告统一归入 `短剧游戏`；`AI应用` 仍保持独立宽口径。
+  主因同时包含宽词和具体词时具体词优先，避免“AI应用+出海广告”被宽词错误吸收。
+- 当天已经落盘的旧 `theme:AI视频` 候选和明星轨迹会在读取/续写时规范成
+  `theme:短剧游戏`，不会在页面形成 AI 视频与短剧游戏两张重复卡；规范化仍严格
+  限于各自来源块，东财与同花顺不串线。
 - 兼容当天已落盘的旧 `familyKey`：消费 L2 任务时按 `boardName` 使用当前词典重新
   归一；同时间的直接同族证据优先于候选回填证据，因此可保留“快手概念”涨停前
   预期明星的真实板块和时点。
@@ -11598,6 +11604,8 @@ Files:
 - `tests/strategy-three-requirements.test.js`
 - `tests/strategy-intraday-sticky-candidate.test.js`
 - `tests/strategy-star-attribution.test.js`
+- `tests/scan-supplement.test.js`
+- `tests/strategy-fund-forward-augment.test.js`
 - `tests/star-l2-layers.test.js`
 - `tests/ths-strategy-correctness.test.js`
 - `docs/DAILY_HANDOFF.md`
@@ -11613,6 +11621,16 @@ Validated:
 - 同花顺 AI 视频曾以 8 只涨停、DDE 大单活动约 11.47 亿元进入预备主线，含
   昆仑万维确认明星、天龙集团预期明星；05:30 预测档仍有该候选，06:06 新写档案
   已删除候选但保留两条 AI 视频 `starTransitions`，证明是覆盖丢卡。
+- 7 月 31 日来源快照回放：同花顺 `AI视频` rank1（+8.15%、9 涨停）、
+  `快手概念` rank2（+7.65%、10 涨停）、`小红书概念` rank5（+6.91%、11 涨停）
+  均归入 `theme:短剧游戏`。东财 `快手概念` rank8（+6.89%、超大单净流入
+  50.63 亿元、7 涨停）与 `短剧互动游戏` rank13（+6.23%、超大单净流入
+  48.34 亿元、8 涨停）均通过既有硬门槛进入候选，不再被 top5 截断。
+- 同花顺/东财快照及预测档 SHA-256：
+  `27659b07d4094ce0a9b5cd857efd7297a35d6c2a79eb101b668e86da6e9fc9ec`、
+  `bb55fec17a841706f8c0073f1742c9bc2c8d305ba1f504449b9826f32a2b4106`、
+  `0bf7e7299636ed495bcf82d422dc48f991b38eface45fcee569a011545671f35`；
+  运行时 JSON 未进入 Git。
 - 队列候选选择只接受交易时段内的最新有效观测；新增回归锁定“收盘后复盘任务不得
   先占 code 并遮蔽更早的盘中确认”。
 - 两份预测档安全摘录 SHA-256：
@@ -11622,6 +11640,8 @@ Validated:
 - `node --check kpl-stats-server.js`
 - `node tests/predict-records.test.js`
 - `node tests/strategy-intraday-sticky-candidate.test.js`
+- `node tests/scan-supplement.test.js`
+- `node tests/strategy-fund-forward-augment.test.js`
 - `node tests/star-l2-layers.test.js`
 - `node tests/strategy-star-attribution.test.js`
 - `node tests/strategy-three-requirements.test.js`
@@ -11635,14 +11655,16 @@ Deployment:
 
 Notes for next agent:
 - 复审重点：候选粘性只在同一交易日、同一来源生效；仅 `expected/confirmed` 可恢复；
-  恢复卡仍须通过归属过滤与“确认明星 + 合格龙头 + 至少 3 只同家族涨停”正式门槛。
+  同日强板补入不得接纳跨日快照；恢复卡仍须通过归属过滤与“确认明星 + 合格龙头 +
+  至少 3 只同家族涨停”正式门槛。
 - 蓝色光标应归入短剧游戏：涨停前采用快手/小红书同族 L2 证据，封板时可复用通用板
   的股票级确认；通用板不得冒充短剧家族覆盖，且不能把它重新吸收到算力 AI。
 - AI视频的内部 `plateId=309118` 与指数代码 `886068` 指向同一板块；该单板源不含
-  蓝色光标，因此不把它伪造成直接成分；AI视频仍作为独立主线保留和展示。
-- 部署时若要恢复 2026-07-31 已被旧代码覆盖掉的 AI 视频卡，只能用部署前已捕获且
-  SHA 固定的真实预测片段做一次有备份的合并；不得从 `starTransitions` 猜造资金、
-  涨停数或确认明星。
+  蓝色光标，因此不把它伪造成直接成分。AI视频只在家族层与快手/小红书/短剧游戏
+  归并，个股仍必须来自真实成员或同族候选证据。
+- 部署时若要恢复 2026-07-31 已被旧代码覆盖掉的短视频家族候选，只能用部署前已
+  捕获且 SHA 固定的真实预测片段做一次有备份的合并；不得从 `starTransitions`
+  猜造资金、涨停数或确认明星。
 
 ## 2026-07-30 - Codex - 上线 L2 终盘确认核验
 

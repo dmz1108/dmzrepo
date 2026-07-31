@@ -27,6 +27,17 @@ function makeEnrich(risingLimit, supplementLimit) {
     const STRATEGY_MAINLINE_RISING_BOARD_LIMIT = ${risingLimit};
     const STRATEGY_MAINLINE_SUPPLEMENT_BOARDS = ${supplementLimit};
     let strategyMainlineSupplementState = null;
+    const numOrNull = value => value == null || value === '' || !Number.isFinite(Number(value)) ? null : Number(value);
+    const isoFromCompactDate = value => String(value || '');
+    const strategyMainlineBoardAutoScanEligibility = board => {
+      const netInflow = numOrNull(board?.netInflow);
+      const zt = numOrNull(board?.zt ?? board?.ztCount);
+      return {
+        eligible: !!board?.plateId && netInflow != null && netInflow >= 5e8 && zt != null && zt >= 2,
+        netInflow,
+        zt,
+      };
+    };
     const mapLimit = async (arr) => { ctx.captured = arr; };
   `;
   const epilogue = `
@@ -102,12 +113,30 @@ const board = (plateId, name, zt, gainPct, netInflow) => ({ plateId, name, zt, g
   A(ids5.includes('I') && ids5.includes('D2') && t5.captured.find(b => b.plateId === 'I').scanChannel === 'supplement', '宽池板块经补选通道进入(I/D2)');
   A(t5.state.picked.map(p => p.plateId).sort().join(',') === 'D2,I', '补选观测记录宽池来源');
 
-  // 6. buildStrategyMainlinesLive 接线事实(静态断言):boardPool 按补选配置放宽 + enrich 后裁剪未选中板块
+  // 6. 同日快照中的硬门槛板不能被 top-5 / 补选上限截掉；跨日快照仍不得冒充今日。
+  const t6 = makeEnrich(2, 0);
+  const b6 = [
+    { ...board('P1', '主板1', 5, 5, 9e8), sourceKind: 'snapshot', sourceDay: '2026-07-31' },
+    { ...board('P2', '主板2', 4, 4, 8e8), sourceKind: 'snapshot', sourceDay: '2026-07-31' },
+    // 2026-07-31 东财真实快照形状：快手 rank8、短剧互动游戏 rank13，旧 top5 会同时丢失。
+    { ...board('FAST', '快手概念', 7, 6.89, 50.62806432e8), sourceKind: 'snapshot', sourceDay: '2026-07-31' },
+    { ...board('SHORT', '短剧互动游戏', 8, 6.23, 48.33823056e8), sourceKind: 'snapshot', sourceDay: '2026-07-31' },
+    { ...board('STALE', '昨日强板', 9, 9, 99e8), sourceKind: 'snapshot', sourceDay: '2026-07-30' },
+  ];
+  await t6.run(b6, '2026-07-31', { realtimeSource: 'snapshot', primaryPool: 2 });
+  A(t6.captured.map(b => b.plateId).join(',') === 'P1,P2,FAST,SHORT',
+    '东财 rank8 快手与 rank13 短剧都进入候选，昨日强板仍被拒绝');
+  A(b6[2].scanChannel === 'gate-qualified' && b6[3].scanChannel === 'gate-qualified'
+    && t6.state.hardQualified.length === 2
+    && t6.state.hardQualified.every(row => row.qualification === 'existing-l2-auto-scan-gate'),
+  '两张短视频强板均有独立硬门槛通道和可审计依据，不占用补选数量');
+
+  // 7. buildStrategyMainlinesLive 接线事实(静态断言):boardPool 按补选配置放宽 + enrich 后裁剪未选中板块
   A(src.includes('boardPool: STRATEGY_MAINLINE_LIVE_BOARD_POOL + STRATEGY_MAINLINE_SUPPLEMENT_BOARDS'), 'boardPool 已按补选配置放宽(补选真正看到 top-5 之外的实时候选)');
   A(src.includes('boardPayload.boards = boardPayload.boards.filter(b => b && b.scanChannel)'), 'enrich 后仅保留已选中板块进 seeds(未选中板块不改变原有语义)');
   A(src.includes('primaryPool: STRATEGY_MAINLINE_LIVE_BOARD_POOL'), '调用点传入 primaryPool 锁定主通道候选范围');
 
-  // 7. scanSupplement 跨日不污染:仅当状态 day 与响应 day/requestedDay 一致时输出
+  // 8. scanSupplement 跨日不污染:仅当状态 day 与响应 day/requestedDay 一致时输出
   const metaSrc = extractFn('strategyMainlineAttachResponseMeta');
   const makeMeta = (stateDay) => {
     let out;

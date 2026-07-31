@@ -145,9 +145,13 @@ A(gated.excluded.some(x => x.theme === '半导体' && x.reason === 'l2-scan-wait
 A(gated.excluded.some(x => x.theme === '消费' && x.reason === 'qi-status-without-star-evidence'), '只有 active 不能冒充 QI 正证据');
 
 // 6a. 盘中一旦出现预期明星，当日资格不可逆；收盘未确认只标“未兑现”，不删除主线卡。
-eval(extractFn('strategyMainlineExpectedTransitionMap'));
 // 漂移回退匹配依赖题材归类;测试用直通 stub(theme 原样归类),漂移专项在 strategy-expected-star-sticky.test.js
-const strategyMainlineFamilyInfo = (x) => ({ key: `theme:${String(x?.theme || '').trim()}` });
+const strategyMainlineFamilyInfo = (x) => ({
+  key: String(x?.key || `theme:${String(x?.theme || '').trim()}`),
+  label: String(x?.theme || '').trim(),
+});
+eval(extractFn('strategyPredictCandidateKey'));
+eval(extractFn('strategyMainlineExpectedTransitionMap'));
 eval(extractFn('strategyMainlineStarAttributionDecision'));
 eval(extractFn('strategyMainlineResolveExpectedHistory'));
 eval(extractFn('strategyMainlineStarActionState'));

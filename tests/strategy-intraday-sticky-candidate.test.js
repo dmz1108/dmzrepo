@@ -26,6 +26,14 @@ const isFiniteNumeric = value => value !== null && value !== undefined && value 
 const normalizeReasonSourceCode = value => String(value || '').replace(/\\D/g, '').trim();
 const isoFromCompactDate = value => String(value || '').slice(0, 10);
 const chinaNowParts = () => ({ day: '2026-07-31' });
+const strategyMainlineFamilyInfo = item => {
+  const theme = String(item?.theme || '').trim();
+  if (theme === 'AI视频') return { key: 'theme:短剧游戏', label: '短剧游戏' };
+  return {
+    key: String(item?.key || (theme ? 'theme:' + theme : '')).trim(),
+    label: theme,
+  };
+};
 const strategyMainlineStarActionState = level => level === 'confirmed' ? 'buy-point-observed' : 'watch';
 function strategyMainlineFilterAttributedStars(item, attributionByCode) {
   if (!(attributionByCode instanceof Map)) return item;
@@ -112,8 +120,9 @@ const predict = {
 };
 
 const restored = strategyMainlineRestoreIntradayStickyPrediction(payload, predict);
-const restoredAi = restored.mainlinesBySource.ths.reserveMainlines.find(row => row.theme === 'AI视频');
-A(!!restoredAi, '同花顺 AI视频 从当天预测档恢复到预备主线');
+const restoredAi = restored.mainlinesBySource.ths.reserveMainlines.find(row => row.theme === '短剧游戏');
+A(!!restoredAi && restoredAi.mergedThemes.includes('AI视频'),
+  '同花顺 AI视频 按短剧游戏统一家族从当天预测档恢复到预备主线');
 A(restoredAi.intradaySticky === true && restoredAi.currentObservation === false,
   '恢复卡明确标记为盘中历史轨迹，不冒充当前实时板块数据');
 A(restoredAi.count === 8 && restoredAi.netInflow === 1146847200,
@@ -123,7 +132,7 @@ A(restoredAi.starStocks.some(star => star.code === '300418' && star.level === 'c
   '确认明星与预期明星轨迹同时保留');
 A(restored.mainlinesBySource.eastmoney.reserveMainlines.length === 0,
   '同花顺候选不串入东财来源');
-A(restored.reserveMainlines.some(row => row.theme === 'AI视频' && row.source === 'ths'),
+A(restored.reserveMainlines.some(row => row.theme === '短剧游戏' && row.source === 'ths'),
   '顶层兼容预备列表同步包含来源标记');
 A(!restored.mainlinesBySource.ths.reserveMainlines.some(row => row.theme === '普通'),
   '仅 active、从未成为预期/确认明星的候选不恢复');

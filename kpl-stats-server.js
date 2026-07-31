@@ -20795,6 +20795,8 @@ async function getDayBoardsWithMembers(day, options = {}) {
   const zsTypes = Array.isArray(options.zsTypes) && options.zsTypes.length ? options.zsTypes : [6, 5, 7];
   const bmap = new Map();
   const absorbPayload = async (payload, z, sourceKind = 'snapshot') => {
+    const payloadSourceDay = isoFromCompactDate(payload?.sourceDay || payload?.day || '');
+    const payloadSavedAt = String(payload?.asOf || payload?.savedAt || payload?.generatedAt || '').trim();
     let hidden; try { hidden = await getPermanentHiddenSet(z); } catch { hidden = new Set(); }
     const cardData = payload?.cardData || {};
     for (const b of (Array.isArray(payload?.boards) ? payload.boards : [])) {
@@ -20828,6 +20830,9 @@ async function getDayBoardsWithMembers(day, options = {}) {
         netInflowLegacy: fundFlow.legacy,
         gainPct,
         zt,
+        sourceKind,
+        sourceDay: payloadSourceDay,
+        sourceSavedAt: payloadSavedAt,
       };
       const winner = (!cur || (Number(zt) || 0) > (Number(cur.zt) || 0))
         ? {
@@ -20841,6 +20846,9 @@ async function getDayBoardsWithMembers(day, options = {}) {
             netInflowLegacy: fundFlow.legacy,
             gainPct,
             codes,
+            sourceKind,
+            sourceDay: payloadSourceDay,
+            sourceSavedAt: payloadSavedAt,
           }
         : cur;
       winner.bySource = bySource;
@@ -20892,10 +20900,15 @@ async function getDayBoardsWithMembers(day, options = {}) {
     const apiKey = await readSavedApiKey().catch(() => '');
     if (apiKey) {
       const knownPlateIds = new Set();
+      const entryBySourcePlate = new Map();
       for (const entry of bmap.values()) {
         for (const s of Object.values(entry.bySource || {})) {
           const pid = String(s?.plateId || '').trim();
-          if (pid) knownPlateIds.add(`${Number(s.zsType)}:${pid}`);
+          if (pid) {
+            const sourcePlateKey = `${Number(s.zsType)}:${pid}`;
+            knownPlateIds.add(sourcePlateKey);
+            entryBySourcePlate.set(sourcePlateKey, entry);
+          }
         }
       }
       await mapLimit(zsTypes.map(Number).filter(z => z === 6 || z === 5), 2, async z => {
@@ -20909,6 +20922,19 @@ async function getDayBoardsWithMembers(day, options = {}) {
           const candidates = z === Number(THS_ZS_TYPE)
             ? await strategyPrepareThsLiveCandidates(visibleBoards, requestedDay, boardPool)
             : strategyEastFundCandidateUnion(visibleBoards, boardPool);
+          // 候选已经存在于同日快照时也必须标成 fund-forward。旧逻辑只标“快照里完全没有”
+          // 的板，导致一个板明明被实时资金榜再次选中，却因已存在而失去实时补选资格。
+          for (const candidate of candidates) {
+            const pid = String(candidate?.plateId || '').trim();
+            const sourcePlateKey = pid ? `${z}:${pid}` : '';
+            const existingEntry = sourcePlateKey ? entryBySourcePlate.get(sourcePlateKey) : null;
+            if (!existingEntry) continue;
+            existingEntry.fundForward = true;
+            existingEntry.fundForwardSources = [...new Set([
+              ...(Array.isArray(existingEntry.fundForwardSources) ? existingEntry.fundForwardSources : []),
+              z,
+            ])];
+          }
           const missing = candidates.filter(b => {
             const pid = String(b?.plateId || '').trim();
             return pid && !knownPlateIds.has(`${z}:${pid}`);
@@ -21273,7 +21299,6 @@ const STRATEGY_MAINLINE_MERGE_GROUPS = new Set([
   '消费电子/显示',
 ]);
 const STRATEGY_MAINLINE_KEEP_FINE_THEMES = new Set([
-  'AI视频',
   '短剧游戏',
   'AI应用',
 ]);
@@ -22262,6 +22287,7 @@ async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day, options
     )
     .slice(0, STRATEGY_MAINLINE_RISING_BOARD_LIMIT);
   for (const b of primary) { if (b) b.scanChannel = 'primary'; }
+  const chosen = new Set(primary.map(b => String(b?.plateId || '')).filter(Boolean));
   // 补选通道(会签约束2/3):只有真盘中数据可补选,快照不得伪装成盘中证据。
   // realtimeSource='live':全量 list 参与(原行为不变)。
   // realtimeSource='snapshot':唯有 fundForward===true 的板可参与——它们是快照命中后
@@ -22273,7 +22299,6 @@ async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day, options
     : list.filter(b => b && b.fundForward === true);
   const supplements = [];
   if (STRATEGY_MAINLINE_SUPPLEMENT_BOARDS > 0 && supplementPool.length) {
-    const chosen = new Set(primary.map(b => String(b?.plateId || '')));
     const ranked = supplementPool.slice().sort((a, b) =>
       (Number(b?.netInflow) || 0) - (Number(a?.netInflow) || 0) ||
       (Math.max(0, Number(b?.gainPct) || 0)) - (Math.max(0, Number(a?.gainPct) || 0)));
@@ -22293,6 +22318,36 @@ async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day, options
       supplements.push(b);
     }
   }
+  // 强门槛候选不得再被“前 5 主通道 + 3 个补选”的展示预算截断。只要板块已经满足
+  // 自动 L2 扫描的原有硬条件(东财超大单净流入≥5亿；同花顺 DDE≥5亿且 zjjlr>0；
+  // 两源均须涨停≥2)，它就必须进入后续主线/明星验证。这里不降低任何门槛，只修复
+  // “还没验证就被候选池截掉”的覆盖缺口。
+  //
+  // 快照只有在 payload 内部 sourceDay 与目标日一致时才可走此通道；昨日快照、缺日期
+  // 快照仍不能冒充今日实时证据。live/fund-forward 本身是当日请求，可直接参与。
+  const gateQualified = [];
+  for (const b of list) {
+    const pid = String(b?.plateId || '');
+    if (!pid || chosen.has(pid)) continue;
+    const liveBacked = realtimeSource === 'live' || b?.sourceKind === 'live' || b?.fundForward === true;
+    const sameDaySnapshot = b?.sourceKind === 'snapshot'
+      && isoFromCompactDate(b?.sourceDay || '') === isoFromCompactDate(day || '');
+    if (!liveBacked && !sameDaySnapshot) continue;
+    const eligibility = strategyMainlineBoardAutoScanEligibility(b);
+    if (!eligibility.eligible) continue;
+    chosen.add(pid);
+    b.scanChannel = 'gate-qualified';
+    b.supplementBasis = {
+      netInflow: eligibility.netInflow,
+      gainPct: numOrNull(b?.gainPct),
+      zt: eligibility.zt,
+      liveRankIndex: list.indexOf(b) + 1,
+      qualification: 'existing-l2-auto-scan-gate',
+      sourceDay: String(b?.sourceDay || ''),
+      ...(b?.fundForward === true ? { fundForward: true } : {}),
+    };
+    gateQualified.push(b);
+  }
   // 三审修正2:诊断模式(recordState:false)不得覆盖全局补选观测状态——那是正式请求的运行态。
   if (options.recordState !== false) {
     strategyMainlineSupplementState = {
@@ -22306,9 +22361,15 @@ async function strategyMainlineEnrichBoardsWithRisingStocks(boards, day, options
       limit: STRATEGY_MAINLINE_SUPPLEMENT_BOARDS,
       // picked 即"若无补选会漏掉的板块"清单(它们都不在主通道 top-5 里)
       picked: supplements.map(b => ({ name: String(b?.name || ''), plateId: String(b?.plateId || ''), ...b.supplementBasis })),
+      // hardQualified 不受补选数量上限影响，但每一项都已经通过现有自动扫描硬门槛。
+      hardQualified: gateQualified.map(b => ({
+        name: String(b?.name || ''),
+        plateId: String(b?.plateId || ''),
+        ...b.supplementBasis,
+      })),
     };
   }
-  const targets = [...primary, ...supplements];
+  const targets = [...primary, ...supplements, ...gateQualified];
   await mapLimit(targets, 6, async board => {
     const plateId = String(board?.plateId || '');
     if (!plateId) return;
@@ -24006,16 +24067,27 @@ function strategyMainlineEmptyPayload(day, requestedDay, reason, message, sessio
 // 供第二阶段用真实样本定胜率去重/低置信规则。只扩记录:top 结构与回看统计均不动。
 function strategyPredictCandidateRecord(m, observedAt = '') {
   if (!m) return null;
+  const rawTheme = String(m?.theme || '').trim();
+  const family = strategyMainlineFamilyInfo({
+    theme: rawTheme,
+    key: m?.familyKey || m?.key,
+  });
+  const normalizeShortVideo = family?.key === 'theme:短剧游戏';
+  const recordKey = String(normalizeShortVideo ? family.key : (m?.familyKey || m?.key || '')).trim();
+  const recordTheme = String(normalizeShortVideo ? family.label : rawTheme).trim();
   const stock = s => s ? {
     code: s.code || '', name: s.name || '',
     gain: isFiniteNumeric(s.gain) ? Number(s.gain) : null,
   } : null;
   const recordAt = String(observedAt || m.lastObservedAt || m.observedAt || '').trim();
   return {
-    key: m.familyKey || m.key || '',
-    familyKey: m.familyKey || '',          // 族归属(现状=归并族键;active node 细分待第二阶段)
-    theme: m.theme || '',
-    mergedThemes: Array.isArray(m.mergedThemes) ? m.mergedThemes.slice(0, 8) : [],
+    key: recordKey,
+    familyKey: recordKey,                  // 族归属(现状=归并族键;active node 细分待第二阶段)
+    theme: recordTheme,
+    mergedThemes: [...new Set([
+      ...(Array.isArray(m.mergedThemes) ? m.mergedThemes : []),
+      ...(rawTheme && rawTheme !== recordTheme ? [rawTheme] : []),
+    ])].slice(0, 8),
     rank: m.rank || 0,
     score: m.score ?? null,
     predictScore: m.predictScore ?? null,
@@ -24085,7 +24157,10 @@ function strategyPredictCandidateRecord(m, observedAt = '') {
 }
 
 function strategyPredictCandidateKey(row) {
-  return String(row?.familyKey || row?.key || row?.theme || '').trim();
+  const rawKey = String(row?.familyKey || row?.key || row?.theme || '').trim();
+  const theme = String(row?.theme || row?.mainlineTheme || '').trim();
+  const normalized = strategyMainlineFamilyInfo({ theme, key: rawKey });
+  return String(normalized?.key === 'theme:短剧游戏' ? normalized.key : rawKey).trim();
 }
 
 function strategyPredictMergeStickyCandidates(currentRows, existingRows, transitions, savedAt, existingSavedAt = '') {
@@ -24095,7 +24170,10 @@ function strategyPredictMergeStickyCandidates(currentRows, existingRows, transit
   const levelRank = level => ({ confirmed: 0, expected: 1, active: 2 }[String(level || '')] ?? 9);
   const transitionByKey = new Map();
   for (const row of transitionRows) {
-    const key = String(row?.mainlineKey || '').trim();
+    const key = strategyPredictCandidateKey({
+      familyKey: row?.mainlineKey,
+      theme: row?.mainlineTheme,
+    });
     if (!key) continue;
     if (!transitionByKey.has(key)) transitionByKey.set(key, []);
     transitionByKey.get(key).push({
@@ -24166,8 +24244,21 @@ function strategyPredictMergeStickyCandidates(currentRows, existingRows, transit
     if (!key || currentKeys.has(key)) continue;
     const stars = stickyStars(old, key);
     if (!stars.length) continue;
+    const rawTheme = String(old?.theme || '').trim();
+    const family = strategyMainlineFamilyInfo({
+      theme: rawTheme,
+      key: old?.familyKey || old?.key,
+    });
+    const normalizedTheme = String(key === 'theme:短剧游戏' ? family?.label : rawTheme).trim();
     retained.push({
       ...old,
+      key,
+      familyKey: key,
+      theme: normalizedTheme,
+      mergedThemes: [...new Set([
+        ...(Array.isArray(old?.mergedThemes) ? old.mergedThemes : []),
+        ...(rawTheme && rawTheme !== normalizedTheme ? [rawTheme] : []),
+      ])].slice(0, 8),
       stars: mergeStars(old?.stars, stars),
       firstObservedAt: String(old?.firstObservedAt || old?.lastObservedAt || existingSavedAt || '').trim(),
       lastObservedAt: String(old?.lastObservedAt || existingSavedAt || '').trim(),
@@ -24182,13 +24273,22 @@ function strategyPredictMergeStickyCandidates(currentRows, existingRows, transit
 function strategyPredictStarTransitions(existingRows, mainlines, observedAt) {
   const byKey = new Map();
   for (const raw of (Array.isArray(existingRows) ? existingRows : [])) {
-    const mainlineKey = String(raw?.mainlineKey || '').trim();
+    const mainlineKey = strategyPredictCandidateKey({
+      familyKey: raw?.mainlineKey,
+      theme: raw?.mainlineTheme,
+    });
+    const normalizedTheme = strategyMainlineFamilyInfo({
+      theme: raw?.mainlineTheme,
+      key: raw?.mainlineKey,
+    }).label;
     const code = normalizeReasonSourceCode(raw?.code);
     const firstExpectedAt = String(raw?.firstExpectedAt || '').trim();
     if (!mainlineKey || !code || !firstExpectedAt) continue;
     byKey.set(`${mainlineKey}:${code}`, {
       mainlineKey,
-      mainlineTheme: String(raw?.mainlineTheme || '').trim(),
+      mainlineTheme: String(mainlineKey === 'theme:短剧游戏'
+        ? (normalizedTheme || '短剧游戏')
+        : (raw?.mainlineTheme || '')).trim(),
       code,
       name: String(raw?.name || '').trim(),
       firstExpectedAt,
@@ -24206,7 +24306,7 @@ function strategyPredictStarTransitions(existingRows, mainlines, observedAt) {
     });
   }
   for (const m of (Array.isArray(mainlines) ? mainlines.slice(0, 12) : [])) {
-    const mainlineKey = String(m?.familyKey || m?.key || '').trim();
+    const mainlineKey = strategyPredictCandidateKey(m);
     if (!mainlineKey) continue;
     for (const star of (Array.isArray(m?.starStocks) ? m.starStocks : [])) {
       const code = normalizeReasonSourceCode(star?.code);
@@ -24264,14 +24364,23 @@ function strategyMainlineExpectedTransitionMap(predict, source = '') {
     : (Array.isArray(predict?.starTransitions) ? predict.starTransitions : []);
   const byMainline = new Map();
   for (const raw of rows) {
-    const mainlineKey = String(raw?.mainlineKey || '').trim();
+    const mainlineKey = strategyPredictCandidateKey({
+      familyKey: raw?.mainlineKey,
+      theme: raw?.mainlineTheme,
+    });
+    const normalizedTheme = strategyMainlineFamilyInfo({
+      theme: raw?.mainlineTheme,
+      key: raw?.mainlineKey,
+    }).label;
     const code = normalizeReasonSourceCode(raw?.code);
     const firstExpectedAt = String(raw?.firstExpectedAt || '').trim();
     if (!mainlineKey || !code || !firstExpectedAt) continue;
     if (!byMainline.has(mainlineKey)) byMainline.set(mainlineKey, []);
     byMainline.get(mainlineKey).push({
       mainlineKey,
-      mainlineTheme: String(raw?.mainlineTheme || '').trim(),
+      mainlineTheme: String(mainlineKey === 'theme:短剧游戏'
+        ? (normalizedTheme || '短剧游戏')
+        : (raw?.mainlineTheme || '')).trim(),
       code,
       name: String(raw?.name || '').trim(),
       firstExpectedAt,
@@ -24437,7 +24546,12 @@ function strategyPredictBuildBlock(
 
 function strategyMainlineIntradayStickyCandidateRow(candidate, source, predictSavedAt = '') {
   const key = strategyPredictCandidateKey(candidate);
-  const theme = String(candidate?.theme || '').trim();
+  const rawTheme = String(candidate?.theme || '').trim();
+  const family = strategyMainlineFamilyInfo({
+    theme: rawTheme,
+    key: candidate?.familyKey || candidate?.key,
+  });
+  const theme = String(key === 'theme:短剧游戏' ? family?.label : rawTheme).trim();
   if (!key || !theme) return null;
   const stars = (Array.isArray(candidate?.stars) ? candidate.stars : [])
     .filter(star => ['expected', 'confirmed'].includes(String(star?.level || '')))
@@ -24464,9 +24578,12 @@ function strategyMainlineIntradayStickyCandidateRow(candidate, source, predictSa
   const lastObservedAt = String(candidate?.lastObservedAt || predictSavedAt || '').trim();
   return {
     key,
-    familyKey: String(candidate?.familyKey || key),
+    familyKey: key,
     theme,
-    mergedThemes: Array.isArray(candidate?.mergedThemes) ? candidate.mergedThemes.slice(0, 8) : [],
+    mergedThemes: [...new Set([
+      ...(Array.isArray(candidate?.mergedThemes) ? candidate.mergedThemes : []),
+      ...(rawTheme && rawTheme !== theme ? [rawTheme] : []),
+    ])].slice(0, 8),
     source: String(source || ''),
     rank: Number(candidate?.rank) || 0,
     score: isFiniteNumeric(candidate?.score) ? Number(candidate.score) : null,
@@ -24527,7 +24644,7 @@ function strategyMainlineRestoreIntradayStickyPrediction(payload, predict, optio
   const predictDay = isoFromCompactDate(predict.day || '');
   const today = isoFromCompactDate(chinaNowParts().day);
   if (!day || day !== predictDay || day !== today) return payload;
-  const keyOf = row => String(row?.familyKey || row?.key || row?.theme || '').trim();
+  const keyOf = row => strategyPredictCandidateKey(row);
   const starRank = level => ({ confirmed: 0, expected: 1, active: 2 }[String(level || '')] ?? 9);
   const mergeStars = (current, sticky) => {
     const byCode = new Map();
