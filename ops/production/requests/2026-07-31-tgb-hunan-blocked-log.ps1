@@ -11,7 +11,16 @@ $ErrorActionPreference = 'Stop'
 $project = 'C:\PandaDashboard'
 $day = '2026-07-31'
 $articleUrl = 'https://www.tgb.cn/a/2tSJcjNYab7'
-$articleTitle = '7.31湖南人涨停复盘+晚间消息汇总'
+$requiredTitle = -join @(
+  [char]0x6E56,
+  [char]0x5357,
+  [char]0x4EBA,
+  [char]0x6DA8,
+  [char]0x505C,
+  [char]0x590D,
+  [char]0x76D8
+)
+$retiredMarker = [string][char]0x9000
 $rawManifestFile = Join-Path $project 'kpl-limitup-main-reason-sources\tgb-hunan-raw\2026-07-31\manifest.json'
 $rawImageFile = Join-Path $project 'kpl-limitup-main-reason-sources\tgb-hunan-raw\2026-07-31\image-01-06.png'
 $formalFile = Join-Path $project 'kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-07-31.json'
@@ -31,7 +40,10 @@ if ([string]$manifest.day -ne $day) { throw 'Raw evidence manifest day mismatch.
 if ([string]$manifest.status -ne 'raw-evidence-saved') { throw 'Raw evidence manifest is not ready.' }
 $articles = @($manifest.articles)
 $article = @($articles | Where-Object {
-  [string]$_.url -eq $articleUrl -and [string]$_.title -eq $articleTitle
+  $candidateTitle = [string]$_.title
+  ([string]$_.url -eq $articleUrl) -and
+    $candidateTitle.StartsWith('7.31', [System.StringComparison]::Ordinal) -and
+    $candidateTitle.IndexOf($requiredTitle, [System.StringComparison]::Ordinal) -ge 0
 })
 if ($article.Count -ne 1) { throw 'Expected official article metadata is absent or duplicated.' }
 
@@ -46,7 +58,10 @@ $baselineRows = @($baseline.stocks)
 $eligibleRows = @($baselineRows | Where-Object {
   $code = [string]$_.code
   $name = [string]$_.name
-  $code -notmatch '^[489]' -and $name -notmatch '(?i)(?:\*?ST|退)' -and $name -notmatch '(?i)^[NC]'
+  ($code -notmatch '^[489]') -and
+    ($name -notmatch '(?i)\*?ST') -and
+    ($name.IndexOf($retiredMarker, [System.StringComparison]::Ordinal) -lt 0) -and
+    ($name -notmatch '(?i)^[NC]')
 })
 $eligibleCodes = @($eligibleRows | ForEach-Object { [string]$_.code } | Sort-Object -Unique)
 if ($eligibleRows.Count -ne 98 -or $eligibleCodes.Count -ne 98) {
@@ -70,13 +85,13 @@ $logEntry = @(
   '- Official image: image-01-06.png; 1505003 bytes; SHA-256 3048e335c7741d45f7231a5d44227006834b9a40bf99d85aa3ed60ff518726a3.'
   '- Codex manual first pass and second visual pass: 98 rows, 98 unique codes; missingCodes=[]; extraCodes=[]; duplicateCodes=[]; weakCount=0 before the image-legibility gate.'
   '- Manual topic counts: 18 + 17 + 14 + 7 + 6 + 4 + 4 + 3 + 3 + 3 + 12 + 7 = 98.'
-  '- Source-image blocker: code 605178 detail reason is cut off at the right edge after the visible text "拟并购嘉合劲威（存储芯片".'
-  '- Source-image blocker: code 605198 detail reason is cut off at the right edge after the visible text "拟收购宁波甬强科技（覆铜".'
+  '- Source-image blocker: code 605178 detail reason is cut off at the right edge after the visible storage-chip phrase.'
+  '- Source-image blocker: code 605198 detail reason is cut off at the right edge during the visible copper-clad phrase.'
   '- The official _760w and _max image URLs resolve to the same 530-pixel-wide bytes; missing pixels cannot be recovered by lossless zoom.'
-  '- Name normalization note: code 000032 uses half-width A in the official image and full-width Ａ in the terminal pool.'
+  '- Name normalization note: code 000032 uses half-width A in the official image and full-width A in the terminal pool (NFKC-equivalent).'
   '- Formal structured TGB rows: not written'
   '- Combined main-reason database rebuilt: no'
-  '- Public source-view remains TGB 0; existing combined/复盘啦/选股宝/韭研 counts remain 98.'
+  '- Public source-view remains TGB 0; existing combined, kaipanla, xuangubao, and jiuyangongshe counts remain 98.'
   '- Service restart: none'
   ''
 ) -join "`r`n"
