@@ -11608,6 +11608,7 @@ Files:
 - `tests/strategy-fund-forward-augment.test.js`
 - `tests/star-l2-layers.test.js`
 - `tests/ths-strategy-correctness.test.js`
+- `ops/production/manifests/strategy-short-video-discovery-20260731.json`
 - `docs/DAILY_HANDOFF.md`
 
 Validated:
@@ -11648,10 +11649,17 @@ Validated:
 - `node tests/qi-mainline-states.test.js`
 - 全部 77 个 `tests/*.test.js`
 - `git diff --check`
+- 上线前公开回看基线 `/api/strategy-mainline-review?days=15` 的响应 SHA-256 为
+  `1315b9575212ad96549e10a934c54a074cac423a116f6bed0fe11dd912f48d82`；核心指标为
+  主线成立率 66.7%（4/6）、预期明星封板率 25%（1/4）、领先时长中位数
+  93.6 分钟（1 个样本）、预备明星封板率 0%（0/14）。部署后按同一参数复取并
+  记录差异，用于量化词典归并的历史追溯影响。
 
 Deployment:
 - 本条仅为 GitHub 分支代码、测试与交接记录；生产未部署，服务未重启。
 - 未修改正式预测档、L2 运行时任务、主因库、收盘价库或公司端 worker。
+- 原子部署清单只发布 `kpl-stats-server.js` 与 `theme-taxonomy.json` 并重启主服务；
+  不发布测试或运行时数据。
 
 Notes for next agent:
 - 复审重点：候选粘性只在同一交易日、同一来源生效；仅 `expected/confirmed` 可恢复；
