@@ -21301,6 +21301,7 @@ const STRATEGY_MAINLINE_MERGE_GROUPS = new Set([
 const STRATEGY_MAINLINE_KEEP_FINE_THEMES = new Set([
   '短剧游戏',
   'AI应用',
+  '人工智能',
 ]);
 function strategyMainlineFamilyInfo(item) {
   const theme = String(item?.theme || '').trim();
@@ -21741,9 +21742,22 @@ function strategyMergeMainlineRoles(items, count) {
   };
 }
 function strategyMergeMainlineFamilies(rawMainlines) {
+  const classified = (rawMainlines || []).map(item => ({
+    item,
+    family: strategyMainlineFamilyInfo(item),
+  }));
+  // AI 软件方向在盘面上常被两套板块词典拆开：宽口径的“AI应用”与更具体的
+  // “AI视频/短剧游戏”。同一来源同一次构建中两者同时出现时，才按软件主线合并；
+  // 单独的游戏/传媒或单独的 AI 应用仍保持原粒度。合并键沿用短剧族，保证已有 L2
+  // 任务、预判记录和回看键稳定；mergedThemes 会保留 AI应用，供龙头池同时消费两族主因。
+  const mergeAiSoftware = classified.some(row => row.family?.key === 'theme:AI应用')
+    && classified.some(row => row.family?.key === 'theme:短剧游戏');
   const buckets = new Map();
-  for (const item of rawMainlines || []) {
-    const family = strategyMainlineFamilyInfo(item);
+  for (const row of classified) {
+    const item = row.item;
+    const family = mergeAiSoftware && (row.family?.key === 'theme:AI应用' || row.family?.key === 'theme:短剧游戏')
+      ? { ...row.family, key: 'theme:短剧游戏', label: '短剧游戏', group: '' }
+      : row.family;
     if (!buckets.has(family.key)) buckets.set(family.key, { family, items: [] });
     buckets.get(family.key).items.push(item);
   }

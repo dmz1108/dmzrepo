@@ -13112,3 +13112,38 @@ Deployment:
 Notes for next agent:
 - 这是一项有明确审计记录的一次性 Owner 授权，不得把“用户口头补全可替代官方原图”
   泛化到其他日期；后续仍应在原图不可辨认时默认阻断。
+
+## 2026-08-02 - Codex - 7.31 AI 软件主线与算力硬件隔离
+
+Changed:
+- 按 Owner 对 2026-07-31 盘面的修正，当同一来源同一次构建同时出现
+  `AI应用` 与 `AI视频/短剧游戏` 时，将两者按软件主线合并；单独出现时仍保持原粒度。
+- 合并键沿用 `theme:短剧游戏`，不破坏已有 L2 任务、盘中预判和回看记录；
+  `mergedThemes` 同时保留 `AI应用` 与 `AI视频`，使龙头池能消费蓝色光标的 AI 应用历史主因。
+- `人工智能` 宽口径题材保持独立，不再默认并入算力硬件族；算力/AI 硬件/液冷仍按
+  `group:算力AI` 独立统计。
+- 新增 2026-07-31 生产形态回归：软件/硬件成分不串族、蓝色光标去重、软件龙头池同时具备
+  AI 应用与短剧家族键、没有 AI 视频佐证时不强行合并。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/mainline-ai-software-family.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- 新增 AI 软件家族专项测试通过。
+- 明星归属、L2 层级、龙头家族指标、盘后归属、预判回看、预判记录与粘性候选共
+  7 个相邻专项测试通过。
+- 除 `origin/main@b531132` 上已可独立复现的
+  `tests/board-snapshot-contamination.test.js` 临时文件 `ENOENT` 外，其余 78 个
+  `tests/*.test.js` 全部通过。
+- `git diff --check`
+
+Deployment:
+- 本条提交时尚未部署生产代码、未重启服务、未修改 2026-07-31 运行时预判档。
+
+Notes for next agent:
+- 历史修复必须先备份，优先用新代码和云端原始数据重算；不得为了上榜伪造明星、龙头、涨停数或资金。
+- 验收口径：7 月 31 日软件方向应保留蓝色光标确认明星，算力硬件不得再包含
+  `AI应用`、蓝色光标或软件板块资金。
