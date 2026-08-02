@@ -12987,3 +12987,39 @@ Deployment:
 Notes for next agent:
 - 只有作者发布新的、完整可辨认且标题/日期/水印匹配的官方白底原图，才能恢复正式
   入库；当前主图哈希未变，继续重复下载不会解除阻断。
+
+## 2026-08-02 - Codex - 修正 7.31 预判回看的预备主线可见性
+
+Changed:
+- 回看 API 为东财/同花顺各自返回已落盘的 `qiTier=reserve` 摘要，包括题材、缺件
+  原因及确认/预期明星，不提升正式资格，也不计入正式命中率。
+- 策略页日期摘要和展开后的来源行会直接显示“预备题材（明星状态·缺件原因）”；正式
+  主线与预备主线同时存在时两者并列，预备层不再只藏在二级展开项里。
+- 为 2026-07-31 生产预测档准备归因修正：蓝色光标只保留在同花顺短剧游戏轨迹，清除
+  算力 AI 候选中的重复归属；正式三要件不变。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/mainline-review.test.js`
+- `tests/strategy-three-requirements.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- 预判回看、归因、三要件、双来源和策略 UI 共 8 个专项测试通过。
+- 其余 76 个 `tests/*.test.js` 通过；既有
+  `tests/board-snapshot-contamination.test.js` 在异步 `saveSnapshot` 尚未落盘时读取临时
+  文件，单独复跑仍报 `ENOENT`，与本次改动无关。
+- `git diff --check`
+
+Deployment:
+- 本条提交时尚未部署应用代码、尚未重启服务。
+- 生产数据修正必须先备份当前 `mainline-predict-2026-07-31.json`，再按已保存的 L2、
+  同花顺 AI 视频板块及既有证据哈希写入；不得改写正式评分规则。
+
+Notes for next agent:
+- 7 月 31 日短剧游戏仍是“有确认明星和 9 只涨停、但缺合格龙头”的预备主线，不能
+  为了显示而提升为正式主线。
+- 重点验收：摘要必须出现同花顺短剧游戏、蓝色光标确认；展开详情不得再把蓝色光标
+  同时归到算力 AI。

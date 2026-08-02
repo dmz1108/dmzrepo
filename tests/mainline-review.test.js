@@ -69,6 +69,7 @@ eval(extractFn('strategyMainlineLeadAssessment'));
 eval(extractFn('strategyMainlineLeadSample'));
 eval(extractFn('strategyMedianNumber'));
 eval(extractFn('strategyMainlineReserveStarOutcomes'));   // 三要件预备层盘后结果(#201)
+eval(extractFn('strategyMainlineReviewReserveSummaries'));
 eval(extractFn('strategyMainlineReviewFormalTop'));
 eval(extractFn('strategyMainlineReviewHasRecord'));
 eval(extractFn('strategyMainlineStarAttributionDecision'));
@@ -423,7 +424,11 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
     bySource: {
       eastmoney: { available: true, hasMainlines: false, top: [], candidates: [], starTransitions: [] },   // 东财当日有效零结果:顶层兼容 top 也为空
       ths: { available: true, hasMainlines: true, top: [{ key: '算力', theme: '算力', l2VerificationStatus: 'qi', star: null, leader: null }],
-             candidates: [{ key: '算力', l2VerificationStatus: 'qi' }], starTransitions: [] },
+             candidates: [
+               { key: '算力', l2VerificationStatus: 'qi' },
+               { key: 'theme:短剧游戏', theme: '短剧游戏', qiTier: 'reserve', reserveReasons: ['no-qualified-leader'],
+                 stars: [{ code: '300058', name: '蓝色光标', level: 'confirmed' }] },
+             ], starTransitions: [] },
     } };
   LIMIT_UP['2026-07-13'] = finalLimitDb(['600020']);
   MAIN_REASON['2026-07-13'] = reasonDb([{ code: '600020', name: 'X', finalBoardTopic: '算力' }]);
@@ -432,6 +437,10 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   A(!!r13, '三审P1:东财空+同花顺有预测,该日仍进入回看(不被顶层空 top 跳过)');
   A(!!(r13 && r13.bySource) && r13.bySource.eastmoney.noMainline === true, '三审P1:东财该日无主线(noMainline)');
   A(!!(r13 && r13.bySource) && r13.bySource.ths.mainlineHitTop1 === true, '三审P1:同花顺预判算力=当日实际第一 → top1 命中');
+  A(r13.bySource.ths.hasReserveMainlines === true
+    && r13.bySource.ths.reserveMainlines?.[0]?.theme === '短剧游戏'
+    && r13.bySource.ths.reserveMainlines?.[0]?.confirmedStarCount === 1,
+  '三审P1:同一来源有正式主线时仍显式返回预备短剧游戏及确认明星,不再藏于展开层');
   A(out3.stats.bySource.ths.mainlineTotal >= 1 && out3.stats.bySource.ths.mainlineTop1Hits >= 1, '三审P1:同花顺命中进入 stats.bySource 分母/命中(不系统性漏样本)');
   A(out3.stats.bySource.eastmoney.mainlineTotal === 0, '三审P1:东财该日无主线,不计东财分母(不借同花顺凑数)');
 

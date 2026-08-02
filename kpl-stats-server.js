@@ -25633,6 +25633,58 @@ function strategyMainlineReserveStarOutcomes(predict) {
   return out;
 }
 
+// 回看摘要也必须显式带出预备主线。预备候选不会进入正式 top，但如果只在展开后的
+// reserveStarOutcomes 里出现，日期摘要会误导成“当天没有发现该方向”。这里仅整理已
+// 落盘的 qiTier=reserve 证据，不提升正式资格，也不参与任何命中率统计。
+function strategyMainlineReviewReserveSummaries(predict) {
+  const candidates = (Array.isArray(predict?.candidates) ? predict.candidates : [])
+    .filter(row => row && row.qiTier === 'reserve');
+  const transitions = Array.isArray(predict?.starTransitions) ? predict.starTransitions : [];
+  const levelRank = { active: 1, expected: 2, confirmed: 3 };
+  const summaries = candidates.map((candidate, index) => {
+    const familyKey = String(candidate?.key || candidate?.familyKey || '').trim();
+    const starsByCode = new Map();
+    const addStar = (star, fallbackLevel = '') => {
+      const code = normalizeReasonSourceCode(star?.code);
+      if (!code) return;
+      const level = String(star?.level || star?.lastLevel || fallbackLevel || '').trim();
+      if (!['expected', 'confirmed'].includes(level)) return;
+      const previous = starsByCode.get(code);
+      if (previous && (levelRank[previous.level] || 0) >= (levelRank[level] || 0)) return;
+      starsByCode.set(code, {
+        code,
+        name: String(star?.name || previous?.name || '').trim(),
+        level,
+      });
+    };
+    addStar(candidate?.star);
+    for (const star of (Array.isArray(candidate?.stars) ? candidate.stars : [])) addStar(star);
+    for (const transition of transitions) {
+      if (String(transition?.mainlineKey || '').trim() !== familyKey) continue;
+      addStar(transition, transition?.confirmedAt ? 'confirmed' : 'expected');
+    }
+    const stars = [...starsByCode.values()]
+      .sort((a, b) => (levelRank[b.level] || 0) - (levelRank[a.level] || 0)
+        || a.code.localeCompare(b.code));
+    return {
+      familyKey,
+      theme: String(candidate?.theme || '').trim(),
+      reserveReasons: Array.isArray(candidate?.reserveReasons)
+        ? candidate.reserveReasons.map(String).filter(Boolean)
+        : [],
+      confirmedStarCount: stars.filter(star => star.level === 'confirmed').length,
+      expectedStarCount: stars.filter(star => star.level === 'expected').length,
+      stars,
+      rank: Number.isFinite(Number(candidate?.rank)) ? Number(candidate.rank) : index + 1,
+    };
+  }).filter(summary => summary.familyKey && summary.theme);
+  summaries.sort((a, b) => b.confirmedStarCount - a.confirmedStarCount
+    || b.expectedStarCount - a.expectedStarCount
+    || a.rank - b.rank
+    || a.theme.localeCompare(b.theme, 'zh-CN'));
+  return summaries;
+}
+
 // schema v2 起已经保存候选的 L2 验证状态。回看里的“正式主线”只认预期明星/明星确认的
 // 正证据；unscanned、scanned-no-star、active 都仍可留在候选档案，但不能冒充正式主线。
 // 更早的旧档案没有足够字段可还原当时 L2 状态，继续按旧口径展示，避免伪造历史结论。
@@ -26210,6 +26262,7 @@ async function getStrategyMainlineReview(days = 10) {
         };
         const fTop = strategyMainlineReviewFormalTop(blockPredict);
         const sMain = fTop.find(t => predict.confirmedKey && t.key === predict.confirmedKey) || fTop[0] || null;
+        const reserveMainlines = strategyMainlineReviewReserveSummaries(blockPredict);
         // 新 schema v3 明确保存 available；早期 v3 没有该字段，空块只能诚实标为 unknown，
         // 不能猜成“无主线”或“来源暂缺”。有正式主线时即使旧记录缺元数据，主题本身仍可展示。
         const sourceAvailable = typeof block.available === 'boolean' ? block.available : null;
@@ -26268,6 +26321,8 @@ async function getStrategyMainlineReview(days = 10) {
           mainlineHitTop3: hitTop3,
           mainlineLead: leadTime,
           mainlineLeadStatus: leadTimeStatus,
+          hasReserveMainlines: reserveMainlines.length > 0,
+          reserveMainlines,
         };
       }
     }

@@ -307,6 +307,7 @@ A(/STRATEGY_MAINLINE_FINAL_SEAL_TTL_MS/.test(src)
 
 // ---- 5b. 盘后回看:预备主线预期明星单独输出,与正式回看分开 ----
 eval(extractFn('strategyMainlineReserveStarOutcomes'));
+eval(extractFn('strategyMainlineReviewReserveSummaries'));
 const outcomePredict = {
   bySource: {
     eastmoney: {
@@ -343,11 +344,24 @@ A(outcomes.some(o => o.source === 'ths' && o.code === '000725' && o.kind === 'ex
   '回看:同花顺预备(缺龙头)独立成行,不与东财合并');
 A(outcomes.some(o => o.source === 'ths' && o.code === '600760' && o.kind === 'confirmed' && o.lastLevel === 'confirmed'),
   '回看:缺龙头卡的"从未 expected 的确认明星"从候选档案补齐(kind=confirmed),不因无轨迹行消失(Codex #201 三审)');
+const reserveSummaries = strategyMainlineReviewReserveSummaries(outcomePredict.bySource.ths);
+A(reserveSummaries.length === 2 && reserveSummaries[0].theme === '军工'
+  && reserveSummaries[0].confirmedStarCount === 1
+  && reserveSummaries[1].theme === '消费电子'
+  && reserveSummaries[1].expectedStarCount === 1,
+  '回看摘要:预备主线按确认/预期明星证据排序并显式输出,但不提升为正式 top');
+A(reserveSummaries[0].reserveReasons.join(',') === 'no-qualified-leader'
+  && reserveSummaries[0].stars[0].code === '600760',
+  '回看摘要:保留预备缺件原因与对应明星明细');
 A(/if \(row\.kind === 'confirmed'\) \{ item\.sealStatus = 'confirmed'; return item; \}/.test(src),
   '静态:kind=confirmed 展示行不进 expected 封板转化统计(两类语义分开)');
 A(/reserveCell\(r\)/.test(fs.readFileSync(path.join(__dirname, '..', 'kpl-dashboard_17_apple.html'), 'utf8'))
   && /reserveStarOutcomes/.test(fs.readFileSync(path.join(__dirname, '..', 'kpl-dashboard_17_apple.html'), 'utf8')),
   '静态:回看前端消费 reserveStarOutcomes(纯预备日不再只显示今日无主线)');
+const reviewHtml = fs.readFileSync(path.join(__dirname, '..', 'kpl-dashboard_17_apple.html'), 'utf8');
+A(/sourceReserveText\(src/.test(reviewHtml) && /预备 \$\{reserveText\}/.test(reviewHtml)
+  && /无正式主线/.test(reviewHtml),
+  '静态:回看摘要与来源行直接显示预备题材/明星状态,不再只藏在展开详情');
 const legacyPredictNoTier = {
   top: [{ key: 'theme:白酒', theme: '白酒' }],
   candidates: [{ key: 'theme:白酒', theme: '白酒' }, { key: 'theme:第四名', theme: '第四名' }],
