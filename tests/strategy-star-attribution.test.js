@@ -161,6 +161,40 @@ const blueCompute = strategyMainlineStarAttributionDecision(
 );
 A(!blueCompute.allowed && blueCompute.basis === 'current-limit-reason-conflict',
 '宽口径AI应用不得再把蓝色光标排他归入算力AI');
+const blueBroadOnlyAttribution = strategyMainlineBuildStarAttributionContext(new Map(), new Map([
+  ['300058', {
+    code: '300058',
+    reason: 'AI应用',
+    source: 'four-source-main-reason-db',
+  }],
+]));
+const blueBroadShortDrama = strategyMainlineStarAttributionDecision(
+  { theme: '短剧游戏', familyKey: shortDramaFamily },
+  blueFocus,
+  blueBroadOnlyAttribution,
+);
+A(blueBroadShortDrama.allowed && blueBroadShortDrama.basis === 'current-main-reason-broad-compatible',
+'四源仅给宽口径AI应用时，不得否决同日AI视频板块提供的更具体短剧游戏归属');
+A(!strategyMainlineStarAttributionDecision(
+  { theme: '算力AI', familyKey: 'group:算力AI' }, blueFocus, blueBroadOnlyAttribution,
+).allowed, 'AI应用宽口径兼容不向算力AI放开，避免蓝色光标重新被错挂');
+A(!strategyMainlineStarAttributionDecision(
+  { theme: '电力', familyKey: 'theme:电力' }, blueFocus, blueBroadOnlyAttribution,
+).allowed, 'AI应用宽口径兼容不向无关家族放开');
+const bluePriorBroadOnlyAttribution = strategyMainlineBuildStarAttributionContext(new Map([
+  ['300058', {
+    code: '300058',
+    theme: 'AI应用',
+    topics: [],
+  }],
+]), new Map());
+A(strategyMainlineStarAttributionDecision(
+  { theme: '短剧游戏', familyKey: shortDramaFamily }, blueFocus, bluePriorBroadOnlyAttribution,
+).basis === 'prior-main-reason-broad-compatible',
+'盘中尚无当日主因时，历史宽口径AI应用也不得错杀同日短剧游戏板块候选');
+A(!strategyMainlineStarAttributionDecision(
+  { theme: '算力AI', familyKey: 'group:算力AI' }, blueFocus, bluePriorBroadOnlyAttribution,
+).allowed, '历史宽口径AI应用兼容同样不向算力AI放开');
 
 const rotatedLive = strategyMainlineBuildStarAttributionContext(priorByCode, new Map([
   ['002409', { code: '002409', reason: '光伏' }],

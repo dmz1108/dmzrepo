@@ -13024,6 +13024,40 @@ Notes for next agent:
 - 重点验收：摘要必须出现同花顺短剧游戏、蓝色光标确认；展开详情不得再把蓝色光标
   同时归到算力 AI。
 
+## 2026-08-02 - Codex - 宽口径 AI 应用不再否决短剧游戏归因
+
+Changed:
+- 明星归因上下文保存当前/历史主因是否只有宽口径证据。
+- 当四源当日主因或盘中可用的历史主因只有宽口径“AI 应用”时，允许更具体的同日
+  AI 视频/短剧游戏板块归属；该兼容不向算力 AI、电力或其他无关家族开放。
+- 增加蓝色光标生产形态回归：短剧游戏通过，算力 AI 和电力继续拒绝。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/strategy-star-attribution.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- `node tests/strategy-star-attribution.test.js`
+- `node tests/mainline-attribution.test.js`
+- `node tests/mainline-review.test.js`
+- `node tests/strategy-three-requirements.test.js`
+- `git diff --check`
+
+Deployment:
+- 本条提交时尚未部署该兼容规则、尚未重启服务。
+- 前一项 PR #351 已由受保护生产运行 `30753094768` 部署并重启主服务，健康检查通过。
+- 2026-07-31 预测档已在备份后修正；备份目录
+  `C:\PandaDashboard\backups\strategy-review-repair-20260731-20260802-225929`，修正后
+  SHA-256 为 `56fcc07b709ad925830ac647bb2d46a42f9c1a6dd7f3ec5b6574f9450747a25a`，数据修正
+  未重启服务。
+
+Notes for next agent:
+- 部署后验收 `/api/strategy-mainline-review?days=10` 的 2026-07-31：同花顺预备
+  短剧游戏应有蓝色光标和昆仑万维两只确认明星、天龙集团和捷成股份两只预期明星；
+  蓝色光标不得出现在算力 AI 明星明细中。
+
 ## 2026-08-02 - Codex - Owner 授权补全并正式入库 7.31 TGB
 
 Changed:
