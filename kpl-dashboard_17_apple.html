@@ -13931,6 +13931,20 @@ function renderMainlineReviewHTML(d) {
         : '正式条件未满足';
     return `<span class="mlr-hit miss" title="${escapeHTML(why)}">${escapeHTML(why)}</span>`;
   };
+  const reserveReasonLabel = (reason) => reason === 'no-qualified-leader' ? '缺合格龙头'
+    : reason === 'no-confirmed-star' ? '缺确认明星'
+      : reason === 'insufficient-limit-up-count' ? '涨停不足3只'
+        : String(reason || '条件未齐');
+  const sourceReserveText = (src, limit = 2) => {
+    const rows = Array.isArray(src?.reserveMainlines) ? src.reserveMainlines : [];
+    return rows.slice(0, limit).map(row => {
+      const signal = Number(row?.confirmedStarCount) > 0 ? '明星确认'
+        : Number(row?.expectedStarCount) > 0 ? '预期明星' : '候选';
+      const reasons = (Array.isArray(row?.reserveReasons) ? row.reserveReasons : [])
+        .map(reserveReasonLabel).filter(Boolean).join('、');
+      return `${String(row?.theme || '')}（${signal}${reasons ? `·${reasons}` : ''}）`;
+    }).filter(Boolean).join(' / ');
+  };
   const sourceReviewHTML = (r) => {
     if (!r || !r.bySource) return '';
     const sourceEntries = [['eastmoney', '东财'], ['ths', '同花顺']];
@@ -13942,16 +13956,21 @@ function renderMainlineReviewHTML(d) {
       const status = statusOf(src);
       const noMainline = status === 'no-mainline';
       const sourceRow = { ...r, ...src, noMainline };
+      const reserveText = sourceReserveText(src);
       const stateText = status === 'unavailable' ? '来源暂缺'
         : status === 'unknown' ? '历史状态未知'
-          : noMainline ? '无主线' : escapeHTML(src.theme);
+          : noMainline ? (reserveText ? '无正式主线' : '无主线') : String(src.theme || '');
+      const displayText = reserveText ? `${stateText} · 预备 ${reserveText}` : stateText;
+      const displayHTML = reserveText
+        ? `<strong title="${escapeHTML(displayText)}">${escapeHTML(displayText)}</strong>`
+        : `<strong>${escapeHTML(displayText)}</strong>`;
       const reason = escapeHTML(src.message || src.reason || (status === 'unavailable' ? '该来源当时不可用' : '早期记录未保存来源可用性'));
       const result = status === 'unavailable'
         ? `<span class="mlr-hit na" title="${reason}" aria-label="${label}来源暂缺：${reason}">暂缺</span>`
         : status === 'unknown'
           ? `<span class="mlr-hit na" title="${reason}" aria-label="${label}历史状态未知：${reason}">状态未知</span>`
           : hitCell(sourceRow);
-      return `<span class="mlr-source-row ${status}"><span class="mlr-source-name">${label}</span><strong>${stateText}</strong>${result}</span>`;
+      return `<span class="mlr-source-row ${status}"><span class="mlr-source-name">${label}</span>${displayHTML}${result}</span>`;
     }).join('');
     return `<span class="mlr-source-grid">${items}</span>`;
   };
@@ -14152,11 +14171,12 @@ function renderMainlineReviewHTML(d) {
           const status = String(src?.status || '') || (src?.available === false ? 'unavailable'
             : String(src?.theme || '').trim() ? 'mainline'
               : (src?.available === true && src?.noMainline === true) ? 'no-mainline' : 'unknown');
-          const t = status === 'unavailable' ? '暂缺' : (status === 'unknown' ? '状态未知' : (status === 'no-mainline' ? '无主线' : String(src.theme || '')));
+          const t = status === 'unavailable' ? '暂缺' : (status === 'unknown' ? '状态未知' : (status === 'no-mainline' ? '无正式主线' : String(src.theme || '')));
+          const reserveText = sourceReserveText(src, 1);
           const hit = status === 'mainline'
             ? (src.mainlineQualified === true ? '成立' : (src.mainlineQualified === false ? '未成立' : ''))
             : '';
-          return `${label}${t}${hit ? ` ${hit}` : ''}`;
+          return `${label}${t}${hit ? ` ${hit}` : ''}${reserveText ? ` · 预备 ${reserveText}` : ''}`;
         };
         return `${part('eastmoney', '东财 ')} / ${part('ths', '同花顺 ')}`;
       }
