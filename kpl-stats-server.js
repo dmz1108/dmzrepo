@@ -29954,22 +29954,34 @@ const server = http.createServer(async (req, res) => {
       // frozen=对外展示的冻结快照摘要。不写预测、不派扫描、不改快照。
       if (!requireAdmin(req, res)) return;
       const dbgDay = isoFromCompactDate(url.searchParams.get('day') || chinaNowParts().day);
+      const dbgSource = String(url.searchParams.get('source') || '').trim().toLowerCase();
+      const dbgBoardZsTypes = dbgSource === 'eastmoney' ? [6] : (dbgSource === 'ths' ? [5] : null);
+      if (dbgSource && !dbgBoardZsTypes) {
+        return send(res, 400, { ok: false, error: 'source must be eastmoney or ths' });
+      }
       const traceCodes = String(url.searchParams.get('codes') || '')
         .split(',').map(s => s.trim()).filter(Boolean).slice(0, 10);
       const wantReview = url.searchParams.get('review') === '1' || url.searchParams.get('review') === 'true';
-      const live = await buildStrategyMainlinesLive(dbgDay, { writePredict: false, leaderDebug: true, traceCodes })
+      const debugOptions = {
+        writePredict: false,
+        leaderDebug: true,
+        traceCodes,
+        ...(dbgBoardZsTypes ? { boardZsTypes: dbgBoardZsTypes } : {}),
+      };
+      const live = await buildStrategyMainlinesLive(dbgDay, debugOptions)
         .catch(e => ({ ok: false, error: String(e && e.message || e) }));
       const frozen = await readStrategyMainlineSnapshot(dbgDay).catch(() => null);
       // review=1:额外跑一次「盘后归属复核」重算(postCloseReview:true)——用当日综合主因把真龙头
       // 归回其主因主线、从错误主线剔除。这是与冻结盘中预测并列的对照结果,只读、不写快照。
       const review = wantReview
-        ? await buildStrategyMainlinesLive(dbgDay, { writePredict: false, leaderDebug: true, postCloseReview: true, traceCodes })
+        ? await buildStrategyMainlinesLive(dbgDay, { ...debugOptions, postCloseReview: true })
             .catch(e => ({ ok: false, error: String(e && e.message || e) }))
         : null;
       return send(res, 200, {
         ok: true,
         day: dbgDay,
-        note: 'read-only diagnosis: live=当前盘中预测口径即时重算(不含当日盘后主因),frozen=冻结盘中预测摘要,review=盘后归属复核对照(review=1 时,用当日综合主因重算,仅对照不写快照)。',
+        source: dbgSource || 'combined',
+        note: 'read-only diagnosis: live=当前盘中预测口径即时重算(不含当日盘后主因),frozen=冻结盘中预测摘要,review=盘后归属复核对照(review=1 时,用当日综合主因重算,仅对照不写快照)。source=ths/eastmoney 可限定单一板块来源。',
         frozenSummary: frozen ? (frozen.mainlines || []).map(m => ({
           theme: m.theme,
           leaders: (m.leaders || []).map(r => ({ code: r.code, name: r.name, leadScore: r.leadScore ?? null })),
