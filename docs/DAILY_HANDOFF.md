@@ -13231,3 +13231,46 @@ Deployment:
 Notes for next agent:
 - 代码部署后再按两源诊断重建 2026-07-31 预测档；公开回看必须同时满足：两源主题均为
   软件方向、蓝色光标为确认明星、盘后 AI应用 28 家进入资格、Top1 命中、算力不在正式主线。
+
+## 2026-08-02 - Codex - 7.31 AI 软件主线修复部署与历史档验收
+
+Changed:
+- PR #359 已合并，生产主服务已部署盘中合并族与盘后回看族的对齐规则。
+- 按东财/同花顺单源盘后诊断和 Owner 裁定，重建
+  `strategy-data/mainline-predict-2026-07-31.json`：两源正式主线均为软件方向
+  `theme:短剧游戏`，蓝色光标 `300058` 为首位确认明星；算力不再进入该日正式预测块。
+- 预测档保留两源各自证据：东财代表板为 `AI应用`，同花顺候选保留 `AI视频/智谱AI/短剧游戏`；
+  未改来源数据库、冻结快照、L2 任务或其他日期预测档。
+
+Files:
+- Git: `docs/DAILY_HANDOFF.md`
+- Runtime: `C:\PandaDashboard\strategy-data\mainline-predict-2026-07-31.json`
+- Cloud logs: `panda-cloud-ops-2026-06-19.md`, `_cloud-change-log-20260705.md`
+
+Validated:
+- GitHub Actions run `30756392595` 成功，生产提交
+  `dc81f6a7857521bd244121cf44fd7297c1c32ba3`，`/health` 返回 `ok:true`。
+- 公开 `/api/strategy-mainline-review?days=15` 的 2026-07-31 行验证：
+  `noMainline=false`、`mainlineQualified=true`、`mainlineHitTop1=true`、
+  `mainlineStarQualified=true`。
+- 盘后实际第一家族为 `AI应用` 28 家，资格记录
+  `matchedActualFamilyKeys=[theme:AI应用]`、`limitUpCount=28`；算力为第二家族 18 家，
+  不参与正式主线。
+- 东财与同花顺两源均返回 `status=mainline`、`familyKey=theme:短剧游戏`、
+  `mainlineQualified=true`、`mainlineHitTop1=true`；蓝色光标为确认明星且
+  `sealedSameDay=true`。同花顺保存的真实轨迹测得涨停前领先 7.2 个可交易分钟。
+- 行情主页 HTTP 200；生产预测档写后 SHA-256 为
+  `0558e1abff537e628bbb3c8f822e67c59ca1625c878436f345fd5d83b9a76230`。
+
+Deployment:
+- 代码部署备份：`C:\PandaDashboard\_deploy-backups\github-30756392595-1`，已重启主服务。
+- 历史档写前备份：
+  `C:\PandaDashboard\backups\mainline-20260731-ai-software-owner-adjudication-20260802162513\mainline-predict-2026-07-31.json`。
+- 历史档写前 SHA-256：
+  `56fcc07b709ad925830ac647bb2d46a42f9c1a6dd7f3ec5b6574f9450747a25a`。
+- 历史档为原子写入；临时脚本和临时 JSON 已从项目根目录清理。运行时修复后未再次重启服务。
+
+Notes for next agent:
+- 7 月 31 日的历史修复属于有备份、有哈希、有 Owner 裁定的单日修正；不要把“算力非主线”
+  泛化到其他日期。未来同类软件行情只在预测候选明确包含 AI应用 与 AI视频/短剧合并证据时
+  才跨家族键回看。
