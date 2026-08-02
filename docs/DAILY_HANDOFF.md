@@ -13023,3 +13023,51 @@ Notes for next agent:
   为了显示而提升为正式主线。
 - 重点验收：摘要必须出现同花顺短剧游戏、蓝色光标确认；展开详情不得再把蓝色光标
   同时归到算力 AI。
+
+## 2026-08-02 - Codex - Owner 授权补全并正式入库 7.31 TGB
+
+Changed:
+- Owner 明确授权仅对 `2026-07-31` 官方原图右缘裁切的两个 `detailReason` 做一次性
+  人工补全：`605178 时空科技` 为“拟并购嘉合劲威（存储芯片）”，`605198 安德利`
+  为“拟收购宁波甬强科技（覆铜板）”；该授权不改变以后每日 TGB 的默认证据规则。
+- 恢复此前从同一哈希官方白底原图完成双遍人工复核的 98 行底稿；其余 96 行未改动，
+  两个授权行在正式载荷和云端日志中保留独立 provenance。
+- PR #352 新增日期绑定的受保护生产写入请求、production-environment 载荷路由及专项
+  回归测试；载荷只临时保存为受保护 secret，未进入 Git，成功运行后已删除 secret。
+
+Files:
+- `.github/workflows/production-ops.yml`
+- `ops/production/requests/2026-08-02-tgb-hunan-20260731-owner-authorized-write.ps1`
+- `tests/tgb-20260731-owner-authorized-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 正式文章仍为 `https://www.tgb.cn/a/2tSJcjNYab7`，标题
+  `7.31湖南人涨停复盘+晚间消息汇总`；采用 `image-01-06.png`，530×8162、
+  1505003 字节，SHA-256
+  `3048e335c7741d45f7231a5d44227006834b9a40bf99d85aa3ed60ff518726a3`。
+- 写入前候选 98 行/98 个唯一代码；终盘池原始 99 行、过滤后 98 行；
+  `missingCodes=[]`、`extraCodes=[]`、`duplicateCodes=[]`、`weakCount=0`，代码集合
+  SHA-256 `908743e0babcb01990c299e4b3af97774d988811f24982b382e28eff814d678f`。
+- 题材块计数为 `18+17+14+7+6+4+4+3+3+3+12+7=98`；唯一名称差异为
+  `000032 深桑达A` 对终盘池 `深桑达Ａ`，按 NFKC 宽度差异明确记录。
+- 受保护运行 `30753057213` 成功；人工载荷 SHA-256
+  `fa211bd37a1ef1c76498b92e791bff6d19111f7ea3de8e53e28dcc88045b1054`，正式文件
+  SHA-256 `9c1baf25edd5b1564d161b662fc92ce4b628b0b53ddfd267796bf8ea52ca078f`，
+  重折后综合主因 SHA-256
+  `7dc0a926f5bcc678dce2e2f67307553fd521877dc27076c404adbf7fd2e2c448`。
+- 独立公网复核：综合归纳、复盘啦、选股宝、韭研、淘股吧均为 98；TGB 覆盖率与
+  主因覆盖率均 100%，低置信股票 0，`sourceErrors=[]`，两条授权补全值显示正确，
+  `/health` 返回 `{"ok":true}`。
+- 所有 `tests/tgb-*.test.js` 与 manual-only 检查通过；`git diff --check` 通过。
+
+Deployment:
+- 已备份所有受影响生产文件及证据到
+  `C:\PandaDashboard\backups\tgb-hunan-owner-authorized-manual-20260731-20260802145242`。
+- 已写入正式 `tgb-hunan-structured/2026-07-31.json`，并强制重折当天综合主因库；
+  两份云端运维日志已追加日期、授权范围、校验、哈希和备份路径。
+- 未部署应用代码，未重启主站、Caddy、娱乐服务、SSH 或公司端 L2 worker。
+
+Notes for next agent:
+- 这是一项有明确审计记录的一次性 Owner 授权，不得把“用户口头补全可替代官方原图”
+  泛化到其他日期；后续仍应在原图不可辨认时默认阻断。
