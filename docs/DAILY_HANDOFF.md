@@ -13198,3 +13198,36 @@ Deployment:
 Notes for next agent:
 - 代码上线后须重新执行东财/同花顺单源只读诊断；历史档只按重算证据和 Owner 对
   7 月 31 日“AI 软件为主线、算力硬件非主线”的裁定修复，写前备份并保留前后哈希。
+
+## 2026-08-02 - Codex - 对齐 AI 软件主线的盘中族键与盘后回看族键
+
+Changed:
+- 修复 2026-07-31 暴露的回看口径断层：盘中预测已明确把 `AI应用 + AI视频/短剧`
+  合并为软件方向时，盘后 `AI应用` 涨停家族可作为同一软件主线的成立与命中证据。
+- 兼容严格依赖预测候选的 `mergedThemes`；只有 AI 应用或只有 AI 视频时仍保持原独立粒度，
+  `group:算力AI` 永不进入这组兼容键。
+- 根层和东财/同花顺分源回看统一使用同一兼容集合计算涨停数量、Top1 和 Top3，避免页面
+  再出现“盘后 AI应用 第一、蓝色光标确认，但软件主线涨停数为 0”的矛盾。
+- 回看资格新增 `matchedActualFamilyKeys`，便于审计实际采用了哪一条盘后家族证据。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/mainline-ai-software-family.test.js`
+- `tests/mainline-review.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- `node tests/mainline-ai-software-family.test.js`
+- `node tests/mainline-review.test.js`
+- 主线归因、明星归因、两源配对、两源主线、三要件与预测记录等相邻专项测试通过。
+- `git diff --check`
+
+Deployment:
+- 本提交尚未部署；生产仍保留原 2026-07-31 预测档。
+- 曾对历史档执行一次带备份的验证写入，但因发现盘中/盘后软件族键尚未对齐而立即回滚；
+  回滚后的 SHA-256 与写前一致，过程已记录两份云端日志，未重启服务。
+
+Notes for next agent:
+- 代码部署后再按两源诊断重建 2026-07-31 预测档；公开回看必须同时满足：两源主题均为
+  软件方向、蓝色光标为确认明星、盘后 AI应用 28 家进入资格、Top1 命中、算力不在正式主线。

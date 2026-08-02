@@ -25424,17 +25424,50 @@ function strategyMainlineReviewStarCandidates(predict, main) {
   }
   return [...deduped.values()];
 }
+// AI 软件方向只有在预测档明确记录“AI应用 + AI视频/短剧”已经合并时，回看才把
+// 盘后 AI应用 家族视为同一条主线。AI应用单独出现时仍保持独立，绝不向算力硬件放开。
+function strategyMainlineReviewFamilyKeys(predict, main) {
+  const family = strategyMainlineFamilyInfo({
+    key: main?.key || main?.familyKey || '',
+    theme: main?.theme || '',
+  });
+  const keys = new Set(family?.key ? [family.key] : []);
+  const candidate = (Array.isArray(predict?.candidates) ? predict.candidates : [])
+    .find(row => strategyMainlineFamilyInfo({
+      key: row?.key || row?.familyKey || '',
+      theme: row?.theme || '',
+    }).key === family?.key) || null;
+  const mergedKeys = new Set((Array.isArray(candidate?.mergedThemes) ? candidate.mergedThemes : [])
+    .map(theme => strategyMainlineFamilyInfo({ theme }).key)
+    .filter(Boolean));
+  const hasApp = family?.key === 'theme:AI应用' || mergedKeys.has('theme:AI应用');
+  const hasShortVideo = family?.key === 'theme:短剧游戏' || mergedKeys.has('theme:短剧游戏');
+  if (hasApp && hasShortVideo) {
+    keys.add('theme:AI应用');
+    keys.add('theme:短剧游戏');
+  }
+  return keys;
+}
+function strategyMainlineReviewActualFamilyCount(predict, main, actualRanking) {
+  const accepted = strategyMainlineReviewFamilyKeys(predict, main);
+  const rows = (Array.isArray(actualRanking) ? actualRanking : [])
+    .filter(row => row?.familyKey && accepted.has(row.familyKey));
+  return {
+    count: rows.reduce((sum, row) => sum + (Number(row?.count) || 0), 0),
+    familyKeys: rows.map(row => row.familyKey),
+  };
+}
 function strategyMainlineReviewQualification(predict, main, actualRanking, finalSealedCodes, evidenceComplete) {
   const family = strategyMainlineFamilyInfo({
     key: main?.key || main?.familyKey || '',
     theme: main?.theme || '',
   });
-  const familyRow = (Array.isArray(actualRanking) ? actualRanking : [])
-    .find(row => row?.familyKey && row.familyKey === family.key) || null;
-  const limitUpCount = familyRow ? Number(familyRow.count) || 0 : 0;
+  const actualFamily = strategyMainlineReviewActualFamilyCount(predict, main, actualRanking);
+  const limitUpCount = actualFamily.count;
   const base = {
     familyKey: family.key || '',
     familyLabel: family.label || String(main?.theme || ''),
+    matchedActualFamilyKeys: actualFamily.familyKeys,
     limitUpCount,
     minLimitUpCount: STRATEGY_MAINLINE_FORMAL_MIN_ZT,
     limitUpPass: limitUpCount >= STRATEGY_MAINLINE_FORMAL_MIN_ZT,
@@ -26250,12 +26283,11 @@ async function getStrategyMainlineReview(days = 10) {
     let mainlineLeadStatus = null;
     if (actualRanking.length && main) {
       const tiedFirstFamilies = tier1.map(f => f.familyKey);
-      const predictedFamilies = formalTop.slice(0, 3)
-        .map(t => strategyMainlineFamilyInfo({ theme: t?.theme || '', key: t?.key || '' }).key)
-        .filter(Boolean);
-      const mainFamily = strategyMainlineFamilyInfo({ theme: main.theme || '', key: main.key || '' }).key;
-      mainlineHitTop1 = tiedFirstFamilies.includes(mainFamily);            // 命中任意并列第一都算 top1
-      mainlineHitTop3 = tiedFirstFamilies.some(f => predictedFamilies.includes(f));
+      const predictedFamilies = new Set(formalTop.slice(0, 3)
+        .flatMap(row => [...strategyMainlineReviewFamilyKeys(predict, row)]));
+      const mainFamilies = strategyMainlineReviewFamilyKeys(predict, main);
+      mainlineHitTop1 = tiedFirstFamilies.some(familyKey => mainFamilies.has(familyKey));
+      mainlineHitTop3 = tiedFirstFamilies.some(familyKey => predictedFamilies.has(familyKey));
       // 当日盘中(pendingReview)即使数据凑巧齐全也只算"待盘后验证",不计最终命中率
       if (sampleValid && !pendingReview) {
         mainlineTotal += 1;
@@ -26312,10 +26344,11 @@ async function getStrategyMainlineReview(days = 10) {
         let leadTime = null;
         let leadTimeStatus = null;
         if (sourceStatus === 'mainline' && actualRanking.length) {
-          const predFams = fTop.slice(0, 3).map(t => strategyMainlineFamilyInfo({ theme: t?.theme || '', key: t?.key || '' }).key).filter(Boolean);
-          const mFam = strategyMainlineFamilyInfo({ theme: sMain.theme || '', key: sMain.key || '' }).key;
-          hitTop1 = tiedFirstFamilies.includes(mFam);
-          hitTop3 = tiedFirstFamilies.some(f => predFams.includes(f));
+          const predFams = new Set(fTop.slice(0, 3)
+            .flatMap(row => [...strategyMainlineReviewFamilyKeys(blockPredict, row)]));
+          const mainFamilies = strategyMainlineReviewFamilyKeys(blockPredict, sMain);
+          hitTop1 = tiedFirstFamilies.some(familyKey => mainFamilies.has(familyKey));
+          hitTop3 = tiedFirstFamilies.some(familyKey => predFams.has(familyKey));
           if (sampleValid && !pendingReview) {
             srcStat[skey].total += 1;
             if (hitTop1) srcStat[skey].top1 += 1;

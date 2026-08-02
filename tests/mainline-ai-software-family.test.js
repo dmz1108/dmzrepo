@@ -70,9 +70,15 @@ const STRATEGY_MAINLINE_MERGE_GROUPS = extractSet('STRATEGY_MAINLINE_MERGE_GROUP
 const STRATEGY_MAINLINE_KEEP_FINE_THEMES = extractSet('STRATEGY_MAINLINE_KEEP_FINE_THEMES');
 eval(extractFn('strategyMainlineFamilyInfo'));
 eval(extractFn('strategyMainlineBoardThemeRelated'));
+eval(extractFn('strategyMainlineReviewFamilyKeys'));
+eval(extractFn('strategyMainlineReviewActualFamilyCount'));
 
 const normalizeReasonSourceCode = value => String(value || '').trim();
 const isFiniteNumeric = value => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
+const STRATEGY_MAINLINE_FORMAL_MIN_ZT = 3;
+const strategyMainlineExpectedStarTransitions = () => [];
+eval(extractFn('strategyMainlineReviewStarCandidates'));
+eval(extractFn('strategyMainlineReviewQualification'));
 const strategyDedupeByCode = rows => [...new Map((rows || []).map(row => [normalizeReasonSourceCode(row?.code), row])).values()];
 const strategyMainlineRepresentativeBoardInflow = boards => ({
   value: boards?.[0]?.netInflow ?? null,
@@ -159,5 +165,57 @@ const appOnly = strategyMergeMainlineFamilies([
 assert(appOnly.some(row => row.familyKey === 'theme:AI应用')
   && appOnly.some(row => row.familyKey === 'group:算力AI'),
   '没有 AI视频/短剧佐证时，AI应用与算力仍分开展示');
+
+const softwarePredict = {
+  candidates: [{
+    key: 'theme:短剧游戏',
+    familyKey: 'theme:短剧游戏',
+    theme: '短剧游戏',
+    mergedThemes: ['AI应用', 'AI视频', '短剧游戏'],
+    stars: [{ code: '300058', name: '蓝色光标', level: 'confirmed' }],
+  }],
+};
+const softwareTop = {
+  key: 'theme:短剧游戏',
+  theme: '短剧游戏',
+  star: { code: '300058', name: '蓝色光标', level: 'confirmed' },
+};
+const reviewKeys = strategyMainlineReviewFamilyKeys(softwarePredict, softwareTop);
+const reviewCount = strategyMainlineReviewActualFamilyCount(softwarePredict, softwareTop, [
+  { familyKey: 'theme:AI应用', count: 28 },
+  { familyKey: 'group:算力AI', count: 18 },
+]);
+assert(reviewKeys.has('theme:AI应用') && reviewKeys.has('theme:短剧游戏')
+  && !reviewKeys.has('group:算力AI'),
+  '回看只在预测档明确合并时把 AI应用 与 AI视频/短剧视为同一软件族');
+assert(reviewCount.count === 28
+  && reviewCount.familyKeys.length === 1
+  && reviewCount.familyKeys[0] === 'theme:AI应用',
+  '7月31日盘后 AI应用 28 家可验证软件主线，但算力 18 家不混入');
+const qualification = strategyMainlineReviewQualification(
+  softwarePredict,
+  softwareTop,
+  [
+    { familyKey: 'theme:AI应用', count: 28 },
+    { familyKey: 'group:算力AI', count: 18 },
+  ],
+  new Set(['300058']),
+  true,
+);
+assert(qualification.qualified === true
+  && qualification.limitUpCount === 28
+  && qualification.confirmedStar?.code === '300058',
+  '蓝色光标确认 + AI应用 28 家涨停使软件方向通过正式主线资格');
+
+const shortOnlyPredict = {
+  candidates: [{
+    key: 'theme:短剧游戏',
+    familyKey: 'theme:短剧游戏',
+    theme: '短剧游戏',
+    mergedThemes: ['AI视频'],
+  }],
+};
+assert(!strategyMainlineReviewFamilyKeys(shortOnlyPredict, softwareTop).has('theme:AI应用'),
+  '只有 AI视频/短剧证据时不擅自吸收独立 AI应用 家族');
 
 if (!process.exitCode) console.log('ALL CHECKS PASSED');
