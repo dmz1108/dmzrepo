@@ -185,6 +185,13 @@ async function waitHealth(port, ms = 20000) {
     const token = login.json && login.json.token;
     A((await httpJson(port, `/api/strategy-mainline-leader-debug?day=${DAY_CLEAN}&codes=600001`)).status === 403, '无 token 访问诊断端点:403(门控完好)');
 
+    const badSource = await httpJson(port, `/api/strategy-mainline-leader-debug?day=${DAY_CLEAN}&source=invalid`, { headers: { 'x-admin-token': token } });
+    A(badSource.status === 400 && /eastmoney or ths/.test(String(badSource.json?.error || '')),
+      '单源诊断拒绝未知来源，不默认混源');
+    const thsOnly = await httpJson(port, `/api/strategy-mainline-leader-debug?day=${DAY_CLEAN}&source=ths`, { headers: { 'x-admin-token': token } });
+    A(thsOnly.status === 200 && thsOnly.json?.source === 'ths',
+      '管理员诊断可显式限定同花顺单源');
+
     const diag = (day) => httpJson(port, `/api/strategy-mainline-leader-debug?day=${day}&codes=600001`, { headers: { 'x-admin-token': token } });
     const meta = r => (r.json && r.json.live && r.json.live.debugMeta) || null;
 

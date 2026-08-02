@@ -13147,3 +13147,27 @@ Notes for next agent:
 - 历史修复必须先备份，优先用新代码和云端原始数据重算；不得为了上榜伪造明星、龙头、涨停数或资金。
 - 验收口径：7 月 31 日软件方向应保留蓝色光标确认明星，算力硬件不得再包含
   `AI应用`、蓝色光标或软件板块资金。
+
+## 2026-08-02 - Codex - 主线诊断支持东财/同花顺单源重算
+
+Changed:
+- 管理员只读诊断端点新增 `source=ths|eastmoney`，可按同花顺或东财单源分别重算
+  live/review 主线；不传参数仍保持原混合诊断口径。
+- 非法来源显式返回 400，不默认回落混源；响应附带实际 `source`，供历史修复审计。
+- 该能力只服务于用真实单源证据修复 2026-07-31，不改正式页面、不写预测、不派发 L2。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/leader-debug-endpoint.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- `node tests/leader-debug-endpoint.test.js`（真实本地 HTTP + 临时管理员会话）
+- `git diff --check`
+
+Deployment:
+- 本条提交时尚未部署该诊断参数，未重启服务。
+
+Notes for next agent:
+- 单源诊断仍只读；历史预判档的修复必须另行备份、写入、公开回看验证和回滚。
