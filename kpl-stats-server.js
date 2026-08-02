@@ -21361,8 +21361,10 @@ function strategyMainlineBuildStarAttributionContext(priorByCode, liveReasonByCo
         currentSource: '',
         currentFamilies: new Set(),
         currentTopics: [],
+        currentBroadOnly: false,
         priorFamilies: new Set(),
         priorTopics: [],
+        priorBroadOnly: false,
       });
     }
     return out.get(code);
@@ -21379,6 +21381,7 @@ function strategyMainlineBuildStarAttributionContext(priorByCode, liveReasonByCo
       const row = ensure(code);
       row.priorFamilies = evidence.keys;
       row.priorTopics = evidence.topics;
+      row.priorBroadOnly = evidence.broadOnly === true;
     }
   }
   if (liveReasonByCode instanceof Map) {
@@ -21392,6 +21395,7 @@ function strategyMainlineBuildStarAttributionContext(priorByCode, liveReasonByCo
       row.currentSource = String(live?.source || '');
       row.currentFamilies = evidence.keys;
       row.currentTopics = evidence.topics;
+      row.currentBroadOnly = evidence.broadOnly === true;
     }
   }
   return out;
@@ -21411,6 +21415,13 @@ function strategyMainlineStarAttributionDecision(item, star, attributionByCode) 
     if (evidence.currentFamilies.has(familyKey)) {
       return { allowed: true, basis: currentBasis, conflict: '' };
     }
+    // “AI应用”是宽口径兜底，不能反过来否决同日板块已经给出的更具体 AI视频/短剧游戏
+    // 归属。兼容只开放这一条父子关系；算力AI、电力等其他家族仍按冲突拒绝。
+    if (evidence.currentBroadOnly === true
+      && evidence.currentFamilies.has('theme:AI应用')
+      && familyKey === 'theme:短剧游戏') {
+      return { allowed: true, basis: `${currentBasis}-broad-compatible`, conflict: '' };
+    }
     return {
       allowed: false,
       basis: `${currentBasis}-conflict`,
@@ -21420,6 +21431,11 @@ function strategyMainlineStarAttributionDecision(item, star, attributionByCode) 
   if (evidence.priorFamilies instanceof Set && evidence.priorFamilies.size) {
     if (evidence.priorFamilies.has(familyKey)) {
       return { allowed: true, basis: 'prior-main-reason', conflict: '' };
+    }
+    if (evidence.priorBroadOnly === true
+      && evidence.priorFamilies.has('theme:AI应用')
+      && familyKey === 'theme:短剧游戏') {
+      return { allowed: true, basis: 'prior-main-reason-broad-compatible', conflict: '' };
     }
     return {
       allowed: false,
