@@ -22197,6 +22197,13 @@ function strategyMainlineBoardThemeRelated(boardName, theme) {
   const mainInfo = strategyThemeTaxonomyInfo(main);
   if (boardInfo && mainInfo) {
     if (boardInfo.standard && mainInfo.standard && boardInfo.standard === mainInfo.standard) return true;
+    // AI 应用/人工智能等软件细分虽然历史上与算力共用 taxonomy group，
+    // 但不能仅凭这个宽组关系把 AI应用、ChatGPT、智谱AI 的板块资金和涨幅
+    // 挂到算力/液冷硬件主线。细分族之间只认相同 standard；AI应用与
+    // AI视频/短剧游戏的归并由 strategyMergeMainlineFamilies 单独处理。
+    const boardFine = STRATEGY_MAINLINE_KEEP_FINE_THEMES.has(themeDisplayName(boardInfo.standard));
+    const mainFine = STRATEGY_MAINLINE_KEEP_FINE_THEMES.has(themeDisplayName(mainInfo.standard));
+    if (boardFine || mainFine) return false;
     if (boardInfo.group && mainInfo.group && boardInfo.group === mainInfo.group) return true;
   }
   return board.includes(main) || main.includes(board);

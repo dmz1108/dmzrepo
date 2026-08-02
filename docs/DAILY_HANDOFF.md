@@ -13171,3 +13171,30 @@ Deployment:
 
 Notes for next agent:
 - 单源诊断仍只读；历史预判档的修复必须另行备份、写入、公开回看验证和回滚。
+
+## 2026-08-02 - Codex - 阻断 AI 软件板块资金串入算力硬件
+
+Changed:
+- 修正 `strategyMainlineBoardThemeRelated`：`AI应用`、`人工智能`、`短剧游戏`
+  等保留细分族不再仅因旧 taxonomy 的宽组相同，就把板块资金、涨幅和共振证据挂到
+  `算力/液冷/AI硬件`。
+- 同一标准题材仍可正常匹配；AI 应用与 AI 视频/短剧的合并继续由专门的软件家族逻辑处理。
+- 新增 2026-07-31 回归断言，锁住东财 `AI应用`、`ChatGPT`、同花顺 `智谱AI`
+  不得给算力硬件贡献资金，同时保留同标准题材和算力/液冷硬件组的正常匹配。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/mainline-ai-software-family.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- `node tests/mainline-ai-software-family.test.js`
+- `git diff --check`
+
+Deployment:
+- 本条提交时尚未部署，未重启服务，未改写 2026-07-31 历史预测档。
+
+Notes for next agent:
+- 代码上线后须重新执行东财/同花顺单源只读诊断；历史档只按重算证据和 Owner 对
+  7 月 31 日“AI 软件为主线、算力硬件非主线”的裁定修复，写前备份并保留前后哈希。
