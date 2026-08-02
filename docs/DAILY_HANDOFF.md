@@ -13044,9 +13044,17 @@ Validated:
 - `node tests/mainline-review.test.js`
 - `node tests/strategy-three-requirements.test.js`
 - `git diff --check`
+- 除既有异步临时文件竞态用例外，其余 `77` 个 `tests/*.test.js` 全部通过。
+- 生产 `/health` 返回 `{"ok":true}`；回看接口的 `2026-07-31` 同花顺预备短剧游戏
+  返回蓝色光标、昆仑万维两只确认明星及天龙集团、捷成股份两只预期明星，蓝色光标
+  不再出现在算力 AI 明星明细中。
 
 Deployment:
-- 本条提交时尚未部署该兼容规则、尚未重启服务。
+- PR #354 已合并；受保护生产运行 `30753750200` 从 `main@ee7a417` 部署
+  `kpl-stats-server.js`，重启主服务且健康检查通过。
+- 自动回退备份位于
+  `C:\PandaDashboard\_deploy-backups\github-30753750200-1`；云端两份运维日志由部署脚本
+  自动追加。
 - 前一项 PR #351 已由受保护生产运行 `30753094768` 部署并重启主服务，健康检查通过。
 - 2026-07-31 预测档已在备份后修正；备份目录
   `C:\PandaDashboard\backups\strategy-review-repair-20260731-20260802-225929`，修正后
@@ -13054,9 +13062,8 @@ Deployment:
   未重启服务。
 
 Notes for next agent:
-- 部署后验收 `/api/strategy-mainline-review?days=10` 的 2026-07-31：同花顺预备
-  短剧游戏应有蓝色光标和昆仑万维两只确认明星、天龙集团和捷成股份两只预期明星；
-  蓝色光标不得出现在算力 AI 明星明细中。
+- 2026-07-31 短剧游戏仍因 `no-qualified-leader` 留在预备层；这是正式三要件的正确结果，
+  不得为了显示而提升为正式主线。
 
 ## 2026-08-02 - Codex - Owner 授权补全并正式入库 7.31 TGB
 
