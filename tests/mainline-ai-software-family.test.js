@@ -69,6 +69,7 @@ eval(extractFn('strategyThemeTaxonomyInfo'));
 const STRATEGY_MAINLINE_MERGE_GROUPS = extractSet('STRATEGY_MAINLINE_MERGE_GROUPS');
 const STRATEGY_MAINLINE_KEEP_FINE_THEMES = extractSet('STRATEGY_MAINLINE_KEEP_FINE_THEMES');
 eval(extractFn('strategyMainlineFamilyInfo'));
+eval(extractFn('strategyMainlineBoardThemeRelated'));
 
 const normalizeReasonSourceCode = value => String(value || '').trim();
 const isFiniteNumeric = value => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
@@ -116,6 +117,13 @@ assert(strategyMainlineFamilyInfo({ theme: '人工智能' }).key === 'theme:人�
 assert(strategyMainlineFamilyInfo({ theme: '算力' }).key === 'group:算力AI'
   && strategyMainlineFamilyInfo({ theme: '液冷' }).key === 'group:算力AI',
   '算力与液冷仍属硬件算力族');
+assert(!strategyMainlineBoardThemeRelated('AI应用', '算力')
+  && !strategyMainlineBoardThemeRelated('ChatGPT概念', '液冷')
+  && !strategyMainlineBoardThemeRelated('智谱AI', 'AI硬件'),
+  'AI 软件板块不得仅凭旧 taxonomy group 给算力硬件贡献资金和涨幅');
+assert(strategyMainlineBoardThemeRelated('AI应用', 'ChatGPT概念')
+  && strategyMainlineBoardThemeRelated('算力概念', '液冷'),
+  '同一 AI 应用 standard 与同一硬件大组仍保持既有匹配');
 
 const merged = strategyMergeMainlineFamilies([
   candidate('AI应用', ['300058', '300418', '002354'], 120, 'AI应用'),
