@@ -60,6 +60,8 @@ const STRATEGY_MAINLINE_FORMAL_MIN_ZT = 3;
 // ---- 待测函数 + 可控 IO/时钟 stub ----
 eval(extractFn('strategyMainlineActualFamilyRanking'));
 eval(extractFn('strategyMainlineReviewStarCandidates'));
+eval(extractFn('strategyMainlineReviewFamilyKeys'));
+eval(extractFn('strategyMainlineReviewActualFamilyCount'));
 eval(extractFn('strategyMainlineReviewQualification'));
 eval(extractFn('normalizeReviewFirstLimitTime'));
 eval(extractFn('strategyMainlineExpectedStarTransitions'));
