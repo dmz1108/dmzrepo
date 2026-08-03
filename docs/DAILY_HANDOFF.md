@@ -13675,3 +13675,44 @@ Deployment:
 Notes for next agent:
 - 该结果是 Owner 指定的盘后证据修正，不得回写为盘中预测样本；后续自动生成器仍由现行归因和
   L2 规则负责，不能复用按时间选择同类型任务的 v1 做法。
+
+## 2026-08-03 - Claude Code Remote - 词典声明式族字段与裁决泛化(issue #375 PR A,行为等价)
+
+Changed:
+- theme-taxonomy.json 新增声明式字段:`familyUnit`("group"=按组归并交易族 /
+  "standard"=按标准名独立细族,共 50+3 条,严格按改造前字面集合行为标注)、
+  `compatibleParents`(火电热电/绿电新能源运营/水电 → 电力)、
+  `broadFallbackFamilies`(AI应用 → 短剧游戏)。
+- `strategyMainlineFamilyInfo` 改为消费 `familyUnit`;
+  `strategyMainlineBoardThemeRelated` 的 KEEP_FINE 判定同步切换。
+- 新增 `strategyMainlineFamilyCompat`(从词典构建 子族→父族 与 宽词→兜底族 关系图,
+  随词典热加载失效重建)与 `strategyThemeTaxonomyValidateFamilyUnits`
+  (声明字段与字面集合一致性 fail-fast 校验,启动与热加载均执行)。
+- `strategyMainlineStarAttributionDecision` 删除全部 4 处硬编码特例
+  (电力父子 ×2、AI应用宽兜底 ×2),改为通用兼容关系查询;basis 字符串不变。
+- 字面集合 MERGE_GROUPS/KEEP_FINE 暂保留(供旧测试提取与一致性校验),
+  PR B 首批族划分时随行为变更一并退役。
+
+Files:
+- `theme-taxonomy.json`
+- `kpl-stats-server.js`
+- `tests/family-declarative-equivalence.test.js`(新增)
+- `tests/fixtures/family-key-baseline.json`(新增,改造前基线)
+- `tests/strategy-star-attribution.test.js`(注入新函数)
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 行为等价:改造前代码枚举词典全部 1102 词生成基线 fixture,新实现逐词比对
+  族键/标签/组 **零差异**;裁决场景(华电辽能父子、蓝色光标宽兜底、兄弟/跨族拒绝、
+  非 broadOnly 不兜底)basis 全部不变。
+- 一致性校验正反例(通过/篡改即抛)均有断言。
+- `node --check`;全仓 80/81 通过(唯一失败 board-snapshot-contamination 为
+  main 既有环境问题,#361 复审时已确认)。
+
+Deployment:
+- GitHub only;未部署、未重启、未改任何生产数据。
+
+Notes for next agent:
+- PR B(首批族划分:电力发电侧合族、算力硬件/AI软件分家)是**有意行为变更**,
+  届时更新 fixture 并把前后族键 diff 写入交接;字面集合与一致性校验在 PR B 删除。
+- 词典热加载路径已包含 compat 缓存失效与校验,管理员改词典后无需重启。

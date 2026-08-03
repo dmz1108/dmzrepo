@@ -84,6 +84,7 @@ eval(src.match(/const THS_EVENT_NOISE = [^\n]+/)[0].replace('const ', 'var '));
 eval(extractFn('thsReasonTokens'));
 eval(extractFn('strategyMainlineReasonFamilyEvidence'));
 eval(extractFn('strategyMainlineBuildStarAttributionContext'));
+eval(extractFn('strategyMainlineFamilyCompat'));
 eval(extractFn('strategyMainlineStarAttributionDecision'));
 eval(extractFn('strategyMainlineFilterAttributedStars'));
 eval(extractFn('strategyMainlineMainReasonDbAttribution'));

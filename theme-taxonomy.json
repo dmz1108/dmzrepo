@@ -40,7 +40,8 @@
     "存储主控",
     "利基存储",
     "NOR Flash"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "光刻机光刻胶",
@@ -72,7 +73,8 @@
     "光罩",
     "涂胶显影",
     "光刻胶概念"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "先进封装",
@@ -114,7 +116,8 @@
     "半导体封装",
     "ABF载板",
     "倒装封装"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "半导体材料",
@@ -152,7 +155,8 @@
     "电子级氢氟酸",
     "半导体前驱体",
     "封装材料"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "半导体设备",
@@ -196,7 +200,8 @@
     "半导体设备零部件",
     "CMP设备",
     "ALD设备"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "功率半导体/第三代半导体",
@@ -234,7 +239,8 @@
     "模拟芯片",
     "宽禁带半导体",
     "功率二极管"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "半导体硅片",
@@ -263,7 +269,8 @@
     "半导体石英",
     "抛光片",
     "外延片"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "芯片设计/算力芯片",
@@ -306,7 +313,8 @@
     "RISC-V",
     "FPGA",
     "国产CPU"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "半导体",
@@ -328,7 +336,8 @@
     "半导体概念",
     "IC"
    ],
-   "broad": true
+   "broad": true,
+   "familyUnit": "group"
   },
   {
    "standard": "光模块/光通信",
@@ -386,7 +395,8 @@
     "光组件",
     "相干光通信",
     "光互连"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "光纤光缆",
@@ -411,7 +421,8 @@
     "预制棒",
     "通信光缆",
     "海底光缆"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "高速铜连接",
@@ -439,7 +450,8 @@
     "高速背板",
     "DAC铜缆",
     "无源铜连接"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "覆铜板/铜箔/PCB上游材料",
@@ -483,7 +495,8 @@
     "BT树脂",
     "碳氢树脂",
     "PPO树脂"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "电子布/玻纤",
@@ -512,7 +525,8 @@
     "低介电玻纤",
     "Low-Dk玻纤布",
     "石英玻纤"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "PCB/印制电路板",
@@ -552,7 +566,8 @@
     "多层板",
     "AI PCB",
     "服务器PCB"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "MLCC/电容",
@@ -582,7 +597,8 @@
     "超级电容",
     "铝电解电容",
     "钽电容"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "电感",
@@ -604,7 +620,8 @@
     "片式电感",
     "贴片电感",
     "磁性元件"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "被动元件材料",
@@ -630,7 +647,8 @@
     "电子浆料",
     "银浆",
     "被动元件材料"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "被动元件",
@@ -648,7 +666,8 @@
     "元器件",
     "无源器件"
    ],
-   "broad": true
+   "broad": true,
+   "familyUnit": "group"
   },
   {
    "standard": "液冷/数据中心散热",
@@ -676,7 +695,8 @@
     "金刚石散热",
     "浸没式液冷",
     "温控散热"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "AI电源/AI配电",
@@ -696,7 +716,8 @@
     "AI配电",
     "服务器电源",
     "数据中心供电"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "AI硬件/服务器",
@@ -714,7 +735,8 @@
     "AI服务器",
     "服务器",
     "算力硬件"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "算力/数据中心",
@@ -744,7 +766,8 @@
     "存算基地",
     "算电一体",
     "AIDC"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "短剧游戏/传媒",
@@ -794,7 +817,8 @@
     "出版",
     "动漫",
     "微短剧"
-   ]
+   ],
+   "familyUnit": "standard"
   },
   {
    "standard": "AI应用/AI大模型",
@@ -827,7 +851,11 @@
     "AI医疗",
     "ChatGPT"
    ],
-   "broad": true
+   "broad": true,
+   "familyUnit": "standard",
+   "broadFallbackFamilies": [
+    "短剧游戏"
+   ]
   },
   {
    "standard": "人工智能",
@@ -839,7 +867,8 @@
    "members": [
     "人工智能"
    ],
-   "broad": true
+   "broad": true,
+   "familyUnit": "standard"
   },
   {
    "standard": "减速器",
@@ -855,7 +884,8 @@
    ],
    "members": [
     "减速器"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "机器视觉",
@@ -869,7 +899,8 @@
    ],
    "members": [
     "机器视觉"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "脑机接口",
@@ -883,7 +914,8 @@
    ],
    "members": [
     "脑机接口"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "具身智能/物理AI",
@@ -901,7 +933,8 @@
     "物理AI",
     "具身智能",
     "AI智能体"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "人形机器人",
@@ -930,7 +963,8 @@
     "智能制造",
     "智能割草",
     "机器人零部件"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "智能驾驶/无人驾驶",
@@ -954,7 +988,8 @@
    "members": [
     "无人驾驶",
     "智能驾驶"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "固态电池",
@@ -1501,6 +1536,9 @@
     "虚拟电厂",
     "电力现货",
     "整县推进"
+   ],
+   "compatibleParents": [
+    "电力"
    ]
   },
   {
@@ -1524,6 +1562,9 @@
     "火力发电",
     "热电联产",
     "火电灵活性改造"
+   ],
+   "compatibleParents": [
+    "电力"
    ]
   },
   {
@@ -1543,6 +1584,9 @@
     "抽水蓄能",
     "抽蓄",
     "水力发电"
+   ],
+   "compatibleParents": [
+    "电力"
    ]
   },
   {
@@ -1830,7 +1874,8 @@
     "含氟",
     "氟化",
     "氟化学品"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "磷化工",
@@ -1851,7 +1896,8 @@
     "黄磷",
     "磷酸",
     "磷化学品"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "工业气体电子特气",
@@ -1875,7 +1921,8 @@
     "氦气",
     "稀有气体",
     "电子气体"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "染料",
@@ -1893,7 +1940,8 @@
     "分散染料",
     "靛蓝",
     "染料中间体"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "PEEK材料",
@@ -1908,7 +1956,8 @@
     "聚醚醚酮",
     "PEEK材料",
     "特种工程塑料"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "先进陶瓷材料",
@@ -1930,7 +1979,8 @@
     "精密陶瓷",
     "陶瓷材料",
     "先进陶瓷"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "培育钻石/金刚石",
@@ -1951,7 +2001,8 @@
     "钻石概念",
     "工业金刚石",
     "金刚石半导体"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "化工",
@@ -1989,7 +2040,8 @@
     "有机硅",
     "民爆"
    ],
-   "broad": true
+   "broad": true,
+   "familyUnit": "group"
   },
   {
    "standard": "玻璃基板封装",
@@ -2011,7 +2063,8 @@
     "玻璃基Micro",
     "电子玻璃",
     "玻璃"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "面板/MicroLED/折叠屏",
@@ -2039,7 +2092,8 @@
     "显示面板",
     "Micro OLED",
     "显示模组"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "消费电子",
@@ -2071,7 +2125,8 @@
     "AI眼镜",
     "智能眼镜",
     "可穿戴设备"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "低空经济",
@@ -2180,7 +2235,8 @@
     "细胞治疗",
     "基因治疗",
     "创新药出海"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "医疗器械",
@@ -2201,7 +2257,8 @@
     "体外诊断",
     "高值耗材",
     "医学影像"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "医药",
@@ -2228,7 +2285,8 @@
     "原料药",
     "医疗"
    ],
-   "broad": true
+   "broad": true,
+   "familyUnit": "group"
   },
   {
    "standard": "白酒/食品饮料",
@@ -2259,7 +2317,8 @@
     "调味品",
     "饮料",
     "酒类"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "预制菜",
@@ -2273,7 +2332,8 @@
     "预制菜",
     "速冻食品",
     "餐饮供应链"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "养殖",
@@ -2304,7 +2364,8 @@
     "农机",
     "农业",
     "宠物经济"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "服装家纺/纺织",
@@ -2327,7 +2388,8 @@
     "纺织",
     "家纺",
     "服装"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "零售/商业百货",
@@ -2361,7 +2423,8 @@
     "在线导购",
     "黄金珠宝",
     "家电"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "世界杯/体育",
@@ -2380,7 +2443,8 @@
     "足球",
     "体育",
     "体育产业"
-   ]
+   ],
+   "familyUnit": "group"
   },
   {
    "standard": "大消费",
@@ -2400,7 +2464,8 @@
     "消费",
     "消费概念"
    ],
-   "broad": true
+   "broad": true,
+   "familyUnit": "group"
   },
   {
    "standard": "地产链",
