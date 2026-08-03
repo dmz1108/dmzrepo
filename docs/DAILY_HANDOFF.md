@@ -13675,3 +13675,30 @@ Deployment:
 Notes for next agent:
 - 该结果是 Owner 指定的盘后证据修正，不得回写为盘中预测样本；后续自动生成器仍由现行归因和
   L2 规则负责，不能复用按时间选择同类型任务的 v1 做法。
+
+## 2026-08-03 - Codex - 预判回看正式主线与统计样本状态解耦
+
+Changed:
+- 修复预判回看把 `sampleValid=false` 优先渲染为中性状态、从而覆盖
+  `mainlineQualified=true` 正式主线结论的问题。
+- `sampleValid` 继续只控制是否进入盘中预测统计；盘后确认满足正式主线条件时，摘要行改为真主线
+  高亮并显示“正式主线”徽标，同时保留“不计样本·已收盘”说明。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `tests/strategy-two-source-mainlines.test.js`
+- `ops/production/manifests/strategy-review-formal-mainline-display-20260803.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node tests/strategy-two-source-mainlines.test.js`
+- `node tests/mainline-review.test.js`
+- `git diff --check`
+- 新增回归断言：不计预测样本但正式资格成立的记录必须使用 `hit-ok`，摘要徽标必须为
+  “正式主线”，统计排除标签继续保留。
+
+Deployment:
+- 当前仅 GitHub 修改；尚未部署，未重启服务。
+
+Notes for next agent:
+- 不得把盘后人工修正重新计入盘中命中率；本次只修正事实结论的视觉优先级，不改变统计口径。
