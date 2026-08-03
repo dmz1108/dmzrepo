@@ -13274,3 +13274,41 @@ Notes for next agent:
 - 7 月 31 日的历史修复属于有备份、有哈希、有 Owner 裁定的单日修正；不要把“算力非主线”
   泛化到其他日期。未来同类软件行情只在预测候选明确包含 AI应用 与 AI视频/短剧合并证据时
   才跨家族键回看。
+
+## 2026-08-02 - Codex - 主因归属约束板块涨停扫描数量
+
+Changed:
+- 自动 L2 扫描的“板块至少 2 只涨停”不再只信静态板块成员关系；对已有明确当日/历史
+  主因归属的涨停股，若其主因家族与候选板块家族冲突，则从该板块的策略有效涨停数中剔除。
+- 保留来源原始涨停数 `ztRaw`、归属修正后的 `zt`、合格涨停代码和冲突明细；只修正策略
+  派生统计，不改涨停底库、主因库或来源快照。主因未知者继续保留，避免错杀首日新题材。
+- 归属修正提前到实时主线 seed 生成之前，防止硬件股虽然未通过 L2 扫描门槛，却仍残留在
+  软件题材的 `todayCodes` 或 `countFallback` 中。
+- 真实证据复核：`002929 润建股份` 出现在多模态 AI 等板块，但 2026-07-31 主因是
+  `算力`；`300058 蓝色光标` 主因是 `AI应用`，继续作为软件方向证据保留。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/mainline-ai-software-family.test.js`
+- `tests/strategy-board-zt-backfill.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js`
+- 主因家族、板级涨停回填、catalog 补水、明星归属、三要件、双源主线、扫描优先级、
+  资金闸、历史结论、预判回看和明星粘性等 13 组专项测试通过。
+- 生产只读证据请求：`day=2026-07-31`，`themes=AI应用,AI视频,短剧游戏,算力AI`，
+  `windowDays=20`，股票代码为本次 AI 软件/硬件样本 20 只；证据包 `complete=true`，
+  `missingSources=[]`，`sourceErrors=[]`。
+- 证据包 SHA-256：
+  `5a7c2d9eaae9ffe889100140080c2f40d1ae3f1b8c13e83d3263ff34001cf412`；
+  `tools/replay-strategy-case.js --require-complete --expect-sha=...` 通过。
+- `git diff --check`
+
+Deployment:
+- 本提交尚未部署，未重启服务，未改写任何正式数据库、快照或预测档。
+- 云端只在 `tmp/strategy-cases` 写入同 SHA 的只读证据包供独立复核；临时 capture 脚本已删除。
+
+Notes for next agent:
+- 请用相同日期、主题、20 只代码和 20 日窗口独立复核。重点确认：明确算力/半导体主因的
+  涨停股不能替 AI 软件板凑扫描数量；蓝色光标等软件主因股仍保留；主因未知者不应被删除。

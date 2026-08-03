@@ -22545,7 +22545,7 @@ async function strategyMainlineHydrateCatalogBoardsForScan(seedByKey, catalogBoa
     board.nearLimitCodes = board.nearLimitStocks.map(stock => stock.code);
     board.breadth = strategyMainlineBoardBreadth(normalized);
   });
-  strategyMainlineBackfillBoardZt(selected, limitUpByCode);
+  strategyMainlineBackfillBoardZt(selected, limitUpByCode, options.attributionByCode);
   return selected.filter(board => Array.isArray(board?.memberRows) && board.memberRows.length > 0);
 }
 
@@ -23388,14 +23388,19 @@ function strategyMainlineScanPriorityCodes(board, priorByCode) {
     .slice(0, 20);
 }
 
-// 板级涨停数精确回填:仅当 board.zt 为 null(盘中实时榜常见)时,用成份股逐只判定——
+// 板级涨停数精确回填:当 board.zt 未知时,用成份股逐只判定——
 // ①成份 code ∈ 当日涨停底库(权威);②底库没有该股时,实时涨幅 ≥ limitUpThreshold(code,name) 兜底。
-// 两路 code 集合取并去重;标 ztSource='member-join' 供审计。已知 zt(快照/来源自带)绝不覆盖。
-function strategyMainlineBackfillBoardZt(boards, limitUpByCode) {
+// 若传入主因归属上下文,再用与明星股相同的归属裁决剔除明确跨族的涨停贡献：例如历史/当日
+// 主因只指向算力硬件的股票,不得替 AI视频/短剧游戏凑满自动扫描所需的「至少2只涨停」。
+// 原始来源数保存在 ztRaw,剔除明细保存在 ztRejectedByAttribution,不篡改底层涨停事实。
+function strategyMainlineBackfillBoardZt(boards, limitUpByCode, attributionByCode = null) {
   for (const b of (Array.isArray(boards) ? boards : [])) {
     // 只把「有限数值」当已有值(含真实 0);null/undefined/NaN 一律视为未知需回填——
     // 生产 unknown 曾以 NaN 形态出现(Codex #111 复核 P1),!=null 守卫会漏掉它。
-    if (!b || isFiniteNumeric(b.zt)) continue;
+    if (!b) continue;
+    const hasKnownZt = isFiniteNumeric(b.zt);
+    const hasAttribution = attributionByCode instanceof Map;
+    if (hasKnownZt && !hasAttribution) continue;
     const rows = Array.isArray(b.memberRows) ? b.memberRows : [];
     if (!rows.length) continue;
     const ztCodes = new Set();
@@ -23406,8 +23411,49 @@ function strategyMainlineBackfillBoardZt(boards, limitUpByCode) {
       const gain = Number(r?.gain);
       if (Number.isFinite(gain) && gain >= limitUpThreshold(code, r?.name)) ztCodes.add(code);
     }
-    b.zt = ztCodes.size;
-    b.ztSource = 'member-join';
+    if (!hasAttribution) {
+      b.zt = ztCodes.size;
+      b.ztSource = 'member-join';
+      continue;
+    }
+
+    const rejected = [];
+    const boardFamilyKey = String(strategyMainlineFamilyInfo({ theme: b?.name }).key || '');
+    for (const code of ztCodes) {
+      const decision = strategyMainlineStarAttributionDecision(
+        { familyKey: boardFamilyKey },
+        { code },
+        attributionByCode,
+      );
+      if (!decision.allowed) {
+        rejected.push({
+          code,
+          reason: String(decision.basis || 'main-reason-conflict'),
+          conflict: String(decision.conflict || ''),
+        });
+      }
+    }
+    const priorRaw = isFiniteNumeric(b.ztRaw) ? Number(b.ztRaw) : null;
+    const rawZt = priorRaw != null ? priorRaw : (hasKnownZt ? Number(b.zt) : ztCodes.size);
+    const rejectedCodes = new Set(rejected.map(row => row.code));
+    const listedCodes = [...new Set((Array.isArray(b.codes) ? b.codes : [])
+      .map(normalizeReasonSourceCode)
+      .filter(Boolean))];
+    const candidateCoverageComplete = listedCodes.length > 0 || ztCodes.size >= rawZt;
+
+    b.ztRaw = rawZt;
+    b.zt = Math.max(0, rawZt - rejected.length);
+    b.ztAttributionAdjusted = rejected.length > 0;
+    b.ztRejectedByAttribution = rejected;
+    if (candidateCoverageComplete) {
+      const baseCodes = listedCodes.length ? listedCodes : [...ztCodes];
+      b.ztQualifiedCodes = baseCodes.filter(code => !rejectedCodes.has(code));
+    } else {
+      delete b.ztQualifiedCodes;
+    }
+    const baseSource = String(b.ztSource || (hasKnownZt ? 'source' : 'member-join'))
+      .replace(/\+main-reason-attribution$/u, '');
+    b.ztSource = rejected.length ? `${baseSource}+main-reason-attribution` : baseSource;
   }
 }
 
@@ -26724,7 +26770,8 @@ function strategyMainlineAddRealtimeBoardSeed(seedByKey, board) {
   const zt = numOrNull(board?.zt);
   const gainPct = numOrNull(board?.gainPct);
   const netInflow = numOrNull(board?.netInflow);
-  const codes = [...new Set((Array.isArray(board?.codes) ? board.codes : [])
+  const sourceCodes = Array.isArray(board?.ztQualifiedCodes) ? board.ztQualifiedCodes : board?.codes;
+  const codes = [...new Set((Array.isArray(sourceCodes) ? sourceCodes : [])
     .map(normalizeReasonSourceCode)
     .filter(Boolean))];
   const risingStocks = strategyMainlineBoardRisingStocks(board);
@@ -27339,20 +27386,12 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     for (const stock of strategyMainlineBoardRisingStocks(b)) strategyMainlineAddRisingStock(risingStockByCode, stock);
     for (const stock of strategyMainlineBoardNearLimitStocks(b)) strategyMainlineAddRisingStock(nearLimitStockByCode, stock);
   }
-  for (const b of (boardPayload?.boards || [])) {
-    const zt = numOrNull(b?.zt);
-    const gainPct = numOrNull(b?.gainPct);
-    const netInflow = numOrNull(b?.netInflow);
-    const hasLimitUps = zt != null && zt > 0;
-    const hasCodes = Array.isArray(b?.codes) && b.codes.length > 0;
-    const hasRising = Array.isArray(b?.risingStocks) && b.risingStocks.length > 0;
-    if (!hasLimitUps && !hasCodes && !hasRising) continue;
-    if (!((zt != null && zt >= 2) || (gainPct != null && gainPct > 0) || (netInflow != null && netInflow > 0))) continue;
-    strategyMainlineAddRealtimeBoardSeed(seedByKey, b);
-  }
   let todayLimitCodes = new Set([...limitUpByCode.keys()]);
   if (!todayLimitCodes.size) {
-    todayLimitCodes = new Set([...seedByKey.values()].flatMap(seed => [...(seed.codeSet || [])]));
+    todayLimitCodes = new Set((boardPayload?.boards || []).flatMap(board =>
+      (Array.isArray(board?.codes) ? board.codes : [])
+        .map(normalizeReasonSourceCode)
+        .filter(Boolean)));
   }
   const intradaySignalCodes = new Set([...todayLimitCodes, ...risingStockByCode.keys()]);
   const priorReason = await strategyMainlineDiagAwait('prior-reason',
@@ -27363,6 +27402,28 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     priorReason?.byCode,
     liveReasonByCode,
   );
+  // 自动扫描的「至少2只涨停」必须使用主因归属后的有效数量。原始板块涨停数仍保留在
+  // ztRaw；这里只剔除已有明确跨族证据的股票，主因未知者继续按成分关系保留。
+  strategyMainlineBackfillBoardZt(
+    boardPayload?.boards || [],
+    limitUpByCode,
+    starAttributionByCode,
+  );
+  // 必须在板块进入 seed 之前完成归属修正。否则扫描门槛虽已扣掉跨族涨停，软件 seed 的
+  // todayCodes/countFallback 仍会保留硬件股，后续正式主线数量又会被污染。
+  for (const b of (boardPayload?.boards || [])) {
+    const zt = numOrNull(b?.zt);
+    const gainPct = numOrNull(b?.gainPct);
+    const netInflow = numOrNull(b?.netInflow);
+    const hasLimitUps = zt != null && zt > 0;
+    const hasCodes = Array.isArray(b?.ztQualifiedCodes)
+      ? b.ztQualifiedCodes.length > 0
+      : Array.isArray(b?.codes) && b.codes.length > 0;
+    const hasRising = Array.isArray(b?.risingStocks) && b.risingStocks.length > 0;
+    if (!hasLimitUps && !hasCodes && !hasRising) continue;
+    if (!((zt != null && zt >= 2) || (gainPct != null && gainPct > 0) || (netInflow != null && netInflow > 0))) continue;
+    strategyMainlineAddRealtimeBoardSeed(seedByKey, b);
+  }
   for (const prior of priorReason.byCode.values()) {
     const seed = strategyMainlineEnsureSeed(seedByKey, prior.theme, prior.key);
     if (!seed) continue;
@@ -27430,7 +27491,7 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
     catalogBoardsForSource,
     isoDay,
     limitUpByCode,
-    { fullWait: diagMode, debugErrors }
+    { fullWait: diagMode, debugErrors, attributionByCode: starAttributionByCode }
   ).catch(e => {
     if (debugErrors) debugErrors.push(`catalog-hydrate: ${String(e && e.message || e)}`);
     return [];
