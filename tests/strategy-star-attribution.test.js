@@ -129,6 +129,38 @@ A(strategyMainlineStarAttributionDecision(semiconductor, taiJi, attribution).all
 A(strategyMainlineStarAttributionDecision(semiconductor, yaKe, attribution).allowed,
   '雅克科技在半导体家族通过历史四源主因归属');
 
+const huaDian = { code: '600396', name: '华电辽能', level: 'confirmed' };
+const huaDianCurrent = strategyMainlineBuildStarAttributionContext(new Map(), new Map([
+  ['600396', {
+    code: '600396',
+    reason: '火电+用电负荷新高+央企',
+    source: 'ths-limit-up-pool',
+  }],
+]));
+const huaDianPower = strategyMainlineStarAttributionDecision(electric, huaDian, huaDianCurrent);
+A(huaDianPower.allowed && huaDianPower.basis === 'current-limit-reason-child-compatible',
+  '华电辽能当日火电细分主因可以支撑电力父主线');
+A(!strategyMainlineStarAttributionDecision(
+  { theme: '绿色电力', familyKey: 'theme:绿电新能源运营' }, huaDian, huaDianCurrent,
+).allowed, '火电明星不得因电力父子兼容规则错挂到绿色电力兄弟题材');
+A(!strategyMainlineStarAttributionDecision(
+  electric,
+  { code: '601700', name: '风范股份', level: 'confirmed' },
+  strategyMainlineBuildStarAttributionContext(new Map(), new Map([
+    ['601700', { code: '601700', reason: '特高压+电网设备', source: 'ths-limit-up-pool' }],
+  ])),
+).allowed, '电网设备明星不得借父子兼容规则计入发电侧电力主线');
+const huaDianPrior = strategyMainlineBuildStarAttributionContext(new Map([
+  ['600396', {
+    code: '600396',
+    theme: '电力',
+    topics: [{ theme: '绿色电力' }],
+  }],
+]), new Map());
+A(strategyMainlineStarAttributionDecision(electric, huaDian, huaDianPrior).basis
+  === 'prior-main-reason-child-compatible',
+'华电辽能历史绿色电力主因在盘中尚无当日主因时仍可支撑电力父主线');
+
 const shortDramaFamily = strategyMainlineFamilyInfo({ theme: '短剧游戏' }).key;
 A(shortDramaFamily === 'theme:短剧游戏'
   && strategyMainlineFamilyInfo({ theme: '快手概念' }).key === shortDramaFamily

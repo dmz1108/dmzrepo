@@ -21407,6 +21407,12 @@ function strategyMainlineStarAttributionDecision(item, star, attributionByCode) 
   if (!code || !familyKey || !(attributionByCode instanceof Map)) {
     return { allowed: true, basis: 'board-membership-only', conflict: '' };
   }
+  // 细分发电主因可以支撑“电力”父主线，但兄弟细分仍不能互相借明星。
+  // 例如火电明星可计入电力，不得因此计入绿电；电网设备/核电工程也不属于该兼容范围。
+  const isPowerParentCompatible = families => familyKey === 'theme:电力'
+    && families instanceof Set
+    && ['theme:火电热电', 'theme:绿电新能源运营', 'theme:水电']
+      .some(childKey => families.has(childKey));
   const evidence = attributionByCode.get(code);
   if (!evidence) return { allowed: true, basis: 'board-membership-only', conflict: '' };
   if (evidence.currentFamilies instanceof Set && evidence.currentFamilies.size) {
@@ -21423,6 +21429,9 @@ function strategyMainlineStarAttributionDecision(item, star, attributionByCode) 
       && familyKey === 'theme:短剧游戏') {
       return { allowed: true, basis: `${currentBasis}-broad-compatible`, conflict: '' };
     }
+    if (isPowerParentCompatible(evidence.currentFamilies)) {
+      return { allowed: true, basis: `${currentBasis}-child-compatible`, conflict: '' };
+    }
     return {
       allowed: false,
       basis: `${currentBasis}-conflict`,
@@ -21437,6 +21446,9 @@ function strategyMainlineStarAttributionDecision(item, star, attributionByCode) 
       && evidence.priorFamilies.has('theme:AI应用')
       && familyKey === 'theme:短剧游戏') {
       return { allowed: true, basis: 'prior-main-reason-broad-compatible', conflict: '' };
+    }
+    if (isPowerParentCompatible(evidence.priorFamilies)) {
+      return { allowed: true, basis: 'prior-main-reason-child-compatible', conflict: '' };
     }
     return {
       allowed: false,
