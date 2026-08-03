@@ -13481,3 +13481,33 @@ Deployment:
 Notes for next agent:
 - 修复作用于部署后的实时计算。2026-08-03 已冻结快照保留当时实际输出，不能为了改变历史
   页面结果而静默重写；后续交易日用真实候选验证发电细分明星是否正确支撑“电力”。
+
+## 2026-08-03 - Codex - TGB 湖南人官方文章未发布阻断
+
+Changed:
+- 按北京时间交易日 2026-08-03 走受保护生产流程强制刷新 @TGB湖南人官方原文与原图证据。
+- PR #367 已合并；生产运行 `30810233537` 第一次在上传前因 SSH 端口拒绝失败，第二次连通后
+  执行 raw-only 抓取，结果为 `article-not-found`、0 篇文章、0 张图片。
+- 因缺少标题、日期、水印均可核对的官方白底表格原图，未开始人工逐行转录，未写正式库，
+  未重折综合主因库；新增日期绑定的云端阻断日志请求。
+
+Files:
+- `ops/production/requests/2026-08-03-tgb-hunan-raw-evidence.ps1`
+- `ops/production/requests/2026-08-03-tgb-hunan-article-not-found-log.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 北京时间目标日为 2026-08-03（周一交易日），公开健康接口返回 `ok:true`。
+- 受保护 raw-only 回执明确 `ocrDisabled=true`、`manualRequired=true`、
+  `automaticStructuringDisabled=true`、`officialTgbOnly=true`。
+- 公开 source-view 在阻断时综合归纳、复盘啦、选股宝、韭研均为 75 只，TGB 正式来源缺失；
+  无任何 OCR/Qwen/自动视觉结果被用于正式行。
+
+Deployment:
+- 原始证据抓取写入同日 `article-not-found` raw manifest；未写正式 TGB 文件，未重折综合主因库。
+- 未部署代码，未重启服务。
+- 云端阻断日志由日期绑定请求在合并后执行；写前备份两份云端日志。
+
+Notes for next agent:
+- 待官方文章和原图可用后重新执行 raw-evidence force refresh，再从选图、双遍人工转录和 75 只
+  终盘池全量对账继续；当前状态不能声称 TGB 入库完成。
