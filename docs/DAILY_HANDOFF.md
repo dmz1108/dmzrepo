@@ -13450,3 +13450,34 @@ Notes for next agent:
 - 合并部署后用 2026-08-03 只读诊断重算电力候选；预期华电辽能归属依据变为
   `current-limit-reason-child-compatible`，再由确认明星、合格龙头、至少 3 只同族涨停三要件
   决定是否成为正式主线。
+
+## 2026-08-03 - Codex - 电力父主线归因部署回执
+
+Changed:
+- PR #365 已合并至 `main`，合并提交为
+  `f85fd028ec1288c85b5c1a6f4795d29a353a8a3d`。
+- 通过受保护的 GitHub `production` 环境部署 `kpl-stats-server.js`；Owner 完成环境批准后，
+  工作流全部步骤成功。
+
+Files:
+- `kpl-stats-server.js`（生产部署）
+- `docs/DAILY_HANDOFF.md`（本部署回执）
+
+Validated:
+- GitHub Actions run `30797712744`：`conclusion=success`，部署回执为
+  `restart=main`、`health=ok`。
+- 生产文件 SHA-256
+  `054fc13ad75473f41941ab06b58f0da161071082e2972c831611fe3704b57605`
+  与 `main` 同提交文件一致。
+- `https://market.dreamerqi.com/health` 返回 `{"ok":true}`。
+- 生产只读证据仍显示 2026-08-03 华电辽能当日综合细分为“电力(绿色电力)”、历史主因
+  为“电力”；原冻结结果中的电力候选为 5 只涨停、4 个板块且 `scanned-no-star`。
+
+Deployment:
+- 云端备份：`C:\PandaDashboard\_deploy-backups\github-30797712744-1`。
+- 主服务已重启；未改运行时数据库、L2 任务、`mainline-predict-2026-08-03.json` 或
+  `strategy-mainline-snapshot-2026-08-03.json`。
+
+Notes for next agent:
+- 修复作用于部署后的实时计算。2026-08-03 已冻结快照保留当时实际输出，不能为了改变历史
+  页面结果而静默重写；后续交易日用真实候选验证发电细分明星是否正确支撑“电力”。
