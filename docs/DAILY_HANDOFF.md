@@ -13571,3 +13571,34 @@ Deployment:
 Notes for next agent:
 - 只有日期绑定脚本在 `main` 合并并通过生产环境批准后才能写入；脚本会再次核验原图哈希、
   75 只终盘池、题材块计数和全部质量闸，备份相关云端文件，原子写入并重折当天综合主因库。
+
+## 2026-08-03 - Codex - TGB 湖南人 75 行正式入库回执
+
+Changed:
+- PR #370 已合并；受保护生产运行 `30821966168` 成功写入 2026-08-03
+  `review/tgb-hunan-structured` 正式源并重折当天综合主因库。
+- 写前完整备份正式源、综合主因、证据、质量、auto 及相关来源文件和两份云端日志；正式源原子
+  写入，工作流远端加密 payload 与临时脚本已清理。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- Runtime: `C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-08-03.json`
+- Runtime combined/evidence/quality/auto artifacts for `2026-08-03`
+- Cloud logs: `panda-cloud-ops-2026-06-19.md`, `_cloud-change-log-20260705.md`
+
+Validated:
+- 生产 gate 与落盘后二次 gate 均为 75 行/75 唯一代码，`missingCodes=[]`、`extraCodes=[]`、
+  `duplicateCodes=[]`、`weakCount=0`、名称不匹配 0；题材块与人工计数均合计 75。
+- 综合主因、证据和 auto TGB 代码集均为 75，缺失/多余为空。
+- 公开 source-view：综合归纳、复盘啦、选股宝、韭研、淘股吧均为 75；TGB 覆盖率与主因覆盖率
+  均为 100%，低质量 0，`sourceErrors=[]`；公开 `/health` 为 `ok:true`。
+- 正式 TGB SHA-256：`dd74551a1fe9d42242fdd7b4aa01028edd497890524ae1917bd55bc820aca647`；
+  重折后综合主因 SHA-256：`b703268fdc9b08df01da99951dc1c42654dc698e18ec9dd5bae23f13f5e9086f`。
+
+Deployment:
+- 云端备份：`C:\PandaDashboard\backups\tgb-hunan-manual-20260803-20260803141746`。
+- 当天综合主因已重折；未部署服务代码，未重启服务。
+
+Notes for next agent:
+- 文章：`https://www.tgb.cn/a/2tXVJyaw2tR`；官方图片：`image-01-06.png`。
+- 本日正式源已受人工来源保护；普通同步与 force 不得覆盖。任何更正必须先备份并重跑全部质量闸。
