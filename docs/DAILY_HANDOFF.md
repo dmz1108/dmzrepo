@@ -13537,3 +13537,37 @@ Deployment:
 Notes for next agent:
 - 只有在官方文章及白底 @TGB湖南人水印原图出现后才能重跑并继续人工转录；不可从其他图片
   或自动视觉结果补全。
+
+## 2026-08-03 - Codex - TGB 湖南人官方原图人工转录待写入
+
+Changed:
+- Owner 确认文章已发布后重新执行受保护 raw-evidence force refresh；成功保存官方文章
+  `https://www.tgb.cn/a/2tXVJyaw2tR` 和 22 张原始图片证据。
+- 人工选定 `image-01-06.png`：标题【8.3星期一】湖南人涨停复盘、白底分题材表格、
+  `@TGB湖南人` 水印；排除同花顺红图 `image-01-19.png`、回帖复盘图及头像/广告。
+- Codex 对选定原图逐题材块、逐行、逐字段完成第一遍转录和第二遍人工复核；市场连板股 17 行
+  是摘要重复块，七个正式题材块已合计 75 并完整覆盖终盘池，因此不重复入库。
+- 新增日期绑定的受保护正式写入脚本和加密 payload 传送映射；正式 75 行只存于 GitHub
+  `production` 环境秘密，不进入 Git。
+
+Files:
+- `.github/workflows/production-ops.yml`
+- `ops/production/requests/2026-08-03-tgb-hunan-write.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 原图长度 784312，SHA-256
+  `5d36e9bb7edc9009b12da91f7f46234c071942da1c1ed880876a9c570c6256eb`。
+- 题材块计数：核电 16、机器人 15、AI应用 11、电力 5、光伏 3、其他热点 8、其他个股 17，
+  合计 75。
+- 写前本地对账：75 行/75 唯一代码，`missingCodes=[]`、`extraCodes=[]`、重复 0、弱字段 0、
+  代码名称差异 0；payload SHA-256
+  `145938377f92857c9ce9f30290ef1c8b96e6621ee79aaf64fadfb75f003f0f2f`。
+- 未使用 Qwen、OCR 或任何自动视觉结果生成、补全、猜测或校验正式行。
+
+Deployment:
+- 本条记录时正式写入请求尚未执行；未重折综合主因库，未重启服务。
+
+Notes for next agent:
+- 只有日期绑定脚本在 `main` 合并并通过生产环境批准后才能写入；脚本会再次核验原图哈希、
+  75 只终盘池、题材块计数和全部质量闸，备份相关云端文件，原子写入并重折当天综合主因库。
