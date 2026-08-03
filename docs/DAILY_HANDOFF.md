@@ -13511,3 +13511,29 @@ Deployment:
 Notes for next agent:
 - 待官方文章和原图可用后重新执行 raw-evidence force refresh，再从选图、双遍人工转录和 75 只
   终盘池全量对账继续；当前状态不能声称 TGB 入库完成。
+
+## 2026-08-03 - Codex - TGB 文章缺失阻断日志回执
+
+Changed:
+- PR #368 已合并，受保护生产运行 `30810890109` 成功把 2026-08-03 官方文章缺失阻断记录
+  写入两份云端运维日志。
+- 写日志前完整备份两份旧日志；未写正式 TGB 文件，未重折综合主因库。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- Runtime logs: `C:\PandaDashboard\panda-cloud-ops-2026-06-19.md`,
+  `C:\PandaDashboard\_cloud-change-log-20260705.md`
+
+Validated:
+- 回执：`rawStatus=article-not-found`、文章 0、图片 0、终盘池 75 行/75 唯一代码，代码集
+  SHA-256 为 `4e35590fa4489d1d5a959db5f2d78c176c9242cd7e009b0aaf4b06531acda49d`。
+- 公开健康接口仍为 `ok:true`；source-view 综合归纳及另外三源均为 75，TGB 为 0。
+
+Deployment:
+- 云端日志备份：
+  `C:\PandaDashboard\backups\tgb-hunan-blocked-20260803-20260803-194739`。
+- 未部署代码、未重启服务、未写正式 TGB 行、未重折综合主因库。
+
+Notes for next agent:
+- 只有在官方文章及白底 @TGB湖南人水印原图出现后才能重跑并继续人工转录；不可从其他图片
+  或自动视觉结果补全。
