@@ -13113,6 +13113,37 @@ Notes for next agent:
 - 这是一项有明确审计记录的一次性 Owner 授权，不得把“用户口头补全可替代官方原图”
   泛化到其他日期；后续仍应在原图不可辨认时默认阻断。
 
+## 2026-08-03 - Codex - PR #362 次高次收终值闸部署
+
+Changed:
+- PR #362 的 Remote Claude 与 Local Claude 复核均为 approved；同步最新 `main` 后，
+  新旧功能补丁的稳定 patch-id 完全一致，最终以合并提交 `063ce49` 进入 `main`。
+- 生产预判回看现在只在对应后续交易日收盘后结算次高、次收和胜负；未收盘时返回
+  `null` 并显示“待收盘”。第三个后续交易日的 3 日收益使用同样终值闸。
+
+Files:
+- Runtime: `C:\PandaDashboard\kpl-stats-server.js`
+- Runtime: `C:\PandaDashboard\kpl-dashboard_17_apple.html`
+- Cloud logs: `panda-cloud-ops-2026-06-19.md`, `_cloud-change-log-20260705.md`
+- Git: `docs/DAILY_HANDOFF.md`
+
+Validated:
+- GitHub production run `30793246419` 成功，部署提交为
+  `063ce49e4091305e8da6b3a703e509fa02b5b779`。
+- 部署回执为两文件原子发布、`restart=main`、`health=ok`；公网 `/health` 返回
+  `{"ok":true}`。
+- 部署后 2026-07-31 蓝色光标以 2026-08-03 收盘终值结算：次收 `+2.58%`、
+  次高 `+7.11%`；此前盘中误取的阶段值 `+0.56% / +2.72%` 不再使用。
+- 3 日收益仍为 `null`，因为第三个后续交易日尚未形成。
+
+Deployment:
+- 备份：`C:\PandaDashboard\_deploy-backups\github-30793246419-1`。
+- 主服务已重启；未改运行时数据库、历史预测档、冻结快照或 L2 任务。
+
+Notes for next agent:
+- 次高是复盘终值指标，不采用盘中阶段最高价。若产品以后需要盘中观察值，应新增独立字段，
+  不得复用 `nextHighGain` / `nextCloseGain`。
+
 ## 2026-08-02 - Codex - 7.31 AI 软件主线与算力硬件隔离
 
 Changed:
