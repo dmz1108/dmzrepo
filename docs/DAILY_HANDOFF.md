@@ -13351,3 +13351,35 @@ Notes for next agent:
 - 下一交易日重点观察混合软硬件板的 `ztRejectedByAttribution`、
   `ztAttributionCoverage` 与 `ztUnidentifiedCount`；partial 时必须保持
   `zt = ztQualifiedCodes.length + ztUnidentifiedCount`。
+
+## 2026-08-03 - Codex - 回看次高次收增加收盘终值闸
+
+Changed:
+- 修复预判回看把下一交易日盘中日 K 的实时 `close/high` 当成最终“次收/次高”的问题。
+- 下一交易日未收盘时，明星与龙头的次高、次收和胜负均保持 `null`；第三个后续交易日
+  未收盘时，3 日收益同样保持 `null`。
+- 接口增加 `nextDayFinal`、`thirdDayFinal` 及逐股 pending 元数据；前端摘要与展开详情将
+  此类空值明确显示为“待收盘”。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/mainline-review.test.js`
+- `tests/strategy-two-source-mainlines.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 生产只读接口修复前证据：2026-07-31 蓝色光标的 `nextDay=2026-08-03`，但 8 月 3 日
+  尚未收盘时错误返回 `nextCloseGain=0.56`、`nextHighGain=2.72`。
+- 新回归模拟下一交易日盘中同时存在实时日 K 和提前写入价格，明星与龙头仍必须返回
+  次高/次收/胜负为 `null`，并标记 `nextPerformancePending=true`。
+- `node --check kpl-stats-server.js`、`node tests/mainline-review.test.js`、
+  `node tests/strategy-two-source-mainlines.test.js`、
+  `node tests/strategy-historical-conclusion.test.js`、`git diff --check` 均通过。
+
+Deployment:
+- GitHub only；尚未合并、未部署、未重启服务，未改任何历史预测档或运行时数据库。
+
+Notes for next agent:
+- 次高虽然盘中已有阶段值，但它是复盘终值指标，必须等下一交易日收盘后再展示；不能与
+  今日实时页面的盘中最高价语义混用。

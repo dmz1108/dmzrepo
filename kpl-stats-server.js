@@ -26201,17 +26201,27 @@ async function getStrategyMainlineReview(days = 10) {
     const formalTop = strategyMainlineReviewFormalTop(predict);
     const main = formalTop.find(t => predict.confirmedKey && t.key === predict.confirmedKey) || formalTop[0] || null;
     const noMainline = !main;
-    const [c0, c1, c3] = await Promise.all([closeMapOf(day), closeMapOf(nextDay), closeMapOf(thirdDay)]);
+    // 次高、次收与 3 日都是盘后复盘指标。日 K 在交易日盘中也会返回一根尚未完成的
+    // 当日 bar，其中 close 只是实时价、high 也仍可能继续刷新；不能把它们冒充终值。
+    const nextDayFinal = !!nextDay && isAfterMarketClose(nextDay);
+    const thirdDayFinal = !!thirdDay && isAfterMarketClose(thirdDay);
+    const [c0, c1, c3] = await Promise.all([
+      closeMapOf(day),
+      nextDayFinal ? closeMapOf(nextDay) : Promise.resolve(new Map()),
+      thirdDayFinal ? closeMapOf(thirdDay) : Promise.resolve(new Map()),
+    ]);
     const evalStock = async (stock) => {
       if (!stock?.code) return null;
       const code = normalizeReasonSourceCode(stock.code);
-      const requiredThroughDay = thirdDay || nextDay || '';
+      const requiredThroughDay = thirdDayFinal ? thirdDay : (nextDayFinal ? nextDay : day);
       const kline = requiredThroughDay ? await klineOf(code, requiredThroughDay) : null;
       const baseBar = strategyKlineBarForDay(kline, day);
-      const nextBar = strategyKlineBarForDay(kline, nextDay);
-      const thirdBar = strategyKlineBarForDay(kline, thirdDay);
+      const nextBar = nextDayFinal ? strategyKlineBarForDay(kline, nextDay) : null;
+      const thirdBar = thirdDayFinal ? strategyKlineBarForDay(kline, thirdDay) : null;
       // 每日收盘价库仍是首选；精确日 K 只在对应日期缺项时补齐，不跨日猜值。
-      const p0Stored = c0.get(code), p1Stored = c1.get(code), p3Stored = c3.get(code);
+      const p0Stored = c0.get(code);
+      const p1Stored = nextDayFinal ? c1.get(code) : null;
+      const p3Stored = thirdDayFinal ? c3.get(code) : null;
       const p0 = Number.isFinite(p0Stored) ? p0Stored : baseBar?.close;
       const p1 = Number.isFinite(p1Stored) ? p1Stored : nextBar?.close;
       const p3 = Number.isFinite(p3Stored) ? p3Stored : thirdBar?.close;
@@ -26232,6 +26242,8 @@ async function getStrategyMainlineReview(days = 10) {
         nextHighGain,
         threeDayGain,
         win: closeGain != null ? closeGain > 0 : null,
+        nextPerformancePending: !!nextDay && !nextDayFinal,
+        threeDayPerformancePending: !!thirdDay && !thirdDayFinal,
       };
     };
     const rawLeaders = (Array.isArray(main?.leaders) && main.leaders.length ? main.leaders : (main?.leader ? [main.leader] : []))
@@ -26482,7 +26494,7 @@ async function getStrategyMainlineReview(days = 10) {
       }
     }
     rows.push({
-      day, nextDay, thirdDay,
+      day, nextDay, thirdDay, nextDayFinal, thirdDayFinal,
       theme: main?.theme || '', confirmed: !!(main && predict.confirmedKey && main.key === predict.confirmedKey),
       stage: main?.stage || '', certainty: main?.certainty || '',
       noMainline, noMainlineReason: noMainline ? 'no-l2-star-evidence' : '',
