@@ -30,8 +30,25 @@ const TARGET_THEME = '\u7535\u529b';
 const TARGET_FAMILY = 'theme:\u7535\u529b';
 const TARGET_STAR_CODE = '600396';
 const TARGET_STAR_NAME = '\u534e\u7535\u8fbd\u80fd';
-const OPERATION_ID = 'review-electricity-mainline-backfill-20260803';
+const V1_OPERATION_ID = 'review-electricity-mainline-backfill-20260803';
+const OPERATION_ID = 'review-electricity-mainline-backfill-20260803-v2';
 const REQUIRED_LIMIT_CODES = ['000595', '600396', '600644'];
+const REQUIRED_L2_JOBS = {
+  eastmoney: {
+    zsType: 6,
+    jobId: '2e697655678c20dc',
+    plateId: 'BK1024',
+    boardName: '\u7eff\u8272\u7535\u529b',
+    familyKey: 'theme:\u7eff\u7535\u65b0\u80fd\u6e90\u8fd0\u8425',
+  },
+  ths: {
+    zsType: 5,
+    jobId: '415560b0b3211565',
+    plateId: '308969',
+    boardName: '\u8d85\u8d85\u4e34\u754c\u53d1\u7535',
+    familyKey: 'theme:\u8d85\u8d85\u4e34\u754c\u53d1\u7535',
+  },
+};
 const correctedAt = new Date().toISOString();
 
 function normalizeCode(value) {
@@ -121,9 +138,51 @@ function assertCloudLogs() {
   }
 }
 
+function reviewCorrection(payload, operationId) {
+  return (payload?.reviewCorrections || []).find(row => row?.operationId === operationId) || null;
+}
+
+function assertV1Prediction(payload) {
+  const correction = reviewCorrection(payload, V1_OPERATION_ID);
+  if (!correction) throw new Error('v1 correction metadata is missing');
+  if (payload.hasMainlines !== true || payload.recordState !== 'mainline'
+    || String(payload.sessionPhase || '') !== '\u5df2\u6536\u76d8') {
+    throw new Error('v1 correction is no longer the audited mainline record');
+  }
+  const root = payload?.candidates?.[0];
+  const eastmoney = payload?.bySource?.eastmoney?.candidates?.[0];
+  const ths = payload?.bySource?.ths?.candidates?.[0];
+  if ((payload?.candidates || []).length !== 1 || (payload?.top || []).length !== 1
+    || String(root?.familyKey || '') !== TARGET_FAMILY
+    || String(root?.theme || '') !== TARGET_THEME
+    || normalizeCode(root?.stars?.[0]?.code) !== TARGET_STAR_CODE
+    || String(root?.stars?.[0]?.level || '') !== 'confirmed') {
+    throw new Error('v1 root correction drifted from the audited Electricity result');
+  }
+  const currentCodes = [...new Set((root?.todayLimitCodes || []).map(normalizeCode).filter(Boolean))].sort();
+  if (currentCodes.join(',') !== REQUIRED_LIMIT_CODES.slice().sort().join(',')) {
+    throw new Error('v1 correction limit-up set drifted');
+  }
+  if (String(root?.correctionEvidence?.operationId || '') !== V1_OPERATION_ID
+    || String(eastmoney?.correctionEvidence?.operationId || '') !== V1_OPERATION_ID
+    || String(ths?.correctionEvidence?.operationId || '') !== V1_OPERATION_ID) {
+    throw new Error('v1 correction evidence metadata drifted');
+  }
+  if ((eastmoney?.correctionEvidence?.l2Jobs || []).join(',') !== '71d4a6fba47e3d37'
+    || (eastmoney?.mergedThemes || []).join(',') !== '\u98ce\u80fd') {
+    throw new Error('v1 Eastmoney evidence is not the audited Wind mis-selection');
+  }
+  if ((ths?.correctionEvidence?.l2Jobs || []).join(',') !== REQUIRED_L2_JOBS.ths.jobId
+    || (ths?.mergedThemes || []).join(',') !== REQUIRED_L2_JOBS.ths.boardName) {
+    throw new Error('v1 THS evidence drifted from the audited source');
+  }
+  return { baseline: 'v1', correction };
+}
+
 function assertOriginalPrediction(payload) {
   if (String(payload?.day || '') !== TARGET_DAY) throw new Error('prediction day mismatch');
   if (Number(payload?.schemaVersion || 0) !== 3) throw new Error('prediction schema is not v3');
+  if (reviewCorrection(payload, V1_OPERATION_ID)) return assertV1Prediction(payload);
   if (payload.hasMainlines !== false || payload.recordState !== 'no-mainline') {
     throw new Error('prediction is no longer the expected no-mainline record');
   }
@@ -137,6 +196,7 @@ function assertOriginalPrediction(payload) {
       throw new Error(`${source} prediction block changed from the audited baseline`);
     }
   }
+  return { baseline: 'original', correction: null };
 }
 
 function assertFrozenExclusion(payload) {
@@ -307,15 +367,28 @@ function evaluateL2Job(item, expectedZsType) {
 function selectL2Evidence() {
   const jobs = collectLatestL2Jobs();
   const selected = {};
-  for (const [source, zsType] of [['eastmoney', 6], ['ths', 5]]) {
-    const matching = jobs
-      .filter(item => Number(item.job?.zsType) === zsType)
-      .sort((a, b) => b.persistedSavedAt.localeCompare(a.persistedSavedAt));
-    for (const item of matching) {
-      const evidence = evaluateL2Job(item, zsType);
-      if (evidence) { selected[source] = evidence; break; }
+  for (const [source, required] of Object.entries(REQUIRED_L2_JOBS)) {
+    const item = jobs.find(candidate => String(candidate.job?.jobId || '') === required.jobId);
+    if (!item) throw new Error(`required L2 job missing for ${source}: ${required.jobId}`);
+    for (const [field, expected] of Object.entries({
+      zsType: required.zsType,
+      plateId: required.plateId,
+      boardName: required.boardName,
+      familyKey: required.familyKey,
+    })) {
+      const actual = field === 'zsType' ? Number(item.job?.[field]) : String(item.job?.[field] || '');
+      if (actual !== expected) {
+        throw new Error(`${source} L2 ${field} drifted: expected ${expected}, got ${actual}`);
+      }
     }
-    if (!selected[source]) throw new Error(`confirmed L2 star evidence missing for ${source}`);
+    const evidence = evaluateL2Job(item, required.zsType);
+    if (!evidence) throw new Error(`required L2 job no longer satisfies confirmed-star rules for ${source}`);
+    for (const field of ['jobId', 'plateId', 'boardName', 'familyKey']) {
+      if (String(evidence[field] || '') !== String(required[field] || '')) {
+        throw new Error(`${source} evaluated L2 ${field} mismatch`);
+      }
+    }
+    selected[source] = evidence;
   }
   return selected;
 }
@@ -493,6 +566,7 @@ function buildCorrectedPrediction(original, leader, l2Evidence, limitRows, froze
   // This is an Owner-directed post-close correction, not a recovered intraday
   // prediction sample. Mark it as settled so review statistics cannot count it.
   next.sessionPhase = '\u5df2\u6536\u76d8';
+  const priorCorrection = reviewCorrection(original, V1_OPERATION_ID);
   next.reviewCorrections = [
     ...(Array.isArray(original.reviewCorrections) ? original.reviewCorrections : []),
     {
@@ -506,7 +580,7 @@ function buildCorrectedPrediction(original, leader, l2Evidence, limitRows, froze
       manualCorrection: true,
       excludedFromPredictionStats: true,
       originalSavedAt: String(original.savedAt || ''),
-      originalSessionPhase: String(original.sessionPhase || ''),
+      originalSessionPhase: String(priorCorrection?.originalSessionPhase || original.sessionPhase || ''),
       frozenSnapshotPreserved: true,
       sourceDatabasesChanged: false,
       theme: TARGET_THEME,
@@ -519,6 +593,73 @@ function buildCorrectedPrediction(original, leader, l2Evidence, limitRows, froze
     },
   ];
   return next;
+}
+
+function assertCorrectedCandidate(candidate, source) {
+  const required = REQUIRED_L2_JOBS[source];
+  if (!candidate || String(candidate.familyKey || '') !== TARGET_FAMILY
+    || String(candidate.theme || '') !== TARGET_THEME) {
+    throw new Error(`${source} corrected candidate is not Electricity`);
+  }
+  if ((candidate.mergedThemes || []).join(',') !== required.boardName) {
+    throw new Error(`${source} corrected candidate board is not the pinned source board`);
+  }
+  const jobs = candidate?.correctionEvidence?.l2Jobs || [];
+  if (String(candidate?.correctionEvidence?.operationId || '') !== OPERATION_ID
+    || jobs.length !== 1 || String(jobs[0] || '') !== required.jobId) {
+    throw new Error(`${source} corrected candidate does not cite the pinned L2 job`);
+  }
+  const board = (candidate.resonanceBoards || [])[0];
+  if ((candidate.resonanceBoards || []).length !== 1
+    || String(board?.name || '') !== required.boardName
+    || String(board?.plateId || '') !== required.plateId
+    || Number(board?.zsType) !== required.zsType
+    || String(board?.evidenceJobId || '') !== required.jobId) {
+    throw new Error(`${source} corrected resonance-board evidence drifted`);
+  }
+  const codes = [...new Set((candidate.todayLimitCodes || []).map(normalizeCode).filter(Boolean))].sort();
+  if (codes.join(',') !== REQUIRED_LIMIT_CODES.slice().sort().join(',')) {
+    throw new Error(`${source} corrected limit-up set drifted`);
+  }
+  const star = (candidate.stars || []).find(row => normalizeCode(row?.code) === TARGET_STAR_CODE);
+  if (!star || String(star.level || '') !== 'confirmed') {
+    throw new Error(`${source} corrected confirmed star is missing`);
+  }
+}
+
+function assertCorrectedPrediction(payload, l2Evidence) {
+  if (String(payload?.day || '') !== TARGET_DAY || Number(payload?.schemaVersion || 0) !== 3
+    || payload.hasMainlines !== true || payload.recordState !== 'mainline'
+    || String(payload.sessionPhase || '') !== '\u5df2\u6536\u76d8') {
+    throw new Error('v2 corrected prediction metadata is invalid');
+  }
+  const correction = reviewCorrection(payload, OPERATION_ID);
+  if (!correction || correction.excludedFromPredictionStats !== true
+    || correction.frozenSnapshotPreserved !== true
+    || correction.sourceDatabasesChanged !== false) {
+    throw new Error('v2 correction audit metadata is invalid');
+  }
+  for (const source of ['eastmoney', 'ths']) {
+    const block = payload?.bySource?.[source];
+    if (!block || block.available !== true || block.hasMainlines !== true
+      || (block.top || []).length !== 1 || (block.candidates || []).length !== 1) {
+      throw new Error(`${source} corrected prediction block is invalid`);
+    }
+    assertCorrectedCandidate(block.candidates[0], source);
+    const recorded = correction?.l2Evidence?.[source];
+    const required = REQUIRED_L2_JOBS[source];
+    if (String(recorded?.jobId || '') !== required.jobId
+      || String(recorded?.plateId || '') !== required.plateId
+      || String(recorded?.boardName || '') !== required.boardName
+      || String(recorded?.familyKey || '') !== required.familyKey
+      || String(l2Evidence?.[source]?.jobId || '') !== required.jobId) {
+      throw new Error(`${source} correction audit does not preserve the pinned L2 evidence`);
+    }
+  }
+  if ((payload.top || []).length !== 1 || (payload.candidates || []).length !== 1) {
+    throw new Error('v2 root corrected prediction is invalid');
+  }
+  assertCorrectedCandidate(payload.candidates[0], 'eastmoney');
 }
 
 function hasOperation(payload) {
@@ -582,7 +723,8 @@ function appendCloudLogs(backupDir, beforeHash, afterHash, verification, evidenc
     `- Commit: ${OPERATION_COMMIT || 'not-provided'}`,
     `- Run: ${OPERATION_RUN_ID || 'not-provided'}`,
     `- Target: ${TARGET_DAY} ${TARGET_THEME}; confirmed star ${TARGET_STAR_CODE} ${TARGET_STAR_NAME}.`,
-    `- Formal evidence: ${REQUIRED_LIMIT_CODES.length} same-family final limit-ups, two-source confirmed L2 evidence, and qualified leader.`,
+    `- Repair: replaced the v1 time-based Eastmoney Wind evidence selection with the pinned audited Green Electricity job.`,
+    `- Formal evidence: ${REQUIRED_LIMIT_CODES.length} same-family final limit-ups, exact two-source confirmed L2 jobs, and qualified leader.`,
     `- L2 jobs: eastmoney=${evidence.eastmoney.jobId}, ths=${evidence.ths.jobId}.`,
     '- Runtime change: persisted prediction record only.',
     '- Frozen strategy snapshot, main-reason database, source artifacts, final limit-up pool, L2 jobs, code, and service state were not changed.',
@@ -610,6 +752,8 @@ async function main() {
 
   const original = readJson(predictionPath);
   if (hasOperation(original)) {
+    const l2Evidence = selectL2Evidence();
+    assertCorrectedPrediction(original, l2Evidence);
     const verification = await verifyPublic();
     console.log(JSON.stringify({
       ok: true,
@@ -621,7 +765,7 @@ async function main() {
     return;
   }
 
-  assertOriginalPrediction(original);
+  const originalState = assertOriginalPrediction(original);
   const frozenBaseline = assertFrozenExclusion(readJson(frozenPath));
   const limitRows = assertDayEvidence(readJson(limitPath), readJson(mainReasonPath));
   const l2Evidence = selectL2Evidence();
@@ -629,6 +773,7 @@ async function main() {
   const corrected = buildCorrectedPrediction(
     original, leader, l2Evidence, limitRows, frozenBaseline,
   );
+  assertCorrectedPrediction(corrected, l2Evidence);
 
   const stamp = correctedAt.replace(/[-:TZ.]/g, '').slice(0, 14);
   const backupDir = path.join(PROJECT_ROOT, '_deploy-backups', `${OPERATION_ID}-${stamp}`);
@@ -639,12 +784,14 @@ async function main() {
 
   try {
     atomicWriteJson(predictionPath, corrected);
+    assertCorrectedPrediction(readJson(predictionPath), l2Evidence);
     const verification = await verifyPublic();
     const afterHash = sha256(predictionPath);
     appendCloudLogs(backupDir, beforeHash, afterHash, verification, l2Evidence);
     console.log(JSON.stringify({
       ok: true,
       operationId: OPERATION_ID,
+      upgradedFrom: originalState.baseline,
       day: TARGET_DAY,
       theme: TARGET_THEME,
       star: { code: TARGET_STAR_CODE, name: TARGET_STAR_NAME, level: 'confirmed' },
