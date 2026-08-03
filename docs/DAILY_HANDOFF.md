@@ -13321,3 +13321,33 @@ Notes for next agent:
 - `tests/board-snapshot-contamination.test.js` 在本分支和原 `main@e4eb24e` 都会失败；已定位为
   测试固定写 2026-07-02，但当前日期已使其超过默认 30 日保留期，`saveSnapshot` 后被 `prune`
   正常删除，并非本 PR 回归。应另开小 PR 给测试注入更长 `keepDays`，不要混入本策略改动。
+
+## 2026-08-03 - Codex - PR #361 归因涨停门槛部署
+
+Changed:
+- PR #361 经 Remote Claude 与 Local Claude 针对行为提交 `fa97ff3` 独立复核通过；采纳
+  维护性建议后仅追加一行 partial 语义注释，最终 head 为 `e9c77be`。
+- PR #361 已合并到 `main`，合并提交 `cc5845d`。
+- 生产已部署主因归属后的板块涨停门槛：明确硬件主因股票不再替软件板块凑扫描所需
+  涨停数；软件主因与无主因股票保留；来源未知差额只留在聚合计数，不进入具体代码清单。
+
+Files:
+- Runtime: `C:\PandaDashboard\kpl-stats-server.js`
+- Cloud logs: `panda-cloud-ops-2026-06-19.md`, `_cloud-change-log-20260705.md`
+- Git: `docs/DAILY_HANDOFF.md`
+
+Validated:
+- GitHub production run `30792481611` 成功，部署提交为
+  `cc5845db4983198b384bc00ed78f6b42f05fc53f`。
+- 部署回执：仅 `kpl-stats-server.js`，`restart=main`，`health=ok`。
+- 生产 `https://market.dreamerqi.com/health` 返回 `ok:true`；公开预判回看接口正常返回
+  2026-08-03 与 2026-07-31 记录。
+
+Deployment:
+- 备份：`C:\PandaDashboard\_deploy-backups\github-30792481611-1`。
+- 主服务已重启；未改运行时数据库、历史预测档、冻结快照或 L2 任务。
+
+Notes for next agent:
+- 下一交易日重点观察混合软硬件板的 `ztRejectedByAttribution`、
+  `ztAttributionCoverage` 与 `ztUnidentifiedCount`；partial 时必须保持
+  `zt = ztQualifiedCodes.length + ztUnidentifiedCount`。
