@@ -14103,21 +14103,22 @@ function renderMainlineReviewHTML(d) {
   // 行级结果配色(与 hitCell 同口径):红色只表示“确认明星 + 同家族至少3只涨停”的正式主线。
   const rowHitClass = (r, starVisual) => {
     if (r.bySource) {
-      if (r.sampleValid === false) return 'hit-invalid';
       if (r.pendingReview) return 'hit-wait';
       const sourceRows = Object.values(r.bySource).filter(src => src && src.status !== 'unavailable' && src.status !== 'unknown' && !src.noMainline && src.mainlineQualified != null);
       const outcomes = new Set(sourceRows.map(src => src.mainlineQualified === true ? 'ok' : 'miss'));
       // 双源各自独立评估；只要任一来源满足正式主线条件，并且当日已有确认明星，
       // 整日即具备一条完整的“单源主线 + 明星”证据链，应使用红色真主线状态。
+      // sampleValid 只控制是否进入盘中预测统计，不能覆盖盘后已确认的正式主线事实。
       if (starVisual?.key === 'confirmed' && outcomes.has('ok')) return 'hit-ok';
+      if (r.sampleValid === false) return 'hit-invalid';
       if (outcomes.size !== 1) return 'hit-na';
       return outcomes.has('ok') ? 'hit-ok' : 'hit-miss';
     }
     if (r.noMainline) return 'hit-na';
-    if (r.sampleValid === false) return 'hit-invalid';
     if (r.pendingReview) return 'hit-wait';
-    if (r.mainlineQualified == null) return 'hit-na';
     if (r.mainlineQualified) return 'hit-ok';
+    if (r.sampleValid === false) return 'hit-invalid';
+    if (r.mainlineQualified == null) return 'hit-na';
     return 'hit-miss';
   };
   const rowModels = rows.map(r => ({ r, starVisual: reviewStarVisual(r) }));
@@ -14233,8 +14234,12 @@ function renderMainlineReviewHTML(d) {
       const n = Number(v);
       return `<b class="${n > 0 ? 'up' : (n < 0 ? 'down' : '')}">${n > 0 ? '+' : ''}${n}%</b>`;
     };
+    const hasQualifiedMainline = finalConclusion?.formalQualified === true
+      || qualifiedSourceThemes.length > 0 || Boolean(legacyQualified);
     const lineBadge = finalConclusion
       ? `<span class="mlr-line-badge${finalConclusion.formalQualified === true ? '' : ' quiet'}">${finalConclusion.formalQualified === true ? '正式主线' : (finalConclusion.formalQualified === false ? '无正式主线' : '待核验')}</span>`
+      : hasQualifiedMainline
+      ? '<span class="mlr-line-badge">正式主线</span>'
       : starVisual.key
       ? `<span class="mlr-line-badge ${starVisual.key}">${escapeHTML(starVisual.label)}</span>`
       : `<span class="mlr-line-badge quiet">${r.noMainline || !r.theme ? '今日无主线' : escapeHTML(r.theme)}</span>`;
