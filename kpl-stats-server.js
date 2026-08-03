@@ -23392,7 +23392,8 @@ function strategyMainlineScanPriorityCodes(board, priorByCode) {
 // ①成份 code ∈ 当日涨停底库(权威);②底库没有该股时,实时涨幅 ≥ limitUpThreshold(code,name) 兜底。
 // 若传入主因归属上下文,再用与明星股相同的归属裁决剔除明确跨族的涨停贡献：例如历史/当日
 // 主因只指向算力硬件的股票,不得替 AI视频/短剧游戏凑满自动扫描所需的「至少2只涨停」。
-// 原始来源数保存在 ztRaw,剔除明细保存在 ztRejectedByAttribution,不篡改底层涨停事实。
+// 来源标量保存在 ztReported,逐股可见数保存在 ztObserved,两者最大值作为归属前 ztRaw；
+// 剔除明细保存在 ztRejectedByAttribution,不篡改底层涨停事实。
 function strategyMainlineBackfillBoardZt(boards, limitUpByCode, attributionByCode = null) {
   for (const b of (Array.isArray(boards) ? boards : [])) {
     // 只把「有限数值」当已有值(含真实 0);null/undefined/NaN 一律视为未知需回填——
@@ -23401,8 +23402,11 @@ function strategyMainlineBackfillBoardZt(boards, limitUpByCode, attributionByCod
     const hasKnownZt = isFiniteNumeric(b.zt);
     const hasAttribution = attributionByCode instanceof Map;
     if (hasKnownZt && !hasAttribution) continue;
+    const listedCodes = [...new Set((Array.isArray(b.codes) ? b.codes : [])
+      .map(normalizeReasonSourceCode)
+      .filter(Boolean))];
     const rows = Array.isArray(b.memberRows) ? b.memberRows : [];
-    if (!rows.length) continue;
+    if (!rows.length && !(hasAttribution && listedCodes.length)) continue;
     const ztCodes = new Set();
     for (const r of rows) {
       const code = normalizeReasonSourceCode(r?.code);
@@ -23417,9 +23421,13 @@ function strategyMainlineBackfillBoardZt(boards, limitUpByCode, attributionByCod
       continue;
     }
 
+    // 来源自带 ztList/codes 时它是逐股裁决总体；否则才用成员∩涨停池/涨幅阈值的识别结果。
+    // 不能拿一个总体算 rejected、再从另一个更小的标量 zt 里扣，否则会出现 qualifiedCodes=2
+    // 但 zt=0 的自相矛盾。来源标量更大时，差额按“尚未识别主因”保留，不擅自误删。
+    const candidateCodes = new Set(listedCodes.length ? listedCodes : ztCodes);
     const rejected = [];
     const boardFamilyKey = String(strategyMainlineFamilyInfo({ theme: b?.name }).key || '');
-    for (const code of ztCodes) {
+    for (const code of candidateCodes) {
       const decision = strategyMainlineStarAttributionDecision(
         { familyKey: boardFamilyKey },
         { code },
@@ -23433,24 +23441,25 @@ function strategyMainlineBackfillBoardZt(boards, limitUpByCode, attributionByCod
         });
       }
     }
+    const priorReported = isFiniteNumeric(b.ztReported) ? Number(b.ztReported) : null;
     const priorRaw = isFiniteNumeric(b.ztRaw) ? Number(b.ztRaw) : null;
-    const rawZt = priorRaw != null ? priorRaw : (hasKnownZt ? Number(b.zt) : ztCodes.size);
+    const reportedZt = priorReported != null
+      ? priorReported
+      : (priorRaw != null ? priorRaw : (hasKnownZt ? Number(b.zt) : candidateCodes.size));
+    const rawZt = Math.max(0, reportedZt, candidateCodes.size);
     const rejectedCodes = new Set(rejected.map(row => row.code));
-    const listedCodes = [...new Set((Array.isArray(b.codes) ? b.codes : [])
-      .map(normalizeReasonSourceCode)
-      .filter(Boolean))];
-    const candidateCoverageComplete = listedCodes.length > 0 || ztCodes.size >= rawZt;
+    const qualifiedCodes = [...candidateCodes].filter(code => !rejectedCodes.has(code));
+    const unidentifiedCount = Math.max(0, rawZt - candidateCodes.size);
 
+    b.ztReported = reportedZt;
+    b.ztObserved = candidateCodes.size;
     b.ztRaw = rawZt;
-    b.zt = Math.max(0, rawZt - rejected.length);
+    b.zt = qualifiedCodes.length + unidentifiedCount;
     b.ztAttributionAdjusted = rejected.length > 0;
+    b.ztAttributionCoverage = unidentifiedCount > 0 ? 'partial' : 'complete';
+    b.ztUnidentifiedCount = unidentifiedCount;
     b.ztRejectedByAttribution = rejected;
-    if (candidateCoverageComplete) {
-      const baseCodes = listedCodes.length ? listedCodes : [...ztCodes];
-      b.ztQualifiedCodes = baseCodes.filter(code => !rejectedCodes.has(code));
-    } else {
-      delete b.ztQualifiedCodes;
-    }
+    b.ztQualifiedCodes = qualifiedCodes;
     const baseSource = String(b.ztSource || (hasKnownZt ? 'source' : 'member-join'))
       .replace(/\+main-reason-attribution$/u, '');
     b.ztSource = rejected.length ? `${baseSource}+main-reason-attribution` : baseSource;
