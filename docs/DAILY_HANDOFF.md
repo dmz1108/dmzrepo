@@ -13571,3 +13571,39 @@ Deployment:
 Notes for next agent:
 - 只有日期绑定脚本在 `main` 合并并通过生产环境批准后才能写入；脚本会再次核验原图哈希、
   75 只终盘池、题材块计数和全部质量闸，备份相关云端文件，原子写入并重折当天综合主因库。
+
+## 2026-08-03 - Codex - 8 月 3 日电力历史主线修正请求
+
+Changed:
+- 新增日期绑定的一次性生产修正：只重建 `mainline-predict-2026-08-03.json`，不改冻结快照、
+  涨停库、主因库、L2 任务或业务代码。
+- 修正以当前正式证据为准：新能股份、华电辽能、乐山电力三只终盘涨停均正式归因电力；
+  华电辽能在东财绿色电力与同花顺超超临界发电两组持久化 L2 任务中均通过确认明星门槛；
+  7 月 20 日、22 日已有正式电力主因，可通过龙头历史主因硬闸。
+- 脚本写前校验原始无主线预测与 `scanned-no-star` 冻结基线，备份后原子写入，公开接口验收失败
+  即自动回滚；根级兼容块保持东财来源，双源真值分别写入 `bySource`。
+- 该结果明确标记为 Owner 指定的盘后人工证据修正，并将记录阶段置为“已收盘”；页面恢复正确结论，
+  但不进入盘中预测命中率、封板率、领先时长等统计分母。
+
+Files:
+- `ops/production/requests/2026-08-03-review-electricity-mainline-backfill.ps1`
+- `tests/review-electricity-20260803-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node tests/review-electricity-20260803-production-request.test.js`
+- `node tests/strategy-historical-conclusion.test.js`
+- `node tests/mainline-review.test.js`
+- `node tests/strategy-star-attribution.test.js`
+- `node tests/strategy-three-requirements.test.js`
+- `node --check kpl-stats-server.js`
+- `git diff --check`
+
+Deployment:
+- GitHub only；尚未合并、未执行生产修正、未重启服务，当前云端 8 月 3 日仍显示无主线。
+
+Notes for next agent:
+- 复核必须确认正式电力代码严格为 `000595`、`600396`、`600644`；`000037` 当前正式主因是
+  核电，不得纳入电力三只或写 override。
+- 合并后通过受保护生产工作流执行该脚本；成功标准是策略接口与预判回看同时恢复电力、
+  华电辽能明星确认和龙头，并且正式主线资格的同族涨停数至少为 3。
