@@ -145,6 +145,20 @@ A(finalStarSummary.includes('正式主线 PCB · 同家族10只涨停')
   && !finalStarSummary.includes('主因机器人10涨停')
   && !finalStarSummary.includes('主因分布首位'),
   '最终摘要只展示确认明星所在正式主线及同家族涨停数，不再把全市场主因分布首位当结论');
+const pendingFollowupHTML = renderMainlineReviewHTML({
+  days: [{
+    day: '2026-07-31', nextDay: '2026-08-03', nextDayFinal: false,
+    phase: '尾盘', sampleValid: true, pendingReview: false,
+    noMainline: false, theme: '短剧游戏', mainlineQualified: true, mainlineStarQualified: true,
+    star: { code: '300058', name: '蓝色光标', predictLevel: 'confirmed',
+      nextHighGain: null, nextCloseGain: null, threeDayGain: null, nextPerformancePending: true },
+    leaders: [], expectedStars: [], actualTop: [{ theme: 'AI应用', count: 28 }],
+  }],
+  stats: {},
+});
+A((pendingFollowupHTML.match(/待收盘/g) || []).length >= 4
+  && !pendingFollowupHTML.includes('次收</i><b>--</b>'),
+  '下一交易日未收盘时，蓝色光标摘要和详情的次高/次收明确显示待收盘');
 const correctedStarMetricsHTML = renderMainlineReviewHTML({
   days: [{
     day: '2026-07-27', phase: '尾盘', sampleValid: true, pendingReview: false,

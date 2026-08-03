@@ -13901,16 +13901,16 @@ function renderMainlineReviewHTML(d) {
   const gainCell = (s, isStar) => {
     if (!s) return '<span class="mlr-na">—</span>';
     const extra = isStar ? starLevelChip(s) + sealChip(s) : '';
-    const metric = (label, value, title) => {
-      if (value == null) return `<span class="mlr-perf na" title="${escapeHTML(title)}"><i>${label}</i><b>--</b></span>`;
+    const metric = (label, value, title, pending = false) => {
+      if (value == null) return `<span class="mlr-perf na" title="${escapeHTML(pending ? `${title}；对应交易日尚未收盘` : title)}"><i>${label}</i><b>${pending ? '待收盘' : '--'}</b></span>`;
       const n = Number(value);
       const cls = n > 0 ? 'up' : (n < 0 ? 'down' : 'flat');
       return `<span class="mlr-perf ${cls}" title="${escapeHTML(title)}"><i>${label}</i><b>${n > 0 ? '+' : ''}${n}%</b></span>`;
     };
     const performance = [
-      metric('次高', s.nextHighGain, '下一交易日最高价相对预判日收盘价的涨幅'),
-      metric('次收', s.nextCloseGain, '下一交易日收盘价相对预判日收盘价的涨幅'),
-      metric('3日', s.threeDayGain, '第三个后续交易日收盘价相对预判日收盘价的涨跌幅'),
+      metric('次高', s.nextHighGain, '下一交易日最高价相对预判日收盘价的涨幅', s.nextPerformancePending),
+      metric('次收', s.nextCloseGain, '下一交易日收盘价相对预判日收盘价的涨幅', s.nextPerformancePending),
+      metric('3日', s.threeDayGain, '第三个后续交易日收盘价相对预判日收盘价的涨跌幅', s.threeDayPerformancePending),
     ].join('');
     return `<span class="mlr-stock-review"><span class="mlr-stock-review-head"><span class="mlr-name">${escapeHTML(s.name || s.code || '')}</span>${extra}</span><span class="mlr-performance">${performance}</span></span>`;
   };
@@ -14228,8 +14228,8 @@ function renderMainlineReviewHTML(d) {
         .filter(Boolean)
         .join(' / ')
       : '';
-    const linePerf = (v) => {
-      if (v == null) return '<b class="na">--</b>';
+    const linePerf = (v, pending = false) => {
+      if (v == null) return `<b class="na">${pending ? '待收盘' : '--'}</b>`;
       const n = Number(v);
       return `<b class="${n > 0 ? 'up' : (n < 0 ? 'down' : '')}">${n > 0 ? '+' : ''}${n}%</b>`;
     };
@@ -14244,9 +14244,9 @@ function renderMainlineReviewHTML(d) {
       ${lineBadge}
       <span class="mlr-line-flow">${escapeHTML(compactPred)} <i>→</i> <b>${escapeHTML(compactOut)}</b>${r.sampleValid === false ? '<em class="mlr-line-invalid">不计样本</em>' : ''}</span>
       <span class="mlr-line-star">${finalStarNames ? escapeHTML(finalStarNames) : (starVisual.name ? escapeHTML(starVisual.name) : '<i>—</i>')}</span>
-      <span class="mlr-line-perf">${linePerf(lineStock?.nextHighGain)}</span>
-      <span class="mlr-line-perf">${linePerf(lineStock?.nextCloseGain)}</span>
-      <span class="mlr-line-perf">${linePerf(lineStock?.threeDayGain)}</span>
+      <span class="mlr-line-perf">${linePerf(lineStock?.nextHighGain, lineStock?.nextPerformancePending)}</span>
+      <span class="mlr-line-perf">${linePerf(lineStock?.nextCloseGain, lineStock?.nextPerformancePending)}</span>
+      <span class="mlr-line-perf">${linePerf(lineStock?.threeDayGain, lineStock?.threeDayPerformancePending)}</span>
       <b class="mlr-line-caret" aria-hidden="true"></b>
     </summary>
     <div class="mlr-row ${hitClass}${starVisual.rowClass ? ` ${starVisual.rowClass}` : ''}${r.sampleValid === false ? ' invalid' : ''}">

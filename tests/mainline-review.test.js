@@ -639,6 +639,25 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
     && !unknown27?.attributionReview,
   '没有主因归因证据时保留旧记录，不把未知误删成冲突');
 
+  // ---------- 下一交易日盘中:实时日 K 的 close/high 不是终值 ----------
+  TODAY = '2026-07-13'; TODAY_CLOSED = false;
+  TRADING_DAYS = ['2026-07-10', '2026-07-13'];
+  CLOSE['2026-07-10'] = { '600010': 10, '600011': 20 };
+  // 即使收盘库被错误提前写入，盘中也不得消费。
+  CLOSE['2026-07-13'] = { '600010': 10.8, '600011': 22 };
+  KLINE['600010'] = { x: ['2026-07-10', '2026-07-13'], y: [[9.8, 10, 10.2, 9.7], [10.2, 10.8, 11.2, 10.1]] };
+  KLINE['600011'] = { x: ['2026-07-10', '2026-07-13'], y: [[19.5, 20, 20.4, 19.2], [20.5, 22, 23, 20.1]] };
+  const intradayFollowup = await getStrategyMainlineReview(10);
+  const followup10 = intradayFollowup.days.find(row => row.day === '2026-07-10');
+  A(followup10?.nextDay === '2026-07-13' && followup10.nextDayFinal === false,
+    '下一交易日存在但尚未收盘时，回看明确标记 nextDayFinal=false');
+  A(followup10?.star?.nextCloseGain === null && followup10?.star?.nextHighGain === null
+    && followup10?.star?.win === null && followup10?.star?.nextPerformancePending === true,
+  '下一交易日盘中，明星的次收/次高/胜负保持待收盘，不消费实时日K');
+  A(followup10?.leader?.nextCloseGain === null && followup10?.leader?.nextHighGain === null
+    && followup10?.leader?.win === null && followup10?.leader?.nextPerformancePending === true,
+  '下一交易日盘中，龙头的次收/次高/胜负同样保持待收盘');
+
   if (process.exitCode) console.error('\nSOME MAINLINE-REVIEW CHECKS FAILED');
   else console.log('\nALL MAINLINE-REVIEW CHECKS PASSED');
 })().catch(e => { console.error(e); process.exitCode = 1; });
