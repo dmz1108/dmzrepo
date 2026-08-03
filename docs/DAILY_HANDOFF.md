@@ -13640,3 +13640,38 @@ Deployment:
 Notes for next agent:
 - v2 上云后必须验证预测档根级和东财分源只引用绿色电力任务 `2e697655678c20dc`，同花顺分源
   只引用超超临界发电任务 `415560b0b3211565`；不得再出现风能任务。
+
+## 2026-08-03 - Codex - 8 月 3 日电力历史主线 v2 生产回执
+
+Changed:
+- PR #373 已合并；受保护生产运行 `30825737522` 成功把 v1 的东财风能误选证据升级为已核验的
+  东财绿色电力证据，同时保留正确的同花顺超超临界发电证据。
+- 云端 8 月 3 日预测档根级、东财分源和同花顺分源均已通过任务 ID、板块 ID、名称、来源类型
+  及家族的严格落盘校验。
+
+Files:
+- Runtime: `C:\PandaDashboard\strategy-data\mainline-predict-2026-08-03.json`
+- Runtime logs: `C:\PandaDashboard\panda-cloud-ops-2026-06-19.md`,
+  `C:\PandaDashboard\_cloud-change-log-20260705.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 公开策略接口：电力、3 只同族涨停、华电辽能确认明星与龙头。
+- 公开预判回看：`noMainline=false`、`mainlineQualified=true`、东财/同花顺均为 `mainline`。
+- 盘后人工修正仍为 `sampleValid=false`、`sampleInvalidReason=phase:已收盘`，不污染盘中预测统计。
+- 根级及东财证据任务为 `2e697655678c20dc` / `BK1024` / 绿色电力；同花顺证据任务为
+  `415560b0b3211565` / `308969` / 超超临界发电；预测档已无风能证据引用。
+
+Deployment:
+- Workflow: `https://github.com/dmz1108/dmzrepo/actions/runs/30825737522`
+- Commit: `0905ee882cb2236a1de888908f2d64aa7cc936d2`
+- Prediction SHA-256:
+  `d4cec83d008ba3725ad4390d067667be4763f8f88db313d0d174a03168726d56` ->
+  `c7906f507ceb0a9c6864f1bd82c0dba3fa1d8ff3fd0ba29d1ccbe773b967a297`。
+- Backup:
+  `C:\PandaDashboard\_deploy-backups\review-electricity-mainline-backfill-20260803-v2-20260803150528`。
+- 未重启服务；未改冻结快照、涨停库、主因库、L2 任务或任何其他来源数据库。
+
+Notes for next agent:
+- 该结果是 Owner 指定的盘后证据修正，不得回写为盘中预测样本；后续自动生成器仍由现行归因和
+  L2 规则负责，不能复用按时间选择同类型任务的 v1 做法。
