@@ -70,7 +70,9 @@ A(bNaN.zt === 2 && bNaN.ztSource === 'member-join', '生产形态 zt=NaN → 视
 A(bUndef.zt === 1 && bUndef.ztSource === 'member-join', 'zt=undefined(字段缺失)→ 同样回填');
 // 边界规范化:absorbPayload 未知涨停数产出 null 而非 NaN(numOrNull)
 A(src.includes('const zt = numOrNull(b?.ztCount ?? b?.zt);'), '静态:getDayBoardsWithMembers 边界用 numOrNull 规范未知涨停数(不再产出 NaN)');
-A(/if \(!b \|\| isFiniteNumeric\(b\.zt\)\) continue;/.test(src), '静态:回填守卫只认有限数值(含0)为已有值,null/NaN/undefined 均回填');
+A(src.includes('const hasKnownZt = isFiniteNumeric(b.zt);')
+  && src.includes('if (hasKnownZt && !hasAttribution) continue;'),
+  '静态:无归属上下文时有限数值(含0)仍保持来源原值,null/NaN/undefined 正常回填');
 
 // ---- 6. 端到端:9.67亿 + zt unknown 的板,回填后进自动扫描门槛(真实 strategyMainlineMaybeAutoScan) ----
 const STRATEGY_MAINLINE_BIG_GAIN_PCT = 5;
@@ -121,5 +123,14 @@ A(medBoard.zt === 2 && dispatched.length === 1 && dispatched[0].plateId === 'BK1
 
 // ---- 7. 静态:impl 在涨停底库建好后、种子/扫描前调用回填 ----
 A(/strategyMainlineBackfillBoardZt\(boardPayload\?\.boards \|\| \[\], limitUpByCode\)/.test(src), '静态:impl 用当日涨停底库回填板级 zt(enrich 后、种子/扫描前)');
+A(/strategyMainlineBackfillBoardZt\([\s\S]*?boardPayload\?\.boards \|\| \[\],[\s\S]*?limitUpByCode,[\s\S]*?starAttributionByCode,[\s\S]*?\)/.test(src),
+  '静态:自动扫描前再次用主因归属上下文修正板级有效涨停数');
+const attributionPassAt = src.indexOf('const starAttributionByCode = strategyMainlineBuildStarAttributionContext');
+const attributedBackfillAt = src.indexOf('strategyMainlineBackfillBoardZt(\n    boardPayload?.boards || [],\n    limitUpByCode,\n    starAttributionByCode,', attributionPassAt);
+const realtimeSeedAt = src.indexOf('strategyMainlineAddRealtimeBoardSeed(seedByKey, b);', attributedBackfillAt);
+A(attributionPassAt >= 0 && attributedBackfillAt > attributionPassAt && realtimeSeedAt > attributedBackfillAt,
+  '静态:必须先完成主因归属修正再写实时 seed,避免 todayCodes/countFallback 保留跨族涨停');
+A(src.includes('const sourceCodes = Array.isArray(board?.ztQualifiedCodes) ? board.ztQualifiedCodes : board?.codes;'),
+  '静态:实时 seed 优先使用归属过滤后的涨停代码集合');
 
 console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL STRATEGY-BOARD-ZT-BACKFILL CHECKS PASSED');

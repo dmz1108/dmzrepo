@@ -70,8 +70,12 @@ const STRATEGY_MAINLINE_MERGE_GROUPS = extractSet('STRATEGY_MAINLINE_MERGE_GROUP
 const STRATEGY_MAINLINE_KEEP_FINE_THEMES = extractSet('STRATEGY_MAINLINE_KEEP_FINE_THEMES');
 eval(extractFn('strategyMainlineFamilyInfo'));
 eval(extractFn('strategyMainlineBoardThemeRelated'));
+eval(extractFn('strategyMainlineStarAttributionDecision'));
 eval(extractFn('strategyMainlineReviewFamilyKeys'));
 eval(extractFn('strategyMainlineReviewActualFamilyCount'));
+
+const limitUpThreshold = () => 9.75;
+eval(extractFn('strategyMainlineBackfillBoardZt'));
 
 const normalizeReasonSourceCode = value => String(value || '').trim();
 const isFiniteNumeric = value => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
@@ -157,6 +161,104 @@ assert(hardware?.mergedThemes.includes('算力') && hardware?.mergedThemes.inclu
   '硬件算力只合并算力/液冷，不再混入 AI应用');
 assert(!software?.todayCodes.includes('603629') && !hardware?.todayCodes.includes('300058'),
   '软件与硬件成分不串族');
+
+const priorAttribution = new Map([
+  ['002929', {
+    currentFamilies: new Set(),
+    currentTopics: [],
+    currentBroadOnly: false,
+    priorFamilies: new Set(['group:算力AI']),
+    priorTopics: ['算力'],
+    priorBroadOnly: false,
+  }],
+  ['300058', {
+    currentFamilies: new Set(),
+    currentTopics: [],
+    currentBroadOnly: false,
+    priorFamilies: new Set(['theme:短剧游戏']),
+    priorTopics: ['短剧游戏'],
+    priorBroadOnly: false,
+  }],
+]);
+const softwareScanBoard = {
+  name: 'AI视频',
+  zt: null,
+  codes: ['002929', '300058'],
+  memberRows: [
+    { code: '002929', name: '润建股份', gain: 10 },
+    { code: '300058', name: '蓝色光标', gain: 20 },
+  ],
+};
+strategyMainlineBackfillBoardZt(
+  [softwareScanBoard],
+  new Map([['002929', {}], ['300058', {}]]),
+  priorAttribution,
+);
+assert(softwareScanBoard.ztRaw === 2 && softwareScanBoard.zt === 1,
+  '硬件主因涨停股不得替 AI视频 软件板凑满至少2只涨停的扫描门槛');
+assert(softwareScanBoard.ztQualifiedCodes.join(',') === '300058'
+  && softwareScanBoard.ztRejectedByAttribution[0]?.code === '002929'
+  && softwareScanBoard.ztRejectedByAttribution[0]?.conflict === '算力',
+  '软件板保留蓝色光标并记录被剔除硬件股的代码与主因冲突');
+
+const sourceCountBoard = {
+  name: 'AI视频',
+  zt: 3,
+  codes: ['002929', '300058', '300418'],
+  memberRows: [
+    { code: '002929', name: '润建股份', gain: 10 },
+    { code: '300058', name: '蓝色光标', gain: 20 },
+    { code: '300418', name: '软件股', gain: 20 },
+  ],
+};
+strategyMainlineBackfillBoardZt(
+  [sourceCountBoard],
+  new Map([['002929', {}], ['300058', {}], ['300418', {}]]),
+  priorAttribution,
+);
+assert(sourceCountBoard.ztRaw === 3 && sourceCountBoard.zt === 2
+  && sourceCountBoard.ztSource === 'source+main-reason-attribution',
+  '来源自带涨停数也必须扣除明确跨族股票，同时保留原始数量供审计');
+
+const mismatchedSourceBoard = {
+  name: 'AI视频',
+  zt: 2,
+  codes: ['002929', '000032', '300058', '300418'],
+  memberRows: [
+    { code: '002929', name: '润建股份', gain: 10 },
+    { code: '000032', name: '深桑达A', gain: 10 },
+    { code: '300058', name: '蓝色光标', gain: 20 },
+    { code: '300418', name: '软件股', gain: 20 },
+  ],
+};
+const mismatchedAttribution = new Map([
+  ...priorAttribution,
+  ['000032', {
+    currentFamilies: new Set(), currentTopics: [], currentBroadOnly: false,
+    priorFamilies: new Set(['theme:半导体']), priorTopics: ['半导体'], priorBroadOnly: false,
+  }],
+]);
+strategyMainlineBackfillBoardZt(
+  [mismatchedSourceBoard],
+  new Map(mismatchedSourceBoard.codes.map(code => [code, {}])),
+  mismatchedAttribution,
+);
+assert(mismatchedSourceBoard.ztReported === 2 && mismatchedSourceBoard.ztRaw === 4
+  && mismatchedSourceBoard.zt === 2
+  && mismatchedSourceBoard.ztQualifiedCodes.join(',') === '300058,300418',
+  '来源标量小于逐股总体时按同一代码总体裁决，不得出现合格2只但zt=0');
+
+const partialCoverageBoard = {
+  name: 'AI视频',
+  zt: 4,
+  codes: ['002929', '300058'],
+  memberRows: [],
+};
+strategyMainlineBackfillBoardZt([partialCoverageBoard], new Map(), priorAttribution);
+assert(partialCoverageBoard.zt === 3 && partialCoverageBoard.ztUnidentifiedCount === 2
+  && partialCoverageBoard.ztAttributionCoverage === 'partial'
+  && partialCoverageBoard.ztQualifiedCodes.join(',') === '300058',
+  '来源标量大于可见代码时只剔除明确冲突，未识别差额保留且标记partial');
 
 const appOnly = strategyMergeMainlineFamilies([
   candidate('AI应用', ['300058'], 50, 'AI应用'),
