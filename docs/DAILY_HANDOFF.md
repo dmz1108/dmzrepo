@@ -13702,3 +13702,28 @@ Deployment:
 
 Notes for next agent:
 - 不得把盘后人工修正重新计入盘中命中率；本次只修正事实结论的视觉优先级，不改变统计口径。
+
+## 2026-08-03 - Codex - 预判回看正式主线显示部署回执
+
+Changed:
+- PR #376 已合并并通过受保护生产工作流部署；8 月 3 日盘后修正记录现在按“正式主线”高亮，
+  同时继续显示“不计样本·已收盘”。
+
+Files:
+- Runtime: `C:\PandaDashboard\kpl-dashboard_17_apple.html`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 云端文件、公开 `/kpl` 文件与 `main` 的 SHA-256 均为
+  `c30758ea18a601e380a93e63cfe06a29a69812e92011355a50a4840528ea79d8`。
+- 公开回看接口仍返回 8 月 3 日电力、3 只涨停、华电辽能确认明星、
+  `mainlineQualified=true`；统计样本仍为无效盘后样本。
+
+Deployment:
+- Workflow: `https://github.com/dmz1108/dmzrepo/actions/runs/30827111045`
+- Commit: `9c145eeb147470cd100cbd7440459a19d02a25e3`
+- Backup: `C:\PandaDashboard\_deploy-backups\github-30827111045-1`
+- 未重启服务。
+
+Notes for next agent:
+- 正式主线事实状态和盘中预测样本资格是两条独立维度；后续 UI 不得再次让后者覆盖前者。
