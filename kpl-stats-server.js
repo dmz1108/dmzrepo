@@ -23459,6 +23459,7 @@ function strategyMainlineBackfillBoardZt(boards, limitUpByCode, attributionByCod
     b.ztAttributionCoverage = unidentifiedCount > 0 ? 'partial' : 'complete';
     b.ztUnidentifiedCount = unidentifiedCount;
     b.ztRejectedByAttribution = rejected;
+    // partial 时未知差额只保留在聚合 zt，不能塞进具体代码清单污染 seed/todayCodes。
     b.ztQualifiedCodes = qualifiedCodes;
     const baseSource = String(b.ztSource || (hasKnownZt ? 'source' : 'member-join'))
       .replace(/\+main-reason-attribution$/u, '');
