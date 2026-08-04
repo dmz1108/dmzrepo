@@ -73,6 +73,8 @@ eval(extractFn('strategyMedianNumber'));
 eval(extractFn('strategyMainlineReserveStarOutcomes'));   // 三要件预备层盘后结果(#201)
 eval(extractFn('strategyMainlineReviewReserveSummaries'));
 eval(extractFn('strategyMainlineReviewFormalTop'));
+eval(extractFn('strategyMainlineReviewFormalConclusions'));
+eval(extractFn('strategyMainlineReviewAggregateQualification'));
 eval(extractFn('strategyMainlineReviewHasRecord'));
 eval(extractFn('strategyMainlineStarAttributionDecision'));
 eval(extractFn('strategyMainlineReviewPredictionStarCodes'));
@@ -145,6 +147,43 @@ const finalLimitDb = (codes) => ({
 const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
 
 (async () => {
+  const multiFormal = strategyMainlineReviewFormalTop({
+    schemaVersion: 3,
+    top: [
+      { key: 'theme:A', theme: 'A', rank: 1 },
+      { key: 'theme:B', theme: 'B', rank: 2 },
+      { key: 'theme:C', theme: 'C', rank: 3 },
+    ],
+    candidates: [
+      { key: 'theme:A', theme: 'A', rank: 1, qiTier: 'formal', stars: [{ code: '600001', level: 'confirmed' }] },
+      { key: 'theme:B', theme: 'B', rank: 2, qiTier: 'formal', stars: [{ code: '600002', level: 'confirmed' }] },
+      { key: 'theme:C', theme: 'C', rank: 3, qiTier: 'formal', stars: [{ code: '600003', level: 'confirmed' }] },
+      { key: 'theme:医药', theme: '医药', rank: 4, qiTier: 'formal', intradaySticky: false, stars: [{ code: '600004', level: 'confirmed' }] },
+    ],
+    starTransitions: [],
+  });
+  A(multiFormal.map(row => row.theme).join(',') === 'A,B,C,医药',
+    '旧预测档从显式 formal candidates 恢复第4名正式主线，top3统计不截断事实集合');
+  const moreThanTenFormal = strategyMainlineReviewFormalConclusions(
+    { candidates: [], starTransitions: [] },
+    Array.from({ length: 12 }, (_, index) => ({
+      key: `theme:T${index + 1}`,
+      theme: `T${index + 1}`,
+      rank: index + 1,
+    })),
+    [],
+    new Set(),
+    false,
+    true,
+  );
+  A(moreThanTenFormal.length === 12,
+    '正式主线事实集不受 top10 截断，排名只决定顺序');
+  A(strategyMainlineReviewAggregateQualification([
+    { rank: 1, mainlineQualified: false },
+    { rank: 4, mainlineQualified: true },
+  ]) === true,
+  '来源第1名盘后未成立时，第4名独立过门槛仍使该来源存在正式主线');
+
   const absoluteMainline = strategyMainlineReviewQualification(
     {
       schemaVersion: 3,

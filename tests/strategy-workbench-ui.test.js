@@ -63,9 +63,9 @@ assert(html.includes('class="mlr-evidence-grid"'));
 assert(html.includes('<details class="mlr-reserve-line">'));
 assert(html.includes('const finalConfirmationHTML =') && html.includes('r.finalConfirmedMainline'),
   '预判回看可独立展示管理员最终确认，不覆盖盘中预测');
-assert(html.includes('<span class="mlr-source-name">收盘复核</span>')
-  && html.includes('管理员收盘复核独立于盘中预测，不改写预测命中率；正式主线仍须满足确认明星股且同家族至少3只涨停'),
-  '收盘复核在盘后验证区明确标注，并声明正式资格口径及不计预测命中率');
+assert(html.includes('<span class="mlr-source-name">人工重点</span>')
+  && html.includes('人工重点是管理员附加标记，不决定其他过闸方向的正式主线资格'),
+  '人工重点与正式主线资格分开展示，不覆盖其他过闸方向');
 // 逐档明细 6 列紧凑表(2026-07-24 重设计):买/卖合并成对,比值为主角。
 assert(html.includes('<th colspan="2" class="grp grp-active">主动成交</th><th colspan="2" class="grp grp-passive">被动成交</th><th rowspan="2" class="col-support">合力比</th>'));
 assert(html.includes('<th class="col-amt">买入 / 卖出</th><th class="col-ratio">主动比</th>'));
@@ -109,7 +109,8 @@ assert(/body\.view-strategy \.ml-proof-row\.ml-star-proof\s*\{[\s\S]*?display:\s
 assert(/body\.view-strategy \.ml-star-proof \.ml-star-list\s*\{[\s\S]*?display:\s*flex !important;[\s\S]*?flex-wrap:\s*wrap;[\s\S]*?\}/.test(css));
 assert(/body\.view-strategy \.ml-star-proof \.ml-stock\.ml-starstock\s*\{[\s\S]*?width:\s*max-content;[\s\S]*?max-width:\s*100%;[\s\S]*?\}/.test(css));
 assert(/body\.view-strategy \.ml-card\.confirmed-mainline\s*\{[\s\S]*?border-color:\s*rgba\(255,\s*104,\s*100,\s*0\.62\) !important;[\s\S]*?box-shadow:\s*inset 4px 0 0 #ff6864,[\s\S]*?\}/.test(css));
-assert(html.includes('class="ml-confirmed ml-daily-confirmed">✔ 当日主线</span>'));
+assert(html.includes("isStrongestMainline ? '★ 最强主线' : '✔ 正式主线'"));
+assert(html.includes('人工重点只作附加标记') && html.includes('>设为重点</button>'));
 assert(html.includes('class="ml-confirmed" style="background:rgba(74,155,255,.16);color:#4a9bff;"'));
 assert(/body\.view-strategy \.ml-card\.confirmed-mainline \.ml-daily-confirmed\s*\{[\s\S]*?background:\s*#e95753 !important;[\s\S]*?color:\s*#fff !important;[\s\S]*?\}/.test(css));
 assert(!css.includes('body.view-strategy .ml-card.confirmed-mainline .ml-confirmed {'));
@@ -207,7 +208,7 @@ assert(html.includes('ml-star-proof is-empty') && html.includes('已完成 L2 �
   '无明星方向仍显示明星信号行与扫描状态,强度够的板块不隐身');
 assert(!html.includes('<div class="ml-score-wrap">'), '旧的整行评分盒已由左柱取代');
 assert(css.includes('body.view-strategy .ml-card.has-confirmed-star .ml-rail')
-  && css.includes('--st-gold: #f0c04a'), '确认明星沿用金色证据语义(#262),红色仍留给人工确认主线');
+  && css.includes('--st-gold: #f0c04a'), '确认明星沿用金色证据语义(#262),红色用于全部过闸正式主线');
 // Owner 定稿方案A:确认=金箔徽章,预期改冷石板(原金/琥珀色相仅差 1.4°、RGB 距离 17,几乎同色)
 assert(css.includes('--st-slate: #7f9bbd') && css.includes('.ml-card.has-expected-star .ml-rail-bar i { background: var(--st-slate)'),
   '预期明星改冷石板色,与确认金拉开色相');

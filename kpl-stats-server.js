@@ -24854,6 +24854,14 @@ function strategyPredictBuildBlock(
     .filter(Boolean);
   return {
     top: (mainlines || []).slice(0, 3).map(strategyPredictPickTop).filter(Boolean),
+    // top 继续承担前三名预测统计；qualifiedMainlines 单独保存全部过闸正式主线，
+    // 排名只决定顺序，不得用 top3/top10 限额删除已过硬门槛的方向。
+    qualifiedMainlines: (mainlines || [])
+      .map(item => {
+        const record = strategyPredictPickTop(item);
+        return record ? { ...record, qiTier: item?.qiTier || 'formal' } : null;
+      })
+      .filter(Boolean),
     candidates: strategyPredictMergeStickyCandidates(
       currentCandidates,
       existingCandidates,
@@ -25074,7 +25082,8 @@ async function writeMainlinePredict(day, sessionPhase, mainlines, confirm, reser
     await fs.writeFile(strategyMainlinePredictPath(day), JSON.stringify({
       day, savedAt, sessionPhase: sessionPhase || '',
       confirmedKey: confirm?.key || '', top: block.top,
-      schemaVersion: 2, candidates: block.candidates, starTransitions: block.starTransitions,
+      schemaVersion: 2, qualifiedMainlines: block.qualifiedMainlines,
+      candidates: block.candidates, starTransitions: block.starTransitions,
     }, null, 2), 'utf8');
     await recordStrategyDailyIntradayObservation(day, sessionPhase, mainlines, savedAt);
   } catch {}
@@ -25183,7 +25192,8 @@ async function writeMainlinePredictBySource(day, sessionPhase, mainlinesBySource
       recordState: hasMainlines ? 'mainline' : 'no-mainline',
       bySource: { eastmoney: eastBlock, ths: thBlock },
       // 兼容层:东财单源(不跨源混排),供旧回看/旧页面;真值在 bySource。
-      top: eastBlock.top, candidates: eastBlock.candidates, starTransitions: eastBlock.starTransitions,
+      top: eastBlock.top, qualifiedMainlines: eastBlock.qualifiedMainlines,
+      candidates: eastBlock.candidates, starTransitions: eastBlock.starTransitions,
     }, null, 2), 'utf8');
     // 盘中观测:按 family 去重的两源并集(mergeIntradayObservation 本身按 familyKey 聚合,东财优先)。
     const seen = new Set();
@@ -26044,14 +26054,30 @@ function strategyMainlineReviewReserveSummaries(predict) {
 // 更早的旧档案没有足够字段可还原当时 L2 状态，继续按旧口径展示，避免伪造历史结论。
 function strategyMainlineReviewFormalTop(predict) {
   const top = Array.isArray(predict?.top) ? predict.top.filter(Boolean) : [];
+  const explicit = Array.isArray(predict?.qualifiedMainlines)
+    ? predict.qualifiedMainlines.filter(Boolean)
+    : [];
+  // 兼容 qualifiedMainlines 上线前的预测档：candidates 已保存第 4~10 名的显式 qiTier，
+  // 只恢复当次仍在池中的 formal 行；sticky 历史候选不能重新冒充当日正式主线。
+  const candidateFormal = explicit.length ? [] : (Array.isArray(predict?.candidates) ? predict.candidates : [])
+    .filter(row => row?.qiTier === 'formal' && row?.intradaySticky !== true);
+  const byKey = new Map();
+  for (const row of [...top, ...explicit, ...candidateFormal]) {
+    const key = String(row?.key || row?.familyKey || row?.theme || '').trim();
+    if (!key || byKey.has(key)) continue;
+    byKey.set(key, row);
+  }
+  const formalRows = [...byKey.values()].sort((a, b) =>
+    (Number(a?.rank) || 999) - (Number(b?.rank) || 999)
+      || (Number(b?.score) || 0) - (Number(a?.score) || 0));
   const strictL2Evidence = Number(predict?.schemaVersion || 0) >= 2 || Array.isArray(predict?.candidates);
-  if (!strictL2Evidence) return top;
+  if (!strictL2Evidence) return formalRows;
   const candidateByKey = new Map((Array.isArray(predict?.candidates) ? predict.candidates : [])
     .filter(Boolean)
     .map(row => [String(row?.key || row?.familyKey || '').trim(), row])
     .filter(([key]) => key));
   const positiveLevels = new Set(['expected', 'confirmed']);
-  return top.filter(main => {
+  return formalRows.filter(main => {
     const key = String(main?.key || '').trim();
     const candidate = candidateByKey.get(key) || null;
     const status = String(main?.l2VerificationStatus || candidate?.l2VerificationStatus || '').trim();
@@ -26063,14 +26089,59 @@ function strategyMainlineReviewFormalTop(predict) {
     return status === 'qi' || levels.some(level => positiveLevels.has(level)) || hadExpectedTransition;
   });
 }
+
+function strategyMainlineReviewFormalConclusions(
+  predict,
+  formalRows,
+  actualRanking,
+  finalSealedCodes,
+  evidenceComplete,
+  pendingReview,
+) {
+  return (Array.isArray(formalRows) ? formalRows : []).map((main, index) => {
+    const family = strategyMainlineFamilyInfo({
+      key: main?.key || main?.familyKey || '',
+      theme: main?.theme || '',
+    });
+    const qualification = pendingReview ? null : strategyMainlineReviewQualification(
+      predict,
+      main,
+      actualRanking,
+      finalSealedCodes,
+      evidenceComplete,
+    );
+    const stars = strategyMainlineReviewStarCandidates(predict, main).slice(0, 4);
+    return {
+      key: String(main?.key || main?.familyKey || family.key || ''),
+      familyKey: family.key || '',
+      theme: String(main?.theme || family.label || ''),
+      rank: Number(main?.rank) || index + 1,
+      score: isFiniteNumeric(main?.score) ? Number(main.score) : null,
+      gateQualified: true,
+      isStrongestMainline: index === 0,
+      mainlineQualified: qualification?.qualified ?? null,
+      mainlineQualification: qualification,
+      stars,
+    };
+  });
+}
+
+function strategyMainlineReviewAggregateQualification(formalMainlines) {
+  const rows = Array.isArray(formalMainlines) ? formalMainlines : [];
+  if (rows.some(row => row?.mainlineQualified === true)) return true;
+  if (rows.length && rows.every(row => row?.mainlineQualified === false)) return false;
+  return null;
+}
 // 回看记录不只包含“有主线”的 top。schema v3 会把来源正常但零主线明确保存为
 // available=true + hasMainlines=false；这种记录必须入列为“今日无主线”。旧的空壳文件
 // 没有可用性元数据，继续跳过，避免把来源故障或损坏文件猜成无主线。
 function strategyMainlineReviewHasRecord(predict) {
   if (!predict || typeof predict !== 'object') return false;
   if (Array.isArray(predict.top) && predict.top.length) return true;
+  if (Array.isArray(predict.qualifiedMainlines) && predict.qualifiedMainlines.length) return true;
   const sourceBlocks = ['eastmoney', 'ths'].map(key => predict?.bySource?.[key]).filter(Boolean);
   if (sourceBlocks.some(block => Array.isArray(block.top) && block.top.length)) return true;
+  if (sourceBlocks.some(block => Array.isArray(block.qualifiedMainlines) && block.qualifiedMainlines.length)) return true;
   // 明确无主线必须同时具备“至少一个来源可用”的证据。两源都不可用、只有空块的
   // 历史文件仍跳过，不能把抓取故障解释成市场没有主线。
   const hasResolvedSource = sourceBlocks.some(block => block.available === true);
@@ -26087,6 +26158,7 @@ function strategyMainlineReviewPredictionStarCodes(predict) {
   const addBlock = block => {
     if (!block || typeof block !== 'object') return;
     for (const row of (Array.isArray(block.top) ? block.top : [])) addStar(row?.star);
+    for (const row of (Array.isArray(block.qualifiedMainlines) ? block.qualifiedMainlines : [])) addStar(row?.star);
     for (const row of (Array.isArray(block.candidates) ? block.candidates : [])) {
       addStar(row?.star);
       for (const star of (Array.isArray(row?.stars) ? row.stars : [])) addStar(star);
@@ -26103,6 +26175,7 @@ function strategyMainlineReviewFilterAttributionBlock(block, attributionByCode, 
     return { block, rejected: [] };
   }
   const hasTop = Array.isArray(block.top);
+  const hasQualified = Array.isArray(block.qualifiedMainlines);
   const hasCandidates = Array.isArray(block.candidates);
   const hasTransitions = Array.isArray(block.starTransitions);
   const rejected = [];
@@ -26134,6 +26207,11 @@ function strategyMainlineReviewFilterAttributionBlock(block, attributionByCode, 
     if (row?.star) next.star = keepStar(row, row.star, 'top-star');
     return next;
   });
+  let qualifiedMainlines = (hasQualified ? block.qualifiedMainlines : []).map(row => {
+    const next = { ...row };
+    if (row?.star) next.star = keepStar(row, row.star, 'qualified-mainline-star');
+    return next;
+  });
   let candidates = (hasCandidates ? block.candidates : []).map(row => {
     const next = { ...row };
     if (row?.star) next.star = keepStar(row, row.star, 'candidate-star');
@@ -26152,6 +26230,7 @@ function strategyMainlineReviewFilterAttributionBlock(block, attributionByCode, 
   if (!rejected.length) {
     const nextBlock = { ...block };
     if (hasTop) nextBlock.top = top;
+    if (hasQualified) nextBlock.qualifiedMainlines = qualifiedMainlines;
     if (hasCandidates) nextBlock.candidates = candidates;
     if (hasTransitions) nextBlock.starTransitions = starTransitions;
     return {
@@ -26166,6 +26245,7 @@ function strategyMainlineReviewFilterAttributionBlock(block, attributionByCode, 
     if (familyKey && ['expected', 'confirmed'].includes(level)) positiveFamilies.add(familyKey);
   };
   for (const row of top) addPositive(row, row?.star);
+  for (const row of qualifiedMainlines) addPositive(row, row?.star);
   for (const row of candidates) {
     addPositive(row, row?.star);
     for (const star of (Array.isArray(row?.stars) ? row.stars : [])) addPositive(row, star);
@@ -26192,9 +26272,11 @@ function strategyMainlineReviewFilterAttributionBlock(block, attributionByCode, 
     };
   };
   top = top.map(downgradeRejectedFamily);
+  qualifiedMainlines = qualifiedMainlines.map(downgradeRejectedFamily);
   candidates = candidates.map(downgradeRejectedFamily);
   const nextBlock = { ...block };
   if (hasTop) nextBlock.top = top;
+  if (hasQualified) nextBlock.qualifiedMainlines = qualifiedMainlines;
   if (hasCandidates) nextBlock.candidates = candidates;
   if (hasTransitions) nextBlock.starTransitions = starTransitions;
   return {
@@ -26570,6 +26652,14 @@ async function getStrategyMainlineReview(days = 10) {
     const finalSealedCodes = limitDbFinal
       ? new Set((limitDb.stocks || []).map(stock => normalizeReasonSourceCode(stock?.code)).filter(Boolean))
       : null;
+    const formalMainlines = strategyMainlineReviewFormalConclusions(
+      predict,
+      formalTop,
+      actualRanking,
+      finalSealedCodes,
+      reasonComplete,
+      pendingReview,
+    );
     const mainlineQualification = main && !pendingReview
       ? strategyMainlineReviewQualification(predict, main, actualRanking, finalSealedCodes, reasonComplete)
       : null;
@@ -26619,6 +26709,7 @@ async function getStrategyMainlineReview(days = 10) {
         const block = predict.bySource[skey] || {};
         const blockPredict = {
           top: block.top || [],
+          qualifiedMainlines: block.qualifiedMainlines || [],
           candidates: block.candidates || [],
           starTransitions: block.starTransitions || [],
           confirmedKey: predict.confirmedKey,
@@ -26627,6 +26718,14 @@ async function getStrategyMainlineReview(days = 10) {
         };
         const fTop = strategyMainlineReviewFormalTop(blockPredict);
         const sMain = fTop.find(t => predict.confirmedKey && t.key === predict.confirmedKey) || fTop[0] || null;
+        const formalMainlines = strategyMainlineReviewFormalConclusions(
+          blockPredict,
+          fTop,
+          actualRanking,
+          finalSealedCodes,
+          reasonComplete,
+          pendingReview,
+        );
         const reserveMainlines = strategyMainlineReviewReserveSummaries(blockPredict);
         // 新 schema v3 明确保存 available；早期 v3 没有该字段，空块只能诚实标为 unknown，
         // 不能猜成“无主线”或“来源暂缺”。有正式主线时即使旧记录缺元数据，主题本身仍可展示。
@@ -26653,7 +26752,9 @@ async function getStrategyMainlineReview(days = 10) {
           sourceQualification = !pendingReview
             ? strategyMainlineReviewQualification(blockPredict, sMain, actualRanking, finalSealedCodes, reasonComplete)
             : null;
-          sourceQualified = sourceQualification?.qualified ?? null;
+          // 来源日结论只问“是否有任一条正式主线成立”，不再只看排名第一的 sMain。
+          // sourceQualification 保留第一条明细以兼容旧客户端；formalMainlines 是新事实集。
+          sourceQualified = strategyMainlineReviewAggregateQualification(formalMainlines);
           if (sampleValid && !pendingReview && sourceQualified != null) {
             srcStat[skey].qualifiedTotal += 1;
             if (sourceQualified) srcStat[skey].qualified += 1;
@@ -26687,6 +26788,8 @@ async function getStrategyMainlineReview(days = 10) {
           mainlineHitTop3: hitTop3,
           mainlineLead: leadTime,
           mainlineLeadStatus: leadTimeStatus,
+          formalMainlines,
+          formalMainlineCount: formalMainlines.length,
           hasReserveMainlines: reserveMainlines.length > 0,
           reserveMainlines,
         };
@@ -26731,6 +26834,7 @@ async function getStrategyMainlineReview(days = 10) {
       actualTop, actualFirstTied,
       mainlineQualified, mainlineQualification,
       mainlineHitTop1, mainlineHitTop3, mainReasonMissingCount,
+      formalMainlines,
       mainlineLead, mainlineLeadStatus, star, mainlineStarQualified, expectedStars, reserveStarOutcomes, leader, leaders,
       ...(attributionReview.rejected.length ? {
         attributionReview: {
@@ -28106,12 +28210,12 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
       excluded: [...nonQiExcluded, ...reworkOutcome.gate.excluded],
       leaderReworkCompleted: reworkOutcome.reworkCompleted,
     };
-    mainlines = l2Gate.kept.sort(mainlineSort).slice(0, 10).map((x, i) => ({ ...x, rank: i + 1 }));
+    // 正式门槛是资金、同家族涨停、确认明星与合格龙头；排名只排序，不限制入选数。
+    mainlines = l2Gate.kept.sort(mainlineSort).map((x, i) => ({ ...x, rank: i + 1 }));
     reserveMainlines = l2Gate.reserve.sort(mainlineSort).slice(0, 6).map((x, i) => ({ ...x, rank: i + 1 }));
   } else {
     mainlines = l2Gate.kept
       .sort(mainlineSort)
-      .slice(0, 10)
       .map((x, i) => ({ ...x, rank: i + 1 }));
     if (diagMode) {
       try {
@@ -28924,6 +29028,58 @@ function strategyMainlineMatchesConfirm(mainline, confirm) {
   return !!((confirmKey && mainlineKey === confirmKey) || (confirmTheme && mainlineTheme === confirmTheme));
 }
 
+function strategyMainlineIsFormal(mainline) {
+  if (!mainline || mainline.qiTier === 'reserve') return false;
+  if (mainline.qiTier === 'formal') return true;
+  // 旧冻结记录还没有 qiTier；当时能留在 mainlines 的 QI 正证据仍按正式主线兼容展示。
+  return String(mainline.l2VerificationStatus || '') === 'qi';
+}
+
+function strategyMainlineAnnotateList(mainlines, confirm) {
+  let strongestAssigned = false;
+  return Array.isArray(mainlines) ? mainlines.map(mainline => {
+    const isFormalMainline = strategyMainlineIsFormal(mainline);
+    const isStrongestMainline = isFormalMainline && !strongestAssigned;
+    if (isStrongestMainline) strongestAssigned = true;
+    const isOwnerConfirmedMainline = strategyMainlineMatchesConfirm(mainline, confirm);
+    return {
+      ...mainline,
+      isFormalMainline,
+      isStrongestMainline,
+      isOwnerConfirmedMainline,
+      // 兼容旧页面/API；语义明确为人工重点，不再代表唯一正式主线。
+      isConfirmedMainline: isOwnerConfirmedMainline,
+    };
+  }) : mainlines;
+}
+
+function strategyMainlineAnnotatePayload(payload, confirm) {
+  if (!payload || typeof payload !== 'object') return payload;
+  const annotateSource = sourcePayload => sourcePayload && typeof sourcePayload === 'object'
+    ? {
+        ...sourcePayload,
+        mainlines: strategyMainlineAnnotateList(sourcePayload.mainlines, confirm),
+        formalMainlineCount: (Array.isArray(sourcePayload.mainlines) ? sourcePayload.mainlines : [])
+          .filter(strategyMainlineIsFormal).length,
+      }
+    : sourcePayload;
+  const mainlinesBySource = payload.mainlinesBySource
+    ? {
+        ...payload.mainlinesBySource,
+        eastmoney: annotateSource(payload.mainlinesBySource.eastmoney),
+        ths: annotateSource(payload.mainlinesBySource.ths),
+      }
+    : payload.mainlinesBySource;
+  return {
+    ...payload,
+    confirmedMainline: confirm || null,
+    mainlines: strategyMainlineAnnotateList(payload.mainlines, confirm),
+    formalMainlineCount: (Array.isArray(payload.mainlines) ? payload.mainlines : [])
+      .filter(strategyMainlineIsFormal).length,
+    ...(mainlinesBySource ? { mainlinesBySource } : {}),
+  };
+}
+
 // 某些旧日由页面在 15:30 前过早冻结为空，但同日盘中预测档案已经保存了正式主线、
 // 明星与龙头（2026-07-23）。历史展示只读补回这些已落档事实，不改写冻结快照，
 // 也不虚构预测档案未保存的板块涨幅、资金或成分股指标。
@@ -29303,27 +29459,8 @@ async function getStrategyMainlinesWithConfirm(day) {
   if (!payload || typeof payload !== 'object') return payload;
   const confirmDay = isoFromCompactDate(payload.day || day || chinaNowParts().day);
   const confirm = await readMainlineConfirm(confirmDay).catch(() => null);
-  const withConfirm = list => Array.isArray(list)
-    ? list.map(mainline => ({ ...mainline, isConfirmedMainline: strategyMainlineMatchesConfirm(mainline, confirm) }))
-    : list;
-  // 两套独立预测:确认标记同样落到东财/同花顺各自的 mainlines(各自独立,不交叉)。
-  const bySource = payload.mainlinesBySource
-    ? {
-        ...payload.mainlinesBySource,
-        eastmoney: payload.mainlinesBySource.eastmoney
-          ? { ...payload.mainlinesBySource.eastmoney, mainlines: withConfirm(payload.mainlinesBySource.eastmoney.mainlines) }
-          : payload.mainlinesBySource.eastmoney,
-        ths: payload.mainlinesBySource.ths
-          ? { ...payload.mainlinesBySource.ths, mainlines: withConfirm(payload.mainlinesBySource.ths.mainlines) }
-          : payload.mainlinesBySource.ths,
-      }
-    : payload.mainlinesBySource;
-  return {
-    ...payload,
-    confirmedMainline: confirm || null,
-    mainlines: withConfirm(payload.mainlines),
-    ...(bySource ? { mainlinesBySource: bySource } : {}),
-  };
+  // 正式资格、最强排序与人工重点是三个独立字段；人工重点不再覆盖其他过闸主线。
+  return strategyMainlineAnnotatePayload(payload, confirm);
 }
 
 async function getStrategyMainlinesVisible(day) {
@@ -29352,10 +29489,11 @@ async function getStrategyMainlinesVisible(day) {
     strategyMainlineAttachExpectedHistoryPayload(withIntradaySticky, predict, { attributionByCode }),
     { finalSealedCodes }
   );
-  return strategyMainlineRestoreHistoricalPrediction(restricted, predict, {
+  const visible = strategyMainlineRestoreHistoricalPrediction(restricted, predict, {
     finalSealedCodes,
     attributionByCode,
   });
+  return strategyMainlineAnnotatePayload(visible, payload.confirmedMainline || null);
 }
 
 async function readAiReadOnlyToken() {
@@ -29446,6 +29584,9 @@ function aiCompactMainline(mainline) {
     fundDirection: mainline.fundDirection || null,
     thsEligibilityGate: mainline.thsEligibilityGate || null,
     qiTier: mainline.qiTier || null,             // 三要件:formal=真主线 / reserve=预备主线
+    isFormalMainline: mainline.isFormalMainline === true,
+    isStrongestMainline: mainline.isStrongestMainline === true,
+    isOwnerConfirmedMainline: mainline.isOwnerConfirmedMainline === true,
     reserveReasons: Array.isArray(mainline.reserveReasons) ? mainline.reserveReasons : null,
     sourcePairs: mainline.sourcePairs || null,   // R2:东财/同花顺 各自同源净流入+涨幅配对
     boardGainPct: aiNum(mainline.boardGainPct),

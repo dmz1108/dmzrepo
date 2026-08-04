@@ -13453,7 +13453,9 @@ function renderStrategyMainlinesHTML(d) {
     const combinedBadge = badgeText
       ? `<span class="ml-stage ml-stage-${escapeHTML(badgeStageKey || 'confirm')}" title="${escapeHTML(badgeTitle)}">${escapeHTML(badgeText)}</span>`
       : '';
-    const isFormalActionCard = m.qiTier === 'formal';
+    const isFormalActionCard = m.isFormalMainline === true || m.qiTier === 'formal';
+    const isStrongestMainline = m.isStrongestMainline === true || (isFormalActionCard && i === 0);
+    const isOwnerConfirmedMainline = m.isOwnerConfirmedMainline === true || m.isConfirmedMainline === true;
     const newThemeBadge = m.isNewTheme ? `<span class="ml-newtheme" title="首日新题材:暂无历史主因属正常,以盘面与资金信号为准">首日</span>` : '';
     const historicalPredictionBadge = predictionSummaryOnly
       ? '<span class="ml-newtheme" title="原收盘快照过早冻结；本卡只读恢复当日已经落盘的主线、明星与龙头，不补造缺失盘面数据">历史预测档案</span>'
@@ -13600,11 +13602,16 @@ function renderStrategyMainlinesHTML(d) {
       'qi': `<span class="ml-confirmed" style="background:rgba(74,155,255,.16);color:#4a9bff;" title="已扫描且至少 1 只股票满足 L2 预期明星或明星确认标准。">QI主线</span>`,
     };
     const qiBadge = l2BadgeByState[l2State] || '';
-    const confirmedBadge = m.isConfirmedMainline ? `<span class="ml-confirmed ml-daily-confirmed">✔ 当日主线</span>` : '';
+    const confirmedBadge = isFormalActionCard
+      ? `<span class="ml-confirmed ml-daily-confirmed">${isStrongestMainline ? '★ 最强主线' : '✔ 正式主线'}</span>`
+      : '';
+    const ownerConfirmedBadge = isOwnerConfirmedMainline
+      ? '<span class="ml-newtheme" title="管理员人工重点只作附加标记，不决定其他过闸方向的正式主线资格">人工重点</span>'
+      : '';
     const confirmBtn = state.adminLoggedIn
-      ? (m.isConfirmedMainline
-        ? `<button type="button" class="ml-confirm-btn on" onclick="unconfirmMainlineTheme()">取消确认</button>`
-        : `<button type="button" class="ml-confirm-btn" data-key="${escapeHTML(m.familyKey || m.key || '')}" data-theme="${escapeHTML(m.theme || '')}" onclick="confirmMainlineTheme(this.dataset.key, this.dataset.theme)">确认主线</button>`)
+      ? (isOwnerConfirmedMainline
+        ? `<button type="button" class="ml-confirm-btn on" onclick="unconfirmMainlineTheme()">取消重点</button>`
+        : `<button type="button" class="ml-confirm-btn" data-key="${escapeHTML(m.familyKey || m.key || '')}" data-theme="${escapeHTML(m.theme || '')}" onclick="confirmMainlineTheme(this.dataset.key, this.dataset.theme)">设为重点</button>`)
       : '';
     const breadthHtml = m.breadth && m.breadth.upPct != null
       ? `<span class="ml-stock">${escapeHTML(m.breadth.boardName || '成分广度')}<i>${Number(m.breadth.upPct)}%上涨 · 中位${Number(m.breadth.medianGainPct) >= 0 ? '+' : ''}${Number(m.breadth.medianGainPct)}%</i></span>`
@@ -13632,7 +13639,7 @@ function renderStrategyMainlinesHTML(d) {
     const railPredHtml = (m.predictScore != null && Math.round(Number(m.predictScore)) !== Math.round(railScore))
       ? `<span class="ml-rail-pred" title="只含前瞻信号:大涨扩散/冲板/普涨广度/动能/历史主因/资金"><b>${Number(m.predictScore || 0).toFixed(0)}</b><i>预判分</i></span>`
       : '';
-    return `<article class="ml-card${i === 0 ? ' lead' : ''}${m.isConfirmedMainline ? ' confirmed-mainline' : ''}${hasConfirmedStar ? ' has-confirmed-star' : (hasExpectedStar ? ' has-expected-star' : '')}">
+    return `<article class="ml-card${i === 0 ? ' lead' : ''}${isFormalActionCard ? ' confirmed-mainline' : ''}${isStrongestMainline ? ' strongest-mainline' : ''}${hasConfirmedStar ? ' has-confirmed-star' : (hasExpectedStar ? ' has-expected-star' : '')}">
       <div class="ml-rail">
         <span class="ml-rank">NO.${Number(m.rank) || i + 1}</span>
         <span class="ml-rail-score" title="含涨停/高度/连板确认分的完整主线强度">${railScore.toFixed(0)}</span>
@@ -13648,7 +13655,7 @@ function renderStrategyMainlinesHTML(d) {
             ${marketPulse}
           </div>
           <div class="ml-name-flags">
-            ${qiBadge}${confirmedBadge}${historicalPredictionBadge}
+            ${qiBadge}${confirmedBadge}${ownerConfirmedBadge}${historicalPredictionBadge}
             ${combinedBadge}
             ${newThemeBadge}
             ${m.dualResonance ? `<span class="ml-dual" title="该题材在东财与同花顺两套独立预测里都排进前列（各自独立评分，未合并）">🔗双源共振</span>` : ''}
@@ -13945,6 +13952,26 @@ function renderMainlineReviewHTML(d) {
       return `${String(row?.theme || '')}（${signal}${reasons ? `·${reasons}` : ''}）`;
     }).filter(Boolean).join(' / ');
   };
+  const sourceFormalRows = (src) => {
+    const rows = Array.isArray(src?.formalMainlines) ? src.formalMainlines.filter(row => row?.theme) : [];
+    if (rows.length) return rows;
+    const theme = String(src?.theme || '').trim();
+    return theme ? [{
+      theme,
+      rank: 1,
+      // 旧 schema 没有 gateQualified；只要有明确盘后结论（true/false），
+      // 就说明它当时是待复核的正式预测，false 不等于“从未入选”。
+      gateQualified: src?.gateQualified === true || src?.mainlineQualified != null,
+      mainlineQualified: src?.mainlineQualified ?? null,
+      mainlineQualification: src?.mainlineQualification || null,
+    }] : [];
+  };
+  const sourceFormalOutcome = (src) => {
+    const rows = sourceFormalRows(src).filter(row => row?.gateQualified === true);
+    if (rows.some(row => row?.mainlineQualified === true)) return true;
+    if (rows.length && rows.every(row => row?.mainlineQualified === false)) return false;
+    return null;
+  };
   const sourceReviewHTML = (r) => {
     if (!r || !r.bySource) return '';
     const sourceEntries = [['eastmoney', '东财'], ['ths', '同花顺']];
@@ -13957,9 +13984,16 @@ function renderMainlineReviewHTML(d) {
       const noMainline = status === 'no-mainline';
       const sourceRow = { ...r, ...src, noMainline };
       const reserveText = sourceReserveText(src);
+      const formalRows = sourceFormalRows(src);
+      const gateQualifiedRows = formalRows.filter(row => row?.gateQualified === true);
+      const formalText = formalRows.map(row => {
+        const audit = row.mainlineQualified === false ? '（盘后未成立）'
+          : row.mainlineQualified == null ? '（待核验）' : '';
+        return `${String(row.theme || '')}${audit}`;
+      }).join(' / ');
       const stateText = status === 'unavailable' ? '来源暂缺'
         : status === 'unknown' ? '历史状态未知'
-          : noMainline ? (reserveText ? '无正式主线' : '无主线') : String(src.theme || '');
+          : noMainline ? (reserveText ? '无正式主线' : '无主线') : (formalText || String(src.theme || ''));
       const displayText = reserveText ? `${stateText} · 预备 ${reserveText}` : stateText;
       const displayHTML = reserveText
         ? `<strong title="${escapeHTML(displayText)}">${escapeHTML(displayText)}</strong>`
@@ -13969,7 +14003,9 @@ function renderMainlineReviewHTML(d) {
         ? `<span class="mlr-hit na" title="${reason}" aria-label="${label}来源暂缺：${reason}">暂缺</span>`
         : status === 'unknown'
           ? `<span class="mlr-hit na" title="${reason}" aria-label="${label}历史状态未知：${reason}">状态未知</span>`
-          : hitCell(sourceRow);
+          : gateQualifiedRows.length
+            ? `<span class="mlr-hit ${gateQualifiedRows.some(row => row.mainlineQualified !== false) ? 'ok' : 'miss'}" title="排名只决定顺序；每个通过资金、同家族涨停数和确认明星门槛的方向都独立算正式主线">${gateQualifiedRows.length}条正式</span>`
+            : hitCell(sourceRow);
       return `<span class="mlr-source-row ${status}"><span class="mlr-source-name">${label}</span>${displayHTML}${result}</span>`;
     }).join('');
     return `<span class="mlr-source-grid">${items}</span>`;
@@ -13982,15 +14018,15 @@ function renderMainlineReviewHTML(d) {
     const starText = stars.length
       ? ` · ${stars.map(star => `${star.name || star.code}${star.level === 'confirmed' ? ' 明星确认' : ' 预期明星'}`).join(' / ')}`
       : '';
-    const status = final.formalQualified === true ? '正式主线'
-      : final.formalQualified === false ? '未形成正式主线'
-        : '正式资格待核验';
+    const status = final.formalQualified === true ? '重点对应正式主线'
+      : final.formalQualified === false ? '仅人工重点'
+        : '人工重点待核验';
     const familyCount = final.sameFamilyLimitUpCount == null
       ? ''
       : ` · 同家族${Number(final.sameFamilyLimitUpCount) || 0}只涨停`;
     return `<span class="mlr-source-grid">
-      <span class="mlr-source-row ${final.formalQualified === true ? 'mainline' : ''}" title="管理员收盘复核独立于盘中预测，不改写预测命中率；正式主线仍须满足确认明星股且同家族至少3只涨停">
-        <span class="mlr-source-name">收盘复核</span>
+      <span class="mlr-source-row ${final.formalQualified === true ? 'mainline' : ''}" title="人工重点是管理员附加标记，不决定其他过闸方向的正式主线资格，也不改写盘中预测命中率">
+        <span class="mlr-source-name">人工重点</span>
         <strong>${escapeHTML(final.theme || final.key || '')}${escapeHTML(familyCount)}${escapeHTML(starText)}</strong>
         <span class="mlr-hit ${final.formalQualified === true ? 'ok' : (final.formalQualified === false ? 'miss' : 'na')}">${status}</span>
       </span>
@@ -14104,8 +14140,11 @@ function renderMainlineReviewHTML(d) {
   const rowHitClass = (r, starVisual) => {
     if (r.bySource) {
       if (r.pendingReview) return 'hit-wait';
-      const sourceRows = Object.values(r.bySource).filter(src => src && src.status !== 'unavailable' && src.status !== 'unknown' && !src.noMainline && src.mainlineQualified != null);
-      const outcomes = new Set(sourceRows.map(src => src.mainlineQualified === true ? 'ok' : 'miss'));
+      const sourceRows = Object.values(r.bySource)
+        .filter(src => src && src.status !== 'unavailable' && src.status !== 'unknown' && !src.noMainline)
+        .map(src => sourceFormalOutcome(src))
+        .filter(outcome => outcome != null);
+      const outcomes = new Set(sourceRows.map(outcome => outcome === true ? 'ok' : 'miss'));
       // 双源各自独立评估；只要任一来源满足正式主线条件，并且当日已有确认明星，
       // 整日即具备一条完整的“单源主线 + 明星”证据链，应使用红色真主线状态。
       // sampleValid 只控制是否进入盘中预测统计，不能覆盖盘后已确认的正式主线事实。
@@ -14151,7 +14190,9 @@ function renderMainlineReviewHTML(d) {
     const detail = evidenceCells.length ? `<div class="mlr-evidence-grid">${evidenceCells.join('')}</div>` : '';
     const actualResult = actualCell(r);
     const finalResult = finalConfirmationHTML(r, actualResult);
-    const result = finalResult || (sourceReview ? actualResult : `${r.noMainline ? '' : hitCell(r)}${actualResult}`);
+    const result = sourceReview
+      ? (finalResult || actualResult)
+      : `${r.noMainline ? '' : hitCell(r)}${finalResult || actualResult}`;
     const sourceStates = r.bySource ? Object.values(r.bySource).map(src => String(src?.status || '')) : [];
     const sourceHasMainline = sourceStates.includes('mainline');
     const sourceAllNoMainline = sourceStates.length > 0 && sourceStates.every(status => status === 'no-mainline');
@@ -14172,10 +14213,13 @@ function renderMainlineReviewHTML(d) {
           const status = String(src?.status || '') || (src?.available === false ? 'unavailable'
             : String(src?.theme || '').trim() ? 'mainline'
               : (src?.available === true && src?.noMainline === true) ? 'no-mainline' : 'unknown');
-          const t = status === 'unavailable' ? '暂缺' : (status === 'unknown' ? '状态未知' : (status === 'no-mainline' ? '无正式主线' : String(src.theme || '')));
+          const formalRows = sourceFormalRows(src);
+          const formalText = formalRows.map(row => String(row?.theme || '')).filter(Boolean).join('、');
+          const t = status === 'unavailable' ? '暂缺' : (status === 'unknown' ? '状态未知' : (status === 'no-mainline' ? '无正式主线' : (formalText || String(src.theme || ''))));
           const reserveText = sourceReserveText(src, 1);
+          const formalOutcome = sourceFormalOutcome(src);
           const hit = status === 'mainline'
-            ? (src.mainlineQualified === true ? '成立' : (src.mainlineQualified === false ? '未成立' : ''))
+            ? (formalOutcome === true ? '成立' : (formalOutcome === false ? '未成立' : ''))
             : '';
           return `${label}${t}${hit ? ` ${hit}` : ''}${reserveText ? ` · 预备 ${reserveText}` : ''}`;
         };
@@ -14188,15 +14232,19 @@ function renderMainlineReviewHTML(d) {
     const finalConclusion = r.finalConfirmedMainline || null;
     const qualifiedSourceThemes = r.bySource
       ? [...new Map(Object.values(r.bySource)
-        .filter(src => src?.status === 'mainline' && src?.mainlineQualified === true)
-        .map(src => {
-          const theme = String(src?.theme || '').trim();
-          const count = src?.mainlineQualification?.limitUpCount;
-          return [theme, {
-            theme,
-            limitUpCount: count == null ? null : Number(count) || 0,
-          }];
-        })
+        .filter(src => String(src?.status || '') === 'mainline'
+          || (!src?.status && src?.available !== false && String(src?.theme || '').trim()))
+        .flatMap(src => sourceFormalRows(src)
+          .filter(row => row?.gateQualified === true && row?.mainlineQualified !== false)
+          .map(row => {
+            const theme = String(row?.theme || '').trim();
+            const count = row?.mainlineQualification?.limitUpCount;
+            return [theme, {
+              theme,
+              limitUpCount: count == null ? null : Number(count) || 0,
+              auditPending: row?.mainlineQualified == null,
+            }];
+          }))
         .filter(([theme]) => theme)).values()]
       : [];
     const legacyQualified = r.mainlineQualified === true
@@ -14204,13 +14252,11 @@ function renderMainlineReviewHTML(d) {
       : '';
     const legacyLimitUpCount = r.mainlineQualification?.limitUpCount;
     const qualifiedThemeText = item => `${item.theme}${item.limitUpCount == null ? '' : `（同家族${item.limitUpCount}只涨停）`}`;
-    const compactOut = finalConclusion
-      ? finalConclusion.formalQualified === true
-        ? `正式主线 ${String(finalConclusion.theme || finalConclusion.key || '')}${finalConclusion.sameFamilyLimitUpCount == null ? '' : ` · 同家族${Number(finalConclusion.sameFamilyLimitUpCount) || 0}只涨停`}`
-        : finalConclusion.formalQualified === false ? '今日无正式主线' : '正式主线待核验'
-      : r.pendingReview ? '待盘后验证'
-        : qualifiedSourceThemes.length ? `正式主线 ${qualifiedSourceThemes.map(qualifiedThemeText).join(' / ')}`
-          : legacyQualified ? `正式主线 ${legacyQualified}${legacyLimitUpCount == null ? '' : ` · 同家族${Number(legacyLimitUpCount) || 0}只涨停`}`
+    const compactOut = r.pendingReview ? '待盘后验证'
+      : qualifiedSourceThemes.length ? `正式主线 ${qualifiedSourceThemes.map(qualifiedThemeText).join(' / ')}`
+        : legacyQualified ? `正式主线 ${legacyQualified}${legacyLimitUpCount == null ? '' : ` · 同家族${Number(legacyLimitUpCount) || 0}只涨停`}`
+          : finalConclusion?.formalQualified === true
+            ? `正式主线 ${String(finalConclusion.theme || finalConclusion.key || '')}${finalConclusion.sameFamilyLimitUpCount == null ? '' : ` · 同家族${Number(finalConclusion.sameFamilyLimitUpCount) || 0}只涨停`}`
             : (r.mainlineQualified == null && !r.noMainline ? '正式主线待核验' : '今日无正式主线');
     const finalStars = finalConclusion
       ? (Array.isArray(finalConclusion.stars) ? finalConclusion.stars : [])
@@ -14234,12 +14280,12 @@ function renderMainlineReviewHTML(d) {
       const n = Number(v);
       return `<b class="${n > 0 ? 'up' : (n < 0 ? 'down' : '')}">${n > 0 ? '+' : ''}${n}%</b>`;
     };
-    const hasQualifiedMainline = finalConclusion?.formalQualified === true
-      || qualifiedSourceThemes.length > 0 || Boolean(legacyQualified);
-    const lineBadge = finalConclusion
-      ? `<span class="mlr-line-badge${finalConclusion.formalQualified === true ? '' : ' quiet'}">${finalConclusion.formalQualified === true ? '正式主线' : (finalConclusion.formalQualified === false ? '无正式主线' : '待核验')}</span>`
-      : hasQualifiedMainline
+    const hasQualifiedMainline = qualifiedSourceThemes.length > 0 || Boolean(legacyQualified)
+      || finalConclusion?.formalQualified === true;
+    const lineBadge = hasQualifiedMainline
       ? '<span class="mlr-line-badge">正式主线</span>'
+      : finalConclusion
+      ? `<span class="mlr-line-badge quiet">${finalConclusion.formalQualified === false ? '人工重点' : '待核验'}</span>`
       : starVisual.key
       ? `<span class="mlr-line-badge ${starVisual.key}">${escapeHTML(starVisual.label)}</span>`
       : `<span class="mlr-line-badge quiet">${r.noMainline || !r.theme ? '今日无主线' : escapeHTML(r.theme)}</span>`;

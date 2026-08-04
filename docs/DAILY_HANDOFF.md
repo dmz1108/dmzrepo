@@ -13823,3 +13823,43 @@ Deployment:
 Notes for next agent:
 - 复审应确认生产默认 `nowParts` 仍为北京时间，且严格小于 cutoff 的文件才删除；
   30 天边界文件保留，31 天及更旧文件清理。
+
+## 2026-08-04 - Codex - 正式主线资格与排名完全解耦
+
+Changed:
+- 正式主线只由现有资金、同家族涨停数、确认明星与合格龙头硬门槛决定；
+  排名只用于排序和标记“最强主线”，不再用 top3/top10 数量限额淘汰已过门槛方向。
+- 预测档案新增 `qualifiedMainlines`，完整保存每个来源全部正式主线；旧 `top`
+  继续仅供前三命中率统计，保持兼容。旧档可从非粘性 `qiTier=formal` 候选恢复第 4 名及以后主线。
+- 预判回看按来源返回所有 `formalMainlines`；来源结论改为任一正式方向成立即成立，
+  不再只看来源排名第一。人工“确认主线”改为独立“人工重点”语义，不覆盖其他正式主线。
+- 策略卡片区分“最强主线 / 正式主线 / 人工重点”；预判回看按东财、同花顺分别列出全部正式方向。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/mainline-confirm.test.js`
+- `tests/mainline-review.test.js`
+- `tests/predict-records.test.js`
+- `tests/qi-mainline-states.test.js`
+- `tests/strategy-two-source-mainlines.test.js`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 修复前公开生产证据：`2026-08-04` 返回光通信、算力 AI、PCB 与连接、医药四条
+  `qiTier=formal`，医药排名第 4，但旧单选字段只标记其中一条。证据 SHA-256：
+  `edaceb83b52223c597f7fd99b679cb4f3aaab49ddf727f84b9c2ad40d4ea6ac8`；回看证据 SHA-256：
+  `31b464b736f775db535053edeac1c88dd7f2fd601792d9fd0b4082b370ed550d`。证据文件仅在忽略的 `tmp/`，未入 Git。
+- 新增反例：来源第 1 名未成立、第 4 名独立过门槛时，来源仍判定存在正式主线；
+  12 条过门槛方向不得被 top10 截断。
+- `node --check kpl-stats-server.js` 通过。
+- `for f in tests/*.test.js; do node "$f" || exit 1; done` 全仓 **81/81** 测试文件通过。
+- `git diff --check` 通过。
+
+Deployment:
+- GitHub only；尚未部署云端，未重启服务，未修改生产运行时数据。
+
+Notes for next agent:
+- 复审必须区分两套口径：`top3` 仍是“预测排名命中率”统计；
+  `qualifiedMainlines/formalMainlines` 是“所有独立过硬门槛的正式主线”事实集。不得再用名次或人工单选字段截断后者。
