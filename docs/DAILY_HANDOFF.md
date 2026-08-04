@@ -14074,3 +14074,39 @@ Deployment:
 Notes for next agent:
 - `theme-taxonomy.json` 与当前主服务启动声明属于原子依赖；以后修改任一侧的 family 声明时，部署清单
   必须同时覆盖两者，避免再次出现代码/词典版本撕裂。
+
+## 2026-08-04 - Codex - PR #382 原子部署成功回执
+
+Changed:
+- PR #389 合并为 `main@8f2b796fc2c58393e836b839de1d0c6cd096d73b`，受保护生产运行
+  `30915947968` 使用原子清单发布主服务、行情前端和题材词典并重启主服务。
+- 部署健康检查一次通过，未触发回滚；两份云端运维日志均已自动写入本运行号。
+
+Files:
+- Runtime: `C:\PandaDashboard\kpl-stats-server.js`
+- Runtime: `C:\PandaDashboard\kpl-dashboard_17_apple.html`
+- Runtime: `C:\PandaDashboard\theme-taxonomy.json`
+- Cloud logs: `panda-cloud-ops-2026-06-19.md`, `_cloud-change-log-20260705.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 公网 `https://market.dreamerqi.com/health` 返回 200/`{"ok":true}`。
+- 云端三项 SHA-256 与批准版本完全一致：主服务
+  `5d9bdcce6353fc765bcd83e11aecc8005eb9031c131f3f9d106ea25ac3dcc49a`，行情前端
+  `74a43deb0e49ec0ea0be8d69ece8cc99ad742f19273382a60aeb50f3936f7a27`，题材词典
+  `0b792fd34533631f82e430db16cf7ef8a2db477447d5e40a8ee34539889ad3ad`。
+- 2026-08-03 回看已把电力识别为正式主线：整体、东财、同花顺均为 `mainlineQualified=true`，
+  `formalMainlineCount=1`；确认明星华电辽能 `600396`，电力族涨停 3 只，满足正式门槛。
+- 上线前后回看统计保持一致：整体 4/5（80%）、东财 4/5（80%）、同花顺 3/3（100%），说明
+  本次修正扩展正式主线事实集，没有意外改写既有命中率口径。
+- 上线后 review 证据 SHA-256：`dad056d9812ad2860adbbcc7ab897a40770f6341f324e431d5f45102a2b605ce`；
+  2026-08-03 mainlines 响应 SHA-256：`d6486678c5f4b54c246e51ed700fda6c154dfed7c14a32602b699cf33761dae2`。
+
+Deployment:
+- Workflow: `https://github.com/dmz1108/dmzrepo/actions/runs/30915947968`。
+- 云端回退备份：`C:\PandaDashboard\_deploy-backups\github-30915947968-1`。
+- 主服务已重启且健康；未修改任何运行时数据库、用户数据或凭据。
+
+Notes for next agent:
+- PR #382 已正式生效。后续对多条正式主线的 UI 或语义调整，应以 `formalMainlines` 为事实集合，
+  旧的单条 `sourceQualification` 仅保留兼容用途。
