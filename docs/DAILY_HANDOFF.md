@@ -13831,6 +13831,8 @@ Changed:
   排名只用于排序和标记“最强主线”，不再用 top3/top10 数量限额淘汰已过门槛方向。
 - 预测档案新增 `qualifiedMainlines`，完整保存每个来源全部正式主线；旧 `top`
   继续仅供前三命中率统计，保持兼容。旧档可从非粘性 `qiTier=formal` 候选恢复第 4 名及以后主线。
+- 复审发现去掉 top10 后，旧 `strategyPredictStarTransitions` 的 12 条上限首次可达；
+  已去掉事件轨迹截断，避免第 13 条及以后正式主线丢失预期明星、领先时长和粘性历史证据。
 - 预判回看按来源返回所有 `formalMainlines`；来源结论改为任一正式方向成立即成立，
   不再只看来源排名第一。人工“确认主线”改为独立“人工重点”语义，不覆盖其他正式主线。
 - 策略卡片区分“最强主线 / 正式主线 / 人工重点”；预判回看按东财、同花顺分别列出全部正式方向。
@@ -13852,7 +13854,7 @@ Validated:
   `edaceb83b52223c597f7fd99b679cb4f3aaab49ddf727f84b9c2ad40d4ea6ac8`；回看证据 SHA-256：
   `31b464b736f775db535053edeac1c88dd7f2fd601792d9fd0b4082b370ed550d`。证据文件仅在忽略的 `tmp/`，未入 Git。
 - 新增反例：来源第 1 名未成立、第 4 名独立过门槛时，来源仍判定存在正式主线；
-  12 条过门槛方向不得被 top10 截断。
+  12 条过门槛方向不得被 top10 截断；第 13 条正式主线的预期明星事件不得被轨迹上限丢失。
 - `node --check kpl-stats-server.js` 通过。
 - `for f in tests/*.test.js; do node "$f" || exit 1; done` 全仓 **81/81** 测试文件通过。
 - `git diff --check` 通过。
@@ -13863,3 +13865,124 @@ Deployment:
 Notes for next agent:
 - 复审必须区分两套口径：`top3` 仍是“预测排名命中率”统计；
   `qualifiedMainlines/formalMainlines` 是“所有独立过硬门槛的正式主线”事实集。不得再用名次或人工单选字段截断后者。
+- Owner 已用 2026-08-03/08-04 历史日追问并明确“达到硬门槛就都可以成为主线”；
+  因此来源成立率由“只看第 1 名”改为“任一正式方向成立”是对已存事实的历史纠错，
+  故意适用旧档，不设未来生效日。这与 PR #381 的“题材族词典重划”是不同类变更；
+  #381 后续合并时仍须让本 PR 的多主线计算在对应日期的族纪元内执行。
+## 2026-08-04 - Codex - TGB 湖南人原始证据刷新请求
+
+Changed:
+- 确认北京时间 2026-08-04 为星期二交易日；新增日期绑定的受保护生产请求，只强制刷新
+  `@TGB湖南人` 官方文章和原始图片证据。
+- 请求会先备份同日既有 raw-evidence 目录，严格校验文章标题、官方链接和已下载图片，且明确禁止
+  OCR/Qwen/视觉识别、正式行写入、综合主因重折或服务重启。
+
+Files:
+- `ops/production/requests/2026-08-04-tgb-hunan-raw-evidence.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 脚本目标日期固定为 2026-08-04，只调用 `--tgb-hunan-raw-evidence --days=1 --force`。
+- `git diff --check` 通过；生产结果需在脚本合并并经受保护工作流批准后确认。
+
+Deployment:
+- GitHub only；尚未执行生产刷新，未写正式 TGB 行，未重折综合主因库，未重启服务。
+
+Notes for next agent:
+- 生产刷新后只可从标题、日期、白底表格及 `@TGB湖南人` 水印均匹配的官方原图继续人工双遍转录；
+  若文章、图片或字段不可辨认，必须停止且不得写正式库。
+
+## 2026-08-04 - Codex - TGB 人工转录写前终盘池检查请求
+
+Changed:
+- 受保护 raw-evidence 运行 `30905538982` 已保存官方文章及 15 张原始图片；人工选定
+  `image-01-07.png`，排除同花顺红图、回帖图、头像、小图和炸板区。
+- Codex 已完成 137 行两遍逐字段人工转录；第二遍修正 1 个易混字，未使用 OCR、Qwen 或自动视觉结果。
+- 新增日期绑定的只读写前检查，固定原始终盘池 138、复盘合格池 137，并输出唯一排除项和合格代码集哈希。
+
+Files:
+- `ops/production/requests/2026-08-04-tgb-hunan-prewrite-inspect.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 人工题材块计数：算力 21、PCB 19、光通信 16、AI应用 14、医疗医药 12、机器人 10、
+  AI液冷散热 8、半导体 8、电力 5、磷化铟 5、MLCC 4、摘帽相关 4、其他热点 4、其他个股 7；合计 137。
+- 公开综合归纳池对账：137 行/137 唯一代码，`missingCodes=[]`、`extraCodes=[]`、重复 0、弱字段 0；
+  唯一名称差异为原图“青云科技”对应终盘池“青云科技-U”，将显式记录为来源别名。
+
+Deployment:
+- 原始证据刷新已执行；正式行尚未写入，综合主因尚未重折，未重启服务。
+- 本条只读终盘池检查尚待合并后执行。
+
+Notes for next agent:
+- 正式写入脚本必须固定只读检查返回的唯一排除项、原图 SHA-256、137 行题材块计数和显式名称别名，
+  并在任何质量闸失败时停止及回滚。
+
+## 2026-08-04 - Codex - TGB 湖南人 137 行正式写入请求
+
+Changed:
+- 受保护只读检查运行 `30906586369` 固定原始终盘池 138/138、唯一排除北交所代码 `920092`、
+  复盘合格池 137/137，合格代码集 SHA-256 为
+  `0d127a1d597b1b1cfea64b5aef25dcdb3a93bbc2ffd49ea54bfea7fe6b3f53d2`；正式文件不存在。
+- 新增日期绑定的正式写入脚本和加密 payload 传送映射；137 行人工转录正文只保存于 GitHub
+  `production` 环境秘密，不进入 Git。
+- 写入脚本会重验官方文章、原图文件/URL/长度/SHA-256、终盘池、代码名称、14 个题材块和全部
+  质量闸，备份所有可能变更的来源/综合/证据/质量/auto 文件及两份云端日志，原子写入并失败回滚。
+
+Files:
+- `.github/workflows/production-ops.yml`
+- `ops/production/requests/2026-08-04-tgb-hunan-write.ps1`
+- `tests/tgb-20260804-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 官方文章：`https://www.tgb.cn/a/2tZtbfK6FHu`；官方图片：`image-01-07.png`，长度 1278534，
+  SHA-256 `39e306418b9da97e585b6025b55cd162251d55cf5f094e600de45d6f628556e2`。
+- 写前对账：137 行/137 唯一代码，`missingCodes=[]`、`extraCodes=[]`、重复 0、`weakCount=0`；
+  14 个题材块人工计数之和 137；显式名称别名仅 `688316` 青云科技/青云科技-U。
+- 人工 payload SHA-256：`f3ccd690f63dffae49ea6fcb3831f7e0aee9b6814ff63816cc6d5551b1bb3b34`；
+  未使用 Qwen、OCR 或任何自动视觉结果生成、补全、猜测或校验正式行。
+- `node tests/tgb-20260804-production-request.test.js`、`node tests/production-ops-workflow.test.js`、
+  嵌入式 Node 语法检查、workflow YAML/Bash 语法检查和 `git diff --check` 通过。
+
+Deployment:
+- 本条记录时正式写入请求尚未执行；当天综合主因尚未重折，未重启服务。
+
+Notes for next agent:
+- 只有本日期绑定脚本在 `main` 合并并通过生产环境批准后才可写入；生产 gate、落盘后二次 gate、
+  综合主因/证据/auto 代码集和公开 source-view 任一不通过均必须回滚。
+
+## 2026-08-04 - Codex - TGB 湖南人 137 行正式入库回执
+
+Changed:
+- PR #385 已合并；受保护生产运行 `30907239425` 成功写入 2026-08-04
+  `review/tgb-hunan-structured` 正式源并重折当天综合主因库。
+- 写前完整备份正式源、综合主因、证据、质量、auto、相关来源文件、官方证据和两份云端日志；
+  正式源原子写入，工作流远端加密 payload 与临时脚本已清理。
+- 两份云端运维日志已记录文章、官方图片、校验闸、备份、正式源/综合主因哈希与无重启状态。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- Runtime: `C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-08-04.json`
+- Runtime combined/evidence/quality/auto artifacts for `2026-08-04`
+- Cloud logs: `panda-cloud-ops-2026-06-19.md`, `_cloud-change-log-20260705.md`
+
+Validated:
+- 生产 gate 与落盘后二次 gate 均为 137 行/137 唯一代码，`missingCodes=[]`、`extraCodes=[]`、
+  `duplicateCodes=[]`、`weakCount=0`、名称不匹配 0；14 个题材块和人工块计数均合计 137。
+- 原始终盘池 138/138，唯一排除北交所代码 `920092`；显式来源名称差异仅青云科技/青云科技-U，
+  `nameDifferencesMatch=true`。
+- 综合主因、证据和 auto TGB 代码集均为 137，缺失/多余为空。
+- 公开 source-view：综合归纳、复盘啦、选股宝、淘股吧均为 137，韭研 0；TGB 覆盖率与主因覆盖率
+  均为 100%，低质量 0，`sourceErrors=[]`；公开 `/health` 为 `ok:true`。
+- 正式 TGB SHA-256：`fbe0d7bd0ea7a5910c1f1a017e268dd9a99a7fbe7d13c73b50357468b5aea22f`；
+  重折后综合主因 SHA-256：`8105addd49a95e1b83029420bd63d5c7bdd97884bbf98948e0f1fe3b1e0d2319`。
+
+Deployment:
+- Workflow: `https://github.com/dmz1108/dmzrepo/actions/runs/30907239425`。
+- 云端备份：`C:\PandaDashboard\backups\tgb-hunan-manual-20260804-20260804120212`。
+- 当天综合主因已重折；未部署服务代码，未重启服务。
+
+Notes for next agent:
+- 文章：`https://www.tgb.cn/a/2tZtbfK6FHu`；官方图片：`image-01-07.png`。
+- 本日正式源已受人工来源保护；普通同步与 force 不得覆盖。任何更正必须先备份并重跑全部质量闸。
