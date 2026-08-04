@@ -27,11 +27,6 @@ function extractArr(name) {
   for (; j < src.length; j++) { if (src[j] === '[') d++; else if (src[j] === ']') { d--; if (d === 0) break; } }
   return src.slice(i, j + 2).replace('const ', 'var ');
 }
-function extractSet(name) {
-  const m = src.match(new RegExp(`const ${name} = new Set\\(\\[([\\s\\S]*?)\\]\\)`));
-  if (!m) throw new Error('not found set: ' + name);
-  return new Set(eval('[' + m[1] + ']'));
-}
 const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.exitCode = 1; } else console.log('ok: ' + msg); };
 
 // ---- 生产题材/家族工具(不 stub)----
@@ -48,8 +43,6 @@ eval(extractFn('consensusKey'));
 eval(extractFn('strategyResonanceTopicKey'));
 eval(extractFn('strategyThemeTaxonomyInfo'));
 eval(extractFn('strategyMainlineTopicKey'));
-const STRATEGY_MAINLINE_MERGE_GROUPS = extractSet('STRATEGY_MAINLINE_MERGE_GROUPS');
-const STRATEGY_MAINLINE_KEEP_FINE_THEMES = extractSet('STRATEGY_MAINLINE_KEEP_FINE_THEMES');
 eval(extractFn('strategyMainlineFamilyInfo'));
 eval(extractFn('normalizeReasonSourceCode'));
 const isExcludedFromReview = () => false;  // 夹具代码均为主板正常股(与 leader-pool-debug 测试一致)
@@ -67,10 +60,10 @@ eval(extractFn('strategyMainlineReasonAttributionConfidence'));
 eval(extractFn('strategyMainlineApplyCurrentReasonAttribution'));
 
 // ---- 生产家族前置断言:证明 7-08 场景的族缺口/族一致真实成立 ----
-A(strategyMainlineFamilyInfo({ theme: '算力' }).key === 'group:算力AI', '生产:算力 → 算力AI 家族');
-A(strategyMainlineFamilyInfo({ theme: '云计算' }).key === 'group:算力AI', '生产:云计算 → 算力AI 家族(与算力同族)');
-A(strategyMainlineFamilyInfo({ theme: '液冷' }).key === 'group:算力AI', '生产:液冷 → 算力AI 家族(同族不同 key)');
-A(strategyMainlineFamilyInfo({ theme: '网络安全' }).key !== 'group:算力AI', '生产:网络安全 ≠ 算力AI 家族(跨族)');
+A(strategyMainlineFamilyInfo({ theme: '算力' }).key === 'group:算力硬件', '生产:算力 → 算力硬件家族(PR B)');
+A(strategyMainlineFamilyInfo({ theme: '云计算' }).key === 'group:算力硬件', '生产:云计算 → 算力硬件家族(与算力同族)');
+A(strategyMainlineFamilyInfo({ theme: '液冷' }).key === 'group:算力硬件', '生产:液冷 → 算力硬件家族(同族不同 key)');
+A(strategyMainlineFamilyInfo({ theme: '网络安全' }).key !== 'group:算力硬件', '生产:网络安全 ≠ 算力硬件家族(跨族)');
 A(canonicalTopicName('数据中心') === '算力', '生产:数据中心 → 算力(候选源同族证据成立)');
 
 // ---- 置信度门槛(Codex 第5点;二审真实嵌套结构;三审禁止跨候选拼接)----
@@ -212,7 +205,7 @@ const HARD = (code, name) => ({ ...REAL_XINGWANG(), code, name });
   A(!seedByKey.get(strategyMainlineTopicKey('网络安全')).codeSet.has('002396'), '星网已从网络安全 seed 剔除(跨族)');
   A(!seedByKey.get(strategyMainlineTopicKey('数字货币')).codeSet.has('002396'), '星网已从数字货币 seed 剔除(跨族)');
   A(seedByKey.get(strategyMainlineTopicKey('液冷')).codeSet.has('002396'), '星网保留在液冷 seed(同属算力AI 家族)');
-  A(hard.get('002396') === 'group:算力AI', 'hard 映射记录星网归属算力AI 家族');
+  A(hard.get('002396') === 'group:算力硬件', 'hard 映射记录星网归属算力硬件家族');
   A(!seedCompute.codeSet.has('000938'), '紫光(未涨停)不被归属并入 todayCodes');
   A(seedCompute.codeSet.has('600588'), '算力 seed 原有涨停成分 600588 不受影响');
   A(hard.size === 1 && soft.size === 0, 'hard 仅含当日涨停+有综合主因的星网,soft 为空');

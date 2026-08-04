@@ -13070,9 +13070,8 @@ function loadThemeTaxonomy() {  // 可热加载(管理员校准加词后重读,�
   const dropRe = (candidate.dropped || []).length
     ? new RegExp('(' + (candidate.dropped || []).map(w => String(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')')
     : null;
-  // 语义校验(familyUnit 一致性 + 兼容引用合法性)先于交换。模块初始化期字面集合尚在 TDZ,
-  // 校验经 _ready 门闩跳过,由集合声明后的显式调用完成首检——启动期数据坏直接抛死进程,
-  // 正是期望的 fail-fast;热加载期抛错则完整保留旧状态。
+  // 结构+语义校验(兼容引用合法性、遮蔽回环)先于交换(PR B 起无门闩,始终完整执行):
+  // 启动期数据坏直接抛死进程,正是期望的 fail-fast;热加载期抛错则完整保留旧状态。
   strategyThemeTaxonomyValidateFamilyUnits(candidate);
   THEME_TAXONOMY = candidate;
   THEME_NONBROAD = nonbroad;
@@ -13081,6 +13080,9 @@ function loadThemeTaxonomy() {  // 可热加载(管理员校准加词后重读,�
   strategyMainlineFamilyCompat._cache = null;
 }
 loadThemeTaxonomy();
+// 加载后无参复检:候选校验期全局词典尚空,shadowProblem 的 topicKey 回环走不到
+// standardTheme 分支;此调用以已加载词典再跑一遍语义校验,保住启动期该维度的 fail-fast。
+strategyThemeTaxonomyValidateFamilyUnits();
 function themeDisplayName(standard) { return String(standard || '').split('/')[0].trim(); }
 function themeKeywordMatches(text, keyword) {
   const s = String(text || '').trim();
@@ -21307,23 +21309,6 @@ function strategyThemeTaxonomyInfo(raw) {
   }
   return null;
 }
-const STRATEGY_MAINLINE_MERGE_GROUPS = new Set([
-  '算力AI',
-  '机器人',
-  '半导体',
-  '医药',
-  '消费',
-  '化工材料',
-  'PCB与连接',
-  '被动元件',
-  '光通信',
-  '消费电子/显示',
-]);
-const STRATEGY_MAINLINE_KEEP_FINE_THEMES = new Set([
-  '短剧游戏',
-  'AI应用',
-  '人工智能',
-]);
 function strategyMainlineFamilyInfo(item) {
   const theme = String(item?.theme || '').trim();
   const info = strategyThemeTaxonomyInfo(theme);
@@ -21331,8 +21316,8 @@ function strategyMainlineFamilyInfo(item) {
   const fineKey = /^(?:theme|group):/.test(rawKey)
     ? rawKey
     : `theme:${rawKey || strategyMainlineTopicKey(theme) || theme}`;
-  // 族单位由词典声明式字段决定(issue #375 PR A):'standard' 独立细族 / 'group' 归并交易族 /
-  // 缺省按查询词落细键。字面集合仅作一致性校验与旧测试兼容,不再参与判定。
+  // 族单位由词典声明式字段决定(issue #375):'standard' 独立细族 / 'group' 归并交易族 /
+  // 缺省按查询词落细键。词典是唯一判定来源(PR B 已退役历史字面集合)。
   if (info?.standard && info.familyUnit === 'standard') {
     const canonicalFineKey = strategyMainlineTopicKey(info.standard) || info.standard;
     return { key: `theme:${canonicalFineKey}`, label: info.standard, group: '', taxonomy: info };
@@ -21342,14 +21327,13 @@ function strategyMainlineFamilyInfo(item) {
   }
   return { key: fineKey, label: theme, group: '', taxonomy: info };
 }
-// 词典声明式字段与历史字面集合的一致性校验:启动/热加载即失败,杜绝双源漂移。
-// 字面集合在 PR B(首批族划分)随行为变更一并退役;届时本校验与集合同删。
+// 词典声明式字段的结构与语义校验:启动/热加载即失败(fail-fast)。
+// PR B 已退役历史字面集合(MERGE_GROUPS/KEEP_FINE)与 _ready 门闩:词典为唯一来源,
+// 校验在 loadThemeTaxonomy 交换前对候选完整执行(Codex PR #378 P2)。
 function strategyThemeTaxonomyValidateFamilyUnits(candidate) {
-  // 模块初始化期字面集合(const)尚未就绪(TDZ);首次校验由集合声明之后的显式调用完成,
-  // 此后的热加载路径以候选词典为对象在交换前校验(Codex PR #378 P2)。
-  // 结构校验不依赖字面集合,在 _ready 门闩之前执行(Codex 二轮 P1 / Local Claude db8e6f0):
-  // 候选缺 taxonomy 数组等结构缺陷绝不能静默回退去校验旧词典——那会对无效候选报告"通过",
-  // 随后原子交换把它换入,全站族归属静默降级。无参调用(初始化后首检)校验当前已加载词典。
+  // 结构校验(Codex 二轮 P1 / Local Claude db8e6f0):候选缺 taxonomy 数组等结构缺陷
+  // 绝不能静默回退去校验旧词典——那会对无效候选报告"通过",随后原子交换把它换入,
+  // 全站族归属静默降级。无参调用(加载后复检)校验当前已加载词典。
   if (candidate !== undefined) {
     const structural = [];
     if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
@@ -21375,32 +21359,10 @@ function strategyThemeTaxonomyValidateFamilyUnits(candidate) {
       throw new Error('[theme-taxonomy] 词典声明校验失败: ' + structural.join('; '));
     }
   }
-  if (!strategyThemeTaxonomyValidateFamilyUnits._ready) return;
   const tax = candidate !== undefined
     ? candidate.taxonomy
     : (THEME_TAXONOMY.taxonomy || []);
   const problems = [];
-  for (const t of tax) {
-    const display = themeDisplayName(t.standard);
-    const declared = t.familyUnit === 'group' || t.familyUnit === 'standard' ? t.familyUnit : '';
-    const expected = STRATEGY_MAINLINE_KEEP_FINE_THEMES.has(display)
-      ? 'standard'
-      : (t.group && STRATEGY_MAINLINE_MERGE_GROUPS.has(t.group) ? 'group' : '');
-    if (declared !== expected) {
-      problems.push(`${display}: familyUnit='${declared}' 但字面集合推导为 '${expected}'`);
-    }
-  }
-  // 反向检查(Local Claude PR #378 复核建议):字面集合中的孤儿项(词典里不存在对应
-  // standard/group)是静默空操作——#342 的 7b6dcf7 曾把 'AI视频' 加进 KEEP_FINE 而其
-  // standard 实为短剧游戏,该行永远不命中且无任何机制发现。集合退役(PR B)前必须可见。
-  const knownStandards = new Set(tax.map(t => themeDisplayName(t.standard)));
-  const knownGroups = new Set(tax.map(t => String(t.group || '')).filter(Boolean));
-  for (const name of STRATEGY_MAINLINE_KEEP_FINE_THEMES) {
-    if (!knownStandards.has(name)) problems.push(`KEEP_FINE 孤儿项 '${name}': 词典无此 standard`);
-  }
-  for (const name of STRATEGY_MAINLINE_MERGE_GROUPS) {
-    if (!knownGroups.has(name)) problems.push(`MERGE_GROUPS 孤儿项 '${name}': 词典无此 group`);
-  }
   // 兼容引用校验(Codex PR #378 P1 两轮):目标必须是词典真实 standard 显示名,且
   // 声明方与目标都不得被遮蔽——回环用**本词典(候选)作用域**的关键词匹配器判定,
   // topicKey 折叠(氢能燃料电池→锂电池 这类)同样拒绝;绝不回退自由文本族键生成错边。
@@ -21523,8 +21485,6 @@ function strategyMainlineFamilyCompat() {
   strategyMainlineFamilyCompat._cache = { parentByChild, broadFallback };
   return strategyMainlineFamilyCompat._cache;
 }
-strategyThemeTaxonomyValidateFamilyUnits._ready = true;
-strategyThemeTaxonomyValidateFamilyUnits();   // 字面集合就绪后的首次一致性校验(fail-fast)
 function strategyMainlineReasonFamilyEvidence(values) {
   const evidenceRows = [];
   for (const raw of (Array.isArray(values) ? values : [values])) {
@@ -21974,18 +21934,29 @@ function strategyMergeMainlineFamilies(rawMainlines) {
     item,
     family: strategyMainlineFamilyInfo(item),
   }));
-  // AI 软件方向在盘面上常被两套板块词典拆开：宽口径的“AI应用”与更具体的
-  // “AI视频/短剧游戏”。同一来源同一次构建中两者同时出现时，才按软件主线合并；
-  // 单独的游戏/传媒或单独的 AI 应用仍保持原粒度。合并键沿用短剧族，保证已有 L2
-  // 任务、预判记录和回看键稳定；mergedThemes 会保留 AI应用，供龙头池同时消费两族主因。
-  const mergeAiSoftware = classified.some(row => row.family?.key === 'theme:AI应用')
-    && classified.some(row => row.family?.key === 'theme:短剧游戏');
+  // 宽词族在盘面上常与其更具体的兜底目标族被两套板块词典拆开(如 AI应用 与
+  // AI视频/短剧游戏)。同一来源同一次构建中两者同时出现时,才按目标族合并为一条主线;
+  // 单独出现时各自保持原粒度。合并边来自词典 broadFallbackFamilies 声明(PR B 起不再
+  // 硬编码);合并键沿用目标族,保证已有 L2 任务、预判记录和回看键稳定;mergedThemes
+  // 保留宽词来源,供龙头池同时消费两族主因。
+  const compat = typeof strategyMainlineFamilyCompat === 'function'
+    ? strategyMainlineFamilyCompat()
+    : { parentByChild: new Map(), broadFallback: new Map() };
+  const familyByKey = new Map();
+  for (const row of classified) {
+    if (row.family?.key && !familyByKey.has(row.family.key)) familyByKey.set(row.family.key, row.family);
+  }
+  const fallbackRemap = new Map();
+  for (const [srcKey, targets] of compat.broadFallback) {
+    if (!familyByKey.has(srcKey)) continue;
+    for (const targetKey of targets) {
+      if (familyByKey.has(targetKey)) { fallbackRemap.set(srcKey, familyByKey.get(targetKey)); break; }
+    }
+  }
   const buckets = new Map();
   for (const row of classified) {
     const item = row.item;
-    const family = mergeAiSoftware && (row.family?.key === 'theme:AI应用' || row.family?.key === 'theme:短剧游戏')
-      ? { ...row.family, key: 'theme:短剧游戏', label: '短剧游戏', group: '' }
-      : row.family;
+    const family = fallbackRemap.get(row.family?.key) || row.family;
     if (!buckets.has(family.key)) buckets.set(family.key, { family, items: [] });
     buckets.get(family.key).items.push(item);
   }
@@ -25736,11 +25707,19 @@ function strategyMainlineReviewFamilyKeys(predict, main) {
   const mergedKeys = new Set((Array.isArray(candidate?.mergedThemes) ? candidate.mergedThemes : [])
     .map(theme => strategyMainlineFamilyInfo({ theme }).key)
     .filter(Boolean));
-  const hasApp = family?.key === 'theme:AI应用' || mergedKeys.has('theme:AI应用');
-  const hasShortVideo = family?.key === 'theme:短剧游戏' || mergedKeys.has('theme:短剧游戏');
-  if (hasApp && hasShortVideo) {
-    keys.add('theme:AI应用');
-    keys.add('theme:短剧游戏');
+  // 预测档明确合并了宽词族与其兜底目标族(词典 broadFallbackFamilies 声明的边,
+  // 如 AI应用→短剧游戏)时,回看同时接受两族的实际涨停计数;未合并时不擅自吸收。
+  const compat = typeof strategyMainlineFamilyCompat === 'function'
+    ? strategyMainlineFamilyCompat()
+    : { broadFallback: new Map() };
+  for (const [srcKey, targets] of compat.broadFallback) {
+    if (!(family?.key === srcKey || mergedKeys.has(srcKey))) continue;
+    for (const targetKey of targets) {
+      if (family?.key === targetKey || mergedKeys.has(targetKey)) {
+        keys.add(srcKey);
+        keys.add(targetKey);
+      }
+    }
   }
   return keys;
 }

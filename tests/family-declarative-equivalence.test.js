@@ -1,7 +1,7 @@
-// issue #375 PR A:词典声明式族字段与裁决泛化的行为等价测试。
-// 基线 fixture 由改造前代码(main@5f004d8)对 taxonomy 全部词枚举生成;
-// 本测试断言新实现对同一词表逐词产出完全相同的族键/标签/组。
-// PR B(首批族划分)属有意行为变更,届时按对照要求更新 fixture 并在交接记录差异。
+// issue #375 PR B:首批交易族划分(电力发电侧合族;算力硬件/AI软件应用分家;核电、电网设备
+// 独立观察;短剧游戏维持独立细族)。fixture 已按新行为重生成,旧→新逐词 diff(104 词)
+// 记录于 docs/DAILY_HANDOFF.md 与 PR 描述。历史字面集合(MERGE_GROUPS/KEEP_FINE)与
+// _ready 门闩已退役:词典声明式字段是唯一判定来源。
 const fs = require('fs');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
@@ -29,11 +29,6 @@ function extractArr(name) {
   }
   return src.slice(d, i + 2).replace('const ', 'var ');
 }
-function extractSet(name) {
-  const m = src.match(new RegExp(`const ${name} = new Set\\(\\[([\\s\\S]*?)\\]\\)`));
-  if (!m) throw new Error('not found set: ' + name);
-  return new Set(eval('[' + m[1] + ']'));
-}
 const A = (cond, msg) => {
   if (!cond) { console.error('FAIL: ' + msg); process.exitCode = 1; }
   else console.log('ok: ' + msg);
@@ -52,17 +47,14 @@ eval(extractFn('consensusKey'));
 eval(extractFn('strategyResonanceTopicKey'));
 eval(extractFn('strategyMainlineTopicKey'));
 eval(extractFn('strategyThemeTaxonomyInfo'));
-const STRATEGY_MAINLINE_MERGE_GROUPS = extractSet('STRATEGY_MAINLINE_MERGE_GROUPS');
-const STRATEGY_MAINLINE_KEEP_FINE_THEMES = extractSet('STRATEGY_MAINLINE_KEEP_FINE_THEMES');
 eval(extractFn('strategyMainlineFamilyInfo'));
 eval(extractFn('strategyThemeTaxonomyValidateFamilyUnits'));
-strategyThemeTaxonomyValidateFamilyUnits._ready = true;   // 生产中由字面集合声明后的显式调用置位
 eval(extractFn('strategyMainlineCompatEntryKey'));
 eval(extractFn('strategyMainlineFamilyCompat'));
 eval(extractFn('normalizeReasonSourceCode'));
 eval(extractFn('strategyMainlineStarAttributionDecision'));
 
-// 1. 全词逐一等价:1102 词的族键/标签/组与改造前基线完全一致。
+// 1. 全词逐一对照:1102 词的族键/标签/组与 PR B 重生成的基线完全一致。
 const baseline = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'family-key-baseline.json'), 'utf8'));
 let mismatch = 0;
 const samples = [];
@@ -73,42 +65,34 @@ for (const [word, expected] of Object.entries(baseline.families)) {
     if (samples.length < 5) samples.push(`${word}: ${expected.key} -> ${got.key}`);
   }
 }
-A(mismatch === 0, `声明式 familyUnit 与改造前行为逐词等价(${Object.keys(baseline.families).length} 词,差异 ${mismatch}${samples.length ? ': ' + samples.join(' | ') : ''})`);
+A(mismatch === 0, `词典声明式族键与 PR B 基线逐词一致(${Object.keys(baseline.families).length} 词,差异 ${mismatch}${samples.length ? ': ' + samples.join(' | ') : ''})`);
 
-// 2. 一致性校验:当前词典必须通过;人为制造漂移必须抛错。
+// 2. PR B 族划分定稿(Owner 确认清单)逐条落地。
 let threw = false;
 try { strategyThemeTaxonomyValidateFamilyUnits(); } catch { threw = true; }
-A(!threw, '当前词典通过 familyUnit 与字面集合一致性校验');
-const tampered = THEME_TAXONOMY.taxonomy.find(t => themeDisplayName(t.standard) === '火电热电');
-const savedUnit = tampered.familyUnit;
-tampered.familyUnit = 'group';
-threw = false;
-try { strategyThemeTaxonomyValidateFamilyUnits(); } catch { threw = true; }
-if (savedUnit === undefined) delete tampered.familyUnit; else tampered.familyUnit = savedUnit;
-A(threw, '词典字段与字面集合漂移时校验立即抛错(fail-fast)');
-// 反向检查(#342 7b6dcf7 的真实失败形状):集合孤儿项必须抛错,不得静默空操作。
-STRATEGY_MAINLINE_KEEP_FINE_THEMES.add('AI视频');
-threw = false;
-try { strategyThemeTaxonomyValidateFamilyUnits(); } catch (e) { threw = /孤儿项 'AI视频'/.test(String(e.message)); }
-STRATEGY_MAINLINE_KEEP_FINE_THEMES.delete('AI视频');
-A(threw, 'KEEP_FINE 孤儿项(词典无此 standard)被反向检查抛错');
-STRATEGY_MAINLINE_MERGE_GROUPS.add('不存在的组');
-threw = false;
-try { strategyThemeTaxonomyValidateFamilyUnits(); } catch (e) { threw = /孤儿项 '不存在的组'/.test(String(e.message)); }
-STRATEGY_MAINLINE_MERGE_GROUPS.delete('不存在的组');
-A(threw, 'MERGE_GROUPS 孤儿项(词典无此 group)被反向检查抛错');
+A(!threw, '当前词典通过声明校验(无参复检路径)');
+const famKey = w => strategyMainlineFamilyInfo({ theme: w }).key;
+A(famKey('电力') === 'group:电力' && famKey('火电') === 'group:电力'
+  && famKey('绿电') === 'group:电力' && famKey('水电') === 'group:电力',
+  '电力发电侧合族:电力/火电/绿电/水电全部落 group:电力');
+A(famKey('液冷') === 'group:算力硬件' && famKey('算力') === 'group:算力硬件'
+  && famKey('AI服务器') === 'group:算力硬件',
+  '算力硬件族:液冷/算力/AI服务器落 group:算力硬件');
+A(famKey('AI应用') === 'group:AI软件应用' && famKey('人工智能') === 'group:AI软件应用',
+  'AI软件应用族:AI应用/人工智能落 group:AI软件应用(与算力硬件分家)');
+A(famKey('核电') === 'theme:核电' && famKey('电网设备') !== 'group:电力',
+  '核电、电网设备不并入电力发电族,保持独立观察');
+A(famKey('短剧游戏') === 'theme:短剧游戏',
+  '短剧游戏维持独立细族(familyUnit=standard)');
 
-// 3. 兼容关系图:与被删除的 4 处硬编码语义一致。
+// 3. 兼容关系图:发电侧 compatibleParents 已随合族移除;宽词兜底保留并随族键迁移。
 const compat = strategyMainlineFamilyCompat();
-A(compat.parentByChild.get('theme:火电热电')?.has('theme:电力')
-  && compat.parentByChild.get('theme:绿电新能源运营')?.has('theme:电力')
-  && compat.parentByChild.get('theme:水电')?.has('theme:电力')
-  && compat.parentByChild.size === 3,
-'发电侧三子族→电力父族关系由词典声明构建,无多余关系');
-A(compat.broadFallback.get('theme:AI应用')?.has('theme:短剧游戏') && compat.broadFallback.size === 1,
-  'AI应用宽词兜底→短剧游戏关系由词典声明构建');
+A(compat.parentByChild.size === 0,
+  '合族后无 compatibleParents 声明,parentByChild 为空(父子兼容被族内精确匹配取代)');
+A(compat.broadFallback.get('group:AI软件应用')?.has('theme:短剧游戏') && compat.broadFallback.size === 1,
+  'AI应用宽词兜底→短剧游戏保留,声明方族键迁移为 group:AI软件应用');
 
-// 4. 裁决行为回归:华电辽能父子兼容、蓝色光标宽兜底、兄弟与跨族拒绝全部保持原 basis。
+// 4. 裁决行为:合族后族内精确匹配取代父子兼容;跨族与硬/软分家仍拒绝;宽兜底保持。
 const ctxOf = rows => {
   const out = new Map();
   for (const [code, families, broadOnly] of rows) {
@@ -120,24 +104,31 @@ const ctxOf = rows => {
   }
   return out;
 };
-const electric = { theme: '电力', familyKey: 'theme:电力' };
-const d1 = strategyMainlineStarAttributionDecision(electric, { code: '600396' }, ctxOf([['600396', ['theme:火电热电'], false]]));
-A(d1.allowed && d1.basis === 'current-limit-reason-child-compatible', '华电辽能:火电子族证据支撑电力父族(basis 不变)');
-const d2 = strategyMainlineStarAttributionDecision({ theme: '绿色电力', familyKey: 'theme:绿电新能源运营' }, { code: '600396' }, ctxOf([['600396', ['theme:火电热电'], false]]));
-A(!d2.allowed, '兄弟互借(火电证据→绿电候选)仍拒绝');
-const d3 = strategyMainlineStarAttributionDecision(electric, { code: '601700' }, ctxOf([['601700', ['theme:电网设备/特高压', 'theme:电网设备'], false]]));
-A(!d3.allowed, '电网设备证据不得支撑发电侧电力');
-const d4 = strategyMainlineStarAttributionDecision({ theme: '短剧游戏', familyKey: 'theme:短剧游戏' }, { code: '300058' }, ctxOf([['300058', ['theme:AI应用'], true]]));
-A(d4.allowed && d4.basis === 'current-limit-reason-broad-compatible', '蓝色光标:宽词AI应用兜底归短剧(basis 不变)');
-const d5 = strategyMainlineStarAttributionDecision({ theme: '算力AI', familyKey: 'group:算力AI' }, { code: '300058' }, ctxOf([['300058', ['theme:AI应用'], true]]));
-A(!d5.allowed, '宽词AI应用不得兜底进算力AI');
-const d6 = strategyMainlineStarAttributionDecision({ theme: '短剧游戏', familyKey: 'theme:短剧游戏' }, { code: '300058' }, ctxOf([['300058', ['theme:AI应用', 'theme:算力/数据中心'], false]]));
+const electric = { theme: '电力', familyKey: famKey('电力') };
+const d1 = strategyMainlineStarAttributionDecision(electric, { code: '600396' }, ctxOf([['600396', [famKey('火电')], false]]));
+A(d1.allowed && d1.basis === 'current-limit-reason', '华电辽能:火电证据与电力候选同族,精确匹配放行(不再需要 child-compatible 边)');
+const d2 = strategyMainlineStarAttributionDecision({ theme: '绿色电力', familyKey: famKey('绿电') }, { code: '600396' }, ctxOf([['600396', [famKey('火电')], false]]));
+A(d2.allowed && d2.basis === 'current-limit-reason', '发电侧同族互认:火电证据支撑绿电候选(PR B 合族的目标行为)');
+const d3 = strategyMainlineStarAttributionDecision(electric, { code: '601700' }, ctxOf([['601700', [famKey('电网设备'), famKey('特高压')], false]]));
+A(!d3.allowed, '电网设备证据不得支撑发电侧电力(独立观察)');
+const dNuke = strategyMainlineStarAttributionDecision(electric, { code: '601985' }, ctxOf([['601985', [famKey('核电')], false]]));
+A(!dNuke.allowed, '核电证据不得支撑发电侧电力(独立观察)');
+const d4 = strategyMainlineStarAttributionDecision({ theme: '短剧游戏', familyKey: famKey('短剧游戏') }, { code: '300058' }, ctxOf([['300058', [famKey('AI应用')], true]]));
+A(d4.allowed && d4.basis === 'current-limit-reason-broad-compatible', '蓝色光标:宽词AI应用兜底归短剧(basis 不变,族键已迁移)');
+const d5 = strategyMainlineStarAttributionDecision({ theme: '算力', familyKey: famKey('算力') }, { code: '300058' }, ctxOf([['300058', [famKey('AI应用')], true]]));
+A(!d5.allowed, '宽词AI应用不得兜底进算力硬件族(硬/软分家)');
+const dHw = strategyMainlineStarAttributionDecision({ theme: 'AI应用', familyKey: famKey('AI应用') }, { code: '300442' }, ctxOf([['300442', [famKey('液冷')], false]]));
+A(!dHw.allowed, '液冷(算力硬件)证据不得支撑AI软件应用候选(硬/软分家)');
+const d6 = strategyMainlineStarAttributionDecision({ theme: '短剧游戏', familyKey: famKey('短剧游戏') }, { code: '300058' }, ctxOf([['300058', [famKey('AI应用'), famKey('算力')], false]]));
 A(!d6.allowed, '证据含具体词(非 broadOnly)时宽兜底不生效,维持冲突拒绝');
 
-// 5. 静态:4 处硬编码已删除。
+// 5. 静态:4 处硬编码与历史字面集合、_ready 门闩均已删除。
 A(!src.includes('isPowerParentCompatible') && !src.includes("currentFamilies.has('theme:AI应用')")
   && !src.includes("priorFamilies.has('theme:AI应用')"),
 '裁决函数中的电力父子/AI应用宽兜底硬编码已全部删除');
+A(!src.includes('STRATEGY_MAINLINE_MERGE_GROUPS = new Set') && !src.includes('STRATEGY_MAINLINE_KEEP_FINE_THEMES = new Set')
+  && !src.includes('strategyThemeTaxonomyValidateFamilyUnits._ready'),
+'历史字面集合与 _ready 门闩已退役,词典为唯一判定来源');
 
 // 6. [Codex P1] 兼容引用校验:拼错/重复/自引用/宽词限制/空引用全部抛错,不得回退自由文本族键。
 const cloneTax = () => JSON.parse(JSON.stringify(THEME_TAXONOMY));
@@ -156,29 +147,29 @@ expectInvalid(t => { t.compatibleParents = ['']; }, /含空引用/, '空引用�
 
 // 7. [Codex P1] 构图层第二道网:即便绕过校验,FamilyCompat 构图遇幽灵目标也抛错。
 const hotEntry = THEME_TAXONOMY.taxonomy.find(t => themeDisplayName(t.standard) === '火电热电');
-const savedParents = hotEntry.compatibleParents;
 hotEntry.compatibleParents = ['电历'];
 strategyMainlineFamilyCompat._cache = null;
 let ghostThrew = false;
 try { strategyMainlineFamilyCompat(); } catch (e) { ghostThrew = /幽灵族边/.test(String(e.message)); }
-hotEntry.compatibleParents = savedParents;
+delete hotEntry.compatibleParents;
 strategyMainlineFamilyCompat._cache = null;
 A(ghostThrew, '构图遇不存在的引用目标抛错(幽灵族边),不静默生成');
-A(strategyMainlineFamilyCompat().parentByChild.get('theme:火电热电')?.has('theme:电力'),
-  '恢复后关系图重建正常');
+A(strategyMainlineFamilyCompat().parentByChild.size === 0
+  && strategyMainlineFamilyCompat().broadFallback.get('group:AI软件应用')?.has('theme:短剧游戏'),
+  '恢复后关系图重建正常(空父子边 + 保留宽兜底)');
 
 // 8. [Codex P2] 热加载事务性:语义无效但 JSON 合法的候选 → 抛错且全部旧状态保持不变。
 (function (THEME_TAXONOMY, THEME_NONBROAD, THEME_BROAD, THEME_DROP_RE, fsSync, THEME_TAXONOMY_PATH) {
   eval(extractFn('loadThemeTaxonomy'));
   const invalid = cloneTax();
-  invalid.taxonomy.find(t => themeDisplayName(t.standard) === '火电热电').familyUnit = 'group';
+  invalid.taxonomy.find(t => themeDisplayName(t.standard) === '火电热电').compatibleParents = ['电历'];
   fsSync.readFileSync = () => JSON.stringify(invalid);
   const beforeTax = THEME_TAXONOMY, beforeNb = THEME_NONBROAD, beforeB = THEME_BROAD;
   const sentinel = { sentinel: true };
   strategyMainlineFamilyCompat._cache = sentinel;
   let threwHot = false;
   try { loadThemeTaxonomy(); } catch (e) { threwHot = /词典声明校验失败/.test(String(e.message)); }
-  A(threwHot, '热加载语义无效候选时在交换前抛错');
+  A(threwHot, '热加载语义无效候选(幽灵引用)时在交换前抛错');
   A(THEME_TAXONOMY === beforeTax && THEME_NONBROAD === beforeNb && THEME_BROAD === beforeB,
     '抛错后 THEME_TAXONOMY/NONBROAD/BROAD 保持旧引用,进程内状态未被污染');
   A(strategyMainlineFamilyCompat._cache === sentinel, '抛错后 compat 缓存未被清空');
@@ -199,13 +190,13 @@ hotEntry.compatibleParents = ['氢能燃料电池'];
 strategyMainlineFamilyCompat._cache = null;
 let shadowThrew = false;
 try { strategyMainlineFamilyCompat(); } catch (e) { shadowThrew = /被关键词匹配遮蔽|topicKey 折叠/.test(String(e.message)); }
-hotEntry.compatibleParents = savedParents;
+delete hotEntry.compatibleParents;
 strategyMainlineFamilyCompat._cache = null;
 A(shadowThrew, '构图遇遮蔽目标抛错,不再送回关键词匹配器连错族');
-A(strategyMainlineFamilyCompat().parentByChild.get('theme:火电热电')?.has('theme:电力'),
+A(strategyMainlineFamilyCompat().parentByChild.size === 0,
   '遮蔽用例恢复后关系图重建正常');
 
-// 10. [Codex 二轮 P1] 结构校验先于 _ready 门闩,且覆盖缺失/非数组/重复 standard/空词典。
+// 10. [Codex 二轮 P1] 结构校验覆盖缺失/非数组/重复 standard/空词典(无门闩,始终执行)。
 const expectStructural = (candidate, pattern, msg) => {
   let caught = '';
   try { strategyThemeTaxonomyValidateFamilyUnits(candidate); } catch (e) { caught = String(e.message); }
@@ -223,12 +214,6 @@ expectStructural(dupCandidate, /standard 显示名重复/, '重复 standard → 
 const badKw = cloneTax();
 badKw.taxonomy[0].keywords = 'not-array';
 expectStructural(badKw, /keywords 必须是数组/, 'keywords 非数组 → 抛错');
-// 结构校验不受 _ready 门闩约束(初始化期也拦截)。
-strategyThemeTaxonomyValidateFamilyUnits._ready = false;
-let preLatchThrew = false;
-try { strategyThemeTaxonomyValidateFamilyUnits({ dropped: [] }); } catch { preLatchThrew = true; }
-strategyThemeTaxonomyValidateFamilyUnits._ready = true;
-A(preLatchThrew, '_ready 未置位时结构校验仍然拦截(初始化期不豁免)');
 
 // 11. [Codex 二轮 P1] 热加载 Codex 回放形状 {"dropped":[]}:必须抛错且不交换。
 (function (THEME_TAXONOMY, THEME_NONBROAD, THEME_BROAD, THEME_DROP_RE, fsSync, THEME_TAXONOMY_PATH) {

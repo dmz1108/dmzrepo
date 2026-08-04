@@ -27,11 +27,6 @@ function extractArr(name) {
   }
   return src.slice(i, j + 2).replace('const ', 'var ');
 }
-function extractSet(name) {
-  const m = src.match(new RegExp(`const ${name} = new Set\\(\\[([\\s\\S]*?)\\]\\)`));
-  if (!m) throw new Error('not found set: ' + name);
-  return new Set(eval('[' + m[1] + ']'));
-}
 const A = (condition, message) => {
   if (!condition) { console.error('FAIL: ' + message); process.exitCode = 1; }
   else console.log('ok: ' + message);
@@ -50,8 +45,6 @@ eval(extractFn('consensusKey'));
 eval(extractFn('strategyResonanceTopicKey'));
 eval(extractFn('strategyThemeTaxonomyInfo'));
 eval(extractFn('strategyMainlineTopicKey'));
-const STRATEGY_MAINLINE_MERGE_GROUPS = extractSet('STRATEGY_MAINLINE_MERGE_GROUPS');
-const STRATEGY_MAINLINE_KEEP_FINE_THEMES = extractSet('STRATEGY_MAINLINE_KEEP_FINE_THEMES');
 eval(extractFn('strategyMainlineFamilyInfo'));
 
 const normalizeReasonSourceCode = value => String(value || '').trim();

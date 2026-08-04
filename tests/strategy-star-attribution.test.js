@@ -35,11 +35,6 @@ function extractArr(name) {
   }
   return src.slice(declaration, index + 2).replace('const ', 'var ');
 }
-function extractSet(name) {
-  const match = src.match(new RegExp(`const ${name} = new Set\\(\\[([\\s\\S]*?)\\]\\)`));
-  if (!match) throw new Error(`not found set: ${name}`);
-  return new Set(eval(`[${match[1]}]`));
-}
 
 const A = (condition, message) => {
   if (!condition) {
@@ -76,8 +71,6 @@ eval(extractFn('consensusKey'));
 eval(extractFn('strategyResonanceTopicKey'));
 eval(extractFn('strategyThemeTaxonomyInfo'));
 eval(extractFn('strategyMainlineTopicKey'));
-const STRATEGY_MAINLINE_MERGE_GROUPS = extractSet('STRATEGY_MAINLINE_MERGE_GROUPS');
-const STRATEGY_MAINLINE_KEEP_FINE_THEMES = extractSet('STRATEGY_MAINLINE_KEEP_FINE_THEMES');
 eval(extractFn('strategyMainlineFamilyInfo'));
 eval(extractFn('normalizeReasonSourceCode'));
 eval(src.match(/const THS_EVENT_NOISE = [^\n]+/)[0].replace('const ', 'var '));
@@ -117,7 +110,7 @@ const attribution = strategyMainlineBuildStarAttributionContext(priorByCode, liv
 const taiJi = { code: '600667', name: '太极实业', level: 'confirmed' };
 const yaKe = { code: '002409', name: '雅克科技', level: 'expected' };
 const photovoltaic = { theme: '光伏', familyKey: 'theme:光伏' };
-const electric = { theme: '电力', familyKey: 'theme:电力' };
+const electric = { theme: '电力', familyKey: 'group:电力' };   // PR B: 发电侧合族
 const semiconductor = { theme: '半导体', familyKey: 'group:半导体' };
 
 const taiJiWrong = strategyMainlineStarAttributionDecision(photovoltaic, taiJi, attribution);
@@ -140,11 +133,13 @@ const huaDianCurrent = strategyMainlineBuildStarAttributionContext(new Map(), ne
   }],
 ]));
 const huaDianPower = strategyMainlineStarAttributionDecision(electric, huaDian, huaDianCurrent);
-A(huaDianPower.allowed && huaDianPower.basis === 'current-limit-reason-child-compatible',
-  '华电辽能当日火电细分主因可以支撑电力父主线');
-A(!strategyMainlineStarAttributionDecision(
-  { theme: '绿色电力', familyKey: 'theme:绿电新能源运营' }, huaDian, huaDianCurrent,
-).allowed, '火电明星不得因电力父子兼容规则错挂到绿色电力兄弟题材');
+A(huaDianPower.allowed && huaDianPower.basis === 'current-limit-reason',
+  '华电辽能当日火电主因与电力候选同族,精确匹配放行(PR B 合族)');
+const huaDianGreen = strategyMainlineStarAttributionDecision(
+  { theme: '绿色电力', familyKey: strategyMainlineFamilyInfo({ theme: '绿电' }).key }, huaDian, huaDianCurrent,
+);
+A(huaDianGreen.allowed && huaDianGreen.basis === 'current-limit-reason',
+  '发电侧同族互认:火电明星可支撑绿色电力候选(PR B 合族的目标行为)');
 A(!strategyMainlineStarAttributionDecision(
   electric,
   { code: '601700', name: '风范股份', level: 'confirmed' },
@@ -160,8 +155,8 @@ const huaDianPrior = strategyMainlineBuildStarAttributionContext(new Map([
   }],
 ]), new Map());
 A(strategyMainlineStarAttributionDecision(electric, huaDian, huaDianPrior).basis
-  === 'prior-main-reason-child-compatible',
-'华电辽能历史绿色电力主因在盘中尚无当日主因时仍可支撑电力父主线');
+  === 'prior-main-reason',
+'华电辽能历史绿色电力主因在盘中尚无当日主因时仍支撑电力主线(同族精确匹配)');
 
 const shortDramaFamily = strategyMainlineFamilyInfo({ theme: '短剧游戏' }).key;
 A(shortDramaFamily === 'theme:短剧游戏'
@@ -170,9 +165,9 @@ A(shortDramaFamily === 'theme:短剧游戏'
   && strategyMainlineFamilyInfo({ theme: '文化传媒概念' }).key === shortDramaFamily
   && strategyMainlineFamilyInfo({ theme: 'AI视频' }).key === shortDramaFamily,
 'AI视频、快手、小红书与文化传媒统一归入短剧游戏细分家族');
-A(strategyMainlineFamilyInfo({ theme: 'AI应用' }).key === 'theme:AI应用'
+A(strategyMainlineFamilyInfo({ theme: 'AI应用' }).key === 'group:AI软件应用'
   && strategyMainlineFamilyInfo({ theme: 'AI应用' }).key !== strategyMainlineFamilyInfo({ theme: '算力AI' }).key,
-'宽口径AI应用保持独立，不再等同于算力AI');
+'AI应用落 AI软件应用族,与算力硬件族分家(PR B)');
 const blueFocusAttribution = strategyMainlineBuildStarAttributionContext(new Map(), new Map([
   ['300058', {
     code: '300058',
@@ -189,12 +184,12 @@ const blueShortDrama = strategyMainlineStarAttributionDecision(
 A(blueShortDrama.allowed && blueShortDrama.basis === 'current-limit-reason',
 '蓝色光标“AI应用+出海广告”采用更具体的出海广告证据，封板后确认归属短剧游戏');
 const blueCompute = strategyMainlineStarAttributionDecision(
-  { theme: '算力AI', familyKey: 'group:算力AI' },
+  { theme: '算力AI', familyKey: 'group:算力硬件' },
   blueFocus,
   blueFocusAttribution,
 );
 A(!blueCompute.allowed && blueCompute.basis === 'current-limit-reason-conflict',
-'宽口径AI应用不得再把蓝色光标排他归入算力AI');
+'宽口径AI应用不得再把蓝色光标排他归入算力硬件族');
 const blueBroadOnlyAttribution = strategyMainlineBuildStarAttributionContext(new Map(), new Map([
   ['300058', {
     code: '300058',
@@ -210,10 +205,10 @@ const blueBroadShortDrama = strategyMainlineStarAttributionDecision(
 A(blueBroadShortDrama.allowed && blueBroadShortDrama.basis === 'current-main-reason-broad-compatible',
 '四源仅给宽口径AI应用时，不得否决同日AI视频板块提供的更具体短剧游戏归属');
 A(!strategyMainlineStarAttributionDecision(
-  { theme: '算力AI', familyKey: 'group:算力AI' }, blueFocus, blueBroadOnlyAttribution,
-).allowed, 'AI应用宽口径兼容不向算力AI放开，避免蓝色光标重新被错挂');
+  { theme: '算力AI', familyKey: 'group:算力硬件' }, blueFocus, blueBroadOnlyAttribution,
+).allowed, 'AI应用宽口径兼容不向算力硬件族放开，避免蓝色光标重新被错挂');
 A(!strategyMainlineStarAttributionDecision(
-  { theme: '电力', familyKey: 'theme:电力' }, blueFocus, blueBroadOnlyAttribution,
+  { theme: '电力', familyKey: 'group:电力' }, blueFocus, blueBroadOnlyAttribution,
 ).allowed, 'AI应用宽口径兼容不向无关家族放开');
 const bluePriorBroadOnlyAttribution = strategyMainlineBuildStarAttributionContext(new Map([
   ['300058', {
@@ -227,8 +222,8 @@ A(strategyMainlineStarAttributionDecision(
 ).basis === 'prior-main-reason-broad-compatible',
 '盘中尚无当日主因时，历史宽口径AI应用也不得错杀同日短剧游戏板块候选');
 A(!strategyMainlineStarAttributionDecision(
-  { theme: '算力AI', familyKey: 'group:算力AI' }, blueFocus, bluePriorBroadOnlyAttribution,
-).allowed, '历史宽口径AI应用兼容同样不向算力AI放开');
+  { theme: '算力AI', familyKey: 'group:算力硬件' }, blueFocus, bluePriorBroadOnlyAttribution,
+).allowed, '历史宽口径AI应用兼容同样不向算力硬件族放开');
 
 const rotatedLive = strategyMainlineBuildStarAttributionContext(priorByCode, new Map([
   ['002409', { code: '002409', reason: '光伏' }],
@@ -272,7 +267,7 @@ A(mergedPublishedReason.get('002409')?.reason === '光伏',
 
 const filtered = strategyMainlineFilterAttributedStars({
   theme: '电力',
-  familyKey: 'theme:电力',
+  familyKey: 'group:电力',
   starStocks: [yaKe],
   expectedStarHistory: [yaKe],
   hadExpectedStarToday: true,
@@ -293,7 +288,7 @@ A(filtered.l2ScanDetail.attributionRejected[0]?.code === '002409',
 
 const historyOnly = strategyMainlineFilterAttributedStars({
   theme: '电力',
-  familyKey: 'theme:电力',
+  familyKey: 'group:电力',
   starStocks: [],
   expectedStarHistory: [yaKe],
   hadExpectedStarToday: true,
@@ -305,7 +300,7 @@ A(historyOnly.expectedStarHistory.length === 0 && historyOnly.hadExpectedStarTod
 
 const transitionMap = strategyMainlineExpectedTransitionMap({
   starTransitions: [{
-    mainlineKey: 'theme:电力',
+    mainlineKey: 'group:电力',
     mainlineTheme: '电力',
     code: '002409',
     name: '雅克科技',

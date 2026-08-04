@@ -14552,3 +14552,69 @@ Deployment:
 
 Notes for next agent:
 - 后续若增加明星数量，折叠摘要会按最终确认顺序继续逐股对齐；不得恢复单个 `.find()` 取值。
+## 2026-08-04(Local Claude)issue #375 PR B:首批交易族划分(有意行为变更)
+
+What changed:
+- `theme-taxonomy.json` 按 Owner 确认清单重划族(资金一致性原则):
+  - **电力发电侧合族**:电力(宽词)/火电热电/绿电新能源运营/水电 → `group:电力`
+    (familyUnit=group);三条 `compatibleParents:["电力"]` 声明随合族移除
+    (父子兼容边被族内精确匹配取代)。
+  - **算力硬件/AI软件应用分家**:原 `算力AI` 组(液冷、AI电源、AI硬件、算力)
+    更名为 `group:算力硬件`;AI应用/人工智能 从独立细族改为 `group:AI软件应用`。
+    AI应用 的 `broadFallbackFamilies:["短剧游戏"]` 保留(蓝色光标口径不变)。
+  - **核电、电网设备/特高压等仍留在 `电力设备` 组**,无 familyUnit,维持词级
+    细键独立观察;**短剧游戏维持独立细族**(familyUnit=standard)。
+- `kpl-stats-server.js`:
+  - 退役历史字面集合 `STRATEGY_MAINLINE_MERGE_GROUPS` / `STRATEGY_MAINLINE_KEEP_FINE_THEMES`、
+    校验中的正向一致性检查与反向孤儿检查、`_ready` 门闩及集合声明后的显式首检
+    调用——词典声明式字段成为唯一判定来源;校验(结构+兼容引用+遮蔽回环)在
+    `loadThemeTaxonomy` 交换前对候选完整执行,另在首次加载后以已加载词典无参
+    复检一次(候选校验期全局词典尚空,topicKey 回环走不到 standardTheme 分支)。
+  - `strategyMergeMainlineFamilies` 的 AI 软件方向合并硬编码(theme:AI应用 与
+    theme:短剧游戏 同现才合并)泛化为词典 `broadFallbackFamilies` 边驱动:宽词族
+    与其兜底目标族同现时按目标族合并,行为语义与 #342 定稿一致,键随词典迁移。
+  - `strategyMainlineReviewFamilyKeys` 的同一硬编码同样泛化为 broadFallback 边。
+
+行为对照(fixture 旧→新逐词 diff,共 104 词 / 7 类迁移,全部符合确认清单,无意外迁移):
+- `group:算力AI → group:算力硬件`(51 词):AIDC、AI散热、AI服务器、AI电源、液冷、算力 等
+- `theme:AI应用 → group:AI软件应用`(16 词):AIGC、AIPC、AI大模型、AI智能体 等
+- `theme:人工智能 → group:AI软件应用`(2 词):AI概念、人工智能
+- `theme:火电热电 → group:电力`(10 词):火电、热电、煤电、火电灵活性改造 等
+- `theme:绿电新能源运营 → group:电力`(16 词):绿电、新能源运营、源网荷储、电力现货 等
+- `theme:水电 → group:电力`(7 词):水电、抽水蓄能、雅下水电 等
+- `theme:电力 → group:电力`(2 词):电力、电力股
+
+Files:
+- `theme-taxonomy.json`
+- `kpl-stats-server.js`
+- `tests/fixtures/family-key-baseline.json`(按新行为重生成,1102 词)
+- `tests/family-declarative-equivalence.test.js`(迁移到 PR B 语义 + 新增族划分定稿断言)
+- `tests/leader-pool-debug.test.js`、`tests/mainline-attribution.test.js`、
+  `tests/mainline-ai-software-family.test.js`、`tests/strategy-star-attribution.test.js`
+  (族键断言迁移)、`tests/leader-family-metrics.test.js`、`tests/mainline-review.test.js`
+  (仅删除已退役集合的提取)
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- fixture 逐词比对零差异(1102 词);旧→新 diff 104 词逐类核对与确认清单一致。
+- 既有归因案例全量回归:华电辽能(火电证据×电力候选,由 child-compatible 变
+  **精确匹配** `current-limit-reason`;历史绿色电力主因同理)、发电侧同族互认
+  (火电证据支撑绿电候选,合族目标行为)、蓝色光标(宽词AI应用兜底归短剧,
+  basis 不变)、雅克科技/太极实业(半导体口径不变)、润建(硬件主因不得替软件板
+  凑涨停门槛)、电网设备/核电证据不得支撑发电侧电力。
+- `node --check`;全仓 80/81 通过,唯一失败 `board-snapshot-contamination` 为
+  issue #379 既有真实时钟裁剪缺陷(Codex 修复中),与本变更无关。
+
+Deployment:
+- GitHub only;未部署、未重启、未改任何生产数据。
+- **部署须收盘后进行**:族键属日内轨迹键,盘中变更会打断 expectedStarHistory /
+  L2 任务 / 预判记录的族键连续性(kpl-stats-server.js 轨迹注释所述风险)。
+
+Notes for next agent:
+- 华电辽能类案例的拒绝理由从"族键粒度不符"彻底消失:发电侧四细分现在同键。
+- 复盘/回看读取历史 predict 档案时,旧档案中的 `theme:火电热电`、`group:算力AI`
+  等旧键仍存在于历史 JSON;回看按档案自身键匹配,不受影响,但跨日对比时注意
+  2026-08-04 前后键不连续。
+- Codex 复审关注点:①合并/回看两处 broadFallback 泛化是否与 #342 语义完全一致;
+  ②validate 的 shadowProblem 中 topicKey 仍读全局词典(非候选作用域),Codex 上轮
+  已标记非阻断,仅在扩展热加载编辑时需要收紧。

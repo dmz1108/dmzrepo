@@ -48,8 +48,6 @@ eval(extractFn('consensusKey'));
 eval(extractFn('strategyResonanceTopicKey'));
 eval(extractFn('strategyThemeTaxonomyInfo'));
 eval(extractFn('strategyMainlineTopicKey'));
-const STRATEGY_MAINLINE_MERGE_GROUPS = extractSet('STRATEGY_MAINLINE_MERGE_GROUPS');
-const STRATEGY_MAINLINE_KEEP_FINE_THEMES = extractSet('STRATEGY_MAINLINE_KEEP_FINE_THEMES');
 eval(extractFn('strategyMainlineFamilyInfo'));
 eval(extractFn('normalizeReasonSourceCode'));
 const isExcludedFromReview = (code) => String(code || '').startsWith('8');  // 夹具:8 开头视作北交所剔除

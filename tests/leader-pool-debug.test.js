@@ -26,11 +26,6 @@ function extractArr(name) {
   for (; j < src.length; j++) { if (src[j] === '[') d++; else if (src[j] === ']') { d--; if (d === 0) break; } }
   return src.slice(i, j + 2).replace('const ', 'var ');
 }
-function extractSet(name) {
-  const m = src.match(new RegExp(`const ${name} = new Set\\(\\[([\\s\\S]*?)\\]\\)`));
-  if (!m) throw new Error('not found set: ' + name);
-  return new Set(eval('[' + m[1] + ']'));
-}
 const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.exitCode = 1; } else console.log('ok: ' + msg); };
 
 (async () => {
@@ -55,13 +50,11 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   eval(extractFn('strategyResonanceTopicKey'));
   eval(extractFn('strategyThemeTaxonomyInfo'));
   eval(extractFn('strategyMainlineTopicKey'));
-  const STRATEGY_MAINLINE_MERGE_GROUPS = extractSet('STRATEGY_MAINLINE_MERGE_GROUPS');
-  const STRATEGY_MAINLINE_KEEP_FINE_THEMES = extractSet('STRATEGY_MAINLINE_KEEP_FINE_THEMES');
   eval(extractFn('strategyMainlineFamilyInfo'));
-  A(strategyMainlineFamilyInfo({ theme: '算力AI' }).key === 'group:算力AI', '算力AI 使用生产家族 group:算力AI');
-  A(strategyMainlineFamilyInfo({ theme: '云计算' }).key === 'group:算力AI', '云计算与算力归入同一生产家族');
+  A(strategyMainlineFamilyInfo({ theme: '算力AI' }).key === 'group:算力硬件', '算力AI 词经关键词归位 group:算力硬件(PR B 分家后的硬件族)');
+  A(strategyMainlineFamilyInfo({ theme: '云计算' }).key === 'group:算力硬件', '云计算与算力归入同一生产家族(group:算力硬件)');
   A(strategyMainlineFamilyInfo({ theme: '光模块' }).key === 'group:光通信', '光模块按生产口径保持独立的光通信家族');
-  A(strategyMainlineFamilyInfo({ theme: '网络安全' }).key !== 'group:算力AI', '网络安全保持不同家族');
+  A(strategyMainlineFamilyInfo({ theme: '网络安全' }).key !== 'group:算力硬件', '网络安全保持不同家族');
 
   // ---- stub 依赖(仅 IO 与工具,评分/入池/门槛全走真实代码) ----
   const normalizeReasonSourceCode = c => String(c || '').trim();
@@ -159,9 +152,9 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   Object.assign(REASON_DB, onlyZG);
   const familyGap = mkMainline();
   await strategyMainlineReworkLeaders([familyGap], '2026-07-08', { debug: true, traceCodes: ['000938'] });
-  A(familyGap.leaders?.[0]?.code === '000938', '紫光依靠云计算历史主因进入算力AI龙头池并通过主因门槛');
-  A(JSON.stringify(familyGap.leaderDebug?.familyTopics) === JSON.stringify(['算力AI']), "leaderDebug 显示家族标签=['算力AI']");
-  A(JSON.stringify(familyGap.leaderDebug?.familyKeys) === JSON.stringify(['group:算力AI']), "leaderDebug 显示稳定家族键=['group:算力AI']");
+  A(familyGap.leaders?.[0]?.code === '000938', '紫光依靠云计算历史主因进入算力硬件族龙头池并通过主因门槛');
+  A(JSON.stringify(familyGap.leaderDebug?.familyTopics) === JSON.stringify(['算力硬件']), "leaderDebug 显示家族标签=['算力硬件']");
+  A(JSON.stringify(familyGap.leaderDebug?.familyKeys) === JSON.stringify(['group:算力硬件']), "leaderDebug 显示稳定家族键=['group:算力硬件']");
   A(Array.isArray(familyGap.leaderDebug?.tracedMissing) && !familyGap.leaderDebug.tracedMissing.includes('000938'), '紫光已在完整池,不再被列为 tracedMissing');
   A(familyGap.leaderDebug?.fullLeaderCount === 1 && familyGap.leaderDebug?.fullPoolCount === 1,
     '完整正式龙头池和候选池都包含紫光');
