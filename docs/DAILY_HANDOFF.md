@@ -13987,3 +13987,33 @@ Deployment:
 Notes for next agent:
 - 文章：`https://www.tgb.cn/a/2tZtbfK6FHu`；官方图片：`image-01-07.png`。
 - 本日正式源已受人工来源保护；普通同步与 force 不得覆盖。任何更正必须先备份并重跑全部质量闸。
+
+## 2026-08-04 - Codex - PR #382 部署回滚与只读启动诊断
+
+Changed:
+- PR #382 经两位 Claude 增量复审通过后合入 `main@7746589`；受保护生产运行
+  `30912793845` 两次均在主服务健康检查阶段失败，部署器两次自动回滚并恢复旧服务。
+- 新增日期绑定的只读诊断：比较 `main` 审核版本与生产主服务 12 个启动依赖的 SHA-256，读取当前
+  计划任务/监听/健康状态，并在回环端口 `18765` 短暂启动审核版本捕获退出信息。
+- 诊断不停止或启动生产任务、不覆盖生产运行文件、不读取业务数据库；探针源码和日志均在退出时删除，
+  输出会清理路径并遮蔽凭据样式文本。
+
+Files:
+- `ops/production/manifests/pr382-startup-diagnose-20260804.json`
+- `ops/production/requests/2026-08-04-pr382-startup-diagnose.ps1`
+- `tests/pr382-startup-diagnose-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node tests/pr382-startup-diagnose-request.test.js` 通过。
+- `node tests/production-ops-workflow.test.js` 通过。
+- `git diff --check` 通过；审核版本在本机隔离端口可启动且 `/health` 返回 `{"ok":true}`。
+- 两次失败后公网 `https://market.dreamerqi.com/health` 均恢复 200/`{"ok":true}`；PR #382 尚未生效。
+
+Deployment:
+- 生产运行 `30912793845` attempt 1/2 均失败并自动回滚；未留下新版本生产文件，旧服务已恢复。
+- 本条只读诊断尚待合并、复审及受保护运行；未重启生产服务。
+
+Notes for next agent:
+- 不得再次盲目重跑 PR #382 部署。先运行只读诊断，按依赖哈希和隔离启动结果判断是依赖遗漏、
+  生产运行时问题或计划任务重启问题，再修根因。
