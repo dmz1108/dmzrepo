@@ -21347,6 +21347,17 @@ function strategyThemeTaxonomyValidateFamilyUnits() {
       problems.push(`${display}: familyUnit='${declared}' 但字面集合推导为 '${expected}'`);
     }
   }
+  // 反向检查(Local Claude PR #378 复核建议):字面集合中的孤儿项(词典里不存在对应
+  // standard/group)是静默空操作——#342 的 7b6dcf7 曾把 'AI视频' 加进 KEEP_FINE 而其
+  // standard 实为短剧游戏,该行永远不命中且无任何机制发现。集合退役(PR B)前必须可见。
+  const knownStandards = new Set((THEME_TAXONOMY.taxonomy || []).map(t => themeDisplayName(t.standard)));
+  const knownGroups = new Set((THEME_TAXONOMY.taxonomy || []).map(t => String(t.group || '')).filter(Boolean));
+  for (const name of STRATEGY_MAINLINE_KEEP_FINE_THEMES) {
+    if (!knownStandards.has(name)) problems.push(`KEEP_FINE 孤儿项 '${name}': 词典无此 standard`);
+  }
+  for (const name of STRATEGY_MAINLINE_MERGE_GROUPS) {
+    if (!knownGroups.has(name)) problems.push(`MERGE_GROUPS 孤儿项 '${name}': 词典无此 group`);
+  }
   if (problems.length) {
     throw new Error('[theme-taxonomy] familyUnit 与字面集合不一致: ' + problems.join('; '));
   }

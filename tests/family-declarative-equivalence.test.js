@@ -85,6 +85,17 @@ threw = false;
 try { strategyThemeTaxonomyValidateFamilyUnits(); } catch { threw = true; }
 if (savedUnit === undefined) delete tampered.familyUnit; else tampered.familyUnit = savedUnit;
 A(threw, '词典字段与字面集合漂移时校验立即抛错(fail-fast)');
+// 反向检查(#342 7b6dcf7 的真实失败形状):集合孤儿项必须抛错,不得静默空操作。
+STRATEGY_MAINLINE_KEEP_FINE_THEMES.add('AI视频');
+threw = false;
+try { strategyThemeTaxonomyValidateFamilyUnits(); } catch (e) { threw = /孤儿项 'AI视频'/.test(String(e.message)); }
+STRATEGY_MAINLINE_KEEP_FINE_THEMES.delete('AI视频');
+A(threw, 'KEEP_FINE 孤儿项(词典无此 standard)被反向检查抛错');
+STRATEGY_MAINLINE_MERGE_GROUPS.add('不存在的组');
+threw = false;
+try { strategyThemeTaxonomyValidateFamilyUnits(); } catch (e) { threw = /孤儿项 '不存在的组'/.test(String(e.message)); }
+STRATEGY_MAINLINE_MERGE_GROUPS.delete('不存在的组');
+A(threw, 'MERGE_GROUPS 孤儿项(词典无此 group)被反向检查抛错');
 
 // 3. 兼容关系图:与被删除的 4 处硬编码语义一致。
 const compat = strategyMainlineFamilyCompat();
