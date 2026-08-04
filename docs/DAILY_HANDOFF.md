@@ -13768,3 +13768,28 @@ Notes for next agent:
 - PR B(首批族划分:电力发电侧合族、算力硬件/AI软件分家)是**有意行为变更**,
   届时更新 fixture 并把前后族键 diff 写入交接;字面集合与一致性校验在 PR B 删除。
 - 词典热加载路径已包含 compat 缓存失效与校验,管理员改词典后无需重启。
+
+## 2026-08-04 - Codex - 修复策略快照清理未使用注入时钟(issue #379)
+
+Changed:
+- `strategy-backend` 的快照/重点关注清理边界改用 `nowParts().day` 对应的北京时间零点，
+  无效日期才回退 `Date.now()`；测试注入时钟与生产北京时间口径现在一致。
+- 污染回归测试新增 30 天边界保留、超过 30 天继续清理的双向断言，防止只修测试而停掉清理。
+
+Files:
+- `strategy-backend.js`
+- `tests/board-snapshot-contamination.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check strategy-backend.js` 通过。
+- `node tests/board-snapshot-contamination.test.js` 全绿。
+- 全仓测试 **81/81 通过**；此前随真实日历越过保留窗口而稳定失败的测试已恢复。
+- `git diff --check` 通过。
+
+Deployment:
+- GitHub only；未部署云端，未重启服务，未修改生产运行时数据。
+
+Notes for next agent:
+- 复审应确认生产默认 `nowParts` 仍为北京时间，且严格小于 cutoff 的文件才删除；
+  30 天边界文件保留，31 天及更旧文件清理。
