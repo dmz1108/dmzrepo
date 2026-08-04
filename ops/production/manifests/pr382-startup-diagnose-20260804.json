@@ -1,0 +1,53 @@
+{
+  "files": [
+    {
+      "source": "kpl-stats-server.js",
+      "destination": "kpl-stats-server.js"
+    },
+    {
+      "source": "strategy-evidence.js",
+      "destination": "strategy-evidence.js"
+    },
+    {
+      "source": "strategy-daily-events.js",
+      "destination": "strategy-daily-events.js"
+    },
+    {
+      "source": "strategy-daily-event-quality.js",
+      "destination": "strategy-daily-event-quality.js"
+    },
+    {
+      "source": "strategy-realtime-data.js",
+      "destination": "strategy-realtime-data.js"
+    },
+    {
+      "source": "strategy-observation-report.js",
+      "destination": "strategy-observation-report.js"
+    },
+    {
+      "source": "review-source-artifact-guard.js",
+      "destination": "review-source-artifact-guard.js"
+    },
+    {
+      "source": "review-source-health.js",
+      "destination": "review-source-health.js"
+    },
+    {
+      "source": "review-source-health-manifest.js",
+      "destination": "review-source-health-manifest.js"
+    },
+    {
+      "source": "strategy-backend.js",
+      "destination": "strategy-backend.js"
+    },
+    {
+      "source": "l2-focus-scanner.js",
+      "destination": "l2-focus-scanner.js"
+    },
+    {
+      "source": "local-l2-task-queue.js",
+      "destination": "local-l2-task-queue.js"
+    }
+  ],
+  "restart": "none"
+}
