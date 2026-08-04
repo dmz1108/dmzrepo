@@ -138,4 +138,52 @@ A(!src.includes('isPowerParentCompatible') && !src.includes("currentFamilies.has
   && !src.includes("priorFamilies.has('theme:AI应用')"),
 '裁决函数中的电力父子/AI应用宽兜底硬编码已全部删除');
 
+// 6. [Codex P1] 兼容引用校验:拼错/重复/自引用/宽词限制/空引用全部抛错,不得回退自由文本族键。
+const cloneTax = () => JSON.parse(JSON.stringify(THEME_TAXONOMY));
+const expectInvalid = (mutate, pattern, msg) => {
+  const candidate = cloneTax();
+  mutate(candidate.taxonomy.find(t => themeDisplayName(t.standard) === '火电热电'));
+  let caught = '';
+  try { strategyThemeTaxonomyValidateFamilyUnits(candidate); } catch (e) { caught = String(e.message); }
+  A(pattern.test(caught), msg + '(实际: ' + (caught.slice(0, 80) || '未抛错') + ')');
+};
+expectInvalid(t => { t.compatibleParents = ['电历']; }, /引用不存在的 standard '电历'/, '拼错目标(电力→电历)交换前抛错');
+expectInvalid(t => { t.compatibleParents = ['电力', '电力']; }, /重复边 '电力'/, '重复边抛错');
+expectInvalid(t => { t.compatibleParents = ['火电热电']; }, /自引用/, '自引用抛错');
+expectInvalid(t => { t.broadFallbackFamilies = ['短剧游戏']; }, /只能声明在 broad:true/, '非宽词条目声明 broadFallbackFamilies 抛错');
+expectInvalid(t => { t.compatibleParents = ['']; }, /含空引用/, '空引用抛错');
+
+// 7. [Codex P1] 构图层第二道网:即便绕过校验,FamilyCompat 构图遇幽灵目标也抛错。
+const hotEntry = THEME_TAXONOMY.taxonomy.find(t => themeDisplayName(t.standard) === '火电热电');
+const savedParents = hotEntry.compatibleParents;
+hotEntry.compatibleParents = ['电历'];
+strategyMainlineFamilyCompat._cache = null;
+let ghostThrew = false;
+try { strategyMainlineFamilyCompat(); } catch (e) { ghostThrew = /幽灵族边/.test(String(e.message)); }
+hotEntry.compatibleParents = savedParents;
+strategyMainlineFamilyCompat._cache = null;
+A(ghostThrew, '构图遇不存在的引用目标抛错(幽灵族边),不静默生成');
+A(strategyMainlineFamilyCompat().parentByChild.get('theme:火电热电')?.has('theme:电力'),
+  '恢复后关系图重建正常');
+
+// 8. [Codex P2] 热加载事务性:语义无效但 JSON 合法的候选 → 抛错且全部旧状态保持不变。
+(function (THEME_TAXONOMY, THEME_NONBROAD, THEME_BROAD, THEME_DROP_RE, fsSync, THEME_TAXONOMY_PATH) {
+  eval(extractFn('loadThemeTaxonomy'));
+  const invalid = cloneTax();
+  invalid.taxonomy.find(t => themeDisplayName(t.standard) === '火电热电').familyUnit = 'group';
+  fsSync.readFileSync = () => JSON.stringify(invalid);
+  const beforeTax = THEME_TAXONOMY, beforeNb = THEME_NONBROAD, beforeB = THEME_BROAD;
+  const sentinel = { sentinel: true };
+  strategyMainlineFamilyCompat._cache = sentinel;
+  let threwHot = false;
+  try { loadThemeTaxonomy(); } catch (e) { threwHot = /词典声明校验失败/.test(String(e.message)); }
+  A(threwHot, '热加载语义无效候选时在交换前抛错');
+  A(THEME_TAXONOMY === beforeTax && THEME_NONBROAD === beforeNb && THEME_BROAD === beforeB,
+    '抛错后 THEME_TAXONOMY/NONBROAD/BROAD 保持旧引用,进程内状态未被污染');
+  A(strategyMainlineFamilyCompat._cache === sentinel, '抛错后 compat 缓存未被清空');
+  strategyMainlineFamilyCompat._cache = null;
+  const parseFail = (() => { fsSync.readFileSync = () => '{broken json'; const t0 = THEME_TAXONOMY; try { loadThemeTaxonomy(); } catch { return false; } return THEME_TAXONOMY === t0; })();
+  A(parseFail, 'JSON 损坏时静默保留旧状态(不抛出到调用方,与旧行为一致)');
+})(THEME_TAXONOMY, THEME_NONBROAD, THEME_BROAD, null, { readFileSync: () => '{}' }, 'mem://candidate');
+
 console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL FAMILY-DECLARATIVE-EQUIVALENCE CHECKS PASSED');
