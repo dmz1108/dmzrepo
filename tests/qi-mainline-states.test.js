@@ -71,7 +71,7 @@ A(autoScanAt >= 0 && strictGateAt > autoScanAt, '后台先派发符合条件的 
 A(['未达扫描条件','等待公司端','扫描中','覆盖不足','L2未见明星','QI主线'].every(label => html.includes(label)), '前端六态徽章齐备');
 A(html.includes("Number(board?.netInflow) >= 5e8 && Number(board?.ztCount) >= 2")
   && html.includes("legacyL2Eligible ? 'coverage-insufficient' : 'not-eligible'"), '旧冻结快照按同一5亿+2涨停门槛区分未达条件/历史覆盖不足');
-A(html.includes('${qiBadge}${confirmedBadge}'), 'QI 徽章与 Owner 确认徽章并列独立');
+A(html.includes('${qiBadge}${confirmedBadge}${ownerConfirmedBadge}'), 'QI、正式主线与人工重点三类徽章并列独立');
 A(html.includes("const visibleStars = (m.starStocks || []).filter(s => s.level === 'confirmed' || s.level === 'expected').slice(0, 3)"), '明星行只显确认/预期,至多3只');
 A(html.includes("s.expectedOutcome === 'not-confirmed' ? ' missed' : ''") && src.includes('预期明星·未兑现'), '盘中预期未转为明星时使用醒目的未兑现复盘样式');
 A(html.includes('ml-star-proof-head') && html.includes('ml-star-ratios'), '明星证据区包含独立标题层与主动/被动/合计三项可见比值');

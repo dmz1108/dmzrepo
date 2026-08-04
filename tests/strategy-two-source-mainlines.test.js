@@ -121,6 +121,26 @@ A(bySourceReviewHTML.includes('<span class="mlr-source-name">同花顺</span><st
 A(bySourceReviewHTML.includes('同花顺 成立 1/1(100%)'), 'P2 回看统计:同花顺独立显示正式主线成立率');
 A(bySourceReviewHTML.includes('<span class="mlr-actual"') && bySourceReviewHTML.includes('>算力<i>3涨停</i>'), 'P2 回看页:双源有主线记录继续显示盘后实际第一家族');
 A(!bySourceReviewHTML.includes('<span class="mlr-card-state quiet">今日无主线</span>') && !bySourceReviewHTML.includes('候选未通过 L2'), 'P2 回看页:东财空+同花顺有预测时不再输出无来源的整体“今日无主线”误导');
+const multiFormalReviewHTML = renderMainlineReviewHTML({
+  days: [{
+    day: '2026-08-04', phase: '尾盘', sampleValid: true, pendingReview: false,
+    noMainline: false, theme: '光通信', leaders: [], expectedStars: [], actualTop: [],
+    bySource: {
+      eastmoney: { available: true, status: 'mainline', theme: '光通信', noMainline: false,
+        formalMainlines: [
+          { theme: '光通信', rank: 1, gateQualified: true, mainlineQualified: true, mainlineQualification: { limitUpCount: 15 } },
+          { theme: '医药', rank: 4, gateQualified: true, mainlineQualified: null, mainlineQualification: null },
+        ] },
+      ths: { available: true, status: 'mainline', theme: '算力AI', noMainline: false,
+        formalMainlines: [{ theme: '算力AI', rank: 2, gateQualified: true, mainlineQualified: true, mainlineQualification: { limitUpCount: 15 } }] },
+    },
+  }],
+  stats: { bySource: { eastmoney: {}, ths: {} } },
+});
+A(multiFormalReviewHTML.includes('光通信（同家族15只涨停） / 医药 / 算力AI（同家族15只涨停）'),
+  '排名只排序：东财第4名医药与其他过闸方向一起进入正式主线回看');
+A(multiFormalReviewHTML.includes('>2条正式</span>') && multiFormalReviewHTML.includes('>1条正式</span>'),
+  '回看按来源显示全部正式主线数量，不再每源只显示第一条');
 const finalStarMetricsHTML = renderMainlineReviewHTML({
   days: [{
     day: '2026-07-14', phase: '尾盘', sampleValid: true, pendingReview: false,
@@ -141,10 +161,10 @@ const finalStarMetricsHTML = renderMainlineReviewHTML({
 const finalStarSummary = (finalStarMetricsHTML.match(/<summary class="mlr-line-sum">([\s\S]*?)<\/summary>/) || [])[1] || '';
 A(finalStarSummary.includes('+8.38%') && finalStarSummary.includes('+3.06%') && finalStarSummary.includes('-10.55%'),
   '最终确认明星与预测明星代码一致时，摘要保留生益科技次高/次收/3日收益');
-A(finalStarSummary.includes('正式主线 PCB · 同家族10只涨停')
+A(finalStarSummary.includes('正式主线 PCB')
   && !finalStarSummary.includes('主因机器人10涨停')
   && !finalStarSummary.includes('主因分布首位'),
-  '最终摘要只展示确认明星所在正式主线及同家族涨停数，不再把全市场主因分布首位当结论');
+  '最终摘要展示正式主线，不再把全市场主因分布首位当结论');
 const pendingFollowupHTML = renderMainlineReviewHTML({
   days: [{
     day: '2026-07-31', nextDay: '2026-08-03', nextDayFinal: false,
@@ -179,9 +199,9 @@ const correctedStarMetricsHTML = renderMainlineReviewHTML({
 const correctedStarSummary = (correctedStarMetricsHTML.match(/<summary class="mlr-line-sum">([\s\S]*?)<\/summary>/) || [])[1] || '';
 A(!correctedStarSummary.includes('+8.38%') && (correctedStarSummary.match(/<b class="na">--<\/b>/g) || []).length === 3,
   '最终确认改为另一只明星时，不得把旧预测明星收益错配给新明星');
-A(correctedStarSummary.includes('今日无正式主线')
+A(correctedStarSummary.includes('正式主线 PCB')
   && !correctedStarSummary.includes('主因机器人20涨停'),
-  '确认明星所在家族不足3只涨停时，摘要明确显示今日无正式主线');
+  '人工重点复核失败不再覆盖另一条已成立正式主线');
 const bothNoMainlineReviewHTML = renderMainlineReviewHTML({
   days: [{
     day: '2026-07-16', phase: '尾盘', sampleValid: true, pendingReview: false,
@@ -210,7 +230,7 @@ const unavailableReviewHTML = renderMainlineReviewHTML({
   stats: { bySource: { eastmoney: { mainlineTotal: 0 }, ths: { mainlineTotal: 0 } } },
 });
 A(unavailableReviewHTML.includes('<span class="mlr-source-name">东财</span><strong>来源暂缺</strong>') && unavailableReviewHTML.includes('>暂缺</span>'), '终审P2 回看页:来源不可用明确显示“来源暂缺/暂缺”，不冒充无主线');
-A(unavailableReviewHTML.includes('<span class="mlr-source-name">同花顺</span><strong>算力</strong>') && unavailableReviewHTML.includes('>数据不足</span>'), '终审P3 回看页:另一源主题保留，真实家族不完整时可见显示“数据不足”');
+A(unavailableReviewHTML.includes('<span class="mlr-source-name">同花顺</span><strong>算力（待核验）</strong>') && unavailableReviewHTML.includes('>数据不足</span>'), '终审P3 回看页:另一源主题保留，真实家族不完整时可见显示“待核验/数据不足”');
 A(!unavailableReviewHTML.includes('<strong>无主线</strong>'), '终审P2 回看页:暂缺源不被写成无主线');
 const mixedReviewHTML = renderMainlineReviewHTML({
   days: [

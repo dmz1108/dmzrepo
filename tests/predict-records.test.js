@@ -80,6 +80,8 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
     && out.top[0].leaders[1].code === '600002' && out.top[0].leaders[1].leadScore === 71, 'top 保存前两名龙头及 leadScore');
   A(out.confirmedKey === 'fam-a', 'confirmedKey 不变');
   A(out.schemaVersion === 2, 'schemaVersion=2');
+  A(Array.isArray(out.qualifiedMainlines) && out.qualifiedMainlines.length === 17
+    && out.qualifiedMainlines[16].theme === '填充14', '全部正式主线独立落库，不受 top3/top10 统计截断');
   A(Array.isArray(out.starTransitions) && out.starTransitions.length === 0, 'confirmed-from-start 不冒充 expected 事件');
   A(Array.isArray(out.candidates) && out.candidates.length === 12, 'candidates 上限 12(输入17条)');
   const c0 = out.candidates[0];
@@ -94,6 +96,14 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
   A(c0.lastObservedAt && c0.intradaySticky === false, '当前候选记录观测时点且不标为粘性恢复');
   const c1 = out.candidates[1];
   A(c1.theme === '示例主线B' && c1.leaders.length === 0 && c1.stars.length === 0, '最小主线不报错、空数组');
+  const thirteenExpected = Array.from({ length: 13 }, (_, index) => ({
+    familyKey: `theme:轨迹${index + 1}`,
+    theme: `轨迹${index + 1}`,
+    starStocks: [{ code: String(600100 + index), name: `明星${index + 1}`, level: 'expected' }],
+  }));
+  const allTransitions = strategyPredictStarTransitions([], thirteenExpected, '2026-07-10T02:00:00.000Z');
+  A(allTransitions.length === 13 && allTransitions.some(row => row.mainlineTheme === '轨迹13'),
+    '第13条及以后正式主线的预期明星事件不得被轨迹上限静默丢失');
 
   // 1b. 预测时点的明星等级随记录落盘(PR#25 复审:回看封板验证只统计 expected)
   A(out.top[0].star.level === 'confirmed', '明星 level 落盘(预测时点等级)');
@@ -205,6 +215,8 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
   A(p && p.schemaVersion === 3 && p.bySource, 'schema v3 + bySource 两套独立预测块');
   A(p.bySource.eastmoney.top.map(t => t.theme).join(',') === '算力AI,医药', '东财块保留自己 top:算力AI+医药(第2名医药未被顶掉)');
   A(p.bySource.ths.top.map(t => t.theme).join(',') === '算力AI,大消费', '同花顺块保留自己 top:算力AI+大消费(第2名大消费未被顶掉)');
+  A(p.bySource.eastmoney.qualifiedMainlines.map(t => t.theme).join(',') === '算力AI,医药'
+    && p.qualifiedMainlines.map(t => t.theme).join(',') === '算力AI,医药', '双源块与兼容层都保存全部正式主线');
   // 同题材"算力AI"在两块各存一份,龙头取各自来源(不互相覆盖)
   A(p.bySource.eastmoney.top[0].leader.code === '600001' && p.bySource.ths.top[0].leader.code === '600003', '同题材算力AI两边各存自己的龙头(600001 vs 600003,不跨源覆盖)');
   A(p.bySource.eastmoney.available === true && p.bySource.eastmoney.hasMainlines === true && p.bySource.eastmoney.zsType === 6, '东财块落库来源可用性/主线状态/zsType');
