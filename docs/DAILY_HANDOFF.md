@@ -14612,9 +14612,51 @@ Deployment:
 
 Notes for next agent:
 - 华电辽能类案例的拒绝理由从"族键粒度不符"彻底消失:发电侧四细分现在同键。
-- 复盘/回看读取历史 predict 档案时,旧档案中的 `theme:火电热电`、`group:算力AI`
-  等旧键仍存在于历史 JSON;回看按档案自身键匹配,不受影响,但跨日对比时注意
-  2026-08-04 前后键不连续。
+- ~~回看按档案自身键匹配,不受影响~~——此表述**有误**(Codex #381 复审 P1-3 证伪:
+  回看链每次请求都用当前词典重算)。已按 Owner 裁定实现"历史族口径冻结",见下一条目。
 - Codex 复审关注点:①合并/回看两处 broadFallback 泛化是否与 #342 语义完全一致;
   ②validate 的 shadowProblem 中 topicKey 仍读全局词典(非候选作用域),Codex 上轮
   已标记非阻断,仅在扩展热加载编辑时需要收紧。
+
+## 2026-08-04(Local Claude)PR #381 复审修复:Codex 三项 P1(含历史口径冻结)
+
+What changed(全部先独立复现属实再修):
+- **P1-1 板块关联包含兜底越界**:`strategyMainlineBoardThemeRelated` 在双方都被词典
+  识别、standard 与 group 均不同后,不再落入字符串包含兜底(修前 `电力设备~电力=true`
+  会把电力设备板块带进发电侧,违反"电网设备/特高压首期独立"边界)。正反 6 例断言锁死。
+- **P1-2 familyUnit 白名单**:结构校验新增——familyUnit 只允许空/'group'/'standard',
+  'group' 必须携非空 group;拼错值(如 'groups')此前会被静默归一为空、整族降为细键。
+  负例 3 条 + 热加载"抛错不交换"断言。
+- **P1-3 历史族口径冻结(Owner 裁定:历史预测保持原口径,新词典不得倒溯改变旧日
+  主线结论)**:
+  - 新增 `theme-taxonomy.legacy-preB.json`(main@94481a9 的 PR A 时代词典快照,随代码
+    同版本发布,启动时校验,缺失/损坏即启动失败)。
+  - 新增 `STRATEGY_FAMILY_RECUT_EFFECTIVE_DAY = '2026-08-05'`(新口径首个生效交易日;
+    **若部署延后,合并前必须改此值为实际部署后首个交易日**)。
+  - 新增 `strategyFamilyEraEnterForDay(day)`:生效日前的日子把 THEME_* 词典与兼容图
+    缓存临时切换到旧快照,退出即恢复;只包裹**同步**段(段内 await 会让并发请求读错
+    纪元,代码注释已注明),try/finally 保证异常路径恢复。
+  - 接入点:回看构建的"实际族排名→回看族键→正式主线资格→逐源结论→明星资格"同步段、
+    最终确认资格段、归因审计的上下文构建与过滤(缓存键含日期,新旧纪元不串)。
+  - 行为测试:纪元内 火电→theme:火电热电、AI应用→theme:AI应用、算力→group:算力AI,
+    发电侧三条父子边恢复,华电辽能旧日裁决重放 `child-compatible`;退出后立即恢复新口径;
+    生效日起为空操作。
+
+Files:
+- `kpl-stats-server.js`、`theme-taxonomy.legacy-preB.json`(新增)
+- `tests/family-declarative-equivalence.test.js`(P1-1 六例、P1-2 负例、§13 纪元冻结)
+- `tests/mainline-review.test.js`(注入纪元空操作桩,注明专项覆盖位置)
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 三项 P1 修复前均先独立复现(探针脚本);修复后探针全部转为期望行为。
+- 全仓 **81/81**。受影响窗口抽样(2026-07-21..08-04 回看档案):每日均含受影响旧键,
+  冻结后旧日结论与部署前一致。
+
+Deployment:
+- GitHub only;未部署、未重启。部署仍须收盘后,且部署时核对生效日常量与实际日期一致。
+
+Notes for next agent:
+- 若未来再做第二批族划分,需要把当时的词典再快照一份并把纪元机制升级为多段
+  (day→快照版本的映射),当前实现是单边界两纪元。
+- 词典热加载(管理员加词)只作用于当前纪元;旧快照文件不参与热加载。

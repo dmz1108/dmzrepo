@@ -13083,6 +13083,45 @@ loadThemeTaxonomy();
 // 加载后无参复检:候选校验期全局词典尚空,shadowProblem 的 topicKey 回环走不到
 // standardTheme 分支;此调用以已加载词典再跑一遍语义校验,保住启动期该维度的 fail-fast。
 strategyThemeTaxonomyValidateFamilyUnits();
+
+// ===== 历史族口径冻结(Owner 裁定 2026-08-04 / Codex PR #381 P1-3)=====
+// PR B 自 STRATEGY_FAMILY_RECUT_EFFECTIVE_DAY 起改变交易族划分。历史预测保持原口径:
+// 该日期之前的回看重算(实际族排名、回看族键、正式主线资格、最终确认资格、归因审计)
+// 一律在冻结的旧词典快照下进行,新词典不得倒溯改变旧日主线结论。
+// 进入/退出只允许包裹**同步**代码段——中间出现 await 会让并发请求读到错误纪元的词典。
+const STRATEGY_FAMILY_RECUT_EFFECTIVE_DAY = '2026-08-05';   // 新口径首个生效交易日(=部署后首个交易日;部署延后须在合并前更新)
+const LEGACY_THEME_TAXONOMY_PATH = path.join(__dirname, 'theme-taxonomy.legacy-preB.json');
+const LEGACY_FAMILY_ERA = (() => {
+  // 快照与代码同仓同版本发布;缺失或损坏属打包错误,启动即失败,绝不静默退回新词典
+  // ——那会违反"旧日结论不变"的裁定。
+  const legacy = JSON.parse(fsSync.readFileSync(LEGACY_THEME_TAXONOMY_PATH, 'utf8'));
+  strategyThemeTaxonomyValidateFamilyUnits(legacy);
+  return {
+    taxonomy: legacy,
+    nonbroad: (legacy.taxonomy || []).filter(t => !t.broad),
+    broad: (legacy.taxonomy || []).filter(t => t.broad),
+    dropRe: (legacy.dropped || []).length
+      ? new RegExp('(' + legacy.dropped.map(w => String(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')')
+      : null,
+  };
+})();
+function strategyFamilyEraEnterForDay(day) {
+  const d = isoFromCompactDate(String(day || '')).slice(0, 10);
+  if (!d || d >= STRATEGY_FAMILY_RECUT_EFFECTIVE_DAY) return () => {};
+  const saved = { tax: THEME_TAXONOMY, nb: THEME_NONBROAD, b: THEME_BROAD, drop: THEME_DROP_RE };
+  THEME_TAXONOMY = LEGACY_FAMILY_ERA.taxonomy;
+  THEME_NONBROAD = LEGACY_FAMILY_ERA.nonbroad;
+  THEME_BROAD = LEGACY_FAMILY_ERA.broad;
+  THEME_DROP_RE = LEGACY_FAMILY_ERA.dropRe;
+  strategyMainlineFamilyCompat._cache = null;
+  return () => {
+    THEME_TAXONOMY = saved.tax;
+    THEME_NONBROAD = saved.nb;
+    THEME_BROAD = saved.b;
+    THEME_DROP_RE = saved.drop;
+    strategyMainlineFamilyCompat._cache = null;
+  };
+}
 function themeDisplayName(standard) { return String(standard || '').split('/')[0].trim(); }
 function themeKeywordMatches(text, keyword) {
   const s = String(text || '').trim();
@@ -21353,6 +21392,14 @@ function strategyThemeTaxonomyValidateFamilyUnits(candidate) {
         seenDisplays.add(display);
         if (t.keywords !== undefined && !Array.isArray(t.keywords)) structural.push(`${display}: keywords 必须是数组`);
         if (t.members !== undefined && !Array.isArray(t.members)) structural.push(`${display}: members 必须是数组`);
+        // familyUnit 白名单(Codex PR #381 P1):词典是唯一判定来源后,拼错值(如 'groups')
+        // 会被 strategyThemeTaxonomyInfo 静默归一为空,把整族降级成词级细键——必须 fail-fast。
+        if (t.familyUnit !== undefined && t.familyUnit !== '' && t.familyUnit !== 'group' && t.familyUnit !== 'standard') {
+          structural.push(`${display}: familyUnit 非法值 '${String(t.familyUnit)}'(只允许空、'group'、'standard')`);
+        }
+        if (t.familyUnit === 'group' && !(typeof t.group === 'string' && t.group.trim())) {
+          structural.push(`${display}: familyUnit='group' 但缺少非空 group`);
+        }
       }
     }
     if (structural.length) {
@@ -22404,6 +22451,10 @@ function strategyMainlineBoardThemeRelated(boardName, theme) {
     const mainFine = mainInfo.familyUnit === 'standard';
     if (boardFine || mainFine) return false;
     if (boardInfo.group && mainInfo.group && boardInfo.group === mainInfo.group) return true;
+    // 双方都被词典识别、standard 与 group 均不同 → 拒绝,不再走自由文本包含兜底。
+    // 否则"电力设备"会因包含"电力"二字被并进发电侧(Codex PR #381 P1:违反
+    // 电网设备/特高压首期独立的边界)。显式兼容只能走词典声明关系。
+    return false;
   }
   return board.includes(main) || main.includes(board);
 }
@@ -23293,7 +23344,11 @@ async function strategyMainlineAttributionContextForCodes(day, codes) {
       'visible-live-limit-reason')
     : new Map();
   const currentReasons = strategyMainlineMergeCurrentAttributionReasons(targetDayReasons, officialReasons);
-  const value = strategyMainlineBuildStarAttributionContext(prior?.byCode, currentReasons);
+  // 历史族口径冻结:生效日前的归因上下文按旧词典构族(缓存键含日期,新旧纪元不串)。
+  const eraExit = strategyFamilyEraEnterForDay(isoDay);
+  let value;
+  try { value = strategyMainlineBuildStarAttributionContext(prior?.byCode, currentReasons); }
+  finally { eraExit(); }
   strategyMainlineVisibleAttributionCache.set(cacheKey, { at: Date.now(), value });
   if (strategyMainlineVisibleAttributionCache.size > 20) {
     const oldestKey = strategyMainlineVisibleAttributionCache.keys().next().value;
@@ -26109,23 +26164,19 @@ function strategyMainlineReviewFormalConclusions(
 
 // 多主线回看不能只给兼容层第一条主线补明星、龙头和后续表现。这里在不改变既有
 // 根层统计口径的前提下，为每一条正式主线附上自己的证据，供展开层逐条复核。
-async function strategyMainlineReviewEnrichFormalConclusions(
-  predict,
-  formalRows,
-  conclusions,
-  evalStock,
-  options = {},
-) {
+// 逐条主线证据的**同步绑定**阶段(issue #375 PR B 纪元接缝):把结论行与预测档中的
+// 主线行、候选、同族明星、预期明星轨迹绑定好。这一步读词典(族解析),因此必须在
+// 调用方的族口径纪元内执行——生效日前要按旧词典分族,否则新词典会把当时分属两族的
+// 证据并进同一条线。绑定结果交给 strategyMainlineReviewEnrichFormalConclusions 异步补收益。
+function strategyMainlineReviewPlanFormalEvidence(predict, formalRows, conclusions) {
   const rows = Array.isArray(formalRows) ? formalRows : [];
   const candidates = Array.isArray(predict?.candidates) ? predict.candidates : [];
-  const finalSealedCodes = options.finalSealedCodes instanceof Set ? options.finalSealedCodes : null;
-  const pendingReview = options.pendingReview === true;
-  const limitDbFinal = options.limitDbFinal === true;
   const lineKey = row => String(row?.key || row?.familyKey || '').trim();
   const familyKey = row => strategyMainlineFamilyInfo({
     key: row?.key || row?.familyKey || '',
     theme: row?.theme || '',
   }).key;
+  // 同族多条时 fail closed:宁可不补明细,也不把另一条主线的证据错挂过来(#401 复审)。
   const uniqueFamilyMatch = (collection, family) => {
     if (!family) return null;
     const matches = collection.filter(row => familyKey(row) === family);
@@ -26145,6 +26196,38 @@ async function strategyMainlineReviewEnrichFormalConclusions(
       || uniqueFamilyMatch(candidates, family)
       || null;
   };
+  return (Array.isArray(conclusions) ? conclusions : []).map(conclusion => {
+    const main = findLine(conclusion);
+    const candidate = findCandidate(main || conclusion);
+    const rawStars = strategyMainlineReviewStarCandidates(predict, main || conclusion).slice(0, 4);
+    const rawLeaders = [
+      ...(Array.isArray(main?.leaders) ? main.leaders : (main?.leader ? [main.leader] : [])),
+      ...(Array.isArray(candidate?.leaders) ? candidate.leaders : (candidate?.leader ? [candidate.leader] : [])),
+    ];
+    const leaderByCode = new Map();
+    for (const leader of rawLeaders) {
+      const code = normalizeReasonSourceCode(leader?.code);
+      if (code && !leaderByCode.has(code)) leaderByCode.set(code, leader);
+    }
+    return {
+      conclusion,
+      rawStars,
+      rawLeaders: [...leaderByCode.values()].slice(0, 2),
+      transitions: strategyMainlineExpectedStarTransitions(predict, main || conclusion),
+    };
+  });
+}
+// 逐条主线证据的**异步补全**阶段:只做收益(evalStock)、封板、领先时长与完整性标注,
+// 全程不读词典,因此必须在纪元段之外 await——段内 await 会在让出期间把旧词典快照
+// 暴露给并发请求。绑定关系已由 strategyMainlineReviewPlanFormalEvidence 按当日口径定好。
+async function strategyMainlineReviewEnrichFormalConclusions(
+  plans,
+  evalStock,
+  options = {},
+) {
+  const finalSealedCodes = options.finalSealedCodes instanceof Set ? options.finalSealedCodes : null;
+  const pendingReview = options.pendingReview === true;
+  const limitDbFinal = options.limitDbFinal === true;
   const stockPerformance = async raw => {
     const code = normalizeReasonSourceCode(raw?.code);
     if (!code) return null;
@@ -26183,27 +26266,17 @@ async function strategyMainlineReviewEnrichFormalConclusions(
       : !options.thirdDay ? 'awaiting-third-trading-day'
         : !options.thirdDayFinal ? 'awaiting-third-close' : 'complete';
 
-  return Promise.all((Array.isArray(conclusions) ? conclusions : []).map(async conclusion => {
-    const main = findLine(conclusion);
-    const candidate = findCandidate(main || conclusion);
-    const rawStars = strategyMainlineReviewStarCandidates(predict, main || conclusion).slice(0, 4);
-    const rawLeaders = [
-      ...(Array.isArray(main?.leaders) ? main.leaders : (main?.leader ? [main.leader] : [])),
-      ...(Array.isArray(candidate?.leaders) ? candidate.leaders : (candidate?.leader ? [candidate.leader] : [])),
-    ];
-    const leaderByCode = new Map();
-    for (const leader of rawLeaders) {
-      const code = normalizeReasonSourceCode(leader?.code);
-      if (code && !leaderByCode.has(code)) leaderByCode.set(code, leader);
-    }
-    const transitions = strategyMainlineExpectedStarTransitions(predict, main || conclusion);
+  return Promise.all((Array.isArray(plans) ? plans : []).map(async plan => {
+    const conclusion = plan?.conclusion || {};
+    const rawStars = Array.isArray(plan?.rawStars) ? plan.rawStars : [];
+    const transitions = Array.isArray(plan?.transitions) ? plan.transitions : [];
     const [stars, expectedStars, leaders] = await Promise.all([
       Promise.all(rawStars.map(starPerformance)),
       Promise.all(transitions.map(async transition => ({
         ...transition,
         ...(await starPerformance({ ...transition, level: 'expected' }) || {}),
       }))),
-      Promise.all([...leaderByCode.values()].slice(0, 2).map(stockPerformance)),
+      Promise.all((Array.isArray(plan?.rawLeaders) ? plan.rawLeaders : []).map(stockPerformance)),
     ]);
     let mainlineLead = null;
     let mainlineLeadStatus = pendingReview ? 'pending-post-close'
@@ -26429,7 +26502,10 @@ async function strategyMainlineReviewPredictionAttribution(day, predict) {
   if (!codes.length) return { predict, rejected: [] };
   const attributionByCode = await strategyMainlineAttributionContextForCodes(day, codes)
     .catch(() => new Map());
-  return strategyMainlineReviewFilterPredictionAttribution(predict, attributionByCode);
+  // 历史族口径冻结:旧日预测档案的归因过滤在旧词典纪元内裁决,与档案键同口径。
+  const eraExit = strategyFamilyEraEnterForDay(day);
+  try { return strategyMainlineReviewFilterPredictionAttribution(predict, attributionByCode); }
+  finally { eraExit(); }
 }
 // 管理员最终确认与盘中预测是两类事实：前者可在收盘后修正，后者必须冻结用于命中率审计。
 // 回看同时返回二者，但绝不拿最终确认覆盖 predict.top，也不把它计入预测命中率分母。
@@ -26891,22 +26967,39 @@ async function getStrategyMainlineReview(days = 10) {
       mainReasonMissingCount = [...expected].filter(c => !covered.has(c)).length;
       reasonComplete = expected.size > 0 && mainReasonMissingCount === 0;
     }
-    const actualRanking = reasonComplete ? strategyMainlineActualFamilyRanking(mainReasonDb) : [];
+    // 历史族口径冻结(Owner 裁定/Codex PR #381 P1-3):生效日前的日子,实际族排名、
+    // 回看族键、资格判定、逐源结论全部在旧词典纪元内同步计算;本段无 await(必要前提),
+    // try/finally 保证异常路径也恢复当前词典。
+    const familyEraExit = strategyFamilyEraEnterForDay(day);
+    let actualRanking, tier1, actualTop, actualFirstTied, finalSealedCodes;
+    let formalConclusions = [];
+    let formalEvidencePlans = [];
+    const sourceEvidencePlans = {};   // skey -> 纪元内算好的绑定,纪元外异步补收益
+    let mainlineQualification, mainlineQualified;
+    let mainlineHitTop1 = null, mainlineHitTop3 = null;
+    let mainlineLead = null;
+    let mainlineLeadStatus = null;
+    let reviewBySource = null;
+    let mainlineStarQualified = null;
+    try {
+    actualRanking = reasonComplete ? strategyMainlineActualFamilyRanking(mainReasonDb) : [];
     // 密集分层名次:最大涨停数相同的家族全部并列第一;Top3 取前三个"名次层级"而非数组前三。
     let lastCount = null, tier = 0;
     for (const f of actualRanking) {
       if (f.count !== lastCount) { tier += 1; lastCount = f.count; }
       f.rankTier = tier;
     }
-    const tier1 = actualRanking.filter(f => f.rankTier === 1);
+    tier1 = actualRanking.filter(f => f.rankTier === 1);
     const tier23 = actualRanking.filter(f => f.rankTier > 1 && f.rankTier <= 3);
-    const actualTop = [...tier1, ...tier23.slice(0, Math.max(0, 8 - tier1.length))]
+    actualTop = [...tier1, ...tier23.slice(0, Math.max(0, 8 - tier1.length))]
       .map(f => ({ theme: f.label, count: f.count, rankTier: f.rankTier }));
-    const actualFirstTied = tier1.length > 1;
-    const finalSealedCodes = limitDbFinal
+    actualFirstTied = tier1.length > 1;
+    finalSealedCodes = limitDbFinal
       ? new Set((limitDb.stocks || []).map(stock => normalizeReasonSourceCode(stock?.code)).filter(Boolean))
       : null;
-    const formalConclusions = strategyMainlineReviewFormalConclusions(
+    // #382 多正式主线结论:必须在族纪元段内计算(内部调用 FamilyInfo/ReviewQualification),
+    // 生效日前逐条主线的族按旧词典解析;多主线语义本身不受纪元影响(#382 定稿)。
+    formalConclusions = strategyMainlineReviewFormalConclusions(
       predict,
       formalTop,
       actualRanking,
@@ -26914,30 +27007,14 @@ async function getStrategyMainlineReview(days = 10) {
       reasonComplete,
       pendingReview,
     );
-    const formalMainlines = await strategyMainlineReviewEnrichFormalConclusions(
-      predict,
-      formalTop,
-      formalConclusions,
-      evalStock,
-      {
-        day,
-        pendingReview,
-        limitDb,
-        limitDbFinal,
-        finalSealedCodes,
-        nextDay,
-        nextDayFinal,
-        thirdDay,
-        thirdDayFinal,
-      },
-    );
-    const mainlineQualification = main && !pendingReview
+    // #401 逐条证据分两段(纪元接缝):族相关绑定(行/候选/同族明星、同族歧义 fail closed)
+    // 必须在纪元内同步完成——生效日前这些绑定要按旧词典分族;异步收益补全不读词典,
+    // 移到纪元段外 await 回填,避免让出期间并发请求读到临时换出的旧快照。
+    formalEvidencePlans = strategyMainlineReviewPlanFormalEvidence(predict, formalTop, formalConclusions);
+    mainlineQualification = main && !pendingReview
       ? strategyMainlineReviewQualification(predict, main, actualRanking, finalSealedCodes, reasonComplete)
       : null;
-    const mainlineQualified = mainlineQualification?.qualified ?? null;
-    let mainlineHitTop1 = null, mainlineHitTop3 = null;
-    let mainlineLead = null;
-    let mainlineLeadStatus = null;
+    mainlineQualified = mainlineQualification?.qualified ?? null;
     if (actualRanking.length && main) {
       const tiedFirstFamilies = tier1.map(f => f.familyKey);
       const predictedFamilies = new Set(formalTop.slice(0, 3)
@@ -26969,7 +27046,6 @@ async function getStrategyMainlineReview(days = 10) {
     }
     // 两套独立预测(schema v3):分别评东财/同花顺各自第 1 主线的命中,共享当日真实第一家族;
     // 各源用自己的 bySource 块(不跨源),回看按来源解释(Codex 二审 P1)。
-    let reviewBySource = null;
     if (predict.bySource) {
       // schema v3 的两套预测无论盘后主因是否已完整，都要把各来源的主题/无主线状态返回给前端；
       // 只有命中判定与统计分母依赖完整 actualRanking。否则盘中或数据不足时会退回东财兼容层，
@@ -26991,7 +27067,7 @@ async function getStrategyMainlineReview(days = 10) {
         };
         const fTop = strategyMainlineReviewFormalTop(blockPredict);
         const sMain = fTop.find(t => predict.confirmedKey && t.key === predict.confirmedKey) || fTop[0] || null;
-        const formalConclusions = strategyMainlineReviewFormalConclusions(
+        const sourceFormalConclusions = strategyMainlineReviewFormalConclusions(
           blockPredict,
           fTop,
           actualRanking,
@@ -26999,22 +27075,11 @@ async function getStrategyMainlineReview(days = 10) {
           reasonComplete,
           pendingReview,
         );
-        const formalMainlines = await strategyMainlineReviewEnrichFormalConclusions(
+        // 同上:族绑定在纪元内同步算好,异步收益补全在纪元段外回填(见 formalEvidencePlans)。
+        sourceEvidencePlans[skey] = strategyMainlineReviewPlanFormalEvidence(
           blockPredict,
           fTop,
-          formalConclusions,
-          evalStock,
-          {
-            day,
-            pendingReview,
-            limitDb,
-            limitDbFinal,
-            finalSealedCodes,
-            nextDay,
-            nextDayFinal,
-            thirdDay,
-            thirdDayFinal,
-          },
+          sourceFormalConclusions,
         );
         const reserveMainlines = strategyMainlineReviewReserveSummaries(blockPredict);
         // 新 schema v3 明确保存 available；早期 v3 没有该字段，空块只能诚实标为 unknown，
@@ -27043,8 +27108,10 @@ async function getStrategyMainlineReview(days = 10) {
             ? strategyMainlineReviewQualification(blockPredict, sMain, actualRanking, finalSealedCodes, reasonComplete)
             : null;
           // 来源日结论只问“是否有任一条正式主线成立”，不再只看排名第一的 sMain。
-          // sourceQualification 保留第一条明细以兼容旧客户端；formalMainlines 是新事实集。
-          sourceQualified = strategyMainlineReviewAggregateQualification(formalMainlines);
+          // sourceQualification 保留第一条明细以兼容旧客户端；逐条结论是新事实集。
+          // 用 conclusions(纪元内已算好)而非 enrich 结果:后者只多出收益/封板等展示字段,
+          // mainlineQualified 逐条相同,聚合值不受影响,但可让分母计算不依赖异步补全。
+          sourceQualified = strategyMainlineReviewAggregateQualification(sourceFormalConclusions);
           if (sourceSampleValid && !pendingReview && sourceQualified != null) {
             srcStat[skey].qualifiedTotal += 1;
             if (sourceQualified) srcStat[skey].qualified += 1;
@@ -27078,8 +27145,8 @@ async function getStrategyMainlineReview(days = 10) {
           mainlineHitTop3: hitTop3,
           mainlineLead: leadTime,
           mainlineLeadStatus: leadTimeStatus,
-          formalMainlines,
-          formalMainlineCount: formalMainlines.length,
+          formalMainlines: [],   // 纪元段外 await 回填
+          formalMainlineCount: sourceFormalConclusions.length,
           hasReserveMainlines: reserveMainlines.length > 0,
           reserveMainlines,
           sampleValid: sourceSampleValid,
@@ -27092,7 +27159,6 @@ async function getStrategyMainlineReview(days = 10) {
     // 明星必须属于盘后实际成立的同一条主线。L2 盘中曾确认只说明扫描信号成立；
     // 正式成立只看“同家族确认明星 + 至少3只涨停”，不再要求涨停数量排名第一。
     // null 表示当日盘后主因尚未完成，保留候选证据但不提前下正式结论。
-    let mainlineStarQualified = null;
     if (star && !pendingReview) {
       if (reviewBySource && main) {
         const mainFamily = strategyMainlineFamilyInfo({ theme: main.theme || '', key: main.key || '' }).key;
@@ -27105,18 +27171,39 @@ async function getStrategyMainlineReview(days = 10) {
         mainlineStarQualified = mainlineQualified;
       }
     }
+    } finally { familyEraExit(); }   // 纪元段结束:下方 await 前必须恢复,避免并发请求读到旧词典
+    // #401 逐条证据的异步补全(收益/封板/领先时长):全部不读词典,故必须且只能在纪元段外
+    // await——段内 await 会在让出期间把旧快照暴露给并发请求。绑定关系已在段内按当日口径定好。
+    const enrichOptions = {
+      day, pendingReview, limitDb, limitDbFinal, finalSealedCodes,
+      nextDay, nextDayFinal, thirdDay, thirdDayFinal,
+    };
+    const formalMainlines = await strategyMainlineReviewEnrichFormalConclusions(
+      formalEvidencePlans, evalStock, enrichOptions,
+    );
+    if (reviewBySource) {
+      for (const skey of Object.keys(sourceEvidencePlans)) {
+        if (!reviewBySource[skey]) continue;
+        reviewBySource[skey].formalMainlines = await strategyMainlineReviewEnrichFormalConclusions(
+          sourceEvidencePlans[skey], evalStock, enrichOptions,
+        );
+      }
+    }
     // 收盘后修正/管理员最终确认可能晚于盘中预测档案。最终确认只作为独立结论叠加，
     // 原 prediction、命中判断和所有统计继续使用当时真实落盘值，避免盘后答案穿越。
     let finalConfirmedMainline = null;
     if (confirm && !pendingReview) {
       const finalPayload = await getStrategyMainlinesVisible(day).catch(() => null);
-      finalConfirmedMainline = strategyMainlineReviewConfirmedConclusion(finalPayload, confirm, main);
-      if (finalConfirmedMainline) {
-        finalConfirmedMainline = {
-          ...finalConfirmedMainline,
-          ...strategyMainlineReviewFinalQualification(finalConfirmedMainline, actualRanking, reasonComplete),
-        };
-      }
+      const finalEraExit = strategyFamilyEraEnterForDay(day);
+      try {
+        finalConfirmedMainline = strategyMainlineReviewConfirmedConclusion(finalPayload, confirm, main);
+        if (finalConfirmedMainline) {
+          finalConfirmedMainline = {
+            ...finalConfirmedMainline,
+            ...strategyMainlineReviewFinalQualification(finalConfirmedMainline, actualRanking, reasonComplete),
+          };
+        }
+      } finally { finalEraExit(); }
     }
     rows.push({
       day, nextDay, thirdDay, nextDayFinal, thirdDayFinal,
