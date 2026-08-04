@@ -37,6 +37,7 @@ assert(script.includes('Get-ScheduledTaskInfo') && !script.includes('Start-Sched
 assert(!script.includes('schtasks.exe /End') && !script.includes('schtasks.exe /Run'), 'diagnostic never stops or starts production tasks');
 assert(script.includes('dependencyMatches'), 'diagnostic compares approved and production dependency hashes');
 assert(script.includes('Stop-Process -Id $probeProcess.Id'), 'isolated probe is always terminated');
+assert(script.includes("if ($null -eq $text) { $text = '' }"), 'empty PowerShell 5.1 log files are normalized before string methods');
 assert(script.includes('@($probeStdout, $probeStderr)') && script.includes('Remove-Item -LiteralPath $path') &&
   script.includes('Remove-Item -LiteralPath $stagingRoot -Recurse -Force'),
   'temporary probe archive and logs are always removed');

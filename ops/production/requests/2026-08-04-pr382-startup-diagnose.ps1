@@ -39,7 +39,9 @@ function Get-HealthProbe {
 function Get-SafeLogTail {
   param([string]$Path)
   if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return '' }
-  $text = [string](Get-Content -LiteralPath $Path -Raw -ErrorAction SilentlyContinue)
+  $text = Get-Content -LiteralPath $Path -Raw -ErrorAction SilentlyContinue
+  if ($null -eq $text) { $text = '' }
+  $text = [string]$text
   $text = $text.Replace($projectRoot, '[project]').Replace($env:TEMP, '[temp]')
   $text = $text -replace '(?i)(token|password|cookie|api[_-]?key)\s*[:=]\s*\S+', '$1=[redacted]'
   if ($text.Length -gt 4000) { $text = $text.Substring($text.Length - 4000) }

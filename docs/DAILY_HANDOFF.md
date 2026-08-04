@@ -14017,3 +14017,27 @@ Deployment:
 Notes for next agent:
 - 不得再次盲目重跑 PR #382 部署。先运行只读诊断，按依赖哈希和隔离启动结果判断是依赖遗漏、
   生产运行时问题或计划任务重启问题，再修根因。
+
+## 2026-08-04 - Codex - PR #382 只读诊断空日志兼容修复
+
+Changed:
+- 只读诊断运行 `30914632058` 已完成依赖比较、任务读取与隔离探针，但在序列化空 stdout 时，
+  Windows PowerShell 5.1 将空文件读为 `$null`，字符串清理调用因此失败。
+- `Get-SafeLogTail` 现在先把 `$null` 规范为 `''` 再执行路径和凭据清理；不改变诊断边界。
+
+Files:
+- `ops/production/requests/2026-08-04-pr382-startup-diagnose.ps1`
+- `tests/pr382-startup-diagnose-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 新增 PowerShell 5.1 空日志规范化静态回归断言。
+- `node tests/pr382-startup-diagnose-request.test.js`、`node tests/production-ops-workflow.test.js` 通过。
+- `git diff --check` 通过。
+
+Deployment:
+- 运行 `30914632058` 未部署文件、未重启服务、未修改业务数据；临时文件已由 `finally` 清理。
+- 修正版诊断尚待合并和受保护重跑。
+
+Notes for next agent:
+- 诊断重跑成功前不得再次尝试 PR #382 应用部署。
