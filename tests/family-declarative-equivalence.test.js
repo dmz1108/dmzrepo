@@ -57,6 +57,7 @@ const STRATEGY_MAINLINE_KEEP_FINE_THEMES = extractSet('STRATEGY_MAINLINE_KEEP_FI
 eval(extractFn('strategyMainlineFamilyInfo'));
 eval(extractFn('strategyThemeTaxonomyValidateFamilyUnits'));
 strategyThemeTaxonomyValidateFamilyUnits._ready = true;   // 生产中由字面集合声明后的显式调用置位
+eval(extractFn('strategyMainlineCompatEntryKey'));
 eval(extractFn('strategyMainlineFamilyCompat'));
 eval(extractFn('normalizeReasonSourceCode'));
 eval(extractFn('strategyMainlineStarAttributionDecision'));
@@ -184,6 +185,63 @@ A(strategyMainlineFamilyCompat().parentByChild.get('theme:火电热电')?.has('t
   strategyMainlineFamilyCompat._cache = null;
   const parseFail = (() => { fsSync.readFileSync = () => '{broken json'; const t0 = THEME_TAXONOMY; try { loadThemeTaxonomy(); } catch { return false; } return THEME_TAXONOMY === t0; })();
   A(parseFail, 'JSON 损坏时静默保留旧状态(不抛出到调用方,与旧行为一致)');
+})(THEME_TAXONOMY, THEME_NONBROAD, THEME_BROAD, null, { readFileSync: () => '{}' }, 'mem://candidate');
+
+// 9. [Codex 二轮 P1] 遮蔽 standard 不得作为兼容参与方:关键词抢先命中与 topicKey 折叠均拒绝。
+expectInvalid(t => { t.compatibleParents = ['光伏玻璃']; }, /被关键词匹配遮蔽\(命中 '光伏'\)/,
+  '引用目标被关键词抢先命中(光伏玻璃→光伏)交换前抛错');
+expectInvalid(t => { t.compatibleParents = ['氢能燃料电池']; }, /被关键词匹配遮蔽\(命中 '锂电池'\)/,
+  '引用目标被关键词抢先命中(氢能燃料电池→锂电池)交换前抛错');
+expectInvalid(t => { t.compatibleParents = ['工业气体电子特气']; }, /被关键词匹配遮蔽/,
+  '引用目标为遮蔽的 group 单位条目(工业气体电子特气)同样拒绝');
+// 构图层同样拒绝(第二道网,直接派生不回退模糊匹配)。
+hotEntry.compatibleParents = ['氢能燃料电池'];
+strategyMainlineFamilyCompat._cache = null;
+let shadowThrew = false;
+try { strategyMainlineFamilyCompat(); } catch (e) { shadowThrew = /被关键词匹配遮蔽|topicKey 折叠/.test(String(e.message)); }
+hotEntry.compatibleParents = savedParents;
+strategyMainlineFamilyCompat._cache = null;
+A(shadowThrew, '构图遇遮蔽目标抛错,不再送回关键词匹配器连错族');
+A(strategyMainlineFamilyCompat().parentByChild.get('theme:火电热电')?.has('theme:电力'),
+  '遮蔽用例恢复后关系图重建正常');
+
+// 10. [Codex 二轮 P1] 结构校验先于 _ready 门闩,且覆盖缺失/非数组/重复 standard/空词典。
+const expectStructural = (candidate, pattern, msg) => {
+  let caught = '';
+  try { strategyThemeTaxonomyValidateFamilyUnits(candidate); } catch (e) { caught = String(e.message); }
+  A(pattern.test(caught), msg + '(实际: ' + (caught.slice(0, 70) || '未抛错') + ')');
+};
+expectStructural({}, /缺少非空 taxonomy 数组/, '候选完全没有 taxonomy 键 → 抛错');
+expectStructural({ taxonomy: null }, /缺少非空 taxonomy 数组/, 'taxonomy:null → 抛错');
+expectStructural({ dropped: [] }, /缺少非空 taxonomy 数组/, '只有 dropped 的候选 → 抛错(Codex 回放形状)');
+expectStructural({ taxonomy: [] }, /缺少非空 taxonomy 数组/, '空 taxonomy 数组 → 抛错');
+expectStructural([], /普通对象/, '数组形态候选 → 抛错');
+expectStructural({ taxonomy: [{ standard: 'X' }], dropped: {} }, /dropped 若存在必须是数组/, 'dropped 非数组 → 抛错');
+const dupCandidate = cloneTax();
+dupCandidate.taxonomy.push(JSON.parse(JSON.stringify(dupCandidate.taxonomy[0])));
+expectStructural(dupCandidate, /standard 显示名重复/, '重复 standard → 抛错');
+const badKw = cloneTax();
+badKw.taxonomy[0].keywords = 'not-array';
+expectStructural(badKw, /keywords 必须是数组/, 'keywords 非数组 → 抛错');
+// 结构校验不受 _ready 门闩约束(初始化期也拦截)。
+strategyThemeTaxonomyValidateFamilyUnits._ready = false;
+let preLatchThrew = false;
+try { strategyThemeTaxonomyValidateFamilyUnits({ dropped: [] }); } catch { preLatchThrew = true; }
+strategyThemeTaxonomyValidateFamilyUnits._ready = true;
+A(preLatchThrew, '_ready 未置位时结构校验仍然拦截(初始化期不豁免)');
+
+// 11. [Codex 二轮 P1] 热加载 Codex 回放形状 {"dropped":[]}:必须抛错且不交换。
+(function (THEME_TAXONOMY, THEME_NONBROAD, THEME_BROAD, THEME_DROP_RE, fsSync, THEME_TAXONOMY_PATH) {
+  eval(extractFn('loadThemeTaxonomy'));
+  fsSync.readFileSync = () => '{"dropped":[]}';
+  const beforeTax = THEME_TAXONOMY;
+  const sentinel = { sentinel: true };
+  strategyMainlineFamilyCompat._cache = sentinel;
+  let threwShape = false;
+  try { loadThemeTaxonomy(); } catch (e) { threwShape = /缺少非空 taxonomy 数组/.test(String(e.message)); }
+  A(threwShape && THEME_TAXONOMY === beforeTax && strategyMainlineFamilyCompat._cache === sentinel,
+    'Codex 回放形状 {\"dropped\":[]} 热加载:抛错、不交换、缓存不清');
+  strategyMainlineFamilyCompat._cache = null;
 })(THEME_TAXONOMY, THEME_NONBROAD, THEME_BROAD, null, { readFileSync: () => '{}' }, 'mem://candidate');
 
 console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL FAMILY-DECLARATIVE-EQUIVALENCE CHECKS PASSED');

@@ -21347,8 +21347,36 @@ function strategyMainlineFamilyInfo(item) {
 function strategyThemeTaxonomyValidateFamilyUnits(candidate) {
   // 模块初始化期字面集合(const)尚未就绪(TDZ);首次校验由集合声明之后的显式调用完成,
   // 此后的热加载路径以候选词典为对象在交换前校验(Codex PR #378 P2)。
+  // 结构校验不依赖字面集合,在 _ready 门闩之前执行(Codex 二轮 P1 / Local Claude db8e6f0):
+  // 候选缺 taxonomy 数组等结构缺陷绝不能静默回退去校验旧词典——那会对无效候选报告"通过",
+  // 随后原子交换把它换入,全站族归属静默降级。无参调用(初始化后首检)校验当前已加载词典。
+  if (candidate !== undefined) {
+    const structural = [];
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+      structural.push('候选词典必须是普通对象');
+    } else {
+      if (!Array.isArray(candidate.taxonomy) || !candidate.taxonomy.length) {
+        structural.push('候选词典缺少非空 taxonomy 数组');
+      }
+      if (candidate.dropped !== undefined && !Array.isArray(candidate.dropped)) {
+        structural.push('dropped 若存在必须是数组');
+      }
+      const seenDisplays = new Set();
+      for (const t of (Array.isArray(candidate.taxonomy) ? candidate.taxonomy : [])) {
+        const display = t && typeof t === 'object' ? themeDisplayName(t.standard) : '';
+        if (!display) { structural.push('存在缺少非空 standard 的条目'); continue; }
+        if (seenDisplays.has(display)) structural.push(`standard 显示名重复: '${display}'`);
+        seenDisplays.add(display);
+        if (t.keywords !== undefined && !Array.isArray(t.keywords)) structural.push(`${display}: keywords 必须是数组`);
+        if (t.members !== undefined && !Array.isArray(t.members)) structural.push(`${display}: members 必须是数组`);
+      }
+    }
+    if (structural.length) {
+      throw new Error('[theme-taxonomy] 词典声明校验失败: ' + structural.join('; '));
+    }
+  }
   if (!strategyThemeTaxonomyValidateFamilyUnits._ready) return;
-  const tax = candidate && Array.isArray(candidate.taxonomy)
+  const tax = candidate !== undefined
     ? candidate.taxonomy
     : (THEME_TAXONOMY.taxonomy || []);
   const problems = [];
@@ -21373,16 +21401,38 @@ function strategyThemeTaxonomyValidateFamilyUnits(candidate) {
   for (const name of STRATEGY_MAINLINE_MERGE_GROUPS) {
     if (!knownGroups.has(name)) problems.push(`MERGE_GROUPS 孤儿项 '${name}': 词典无此 group`);
   }
-  // 兼容引用校验(Codex PR #378 P1):compatibleParents / broadFallbackFamilies 的目标必须是
-  // 词典中唯一、真实的 standard 显示名——拼错的目标绝不允许回退成自由文本族键静默生成幽灵边。
+  // 兼容引用校验(Codex PR #378 P1 两轮):目标必须是词典真实 standard 显示名,且
+  // 声明方与目标都不得被遮蔽——回环用**本词典(候选)作用域**的关键词匹配器判定,
+  // topicKey 折叠(氢能燃料电池→锂电池 这类)同样拒绝;绝不回退自由文本族键生成错边。
   const byDisplay = new Map();
   for (const t of tax) {
     const display = themeDisplayName(t.standard);
-    if (!display) continue;
-    byDisplay.set(display, (byDisplay.get(display) || 0) + 1);
+    if (display) byDisplay.set(display, t);   // 唯一性已由结构校验保证
   }
+  const scopedNonbroad = tax.filter(t => !t.broad);
+  const scopedBroad = tax.filter(t => t.broad);
+  const scopedMatchDisplay = s => {
+    for (const t of scopedNonbroad) if ((t.keywords || []).some(k => themeKeywordMatches(s, k))) return themeDisplayName(t.standard);
+    for (const t of scopedBroad) if ((t.keywords || []).some(k => themeKeywordMatches(s, k))) return themeDisplayName(t.standard);
+    return '';
+  };
+  const shadowProblem = (display, entry) => {
+    const matched = scopedMatchDisplay(display);
+    if (matched !== display) return `'${display}' 被关键词匹配遮蔽(命中 '${matched || '无'}')`;
+    if (!(entry.familyUnit === 'group' && entry.group)) {
+      const canonical = strategyMainlineTopicKey(display) || display;
+      if (canonical !== display) return `'${display}' 经 topicKey 折叠为 '${canonical}'`;
+    }
+    return '';
+  };
   for (const t of tax) {
     const display = themeDisplayName(t.standard);
+    const declares = (Array.isArray(t.compatibleParents) && t.compatibleParents.length)
+      || (Array.isArray(t.broadFallbackFamilies) && t.broadFallbackFamilies.length);
+    if (declares) {
+      const selfProblem = shadowProblem(display, t);
+      if (selfProblem) problems.push(`${display}: 兼容声明方自身 ${selfProblem}`);
+    }
     const checkRefs = (list, fieldName, requireBroadSelf) => {
       if (list === undefined) return;
       if (!Array.isArray(list)) { problems.push(`${display}: ${fieldName} 必须是数组`); return; }
@@ -21396,9 +21446,10 @@ function strategyThemeTaxonomyValidateFamilyUnits(candidate) {
         if (seen.has(name)) { problems.push(`${display}: ${fieldName} 重复边 '${name}'`); continue; }
         seen.add(name);
         if (name === display) { problems.push(`${display}: ${fieldName} 自引用`); continue; }
-        const hits = byDisplay.get(name) || 0;
-        if (hits === 0) problems.push(`${display}: ${fieldName} 引用不存在的 standard '${name}'`);
-        else if (hits > 1) problems.push(`${display}: ${fieldName} 引用的 '${name}' 在词典中不唯一`);
+        const entry = byDisplay.get(name);
+        if (!entry) { problems.push(`${display}: ${fieldName} 引用不存在的 standard '${name}'`); continue; }
+        const refProblem = shadowProblem(name, entry);
+        if (refProblem) problems.push(`${display}: ${fieldName} 引用目标 ${refProblem},族键不可靠`);
       }
     };
     checkRefs(t.compatibleParents, 'compatibleParents', false);
@@ -21411,6 +21462,22 @@ function strategyThemeTaxonomyValidateFamilyUnits(candidate) {
 // 族兼容关系(issue #375 PR A):从词典 compatibleParents / broadFallbackFamilies 构建。
 // childKey -> 可支撑的父族键集合;broadKey -> 宽词兜底可归入的族键集合。
 // 依赖用 typeof 守卫:旧测试片段未注入词典时退化为空关系(与其被测场景一致)。
+// 兼容引用参与方(声明方与目标)的族键解析:从 entry 自身声明直接派生,并做两道回环守卫
+// 拒绝被遮蔽的 standard——①关键词匹配器对该显示名必须命中其自身条目;②非 group 单位的
+// 显示名经 topicKey 不得折叠到其它词(topicKey('氢能燃料电池')='锂电池' 这类)。
+// 被遮蔽者作为兼容参与方一律抛错,绝不产出指向错误族的边。
+function strategyMainlineCompatEntryKey(display, entry) {
+  const matched = strategyThemeTaxonomyInfo(display);
+  if (!matched || matched.standard !== themeDisplayName(entry.standard)) {
+    throw new Error(`[theme-taxonomy] 兼容参与方 '${display}' 被关键词匹配遮蔽(命中 '${matched ? matched.standard : '无'}'),族键不可靠`);
+  }
+  if (entry.familyUnit === 'group' && entry.group) return `group:${entry.group}`;
+  const canonical = strategyMainlineTopicKey(display) || display;
+  if (canonical !== display) {
+    throw new Error(`[theme-taxonomy] 兼容参与方 '${display}' 经 topicKey 折叠为 '${canonical}',族键不可靠`);
+  }
+  return `theme:${canonical}`;
+}
 function strategyMainlineFamilyCompat() {
   if (strategyMainlineFamilyCompat._cache) return strategyMainlineFamilyCompat._cache;
   const parentByChild = new Map();
@@ -21418,21 +21485,28 @@ function strategyMainlineFamilyCompat() {
   const taxonomy = typeof THEME_TAXONOMY !== 'undefined' && THEME_TAXONOMY
     ? (THEME_TAXONOMY.taxonomy || [])
     : [];
-  const keyOfName = name => String(strategyMainlineFamilyInfo({ theme: String(name || '') }).key || '');
-  // 引用目标必须是词典真实 standard(Codex PR #378 P1):构图层第二道网,拼错目标抛错而非
-  // 回退成自由文本族键。第一道网是 strategyThemeTaxonomyValidateFamilyUnits 的交换前校验。
-  const knownDisplays = new Set(taxonomy.map(t => themeDisplayName(t.standard)).filter(Boolean));
+  // 引用与声明方的族键一律从索引定位到的 entry 直接派生(Codex 二轮 P1),
+  // 绝不把 standard 名送回自由文本/关键词匹配器——那会被更早的关键词抢先命中连到错误族
+  // (真实反例:氢能燃料电池→锂电池、光伏玻璃→光伏、工业气体电子特气→group:半导体)。
+  const byDisplay = new Map();
+  for (const t of taxonomy) {
+    const d = themeDisplayName(t.standard);
+    if (d) byDisplay.set(d, t);   // 显示名唯一性由结构校验保证
+  }
   const resolveRef = (ownerDisplay, fieldName, name) => {
     const trimmed = typeof name === 'string' ? name.trim() : '';
-    if (!trimmed || !knownDisplays.has(trimmed)) {
+    const entry = trimmed ? byDisplay.get(trimmed) : null;
+    if (!entry) {
       throw new Error(`[theme-taxonomy] ${ownerDisplay}: ${fieldName} 引用不存在的 standard '${trimmed}'(幽灵族边)`);
     }
-    return keyOfName(trimmed);
+    return strategyMainlineCompatEntryKey(trimmed, entry);
   };
   for (const t of taxonomy) {
+    const declares = (Array.isArray(t.compatibleParents) && t.compatibleParents.length)
+      || (Array.isArray(t.broadFallbackFamilies) && t.broadFallbackFamilies.length);
+    if (!declares) continue;   // 非声明方不做回环检查,遮蔽的旁观条目不影响启动
     const selfDisplay = themeDisplayName(t.standard);
-    const selfKey = keyOfName(selfDisplay);
-    if (!selfKey) continue;
+    const selfKey = strategyMainlineCompatEntryKey(selfDisplay, t);
     for (const parent of (Array.isArray(t.compatibleParents) ? t.compatibleParents : [])) {
       const parentKey = resolveRef(selfDisplay, 'compatibleParents', parent);
       if (!parentKey || parentKey === selfKey) continue;
