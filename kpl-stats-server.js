@@ -24626,7 +24626,9 @@ function strategyPredictStarTransitions(existingRows, mainlines, observedAt) {
         : [],
     });
   }
-  for (const m of (Array.isArray(mainlines) ? mainlines.slice(0, 12) : [])) {
+  // 正式主线已不再按名次截断；对应的预期明星事件也必须全量留轨迹。
+  // candidates 仍可保持 12 条诊断展示上限，但 starTransitions 是事实记录，不得静默丢第 13 条及以后。
+  for (const m of (Array.isArray(mainlines) ? mainlines : [])) {
     const mainlineKey = strategyPredictCandidateKey(m);
     if (!mainlineKey) continue;
     for (const star of (Array.isArray(m?.starStocks) ? m.starStocks : [])) {

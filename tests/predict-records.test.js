@@ -96,6 +96,14 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
   A(c0.lastObservedAt && c0.intradaySticky === false, '当前候选记录观测时点且不标为粘性恢复');
   const c1 = out.candidates[1];
   A(c1.theme === '示例主线B' && c1.leaders.length === 0 && c1.stars.length === 0, '最小主线不报错、空数组');
+  const thirteenExpected = Array.from({ length: 13 }, (_, index) => ({
+    familyKey: `theme:轨迹${index + 1}`,
+    theme: `轨迹${index + 1}`,
+    starStocks: [{ code: String(600100 + index), name: `明星${index + 1}`, level: 'expected' }],
+  }));
+  const allTransitions = strategyPredictStarTransitions([], thirteenExpected, '2026-07-10T02:00:00.000Z');
+  A(allTransitions.length === 13 && allTransitions.some(row => row.mainlineTheme === '轨迹13'),
+    '第13条及以后正式主线的预期明星事件不得被轨迹上限静默丢失');
 
   // 1b. 预测时点的明星等级随记录落盘(PR#25 复审:回看封板验证只统计 expected)
   A(out.top[0].star.level === 'confirmed', '明星 level 落盘(预测时点等级)');

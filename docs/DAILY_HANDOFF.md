@@ -13856,7 +13856,7 @@ Validated:
 - 新增反例：来源第 1 名未成立、第 4 名独立过门槛时，来源仍判定存在正式主线；
   12 条过门槛方向不得被 top10 截断；第 13 条正式主线的预期明星事件不得被轨迹上限丢失。
 - `node --check kpl-stats-server.js` 通过。
-- `for f in tests/*.test.js; do node "$f" || exit 1; done` 全仓 **81/81** 测试文件通过。
+- `for f in tests/*.test.js; do node "$f" || exit 1; done` 全仓 **82/82** 测试文件通过。
 - `git diff --check` 通过。
 
 Deployment:
@@ -13869,6 +13869,7 @@ Notes for next agent:
   因此来源成立率由“只看第 1 名”改为“任一正式方向成立”是对已存事实的历史纠错，
   故意适用旧档，不设未来生效日。这与 PR #381 的“题材族词典重划”是不同类变更；
   #381 后续合并时仍须让本 PR 的多主线计算在对应日期的族纪元内执行。
+
 ## 2026-08-04 - Codex - TGB 湖南人原始证据刷新请求
 
 Changed:
