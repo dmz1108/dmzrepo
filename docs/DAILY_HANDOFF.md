@@ -13906,3 +13906,38 @@ Deployment:
 Notes for next agent:
 - 只有本日期绑定脚本在 `main` 合并并通过生产环境批准后才可写入；生产 gate、落盘后二次 gate、
   综合主因/证据/auto 代码集和公开 source-view 任一不通过均必须回滚。
+
+## 2026-08-04 - Codex - TGB 湖南人 137 行正式入库回执
+
+Changed:
+- PR #385 已合并；受保护生产运行 `30907239425` 成功写入 2026-08-04
+  `review/tgb-hunan-structured` 正式源并重折当天综合主因库。
+- 写前完整备份正式源、综合主因、证据、质量、auto、相关来源文件、官方证据和两份云端日志；
+  正式源原子写入，工作流远端加密 payload 与临时脚本已清理。
+- 两份云端运维日志已记录文章、官方图片、校验闸、备份、正式源/综合主因哈希与无重启状态。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- Runtime: `C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-08-04.json`
+- Runtime combined/evidence/quality/auto artifacts for `2026-08-04`
+- Cloud logs: `panda-cloud-ops-2026-06-19.md`, `_cloud-change-log-20260705.md`
+
+Validated:
+- 生产 gate 与落盘后二次 gate 均为 137 行/137 唯一代码，`missingCodes=[]`、`extraCodes=[]`、
+  `duplicateCodes=[]`、`weakCount=0`、名称不匹配 0；14 个题材块和人工块计数均合计 137。
+- 原始终盘池 138/138，唯一排除北交所代码 `920092`；显式来源名称差异仅青云科技/青云科技-U，
+  `nameDifferencesMatch=true`。
+- 综合主因、证据和 auto TGB 代码集均为 137，缺失/多余为空。
+- 公开 source-view：综合归纳、复盘啦、选股宝、淘股吧均为 137，韭研 0；TGB 覆盖率与主因覆盖率
+  均为 100%，低质量 0，`sourceErrors=[]`；公开 `/health` 为 `ok:true`。
+- 正式 TGB SHA-256：`fbe0d7bd0ea7a5910c1f1a017e268dd9a99a7fbe7d13c73b50357468b5aea22f`；
+  重折后综合主因 SHA-256：`8105addd49a95e1b83029420bd63d5c7bdd97884bbf98948e0f1fe3b1e0d2319`。
+
+Deployment:
+- Workflow: `https://github.com/dmz1108/dmzrepo/actions/runs/30907239425`。
+- 云端备份：`C:\PandaDashboard\backups\tgb-hunan-manual-20260804-20260804120212`。
+- 当天综合主因已重折；未部署服务代码，未重启服务。
+
+Notes for next agent:
+- 文章：`https://www.tgb.cn/a/2tZtbfK6FHu`；官方图片：`image-01-07.png`。
+- 本日正式源已受人工来源保护；普通同步与 force 不得覆盖。任何更正必须先备份并重跑全部质量闸。
