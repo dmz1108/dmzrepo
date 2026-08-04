@@ -14041,3 +14041,36 @@ Deployment:
 
 Notes for next agent:
 - 诊断重跑成功前不得再次尝试 PR #382 应用部署。
+
+## 2026-08-04 - Codex - PR #382 启动失败根因与原子部署清单
+
+Changed:
+- 修正版只读诊断运行 `30914954012` 成功完成：现网健康为 200，除主服务仍为回滚版本外，已检查的
+  11 个本地模块均与批准版本一致；隔离探针明确因缺少 `theme-taxonomy.json` 启动失败。
+- 进一步只读核验生产词典 SHA-256 为
+  `d58d23b54a4056bc242525a73db487d5aa73027a77922e0795817c031e042bd9`，批准版本为
+  `0b792fd34533631f82e430db16cf7ef8a2db477447d5e40a8ee34539889ad3ad`。两者题材条目和 dropped
+  清单没有增删；批准版本新增声明式 `familyUnit`、兼容父族等元数据，不存在需保留的云端独有校准项。
+- 新增原子部署清单，将 `kpl-stats-server.js`、`kpl-dashboard_17_apple.html` 和
+  `theme-taxonomy.json` 作为同一批次发布并重启主服务；新增回归测试锁定该启动依赖。
+
+Files:
+- `ops/production/manifests/strategy-multi-formal-mainlines-20260804.json`
+- `tests/pr382-atomic-deployment.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 诊断证据显示旧部署清单遗漏了启动强依赖词典；新服务读取不到词典后触发声明一致性 fail-fast，随后
+  健康检查失败并自动回滚，这与两次生产失败完全一致。
+- 生产 `sub-theme-taxonomy.json` 与批准版本 SHA-256 一致，不需要重复部署。
+- 新清单只增加已审查的代码/前端/词典文件，不含运行时数据库或凭据。
+- `node --check kpl-stats-server.js`、原子部署清单测试、生产工作流测试和全仓 **84/84** 测试文件通过；
+  `git diff --check` 通过。
+
+Deployment:
+- 本条记录创建时新清单尚未执行；生产仍运行回滚后的健康旧版本，`/health` 为 `{"ok":true}`。
+- 合并后应使用受保护生产工作流执行新清单，成功后核验 2026-08-03 正式主线、回看来源统计和公网健康。
+
+Notes for next agent:
+- `theme-taxonomy.json` 与当前主服务启动声明属于原子依赖；以后修改任一侧的 family 声明时，部署清单
+  必须同时覆盖两者，避免再次出现代码/词典版本撕裂。
