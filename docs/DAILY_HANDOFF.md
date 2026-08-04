@@ -14110,3 +14110,39 @@ Deployment:
 Notes for next agent:
 - PR #382 已正式生效。后续对多条正式主线的 UI 或语义调整，应以 `formalMainlines` 为事实集合，
   旧的单条 `sourceQualification` 仅保留兼容用途。
+
+## 2026-08-04 - Codex - 真实盘中 L2 证据恢复回看样本资格
+
+Changed:
+- 收盘后修正的预测档仍默认不计样本；仅当原始冻结时点属于盘中，来源候选、
+  确认明星与精确 L2 job 绑定，且同日盘中证据通过涨停、最大档金额和确认比值门槛时，
+  才以 `intraday-l2-reconstructed` 恢复样本资格。
+- 样本资格按来源独立计算。2026-08-03 同花顺 L2 任务于北京时间 10:23 完成，可计入；
+  东财证据于 15:11 生成，仍不计东财盘中样本。整体样本因存在一条可信盘中证据链而有效。
+- 预判回看新增「盘中L2补证」标识，不再将这类日期显示为「不计样本」；普通已收盘档仍保持原有排除规则。
+- 不改写 2026-08-03 预测档、冻结快照或 L2 原始记录，只在回看计算时校验已有证据。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `tests/mainline-review.test.js`
+- `tests/strategy-workbench-ui.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 只读核对云端 2026-08-03 预测档：同花顺 job `415560b0b3211565` 于 10:23 完成，
+  华电辽能涨停，最大档金额门槛通过，确认比值 3/3 通过；东财 job 时点为 15:11。
+- `node --check kpl-stats-server.js` 通过。
+- `node tests/mainline-review.test.js` 通过，锁定整体/同花顺计样本、东财不计样本，以及游离 L2
+  元数据不得恢复资格。
+- `node tests/strategy-workbench-ui.test.js` 通过。
+- 全仓 84/84 个测试文件通过。
+
+Deployment:
+- 本条记录时仅为 GitHub 代码变更；生产尚未部署，服务未重启。
+- 云端操作仅限只读拉取 2026-08-03 预测档做结构核对，未修改任何运行时数据。
+
+Notes for next agent:
+- 不得把 `excludedFromPredictionStats=true` 普遍翻转；本规则只认窄口径、可稽核的同日盘中 L2 证据链。
+- 部署后应验证 2026-08-03 回看行 `sampleValid=true`、`sampleBasis=intraday-l2-reconstructed`、
+  `sampleEvidenceSources=["ths"]`，且 `bySource.eastmoney.sampleValid=false`。

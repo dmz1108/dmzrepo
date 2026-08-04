@@ -61,6 +61,12 @@ assert(html.includes('class="mlr-compare"'));
 assert(html.includes('class="mlr-source-grid"'));
 assert(html.includes('class="mlr-evidence-grid"'));
 assert(html.includes('<details class="mlr-reserve-line">'));
+assert(html.includes("r.sampleBasis === 'intraday-l2-reconstructed'")
+  && html.includes('盘中L2补证')
+  && html.includes('盘中L2样本'),
+  '收盘修正有真实盘中L2证据时，回看页明确标识为可计样本');
+assert(html.includes('.mlr-sample-evidence') && html.includes('.mlr-line-evidence'),
+  '盘中L2补证样本有独立的可辨识样式');
 assert(html.includes('const finalConfirmationHTML =') && html.includes('r.finalConfirmedMainline'),
   '预判回看可独立展示管理员最终确认，不覆盖盘中预测');
 assert(html.includes('<span class="mlr-source-name">人工重点</span>')
