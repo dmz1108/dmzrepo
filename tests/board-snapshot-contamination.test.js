@@ -87,11 +87,18 @@ const ok = (cond, msg) => { if (!cond) { failed++; console.error('FAIL: ' + msg)
   ok(!JSON.stringify(mixedUnknown.boards).includes('"pU"'), '未知来源行被剔除,不进本日事实');
 
   // ── 3. saveSnapshot 落盘的是抑制后的诚实空档,不是昨日券商 +106 亿
+  const snapshotDir = path.join(dataDir, 'snapshots');
+  const boundaryDay = '2026-06-13';
+  const expiredDay = '2026-06-12';
+  fs.writeFileSync(path.join(snapshotDir, `${boundaryDay}.json`), '{}');
+  fs.writeFileSync(path.join(snapshotDir, `${expiredDay}.json`), '{}');
   const saved = await be2.saveSnapshot(PAST, { force: true });
-  const onDisk = JSON.parse(fs.readFileSync(path.join(dataDir, 'snapshots', `${PAST}.json`), 'utf8'));
+  const onDisk = JSON.parse(fs.readFileSync(path.join(snapshotDir, `${PAST}.json`), 'utf8'));
   ok(saved.boardsStale === true && onDisk.boardsStale === true, '落盘文件带 boardsStale=true');
   ok(!JSON.stringify(onDisk.boards).includes('10634000000') && Object.keys(onDisk.boards).length === 0,
     '磁盘快照不含被冒充的昨日券商净流入(污染未被创建)');
+  ok(fs.existsSync(path.join(snapshotDir, `${boundaryDay}.json`)), '注入时钟的 30 天边界文件继续保留');
+  ok(!fs.existsSync(path.join(snapshotDir, `${expiredDay}.json`)), '注入时钟下超过 30 天的文件仍会清理');
 
   // ── 4. 普查工具:合成两天快照,当日 ≥N 板块净流入与前一日精确相等 → 判 suspected-stale
   const sweepDir = fs.mkdtempSync(path.join(os.tmpdir(), 'p1-sweep-'));

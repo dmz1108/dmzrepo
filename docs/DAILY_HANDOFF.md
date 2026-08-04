@@ -13602,3 +13602,224 @@ Deployment:
 Notes for next agent:
 - 文章：`https://www.tgb.cn/a/2tXVJyaw2tR`；官方图片：`image-01-06.png`。
 - 本日正式源已受人工来源保护；普通同步与 force 不得覆盖。任何更正必须先备份并重跑全部质量闸。
+## 2026-08-03 - Codex - 8 月 3 日电力历史主线修正请求
+
+Changed:
+- 新增日期绑定的一次性生产修正：只重建 `mainline-predict-2026-08-03.json`，不改冻结快照、
+  涨停库、主因库、L2 任务或业务代码。
+- 修正以当前正式证据为准：新能股份、华电辽能、乐山电力三只终盘涨停均正式归因电力；
+  华电辽能在东财绿色电力与同花顺超超临界发电两组持久化 L2 任务中均通过确认明星门槛；
+  7 月 20 日、22 日已有正式电力主因，可通过龙头历史主因硬闸。
+- 脚本写前校验原始无主线预测与 `scanned-no-star` 冻结基线，备份后原子写入，公开接口验收失败
+  即自动回滚；根级兼容块保持东财来源，双源真值分别写入 `bySource`。
+- 该结果明确标记为 Owner 指定的盘后人工证据修正，并将记录阶段置为“已收盘”；页面恢复正确结论，
+  但不进入盘中预测命中率、封板率、领先时长等统计分母。
+
+Files:
+- `ops/production/requests/2026-08-03-review-electricity-mainline-backfill.ps1`
+- `tests/review-electricity-20260803-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node tests/review-electricity-20260803-production-request.test.js`
+- `node tests/strategy-historical-conclusion.test.js`
+- `node tests/mainline-review.test.js`
+- `node tests/strategy-star-attribution.test.js`
+- `node tests/strategy-three-requirements.test.js`
+- `node --check kpl-stats-server.js`
+- `git diff --check`
+
+Deployment:
+- GitHub only；尚未合并、未执行生产修正、未重启服务，当前云端 8 月 3 日仍显示无主线。
+
+Notes for next agent:
+- 复核必须确认正式电力代码严格为 `000595`、`600396`、`600644`；`000037` 当前正式主因是
+  核电，不得纳入电力三只或写 override。
+- 合并后通过受保护生产工作流执行该脚本；成功标准是策略接口与预判回看同时恢复电力、
+  华电辽能明星确认和龙头，并且正式主线资格的同族涨停数至少为 3。
+
+## 2026-08-03 - Codex - 8 月 3 日电力修正证据选择加固
+
+Changed:
+- PR #372 合并后的受保护生产运行 `30824691520` 已恢复 8 月 3 日电力主线：新能股份、
+  华电辽能、乐山电力三只涨停，华电辽能为确认明星与龙头，正式主线资格通过。
+- 读取生产回执后发现 v1 脚本按 `zsType` 后再按保存时间选择 L2 任务；东财风能任务仅比已核验的
+  绿色电力任务晚约 0.33 秒，导致页面结论正确但根级及东财分源的审计板块误记为风能。
+- 将修正升级为 v2：精确固定东财绿色电力任务 `2e697655678c20dc` 与同花顺超超临界发电任务
+  `415560b0b3211565`，并同时校验任务 ID、板块 ID、板块名、家族和来源类型；禁止按最新时间猜测。
+- v2 可安全识别并升级已落盘的 v1 结果；写入前及落盘后逐项验证根级、双分源、三只涨停与
+  确认明星证据，任一不符即从备份原子回滚。
+
+Files:
+- `ops/production/requests/2026-08-03-review-electricity-mainline-backfill.ps1`
+- `tests/review-electricity-20260803-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- v1 生产公开接口当前已返回电力、3 只涨停、华电辽能确认明星与龙头、
+  `mainlineQualified=true`；该盘后修正保持 `sampleValid=false`，不进入预测统计。
+- 生产预测档核验确认 v1 错选东财任务 `71d4a6fba47e3d37`（风能），同花顺任务正确；这是 v2
+  必须修复的唯一已知审计缺陷。
+
+Deployment:
+- v1 已执行；备份目录为
+  `C:\PandaDashboard\_deploy-backups\review-electricity-mainline-backfill-20260803-20260803145251`，
+  未重启服务、未改冻结快照或任何来源数据库。
+- v2 当前仅 GitHub 修改，尚未执行生产修正、未重启服务。
+
+Notes for next agent:
+- v2 上云后必须验证预测档根级和东财分源只引用绿色电力任务 `2e697655678c20dc`，同花顺分源
+  只引用超超临界发电任务 `415560b0b3211565`；不得再出现风能任务。
+
+## 2026-08-03 - Codex - 8 月 3 日电力历史主线 v2 生产回执
+
+Changed:
+- PR #373 已合并；受保护生产运行 `30825737522` 成功把 v1 的东财风能误选证据升级为已核验的
+  东财绿色电力证据，同时保留正确的同花顺超超临界发电证据。
+- 云端 8 月 3 日预测档根级、东财分源和同花顺分源均已通过任务 ID、板块 ID、名称、来源类型
+  及家族的严格落盘校验。
+
+Files:
+- Runtime: `C:\PandaDashboard\strategy-data\mainline-predict-2026-08-03.json`
+- Runtime logs: `C:\PandaDashboard\panda-cloud-ops-2026-06-19.md`,
+  `C:\PandaDashboard\_cloud-change-log-20260705.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 公开策略接口：电力、3 只同族涨停、华电辽能确认明星与龙头。
+- 公开预判回看：`noMainline=false`、`mainlineQualified=true`、东财/同花顺均为 `mainline`。
+- 盘后人工修正仍为 `sampleValid=false`、`sampleInvalidReason=phase:已收盘`，不污染盘中预测统计。
+- 根级及东财证据任务为 `2e697655678c20dc` / `BK1024` / 绿色电力；同花顺证据任务为
+  `415560b0b3211565` / `308969` / 超超临界发电；预测档已无风能证据引用。
+
+Deployment:
+- Workflow: `https://github.com/dmz1108/dmzrepo/actions/runs/30825737522`
+- Commit: `0905ee882cb2236a1de888908f2d64aa7cc936d2`
+- Prediction SHA-256:
+  `d4cec83d008ba3725ad4390d067667be4763f8f88db313d0d174a03168726d56` ->
+  `c7906f507ceb0a9c6864f1bd82c0dba3fa1d8ff3fd0ba29d1ccbe773b967a297`。
+- Backup:
+  `C:\PandaDashboard\_deploy-backups\review-electricity-mainline-backfill-20260803-v2-20260803150528`。
+- 未重启服务；未改冻结快照、涨停库、主因库、L2 任务或任何其他来源数据库。
+
+Notes for next agent:
+- 该结果是 Owner 指定的盘后证据修正，不得回写为盘中预测样本；后续自动生成器仍由现行归因和
+  L2 规则负责，不能复用按时间选择同类型任务的 v1 做法。
+
+## 2026-08-03 - Codex - 预判回看正式主线与统计样本状态解耦
+
+Changed:
+- 修复预判回看把 `sampleValid=false` 优先渲染为中性状态、从而覆盖
+  `mainlineQualified=true` 正式主线结论的问题。
+- `sampleValid` 继续只控制是否进入盘中预测统计；盘后确认满足正式主线条件时，摘要行改为真主线
+  高亮并显示“正式主线”徽标，同时保留“不计样本·已收盘”说明。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `tests/strategy-two-source-mainlines.test.js`
+- `ops/production/manifests/strategy-review-formal-mainline-display-20260803.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node tests/strategy-two-source-mainlines.test.js`
+- `node tests/mainline-review.test.js`
+- `git diff --check`
+- 新增回归断言：不计预测样本但正式资格成立的记录必须使用 `hit-ok`，摘要徽标必须为
+  “正式主线”，统计排除标签继续保留。
+
+Deployment:
+- 当前仅 GitHub 修改；尚未部署，未重启服务。
+
+Notes for next agent:
+- 不得把盘后人工修正重新计入盘中命中率；本次只修正事实结论的视觉优先级，不改变统计口径。
+
+## 2026-08-03 - Codex - 预判回看正式主线显示部署回执
+
+Changed:
+- PR #376 已合并并通过受保护生产工作流部署；8 月 3 日盘后修正记录现在按“正式主线”高亮，
+  同时继续显示“不计样本·已收盘”。
+
+Files:
+- Runtime: `C:\PandaDashboard\kpl-dashboard_17_apple.html`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 云端文件、公开 `/kpl` 文件与 `main` 的 SHA-256 均为
+  `c30758ea18a601e380a93e63cfe06a29a69812e92011355a50a4840528ea79d8`。
+- 公开回看接口仍返回 8 月 3 日电力、3 只涨停、华电辽能确认明星、
+  `mainlineQualified=true`；统计样本仍为无效盘后样本。
+
+Deployment:
+- Workflow: `https://github.com/dmz1108/dmzrepo/actions/runs/30827111045`
+- Commit: `9c145eeb147470cd100cbd7440459a19d02a25e3`
+- Backup: `C:\PandaDashboard\_deploy-backups\github-30827111045-1`
+- 未重启服务。
+
+Notes for next agent:
+- 正式主线事实状态和盘中预测样本资格是两条独立维度；后续 UI 不得再次让后者覆盖前者。
+
+## 2026-08-03 - Claude Code Remote - 词典声明式族字段与裁决泛化(issue #375 PR A,行为等价)
+
+Changed:
+- theme-taxonomy.json 新增声明式字段:`familyUnit`("group"=按组归并交易族 /
+  "standard"=按标准名独立细族,共 50+3 条,严格按改造前字面集合行为标注)、
+  `compatibleParents`(火电热电/绿电新能源运营/水电 → 电力)、
+  `broadFallbackFamilies`(AI应用 → 短剧游戏)。
+- `strategyMainlineFamilyInfo` 改为消费 `familyUnit`;
+  `strategyMainlineBoardThemeRelated` 的 KEEP_FINE 判定同步切换。
+- 新增 `strategyMainlineFamilyCompat`(从词典构建 子族→父族 与 宽词→兜底族 关系图,
+  随词典热加载失效重建)与 `strategyThemeTaxonomyValidateFamilyUnits`
+  (声明字段与字面集合一致性 fail-fast 校验,启动与热加载均执行)。
+- `strategyMainlineStarAttributionDecision` 删除全部 4 处硬编码特例
+  (电力父子 ×2、AI应用宽兜底 ×2),改为通用兼容关系查询;basis 字符串不变。
+- 字面集合 MERGE_GROUPS/KEEP_FINE 暂保留(供旧测试提取与一致性校验),
+  PR B 首批族划分时随行为变更一并退役。
+
+Files:
+- `theme-taxonomy.json`
+- `kpl-stats-server.js`
+- `tests/family-declarative-equivalence.test.js`(新增)
+- `tests/fixtures/family-key-baseline.json`(新增,改造前基线)
+- `tests/strategy-star-attribution.test.js`(注入新函数)
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 行为等价:改造前代码枚举词典全部 1102 词生成基线 fixture,新实现逐词比对
+  族键/标签/组 **零差异**;裁决场景(华电辽能父子、蓝色光标宽兜底、兄弟/跨族拒绝、
+  非 broadOnly 不兜底)basis 全部不变。
+- 一致性校验正反例(通过/篡改即抛)均有断言。
+- `node --check`;全仓 80/81 通过(唯一失败 board-snapshot-contamination 为
+  main 既有环境问题,#361 复审时已确认)。
+
+Deployment:
+- GitHub only;未部署、未重启、未改任何生产数据。
+
+Notes for next agent:
+- PR B(首批族划分:电力发电侧合族、算力硬件/AI软件分家)是**有意行为变更**,
+  届时更新 fixture 并把前后族键 diff 写入交接;字面集合与一致性校验在 PR B 删除。
+- 词典热加载路径已包含 compat 缓存失效与校验,管理员改词典后无需重启。
+
+## 2026-08-04 - Codex - 修复策略快照清理未使用注入时钟(issue #379)
+
+Changed:
+- `strategy-backend` 的快照/重点关注清理边界改用 `nowParts().day` 对应的北京时间零点，
+  无效日期才回退 `Date.now()`；测试注入时钟与生产北京时间口径现在一致。
+- 污染回归测试新增 30 天边界保留、超过 30 天继续清理的双向断言，防止只修测试而停掉清理。
+
+Files:
+- `strategy-backend.js`
+- `tests/board-snapshot-contamination.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check strategy-backend.js` 通过。
+- `node tests/board-snapshot-contamination.test.js` 全绿。
+- 全仓测试 **81/81 通过**；此前随真实日历越过保留窗口而稳定失败的测试已恢复。
+- `git diff --check` 通过。
+
+Deployment:
+- GitHub only；未部署云端，未重启服务，未修改生产运行时数据。
+
+Notes for next agent:
+- 复审应确认生产默认 `nowParts` 仍为北京时间，且严格小于 cutoff 的文件才删除；
+  30 天边界文件保留，31 天及更旧文件清理。

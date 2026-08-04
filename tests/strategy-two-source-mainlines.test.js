@@ -288,7 +288,7 @@ const starVisualReviewHTML = renderMainlineReviewHTML({
   ],
   stats: {},
 });
-A(starVisualReviewHTML.includes('mlr-row hit-invalid star-confirmed invalid') && starVisualReviewHTML.includes('mlr-star-signal confirmed'), '已收盘不计样本的明星确认记录仍保留确认态行级样式');
+A(starVisualReviewHTML.includes('mlr-row hit-ok star-confirmed invalid') && starVisualReviewHTML.includes('mlr-star-signal confirmed'), '已收盘不计样本但已满足正式条件的记录仍按真主线高亮');
 A(starVisualReviewHTML.includes('预期转明星</i><b>迈瑞医疗') && /mlr-row [^"\n]*star-confirmed/.test(starVisualReviewHTML), '预期明星最终封板升级为红色真主线证据');
 A(starVisualReviewHTML.includes('star-expected star-missed') && starVisualReviewHTML.includes('mlr-star-signal missed')
   && starVisualReviewHTML.includes('预期未兑现</i><b>贵州茅台'), '预期明星最终未封板使用未兑现状态');
@@ -302,7 +302,9 @@ A((starVisualReviewHTML.match(/star-confirmed/g) || []).length === 4
 // A+C 重构:分组改为按日期倒序统一表,分组语义由行级 star-* 强调色与结果徽章承担。
 A(starVisualReviewHTML.includes('mlr-table-head') && !starVisualReviewHTML.includes('mlr-group '), '回看使用统一日期表,不再分组分节');
 A((starVisualReviewHTML.match(/主线成立/g) || []).length >= 2 && !starVisualReviewHTML.includes('✓命中'), '主线成立使用独立结论文案,不再与明星阶段混为同一状态');
-A(/mlr-row hit-invalid star-confirmed invalid[\s\S]*?主线成立/.test(starVisualReviewHTML), '不计样本标记、主线成立与明星确认可在同一记录中独立共存');
+A(/mlr-row hit-ok star-confirmed invalid[\s\S]*?主线成立/.test(starVisualReviewHTML), '不计样本标记、主线成立与明星确认可在同一记录中独立共存');
+A(/mlr-line hit-ok star-confirmed invalid[\s\S]*?<span class="mlr-line-badge">正式主线<\/span>/.test(starVisualReviewHTML),
+  '盘后正式主线优先显示正式主线徽标，统计样本有效性不得覆盖事实结论');
 A(html.includes('body.view-strategy .mlr-row.star-confirmed.invalid') && html.includes('opacity: 1;'), '明星证据高亮覆盖 invalid 全行透明度，7月8日不再被变灰');
 
 // ---- 5. 静态锁定:每源只用自己的 zsType 取板;KPL(7) 不进任一边,也不进策略辅助指标 ----

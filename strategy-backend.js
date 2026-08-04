@@ -333,7 +333,9 @@ function createStrategyBackend(opts = {}) {
     catch { return null; }
   }
   async function prune() {
-    const cutoff = Date.now() - KEEP_DAYS * 24 * 60 * 60 * 1000;
+    const nowDayMs = new Date(`${nowParts().day}T00:00:00+08:00`).getTime();
+    const cutoff = (Number.isFinite(nowDayMs) ? nowDayMs : Date.now())
+      - KEEP_DAYS * 24 * 60 * 60 * 1000;
     for (const dir of [SNAP_DIR, FOCUS_DIR]) {
       let files = [];
       try { files = await fs.readdir(dir); } catch { continue; }
