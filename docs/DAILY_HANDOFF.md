@@ -13872,3 +13872,37 @@ Deployment:
 Notes for next agent:
 - 正式写入脚本必须固定只读检查返回的唯一排除项、原图 SHA-256、137 行题材块计数和显式名称别名，
   并在任何质量闸失败时停止及回滚。
+
+## 2026-08-04 - Codex - TGB 湖南人 137 行正式写入请求
+
+Changed:
+- 受保护只读检查运行 `30906586369` 固定原始终盘池 138/138、唯一排除北交所代码 `920092`、
+  复盘合格池 137/137，合格代码集 SHA-256 为
+  `0d127a1d597b1b1cfea64b5aef25dcdb3a93bbc2ffd49ea54bfea7fe6b3f53d2`；正式文件不存在。
+- 新增日期绑定的正式写入脚本和加密 payload 传送映射；137 行人工转录正文只保存于 GitHub
+  `production` 环境秘密，不进入 Git。
+- 写入脚本会重验官方文章、原图文件/URL/长度/SHA-256、终盘池、代码名称、14 个题材块和全部
+  质量闸，备份所有可能变更的来源/综合/证据/质量/auto 文件及两份云端日志，原子写入并失败回滚。
+
+Files:
+- `.github/workflows/production-ops.yml`
+- `ops/production/requests/2026-08-04-tgb-hunan-write.ps1`
+- `tests/tgb-20260804-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 官方文章：`https://www.tgb.cn/a/2tZtbfK6FHu`；官方图片：`image-01-07.png`，长度 1278534，
+  SHA-256 `39e306418b9da97e585b6025b55cd162251d55cf5f094e600de45d6f628556e2`。
+- 写前对账：137 行/137 唯一代码，`missingCodes=[]`、`extraCodes=[]`、重复 0、`weakCount=0`；
+  14 个题材块人工计数之和 137；显式名称别名仅 `688316` 青云科技/青云科技-U。
+- 人工 payload SHA-256：`f3ccd690f63dffae49ea6fcb3831f7e0aee9b6814ff63816cc6d5551b1bb3b34`；
+  未使用 Qwen、OCR 或任何自动视觉结果生成、补全、猜测或校验正式行。
+- `node tests/tgb-20260804-production-request.test.js`、`node tests/production-ops-workflow.test.js`、
+  嵌入式 Node 语法检查、workflow YAML/Bash 语法检查和 `git diff --check` 通过。
+
+Deployment:
+- 本条记录时正式写入请求尚未执行；当天综合主因尚未重折，未重启服务。
+
+Notes for next agent:
+- 只有本日期绑定脚本在 `main` 合并并通过生产环境批准后才可写入；生产 gate、落盘后二次 gate、
+  综合主因/证据/auto 代码集和公开 source-view 任一不通过均必须回滚。
