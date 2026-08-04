@@ -1,0 +1,5516 @@
+{
+ "generatedFrom": "main@5f004d8 (pre-declarative-refactor)",
+ "wordCount": 1102,
+ "families": {
+  "4680": {
+   "key": "theme:锂电池",
+   "label": "4680",
+   "group": ""
+  },
+  "1.6T": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "1.6T光模块": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "112G": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "12英寸": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "12英寸硅片": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "2.5D": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "2.5D封装": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "224G": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "224G铜连接": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "3.5D": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "3D封装": {
+   "key": "theme:3D封装",
+   "label": "3D封装",
+   "group": ""
+  },
+  "3D视觉": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "400G": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "4680电池": {
+   "key": "theme:锂电池",
+   "label": "4680电池",
+   "group": ""
+  },
+  "6G": {
+   "key": "theme:6G",
+   "label": "6G",
+   "group": ""
+  },
+  "6g": {
+   "key": "theme:6G",
+   "label": "6g",
+   "group": ""
+  },
+  "800G": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "8英寸": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "ABF": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "ABF载板": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "ADC": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "AI PCB": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "AIDC": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "AIGC": {
+   "key": "theme:AI应用",
+   "label": "AI应用",
+   "group": ""
+  },
+  "AIPC": {
+   "key": "theme:AI应用",
+   "label": "AI应用",
+   "group": ""
+  },
+  "AI医疗": {
+   "key": "theme:AI应用",
+   "label": "AI应用",
+   "group": ""
+  },
+  "AI大模型": {
+   "key": "theme:AI应用",
+   "label": "AI应用",
+   "group": ""
+  },
+  "AI存储": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "AI应用": {
+   "key": "theme:AI应用",
+   "label": "AI应用",
+   "group": ""
+  },
+  "AI应用/AI大模型": {
+   "key": "theme:AI应用",
+   "label": "AI应用",
+   "group": ""
+  },
+  "AI教育": {
+   "key": "theme:AI应用",
+   "label": "AI应用",
+   "group": ""
+  },
+  "AI散热": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "AI数据中心": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "AI智能体": {
+   "key": "theme:AI应用",
+   "label": "AI应用",
+   "group": ""
+  },
+  "AI服务器": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "AI概念": {
+   "key": "theme:人工智能",
+   "label": "人工智能",
+   "group": ""
+  },
+  "AI电源": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "AI电源/AI配电": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "AI眼镜": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "AI短剧": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "AI硬件": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "AI硬件/服务器": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "AI芯片": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "AI营销": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "AI视频": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "AI配电": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "ALD": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "ALD设备": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "AR": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "ASIC": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "ASIC芯片": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "Agent": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "AnyLayer": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "ArF": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "BBU": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "BC电池": {
+   "key": "theme:锂电池",
+   "label": "BC电池",
+   "group": ""
+  },
+  "BDI": {
+   "key": "theme:航运",
+   "label": "BDI",
+   "group": ""
+  },
+  "BD出海": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "BEST": {
+   "key": "theme:核聚变",
+   "label": "BEST",
+   "group": ""
+  },
+  "BMS": {
+   "key": "theme:储能",
+   "label": "BMS",
+   "group": ""
+  },
+  "BT树脂": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "Bumping": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "CCL": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "CDMO": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "CMP": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "CMP抛光液": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "CMP设备": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "CPO": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "CPU": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "CRO": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "CVD": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "CVD设备": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "CXO": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "ChatGPT": {
+   "key": "theme:AI应用",
+   "label": "AI应用",
+   "group": ""
+  },
+  "Chiplet": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "Chiplet封装": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "CoWoS": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "DAC": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "DAC铜缆": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "DPU": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "DRAM": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "DSP": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "DUV": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "DeepSeek": {
+   "key": "theme:AI应用",
+   "label": "AI应用",
+   "group": ""
+  },
+  "DeepSeek概念": {
+   "key": "theme:AI应用",
+   "label": "AI应用",
+   "group": ""
+  },
+  "EAST": {
+   "key": "theme:核聚变",
+   "label": "EAST",
+   "group": ""
+  },
+  "EUV": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "EUV光刻": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "EVA胶膜": {
+   "key": "theme:光伏",
+   "label": "EVA胶膜",
+   "group": ""
+  },
+  "FCBGA": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "FCBGA载板": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "FPC": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "FPGA": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "Fan-out": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "GIS": {
+   "key": "theme:电网设备",
+   "label": "GIS",
+   "group": ""
+  },
+  "GIS组合电器": {
+   "key": "theme:电网设备",
+   "label": "GIS组合电器",
+   "group": ""
+  },
+  "GLP": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "GLP-1": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "GPU": {
+   "key": "theme:GPU",
+   "label": "GPU",
+   "group": ""
+  },
+  "GPU芯片": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "GaN": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "HBM": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "HDI": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "HDI板": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "HJT": {
+   "key": "theme:光伏",
+   "label": "HJT",
+   "group": ""
+  },
+  "HJT电池": {
+   "key": "theme:锂电池",
+   "label": "HJT电池",
+   "group": ""
+  },
+  "HVDC": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "Hybrid Bonding": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "IC": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "IC载板": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "IDC": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "IGBT": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "IP": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "IP核": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "ITER": {
+   "key": "theme:核聚变",
+   "label": "ITER",
+   "group": ""
+  },
+  "IVD": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "KrF": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "L3": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "LNG": {
+   "key": "theme:天然气",
+   "label": "LNG",
+   "group": ""
+  },
+  "Low CTE玻纤": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "Low-Dk": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "Low-Dk玻纤布": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "LowDk": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "MDI": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "MLCC": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "MLCC/电容": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "MLCC/被动元件": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "MLCC离型膜": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "MLCC粉": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "MLCC镍粉": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "MOSFET": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "MPO": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "MPO光连接器": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "MR": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "Micro OLED": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "MicroLED": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "MiniLED": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "NAND": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "NOR Flash": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "NPU": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "Neuralink": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "N型电池": {
+   "key": "theme:锂电池",
+   "label": "N型电池",
+   "group": ""
+  },
+  "OLED": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "Optimus": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "PCB": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "PCB/印制电路板": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "PCB产业链": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "PCB化学品": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "PCB概念": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "PCB钻针": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "PCB铜箔": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "PCS": {
+   "key": "theme:储能",
+   "label": "PCS",
+   "group": ""
+  },
+  "PD-1": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "PEEK": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "PEEK材料": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "PEM": {
+   "key": "theme:氢能燃料电池",
+   "label": "PEM",
+   "group": ""
+  },
+  "PET复合铜箔": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "PET铜箔": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "POE": {
+   "key": "theme:光伏",
+   "label": "POE",
+   "group": ""
+  },
+  "PPO": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "PPO树脂": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "PTA": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "PVD": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "PVDF": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "R32": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "RDL": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "RISC-V": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "RV减速": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "Robotaxi": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "SLP": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "SMR": {
+   "key": "theme:核电",
+   "label": "SMR",
+   "group": ""
+  },
+  "SOFC": {
+   "key": "theme:氢能燃料电池",
+   "label": "SOFC",
+   "group": ""
+  },
+  "SSCB": {
+   "key": "theme:固态断路器",
+   "label": "SSCB",
+   "group": ""
+  },
+  "SSD": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "SiC": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "SoC": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "SoC芯片": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "Sora": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "Sora概念": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "TGV玻璃": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "TGV玻璃基板": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "TOPCon": {
+   "key": "theme:光伏",
+   "label": "TOPCon",
+   "group": ""
+  },
+  "TOPCon电池": {
+   "key": "theme:锂电池",
+   "label": "TOPCon电池",
+   "group": ""
+  },
+  "TSV": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "V2G": {
+   "key": "theme:充电桩",
+   "label": "V2G",
+   "group": ""
+  },
+  "VR": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "VR/AR/MR": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "eVTOL": {
+   "key": "theme:低空经济",
+   "label": "eVTOL",
+   "group": ""
+  },
+  "license": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "robotaxi": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "一体成型电感": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "一带一路": {
+   "key": "theme:中字头基建",
+   "label": "一带一路",
+   "group": ""
+  },
+  "三元前驱体": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "三元材料": {
+   "key": "theme:锂电池",
+   "label": "三元材料",
+   "group": ""
+  },
+  "世界杯": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "世界杯/体育": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "世界杯概念": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "世界模型": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "东数西算": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "丝杠": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "中字头": {
+   "key": "theme:中字头基建",
+   "label": "中字头",
+   "group": ""
+  },
+  "中字头基建": {
+   "key": "theme:中字头基建",
+   "label": "中字头基建",
+   "group": ""
+  },
+  "中特估": {
+   "key": "theme:中字头基建",
+   "label": "中特估",
+   "group": ""
+  },
+  "中药": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "主控": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "主网": {
+   "key": "theme:电网设备",
+   "label": "主网",
+   "group": ""
+  },
+  "乳": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "乳业": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "二极管": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "云母提锂": {
+   "key": "theme:锂矿锂盐",
+   "label": "云母提锂",
+   "group": ""
+  },
+  "云计算": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "云计算数据中心": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "互感器": {
+   "key": "theme:电网设备",
+   "label": "互感器",
+   "group": ""
+  },
+  "互联网金融": {
+   "key": "theme:金融",
+   "label": "互联网金融",
+   "group": ""
+  },
+  "人工智能": {
+   "key": "theme:人工智能",
+   "label": "人工智能",
+   "group": ""
+  },
+  "人形机器人": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "人造太阳": {
+   "key": "theme:核聚变",
+   "label": "人造太阳",
+   "group": ""
+  },
+  "人造金刚石": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "人造钻石": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "休闲食品": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "传媒": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "低介电": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "低介电玻纤": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "低空": {
+   "key": "theme:低空经济",
+   "label": "低空",
+   "group": ""
+  },
+  "低空经济": {
+   "key": "theme:低空经济",
+   "label": "低空经济",
+   "group": ""
+  },
+  "体外诊断": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "体育": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "体育产业": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "侵入式脑机": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "便携式储能": {
+   "key": "theme:储能",
+   "label": "便携式储能",
+   "group": ""
+  },
+  "保健品": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "保险": {
+   "key": "theme:金融",
+   "label": "保险",
+   "group": ""
+  },
+  "信托": {
+   "key": "theme:金融",
+   "label": "信托",
+   "group": ""
+  },
+  "倒装": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "倒装封装": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "储氢": {
+   "key": "theme:氢能燃料电池",
+   "label": "储氢",
+   "group": ""
+  },
+  "储能": {
+   "key": "theme:储能",
+   "label": "储能",
+   "group": ""
+  },
+  "储能温控": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "储能电池": {
+   "key": "theme:锂电池",
+   "label": "储能电池",
+   "group": ""
+  },
+  "储能系统": {
+   "key": "theme:储能",
+   "label": "储能系统",
+   "group": ""
+  },
+  "储能逆变器": {
+   "key": "theme:光伏",
+   "label": "储能逆变器",
+   "group": ""
+  },
+  "元器件": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "充电枪": {
+   "key": "theme:充电桩",
+   "label": "充电枪",
+   "group": ""
+  },
+  "充电桩": {
+   "key": "theme:充电桩",
+   "label": "充电桩",
+   "group": ""
+  },
+  "充电模块": {
+   "key": "theme:充电桩",
+   "label": "充电模块",
+   "group": ""
+  },
+  "充电网络": {
+   "key": "theme:充电桩",
+   "label": "充电网络",
+   "group": ""
+  },
+  "先进封装": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "先进陶瓷": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "先进陶瓷材料": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "光互连": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "光伏": {
+   "key": "theme:光伏",
+   "label": "光伏",
+   "group": ""
+  },
+  "光伏发电": {
+   "key": "theme:光伏",
+   "label": "光伏发电",
+   "group": ""
+  },
+  "光伏玻璃": {
+   "key": "theme:光伏",
+   "label": "光伏玻璃",
+   "group": ""
+  },
+  "光伏电池": {
+   "key": "theme:锂电池",
+   "label": "光伏电池",
+   "group": ""
+  },
+  "光伏硅片": {
+   "key": "theme:光伏",
+   "label": "光伏硅片",
+   "group": ""
+  },
+  "光伏组件": {
+   "key": "theme:光伏",
+   "label": "光伏组件",
+   "group": ""
+  },
+  "光伏背板": {
+   "key": "theme:光伏",
+   "label": "光伏背板",
+   "group": ""
+  },
+  "光伏胶膜": {
+   "key": "theme:光伏",
+   "label": "光伏胶膜",
+   "group": ""
+  },
+  "光伏设备": {
+   "key": "theme:光伏",
+   "label": "光伏设备",
+   "group": ""
+  },
+  "光伏逆变器": {
+   "key": "theme:光伏",
+   "label": "光伏逆变器",
+   "group": ""
+  },
+  "光伏银浆": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "光刻": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "光刻机": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "光刻机(胶)": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "光刻机光刻胶": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "光刻胶": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "光刻胶概念": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "光刻胶辅材": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "光器件": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "光学透镜": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "光学镜片": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "光引擎": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "光收发": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "光模块": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "光模块/光通信": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "光模块结构件": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "光电芯片": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "光纤": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "光纤光缆": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "光纤涨价": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "光组件": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "光缆": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "光罩": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "光芯片": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "光连接": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "光连接器": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "光通信": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "免税": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "全固态": {
+   "key": "theme:固态电池",
+   "label": "全固态",
+   "group": ""
+  },
+  "全固态电池": {
+   "key": "theme:固态电池",
+   "label": "全固态电池",
+   "group": ""
+  },
+  "全钒液流": {
+   "key": "theme:储能",
+   "label": "全钒液流",
+   "group": ""
+  },
+  "全钒液流电池": {
+   "key": "theme:锂电池",
+   "label": "全钒液流电池",
+   "group": ""
+  },
+  "六氟磷酸锂": {
+   "key": "theme:锂电池",
+   "label": "六氟磷酸锂",
+   "group": ""
+  },
+  "共封装光学": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "兵器": {
+   "key": "theme:军工",
+   "label": "兵器",
+   "group": ""
+  },
+  "具身智能": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "具身智能/物理AI": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "养殖": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "养鸡": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "内存": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "军工": {
+   "key": "theme:军工",
+   "label": "军工",
+   "group": ""
+  },
+  "军民融合": {
+   "key": "theme:军工",
+   "label": "军民融合",
+   "group": ""
+  },
+  "军贸": {
+   "key": "theme:军工",
+   "label": "军贸",
+   "group": ""
+  },
+  "农业": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "农机": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "农药": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "净化": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "减肥药": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "减速器": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "出海广告": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "出版": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "分布式光伏": {
+   "key": "theme:光伏",
+   "label": "分布式光伏",
+   "group": ""
+  },
+  "分布式发电": {
+   "key": "theme:绿电新能源运营",
+   "label": "分布式发电",
+   "group": ""
+  },
+  "分散染料": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "分选机": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "创新药": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "创新药出海": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "利基存储": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "制冷剂": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "券商": {
+   "key": "theme:金融",
+   "label": "券商",
+   "group": ""
+  },
+  "刻蚀机": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "前驱体": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "割草机器人": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "功率IC": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "功率二极管": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "功率半导体": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "功率半导体/第三代半导体": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "功率器件": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "功率电感": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "加氢站": {
+   "key": "theme:氢能燃料电池",
+   "label": "加氢站",
+   "group": ""
+  },
+  "动力煤": {
+   "key": "theme:煤炭",
+   "label": "动力煤",
+   "group": ""
+  },
+  "动力电池": {
+   "key": "theme:锂电池",
+   "label": "动力电池",
+   "group": ""
+  },
+  "动漫": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "化学制药": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "化学品": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "化工": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "化纤": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "化肥": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "北斗": {
+   "key": "theme:商业航天",
+   "label": "北斗",
+   "group": ""
+  },
+  "医学影像": {
+   "key": "theme:医学影像",
+   "label": "医学影像",
+   "group": ""
+  },
+  "医疗": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "医疗医药": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "医疗器械": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "医疗设备": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "医美": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "医药": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "医药商业": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "半固化片": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "半固态电池": {
+   "key": "theme:固态电池",
+   "label": "半固态电池",
+   "group": ""
+  },
+  "半导体": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "半导体前驱体": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "半导体封装": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "半导体材料": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "半导体材料前驱体靶材": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "半导体概念": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "半导体气体": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "半导体洁净室": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "半导体测试": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "半导体石英": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "半导体硅片": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "半导体设备": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "半导体设备材料": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "半导体设备零部件": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "半导体零部件": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "华为昇腾": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "单晶硅": {
+   "key": "theme:硅料硅片",
+   "label": "单晶硅",
+   "group": ""
+  },
+  "卫星": {
+   "key": "theme:商业航天",
+   "label": "卫星",
+   "group": ""
+  },
+  "卫星互联网": {
+   "key": "theme:商业航天",
+   "label": "卫星互联网",
+   "group": ""
+  },
+  "卫星导航": {
+   "key": "theme:商业航天",
+   "label": "卫星导航",
+   "group": ""
+  },
+  "印制电路": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "印制电路板": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "印刷电路": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "印刷电路板": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "压延玻璃": {
+   "key": "theme:光伏玻璃",
+   "label": "压延玻璃",
+   "group": ""
+  },
+  "压延铜箔": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "压缩空气储能": {
+   "key": "theme:储能",
+   "label": "压缩空气储能",
+   "group": ""
+  },
+  "原料药": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "原油": {
+   "key": "theme:石油石化",
+   "label": "原油",
+   "group": ""
+  },
+  "参股长飞": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "变压器": {
+   "key": "theme:电网设备",
+   "label": "变压器",
+   "group": ""
+  },
+  "叠层电池": {
+   "key": "theme:锂电池",
+   "label": "叠层电池",
+   "group": ""
+  },
+  "可回收火箭": {
+   "key": "theme:商业航天",
+   "label": "可回收火箭",
+   "group": ""
+  },
+  "可控核聚变": {
+   "key": "theme:核聚变",
+   "label": "可控核聚变",
+   "group": ""
+  },
+  "可穿戴": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "可穿戴设备": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "可逆燃料电池": {
+   "key": "theme:锂电池",
+   "label": "可逆燃料电池",
+   "group": ""
+  },
+  "叶片": {
+   "key": "theme:风电",
+   "label": "叶片",
+   "group": ""
+  },
+  "含氟": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "商业百货": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "商业航天": {
+   "key": "theme:商业航天",
+   "label": "商业航天",
+   "group": ""
+  },
+  "啤酒": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "四足机器人": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "固体氧化物燃料电池": {
+   "key": "theme:锂电池",
+   "label": "固体氧化物燃料电池",
+   "group": ""
+  },
+  "固态开关": {
+   "key": "theme:固态断路器",
+   "label": "固态开关",
+   "group": ""
+  },
+  "固态断路器": {
+   "key": "theme:固态断路器",
+   "label": "固态断路器",
+   "group": ""
+  },
+  "固态电池": {
+   "key": "theme:固态电池",
+   "label": "固态电池",
+   "group": ""
+  },
+  "固态电解质": {
+   "key": "theme:固态电池",
+   "label": "固态电解质",
+   "group": ""
+  },
+  "固态硬盘": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "固态锂电": {
+   "key": "theme:固态电池",
+   "label": "固态锂电",
+   "group": ""
+  },
+  "国产CPU": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "国产GPU": {
+   "key": "theme:国产GPU",
+   "label": "国产GPU",
+   "group": ""
+  },
+  "国产替代芯片": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "国产芯片": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "国企改革": {
+   "key": "theme:中字头基建",
+   "label": "国企改革",
+   "group": ""
+  },
+  "国防": {
+   "key": "theme:军工",
+   "label": "国防",
+   "group": ""
+  },
+  "国防军工": {
+   "key": "theme:军工",
+   "label": "国防军工",
+   "group": ""
+  },
+  "圆柱电池": {
+   "key": "theme:锂电池",
+   "label": "圆柱电池",
+   "group": ""
+  },
+  "在线导购": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "地产": {
+   "key": "theme:地产链",
+   "label": "地产",
+   "group": ""
+  },
+  "地产基建": {
+   "key": "theme:地产链",
+   "label": "地产基建",
+   "group": ""
+  },
+  "地产链": {
+   "key": "theme:地产链",
+   "label": "地产链",
+   "group": ""
+  },
+  "城中村": {
+   "key": "theme:地产链",
+   "label": "城中村",
+   "group": ""
+  },
+  "城中村改造": {
+   "key": "theme:地产链",
+   "label": "城中村改造",
+   "group": ""
+  },
+  "城市NOA": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "城燃": {
+   "key": "theme:天然气",
+   "label": "城燃",
+   "group": ""
+  },
+  "培育钻石": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "培育钻石/金刚石": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "基因治疗": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "基建": {
+   "key": "theme:中字头基建",
+   "label": "基建",
+   "group": ""
+  },
+  "基础化工": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "塔筒": {
+   "key": "theme:风电",
+   "label": "塔筒",
+   "group": ""
+  },
+  "复合铜箔": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "复合集流体": {
+   "key": "theme:锂电池",
+   "label": "复合集流体",
+   "group": ""
+  },
+  "外延片": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "多元金融": {
+   "key": "theme:金融",
+   "label": "多元金融",
+   "group": ""
+  },
+  "多层板": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "多层陶瓷": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "多层陶瓷电容": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "多晶硅": {
+   "key": "theme:硅料硅片",
+   "label": "多晶硅",
+   "group": ""
+  },
+  "大储": {
+   "key": "theme:储能",
+   "label": "大储",
+   "group": ""
+  },
+  "大圆柱电池": {
+   "key": "theme:锂电池",
+   "label": "大圆柱电池",
+   "group": ""
+  },
+  "大尺寸硅片": {
+   "key": "theme:硅料硅片",
+   "label": "大尺寸硅片",
+   "group": ""
+  },
+  "大模型": {
+   "key": "theme:AI应用",
+   "label": "AI应用",
+   "group": ""
+  },
+  "大水电": {
+   "key": "theme:水电",
+   "label": "大水电",
+   "group": ""
+  },
+  "大消费": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "大硅片": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "大金融": {
+   "key": "theme:金融",
+   "label": "大金融",
+   "group": ""
+  },
+  "大飞机": {
+   "key": "theme:军工",
+   "label": "大飞机",
+   "group": ""
+  },
+  "天然气": {
+   "key": "theme:天然气",
+   "label": "天然气",
+   "group": ""
+  },
+  "天然气概念": {
+   "key": "theme:天然气",
+   "label": "天然气概念",
+   "group": ""
+  },
+  "央企": {
+   "key": "theme:中字头基建",
+   "label": "央企",
+   "group": ""
+  },
+  "央企改革": {
+   "key": "theme:中字头基建",
+   "label": "央企改革",
+   "group": ""
+  },
+  "奥运": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "字节": {
+   "key": "theme:AI应用",
+   "label": "AI应用",
+   "group": ""
+  },
+  "存储": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "存储主控": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "存储器": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "存储模组": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "存储芯片": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "存算": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "存算基地": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "宠物经济": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "宠物食品": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "家居": {
+   "key": "theme:地产链",
+   "label": "家居",
+   "group": ""
+  },
+  "家电": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "家纺": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "宽禁带": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "宽禁带半导体": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "导电剂": {
+   "key": "theme:锂电池",
+   "label": "导电剂",
+   "group": ""
+  },
+  "封测": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "封装基板": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "封装材料": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "小型堆": {
+   "key": "theme:核电",
+   "label": "小型堆",
+   "group": ""
+  },
+  "小红书": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "小红书概念": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "小金属": {
+   "key": "theme:小金属",
+   "label": "小金属",
+   "group": ""
+  },
+  "层状氧化物": {
+   "key": "theme:钠电池",
+   "label": "层状氧化物",
+   "group": ""
+  },
+  "工业机器人": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "工业气体": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "工业气体电子特气": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "工业硅": {
+   "key": "theme:硅料硅片",
+   "label": "工业硅",
+   "group": ""
+  },
+  "工业磷": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "工业金刚石": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "工商业储能": {
+   "key": "theme:储能",
+   "label": "工商业储能",
+   "group": ""
+  },
+  "干散货": {
+   "key": "theme:航运",
+   "label": "干散货",
+   "group": ""
+  },
+  "干膜": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "平台经济": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "广告营销": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "建筑材料": {
+   "key": "theme:地产链",
+   "label": "建筑材料",
+   "group": ""
+  },
+  "开关柜": {
+   "key": "theme:电网设备",
+   "label": "开关柜",
+   "group": ""
+  },
+  "异质结": {
+   "key": "theme:光伏",
+   "label": "异质结",
+   "group": ""
+  },
+  "影像设备": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "影视": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "影视院线": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "微型燃机": {
+   "key": "theme:燃气轮机",
+   "label": "微型燃机",
+   "group": ""
+  },
+  "微型钻头": {
+   "key": "theme:微型钻头",
+   "label": "微型钻头",
+   "group": ""
+  },
+  "微短剧": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "微钻": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "快充": {
+   "key": "theme:充电桩",
+   "label": "快充",
+   "group": ""
+  },
+  "快手": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "快手概念": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "感光油墨": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "户储": {
+   "key": "theme:储能",
+   "label": "户储",
+   "group": ""
+  },
+  "房地产": {
+   "key": "theme:地产链",
+   "label": "房地产",
+   "group": ""
+  },
+  "扇出": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "扇出封装": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "托卡马克": {
+   "key": "theme:核聚变",
+   "label": "托卡马克",
+   "group": ""
+  },
+  "执行器": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "折叠屏": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "抛光垫": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "抛光液": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "抛光片": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "抽水蓄能": {
+   "key": "theme:水电",
+   "label": "抽水蓄能",
+   "group": ""
+  },
+  "抽蓄": {
+   "key": "theme:水电",
+   "label": "抽蓄",
+   "group": ""
+  },
+  "换流阀": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "换电": {
+   "key": "theme:充电桩",
+   "label": "换电",
+   "group": ""
+  },
+  "探针台": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "掩模": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "掩模版": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "掩膜": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "掩膜版": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "散热": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "数字电网": {
+   "key": "theme:电网设备",
+   "label": "数字电网",
+   "group": ""
+  },
+  "数据中心": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "数据中心供冷": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "数据中心供电": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "数据中心散热": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "数据中心算力": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "整县推进": {
+   "key": "theme:绿电新能源运营",
+   "label": "整县推进",
+   "group": ""
+  },
+  "文化传媒": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "文生视频": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "断路器": {
+   "key": "theme:固态断路器",
+   "label": "断路器",
+   "group": ""
+  },
+  "新型电力系统": {
+   "key": "theme:电网设备",
+   "label": "新型电力系统",
+   "group": ""
+  },
+  "新能源装机": {
+   "key": "theme:绿电新能源运营",
+   "label": "新能源装机",
+   "group": ""
+  },
+  "新能源运营": {
+   "key": "theme:绿电新能源运营",
+   "label": "新能源运营",
+   "group": ""
+  },
+  "新零售": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "无人出租": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "无人机": {
+   "key": "theme:低空经济",
+   "label": "无人机",
+   "group": ""
+  },
+  "无人驾驶": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "无源器件": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "无源铜缆": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "无源铜连接": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "旧改": {
+   "key": "theme:地产链",
+   "label": "旧改",
+   "group": ""
+  },
+  "昇腾": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "显示": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "显示模组": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "显示面板": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "普鲁士蓝": {
+   "key": "theme:钠电池",
+   "label": "普鲁士蓝",
+   "group": ""
+  },
+  "晶圆": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "晶圆代工": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "晶圆制造设备": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "晶圆厂": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "智算中心": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "智能制造": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "智能割草": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "智能座舱": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "智能断路器": {
+   "key": "theme:固态断路器",
+   "label": "智能断路器",
+   "group": ""
+  },
+  "智能电网": {
+   "key": "theme:电网设备",
+   "label": "智能电网",
+   "group": ""
+  },
+  "智能电表": {
+   "key": "theme:电网设备",
+   "label": "智能电表",
+   "group": ""
+  },
+  "智能眼镜": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "智能穿戴": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "智能驾驶": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "智能驾驶/无人驾驶": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "智谱": {
+   "key": "theme:AI应用",
+   "label": "AI应用",
+   "group": ""
+  },
+  "曝光机": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "有序充电": {
+   "key": "theme:充电桩",
+   "label": "有序充电",
+   "group": ""
+  },
+  "有机硅": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "有色": {
+   "key": "theme:有色金属",
+   "label": "有色",
+   "group": ""
+  },
+  "有色金属": {
+   "key": "theme:有色金属",
+   "label": "有色金属",
+   "group": ""
+  },
+  "服务器": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "服务器PCB": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "服务器电源": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "服装": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "服装家纺": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "服装家纺/纺织": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "期货": {
+   "key": "theme:金融",
+   "label": "期货",
+   "group": ""
+  },
+  "机器人": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "机器人概念": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "机器人零部件": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "机器狗": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "机器视觉": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "机器视觉概念": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "板卡": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "构网型储能": {
+   "key": "theme:储能",
+   "label": "构网型储能",
+   "group": ""
+  },
+  "果汁": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "果链": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "染料": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "染料中间体": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "柔性屏": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "柔性直流": {
+   "key": "theme:电网设备",
+   "label": "柔性直流",
+   "group": ""
+  },
+  "树脂": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "核燃料": {
+   "key": "theme:核电",
+   "label": "核燃料",
+   "group": ""
+  },
+  "核电": {
+   "key": "theme:核电",
+   "label": "核电",
+   "group": ""
+  },
+  "核电站": {
+   "key": "theme:核电",
+   "label": "核电站",
+   "group": ""
+  },
+  "核电设备": {
+   "key": "theme:核电",
+   "label": "核电设备",
+   "group": ""
+  },
+  "核聚变": {
+   "key": "theme:核聚变",
+   "label": "核聚变",
+   "group": ""
+  },
+  "核能": {
+   "key": "theme:核电",
+   "label": "核能",
+   "group": ""
+  },
+  "模拟芯片": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "正极": {
+   "key": "theme:锂电池",
+   "label": "正极",
+   "group": ""
+  },
+  "正极材料": {
+   "key": "theme:锂电池",
+   "label": "正极材料",
+   "group": ""
+  },
+  "正极磷酸铁锂": {
+   "key": "theme:磷酸铁锂",
+   "label": "正极磷酸铁锂",
+   "group": ""
+  },
+  "民爆": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "气体": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "氟化": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "氟化学品": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "氟化工": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "氢气": {
+   "key": "theme:氢能燃料电池",
+   "label": "氢气",
+   "group": ""
+  },
+  "氢氟酸": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "氢氟酸涨价": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "氢氧化锂": {
+   "key": "theme:锂矿锂盐",
+   "label": "氢氧化锂",
+   "group": ""
+  },
+  "氢燃料": {
+   "key": "theme:氢能燃料电池",
+   "label": "氢燃料",
+   "group": ""
+  },
+  "氢燃料电池": {
+   "key": "theme:锂电池",
+   "label": "氢燃料电池",
+   "group": ""
+  },
+  "氢能": {
+   "key": "theme:氢能燃料电池",
+   "label": "氢能",
+   "group": ""
+  },
+  "氢能源": {
+   "key": "theme:氢能燃料电池",
+   "label": "氢能源",
+   "group": ""
+  },
+  "氢能燃料电池": {
+   "key": "theme:锂电池",
+   "label": "氢能燃料电池",
+   "group": ""
+  },
+  "氦气": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "氧化物电解质": {
+   "key": "theme:固态电池",
+   "label": "氧化物电解质",
+   "group": ""
+  },
+  "氧化铝": {
+   "key": "theme:有色金属",
+   "label": "氧化铝",
+   "group": ""
+  },
+  "氧化铝陶瓷": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "氧化锆": {
+   "key": "theme:小金属",
+   "label": "氧化锆",
+   "group": ""
+  },
+  "氮化硅": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "氮化镓": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "水产养殖": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "水力发电": {
+   "key": "theme:水电",
+   "label": "水力发电",
+   "group": ""
+  },
+  "水泥": {
+   "key": "theme:地产链",
+   "label": "水泥",
+   "group": ""
+  },
+  "水电": {
+   "key": "theme:水电",
+   "label": "水电",
+   "group": ""
+  },
+  "永磁": {
+   "key": "theme:稀土永磁",
+   "label": "永磁",
+   "group": ""
+  },
+  "永磁材料": {
+   "key": "theme:稀土永磁",
+   "label": "永磁材料",
+   "group": ""
+  },
+  "汽车芯片": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "油价": {
+   "key": "theme:石油石化",
+   "label": "油价",
+   "group": ""
+  },
+  "油服": {
+   "key": "theme:石油石化",
+   "label": "油服",
+   "group": ""
+  },
+  "油气": {
+   "key": "theme:石油石化",
+   "label": "油气",
+   "group": ""
+  },
+  "油气开采": {
+   "key": "theme:石油石化",
+   "label": "油气开采",
+   "group": ""
+  },
+  "油运": {
+   "key": "theme:航运",
+   "label": "油运",
+   "group": ""
+  },
+  "泵": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "洁净室": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "测试机": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "海上风电": {
+   "key": "theme:风电",
+   "label": "海上风电",
+   "group": ""
+  },
+  "海底光缆": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "海洋石油": {
+   "key": "theme:石油石化",
+   "label": "海洋石油",
+   "group": ""
+  },
+  "海绵钛": {
+   "key": "theme:钛白粉",
+   "label": "海绵钛",
+   "group": ""
+  },
+  "海缆": {
+   "key": "theme:风电",
+   "label": "海缆",
+   "group": ""
+  },
+  "海缆光纤": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "海运": {
+   "key": "theme:航运",
+   "label": "海运",
+   "group": ""
+  },
+  "海风": {
+   "key": "theme:风电",
+   "label": "海风",
+   "group": ""
+  },
+  "浸没": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "浸没式液冷": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "涂胶显影": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "消费": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "消费概念": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "消费电子": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "涤纶": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "液冷": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "液冷/数据中心散热": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "液冷服务器": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "液冷概念": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "液冷超充": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "液化天然气": {
+   "key": "theme:天然气",
+   "label": "液化天然气",
+   "group": ""
+  },
+  "液晶": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "液晶面板": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "液流电池": {
+   "key": "theme:锂电池",
+   "label": "液流电池",
+   "group": ""
+  },
+  "深远海风电": {
+   "key": "theme:风电",
+   "label": "深远海风电",
+   "group": ""
+  },
+  "混合键合": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "清洗设备": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "温控": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "温控散热": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "港口": {
+   "key": "theme:航运",
+   "label": "港口",
+   "group": ""
+  },
+  "游戏": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "湿电子": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "湿电子化学品": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "溅射靶材": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "源网荷储": {
+   "key": "theme:绿电新能源运营",
+   "label": "源网荷储",
+   "group": ""
+  },
+  "滚柱丝杠": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "激光器": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "激光雷达": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "火力发电": {
+   "key": "theme:火电热电",
+   "label": "火力发电",
+   "group": ""
+  },
+  "火电": {
+   "key": "theme:火电热电",
+   "label": "火电",
+   "group": ""
+  },
+  "火电灵活性改造": {
+   "key": "theme:火电热电",
+   "label": "火电灵活性改造",
+   "group": ""
+  },
+  "火电热电": {
+   "key": "theme:火电热电",
+   "label": "火电热电",
+   "group": ""
+  },
+  "火箭": {
+   "key": "theme:商业航天",
+   "label": "火箭",
+   "group": ""
+  },
+  "灵巧手": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "炭黑": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "炼化": {
+   "key": "theme:石油石化",
+   "label": "炼化",
+   "group": ""
+  },
+  "炼焦": {
+   "key": "theme:煤炭",
+   "label": "炼焦",
+   "group": ""
+  },
+  "热场": {
+   "key": "theme:光伏",
+   "label": "热场",
+   "group": ""
+  },
+  "热电": {
+   "key": "theme:火电热电",
+   "label": "热电",
+   "group": ""
+  },
+  "热电联产": {
+   "key": "theme:火电热电",
+   "label": "热电联产",
+   "group": ""
+  },
+  "热管理金刚石": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "焦炭": {
+   "key": "theme:煤炭",
+   "label": "焦炭",
+   "group": ""
+  },
+  "焦煤": {
+   "key": "theme:煤炭",
+   "label": "焦煤",
+   "group": ""
+  },
+  "煤": {
+   "key": "theme:煤炭",
+   "label": "煤",
+   "group": ""
+  },
+  "煤化工": {
+   "key": "theme:煤炭",
+   "label": "煤化工",
+   "group": ""
+  },
+  "煤炭": {
+   "key": "theme:煤炭",
+   "label": "煤炭",
+   "group": ""
+  },
+  "煤炭开采": {
+   "key": "theme:煤炭",
+   "label": "煤炭开采",
+   "group": ""
+  },
+  "煤电": {
+   "key": "theme:火电热电",
+   "label": "煤电",
+   "group": ""
+  },
+  "煤电联营": {
+   "key": "theme:火电热电",
+   "label": "煤电联营",
+   "group": ""
+  },
+  "燃料电池": {
+   "key": "theme:锂电池",
+   "label": "燃料电池",
+   "group": ""
+  },
+  "燃机": {
+   "key": "theme:燃气轮机",
+   "label": "燃机",
+   "group": ""
+  },
+  "燃气": {
+   "key": "theme:天然气",
+   "label": "燃气",
+   "group": ""
+  },
+  "燃气发电": {
+   "key": "theme:燃气轮机",
+   "label": "燃气发电",
+   "group": ""
+  },
+  "燃气轮机": {
+   "key": "theme:燃气轮机",
+   "label": "燃气轮机",
+   "group": ""
+  },
+  "燃煤": {
+   "key": "theme:火电热电",
+   "label": "燃煤",
+   "group": ""
+  },
+  "片式电容": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "片式电感": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "物业": {
+   "key": "theme:地产链",
+   "label": "物业",
+   "group": ""
+  },
+  "物业服务": {
+   "key": "theme:地产链",
+   "label": "物业服务",
+   "group": ""
+  },
+  "物理AI": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "物理ai": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "特斯拉机器人": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "特种工程塑料": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "特种气体": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "特高压": {
+   "key": "theme:电网设备",
+   "label": "特高压",
+   "group": ""
+  },
+  "猪肉": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "环氧丙烷": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "玻璃": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "玻璃基": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "玻璃基Micro": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "玻璃基板": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "玻璃基板上游": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "玻璃基板封装": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "玻璃纤维": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "玻璃纤维布": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "玻纤": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "玻纤布": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "生物医药": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "生猪": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "生猪养殖": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "电力": {
+   "key": "theme:电力",
+   "label": "电力",
+   "group": ""
+  },
+  "电力现货": {
+   "key": "theme:绿电新能源运营",
+   "label": "电力现货",
+   "group": ""
+  },
+  "电力电子": {
+   "key": "theme:电网设备",
+   "label": "电力电子",
+   "group": ""
+  },
+  "电力股": {
+   "key": "theme:电力",
+   "label": "电力股",
+   "group": ""
+  },
+  "电力设备": {
+   "key": "theme:电网设备",
+   "label": "电力设备",
+   "group": ""
+  },
+  "电力运营": {
+   "key": "theme:火电热电",
+   "label": "电力运营",
+   "group": ""
+  },
+  "电子化学品": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "电子商务": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "电子布": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "电子布/玻纤": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "电子气体": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "电子浆料": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "电子烟": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "电子特气": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "电子玻璃": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "电子玻纤布": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "电子级": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "电子级化学品": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "电子级氢氟酸": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "电子纱": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "电子陶瓷": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "电子陶瓷粉": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "电容": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "电容器": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "电感": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "电感器": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "电池": {
+   "key": "theme:锂电池",
+   "label": "电池",
+   "group": ""
+  },
+  "电池产业链": {
+   "key": "theme:锂电池",
+   "label": "电池产业链",
+   "group": ""
+  },
+  "电池回收": {
+   "key": "theme:锂电池",
+   "label": "电池回收",
+   "group": ""
+  },
+  "电池片": {
+   "key": "theme:锂电池",
+   "label": "电池片",
+   "group": ""
+  },
+  "电池结构件": {
+   "key": "theme:锂电池",
+   "label": "电池结构件",
+   "group": ""
+  },
+  "电池铝箔": {
+   "key": "theme:锂电池",
+   "label": "电池铝箔",
+   "group": ""
+  },
+  "电源管理": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "电网": {
+   "key": "theme:电网设备",
+   "label": "电网",
+   "group": ""
+  },
+  "电网侧储能": {
+   "key": "theme:储能",
+   "label": "电网侧储能",
+   "group": ""
+  },
+  "电网投资": {
+   "key": "theme:电网设备",
+   "label": "电网投资",
+   "group": ""
+  },
+  "电网设备": {
+   "key": "theme:电网设备",
+   "label": "电网设备",
+   "group": ""
+  },
+  "电网设备/特高压": {
+   "key": "theme:电网设备",
+   "label": "电网设备/特高压",
+   "group": ""
+  },
+  "电能表": {
+   "key": "theme:电网设备",
+   "label": "电能表",
+   "group": ""
+  },
+  "电解水制氢": {
+   "key": "theme:氢能燃料电池",
+   "label": "电解水制氢",
+   "group": ""
+  },
+  "电解液": {
+   "key": "theme:锂电池",
+   "label": "电解液",
+   "group": ""
+  },
+  "电解铜": {
+   "key": "theme:铜",
+   "label": "电解铜",
+   "group": ""
+  },
+  "电解铜箔": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "电解铝": {
+   "key": "theme:有色金属",
+   "label": "电解铝",
+   "group": ""
+  },
+  "电路板": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "疫苗": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "白酒": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "白酒/食品饮料": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "白银": {
+   "key": "theme:黄金贵金属",
+   "label": "白银",
+   "group": ""
+  },
+  "白银概念": {
+   "key": "theme:黄金贵金属",
+   "label": "白银概念",
+   "group": ""
+  },
+  "皮鞋": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "盐湖提锂": {
+   "key": "theme:锂矿锂盐",
+   "label": "盐湖提锂",
+   "group": ""
+  },
+  "直流断路器": {
+   "key": "theme:固态断路器",
+   "label": "直流断路器",
+   "group": ""
+  },
+  "相干光": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "相干光通信": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "短剧": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "短剧游戏": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "短剧游戏/传媒": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "短视频": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "石化": {
+   "key": "theme:石油石化",
+   "label": "石化",
+   "group": ""
+  },
+  "石油": {
+   "key": "theme:石油石化",
+   "label": "石油",
+   "group": ""
+  },
+  "石油石化": {
+   "key": "theme:石油石化",
+   "label": "石油石化",
+   "group": ""
+  },
+  "石英": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "石英坩埚": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "石英材料": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "石英玻纤": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "研磨": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "硅光": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "硅基": {
+   "key": "theme:硅料硅片",
+   "label": "硅基",
+   "group": ""
+  },
+  "硅基半导体": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "硅料": {
+   "key": "theme:硅料硅片",
+   "label": "硅料",
+   "group": ""
+  },
+  "硅料硅片": {
+   "key": "theme:硅料硅片",
+   "label": "硅料硅片",
+   "group": ""
+  },
+  "硅片": {
+   "key": "theme:硅料硅片",
+   "label": "硅片",
+   "group": ""
+  },
+  "硫化物电解质": {
+   "key": "theme:固态电池",
+   "label": "硫化物电解质",
+   "group": ""
+  },
+  "碳化硅": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "碳氢树脂": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "碳纳米管": {
+   "key": "theme:锂电池",
+   "label": "碳纳米管",
+   "group": ""
+  },
+  "碳酸锂": {
+   "key": "theme:锂矿锂盐",
+   "label": "碳酸锂",
+   "group": ""
+  },
+  "碳酸锶": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "磁性元件": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "磁性材料": {
+   "key": "theme:稀土永磁",
+   "label": "磁性材料",
+   "group": ""
+  },
+  "磁材": {
+   "key": "theme:稀土永磁",
+   "label": "磁材",
+   "group": ""
+  },
+  "磷化学品": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "磷化工": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "磷化工锂电": {
+   "key": "theme:磷酸铁锂",
+   "label": "磷化工锂电",
+   "group": ""
+  },
+  "磷矿": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "磷肥": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "磷酸": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "磷酸铁": {
+   "key": "theme:磷酸铁锂",
+   "label": "磷酸铁",
+   "group": ""
+  },
+  "磷酸铁锂": {
+   "key": "theme:磷酸铁锂",
+   "label": "磷酸铁锂",
+   "group": ""
+  },
+  "磷酸锰铁锂": {
+   "key": "theme:磷酸铁锂",
+   "label": "磷酸锰铁锂",
+   "group": ""
+  },
+  "社区团购": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "神经接口": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "离型膜": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "离子注入": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "离子注入机": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "种业": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "稀土": {
+   "key": "theme:稀土永磁",
+   "label": "稀土",
+   "group": ""
+  },
+  "稀土概念": {
+   "key": "theme:稀土永磁",
+   "label": "稀土概念",
+   "group": ""
+  },
+  "稀土永磁": {
+   "key": "theme:稀土永磁",
+   "label": "稀土永磁",
+   "group": ""
+  },
+  "稀土磁材": {
+   "key": "theme:稀土永磁",
+   "label": "稀土磁材",
+   "group": ""
+  },
+  "稀有气体": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "稀有金属": {
+   "key": "theme:小金属",
+   "label": "稀有金属",
+   "group": ""
+  },
+  "空间智能": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "端侧AI": {
+   "key": "theme:AI应用",
+   "label": "AI应用",
+   "group": ""
+  },
+  "端到端": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "端到端智驾": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "第三代半导体": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "第四代核电": {
+   "key": "theme:核电",
+   "label": "第四代核电",
+   "group": ""
+  },
+  "算力": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "算力/数据中心": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "算力概念": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "算力模组": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "算力硬件": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "算力租赁": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "算力芯片": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "算电一体": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "类载板": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "粮食": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "粮食概念": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "精密陶瓷": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "精细化工": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "纯碱": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "纺织": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "纺织服装": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "线路板": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "组件": {
+   "key": "theme:光伏",
+   "label": "组件",
+   "group": ""
+  },
+  "组合电器": {
+   "key": "theme:电网设备",
+   "label": "组合电器",
+   "group": ""
+  },
+  "细胞治疗": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "结构陶瓷": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "继电保护": {
+   "key": "theme:电网设备",
+   "label": "继电保护",
+   "group": ""
+  },
+  "绿氢": {
+   "key": "theme:氢能燃料电池",
+   "label": "绿氢",
+   "group": ""
+  },
+  "绿电": {
+   "key": "theme:绿电新能源运营",
+   "label": "绿电",
+   "group": ""
+  },
+  "绿电新能源运营": {
+   "key": "theme:绿电新能源运营",
+   "label": "绿电新能源运营",
+   "group": ""
+  },
+  "绿色电力": {
+   "key": "theme:绿电新能源运营",
+   "label": "绿色电力",
+   "group": ""
+  },
+  "绿色电力交易": {
+   "key": "theme:绿电新能源运营",
+   "label": "绿色电力交易",
+   "group": ""
+  },
+  "绿证": {
+   "key": "theme:绿电新能源运营",
+   "label": "绿证",
+   "group": ""
+  },
+  "职业装": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "聚变": {
+   "key": "theme:核聚变",
+   "label": "聚变",
+   "group": ""
+  },
+  "聚变堆": {
+   "key": "theme:核聚变",
+   "label": "聚变堆",
+   "group": ""
+  },
+  "聚氨酯": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "聚醚醚酮": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "背板玻璃": {
+   "key": "theme:光伏玻璃",
+   "label": "背板玻璃",
+   "group": ""
+  },
+  "脑机接口": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "脑科学": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "自动驾驶": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "自研ASIC": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "自研芯片": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "航天": {
+   "key": "theme:商业航天",
+   "label": "航天",
+   "group": ""
+  },
+  "航改燃机": {
+   "key": "theme:燃气轮机",
+   "label": "航改燃机",
+   "group": ""
+  },
+  "航空发动机": {
+   "key": "theme:军工",
+   "label": "航空发动机",
+   "group": ""
+  },
+  "航运": {
+   "key": "theme:航运",
+   "label": "航运",
+   "group": ""
+  },
+  "航运概念": {
+   "key": "theme:航运",
+   "label": "航运概念",
+   "group": ""
+  },
+  "船运": {
+   "key": "theme:航运",
+   "label": "船运",
+   "group": ""
+  },
+  "芯片": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "芯片IP": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "芯片概念": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "芯片设计": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "芯片设计/算力芯片": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "苹果产业链": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "苹果概念": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "药业": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "萝卜快跑": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "萤石": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "葡萄酒": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "薄膜沉积": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "薄膜沉积设备": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "薄膜电容": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "虚拟电厂": {
+   "key": "theme:绿电新能源运营",
+   "label": "虚拟电厂",
+   "group": ""
+  },
+  "行星滚柱丝杠": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "被动元件": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "被动元件材料": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "被动元件概念": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "被动元器件": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "装修建材": {
+   "key": "theme:地产链",
+   "label": "装修建材",
+   "group": ""
+  },
+  "装配式建筑": {
+   "key": "theme:地产链",
+   "label": "装配式建筑",
+   "group": ""
+  },
+  "覆铜板": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "覆铜板/铜箔/PCB上游材料": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "视觉传感": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "视觉检测": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "视频生成": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "证券": {
+   "key": "theme:金融",
+   "label": "证券",
+   "group": ""
+  },
+  "调味": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "调味品": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "谐波减速": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "谐波减速器": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "豆包": {
+   "key": "theme:AI应用",
+   "label": "AI应用",
+   "group": ""
+  },
+  "负极": {
+   "key": "theme:锂电池",
+   "label": "负极",
+   "group": ""
+  },
+  "负极材料": {
+   "key": "theme:锂电池",
+   "label": "负极材料",
+   "group": ""
+  },
+  "质子交换膜": {
+   "key": "theme:氢能燃料电池",
+   "label": "质子交换膜",
+   "group": ""
+  },
+  "贴片电感": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "贵金属": {
+   "key": "theme:黄金贵金属",
+   "label": "贵金属",
+   "group": ""
+  },
+  "赛事": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "超充": {
+   "key": "theme:充电桩",
+   "label": "超充",
+   "group": ""
+  },
+  "超白玻璃": {
+   "key": "theme:光伏玻璃",
+   "label": "超白玻璃",
+   "group": ""
+  },
+  "超级电容": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "足球": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "足球概念": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "跨境电商": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "车规半导体": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "车规芯片": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "车路协同": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "软包电池": {
+   "key": "theme:锂电池",
+   "label": "软包电池",
+   "group": ""
+  },
+  "软板": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "软饮": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "载板": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "辅助生殖": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "输配电": {
+   "key": "theme:电网设备",
+   "label": "输配电",
+   "group": ""
+  },
+  "退火": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "逆变器": {
+   "key": "theme:光伏",
+   "label": "逆变器",
+   "group": ""
+  },
+  "透镜": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "透镜胶": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "通信": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "通信光缆": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "通用航空": {
+   "key": "theme:低空经济",
+   "label": "通用航空",
+   "group": ""
+  },
+  "通航": {
+   "key": "theme:低空经济",
+   "label": "通航",
+   "group": ""
+  },
+  "速冻食品": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "配电网": {
+   "key": "theme:电网设备",
+   "label": "配电网",
+   "group": ""
+  },
+  "酒类": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "酿酒": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "重力储能": {
+   "key": "theme:储能",
+   "label": "重力储能",
+   "group": ""
+  },
+  "重型燃气轮机": {
+   "key": "theme:燃气轮机",
+   "label": "重型燃气轮机",
+   "group": ""
+  },
+  "量测": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "量测设备": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "金价": {
+   "key": "theme:黄金贵金属",
+   "label": "金价",
+   "group": ""
+  },
+  "金刚石": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "金刚石半导体": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "金刚石散热": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "金刚线": {
+   "key": "theme:光伏",
+   "label": "金刚线",
+   "group": ""
+  },
+  "金属": {
+   "key": "theme:有色金属",
+   "label": "金属",
+   "group": ""
+  },
+  "金属锂": {
+   "key": "theme:锂矿锂盐",
+   "label": "金属锂",
+   "group": ""
+  },
+  "金属锗": {
+   "key": "theme:小金属",
+   "label": "金属锗",
+   "group": ""
+  },
+  "金属镓": {
+   "key": "theme:小金属",
+   "label": "金属镓",
+   "group": ""
+  },
+  "金融": {
+   "key": "theme:金融",
+   "label": "金融",
+   "group": ""
+  },
+  "金融概念": {
+   "key": "theme:金融",
+   "label": "金融概念",
+   "group": ""
+  },
+  "金融科技": {
+   "key": "theme:金融",
+   "label": "金融科技",
+   "group": ""
+  },
+  "钒": {
+   "key": "theme:小金属",
+   "label": "钒",
+   "group": ""
+  },
+  "钒电池": {
+   "key": "theme:锂电池",
+   "label": "钒电池",
+   "group": ""
+  },
+  "钕铁硼": {
+   "key": "theme:稀土永磁",
+   "label": "钕铁硼",
+   "group": ""
+  },
+  "钙钛矿": {
+   "key": "theme:光伏",
+   "label": "钙钛矿",
+   "group": ""
+  },
+  "钙钛矿电池": {
+   "key": "theme:锂电池",
+   "label": "钙钛矿电池",
+   "group": ""
+  },
+  "钛产业链": {
+   "key": "theme:钛产业链",
+   "label": "钛产业链",
+   "group": ""
+  },
+  "钛材": {
+   "key": "theme:钛白粉",
+   "label": "钛材",
+   "group": ""
+  },
+  "钛白": {
+   "key": "theme:钛白粉",
+   "label": "钛白",
+   "group": ""
+  },
+  "钛白粉": {
+   "key": "theme:钛白粉",
+   "label": "钛白粉",
+   "group": ""
+  },
+  "钛精矿": {
+   "key": "theme:钛白粉",
+   "label": "钛精矿",
+   "group": ""
+  },
+  "钛酸钡": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "钠电": {
+   "key": "theme:钠电池",
+   "label": "钠电",
+   "group": ""
+  },
+  "钠电池": {
+   "key": "theme:钠电池",
+   "label": "钠电池",
+   "group": ""
+  },
+  "钠离子": {
+   "key": "theme:钠电池",
+   "label": "钠离子",
+   "group": ""
+  },
+  "钠离子电池": {
+   "key": "theme:钠电池",
+   "label": "钠离子电池",
+   "group": ""
+  },
+  "钨": {
+   "key": "theme:小金属",
+   "label": "钨",
+   "group": ""
+  },
+  "钨钼": {
+   "key": "theme:小金属",
+   "label": "钨钼",
+   "group": ""
+  },
+  "钯": {
+   "key": "theme:黄金贵金属",
+   "label": "钯",
+   "group": ""
+  },
+  "钻石": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "钻石概念": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "钻针": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "钼": {
+   "key": "theme:小金属",
+   "label": "钼",
+   "group": ""
+  },
+  "钽": {
+   "key": "theme:钽铌材料",
+   "label": "钽",
+   "group": ""
+  },
+  "钽电容": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "钽铌": {
+   "key": "theme:钽铌材料",
+   "label": "钽铌",
+   "group": ""
+  },
+  "钽铌材料": {
+   "key": "theme:钽铌材料",
+   "label": "钽铌材料",
+   "group": ""
+  },
+  "铁锂": {
+   "key": "theme:磷酸铁锂",
+   "label": "铁锂",
+   "group": ""
+  },
+  "铂": {
+   "key": "theme:黄金贵金属",
+   "label": "铂",
+   "group": ""
+  },
+  "铂金": {
+   "key": "theme:黄金贵金属",
+   "label": "铂金",
+   "group": ""
+  },
+  "铅": {
+   "key": "theme:有色金属",
+   "label": "铅",
+   "group": ""
+  },
+  "铋": {
+   "key": "theme:小金属",
+   "label": "铋",
+   "group": ""
+  },
+  "铌": {
+   "key": "theme:钽铌材料",
+   "label": "铌",
+   "group": ""
+  },
+  "铜": {
+   "key": "theme:铜",
+   "label": "铜",
+   "group": ""
+  },
+  "铜业": {
+   "key": "theme:铜",
+   "label": "铜业",
+   "group": ""
+  },
+  "铜互连": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "铜价": {
+   "key": "theme:铜",
+   "label": "铜价",
+   "group": ""
+  },
+  "铜矿": {
+   "key": "theme:铜",
+   "label": "铜矿",
+   "group": ""
+  },
+  "铜箔": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "铜缆": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "铜资源": {
+   "key": "theme:铜",
+   "label": "铜资源",
+   "group": ""
+  },
+  "铜连接": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "铝": {
+   "key": "theme:有色金属",
+   "label": "铝",
+   "group": ""
+  },
+  "铝电解电容": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "铟": {
+   "key": "theme:小金属",
+   "label": "铟",
+   "group": ""
+  },
+  "银浆": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "银行": {
+   "key": "theme:金融",
+   "label": "银行",
+   "group": ""
+  },
+  "铼": {
+   "key": "theme:小金属",
+   "label": "铼",
+   "group": ""
+  },
+  "锂": {
+   "key": "theme:锂矿锂盐",
+   "label": "锂",
+   "group": ""
+  },
+  "锂电": {
+   "key": "theme:锂电池",
+   "label": "锂电",
+   "group": ""
+  },
+  "锂电材料": {
+   "key": "theme:锂电池",
+   "label": "锂电材料",
+   "group": ""
+  },
+  "锂电池": {
+   "key": "theme:锂电池",
+   "label": "锂电池",
+   "group": ""
+  },
+  "锂电设备": {
+   "key": "theme:锂电池",
+   "label": "锂电设备",
+   "group": ""
+  },
+  "锂盐": {
+   "key": "theme:锂矿锂盐",
+   "label": "锂盐",
+   "group": ""
+  },
+  "锂矿": {
+   "key": "theme:锂矿锂盐",
+   "label": "锂矿",
+   "group": ""
+  },
+  "锂矿锂盐": {
+   "key": "theme:锂矿锂盐",
+   "label": "锂矿锂盐",
+   "group": ""
+  },
+  "锂精矿": {
+   "key": "theme:锂矿锂盐",
+   "label": "锂精矿",
+   "group": ""
+  },
+  "锂资源": {
+   "key": "theme:锂矿锂盐",
+   "label": "锂资源",
+   "group": ""
+  },
+  "锂金属电池": {
+   "key": "theme:固态电池",
+   "label": "锂金属电池",
+   "group": ""
+  },
+  "锆": {
+   "key": "theme:小金属",
+   "label": "锆",
+   "group": ""
+  },
+  "锌": {
+   "key": "theme:有色金属",
+   "label": "锌",
+   "group": ""
+  },
+  "锑": {
+   "key": "theme:小金属",
+   "label": "锑",
+   "group": ""
+  },
+  "锗": {
+   "key": "theme:小金属",
+   "label": "锗",
+   "group": ""
+  },
+  "镍": {
+   "key": "theme:有色金属",
+   "label": "镍",
+   "group": ""
+  },
+  "镍粉": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "镓": {
+   "key": "theme:小金属",
+   "label": "镓",
+   "group": ""
+  },
+  "镨钕": {
+   "key": "theme:稀土永磁",
+   "label": "镨钕",
+   "group": ""
+  },
+  "长存": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "长时储能": {
+   "key": "theme:储能",
+   "label": "长时储能",
+   "group": ""
+  },
+  "长江存储": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "长鑫": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "长鑫存储": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "长鑫长存": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "长飞": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "长飞光纤": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "闪存": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "阀": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "阴极铜": {
+   "key": "theme:铜",
+   "label": "阴极铜",
+   "group": ""
+  },
+  "陆上风电": {
+   "key": "theme:风电",
+   "label": "陆上风电",
+   "group": ""
+  },
+  "院线": {
+   "key": "theme:短剧游戏",
+   "label": "短剧游戏",
+   "group": ""
+  },
+  "陶瓷": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "陶瓷材料": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "陶瓷电容": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "陶瓷粉": {
+   "key": "group:被动元件",
+   "label": "被动元件",
+   "group": "被动元件"
+  },
+  "隔膜": {
+   "key": "theme:锂电池",
+   "label": "隔膜",
+   "group": ""
+  },
+  "雅下水电": {
+   "key": "theme:水电",
+   "label": "雅下水电",
+   "group": ""
+  },
+  "雅鲁藏布江": {
+   "key": "theme:水电",
+   "label": "雅鲁藏布江",
+   "group": ""
+  },
+  "集成电路": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "集运": {
+   "key": "theme:航运",
+   "label": "集运",
+   "group": ""
+  },
+  "零售": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "零售/商业百货": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "零售连锁": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "零部件": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "靛蓝": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "非球面透镜": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "面板": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "面板/MicroLED/折叠屏": {
+   "key": "group:消费电子/显示",
+   "label": "消费电子/显示",
+   "group": "消费电子/显示"
+  },
+  "靶材": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "鞋服": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "页岩气": {
+   "key": "theme:天然气",
+   "label": "页岩气",
+   "group": ""
+  },
+  "预制棒": {
+   "key": "group:光通信",
+   "label": "光通信",
+   "group": "光通信"
+  },
+  "预制菜": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "颗粒硅": {
+   "key": "theme:硅料硅片",
+   "label": "颗粒硅",
+   "group": ""
+  },
+  "颜料": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "风光储": {
+   "key": "theme:绿电新能源运营",
+   "label": "风光储",
+   "group": ""
+  },
+  "风光储一体化": {
+   "key": "theme:绿电新能源运营",
+   "label": "风光储一体化",
+   "group": ""
+  },
+  "风光大基地": {
+   "key": "theme:绿电新能源运营",
+   "label": "风光大基地",
+   "group": ""
+  },
+  "风光火储": {
+   "key": "theme:绿电新能源运营",
+   "label": "风光火储",
+   "group": ""
+  },
+  "风冷": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "风机": {
+   "key": "theme:风电",
+   "label": "风机",
+   "group": ""
+  },
+  "风电": {
+   "key": "theme:风电",
+   "label": "风电",
+   "group": ""
+  },
+  "风电主轴": {
+   "key": "theme:风电",
+   "label": "风电主轴",
+   "group": ""
+  },
+  "风电叶片": {
+   "key": "theme:风电",
+   "label": "风电叶片",
+   "group": ""
+  },
+  "风电塔筒": {
+   "key": "theme:风电",
+   "label": "风电塔筒",
+   "group": ""
+  },
+  "风电整机": {
+   "key": "theme:风电",
+   "label": "风电整机",
+   "group": ""
+  },
+  "风电法兰": {
+   "key": "theme:风电",
+   "label": "风电法兰",
+   "group": ""
+  },
+  "风电铸件": {
+   "key": "theme:风电",
+   "label": "风电铸件",
+   "group": ""
+  },
+  "风电零部件": {
+   "key": "group:半导体",
+   "label": "半导体",
+   "group": "半导体"
+  },
+  "风电齿轮箱": {
+   "key": "theme:风电",
+   "label": "风电齿轮箱",
+   "group": ""
+  },
+  "飞行汽车": {
+   "key": "theme:低空经济",
+   "label": "飞行汽车",
+   "group": ""
+  },
+  "飞轮储能": {
+   "key": "theme:储能",
+   "label": "飞轮储能",
+   "group": ""
+  },
+  "食品": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "食品饮料": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "餐饮供应链": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "饮料": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "饲料": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "香精": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "马来酰亚胺": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "高值耗材": {
+   "key": "group:医药",
+   "label": "医药",
+   "group": "医药"
+  },
+  "高压直流": {
+   "key": "group:算力AI",
+   "label": "算力AI",
+   "group": "算力AI"
+  },
+  "高多层板": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "高温气冷堆": {
+   "key": "theme:核电",
+   "label": "高温气冷堆",
+   "group": ""
+  },
+  "高温超导磁体": {
+   "key": "theme:核聚变",
+   "label": "高温超导磁体",
+   "group": ""
+  },
+  "高速背板": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "高速覆铜板": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "高速连接器": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "高速铜缆": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "高速铜连接": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "高阶智驾": {
+   "key": "group:机器人",
+   "label": "机器人",
+   "group": "机器人"
+  },
+  "高频高速PCB": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "高频高速板": {
+   "key": "group:PCB与连接",
+   "label": "PCB与连接",
+   "group": "PCB与连接"
+  },
+  "黄磷": {
+   "key": "group:化工材料",
+   "label": "化工材料",
+   "group": "化工材料"
+  },
+  "黄酒": {
+   "key": "group:消费",
+   "label": "消费",
+   "group": "消费"
+  },
+  "黄金": {
+   "key": "theme:黄金贵金属",
+   "label": "黄金",
+   "group": ""
+  },
+  "黄金概念": {
+   "key": "theme:黄金贵金属",
+   "label": "黄金概念",
+   "group": ""
+  },
+  "黄金珠宝": {
+   "key": "theme:黄金贵金属",
+   "label": "黄金珠宝",
+   "group": ""
+  },
+  "黄金股": {
+   "key": "theme:黄金贵金属",
+   "label": "黄金股",
+   "group": ""
+  },
+  "黄金贵金属": {
+   "key": "theme:黄金贵金属",
+   "label": "黄金贵金属",
+   "group": ""
+  },
+  "黄金零售": {
+   "key": "theme:黄金贵金属",
+   "label": "黄金零售",
+   "group": ""
+  }
+ }
+}

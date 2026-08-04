@@ -13060,13 +13060,25 @@ let THEME_NONBROAD = [];
 let THEME_BROAD = [];
 let THEME_DROP_RE = null;
 function loadThemeTaxonomy() {  // 可热加载(管理员校准加词后重读,不重启)
-  try { THEME_TAXONOMY = JSON.parse(fsSync.readFileSync(THEME_TAXONOMY_PATH, 'utf8')); }
-  catch (e) { console.error('[theme-taxonomy] load failed:', e.message); }
-  THEME_NONBROAD = (THEME_TAXONOMY.taxonomy || []).filter(t => !t.broad);
-  THEME_BROAD = (THEME_TAXONOMY.taxonomy || []).filter(t => t.broad);
-  THEME_DROP_RE = (THEME_TAXONOMY.dropped || []).length
-    ? new RegExp('(' + (THEME_TAXONOMY.dropped || []).map(w => String(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')')
+  // 候选构建 → 完整校验 → 原子交换(Codex PR #378 P2):任何一步失败都保留上一份内存状态,
+  // 热加载失败不得让进程消费半新半旧或无效的词典。
+  let candidate = null;
+  try { candidate = JSON.parse(fsSync.readFileSync(THEME_TAXONOMY_PATH, 'utf8')); }
+  catch (e) { console.error('[theme-taxonomy] load failed:', e.message); return; }
+  const nonbroad = (candidate.taxonomy || []).filter(t => !t.broad);
+  const broad = (candidate.taxonomy || []).filter(t => t.broad);
+  const dropRe = (candidate.dropped || []).length
+    ? new RegExp('(' + (candidate.dropped || []).map(w => String(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')')
     : null;
+  // 语义校验(familyUnit 一致性 + 兼容引用合法性)先于交换。模块初始化期字面集合尚在 TDZ,
+  // 校验经 _ready 门闩跳过,由集合声明后的显式调用完成首检——启动期数据坏直接抛死进程,
+  // 正是期望的 fail-fast;热加载期抛错则完整保留旧状态。
+  strategyThemeTaxonomyValidateFamilyUnits(candidate);
+  THEME_TAXONOMY = candidate;
+  THEME_NONBROAD = nonbroad;
+  THEME_BROAD = broad;
+  THEME_DROP_RE = dropRe;
+  strategyMainlineFamilyCompat._cache = null;
 }
 loadThemeTaxonomy();
 function themeDisplayName(standard) { return String(standard || '').split('/')[0].trim(); }
@@ -18546,6 +18558,9 @@ async function addThemeKeyword(url, req, res) {
   if (!Array.isArray(t.members)) t.members = [];
   if (!t.keywords.includes(word)) t.keywords.push(word);
   if (!t.members.includes(word)) t.members.push(word);
+  // 先验证再写(Codex PR #378 P2):语义无效的词典不落盘,避免留下一份重启即死的持久文件。
+  try { strategyThemeTaxonomyValidateFamilyUnits(data); }
+  catch (e) { return send(res, 400, { ok: false, error: 'taxonomy invalid after edit: ' + e.message }); }
   try { fsSync.writeFileSync(THEME_TAXONOMY_PATH, JSON.stringify(data, null, 1), 'utf8'); }
   catch (e) { return send(res, 500, { ok: false, error: 'taxonomy write fail: ' + e.message }); }
   loadThemeTaxonomy();
@@ -21274,15 +21289,21 @@ function strategyMainlineTopicKey(raw) {
 function strategyThemeTaxonomyInfo(raw) {
   const s = String(raw || '').trim();
   if (!s) return null;
+  const infoOf = (t, broad) => ({
+    standard: themeDisplayName(t.standard),
+    group: String(t.group || ''),
+    broad,
+    // 声明式族字段(issue #375 PR A):'group'=按 group 归并成交易族,'standard'=按标准名独立成细族,
+    // 缺省=按查询词落细键(旧口径)。兼容关系由 strategyMainlineFamilyCompat 统一消费。
+    familyUnit: t.familyUnit === 'group' || t.familyUnit === 'standard' ? t.familyUnit : '',
+    compatibleParents: Array.isArray(t.compatibleParents) ? t.compatibleParents : [],
+    broadFallbackFamilies: Array.isArray(t.broadFallbackFamilies) ? t.broadFallbackFamilies : [],
+  });
   for (const t of THEME_NONBROAD) {
-    if ((t.keywords || []).some(k => themeKeywordMatches(s, k))) {
-      return { standard: themeDisplayName(t.standard), group: String(t.group || ''), broad: false };
-    }
+    if ((t.keywords || []).some(k => themeKeywordMatches(s, k))) return infoOf(t, false);
   }
   for (const t of THEME_BROAD) {
-    if ((t.keywords || []).some(k => themeKeywordMatches(s, k))) {
-      return { standard: themeDisplayName(t.standard), group: String(t.group || ''), broad: true };
-    }
+    if ((t.keywords || []).some(k => themeKeywordMatches(s, k))) return infoOf(t, true);
   }
   return null;
 }
@@ -21310,15 +21331,200 @@ function strategyMainlineFamilyInfo(item) {
   const fineKey = /^(?:theme|group):/.test(rawKey)
     ? rawKey
     : `theme:${rawKey || strategyMainlineTopicKey(theme) || theme}`;
-  if (info?.standard && STRATEGY_MAINLINE_KEEP_FINE_THEMES.has(info.standard)) {
+  // 族单位由词典声明式字段决定(issue #375 PR A):'standard' 独立细族 / 'group' 归并交易族 /
+  // 缺省按查询词落细键。字面集合仅作一致性校验与旧测试兼容,不再参与判定。
+  if (info?.standard && info.familyUnit === 'standard') {
     const canonicalFineKey = strategyMainlineTopicKey(info.standard) || info.standard;
     return { key: `theme:${canonicalFineKey}`, label: info.standard, group: '', taxonomy: info };
   }
-  if (info?.group && STRATEGY_MAINLINE_MERGE_GROUPS.has(info.group)) {
+  if (info?.group && info.familyUnit === 'group') {
     return { key: `group:${info.group}`, label: info.group, group: info.group, taxonomy: info };
   }
   return { key: fineKey, label: theme, group: '', taxonomy: info };
 }
+// 词典声明式字段与历史字面集合的一致性校验:启动/热加载即失败,杜绝双源漂移。
+// 字面集合在 PR B(首批族划分)随行为变更一并退役;届时本校验与集合同删。
+function strategyThemeTaxonomyValidateFamilyUnits(candidate) {
+  // 模块初始化期字面集合(const)尚未就绪(TDZ);首次校验由集合声明之后的显式调用完成,
+  // 此后的热加载路径以候选词典为对象在交换前校验(Codex PR #378 P2)。
+  // 结构校验不依赖字面集合,在 _ready 门闩之前执行(Codex 二轮 P1 / Local Claude db8e6f0):
+  // 候选缺 taxonomy 数组等结构缺陷绝不能静默回退去校验旧词典——那会对无效候选报告"通过",
+  // 随后原子交换把它换入,全站族归属静默降级。无参调用(初始化后首检)校验当前已加载词典。
+  if (candidate !== undefined) {
+    const structural = [];
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+      structural.push('候选词典必须是普通对象');
+    } else {
+      if (!Array.isArray(candidate.taxonomy) || !candidate.taxonomy.length) {
+        structural.push('候选词典缺少非空 taxonomy 数组');
+      }
+      if (candidate.dropped !== undefined && !Array.isArray(candidate.dropped)) {
+        structural.push('dropped 若存在必须是数组');
+      }
+      const seenDisplays = new Set();
+      for (const t of (Array.isArray(candidate.taxonomy) ? candidate.taxonomy : [])) {
+        const display = t && typeof t === 'object' ? themeDisplayName(t.standard) : '';
+        if (!display) { structural.push('存在缺少非空 standard 的条目'); continue; }
+        if (seenDisplays.has(display)) structural.push(`standard 显示名重复: '${display}'`);
+        seenDisplays.add(display);
+        if (t.keywords !== undefined && !Array.isArray(t.keywords)) structural.push(`${display}: keywords 必须是数组`);
+        if (t.members !== undefined && !Array.isArray(t.members)) structural.push(`${display}: members 必须是数组`);
+      }
+    }
+    if (structural.length) {
+      throw new Error('[theme-taxonomy] 词典声明校验失败: ' + structural.join('; '));
+    }
+  }
+  if (!strategyThemeTaxonomyValidateFamilyUnits._ready) return;
+  const tax = candidate !== undefined
+    ? candidate.taxonomy
+    : (THEME_TAXONOMY.taxonomy || []);
+  const problems = [];
+  for (const t of tax) {
+    const display = themeDisplayName(t.standard);
+    const declared = t.familyUnit === 'group' || t.familyUnit === 'standard' ? t.familyUnit : '';
+    const expected = STRATEGY_MAINLINE_KEEP_FINE_THEMES.has(display)
+      ? 'standard'
+      : (t.group && STRATEGY_MAINLINE_MERGE_GROUPS.has(t.group) ? 'group' : '');
+    if (declared !== expected) {
+      problems.push(`${display}: familyUnit='${declared}' 但字面集合推导为 '${expected}'`);
+    }
+  }
+  // 反向检查(Local Claude PR #378 复核建议):字面集合中的孤儿项(词典里不存在对应
+  // standard/group)是静默空操作——#342 的 7b6dcf7 曾把 'AI视频' 加进 KEEP_FINE 而其
+  // standard 实为短剧游戏,该行永远不命中且无任何机制发现。集合退役(PR B)前必须可见。
+  const knownStandards = new Set(tax.map(t => themeDisplayName(t.standard)));
+  const knownGroups = new Set(tax.map(t => String(t.group || '')).filter(Boolean));
+  for (const name of STRATEGY_MAINLINE_KEEP_FINE_THEMES) {
+    if (!knownStandards.has(name)) problems.push(`KEEP_FINE 孤儿项 '${name}': 词典无此 standard`);
+  }
+  for (const name of STRATEGY_MAINLINE_MERGE_GROUPS) {
+    if (!knownGroups.has(name)) problems.push(`MERGE_GROUPS 孤儿项 '${name}': 词典无此 group`);
+  }
+  // 兼容引用校验(Codex PR #378 P1 两轮):目标必须是词典真实 standard 显示名,且
+  // 声明方与目标都不得被遮蔽——回环用**本词典(候选)作用域**的关键词匹配器判定,
+  // topicKey 折叠(氢能燃料电池→锂电池 这类)同样拒绝;绝不回退自由文本族键生成错边。
+  const byDisplay = new Map();
+  for (const t of tax) {
+    const display = themeDisplayName(t.standard);
+    if (display) byDisplay.set(display, t);   // 唯一性已由结构校验保证
+  }
+  const scopedNonbroad = tax.filter(t => !t.broad);
+  const scopedBroad = tax.filter(t => t.broad);
+  const scopedMatchDisplay = s => {
+    for (const t of scopedNonbroad) if ((t.keywords || []).some(k => themeKeywordMatches(s, k))) return themeDisplayName(t.standard);
+    for (const t of scopedBroad) if ((t.keywords || []).some(k => themeKeywordMatches(s, k))) return themeDisplayName(t.standard);
+    return '';
+  };
+  const shadowProblem = (display, entry) => {
+    const matched = scopedMatchDisplay(display);
+    if (matched !== display) return `'${display}' 被关键词匹配遮蔽(命中 '${matched || '无'}')`;
+    if (!(entry.familyUnit === 'group' && entry.group)) {
+      const canonical = strategyMainlineTopicKey(display) || display;
+      if (canonical !== display) return `'${display}' 经 topicKey 折叠为 '${canonical}'`;
+    }
+    return '';
+  };
+  for (const t of tax) {
+    const display = themeDisplayName(t.standard);
+    const declares = (Array.isArray(t.compatibleParents) && t.compatibleParents.length)
+      || (Array.isArray(t.broadFallbackFamilies) && t.broadFallbackFamilies.length);
+    if (declares) {
+      const selfProblem = shadowProblem(display, t);
+      if (selfProblem) problems.push(`${display}: 兼容声明方自身 ${selfProblem}`);
+    }
+    const checkRefs = (list, fieldName, requireBroadSelf) => {
+      if (list === undefined) return;
+      if (!Array.isArray(list)) { problems.push(`${display}: ${fieldName} 必须是数组`); return; }
+      if (requireBroadSelf && t.broad !== true) {
+        problems.push(`${display}: ${fieldName} 只能声明在 broad:true 条目上`);
+      }
+      const seen = new Set();
+      for (const raw of list) {
+        const name = typeof raw === 'string' ? raw.trim() : '';
+        if (!name) { problems.push(`${display}: ${fieldName} 含空引用`); continue; }
+        if (seen.has(name)) { problems.push(`${display}: ${fieldName} 重复边 '${name}'`); continue; }
+        seen.add(name);
+        if (name === display) { problems.push(`${display}: ${fieldName} 自引用`); continue; }
+        const entry = byDisplay.get(name);
+        if (!entry) { problems.push(`${display}: ${fieldName} 引用不存在的 standard '${name}'`); continue; }
+        const refProblem = shadowProblem(name, entry);
+        if (refProblem) problems.push(`${display}: ${fieldName} 引用目标 ${refProblem},族键不可靠`);
+      }
+    };
+    checkRefs(t.compatibleParents, 'compatibleParents', false);
+    checkRefs(t.broadFallbackFamilies, 'broadFallbackFamilies', true);
+  }
+  if (problems.length) {
+    throw new Error('[theme-taxonomy] 词典声明校验失败: ' + problems.join('; '));
+  }
+}
+// 族兼容关系(issue #375 PR A):从词典 compatibleParents / broadFallbackFamilies 构建。
+// childKey -> 可支撑的父族键集合;broadKey -> 宽词兜底可归入的族键集合。
+// 依赖用 typeof 守卫:旧测试片段未注入词典时退化为空关系(与其被测场景一致)。
+// 兼容引用参与方(声明方与目标)的族键解析:从 entry 自身声明直接派生,并做两道回环守卫
+// 拒绝被遮蔽的 standard——①关键词匹配器对该显示名必须命中其自身条目;②非 group 单位的
+// 显示名经 topicKey 不得折叠到其它词(topicKey('氢能燃料电池')='锂电池' 这类)。
+// 被遮蔽者作为兼容参与方一律抛错,绝不产出指向错误族的边。
+function strategyMainlineCompatEntryKey(display, entry) {
+  const matched = strategyThemeTaxonomyInfo(display);
+  if (!matched || matched.standard !== themeDisplayName(entry.standard)) {
+    throw new Error(`[theme-taxonomy] 兼容参与方 '${display}' 被关键词匹配遮蔽(命中 '${matched ? matched.standard : '无'}'),族键不可靠`);
+  }
+  if (entry.familyUnit === 'group' && entry.group) return `group:${entry.group}`;
+  const canonical = strategyMainlineTopicKey(display) || display;
+  if (canonical !== display) {
+    throw new Error(`[theme-taxonomy] 兼容参与方 '${display}' 经 topicKey 折叠为 '${canonical}',族键不可靠`);
+  }
+  return `theme:${canonical}`;
+}
+function strategyMainlineFamilyCompat() {
+  if (strategyMainlineFamilyCompat._cache) return strategyMainlineFamilyCompat._cache;
+  const parentByChild = new Map();
+  const broadFallback = new Map();
+  const taxonomy = typeof THEME_TAXONOMY !== 'undefined' && THEME_TAXONOMY
+    ? (THEME_TAXONOMY.taxonomy || [])
+    : [];
+  // 引用与声明方的族键一律从索引定位到的 entry 直接派生(Codex 二轮 P1),
+  // 绝不把 standard 名送回自由文本/关键词匹配器——那会被更早的关键词抢先命中连到错误族
+  // (真实反例:氢能燃料电池→锂电池、光伏玻璃→光伏、工业气体电子特气→group:半导体)。
+  const byDisplay = new Map();
+  for (const t of taxonomy) {
+    const d = themeDisplayName(t.standard);
+    if (d) byDisplay.set(d, t);   // 显示名唯一性由结构校验保证
+  }
+  const resolveRef = (ownerDisplay, fieldName, name) => {
+    const trimmed = typeof name === 'string' ? name.trim() : '';
+    const entry = trimmed ? byDisplay.get(trimmed) : null;
+    if (!entry) {
+      throw new Error(`[theme-taxonomy] ${ownerDisplay}: ${fieldName} 引用不存在的 standard '${trimmed}'(幽灵族边)`);
+    }
+    return strategyMainlineCompatEntryKey(trimmed, entry);
+  };
+  for (const t of taxonomy) {
+    const declares = (Array.isArray(t.compatibleParents) && t.compatibleParents.length)
+      || (Array.isArray(t.broadFallbackFamilies) && t.broadFallbackFamilies.length);
+    if (!declares) continue;   // 非声明方不做回环检查,遮蔽的旁观条目不影响启动
+    const selfDisplay = themeDisplayName(t.standard);
+    const selfKey = strategyMainlineCompatEntryKey(selfDisplay, t);
+    for (const parent of (Array.isArray(t.compatibleParents) ? t.compatibleParents : [])) {
+      const parentKey = resolveRef(selfDisplay, 'compatibleParents', parent);
+      if (!parentKey || parentKey === selfKey) continue;
+      if (!parentByChild.has(selfKey)) parentByChild.set(selfKey, new Set());
+      parentByChild.get(selfKey).add(parentKey);
+    }
+    for (const target of (Array.isArray(t.broadFallbackFamilies) ? t.broadFallbackFamilies : [])) {
+      const targetKey = resolveRef(selfDisplay, 'broadFallbackFamilies', target);
+      if (!targetKey || targetKey === selfKey) continue;
+      if (!broadFallback.has(selfKey)) broadFallback.set(selfKey, new Set());
+      broadFallback.get(selfKey).add(targetKey);
+    }
+  }
+  strategyMainlineFamilyCompat._cache = { parentByChild, broadFallback };
+  return strategyMainlineFamilyCompat._cache;
+}
+strategyThemeTaxonomyValidateFamilyUnits._ready = true;
+strategyThemeTaxonomyValidateFamilyUnits();   // 字面集合就绪后的首次一致性校验(fail-fast)
 function strategyMainlineReasonFamilyEvidence(values) {
   const evidenceRows = [];
   for (const raw of (Array.isArray(values) ? values : [values])) {
@@ -21407,12 +21613,28 @@ function strategyMainlineStarAttributionDecision(item, star, attributionByCode) 
   if (!code || !familyKey || !(attributionByCode instanceof Map)) {
     return { allowed: true, basis: 'board-membership-only', conflict: '' };
   }
-  // 细分发电主因可以支撑“电力”父主线，但兄弟细分仍不能互相借明星。
-  // 例如火电明星可计入电力，不得因此计入绿电；电网设备/核电工程也不属于该兼容范围。
-  const isPowerParentCompatible = families => familyKey === 'theme:电力'
-    && families instanceof Set
-    && ['theme:火电热电', 'theme:绿电新能源运营', 'theme:水电']
-      .some(childKey => families.has(childKey));
+  // 族兼容关系全部来自词典声明(issue #375 PR A),裁决只跑通用规则:
+  // ①子族证据可支撑其声明的父族候选(compatibleParents,单向,兄弟互借在结构上不可能);
+  // ②宽词兜底证据可归入其声明的目标族(broadFallbackFamilies,仅证据全为宽词时)。
+  const compat = typeof strategyMainlineFamilyCompat === 'function'
+    ? strategyMainlineFamilyCompat()
+    : { parentByChild: new Map(), broadFallback: new Map() };
+  const parentCompatible = families => {
+    if (!(families instanceof Set)) return false;
+    for (const family of families) {
+      const parents = compat.parentByChild.get(family);
+      if (parents && parents.has(familyKey)) return true;
+    }
+    return false;
+  };
+  const broadCompatible = families => {
+    if (!(families instanceof Set)) return false;
+    for (const family of families) {
+      const targets = compat.broadFallback.get(family);
+      if (targets && targets.has(familyKey)) return true;
+    }
+    return false;
+  };
   const evidence = attributionByCode.get(code);
   if (!evidence) return { allowed: true, basis: 'board-membership-only', conflict: '' };
   if (evidence.currentFamilies instanceof Set && evidence.currentFamilies.size) {
@@ -21422,14 +21644,10 @@ function strategyMainlineStarAttributionDecision(item, star, attributionByCode) 
     if (evidence.currentFamilies.has(familyKey)) {
       return { allowed: true, basis: currentBasis, conflict: '' };
     }
-    // “AI应用”是宽口径兜底，不能反过来否决同日板块已经给出的更具体 AI视频/短剧游戏
-    // 归属。兼容只开放这一条父子关系；算力AI、电力等其他家族仍按冲突拒绝。
-    if (evidence.currentBroadOnly === true
-      && evidence.currentFamilies.has('theme:AI应用')
-      && familyKey === 'theme:短剧游戏') {
+    if (evidence.currentBroadOnly === true && broadCompatible(evidence.currentFamilies)) {
       return { allowed: true, basis: `${currentBasis}-broad-compatible`, conflict: '' };
     }
-    if (isPowerParentCompatible(evidence.currentFamilies)) {
+    if (parentCompatible(evidence.currentFamilies)) {
       return { allowed: true, basis: `${currentBasis}-child-compatible`, conflict: '' };
     }
     return {
@@ -21442,12 +21660,10 @@ function strategyMainlineStarAttributionDecision(item, star, attributionByCode) 
     if (evidence.priorFamilies.has(familyKey)) {
       return { allowed: true, basis: 'prior-main-reason', conflict: '' };
     }
-    if (evidence.priorBroadOnly === true
-      && evidence.priorFamilies.has('theme:AI应用')
-      && familyKey === 'theme:短剧游戏') {
+    if (evidence.priorBroadOnly === true && broadCompatible(evidence.priorFamilies)) {
       return { allowed: true, basis: 'prior-main-reason-broad-compatible', conflict: '' };
     }
-    if (isPowerParentCompatible(evidence.priorFamilies)) {
+    if (parentCompatible(evidence.priorFamilies)) {
       return { allowed: true, basis: 'prior-main-reason-child-compatible', conflict: '' };
     }
     return {
@@ -22213,8 +22429,8 @@ function strategyMainlineBoardThemeRelated(boardName, theme) {
     // 但不能仅凭这个宽组关系把 AI应用、ChatGPT、智谱AI 的板块资金和涨幅
     // 挂到算力/液冷硬件主线。细分族之间只认相同 standard；AI应用与
     // AI视频/短剧游戏的归并由 strategyMergeMainlineFamilies 单独处理。
-    const boardFine = STRATEGY_MAINLINE_KEEP_FINE_THEMES.has(themeDisplayName(boardInfo.standard));
-    const mainFine = STRATEGY_MAINLINE_KEEP_FINE_THEMES.has(themeDisplayName(mainInfo.standard));
+    const boardFine = boardInfo.familyUnit === 'standard';
+    const mainFine = mainInfo.familyUnit === 'standard';
     if (boardFine || mainFine) return false;
     if (boardInfo.group && mainInfo.group && boardInfo.group === mainInfo.group) return true;
   }
