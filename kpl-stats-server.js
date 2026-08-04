@@ -26452,7 +26452,35 @@ function strategyMainlineReviewFinalQualification(finalMainline, actualRanking, 
 // 保留了精确绑定的同日盘中 L2 任务，且该任务已通过明星确认金额/比值门槛，
 // 可按有效证据的来源恢复为盘中样本。这条例外不认收盘后才产生的 L2 证据。
 const STRATEGY_MAINLINE_INTRADAY_PHASES = new Set(['早盘', '上午盘', '午间休市', '午后', '尾盘']);
-function strategyMainlineReviewSampleStatus(day, predict, source = '') {
+function strategyMainlineReviewFrozenFamilyEvidence(day, snapshot, familyKey) {
+  if (!snapshot || typeof snapshot !== 'object' || snapshot?.frozen !== true
+    || String(snapshot?.day || '') !== String(day || '') || !familyKey) return null;
+  const sections = [
+    ['mainlines', snapshot?.mainlines],
+    ['l2Gate.passed', snapshot?.l2Gate?.passed],
+    ['l2Gate.excluded', snapshot?.l2Gate?.excluded],
+  ];
+  for (const [section, rows] of sections) {
+    for (const row of (Array.isArray(rows) ? rows : [])) {
+      const rowFamily = strategyMainlineFamilyInfo({
+        key: row?.familyKey || row?.key || '',
+        theme: row?.theme || '',
+      }).key;
+      const limitUpCount = Number(row?.count ?? row?.limitUpCount ?? row?.todayLimitCount);
+      if (rowFamily !== familyKey || !Number.isFinite(limitUpCount)
+        || limitUpCount < STRATEGY_MAINLINE_FORMAL_MIN_ZT) continue;
+      return {
+        section,
+        familyKey: rowFamily,
+        theme: String(row?.theme || ''),
+        limitUpCount,
+        l2ScanState: String(row?.l2ScanState || row?.l2VerificationStatus || ''),
+      };
+    }
+  }
+  return null;
+}
+function strategyMainlineReviewSampleStatus(day, predict, source = '', frozenSnapshot = null) {
   const phase = String(predict?.sessionPhase || '').trim();
   const sourceKey = ['eastmoney', 'ths'].includes(String(source || '').trim())
     ? String(source || '').trim()
@@ -26484,7 +26512,12 @@ function strategyMainlineReviewSampleStatus(day, predict, source = '') {
       key: correction?.familyKey || '',
       theme: correction?.theme || '',
     }).key;
-    if (!starCode || starLevel !== 'confirmed' || !correctionFamily) continue;
+    const frozenFamilyEvidence = strategyMainlineReviewFrozenFamilyEvidence(
+      day,
+      frozenSnapshot,
+      correctionFamily,
+    );
+    if (!starCode || starLevel !== 'confirmed' || !correctionFamily || !frozenFamilyEvidence) continue;
 
     for (const key of sourceKeys) {
       const evidence = correction?.l2Evidence?.[key];
@@ -26529,6 +26562,7 @@ function strategyMainlineReviewSampleStatus(day, predict, source = '') {
         operationId: String(correction?.operationId || ''),
         starCode,
         starName: String(correction?.star?.name || starCode),
+        frozenFamilyEvidence,
       });
     }
     if (accepted.length) break;
@@ -26607,7 +26641,11 @@ async function getStrategyMainlineReview(days = 10) {
     const attributionReview = await strategyMainlineReviewPredictionAttribution(day, rawPredict);
     const predict = attributionReview.predict;
     const phase = String(predict.sessionPhase || '');
-    const sampleStatus = strategyMainlineReviewSampleStatus(day, predict);
+    const frozenSampleSnapshot = !STRATEGY_MAINLINE_INTRADAY_PHASES.has(phase)
+      && Array.isArray(predict?.reviewCorrections) && predict.reviewCorrections.length
+      ? await readStrategyMainlineSnapshot(day).catch(() => null)
+      : null;
+    const sampleStatus = strategyMainlineReviewSampleStatus(day, predict, '', frozenSampleSnapshot);
     const sampleValid = sampleStatus.valid;
     const sampleInvalidReason = sampleStatus.invalidReason;
     const pendingReview = day === todayIso && !isAfterMarketClose(day);   // 当前盘中:待盘后验证
@@ -26810,7 +26848,7 @@ async function getStrategyMainlineReview(days = 10) {
       reviewBySource = {};
       for (const skey of ['eastmoney', 'ths']) {
         const block = predict.bySource[skey] || {};
-        const sourceSampleStatus = strategyMainlineReviewSampleStatus(day, predict, skey);
+        const sourceSampleStatus = strategyMainlineReviewSampleStatus(day, predict, skey, frozenSampleSnapshot);
         const sourceSampleValid = sourceSampleStatus.valid;
         const blockPredict = {
           top: block.top || [],

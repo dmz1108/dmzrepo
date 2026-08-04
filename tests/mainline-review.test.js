@@ -57,6 +57,7 @@ function isDroppedThemeWord(raw) { return /测试剔除词/.test(String(raw || '
 const STRATEGY_MAINLINE_INTRADAY_PHASES = extractSet('STRATEGY_MAINLINE_INTRADAY_PHASES');
 const STRATEGY_MAINLINE_FORMAL_MIN_ZT = 3;
 eval(extractFn('strategyMainlineIsTradingSessionObservation'));
+eval(extractFn('strategyMainlineReviewFrozenFamilyEvidence'));
 eval(extractFn('strategyMainlineReviewSampleStatus'));
 
 // ---- 待测函数 + 可控 IO/时钟 stub ----
@@ -110,6 +111,8 @@ const readEastmoneyCloseDbDay = async d => CLOSE[d]
   : null;
 const PREDICTS = {};
 const readMainlinePredict = async d => PREDICTS[d] || null;
+const SNAPSHOTS = {};
+const readStrategyMainlineSnapshot = async d => SNAPSHOTS[d] || null;
 const CONFIRMS = {};
 const readMainlineConfirm = async d => CONFIRMS[d] || null;
 const VISIBLE_MAINLINES = {};
@@ -754,6 +757,13 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
     }],
   };
   PREDICTS['2026-08-03'] = reconstructedPredict;
+  SNAPSHOTS['2026-08-03'] = {
+    day: '2026-08-03', frozen: true,
+    l2Gate: { excluded: [{
+      theme: '电力', familyKey: 'theme:电力', count: 5, boardCount: 4,
+      l2VerificationStatus: 'scanned-no-star', l2ScanState: 'scanned-no-star',
+    }] },
+  };
   LIMIT_UP['2026-08-03'] = finalLimitDb(['600396', '000595', '600644']);
   MAIN_REASON['2026-08-03'] = reasonDb([
     { code: '600396', name: '华电辽能', finalBoardTopic: '电力' },
@@ -782,8 +792,16 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
 
   const detachedEvidence = JSON.parse(JSON.stringify(reconstructedPredict));
   detachedEvidence.bySource.ths.candidates[0].correctionEvidence.l2Jobs = ['other-job'];
-  A(strategyMainlineReviewSampleStatus('2026-08-03', detachedEvidence, 'ths').valid === false,
+  A(strategyMainlineReviewSampleStatus('2026-08-03', detachedEvidence, 'ths', SNAPSHOTS['2026-08-03']).valid === false,
     '未与来源候选精确绑定的L2元数据不得恢复样本资格');
+  A(strategyMainlineReviewSampleStatus('2026-08-03', reconstructedPredict, 'ths', null).valid === false,
+    '只有frozenSnapshotPreserved自述、没有实读冻结快照时不得恢复样本资格');
+  const unrelatedFrozen = JSON.parse(JSON.stringify(SNAPSHOTS['2026-08-03']));
+  unrelatedFrozen.l2Gate.excluded[0] = {
+    theme: '医药', familyKey: 'group:医药', count: 8, l2ScanState: 'scanned-no-star',
+  };
+  A(strategyMainlineReviewSampleStatus('2026-08-03', reconstructedPredict, 'ths', unrelatedFrozen).valid === false,
+    '冻结快照中没有该主线方向时，不得用盘后修正档伪造盘中预判');
 
   if (process.exitCode) console.error('\nSOME MAINLINE-REVIEW CHECKS FAILED');
   else console.log('\nALL MAINLINE-REVIEW CHECKS PASSED');

@@ -14114,8 +14114,9 @@ Notes for next agent:
 ## 2026-08-04 - Codex - 真实盘中 L2 证据恢复回看样本资格
 
 Changed:
-- 收盘后修正的预测档仍默认不计样本；仅当原始冻结时点属于盘中，来源候选、
-  确认明星与精确 L2 job 绑定，且同日盘中证据通过涨停、最大档金额和确认比值门槛时，
+- 收盘后修正的预测档仍默认不计样本；仅当原始冻结时点属于盘中、实读的同日冻结快照
+  确认该方向已进入盘中候选/扫描，来源候选、确认明星与精确 L2 job 绑定，且同日盘中证据通过
+  涨停、最大档金额和确认比值门槛时，
   才以 `intraday-l2-reconstructed` 恢复样本资格。
 - 样本资格按来源独立计算。2026-08-03 同花顺 L2 任务于北京时间 10:23 完成，可计入；
   东财证据于 15:11 生成，仍不计东财盘中样本。整体样本因存在一条可信盘中证据链而有效。
@@ -14132,11 +14133,17 @@ Files:
 Validated:
 - 只读核对云端 2026-08-03 预测档：同花顺 job `415560b0b3211565` 于 10:23 完成，
   华电辽能涨停，最大档金额门槛通过，确认比值 3/3 通过；东财 job 时点为 15:11。
+- 只读核对同日冻结快照：「电力」于盘中已进入 `l2Gate.excluded`，当时记录 5 只涨停、4 个板块，
+  状态为 `scanned-no-star`。修正并非在收盘后凭空新建方向。
+- 审核期增加实读冻结快照门槛：只有 `frozenSnapshotPreserved=true` 自述、或快照中没有同家族方向时，
+  一律不恢复样本资格。
 - `node --check kpl-stats-server.js` 通过。
 - `node tests/mainline-review.test.js` 通过，锁定整体/同花顺计样本、东财不计样本，以及游离 L2
   元数据不得恢复资格。
 - `node tests/strategy-workbench-ui.test.js` 通过。
 - 全仓 84/84 个测试文件通过。
+- 根据上线前生产基线和本次唯一新增样本，预期正式主线成立率从整体 4/5（80%）变为
+  5/6（83.3%），同花顺从 3/3（100%）变为 4/4（100%），东财保持 4/5（80%）；部署后必须实测对照。
 
 Deployment:
 - 本条记录时仅为 GitHub 代码变更；生产尚未部署，服务未重启。
@@ -14144,5 +14151,7 @@ Deployment:
 
 Notes for next agent:
 - 不得把 `excludedFromPredictionStats=true` 普遍翻转；本规则只认窄口径、可稽核的同日盘中 L2 证据链。
+- 修正写入方已版本化在 `ops/production/requests/2026-08-03-review-electricity-mainline-backfill.ps1`；
+  其 `assertFrozenExclusion` 与本次读取侧快照门槛共同防止收盘后新造预判样本。
 - 部署后应验证 2026-08-03 回看行 `sampleValid=true`、`sampleBasis=intraday-l2-reconstructed`、
   `sampleEvidenceSources=["ths"]`，且 `bySource.eastmoney.sampleValid=false`。
