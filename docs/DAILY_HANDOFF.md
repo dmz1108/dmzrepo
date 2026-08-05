@@ -14357,3 +14357,78 @@ Deployment:
 Notes for next agent:
 - 复核重点是多主线明细不得改变根层命中率/封板率分母，且不得把一条主线的收益错配给另一条主线。
 - 8 月 4 日的“3 日”在第三个后续交易日收盘前本就不是终值；本改动只让等待状态诚实可见。
+
+## 2026-08-05 - Codex - TGB 终盘池纠正后重试请求
+
+Changed:
+- 首次 Owner 口径写入运行 `31008138017` 在写前终盘池闸主动失败：脚本执行时终盘文件已从 104 行纠正为 103 行，
+  `601138` 已不在文件中，只剩北交所 `920117` 需排除；旧请求仍固定 104 行，因此拒绝继续。
+- 失败发生在备份/写入前，`rollbackFailures=[]`，正式 TGB 仍缺失，综合主因未重折。
+- 修正日期绑定请求：终盘文件必须为 103/103 且明确不含 `601138`，排除 `920117` 后必须为 102/102；
+  公开 limit-up status 的已有元数据计数 104 单独校验，不再与终盘文件实际行数混用。
+
+Files:
+- `ops/production/requests/2026-08-05-tgb-hunan-owner-authorized-write.ps1`
+- `tests/tgb-20260805-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 失败证据：`rawCount=103`、`rawUniqueCount=103`、`eligibleCount=102`、`eligibleUniqueCount=102`，
+  `excludedRows=[920117]`、`rollbackFailures=[]`。
+- 公开 source-view 仍无 TGB 正式行，公开 `/health` 为 `ok:true`。
+
+Deployment:
+- 首次运行失败且无生产数据变更，未重启服务；纠正后重试尚未执行。
+
+Notes for next agent:
+- 重试仍必须通过 102 行代码集、名称、15 块计数、原图哈希、落盘后二次闸和公开 source-view 全部校验；任一失败继续回滚。
+
+## 2026-08-05 - Codex - TGB 并发终盘池稳定写入请求
+
+Changed:
+- 第二次写入运行 `31008656232` 同样在写前闸主动停止；此时终盘文件又被并发刷新为 104/104，
+  包含 `601138` 和北交所 `920117`，排除两者后仍稳定为 102/102。
+- 将终盘闸改为可审计的双状态合同：原始文件可为 103/103（`601138` 已移除）或 104/104（`601138` 仍存在），
+  但 `601138` 无论是否出现都不得进入合格集，`920117` 始终排除，最终合格代码集必须恒为同一 102 只。
+- 请求回执会显式记录 `ownerExcludedWasPresent`，保留并发刷新时文件所处的实际状态。
+
+Files:
+- `ops/production/requests/2026-08-05-tgb-hunan-owner-authorized-write.ps1`
+- `tests/tgb-20260805-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 第二次失败证据：`rawCount=104`、`rawUniqueCount=104`、`eligibleCount=102`、`eligibleUniqueCount=102`，
+  `excludedRows=[920117,601138]`；仍未进入备份/写入阶段。
+- 两次主动失败共同证明：并发终盘文件的 103/104 差异只由 `601138` 是否存在构成，排除 Owner 明确的非涨停与北交所后，
+  合格集均为 102/102。
+
+Deployment:
+- 第二次运行失败且无正式数据变更，未重启服务；稳定双状态请求尚未执行。
+
+Notes for next agent:
+- 不得放宽最终合格集；双状态仅吸收 `601138` 在终盘原始文件中的并发出现/消失，合格代码数、代码集与全部人工行仍必须精确为 102。
+
+## 2026-08-05 - Codex - TGB 公开状态双计数稳定验证请求
+
+Changed:
+- 第三次写入运行 `31008946918` 已通过终盘双状态闸，并完成备份、正式写入、综合主因重折、落盘后二次闸、
+  综合/证据/auto 代码集和公开 TGB/综合代码集验证；最后仅在公开 limit-up status 的计数检查失败。
+- 该接口与终盘文件同源受并发刷新影响，已观察到 103/104 两个状态；将公开状态计数闸与终盘双状态闸一致为只接受 103 或 104。
+- 公开 TGB 与综合归纳仍必须各为精确 102 行/102 唯一代码，缺失/多余为空，TGB 覆盖率/主因覆盖率 100%，低质量 0，
+  `sourceErrors=[]` 且 `/health` 为 `ok:true`；这些强闸未放宽。
+
+Files:
+- `ops/production/requests/2026-08-05-tgb-hunan-owner-authorized-write.ps1`
+- `tests/tgb-20260805-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 第三次运行失败原因仅 `public baseline/health mismatch`；自动回滚完成，`rollbackFailures=[]`。
+- 回滚后公开 source-view 恢复为 TGB 0，正式文件未保留；公开 `/health` 为 `ok:true`。
+
+Deployment:
+- 第三次运行已回滚，未重启服务；公开状态双计数稳定请求尚未执行。
+
+Notes for next agent:
+- 只有 limit-up status 的已观察 103/104 计数这一元数据闸改为双状态；人工 102 行、正式源、综合库、证据、auto 和公开对账仍全部要求精确一致。
