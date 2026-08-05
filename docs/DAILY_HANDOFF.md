@@ -14155,3 +14155,42 @@ Notes for next agent:
   其 `assertFrozenExclusion` 与本次读取侧快照门槛共同防止收盘后新造预判样本。
 - 部署后应验证 2026-08-03 回看行 `sampleValid=true`、`sampleBasis=intraday-l2-reconstructed`、
   `sampleEvidenceSources=["ths"]`，且 `bySource.eastmoney.sampleValid=false`。
+
+## 2026-08-04 - Codex - PR #391 盘中 L2 回看样本部署回执
+
+Changed:
+- PR #391 经本地与远端 Claude 对最新增量 `2c1cb60` 复核后合入 `main@f3a2642`。
+- 使用既有原子清单发布主服务、行情前端与题材词典；回看现可在不改写历史预测档的前提下，
+  用同日冻结方向和精确绑定的盘中 L2 硬证据恢复 2026-08-03 样本资格。
+- 8 月 3 日冻结快照的 `scanned-no-star` 已有明确原因：旧版精确家族归因没有把同花顺
+  “超超临界发电”和东财“绿色电力”的华电辽能明星证据支撑给“电力”父主线；该兼容边界
+  后由 PR #365 限定为发电细分支撑电力父主线，未开放给电网设备等无关方向。
+
+Files:
+- Runtime: `C:\PandaDashboard\kpl-stats-server.js`
+- Runtime: `C:\PandaDashboard\kpl-dashboard_17_apple.html`
+- Runtime: `C:\PandaDashboard\theme-taxonomy.json`
+- Cloud logs: `panda-cloud-ops-2026-06-19.md`, `_cloud-change-log-20260705.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 受保护生产运行 `30962013538` 成功，部署器报告 `restart=main`、`health=ok`；公网
+  `https://market.dreamerqi.com/health` 返回 `{"ok":true}`。
+- 2026-08-03 回看生产响应：`sampleValid=true`、`sampleBasis=intraday-l2-reconstructed`、
+  `sampleEvidenceSources=["ths"]`；同花顺样本有效，东财保持 `sampleValid=false` / `phase:已收盘`。
+- 正式主线成立率按预期变为整体 5/6（83.3%）、同花顺 4/4（100%）、东财 4/5（80%）。
+- 生产策略页已包含“盘中L2补证”和“盘中L2样本”标识。
+- 批次文件 SHA-256：主服务
+  `f7b87a944be5975429ec730367f0c060d0af7b2f5b5cb5b532529d73046fd579`，行情前端
+  `be1e03832e11579be49229dedcec4c24baaf757073a789ba57abf526d3b3fdc8`，题材词典
+  `0b792fd34533631f82e430db16cf7ef8a2db477447d5e40a8ee34539889ad3ad`。
+
+Deployment:
+- Workflow: `https://github.com/dmz1108/dmzrepo/actions/runs/30962013538`。
+- 云端回退备份：`C:\PandaDashboard\_deploy-backups\github-30962013538-1`。
+- 主服务已重启且健康；未改写运行时数据库、历史预测档、冻结快照或 L2 原始任务。
+
+Notes for next agent:
+- 盘后修正仍默认不计样本；只有同日冻结方向与完整盘中 L2 证据链同时成立，才能使用此窄口径。
+- `l2Gate.excluded` 只证明方向盘中存在，不单独证明明星；明星必须继续通过候选、股票、来源、
+  精确 jobId、交易时点、涨停、最大档金额与确认比值的全部校验。
