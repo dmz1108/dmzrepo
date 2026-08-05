@@ -14271,3 +14271,28 @@ Deployment:
 Notes for next agent:
 - 生产刷新后只可从标题、日期、白底表格及 `@TGB湖南人` 水印均匹配的官方原图继续人工双遍转录；
   若文章、图片或字段不可辨认，必须停止且不得写正式库。
+
+## 2026-08-05 - Codex - TGB 湖南人对账阻断回执
+
+Changed:
+- PR #393、#394、#395 均已合并；受保护生产运行 `31003332247` 已将对账阻断记录到两份云端运维日志。
+- 日志写入前备份两份云端日志；正式 TGB 数据、综合主因库和服务状态均未改变。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- Cloud logs: `panda-cloud-ops-2026-06-19.md`, `_cloud-change-log-20260705.md`
+
+Validated:
+- 云端阻断回执：人工候选 102/102，终盘原始池 104/104，过滤池 103/103，
+  `excludedCodes=[920117]`、`missingCodes=[601138]`、`extraCodes=[]`、重复 0、`weakCount=0`。
+- 公开 source-view 复核为综合归纳 103、复盘啦 102、选股宝 102、韭研 0、淘股吧 0，
+  `sourceErrors=[]`；公开 `/health` 为 `ok:true`。
+
+Deployment:
+- Workflow: `https://github.com/dmz1108/dmzrepo/actions/runs/31003332247`。
+- 云端日志备份：`C:\PandaDashboard\backups\tgb-hunan-blocked-20260805-20260805-195451`。
+- 正式入库 0 行；综合主因未重折；未部署服务代码，未重启服务。
+
+Notes for next agent:
+- 阻断点仍是生产终盘池中的 `601138` 工业富联与湖南人官方炸板区归类冲突；在终盘池纠正或有新的可审计证据前，
+  不得写入 2026-08-05 正式 TGB 文件或重折当天综合主因。
