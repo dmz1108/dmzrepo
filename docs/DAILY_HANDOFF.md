@@ -14660,3 +14660,48 @@ Notes for next agent:
 - 若未来再做第二批族划分,需要把当时的词典再快照一份并把纪元机制升级为多段
   (day→快照版本的映射),当前实现是单边界两纪元。
 - 词典热加载(管理员加词)只作用于当前纪元;旧快照文件不参与热加载。
+
+## 2026-08-05(Local Claude)PR #381 rebase:#401 逐条证据与族纪元的接缝拆分
+
+What changed:
+- #401(逐条正式主线证据)合并后,其 `strategyMainlineReviewEnrichFormalConclusions`
+  是 async,调用点恰在 #381 族口径纪元段内——**段内 await 会在让出期间把临时换出的
+  旧词典快照暴露给并发请求**,违反纪元机制前提。按 Owner/Codex 要求拆为两段:
+  - `strategyMainlineReviewPlanFormalEvidence(predict, formalRows, conclusions)`
+    **同步**,读词典:结论行↔主线行↔候选绑定、同族明星、预期明星轨迹,
+    含 #401 的"同族多条 fail closed"(`uniqueFamilyMatch`)。**在纪元段内执行**,
+    生效日前按旧词典分族。
+  - `strategyMainlineReviewEnrichFormalConclusions(plans, evalStock, options)`
+    **保持 async**,只做收益/封板/领先时长/完整性标注,全程不读词典。
+    **在纪元段外 await 回填**(顶层 + 逐源各一次),不改同步、不吞 Promise。
+- 逐源资格聚合改用纪元内已算好的 `sourceFormalConclusions`(而非 enrich 结果):
+  两者 `mainlineQualified` 逐条相同,聚合值不变,但让**分母不再依赖异步补全**。
+- `formalMainlineCount` 同样取 conclusions 长度,与回填后的明细长度由断言绑死。
+
+Files:
+- `kpl-stats-server.js`(拆分 + 两处调用点 + 纪元段外回填)
+- `tests/mainline-review.test.js`(Plan/Enrich 分段调用;新增三条断言)
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 新增断言:①纪元段内**静态无 await**(从源码切片正则校验,防回归);
+  ②逐源 `mainlineQualified` 必须等于 `AggregateQualification(formalMainlines)`
+  且 `formalMainlineCount === formalMainlines.length`——一旦 enrich 覆盖了
+  `mainlineQualified`,分母与明细立即失配报错;③拆分后 conclusion 原字段完整回填。
+- 08-04 多主线夹具:东财光通信/算力硬件、同花顺算力硬件逐条各带自己的明星与龙头,
+  领先时长逐条独立(measured),未跨线借数。
+- 全仓 **85/85**;Codex 点名的 `mainline-review`(102 ok)、
+  `family-declarative-equivalence`(62 ok)、`strategy-two-source-mainlines`(92 ok)全绿。
+- 夹具中 `group:算力AI` 作为**旧档案键**保留,断言改按解析后的族键取行,
+  顺带验证旧键档案在新词典下仍正确落族。
+
+Deployment:
+- GitHub only;未部署、未重启。保持 Draft 待 Codex 复审。
+- 部署仍须收盘后,且合并前核对 `STRATEGY_FAMILY_RECUT_EFFECTIVE_DAY`
+  (现为 2026-08-05)与实际部署后首个交易日一致——**今日已是 08-05,
+  若部署落在 08-05 收盘后,须改为 2026-08-06**。
+
+Notes for next agent:
+- 纪元段的硬约束现在有测试守着:任何人想在段内加 await 都会被 mainline-review 拦下。
+- 若后续再有"逐条主线证据"类扩展,遵循同一分层:读词典的绑定进 Plan(纪元内),
+  取数/算收益进 Enrich(纪元外)。
