@@ -14432,3 +14432,37 @@ Deployment:
 
 Notes for next agent:
 - 只有 limit-up status 的已观察 103/104 计数这一元数据闸改为双状态；人工 102 行、正式源、综合库、证据、auto 和公开对账仍全部要求精确一致。
+
+## 2026-08-05 - Codex - TGB 湖南人 Owner 口径正式入库回执
+
+Changed:
+- 按 Owner 明确口径将 `601138` 工业富联排除在涨停池外；受保护生产运行 `31009227646`
+  成功写入 2026-08-05 淘股吧湖南人正式源 102 行，并重折当天综合主因库。
+- 正式写入前备份全部会触及的正式源、综合/证据/质量/auto、原始证据及两份云端运维日志；
+  写入与重折后完成落盘和公开接口双重校验，并将成功回执写入云端变更日志。
+
+Files:
+- Runtime formal source: `C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-08-05.json`
+- Runtime combined/evidence/quality/auto data for `2026-08-05`
+- Cloud logs: `panda-cloud-ops-2026-06-19.md`, `_cloud-change-log-20260705.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 官方文章 `https://www.tgb.cn/a/2u10yPnYbir`；原图 `image-01-06.png`，长度 1,279,169，
+  SHA-256 `eb61a2164d33fc0e344d4a6f93e66ed690b9bb079ab2325409b395fc4d6e97af`。
+- 人工正式行与落盘复核均为 102/102；`missingCodes=[]`、`extraCodes=[]`、`duplicateCodes=[]`、
+  `weakCount=0`，15 个题材块合计 102；唯一显式名称别名为 `688549` 中巨芯/中巨芯-U。
+- 运行时终盘原始池为 104/104；排除北交所 `920117` 与 Owner 非涨停 `601138` 后为 102/102。
+  综合、证据、auto 代码集均为 102/102，缺失/多余为空。
+- 公开 source-view：综合归纳 102、淘股吧 102；淘股吧覆盖率和主因覆盖率均为 100%，
+  低置信 0，`sourceErrors=[]`；独立复验 `/health` 为 `ok:true`。
+- 正式文件 SHA-256 `4173e09e1bfd9168ce458c30ae4d15516cf409b4a2be97571bf0561134b62947`；
+  综合文件 SHA-256 `0a66c8a7b81f44d85bb1c464012fbef8f9ef380844607cfdc924a2709ff118e2`。
+
+Deployment:
+- Workflow: `https://github.com/dmz1108/dmzrepo/actions/runs/31009227646`。
+- 云端备份：`C:\PandaDashboard\backups\tgb-hunan-manual-20260805-20260805131441`。
+- 数据写入和综合主因重折已完成；未部署服务代码，未重启服务。
+
+Notes for next agent:
+- 2026-08-05 的正式 TGB 口径固定为 102 只，`601138` 不得补入；炸板区、北交所与非官方图片继续排除。
