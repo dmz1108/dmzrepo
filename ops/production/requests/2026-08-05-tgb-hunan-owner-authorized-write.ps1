@@ -43,9 +43,10 @@ const imageUrl = 'https://image.tgb.cn/img/2026/08/05/hgiet2qf4nmm.png_760w.png'
 const expectedImageLength = 1279169;
 const expectedImageSha256 = 'eb61a2164d33fc0e344d4a6f93e66ed690b9bb079ab2325409b395fc4d6e97af';
 const expectedCount = 102;
-const expectedRawPoolCount = 104;
+const expectedRawPoolCount = 103;
+const expectedPublicLimitStatusCount = 104;
 const ownerExcludedNonLimitUpCode = '601138';
-const expectedExcludedCodes = ['601138', '920117'];
+const expectedExcludedCodes = ['920117'];
 const operationId = 'tgb-hunan-manual-20260805';
 const fixedSource = 'review/tgb-hunan-structured';
 const fixedQualityNote = 'Manual transcription from @TGB\u6e56\u5357\u4eba official table image; source-faithful board block and stock detail reason.';
@@ -201,6 +202,7 @@ function validateBaseline(payload) {
   const eligibleCodes = toSet(eligibleRows.map(row => row.code));
   if (rawRows.length !== expectedRawPoolCount
       || rawCodes.size !== expectedRawPoolCount
+      || rawCodes.has(ownerExcludedNonLimitUpCode)
       || eligibleRows.length !== expectedCount
       || eligibleCodes.size !== expectedCount
       || setDiff(pinnedExcludedCodes, excludedCodes).length
@@ -495,7 +497,7 @@ async function verifyPublic(expectedCodes, previouslyHealthySources) {
       );
       validateExactStockSet('public main-reason day', mainDay, expectedCodes);
       const statusDay = (limitStatus.days || []).find(item => item.day === day);
-      if (Number(statusDay?.count) !== expectedRawPoolCount || health?.ok !== true) {
+      if (Number(statusDay?.count) !== expectedPublicLimitStatusCount || health?.ok !== true) {
         throw new Error('public baseline/health mismatch');
       }
       return {
@@ -675,7 +677,7 @@ async function verifyPublic(expectedCodes, previouslyHealthySources) {
       `- Article: ${articleUrl}`,
       `- Official image: ${imageFile}; length=${expectedImageLength}; sha256=${expectedImageSha256}`,
       `- Manual payload: count=${expectedCount}; sha256=${inputSha256}; second-pass-reviewed=true`,
-      `- Owner-authorized non-limit-up exclusion: ${ownerExcludedNonLimitUpCode}`,
+      `- Owner-authorized non-limit-up absent from corrected terminal pool: ${ownerExcludedNonLimitUpCode}`,
       `- Gate: missing=0; extra=0; duplicates=0; weak=0; name-mismatches=0; explicit-name-differences=${gate.nameDifferences.length}; topic-total=${gate.topicCountTotal}; manual-block-total=${gate.manualBlockTotal}`,
       `- Backup: ${backupDir}`,
       `- Formal TGB sha256: ${formalSha256}`,
