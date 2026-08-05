@@ -14349,3 +14349,29 @@ Deployment:
 
 Notes for next agent:
 - 重试仍必须通过 102 行代码集、名称、15 块计数、原图哈希、落盘后二次闸和公开 source-view 全部校验；任一失败继续回滚。
+
+## 2026-08-05 - Codex - TGB 并发终盘池稳定写入请求
+
+Changed:
+- 第二次写入运行 `31008656232` 同样在写前闸主动停止；此时终盘文件又被并发刷新为 104/104，
+  包含 `601138` 和北交所 `920117`，排除两者后仍稳定为 102/102。
+- 将终盘闸改为可审计的双状态合同：原始文件可为 103/103（`601138` 已移除）或 104/104（`601138` 仍存在），
+  但 `601138` 无论是否出现都不得进入合格集，`920117` 始终排除，最终合格代码集必须恒为同一 102 只。
+- 请求回执会显式记录 `ownerExcludedWasPresent`，保留并发刷新时文件所处的实际状态。
+
+Files:
+- `ops/production/requests/2026-08-05-tgb-hunan-owner-authorized-write.ps1`
+- `tests/tgb-20260805-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 第二次失败证据：`rawCount=104`、`rawUniqueCount=104`、`eligibleCount=102`、`eligibleUniqueCount=102`，
+  `excludedRows=[920117,601138]`；仍未进入备份/写入阶段。
+- 两次主动失败共同证明：并发终盘文件的 103/104 差异只由 `601138` 是否存在构成，排除 Owner 明确的非涨停与北交所后，
+  合格集均为 102/102。
+
+Deployment:
+- 第二次运行失败且无正式数据变更，未重启服务；稳定双状态请求尚未执行。
+
+Notes for next agent:
+- 不得放宽最终合格集；双状态仅吸收 `601138` 在终盘原始文件中的并发出现/消失，合格代码数、代码集与全部人工行仍必须精确为 102。
