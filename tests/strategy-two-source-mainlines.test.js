@@ -128,11 +128,21 @@ const multiFormalReviewHTML = renderMainlineReviewHTML({
     bySource: {
       eastmoney: { available: true, status: 'mainline', theme: '光通信', noMainline: false,
         formalMainlines: [
-          { theme: '光通信', rank: 1, gateQualified: true, mainlineQualified: true, mainlineQualification: { limitUpCount: 15 } },
+          { theme: '光通信', rank: 1, gateQualified: true, mainlineQualified: true, mainlineQualification: { limitUpCount: 15 },
+            stars: [{ code: '600101', name: '光明星', predictLevel: 'confirmed', nextHighGain: 8, nextCloseGain: 5, threeDayGain: null,
+              nextPerformancePending: false, nextPerformanceStatus: 'final', threeDayPerformancePending: true, threeDayPerformanceStatus: 'awaiting-trading-day' }],
+            leaders: [{ code: '600102', name: '光龙头', nextHighGain: 2, nextCloseGain: -1, threeDayGain: null,
+              nextPerformancePending: false, nextPerformanceStatus: 'final', threeDayPerformancePending: true, threeDayPerformanceStatus: 'awaiting-trading-day' }],
+            reviewCompleteness: { followupStatus: 'awaiting-third-trading-day' } },
           { theme: '医药', rank: 4, gateQualified: true, mainlineQualified: null, mainlineQualification: null },
         ] },
       ths: { available: true, status: 'mainline', theme: '算力AI', noMainline: false,
-        formalMainlines: [{ theme: '算力AI', rank: 2, gateQualified: true, mainlineQualified: true, mainlineQualification: { limitUpCount: 15 } }] },
+        formalMainlines: [{ theme: '算力AI', rank: 2, gateQualified: true, mainlineQualified: true, mainlineQualification: { limitUpCount: 15 },
+          stars: [{ code: '600201', name: '算力明星', predictLevel: 'confirmed', nextHighGain: 15, nextCloseGain: 10, threeDayGain: null,
+            nextPerformancePending: false, nextPerformanceStatus: 'final', threeDayPerformancePending: true, threeDayPerformanceStatus: 'awaiting-trading-day' }],
+          leaders: [{ code: '600202', name: '算力龙头', nextHighGain: 7.5, nextCloseGain: 5, threeDayGain: null,
+            nextPerformancePending: false, nextPerformanceStatus: 'final', threeDayPerformancePending: true, threeDayPerformanceStatus: 'awaiting-trading-day' }],
+          reviewCompleteness: { followupStatus: 'awaiting-third-trading-day' } }] },
     },
   }],
   stats: { bySource: { eastmoney: {}, ths: {} } },
@@ -141,6 +151,13 @@ A(multiFormalReviewHTML.includes('光通信（同家族15只涨停） / 医药 /
   '排名只排序：东财第4名医药与其他过闸方向一起进入正式主线回看');
 A(multiFormalReviewHTML.includes('>2条正式</span>') && multiFormalReviewHTML.includes('>1条正式</span>'),
   '回看按来源显示全部正式主线数量，不再每源只显示第一条');
+A(multiFormalReviewHTML.includes('逐条主线证据') && multiFormalReviewHTML.includes('光明星')
+  && multiFormalReviewHTML.includes('算力明星') && multiFormalReviewHTML.includes('等待第3个后续交易日'),
+  '多主线展开层逐条展示各来源自己的明星、龙头与后续完整性状态');
+const multiFormalSummary = (multiFormalReviewHTML.match(/<summary class="mlr-line-sum">([\s\S]*?)<\/summary>/) || [])[1] || '';
+A(multiFormalSummary.includes('光明星 / 算力明星') && multiFormalSummary.includes('+8%')
+  && multiFormalSummary.includes('+5%') && multiFormalSummary.includes('待交易日'),
+  '多主线摘要使用正式主线明星证据，并明确3日尚未到交易日');
 const finalStarMetricsHTML = renderMainlineReviewHTML({
   days: [{
     day: '2026-07-14', phase: '尾盘', sampleValid: true, pendingReview: false,

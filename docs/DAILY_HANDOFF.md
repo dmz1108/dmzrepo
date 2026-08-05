@@ -14325,6 +14325,39 @@ Deployment:
 Notes for next agent:
 - 只有本日期绑定脚本在 `main` 合并并经 `production` 环境批准后才可执行；不得将 `601138` 加入 TGB 正式行。
 
+## 2026-08-05 - Codex - 预判回看多主线证据统一
+
+Changed:
+- 修复预判回看仍以单一兼容主线补明星、龙头和后续表现的问题；东财、同花顺的每条正式主线现在各自携带
+  明星、预期明星、前两名龙头、领先时长、次高/次收/3 日表现与完整性状态。
+- 保留根层兼容字段及既有统计分母，不用新增明细重算历史命中率；管理员最终确认继续作为独立盘后结论，
+  不改写冻结预测。
+- 展开层新增“逐条主线证据”，摘要从正式主线证据选择匹配股票；后续交易日尚未来到时显示“待交易日”，
+  与底库缺失的 `--` 明确区分。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `tests/mainline-review.test.js`
+- `tests/strategy-two-source-mainlines.test.js`
+- `tests/strategy-workbench-ui.test.js`
+- `tests/strategy-hitrate-display.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `node --check kpl-stats-server.js` 通过。
+- 全部 85 个 `tests/*.test.js` 通过。
+- 8 月 4 日形状回归覆盖：光通信与算力 AI 使用各自明星/龙头；算力 AI 在东财、同花顺两源独立保留；
+  次日表现可用而第 3 个后续交易日未到时，状态为 `awaiting-third-trading-day`，不误报缺失。
+
+Deployment:
+- GitHub only；尚未合并、未部署云端、未重启服务、未改写运行时数据库或历史预测档。
+
+Notes for next agent:
+- 复核重点是多主线明细不得改变根层命中率/封板率分母，且不得把一条主线的收益错配给另一条主线。
+- 8 月 4 日的“3 日”在第三个后续交易日收盘前本就不是终值；本改动只让等待状态诚实可见。
+
 ## 2026-08-05 - Codex - TGB 终盘池纠正后重试请求
 
 Changed:

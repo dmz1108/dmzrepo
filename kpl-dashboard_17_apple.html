@@ -9927,7 +9927,7 @@
     }
   }
 </style>
-<link href="/vendor/strategy-workbench.css?v=20260730a" rel="stylesheet">
+<link href="/vendor/strategy-workbench.css?v=20260805a" rel="stylesheet">
 <link href="/vendor/review-workbench.css?v=20260718d" rel="stylesheet">
 <link href="/vendor/realtime-workbench.css?v=20260720" rel="stylesheet">
 </head>
@@ -13910,16 +13910,18 @@ function renderMainlineReviewHTML(d) {
   const gainCell = (s, isStar) => {
     if (!s) return '<span class="mlr-na">—</span>';
     const extra = isStar ? starLevelChip(s) + sealChip(s) : '';
-    const metric = (label, value, title, pending = false) => {
-      if (value == null) return `<span class="mlr-perf na" title="${escapeHTML(pending ? `${title}；对应交易日尚未收盘` : title)}"><i>${label}</i><b>${pending ? '待收盘' : '--'}</b></span>`;
+    const metric = (label, value, title, pending = false, status = '') => {
+      const pendingText = status === 'awaiting-trading-day' ? '待交易日' : '待收盘';
+      const pendingTitle = status === 'awaiting-trading-day' ? `${title}；对应的后续交易日尚未到来` : `${title}；对应交易日尚未收盘`;
+      if (value == null) return `<span class="mlr-perf na" title="${escapeHTML(pending ? pendingTitle : title)}"><i>${label}</i><b>${pending ? pendingText : '--'}</b></span>`;
       const n = Number(value);
       const cls = n > 0 ? 'up' : (n < 0 ? 'down' : 'flat');
       return `<span class="mlr-perf ${cls}" title="${escapeHTML(title)}"><i>${label}</i><b>${n > 0 ? '+' : ''}${n}%</b></span>`;
     };
     const performance = [
-      metric('次高', s.nextHighGain, '下一交易日最高价相对预判日收盘价的涨幅', s.nextPerformancePending),
-      metric('次收', s.nextCloseGain, '下一交易日收盘价相对预判日收盘价的涨幅', s.nextPerformancePending),
-      metric('3日', s.threeDayGain, '第三个后续交易日收盘价相对预判日收盘价的涨跌幅', s.threeDayPerformancePending),
+      metric('次高', s.nextHighGain, '下一交易日最高价相对预判日收盘价的涨幅', s.nextPerformancePending, s.nextPerformanceStatus),
+      metric('次收', s.nextCloseGain, '下一交易日收盘价相对预判日收盘价的涨幅', s.nextPerformancePending, s.nextPerformanceStatus),
+      metric('3日', s.threeDayGain, '第三个后续交易日收盘价相对预判日收盘价的涨跌幅', s.threeDayPerformancePending, s.threeDayPerformanceStatus),
     ].join('');
     return `<span class="mlr-stock-review"><span class="mlr-stock-review-head"><span class="mlr-name">${escapeHTML(s.name || s.code || '')}</span>${extra}</span><span class="mlr-performance">${performance}</span></span>`;
   };
@@ -13973,6 +13975,51 @@ function renderMainlineReviewHTML(d) {
     if (rows.some(row => row?.mainlineQualified === true)) return true;
     if (rows.length && rows.every(row => row?.mainlineQualified === false)) return false;
     return null;
+  };
+  const formalReviewEvidenceHTML = (r) => {
+    if (!r?.bySource) return '';
+    const sourceEntries = [['eastmoney', '东财'], ['ths', '同花顺']];
+    const cards = sourceEntries.flatMap(([sourceKey, sourceLabel]) => {
+      const src = r.bySource[sourceKey] || {};
+      return sourceFormalRows(src)
+        .filter(row => row?.gateQualified === true)
+        .map(row => {
+          const stars = (Array.isArray(row?.stars) ? row.stars : [])
+            .filter(stock => stock?.code && ['expected', 'confirmed'].includes(String(stock?.predictLevel || stock?.level || '')));
+          const leaders = (Array.isArray(row?.leaders) ? row.leaders : (row?.leader ? [row.leader] : []))
+            .filter(stock => stock?.code).slice(0, 2);
+          const result = row.mainlineQualified === true ? '<span class="mlr-formal-status ok">主线成立</span>'
+            : row.mainlineQualified === false ? '<span class="mlr-formal-status miss">盘后未成立</span>'
+              : '<span class="mlr-formal-status wait">待核验</span>';
+          const starHTML = stars.length
+            ? stars.map(stock => gainCell(stock, true)).join('')
+            : '<span class="mlr-na">未保存明星证据</span>';
+          const leaderHTML = leaders.length
+            ? leaders.map((stock, index) => `<span class="mlr-formal-leader"><i>龙头${index + 1}</i>${gainCell(stock, false)}</span>`).join('')
+            : '<span class="mlr-na">未保存龙头候选</span>';
+          const limitCount = row?.mainlineQualification?.limitUpCount;
+          const lead = row?.mainlineLead;
+          const leadText = lead?.leadMinutes != null ? `领先 ${lead.leadMinutes} 分钟`
+            : row?.mainlineLeadStatus === 'after-first-limit' ? '封板后才识别'
+              : row?.mainlineLeadStatus === 'pending-post-close' ? '待盘后核验'
+                : '无可核验领先样本';
+          const completeness = row?.reviewCompleteness || {};
+          const followupText = completeness.followupStatus === 'complete' ? '后续表现已完整'
+            : completeness.followupStatus === 'awaiting-next-trading-day' ? '等待下一交易日'
+              : completeness.followupStatus === 'awaiting-next-close' ? '等待次日收盘'
+                : completeness.followupStatus === 'awaiting-third-trading-day' ? '等待第3个后续交易日'
+                  : completeness.followupStatus === 'awaiting-third-close' ? '等待3日收盘' : '后续状态未知';
+          return `<article class="mlr-formal-item${row.mainlineQualified === true ? ' is-qualified' : ''}">
+            <header><span class="mlr-formal-source">${sourceLabel}</span><strong>${escapeHTML(row.theme || '')}</strong>${result}</header>
+            <div class="mlr-formal-meta"><span>${limitCount == null ? '涨停数待核验' : `同家族 ${Number(limitCount) || 0} 只涨停`}</span><span>${escapeHTML(leadText)}</span><span>${escapeHTML(followupText)}</span></div>
+            <section><label>明星证据</label><div class="mlr-formal-stocks">${starHTML}</div></section>
+            <section><label>龙头候选</label><div class="mlr-formal-stocks leaders">${leaderHTML}</div></section>
+          </article>`;
+        });
+    });
+    return cards.length
+      ? `<section class="mlr-formal-evidence"><div class="mlr-formal-evidence-title"><b>逐条主线证据</b><span>各来源独立保留，不把第一条主线的数据套给其他方向</span></div><div class="mlr-formal-grid">${cards.join('')}</div></section>`
+      : '';
   };
   const sourceReviewHTML = (r) => {
     if (!r || !r.bySource) return '';
@@ -14180,8 +14227,17 @@ function renderMainlineReviewHTML(d) {
       : '';
     const starSlotClass = starVisual.key ? ` mlr-star-slot ${starVisual.key}` : '';
     const starSlotLabel = starVisual.key === 'confirmed' ? '明星' : '预期候选';
-    const reviewStarStock = starVisual.stock || (r.mainlineStarQualified === false ? null : r.star);
     const leaders = Array.isArray(r.leaders) && r.leaders.length ? r.leaders : (r.leader ? [r.leader] : []);
+    const formalStarStocks = r.bySource
+      ? [...Object.values(r.bySource).flatMap(src => sourceFormalRows(src))
+        .filter(row => row?.gateQualified === true && row?.mainlineQualified !== false)
+        .flatMap(row => Array.isArray(row?.stars) ? row.stars : [])
+        .filter(stock => stock?.code && ['expected', 'confirmed'].includes(String(stock?.predictLevel || stock?.level || '')))
+        .sort((a, b) => ({ confirmed: 0, expected: 1 }[String(a?.predictLevel || a?.level || '')] ?? 9)
+          - ({ confirmed: 0, expected: 1 }[String(b?.predictLevel || b?.level || '')] ?? 9))
+        .reduce((stocks, stock) => stocks.some(item => String(item.code) === String(stock.code)) ? stocks : [...stocks, stock], [])]
+      : [];
+    const reviewStarStock = starVisual.stock || formalStarStocks[0] || (r.mainlineStarQualified === false ? null : r.star);
     const leaderCells = leaders.slice(0, 2).map((leader, index) =>
       `<span class="mlr-slot"><span class="mlr-label">${r.bySource ? '东财' : ''}龙头${index + 1}</span> ${gainCell(leader, false)}</span>`
     );
@@ -14200,6 +14256,7 @@ function renderMainlineReviewHTML(d) {
       expectedCell(r) ? `<span class="mlr-slot mlr-conversion-slot"><span class="mlr-label">转化</span>${expectedCell(r)}</span>` : '',
     ].filter(Boolean);
     const detail = evidenceCells.length ? `<div class="mlr-evidence-grid">${evidenceCells.join('')}</div>` : '';
+    const formalDetail = formalReviewEvidenceHTML(r);
     const actualResult = actualCell(r);
     const finalResult = finalConfirmationHTML(r, actualResult);
     const result = sourceReview
@@ -14278,17 +14335,17 @@ function renderMainlineReviewHTML(d) {
     // 把旧预测明星的收益错安到盘后修正出的另一只明星。只有股票代码一致才复用。
     const finalStarCodes = new Set(finalStars.map(star => String(star?.code || '')).filter(Boolean));
     const lineStock = finalConclusion
-      ? [reviewStarStock, r.star, ...(Array.isArray(r.expectedStars) ? r.expectedStars : []), ...leaders]
+      ? [...formalStarStocks, reviewStarStock, r.star, ...(Array.isArray(r.expectedStars) ? r.expectedStars : []), ...leaders]
         .find(stock => stock?.code && finalStarCodes.has(String(stock.code))) || null
-      : (reviewStarStock || null);
+      : (formalStarStocks[0] || reviewStarStock || null);
     const finalStarNames = finalConclusion
       ? finalStars
         .map(star => star.name || star.code)
         .filter(Boolean)
         .join(' / ')
       : '';
-    const linePerf = (v, pending = false) => {
-      if (v == null) return `<b class="na">${pending ? '待收盘' : '--'}</b>`;
+    const linePerf = (v, pending = false, status = '') => {
+      if (v == null) return `<b class="na">${pending ? (status === 'awaiting-trading-day' ? '待交易日' : '待收盘') : '--'}</b>`;
       const n = Number(v);
       return `<b class="${n > 0 ? 'up' : (n < 0 ? 'down' : '')}">${n > 0 ? '+' : ''}${n}%</b>`;
     };
@@ -14306,10 +14363,10 @@ function renderMainlineReviewHTML(d) {
       <time class="mlr-line-day">${escapeHTML(String(r.day || '').slice(5).replace('-', '.'))}</time>
       ${lineBadge}
       <span class="mlr-line-flow">${escapeHTML(compactPred)} <i>→</i> <b>${escapeHTML(compactOut)}</b>${sampleLineTag(r)}</span>
-      <span class="mlr-line-star">${finalStarNames ? escapeHTML(finalStarNames) : (starVisual.name ? escapeHTML(starVisual.name) : '<i>—</i>')}</span>
-      <span class="mlr-line-perf">${linePerf(lineStock?.nextHighGain, lineStock?.nextPerformancePending)}</span>
-      <span class="mlr-line-perf">${linePerf(lineStock?.nextCloseGain, lineStock?.nextPerformancePending)}</span>
-      <span class="mlr-line-perf">${linePerf(lineStock?.threeDayGain, lineStock?.threeDayPerformancePending)}</span>
+      <span class="mlr-line-star">${finalStarNames ? escapeHTML(finalStarNames) : (formalStarStocks.length ? escapeHTML(formalStarStocks.map(stock => stock.name || stock.code).slice(0, 3).join(' / ')) : (starVisual.name ? escapeHTML(starVisual.name) : '<i>—</i>'))}</span>
+      <span class="mlr-line-perf">${linePerf(lineStock?.nextHighGain, lineStock?.nextPerformancePending, lineStock?.nextPerformanceStatus)}</span>
+      <span class="mlr-line-perf">${linePerf(lineStock?.nextCloseGain, lineStock?.nextPerformancePending, lineStock?.nextPerformanceStatus)}</span>
+      <span class="mlr-line-perf">${linePerf(lineStock?.threeDayGain, lineStock?.threeDayPerformancePending, lineStock?.threeDayPerformanceStatus)}</span>
       <b class="mlr-line-caret" aria-hidden="true"></b>
     </summary>
     <div class="mlr-row ${hitClass}${starVisual.rowClass ? ` ${starVisual.rowClass}` : ''}${r.sampleValid === false ? ' invalid' : ''}">
@@ -14324,6 +14381,7 @@ function renderMainlineReviewHTML(d) {
       <span class="mlr-compare-arrow" aria-hidden="true">→</span>
       <section class="mlr-compare-block outcome"><span class="mlr-block-label">盘后验证</span><div class="mlr-result">${result || '<span class="mlr-na">暂无结果</span>'}</div></section>
     </div>
+    ${formalDetail}
     ${detail}
     ${reserveCell(r)}
   </div>

@@ -77,6 +77,7 @@ eval(extractFn('strategyMainlineReserveStarOutcomes'));   // 三要件预备层�
 eval(extractFn('strategyMainlineReviewReserveSummaries'));
 eval(extractFn('strategyMainlineReviewFormalTop'));
 eval(extractFn('strategyMainlineReviewFormalConclusions'));
+eval(extractFn('strategyMainlineReviewEnrichFormalConclusions'));
 eval(extractFn('strategyMainlineReviewAggregateQualification'));
 eval(extractFn('strategyMainlineReviewHasRecord'));
 eval(extractFn('strategyMainlineStarAttributionDecision'));
@@ -802,6 +803,99 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   };
   A(strategyMainlineReviewSampleStatus('2026-08-03', reconstructedPredict, 'ths', unrelatedFrozen).valid === false,
     '冻结快照中没有该主线方向时，不得用盘后修正档伪造盘中预判');
+
+  // ---------- 2026-08-04 结构回归：多来源、多正式主线逐条携带自己的回看证据 ----------
+  TODAY = '2026-08-05'; TODAY_CLOSED = true;
+  TRADING_DAYS = ['2026-08-04', '2026-08-05'];
+  const lightMain = {
+    key: 'group:光通信', theme: '光模块', rank: 1, l2VerificationStatus: 'qi',
+    star: { code: '600101', name: '光明星', level: 'confirmed' },
+    leaders: [{ code: '600102', name: '光龙头', leadScore: 72 }],
+  };
+  const aiMain = {
+    key: 'group:算力AI', theme: '算力AI', rank: 2, l2VerificationStatus: 'qi',
+    star: { code: '600201', name: '算力明星', level: 'confirmed' },
+    leaders: [{ code: '600202', name: '算力龙头', leadScore: 81 }],
+  };
+  const formalCandidate = main => ({
+    ...main, qiTier: 'formal', intradaySticky: false,
+    stars: [main.star], leaders: main.leaders,
+  });
+  const aiTransition = {
+    mainlineKey: 'group:算力AI', mainlineTheme: '算力AI', code: '600201', name: '算力明星',
+    firstExpectedAt: '2026-08-04T01:45:00.000Z', confirmedAt: '2026-08-04T02:10:00.000Z',
+    confirmedBy: 'live-l2-scan', lastLevel: 'confirmed',
+  };
+  PREDICTS['2026-08-04'] = {
+    schemaVersion: 3, sessionPhase: '尾盘', savedAt: '2026-08-04T07:00:00.000Z',
+    top: [lightMain, aiMain], qualifiedMainlines: [lightMain, aiMain],
+    candidates: [formalCandidate(lightMain), formalCandidate(aiMain)], starTransitions: [aiTransition],
+    bySource: {
+      eastmoney: {
+        available: true, hasMainlines: true, top: [lightMain, aiMain], qualifiedMainlines: [lightMain, aiMain],
+        candidates: [formalCandidate(lightMain), formalCandidate(aiMain)], starTransitions: [aiTransition],
+      },
+      ths: {
+        available: true, hasMainlines: true, top: [aiMain], qualifiedMainlines: [aiMain],
+        candidates: [formalCandidate(aiMain)], starTransitions: [aiTransition],
+      },
+    },
+  };
+  LIMIT_UP['2026-08-04'] = finalLimitDb([
+    { code: '600101', firstLimitTime: 100000 }, '600103', '600104',
+    { code: '600201', firstLimitTime: 101000 }, '600203', '600204',
+  ]);
+  MAIN_REASON['2026-08-04'] = reasonDb([
+    { code: '600101', name: '光明星', finalBoardTopic: '光模块' },
+    { code: '600103', name: '光A', finalBoardTopic: '光通信' },
+    { code: '600104', name: '光B', finalBoardTopic: '光模块' },
+    { code: '600201', name: '算力明星', finalBoardTopic: '算力AI' },
+    { code: '600203', name: '算力A', finalBoardTopic: '算力' },
+    { code: '600204', name: '算力B', finalBoardTopic: '算力AI' },
+  ]);
+  CLOSE['2026-08-04'] = { '600101': 10, '600102': 20, '600201': 30, '600202': 40 };
+  CLOSE['2026-08-05'] = { '600101': 10.5, '600102': 19, '600201': 33, '600202': 42 };
+  KLINE['600101'] = { x: ['2026-08-04', '2026-08-05'], y: [[9.8, 10, 10.2, 9.7], [10.1, 10.5, 11, 10]] };
+  KLINE['600102'] = { x: ['2026-08-04', '2026-08-05'], y: [[19.8, 20, 20.2, 19.5], [20, 19, 20.5, 18.8]] };
+  KLINE['600201'] = { x: ['2026-08-04', '2026-08-05'], y: [[29.5, 30, 30.2, 29], [30.5, 33, 34.5, 30.2]] };
+  KLINE['600202'] = { x: ['2026-08-04', '2026-08-05'], y: [[39.5, 40, 40.3, 39], [40.5, 42, 43, 40]] };
+  const multiLineReview = await getStrategyMainlineReview(10);
+  const multi04 = multiLineReview.days.find(row => row.day === '2026-08-04');
+  const eastLight = multi04?.bySource?.eastmoney?.formalMainlines?.find(row => row.familyKey === 'group:光通信');
+  const eastAi = multi04?.bySource?.eastmoney?.formalMainlines?.find(row => row.familyKey === 'group:算力AI');
+  const thsAi = multi04?.bySource?.ths?.formalMainlines?.find(row => row.familyKey === 'group:算力AI');
+  A(eastLight?.stars?.[0]?.code === '600101' && eastLight.stars[0].nextCloseGain === 5
+    && eastLight?.leaders?.[0]?.code === '600102' && eastLight.leaders[0].nextCloseGain === -5,
+  '8月4日东财光通信逐条保留自己的明星、龙头和次日表现');
+  A(eastAi?.stars?.[0]?.code === '600201' && eastAi.stars[0].nextCloseGain === 10
+    && thsAi?.stars?.[0]?.code === '600201' && thsAi.stars[0].nextHighGain === 15,
+  '8月4日算力AI在东财/同花顺各自保留同源明星表现，不再借第一条光通信数据');
+  A(eastAi?.mainlineLead?.code === '600201' && eastAi.mainlineLeadStatus === 'measured',
+    '每条正式主线独立计算自己的预期明星领先时长');
+  A(eastAi?.reviewCompleteness?.followupStatus === 'awaiting-third-trading-day'
+    && eastAi.stars[0].threeDayPerformancePending === true
+    && eastAi.stars[0].threeDayPerformanceStatus === 'awaiting-trading-day',
+  '第三个后续交易日尚未到来时明确标为等待，不再以空白伪装数据缺失');
+  A(multi04?.star?.code === '600101' && multi04?.mainlineLeadStatus !== undefined,
+    '兼容层第一主线字段保持不变，既有统计口径不被多主线明细改写');
+
+  const ambiguousFamilyRows = [
+    { key: 'theme:光模块', theme: '光模块', leaders: [{ code: '600301', name: '光模块龙头' }] },
+    { key: 'theme:光通信', theme: '光通信', leaders: [{ code: '600302', name: '光通信龙头' }] },
+  ];
+  const ambiguousFamilyPredict = {
+    candidates: ambiguousFamilyRows.map(row => ({ ...row, stars: [] })),
+    starTransitions: [],
+  };
+  const ambiguousFamilyReview = await strategyMainlineReviewEnrichFormalConclusions(
+    ambiguousFamilyPredict,
+    ambiguousFamilyRows,
+    [{ key: 'theme:CPO', theme: 'CPO', mainlineQualified: true }],
+    async row => ({ ...row, nextCloseGain: 0, nextHighGain: 0, threeDayGain: 0 }),
+  );
+  A(strategyMainlineFamilyInfo({ theme: '光模块' }).key === strategyMainlineFamilyInfo({ theme: 'CPO' }).key
+    && ambiguousFamilyReview[0]?.leaders?.length === 0,
+  '精确键缺失且同家族存在多条主线时拒绝猜测龙头归属，不再取第一条');
 
   if (process.exitCode) console.error('\nSOME MAINLINE-REVIEW CHECKS FAILED');
   else console.log('\nALL MAINLINE-REVIEW CHECKS PASSED');
