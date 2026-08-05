@@ -26147,18 +26147,23 @@ async function strategyMainlineReviewEnrichFormalConclusions(
     key: row?.key || row?.familyKey || '',
     theme: row?.theme || '',
   }).key;
+  const uniqueFamilyMatch = (collection, family) => {
+    if (!family) return null;
+    const matches = collection.filter(row => familyKey(row) === family);
+    return matches.length === 1 ? matches[0] : null;
+  };
   const findLine = conclusion => {
     const key = lineKey(conclusion);
     const family = familyKey(conclusion);
     return rows.find(row => key && lineKey(row) === key)
-      || rows.find(row => family && familyKey(row) === family)
+      || uniqueFamilyMatch(rows, family)
       || null;
   };
   const findCandidate = main => {
     const key = lineKey(main);
     const family = familyKey(main);
     return candidates.find(row => key && lineKey(row) === key)
-      || candidates.find(row => family && familyKey(row) === family)
+      || uniqueFamilyMatch(candidates, family)
       || null;
   };
   const stockPerformance = async raw => {

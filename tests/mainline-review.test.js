@@ -879,6 +879,24 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   A(multi04?.star?.code === '600101' && multi04?.mainlineLeadStatus !== undefined,
     '兼容层第一主线字段保持不变，既有统计口径不被多主线明细改写');
 
+  const ambiguousFamilyRows = [
+    { key: 'theme:光模块', theme: '光模块', leaders: [{ code: '600301', name: '光模块龙头' }] },
+    { key: 'theme:光通信', theme: '光通信', leaders: [{ code: '600302', name: '光通信龙头' }] },
+  ];
+  const ambiguousFamilyPredict = {
+    candidates: ambiguousFamilyRows.map(row => ({ ...row, stars: [] })),
+    starTransitions: [],
+  };
+  const ambiguousFamilyReview = await strategyMainlineReviewEnrichFormalConclusions(
+    ambiguousFamilyPredict,
+    ambiguousFamilyRows,
+    [{ key: 'theme:CPO', theme: 'CPO', mainlineQualified: true }],
+    async row => ({ ...row, nextCloseGain: 0, nextHighGain: 0, threeDayGain: 0 }),
+  );
+  A(strategyMainlineFamilyInfo({ theme: '光模块' }).key === strategyMainlineFamilyInfo({ theme: 'CPO' }).key
+    && ambiguousFamilyReview[0]?.leaders?.length === 0,
+  '精确键缺失且同家族存在多条主线时拒绝猜测龙头归属，不再取第一条');
+
   if (process.exitCode) console.error('\nSOME MAINLINE-REVIEW CHECKS FAILED');
   else console.log('\nALL MAINLINE-REVIEW CHECKS PASSED');
 })().catch(e => { console.error(e); process.exitCode = 1; });
