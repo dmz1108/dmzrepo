@@ -9927,7 +9927,7 @@
     }
   }
 </style>
-<link href="/vendor/strategy-workbench.css?v=20260805a" rel="stylesheet">
+<link href="/vendor/strategy-workbench.css?v=20260805b" rel="stylesheet">
 <link href="/vendor/review-workbench.css?v=20260718d" rel="stylesheet">
 <link href="/vendor/realtime-workbench.css?v=20260720" rel="stylesheet">
 </head>
@@ -14331,24 +14331,37 @@ function renderMainlineReviewHTML(d) {
       ? (Array.isArray(finalConclusion.stars) ? finalConclusion.stars : [])
         .filter(star => star && (star.level === 'confirmed' || star.level === 'expected'))
       : [];
-    // 最终确认与冻结预测并列展示时，不能无条件抹掉已经算好的明星收益；但也不能
-    // 把旧预测明星的收益错安到盘后修正出的另一只明星。只有股票代码一致才复用。
-    const finalStarCodes = new Set(finalStars.map(star => String(star?.code || '')).filter(Boolean));
-    const lineStock = finalConclusion
-      ? [...formalStarStocks, reviewStarStock, r.star, ...(Array.isArray(r.expectedStars) ? r.expectedStars : []), ...leaders]
-        .find(stock => stock?.code && finalStarCodes.has(String(stock.code))) || null
-      : (formalStarStocks[0] || reviewStarStock || null);
-    const finalStarNames = finalConclusion
-      ? finalStars
-        .map(star => star.name || star.code)
-        .filter(Boolean)
-        .join(' / ')
-      : '';
+    // 摘要姓名与收益必须逐股对齐。最终确认可能同时包含多只明星，不能再用 find()
+    // 只取第一只的收益；没有同代码收益证据的明星保留姓名并诚实显示 --。
+    const performancePool = [
+      ...formalStarStocks,
+      reviewStarStock,
+      r.star,
+      ...(Array.isArray(r.expectedStars) ? r.expectedStars : []),
+      ...leaders,
+    ].filter(stock => stock?.code);
+    const rawLineStocks = finalStars.length
+      ? finalStars.map(star => {
+        const evidence = performancePool.find(stock => String(stock.code) === String(star.code));
+        return evidence ? { ...star, ...evidence, name: evidence.name || star.name || star.code } : star;
+      })
+      : (formalStarStocks.length ? formalStarStocks : (reviewStarStock ? [reviewStarStock] : []));
+    const lineStocks = rawLineStocks.reduce((stocks, stock) => {
+      const code = String(stock?.code || '').trim();
+      if (code && !stocks.some(item => String(item?.code || '') === code)) stocks.push(stock);
+      return stocks;
+    }, []);
     const linePerf = (v, pending = false, status = '') => {
       if (v == null) return `<b class="na">${pending ? (status === 'awaiting-trading-day' ? '待交易日' : '待收盘') : '--'}</b>`;
       const n = Number(v);
       return `<b class="${n > 0 ? 'up' : (n < 0 ? 'down' : '')}">${n > 0 ? '+' : ''}${n}%</b>`;
     };
+    const lineStockNames = lineStocks.length
+      ? lineStocks.map(stock => `<span class="mlr-line-stock-name" title="${escapeHTML(stock.name || stock.code || '')}">${escapeHTML(stock.name || stock.code || '')}</span>`).join('')
+      : (starVisual.name ? `<span class="mlr-line-stock-name">${escapeHTML(starVisual.name)}</span>` : '<i>—</i>');
+    const linePerformanceList = (valueKey, pendingKey, statusKey, label) => lineStocks.length
+      ? lineStocks.map(stock => `<span class="mlr-line-perf-item" title="${escapeHTML(`${stock.name || stock.code || ''} · ${label}`)}">${linePerf(stock?.[valueKey], stock?.[pendingKey], stock?.[statusKey])}</span>`).join('')
+      : `<span class="mlr-line-perf-item">${linePerf(null)}</span>`;
     const hasQualifiedMainline = qualifiedSourceThemes.length > 0 || Boolean(legacyQualified)
       || finalConclusion?.formalQualified === true;
     const lineBadge = hasQualifiedMainline
@@ -14363,10 +14376,10 @@ function renderMainlineReviewHTML(d) {
       <time class="mlr-line-day">${escapeHTML(String(r.day || '').slice(5).replace('-', '.'))}</time>
       ${lineBadge}
       <span class="mlr-line-flow">${escapeHTML(compactPred)} <i>→</i> <b>${escapeHTML(compactOut)}</b>${sampleLineTag(r)}</span>
-      <span class="mlr-line-star">${finalStarNames ? escapeHTML(finalStarNames) : (formalStarStocks.length ? escapeHTML(formalStarStocks.map(stock => stock.name || stock.code).slice(0, 3).join(' / ')) : (starVisual.name ? escapeHTML(starVisual.name) : '<i>—</i>'))}</span>
-      <span class="mlr-line-perf">${linePerf(lineStock?.nextHighGain, lineStock?.nextPerformancePending, lineStock?.nextPerformanceStatus)}</span>
-      <span class="mlr-line-perf">${linePerf(lineStock?.nextCloseGain, lineStock?.nextPerformancePending, lineStock?.nextPerformanceStatus)}</span>
-      <span class="mlr-line-perf">${linePerf(lineStock?.threeDayGain, lineStock?.threeDayPerformancePending, lineStock?.threeDayPerformanceStatus)}</span>
+      <span class="mlr-line-star">${lineStockNames}</span>
+      <span class="mlr-line-perf">${linePerformanceList('nextHighGain', 'nextPerformancePending', 'nextPerformanceStatus', '次高')}</span>
+      <span class="mlr-line-perf">${linePerformanceList('nextCloseGain', 'nextPerformancePending', 'nextPerformanceStatus', '次收')}</span>
+      <span class="mlr-line-perf">${linePerformanceList('threeDayGain', 'threeDayPerformancePending', 'threeDayPerformanceStatus', '3日')}</span>
       <b class="mlr-line-caret" aria-hidden="true"></b>
     </summary>
     <div class="mlr-row ${hitClass}${starVisual.rowClass ? ` ${starVisual.rowClass}` : ''}${r.sampleValid === false ? ' invalid' : ''}">

@@ -155,9 +155,11 @@ A(multiFormalReviewHTML.includes('逐条主线证据') && multiFormalReviewHTML.
   && multiFormalReviewHTML.includes('算力明星') && multiFormalReviewHTML.includes('等待第3个后续交易日'),
   '多主线展开层逐条展示各来源自己的明星、龙头与后续完整性状态');
 const multiFormalSummary = (multiFormalReviewHTML.match(/<summary class="mlr-line-sum">([\s\S]*?)<\/summary>/) || [])[1] || '';
-A(multiFormalSummary.includes('光明星 / 算力明星') && multiFormalSummary.includes('+8%')
-  && multiFormalSummary.includes('+5%') && multiFormalSummary.includes('待交易日'),
-  '多主线摘要使用正式主线明星证据，并明确3日尚未到交易日');
+A(multiFormalSummary.includes('>光明星</span>') && multiFormalSummary.includes('>算力明星</span>')
+  && multiFormalSummary.includes('+8%') && multiFormalSummary.includes('+15%')
+  && multiFormalSummary.includes('+5%') && multiFormalSummary.includes('+10%')
+  && (multiFormalSummary.match(/待交易日/g) || []).length === 2,
+  '多主线摘要逐股对齐展示两只明星的次高、次收与3日等待状态');
 const finalStarMetricsHTML = renderMainlineReviewHTML({
   days: [{
     day: '2026-07-14', phase: '尾盘', sampleValid: true, pendingReview: false,

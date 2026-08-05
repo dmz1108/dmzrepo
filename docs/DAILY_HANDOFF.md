@@ -14501,3 +14501,30 @@ Deployment:
 
 Notes for next agent:
 - PR #381 仍为 Draft 且与新 `main` 冲突；先重整并保留 #401 的异步逐主线证据补全和歧义保护，未经复审不得部署。
+
+## 2026-08-05 - Codex - 预判回看多明星收益逐股对齐
+
+Changed:
+- 修复预判回看折叠摘要列出多只明星姓名、但次高/次收/3 日只取第一只收益的问题。
+- 摘要按股票代码为每只最终确认/正式主线明星匹配各自收益，姓名与三列指标按同一顺序逐行对齐；
+  缺少同代码证据时保留股票姓名并显示 `--`，不得借用另一只明星的数据。
+- 策略样式缓存版本升为 `20260805b`。
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `tests/strategy-two-source-mainlines.test.js`
+- `tests/strategy-workbench-ui.test.js`
+- `tests/strategy-hitrate-display.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 全部 85 个 `tests/*.test.js` 通过。
+- 双明星夹具同时断言两套次高 `+8%/+15%`、次收 `+5%/+10%` 与两条 `待交易日`，锁定逐股对齐。
+- 单明星、最终确认改股、待收盘、无同代码收益证据等既有回归继续通过。
+
+Deployment:
+- 本条记录时 GitHub only；尚未合并、未部署、未重启服务，未改写任何运行时数据库或历史预测档。
+
+Notes for next agent:
+- 本改动只修摘要展示；#401 后端逐主线明星收益数据保持不变。
