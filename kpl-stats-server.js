@@ -26448,9 +26448,143 @@ function strategyMainlineReviewFinalQualification(finalMainline, actualRanking, 
     formalQualificationReasons: limitUpPass ? [] : ['insufficient-limit-up-count'],
   };
 }
-// 只有真实盘中阶段生成的预测才是"预判"(Codex 复审 PR#25 二审):
-// 盘前/集合竞价没有盘面信号、已收盘是答案不是预测——这三类记录展示但不计任何命中率分母。
+// 真实盘中阶段生成的预测才是"预判"。收盘后修正默认不计样本；但若修正档
+// 保留了精确绑定的同日盘中 L2 任务，且该任务已通过明星确认金额/比值门槛，
+// 可按有效证据的来源恢复为盘中样本。这条例外不认收盘后才产生的 L2 证据。
 const STRATEGY_MAINLINE_INTRADAY_PHASES = new Set(['早盘', '上午盘', '午间休市', '午后', '尾盘']);
+function strategyMainlineReviewFrozenFamilyEvidence(day, snapshot, familyKey) {
+  if (!snapshot || typeof snapshot !== 'object' || snapshot?.frozen !== true
+    || String(snapshot?.day || '') !== String(day || '') || !familyKey) return null;
+  const sections = [
+    ['mainlines', snapshot?.mainlines],
+    ['l2Gate.passed', snapshot?.l2Gate?.passed],
+    ['l2Gate.excluded', snapshot?.l2Gate?.excluded],
+  ];
+  for (const [section, rows] of sections) {
+    for (const row of (Array.isArray(rows) ? rows : [])) {
+      const rowFamily = strategyMainlineFamilyInfo({
+        key: row?.familyKey || row?.key || '',
+        theme: row?.theme || '',
+      }).key;
+      const limitUpCount = Number(row?.count ?? row?.limitUpCount ?? row?.todayLimitCount);
+      if (rowFamily !== familyKey || !Number.isFinite(limitUpCount)
+        || limitUpCount < STRATEGY_MAINLINE_FORMAL_MIN_ZT) continue;
+      return {
+        section,
+        familyKey: rowFamily,
+        theme: String(row?.theme || ''),
+        limitUpCount,
+        l2ScanState: String(row?.l2ScanState || row?.l2VerificationStatus || ''),
+      };
+    }
+  }
+  return null;
+}
+function strategyMainlineReviewSampleStatus(day, predict, source = '', frozenSnapshot = null) {
+  const phase = String(predict?.sessionPhase || '').trim();
+  const sourceKey = ['eastmoney', 'ths'].includes(String(source || '').trim())
+    ? String(source || '').trim()
+    : '';
+  if (STRATEGY_MAINLINE_INTRADAY_PHASES.has(phase)) {
+    return {
+      valid: true,
+      basis: 'intraday-prediction-phase',
+      invalidReason: '',
+      sources: sourceKey ? [sourceKey] : [],
+      evidence: [],
+    };
+  }
+
+  const corrections = Array.isArray(predict?.reviewCorrections)
+    ? [...predict.reviewCorrections].reverse()
+    : [];
+  const sourceKeys = sourceKey ? [sourceKey] : ['eastmoney', 'ths'];
+  const accepted = [];
+  for (const correction of corrections) {
+    if (String(correction?.correctionType || '') !== 'post-close-evidence-reconstruction'
+      || String(correction?.day || '') !== String(day || '')
+      || correction?.frozenSnapshotPreserved !== true
+      || !STRATEGY_MAINLINE_INTRADAY_PHASES.has(String(correction?.originalSessionPhase || '').trim())
+      || !strategyMainlineIsTradingSessionObservation(day, correction?.originalSavedAt)) continue;
+    const starCode = normalizeReasonSourceCode(correction?.star?.code);
+    const starLevel = String(correction?.star?.level || '').trim();
+    const correctionFamily = strategyMainlineFamilyInfo({
+      key: correction?.familyKey || '',
+      theme: correction?.theme || '',
+    }).key;
+    const frozenFamilyEvidence = strategyMainlineReviewFrozenFamilyEvidence(
+      day,
+      frozenSnapshot,
+      correctionFamily,
+    );
+    if (!starCode || starLevel !== 'confirmed' || !correctionFamily || !frozenFamilyEvidence) continue;
+
+    for (const key of sourceKeys) {
+      const evidence = correction?.l2Evidence?.[key];
+      const jobId = String(evidence?.jobId || '').trim();
+      const observedAt = String(evidence?.savedAt || '').trim();
+      const maxBucket = evidence?.maxBucket;
+      const ratioGate = maxBucket?.ratioGates?.confirmed || maxBucket?.ratioGate;
+      const ratioPassed = Number(ratioGate?.passed);
+      const ratioRequired = Number(ratioGate?.required || 2);
+      if (!jobId || !strategyMainlineIsTradingSessionObservation(day, observedAt)
+        || !(Number(evidence?.gain) >= 9.5)
+        || maxBucket?.empty === true || maxBucket?.dataMissing === true || maxBucket?.priceMissing === true
+        || maxBucket?.amountGate?.passed !== true
+        || !Number.isFinite(ratioPassed) || !Number.isFinite(ratioRequired)
+        || ratioPassed < ratioRequired) continue;
+
+      // 收盘后修正必须把来源候选、明星和 L2 job 精确绑定；单有一段游离的
+      // reviewCorrections 元数据不足以改变样本资格。
+      const candidates = Array.isArray(predict?.bySource?.[key]?.candidates)
+        ? predict.bySource[key].candidates
+        : [];
+      const boundCandidate = candidates.find(candidate => {
+        const family = strategyMainlineFamilyInfo({
+          key: candidate?.familyKey || candidate?.key || '',
+          theme: candidate?.theme || '',
+        }).key;
+        const stars = [candidate?.star, ...(Array.isArray(candidate?.stars) ? candidate.stars : [])];
+        const hasStar = stars.some(star => normalizeReasonSourceCode(star?.code) === starCode
+          && String(star?.level || '').trim() === 'confirmed');
+        const jobs = Array.isArray(candidate?.correctionEvidence?.l2Jobs)
+          ? candidate.correctionEvidence.l2Jobs.map(value => String(value || '').trim())
+          : [];
+        return family === correctionFamily && hasStar && jobs.includes(jobId);
+      });
+      if (!boundCandidate) continue;
+      accepted.push({
+        source: key,
+        jobId,
+        plateId: String(evidence?.plateId || ''),
+        boardName: String(evidence?.boardName || ''),
+        observedAt,
+        operationId: String(correction?.operationId || ''),
+        starCode,
+        starName: String(correction?.star?.name || starCode),
+        frozenFamilyEvidence,
+      });
+    }
+    if (accepted.length) break;
+  }
+  const evidence = [...new Map(accepted.map(row => [`${row.source}:${row.jobId}`, row])).values()];
+  if (evidence.length) {
+    return {
+      valid: true,
+      basis: 'intraday-l2-reconstructed',
+      invalidReason: '',
+      sources: [...new Set(evidence.map(row => row.source))],
+      evidence,
+    };
+  }
+  return {
+    valid: false,
+    basis: '',
+    invalidReason: phase ? `phase:${phase}` : 'phase:unknown',
+    sources: [],
+    evidence: [],
+  };
+}
 async function getStrategyMainlineReview(days = 10) {
   const apiKey = await readSavedApiKey().catch(() => '');
   const todayIso = isoFromCompactDate(chinaNowParts().day);
@@ -26507,8 +26641,13 @@ async function getStrategyMainlineReview(days = 10) {
     const attributionReview = await strategyMainlineReviewPredictionAttribution(day, rawPredict);
     const predict = attributionReview.predict;
     const phase = String(predict.sessionPhase || '');
-    const sampleValid = STRATEGY_MAINLINE_INTRADAY_PHASES.has(phase);
-    const sampleInvalidReason = sampleValid ? '' : (phase ? `phase:${phase}` : 'phase:unknown');
+    const frozenSampleSnapshot = !STRATEGY_MAINLINE_INTRADAY_PHASES.has(phase)
+      && Array.isArray(predict?.reviewCorrections) && predict.reviewCorrections.length
+      ? await readStrategyMainlineSnapshot(day).catch(() => null)
+      : null;
+    const sampleStatus = strategyMainlineReviewSampleStatus(day, predict, '', frozenSampleSnapshot);
+    const sampleValid = sampleStatus.valid;
+    const sampleInvalidReason = sampleStatus.invalidReason;
     const pendingReview = day === todayIso && !isAfterMarketClose(day);   // 当前盘中:待盘后验证
     const formalTop = strategyMainlineReviewFormalTop(predict);
     const main = formalTop.find(t => predict.confirmedKey && t.key === predict.confirmedKey) || formalTop[0] || null;
@@ -26709,6 +26848,8 @@ async function getStrategyMainlineReview(days = 10) {
       reviewBySource = {};
       for (const skey of ['eastmoney', 'ths']) {
         const block = predict.bySource[skey] || {};
+        const sourceSampleStatus = strategyMainlineReviewSampleStatus(day, predict, skey, frozenSampleSnapshot);
+        const sourceSampleValid = sourceSampleStatus.valid;
         const blockPredict = {
           top: block.top || [],
           qualifiedMainlines: block.qualifiedMainlines || [],
@@ -26746,7 +26887,7 @@ async function getStrategyMainlineReview(days = 10) {
           const mainFamilies = strategyMainlineReviewFamilyKeys(blockPredict, sMain);
           hitTop1 = tiedFirstFamilies.some(familyKey => mainFamilies.has(familyKey));
           hitTop3 = tiedFirstFamilies.some(familyKey => predFams.has(familyKey));
-          if (sampleValid && !pendingReview) {
+          if (sourceSampleValid && !pendingReview) {
             srcStat[skey].total += 1;
             if (hitTop1) srcStat[skey].top1 += 1;
             if (hitTop3) srcStat[skey].top3 += 1;
@@ -26757,11 +26898,11 @@ async function getStrategyMainlineReview(days = 10) {
           // 来源日结论只问“是否有任一条正式主线成立”，不再只看排名第一的 sMain。
           // sourceQualification 保留第一条明细以兼容旧客户端；formalMainlines 是新事实集。
           sourceQualified = strategyMainlineReviewAggregateQualification(formalMainlines);
-          if (sampleValid && !pendingReview && sourceQualified != null) {
+          if (sourceSampleValid && !pendingReview && sourceQualified != null) {
             srcStat[skey].qualifiedTotal += 1;
             if (sourceQualified) srcStat[skey].qualified += 1;
           }
-          if (sampleValid && !pendingReview && sourceQualified === true && limitDbFinal) {
+          if (sourceSampleValid && !pendingReview && sourceQualified === true && limitDbFinal) {
             const assessment = strategyMainlineLeadAssessment(
               day,
               strategyMainlineExpectedStarTransitions(blockPredict, sMain),
@@ -26794,6 +26935,10 @@ async function getStrategyMainlineReview(days = 10) {
           formalMainlineCount: formalMainlines.length,
           hasReserveMainlines: reserveMainlines.length > 0,
           reserveMainlines,
+          sampleValid: sourceSampleValid,
+          sampleBasis: sourceSampleStatus.basis,
+          sampleInvalidReason: sourceSampleStatus.invalidReason,
+          sampleEvidence: sourceSampleStatus.evidence,
         };
       }
     }
@@ -26832,7 +26977,9 @@ async function getStrategyMainlineReview(days = 10) {
       stage: main?.stage || '', certainty: main?.certainty || '',
       noMainline, noMainlineReason: noMainline ? 'no-l2-star-evidence' : '',
       candidateThemes: noMainline ? predict.top.slice(0, 3).map(row => String(row?.theme || '')).filter(Boolean) : [],
-      phase, sampleValid, sampleInvalidReason, pendingReview,
+      phase, sampleValid, sampleBasis: sampleStatus.basis,
+      sampleEvidenceSources: sampleStatus.sources, sampleEvidence: sampleStatus.evidence,
+      sampleInvalidReason, pendingReview,
       actualTop, actualFirstTied,
       mainlineQualified, mainlineQualification,
       mainlineHitTop1, mainlineHitTop3, mainReasonMissingCount,
@@ -26889,7 +27036,7 @@ async function getStrategyMainlineReview(days = 10) {
           mainlineLeadAfterFirstLimitSamples: srcStat.ths.leadAfterFirstLimit },
       },
     },
-    note: '正式主线必须同时具备同家族确认明星股与至少3只当日涨停；涨停数量只作准入下限，不按谁涨停最多决定主线。未扫描、覆盖不足或已扫描无明星的候选显示为今日无主线且不计成立率。领先时长只统计正式主线成立日中有完整事件轨迹的预期明星，从首次预期至同股真实首次封板，仅累计09:30–11:30与13:00–15:00可交易分钟，一来源一日一个样本并取窗口中位数；预期在首次封板后才出现的日期单独计数，不混入中位数。回看同时统计次日最高涨幅、次日收盘涨幅和第三个后续交易日收盘涨跌幅；收盘指标来自每日收盘价库，次日最高来自复权日K。',
+    note: '正式主线必须同时具备同家族确认明星股与至少3只当日涨停；涨停数量只作准入下限，不按谁涨停最多决定主线。未扫描、覆盖不足或已扫描无明星的候选显示为今日无主线且不计成立率。纯收盘后生成的修正不计盘中样本；只有冻结盘中时点、来源候选、明星与同日持久化 L2 任务精确绑定，且盘中已通过明星确认门槛时，才可按该证据来源恢复为有效样本。领先时长只统计正式主线成立日中有完整事件轨迹的预期明星，从首次预期至同股真实首次封板，仅累计09:30–11:30与13:00–15:00可交易分钟，一来源一日一个样本并取窗口中位数；预期在首次封板后才出现的日期单独计数，不混入中位数。回看同时统计次日最高涨幅、次日收盘涨幅和第三个后续交易日收盘涨跌幅；收盘指标来自每日收盘价库，次日最高来自复权日K。',
   };
 }
 

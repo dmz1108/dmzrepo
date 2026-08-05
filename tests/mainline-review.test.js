@@ -56,6 +56,9 @@ const isExcludedFromReview = (code) => String(code || '').startsWith('8');  // �
 function isDroppedThemeWord(raw) { return /测试剔除词/.test(String(raw || '')); }
 const STRATEGY_MAINLINE_INTRADAY_PHASES = extractSet('STRATEGY_MAINLINE_INTRADAY_PHASES');
 const STRATEGY_MAINLINE_FORMAL_MIN_ZT = 3;
+eval(extractFn('strategyMainlineIsTradingSessionObservation'));
+eval(extractFn('strategyMainlineReviewFrozenFamilyEvidence'));
+eval(extractFn('strategyMainlineReviewSampleStatus'));
 
 // ---- 待测函数 + 可控 IO/时钟 stub ----
 eval(extractFn('strategyMainlineActualFamilyRanking'));
@@ -108,6 +111,8 @@ const readEastmoneyCloseDbDay = async d => CLOSE[d]
   : null;
 const PREDICTS = {};
 const readMainlinePredict = async d => PREDICTS[d] || null;
+const SNAPSHOTS = {};
+const readStrategyMainlineSnapshot = async d => SNAPSHOTS[d] || null;
 const CONFIRMS = {};
 const readMainlineConfirm = async d => CONFIRMS[d] || null;
 const VISIBLE_MAINLINES = {};
@@ -696,6 +701,107 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   A(followup10?.leader?.nextCloseGain === null && followup10?.leader?.nextHighGain === null
     && followup10?.leader?.win === null && followup10?.leader?.nextPerformancePending === true,
   '下一交易日盘中，龙头的次收/次高/胜负同样保持待收盘');
+
+  // ---------- Owner 2026-08-04:收盘后修正但存在真实盘中 L2 明星确认证据 ----------
+  TODAY = '2026-08-04'; TODAY_CLOSED = true;
+  TRADING_DAYS = ['2026-08-03'];
+  const l2GateEvidence = (jobId, savedAt, boardName) => ({
+    jobId, plateId: jobId === 'ths-job' ? '308969' : 'BK1024', boardName, savedAt,
+    gain: 10,
+    maxBucket: {
+      amount: 10000000, empty: false, dataMissing: false, priceMissing: false,
+      amountGate: { passed: true, type: 'passive' },
+      ratioGate: { required: 2, passed: 3 },
+      ratioGates: { confirmed: { required: 2, passed: 3 } },
+    },
+  });
+  const correctedCandidate = (jobId, boardName) => ({
+    key: 'theme:电力', familyKey: 'theme:电力', theme: '电力', qiTier: 'formal',
+    l2VerificationStatus: 'qi', intradaySticky: false,
+    stars: [{ code: '600396', name: '华电辽能', level: 'confirmed' }],
+    correctionEvidence: { l2Jobs: [jobId] },
+    resonanceBoards: [{ name: boardName, evidenceJobId: jobId }],
+  });
+  const correctedTop = {
+    key: 'theme:电力', theme: '电力', l2VerificationStatus: 'qi',
+    star: { code: '600396', name: '华电辽能', level: 'confirmed' },
+    leader: { code: '600396', name: '华电辽能' },
+  };
+  const reconstructedPredict = {
+    day: '2026-08-03', schemaVersion: 3, sessionPhase: '已收盘',
+    savedAt: '2026-08-03T08:20:00.000Z', hasMainlines: true, recordState: 'mainline',
+    top: [correctedTop], candidates: [correctedCandidate('east-job', '绿色电力')], starTransitions: [],
+    bySource: {
+      eastmoney: {
+        available: true, hasMainlines: true, top: [correctedTop],
+        candidates: [correctedCandidate('east-job', '绿色电力')], starTransitions: [],
+      },
+      ths: {
+        available: true, hasMainlines: true, top: [correctedTop],
+        candidates: [correctedCandidate('ths-job', '超超临界发电')], starTransitions: [],
+      },
+    },
+    reviewCorrections: [{
+      operationId: 'review-electricity-mainline-backfill-20260803-v2',
+      day: '2026-08-03', correctionType: 'post-close-evidence-reconstruction',
+      excludedFromPredictionStats: true, frozenSnapshotPreserved: true,
+      originalSessionPhase: '尾盘', originalSavedAt: '2026-08-03T06:59:26.033Z',
+      theme: '电力', familyKey: 'theme:电力',
+      star: { code: '600396', name: '华电辽能', level: 'confirmed' },
+      l2Evidence: {
+        // 15:11 才生成：可作盘后证据，不得计东财盘中样本。
+        eastmoney: l2GateEvidence('east-job', '2026-08-03T07:11:00.000Z', '绿色电力'),
+        // 10:23 完成：真实盘中自动扫描且明星确认门槛全部通过。
+        ths: l2GateEvidence('ths-job', '2026-08-03T02:23:44.000Z', '超超临界发电'),
+      },
+    }],
+  };
+  PREDICTS['2026-08-03'] = reconstructedPredict;
+  SNAPSHOTS['2026-08-03'] = {
+    day: '2026-08-03', frozen: true,
+    l2Gate: { excluded: [{
+      theme: '电力', familyKey: 'theme:电力', count: 5, boardCount: 4,
+      l2VerificationStatus: 'scanned-no-star', l2ScanState: 'scanned-no-star',
+    }] },
+  };
+  LIMIT_UP['2026-08-03'] = finalLimitDb(['600396', '000595', '600644']);
+  MAIN_REASON['2026-08-03'] = reasonDb([
+    { code: '600396', name: '华电辽能', finalBoardTopic: '电力' },
+    { code: '000595', name: '电力A', finalBoardTopic: '电力' },
+    { code: '600644', name: '电力B', finalBoardTopic: '电力' },
+  ]);
+  const reconstructedReview = await getStrategyMainlineReview(10);
+  const reconstructed03 = reconstructedReview.days.find(row => row.day === '2026-08-03');
+  A(reconstructed03?.sampleValid === true
+    && reconstructed03?.sampleBasis === 'intraday-l2-reconstructed'
+    && reconstructed03?.sampleEvidenceSources?.join(',') === 'ths',
+  '8月3日收盘修正有同花顺盘中L2真证，恢复为有效样本');
+  A(reconstructed03?.bySource?.ths?.sampleValid === true
+    && reconstructed03?.bySource?.ths?.sampleBasis === 'intraday-l2-reconstructed',
+  '同花顺10:23证据单独计入来源样本');
+  A(reconstructed03?.bySource?.eastmoney?.sampleValid === false
+    && reconstructed03?.bySource?.eastmoney?.sampleInvalidReason === 'phase:已收盘',
+  '东财15:11证据不得冒充东财盘中样本');
+  A(reconstructedReview.stats.mainlineQualifiedTotal === 1
+    && reconstructedReview.stats.mainlineQualifiedHits === 1,
+  '经盘中L2补证的8月3日电力正式主线计入整体成立率');
+  A(reconstructedReview.stats.bySource.ths.mainlineQualifiedTotal === 1
+    && reconstructedReview.stats.bySource.ths.mainlineQualifiedHits === 1
+    && reconstructedReview.stats.bySource.eastmoney.mainlineQualifiedTotal === 0,
+  '分来源统计只计有真实盘中L2证据的同花顺');
+
+  const detachedEvidence = JSON.parse(JSON.stringify(reconstructedPredict));
+  detachedEvidence.bySource.ths.candidates[0].correctionEvidence.l2Jobs = ['other-job'];
+  A(strategyMainlineReviewSampleStatus('2026-08-03', detachedEvidence, 'ths', SNAPSHOTS['2026-08-03']).valid === false,
+    '未与来源候选精确绑定的L2元数据不得恢复样本资格');
+  A(strategyMainlineReviewSampleStatus('2026-08-03', reconstructedPredict, 'ths', null).valid === false,
+    '只有frozenSnapshotPreserved自述、没有实读冻结快照时不得恢复样本资格');
+  const unrelatedFrozen = JSON.parse(JSON.stringify(SNAPSHOTS['2026-08-03']));
+  unrelatedFrozen.l2Gate.excluded[0] = {
+    theme: '医药', familyKey: 'group:医药', count: 8, l2ScanState: 'scanned-no-star',
+  };
+  A(strategyMainlineReviewSampleStatus('2026-08-03', reconstructedPredict, 'ths', unrelatedFrozen).valid === false,
+    '冻结快照中没有该主线方向时，不得用盘后修正档伪造盘中预判');
 
   if (process.exitCode) console.error('\nSOME MAINLINE-REVIEW CHECKS FAILED');
   else console.log('\nALL MAINLINE-REVIEW CHECKS PASSED');
