@@ -326,6 +326,13 @@ expectStructural(noGroup, /familyUnit='group' 但缺少非空 group/, "familyUni
   const noop = strategyFamilyEraEnterForDay(effDay);
   A(fam('火电') === 'group:电力', '生效日当天及之后:纪元进入为空操作,直接用新口径');
   noop();
+  // 生效日边界(部署当日必须仍是旧口径):取生效日的前一自然日,应进入旧纪元。
+  const dayBefore = new Date(Date.parse(effDay + 'T00:00:00Z') - 86400000).toISOString().slice(0, 10);
+  const prevExit = strategyFamilyEraEnterForDay(dayBefore);
+  A(fam('火电') === 'theme:火电热电' && fam('算力') === 'group:算力AI',
+    `生效日前一日(${dayBefore})仍按旧词典解析——部署当天的回看不被新口径倒溯`);
+  prevExit();
+  A(fam('火电') === 'group:电力', '边界用例退出后新口径恢复');
 })();
 
 console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL FAMILY-DECLARATIVE-EQUIVALENCE CHECKS PASSED');

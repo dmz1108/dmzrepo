@@ -14705,3 +14705,33 @@ Notes for next agent:
 - 纪元段的硬约束现在有测试守着:任何人想在段内加 await 都会被 mainline-review 拦下。
 - 若后续再有"逐条主线证据"类扩展,遵循同一分层:读词典的绑定进 Plan(纪元内),
   取数/算收益进 Enrich(纪元外)。
+
+## 2026-08-05(Local Claude)PR #381 转 Ready:同步 main + 生效日定为 08-06
+
+What changed:
+- 同步到最新 `main`(`2afca81`,含 #401 及其部署回执 #403);#401 接缝拆分
+  (Plan 同步绑定在纪元内 / Enrich 异步补全在纪元外)随 rebase 无冲突带过。
+- **`STRATEGY_FAMILY_RECUT_EFFECTIVE_DAY`: `2026-08-05` → `2026-08-06`**。
+  理由:08-05 收盘后才具备合并/部署条件,新口径首个生效交易日即 08-06;
+  08-05 及更早继续走 `LEGACY_FAMILY_ERA` 旧词典,当天回看结论不被倒溯改写。
+- 新增生效日**边界断言**:取生效日前一自然日(现为 2026-08-05)进入纪元,
+  必须仍解析为 `theme:火电热电` / `group:算力AI`——把"部署当天不被新口径倒溯"
+  这条钉死,且断言按常量自动推导,日后改生效日无需改测试。
+
+Files:
+- `kpl-stats-server.js`(生效日常量 + 说明注释)
+- `tests/family-declarative-equivalence.test.js`(边界断言)
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 全仓 **85/85**;`family-declarative-equivalence` 64 ok / 0 fail
+  (含生效日=2026-08-06 自动识别、前一日仍旧口径、退出即恢复)。
+- `node --check` 通过。
+
+Deployment:
+- GitHub only;**未合并、未部署、未重启**。PR 已由 Draft 转 Ready(按 Owner 指示)。
+- 部署仍须收盘后。**若部署未能在 08-05 收盘后进行,合并前必须再次上调生效日**
+  (= 实际部署后首个交易日),否则被跳过的交易日会按新口径重算历史结论。
+
+Notes for next agent:
+- 生效日是本 PR 唯一与"部署时点"耦合的值,改它只需改常量,测试会自动跟随。

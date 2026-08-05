@@ -13089,7 +13089,10 @@ strategyThemeTaxonomyValidateFamilyUnits();
 // 该日期之前的回看重算(实际族排名、回看族键、正式主线资格、最终确认资格、归因审计)
 // 一律在冻结的旧词典快照下进行,新词典不得倒溯改变旧日主线结论。
 // 进入/退出只允许包裹**同步**代码段——中间出现 await 会让并发请求读到错误纪元的词典。
-const STRATEGY_FAMILY_RECUT_EFFECTIVE_DAY = '2026-08-05';   // 新口径首个生效交易日(=部署后首个交易日;部署延后须在合并前更新)
+// 新口径首个生效交易日 = 部署后首个交易日。2026-08-05 收盘后才具备合并/部署条件,
+// 故新口径自 08-06 起生效;08-05 及更早仍走 LEGACY_FAMILY_ERA 旧词典。
+// 若部署再次延后,合并前必须同步更新此值,否则被跳过的那天会按新口径重算历史结论。
+const STRATEGY_FAMILY_RECUT_EFFECTIVE_DAY = '2026-08-06';
 const LEGACY_THEME_TAXONOMY_PATH = path.join(__dirname, 'theme-taxonomy.legacy-preB.json');
 const LEGACY_FAMILY_ERA = (() => {
   // 快照与代码同仓同版本发布;缺失或损坏属打包错误,启动即失败,绝不静默退回新词典
