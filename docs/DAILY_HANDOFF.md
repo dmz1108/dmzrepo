@@ -14324,3 +14324,28 @@ Deployment:
 
 Notes for next agent:
 - 只有本日期绑定脚本在 `main` 合并并经 `production` 环境批准后才可执行；不得将 `601138` 加入 TGB 正式行。
+
+## 2026-08-05 - Codex - TGB 终盘池纠正后重试请求
+
+Changed:
+- 首次 Owner 口径写入运行 `31008138017` 在写前终盘池闸主动失败：脚本执行时终盘文件已从 104 行纠正为 103 行，
+  `601138` 已不在文件中，只剩北交所 `920117` 需排除；旧请求仍固定 104 行，因此拒绝继续。
+- 失败发生在备份/写入前，`rollbackFailures=[]`，正式 TGB 仍缺失，综合主因未重折。
+- 修正日期绑定请求：终盘文件必须为 103/103 且明确不含 `601138`，排除 `920117` 后必须为 102/102；
+  公开 limit-up status 的已有元数据计数 104 单独校验，不再与终盘文件实际行数混用。
+
+Files:
+- `ops/production/requests/2026-08-05-tgb-hunan-owner-authorized-write.ps1`
+- `tests/tgb-20260805-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 失败证据：`rawCount=103`、`rawUniqueCount=103`、`eligibleCount=102`、`eligibleUniqueCount=102`，
+  `excludedRows=[920117]`、`rollbackFailures=[]`。
+- 公开 source-view 仍无 TGB 正式行，公开 `/health` 为 `ok:true`。
+
+Deployment:
+- 首次运行失败且无生产数据变更，未重启服务；纠正后重试尚未执行。
+
+Notes for next agent:
+- 重试仍必须通过 102 行代码集、名称、15 块计数、原图哈希、落盘后二次闸和公开 source-view 全部校验；任一失败继续回滚。
