@@ -14466,3 +14466,38 @@ Deployment:
 
 Notes for next agent:
 - 2026-08-05 的正式 TGB 口径固定为 102 只，`601138` 不得补入；炸板区、北交所与非官方图片继续排除。
+
+## 2026-08-05 - Codex - 预判回看多主线证据上线回执
+
+Changed:
+- PR #401 已合并；预判回看现在为东财、同花顺的每条正式主线分别返回明星、预期明星、前两名龙头、
+  领先时长、次高/次收/3 日表现与完整性状态。
+- 吸收复审建议：精确主线键匹配失败且同一家族存在多条候选时，家族回退拒绝猜测，不再默认取第一条。
+- PR #381 必须基于 #401 后的 `main` 重整；异步证据补全须移出不允许 `await` 的 family-era scope 后再回填。
+
+Files:
+- `kpl-stats-server.js`
+- `kpl-dashboard_17_apple.html`
+- `Qi/vendor/strategy-workbench.css`
+- `tests/mainline-review.test.js`
+- `tests/strategy-two-source-mainlines.test.js`
+- `tests/strategy-workbench-ui.test.js`
+- `tests/strategy-hitrate-display.test.js`
+- Cloud logs: `panda-cloud-ops-2026-06-19.md`, `_cloud-change-log-20260705.md`
+
+Validated:
+- `node --check kpl-stats-server.js` 通过；全部 85 个 `tests/*.test.js` 通过。
+- 生产 `/health` 返回 `ok:true`；`/api/strategy-mainline-review?days=12` 返回 200，冷请求约 2.07 秒、
+  缓存后约 0.66 秒。
+- 2026-08-04 东财 3 条正式主线、同花顺 2 条正式主线均各自携带正确明星、龙头和次日表现；
+  次日 2026-08-05 已终值，第三个后续交易日尚未到时明确为 `awaiting-third-trading-day`。
+- 生产策略样式 SHA-256 与 `main` 一致，行情页已包含“逐条主线证据”和“待交易日”文案。
+
+Deployment:
+- PR: `https://github.com/dmz1108/dmzrepo/pull/401`，合并提交 `a109c851d5dc13871b68e88184c9c2136c822bf4`。
+- Workflow: `https://github.com/dmz1108/dmzrepo/actions/runs/31015645588`。
+- 原子部署后端、行情 HTML、策略样式并重启主服务；运行脚本已自动写入两份云端日志和回退备份路径。
+- 未改写运行时数据库、历史预测档或冻结快照。
+
+Notes for next agent:
+- PR #381 仍为 Draft 且与新 `main` 冲突；先重整并保留 #401 的异步逐主线证据补全和歧义保护，未经复审不得部署。
