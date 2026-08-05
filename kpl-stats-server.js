@@ -26128,6 +26128,131 @@ function strategyMainlineReviewFormalConclusions(
   });
 }
 
+// 多主线回看不能只给兼容层第一条主线补明星、龙头和后续表现。这里在不改变既有
+// 根层统计口径的前提下，为每一条正式主线附上自己的证据，供展开层逐条复核。
+async function strategyMainlineReviewEnrichFormalConclusions(
+  predict,
+  formalRows,
+  conclusions,
+  evalStock,
+  options = {},
+) {
+  const rows = Array.isArray(formalRows) ? formalRows : [];
+  const candidates = Array.isArray(predict?.candidates) ? predict.candidates : [];
+  const finalSealedCodes = options.finalSealedCodes instanceof Set ? options.finalSealedCodes : null;
+  const pendingReview = options.pendingReview === true;
+  const limitDbFinal = options.limitDbFinal === true;
+  const lineKey = row => String(row?.key || row?.familyKey || '').trim();
+  const familyKey = row => strategyMainlineFamilyInfo({
+    key: row?.key || row?.familyKey || '',
+    theme: row?.theme || '',
+  }).key;
+  const findLine = conclusion => {
+    const key = lineKey(conclusion);
+    const family = familyKey(conclusion);
+    return rows.find(row => key && lineKey(row) === key)
+      || rows.find(row => family && familyKey(row) === family)
+      || null;
+  };
+  const findCandidate = main => {
+    const key = lineKey(main);
+    const family = familyKey(main);
+    return candidates.find(row => key && lineKey(row) === key)
+      || candidates.find(row => family && familyKey(row) === family)
+      || null;
+  };
+  const stockPerformance = async raw => {
+    const code = normalizeReasonSourceCode(raw?.code);
+    if (!code) return null;
+    const evaluated = await evalStock(raw).catch(() => null);
+    return evaluated || {
+      code,
+      name: String(raw?.name || code),
+      leadScore: isFiniteNumeric(raw?.leadScore) ? Number(raw.leadScore) : null,
+      nextCloseGain: null,
+      nextHighGain: null,
+      threeDayGain: null,
+      win: null,
+      nextPerformancePending: !options.nextDayFinal,
+      threeDayPerformancePending: !options.thirdDayFinal,
+      nextPerformanceStatus: !options.nextDay ? 'awaiting-trading-day'
+        : !options.nextDayFinal ? 'awaiting-close' : 'final',
+      threeDayPerformanceStatus: !options.thirdDay ? 'awaiting-trading-day'
+        : !options.thirdDayFinal ? 'awaiting-close' : 'final',
+    };
+  };
+  const starPerformance = async raw => {
+    const evaluated = await stockPerformance(raw);
+    if (!evaluated) return null;
+    const predictLevel = String(raw?.level || raw?.lastLevel || '').trim() || null;
+    let sealedSameDay = null;
+    let sealStatus = 'noData';
+    if (pendingReview) sealStatus = 'pending';
+    else if (limitDbFinal && finalSealedCodes) {
+      sealedSameDay = finalSealedCodes.has(evaluated.code);
+      sealStatus = sealedSameDay ? 'sealed' : 'notSealed';
+    }
+    return { ...evaluated, predictLevel, sealedSameDay, sealStatus };
+  };
+  const followupStatus = !options.nextDay ? 'awaiting-next-trading-day'
+    : !options.nextDayFinal ? 'awaiting-next-close'
+      : !options.thirdDay ? 'awaiting-third-trading-day'
+        : !options.thirdDayFinal ? 'awaiting-third-close' : 'complete';
+
+  return Promise.all((Array.isArray(conclusions) ? conclusions : []).map(async conclusion => {
+    const main = findLine(conclusion);
+    const candidate = findCandidate(main || conclusion);
+    const rawStars = strategyMainlineReviewStarCandidates(predict, main || conclusion).slice(0, 4);
+    const rawLeaders = [
+      ...(Array.isArray(main?.leaders) ? main.leaders : (main?.leader ? [main.leader] : [])),
+      ...(Array.isArray(candidate?.leaders) ? candidate.leaders : (candidate?.leader ? [candidate.leader] : [])),
+    ];
+    const leaderByCode = new Map();
+    for (const leader of rawLeaders) {
+      const code = normalizeReasonSourceCode(leader?.code);
+      if (code && !leaderByCode.has(code)) leaderByCode.set(code, leader);
+    }
+    const transitions = strategyMainlineExpectedStarTransitions(predict, main || conclusion);
+    const [stars, expectedStars, leaders] = await Promise.all([
+      Promise.all(rawStars.map(starPerformance)),
+      Promise.all(transitions.map(async transition => ({
+        ...transition,
+        ...(await starPerformance({ ...transition, level: 'expected' }) || {}),
+      }))),
+      Promise.all([...leaderByCode.values()].slice(0, 2).map(stockPerformance)),
+    ]);
+    let mainlineLead = null;
+    let mainlineLeadStatus = pendingReview ? 'pending-post-close'
+      : conclusion?.mainlineQualified == null ? 'post-close-evidence-incomplete'
+        : conclusion.mainlineQualified === false ? 'not-qualified' : 'unavailable';
+    if (!pendingReview && conclusion?.mainlineQualified === true && limitDbFinal) {
+      const assessment = strategyMainlineLeadAssessment(options.day, transitions, options.limitDb);
+      mainlineLead = assessment.sample;
+      mainlineLeadStatus = assessment.status;
+    }
+    const postCloseStatus = pendingReview ? 'pending-post-close'
+      : conclusion?.mainlineQualified == null ? 'evidence-incomplete' : 'complete';
+    return {
+      ...conclusion,
+      stars: stars.filter(Boolean),
+      expectedStars: expectedStars.filter(row => row?.code),
+      leaders: leaders.filter(Boolean),
+      leader: leaders.find(Boolean) || null,
+      mainlineLead,
+      mainlineLeadStatus,
+      reviewCompleteness: {
+        postCloseStatus,
+        followupStatus,
+        nextDay: options.nextDay || null,
+        nextDayFinal: options.nextDayFinal === true,
+        thirdDay: options.thirdDay || null,
+        thirdDayFinal: options.thirdDayFinal === true,
+        complete: postCloseStatus === 'complete' && followupStatus === 'complete',
+      },
+    };
+  }));
+}
+
 function strategyMainlineReviewAggregateQualification(formalMainlines) {
   const rows = Array.isArray(formalMainlines) ? formalMainlines : [];
   if (rows.some(row => row?.mainlineQualified === true)) return true;
@@ -26693,8 +26818,12 @@ async function getStrategyMainlineReview(days = 10) {
         nextHighGain,
         threeDayGain,
         win: closeGain != null ? closeGain > 0 : null,
-        nextPerformancePending: !!nextDay && !nextDayFinal,
-        threeDayPerformancePending: !!thirdDay && !thirdDayFinal,
+        nextPerformancePending: !nextDayFinal,
+        threeDayPerformancePending: !thirdDayFinal,
+        nextPerformanceStatus: !nextDay ? 'awaiting-trading-day'
+          : !nextDayFinal ? 'awaiting-close' : 'final',
+        threeDayPerformanceStatus: !thirdDay ? 'awaiting-trading-day'
+          : !thirdDayFinal ? 'awaiting-close' : 'final',
       };
     };
     const rawLeaders = (Array.isArray(main?.leaders) && main.leaders.length ? main.leaders : (main?.leader ? [main.leader] : []))
@@ -26793,13 +26922,30 @@ async function getStrategyMainlineReview(days = 10) {
     const finalSealedCodes = limitDbFinal
       ? new Set((limitDb.stocks || []).map(stock => normalizeReasonSourceCode(stock?.code)).filter(Boolean))
       : null;
-    const formalMainlines = strategyMainlineReviewFormalConclusions(
+    const formalConclusions = strategyMainlineReviewFormalConclusions(
       predict,
       formalTop,
       actualRanking,
       finalSealedCodes,
       reasonComplete,
       pendingReview,
+    );
+    const formalMainlines = await strategyMainlineReviewEnrichFormalConclusions(
+      predict,
+      formalTop,
+      formalConclusions,
+      evalStock,
+      {
+        day,
+        pendingReview,
+        limitDb,
+        limitDbFinal,
+        finalSealedCodes,
+        nextDay,
+        nextDayFinal,
+        thirdDay,
+        thirdDayFinal,
+      },
     );
     const mainlineQualification = main && !pendingReview
       ? strategyMainlineReviewQualification(predict, main, actualRanking, finalSealedCodes, reasonComplete)
@@ -26861,13 +27007,30 @@ async function getStrategyMainlineReview(days = 10) {
         };
         const fTop = strategyMainlineReviewFormalTop(blockPredict);
         const sMain = fTop.find(t => predict.confirmedKey && t.key === predict.confirmedKey) || fTop[0] || null;
-        const formalMainlines = strategyMainlineReviewFormalConclusions(
+        const formalConclusions = strategyMainlineReviewFormalConclusions(
           blockPredict,
           fTop,
           actualRanking,
           finalSealedCodes,
           reasonComplete,
           pendingReview,
+        );
+        const formalMainlines = await strategyMainlineReviewEnrichFormalConclusions(
+          blockPredict,
+          fTop,
+          formalConclusions,
+          evalStock,
+          {
+            day,
+            pendingReview,
+            limitDb,
+            limitDbFinal,
+            finalSealedCodes,
+            nextDay,
+            nextDayFinal,
+            thirdDay,
+            thirdDayFinal,
+          },
         );
         const reserveMainlines = strategyMainlineReviewReserveSummaries(blockPredict);
         // 新 schema v3 明确保存 available；早期 v3 没有该字段，空块只能诚实标为 unknown，
