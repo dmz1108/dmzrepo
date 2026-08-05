@@ -14528,3 +14528,27 @@ Deployment:
 
 Notes for next agent:
 - 本改动只修摘要展示；#401 后端逐主线明星收益数据保持不变。
+
+## 2026-08-05 - Codex - 多明星收益逐股对齐上线回执
+
+Changed:
+- PR #404 已合并并将预判回看多明星收益逐股对齐展示部署到生产。
+
+Files:
+- Runtime `kpl-dashboard_17_apple.html`
+- Runtime `Qi/vendor/strategy-workbench.css`
+- Cloud logs: `panda-cloud-ops-2026-06-19.md`, `_cloud-change-log-20260705.md`
+
+Validated:
+- 生产 `/health` 返回 `ok:true`；行情 HTML 使用 `strategy-workbench.css?v=20260805b`。
+- 生产策略 CSS SHA-256 与 `main` 一致：`62a725afe68ac3d61cfbf2e0d8fb76adfd9a3b31c1d0947c47ff572d8356e020`。
+- 用生产接口与生产渲染函数复核 2026-08-04：明星为利通电子、行云科技；次高分别为 `+10%/+12.96%`，
+  次收分别为 `+10%/+9.9%`，3 日均为 `待交易日`。
+
+Deployment:
+- PR: `https://github.com/dmz1108/dmzrepo/pull/404`，合并提交 `19cb5e5ac636d80124347edae1394fc234e93db2`。
+- Workflow: `https://github.com/dmz1108/dmzrepo/actions/runs/31018370625`。
+- 静态原子部署成功；未重启服务，未改写运行时数据库、历史预测档或冻结快照。
+
+Notes for next agent:
+- 后续若增加明星数量，折叠摘要会按最终确认顺序继续逐股对齐；不得恢复单个 `.find()` 取值。
