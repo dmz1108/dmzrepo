@@ -13920,6 +13920,33 @@ Deployment:
 Notes for next agent:
 - 若写前终盘池与 102 行官方表代码集不一致，必须列出缺失/多余股票并停止；不得为了对齐数量猜测或补行。
 
+## 2026-08-05 - Codex - TGB 湖南人终盘池对账阻断
+
+Changed:
+- 受保护只读运行 `31003056149` 确认生产终盘原始池 104/104，排除北交所 `920117` 后仍有 103/103。
+- 官方白底表格人工候选为 102/102；与终盘池对账结果为 `missingCodes=[601138]`、
+  `extraCodes=[]`、重复 0、`weakCount=0`。
+- `601138` 工业富联在湖南人原图仅位于明确禁止入库的“涨停炸板”区；不能为满足数量把它补入正式行。
+- 因对账闸不通过，本日正式 `tgb-hunan-structured` 保持缺失，综合主因未重折；新增日期绑定的云端阻断日志请求。
+
+Files:
+- `ops/production/requests/2026-08-05-tgb-hunan-reconciliation-blocked-log.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 官方文章：`https://www.tgb.cn/a/2u10yPnYbir`；官方图片：`image-01-06.png`；图片 SHA-256
+  `eb61a2164d33fc0e344d4a6f93e66ed690b9bb079ab2325409b395fc4d6e97af`。
+- 人工候选 15 个题材块计数之和 102，代码唯一，全字段非空；显式名称差异为 `688549` 中巨芯/中巨芯-U。
+- 公开 source-view 在本次阻断时为综合归纳 103、复盘啦 102、选股宝 102、韭研 0、淘股吧 0，`sourceErrors=[]`。
+
+Deployment:
+- 正式 TGB 行未写入，综合主因未重折，服务未重启。
+- 云端阻断日志请求尚待合并后执行；执行前会备份两份云端日志。
+
+Notes for next agent:
+- 只有终盘池纠正为不含炸板的 102 只，或受控流程提供可审计的真实涨停池证据后，才可从这份人工转录继续写入；
+  不得把炸板行带入正式源。
+
 ## 2026-08-04 - Codex - TGB 人工转录写前终盘池检查请求
 
 Changed:
