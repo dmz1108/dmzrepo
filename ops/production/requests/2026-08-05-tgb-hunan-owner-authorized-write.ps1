@@ -43,10 +43,10 @@ const imageUrl = 'https://image.tgb.cn/img/2026/08/05/hgiet2qf4nmm.png_760w.png'
 const expectedImageLength = 1279169;
 const expectedImageSha256 = 'eb61a2164d33fc0e344d4a6f93e66ed690b9bb079ab2325409b395fc4d6e97af';
 const expectedCount = 102;
-const expectedRawPoolCount = 103;
+const expectedRawPoolCounts = new Set([103, 104]);
 const expectedPublicLimitStatusCount = 104;
 const ownerExcludedNonLimitUpCode = '601138';
-const expectedExcludedCodes = ['920117'];
+const expectedAlwaysExcludedCodes = ['920117'];
 const operationId = 'tgb-hunan-manual-20260805';
 const fixedSource = 'review/tgb-hunan-structured';
 const fixedQualityNote = 'Manual transcription from @TGB\u6e56\u5357\u4eba official table image; source-faithful board block and stock detail reason.';
@@ -197,12 +197,16 @@ function validateBaseline(payload) {
   const rawCodes = toSet(rawRows.map(row => row.code));
   const excludedRows = rawRows.filter(row => excludedFromReview(row.code, row.name));
   const excludedCodes = toSet(excludedRows.map(row => row.code));
-  const pinnedExcludedCodes = toSet(expectedExcludedCodes);
+  const ownerExcludedWasPresent = rawCodes.has(ownerExcludedNonLimitUpCode);
+  const pinnedExcludedCodes = toSet([
+    ...expectedAlwaysExcludedCodes,
+    ...(ownerExcludedWasPresent ? [ownerExcludedNonLimitUpCode] : []),
+  ]);
   const eligibleRows = rawRows.filter(row => !excludedFromReview(row.code, row.name));
   const eligibleCodes = toSet(eligibleRows.map(row => row.code));
-  if (rawRows.length !== expectedRawPoolCount
-      || rawCodes.size !== expectedRawPoolCount
-      || rawCodes.has(ownerExcludedNonLimitUpCode)
+  if (!expectedRawPoolCounts.has(rawRows.length)
+      || !expectedRawPoolCounts.has(rawCodes.size)
+      || rawRows.length !== rawCodes.size
       || eligibleRows.length !== expectedCount
       || eligibleCodes.size !== expectedCount
       || setDiff(pinnedExcludedCodes, excludedCodes).length
@@ -222,6 +226,7 @@ function validateBaseline(payload) {
     rawCount: rawRows.length,
     rawUniqueCount: rawCodes.size,
     excludedRows,
+    ownerExcludedWasPresent,
   };
 }
 
