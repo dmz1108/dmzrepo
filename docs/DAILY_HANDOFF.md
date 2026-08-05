@@ -14296,3 +14296,31 @@ Deployment:
 Notes for next agent:
 - 阻断点仍是生产终盘池中的 `601138` 工业富联与湖南人官方炸板区归类冲突；在终盘池纠正或有新的可审计证据前，
   不得写入 2026-08-05 正式 TGB 文件或重折当天综合主因。
+
+## 2026-08-05 - Codex - TGB 湖南人 Owner 口径正式写入请求
+
+Changed:
+- Owner 明确 `601138` 工业富联不计入涨停；将该口径固定为 2026-08-05 日期绑定的显式非涨停排除，
+  与北交所 `920117` 一同从 104 只终盘原始池排除，得到 102 只正式对账基准。
+- 新增受保护正式写入请求，它会重验日期、官方文章、原图长度/SHA-256、人工 payload SHA-256、
+  102 行代码/名称、15 个题材块、缺失/多余/重复/弱字段、显式名称差异与两个终盘排除。
+- 请求在写前备份正式源、综合主因/证据/质量/auto、其他正式源、原始证据与两份云端日志；
+  原子写入后重折当天综合主因，任一落盘后或公开验证闸失败均自动回滚。
+
+Files:
+- `.github/workflows/production-ops.yml`
+- `ops/production/requests/2026-08-05-tgb-hunan-owner-authorized-write.ps1`
+- `tests/tgb-20260805-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 人工 payload：102 行/102 唯一代码，15 块合计 102，重复 0、弱字段 0；SHA-256
+  `4111c6088d1fe69cc2627b2484636d27afccc834ef731601d79e8b491d97adbf`。
+- 显式名称差异仅 `688549` 中巨芯/中巨芯-U；终盘排除固定为 Owner 授权非涨停 `601138`
+  与北交所 `920117`。
+
+Deployment:
+- 本条记录时正式写入请求尚未执行；正式入库仍为 0，综合主因未重折，未重启服务。
+
+Notes for next agent:
+- 只有本日期绑定脚本在 `main` 合并并经 `production` 环境批准后才可执行；不得将 `601138` 加入 TGB 正式行。
