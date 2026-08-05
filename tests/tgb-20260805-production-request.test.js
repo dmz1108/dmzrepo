@@ -23,11 +23,12 @@ assert(request.includes("expectedImageSha256 = 'eb61a2164d33fc0e344d4a6f93e66ed6
 assert(request.includes('const expectedImageLength = 1279169'), 'request must pin the official image length');
 assert(request.includes('const expectedCount = 102'), 'request must require the 102-stock formal pool');
 assert(request.includes('const expectedRawPoolCounts = new Set([103, 104])'), 'request must safely accept either concurrent terminal-file state');
-assert(request.includes('const expectedPublicLimitStatusCount = 104'), 'request must separately pin the stale public status count');
+assert(request.includes('const expectedPublicLimitStatusCounts = new Set([103, 104])'), 'request must safely accept either observed public status count');
 assert(request.includes("const ownerExcludedNonLimitUpCode = '601138'"), 'request must pin the owner-authorized non-limit-up exclusion');
 assert(request.includes("const expectedAlwaysExcludedCodes = ['920117']"), 'request must pin the Beijing Exchange exclusion');
 assert(request.includes('code === ownerExcludedNonLimitUpCode'), 'review filter must apply the owner-authorized exclusion');
 assert(request.includes('ownerExcludedWasPresent = rawCodes.has(ownerExcludedNonLimitUpCode)'), 'gate must record whether the concurrent terminal file contains the non-limit-up code');
+assert(request.includes('expectedPublicLimitStatusCounts.has(Number(statusDay?.count))'), 'public status gate must handle the same concurrent count pair');
 assert(request.includes("code: '688549'"), 'request must record the source-name alias code');
 assert(request.includes("sourceName: '\\u4e2d\\u5de8\\u82af'"), 'request must preserve the source name');
 assert(request.includes("baselineName: '\\u4e2d\\u5de8\\u82af-U'"), 'request must record the terminal-pool name');

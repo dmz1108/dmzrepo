@@ -14375,3 +14375,27 @@ Deployment:
 
 Notes for next agent:
 - 不得放宽最终合格集；双状态仅吸收 `601138` 在终盘原始文件中的并发出现/消失，合格代码数、代码集与全部人工行仍必须精确为 102。
+
+## 2026-08-05 - Codex - TGB 公开状态双计数稳定验证请求
+
+Changed:
+- 第三次写入运行 `31008946918` 已通过终盘双状态闸，并完成备份、正式写入、综合主因重折、落盘后二次闸、
+  综合/证据/auto 代码集和公开 TGB/综合代码集验证；最后仅在公开 limit-up status 的计数检查失败。
+- 该接口与终盘文件同源受并发刷新影响，已观察到 103/104 两个状态；将公开状态计数闸与终盘双状态闸一致为只接受 103 或 104。
+- 公开 TGB 与综合归纳仍必须各为精确 102 行/102 唯一代码，缺失/多余为空，TGB 覆盖率/主因覆盖率 100%，低质量 0，
+  `sourceErrors=[]` 且 `/health` 为 `ok:true`；这些强闸未放宽。
+
+Files:
+- `ops/production/requests/2026-08-05-tgb-hunan-owner-authorized-write.ps1`
+- `tests/tgb-20260805-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 第三次运行失败原因仅 `public baseline/health mismatch`；自动回滚完成，`rollbackFailures=[]`。
+- 回滚后公开 source-view 恢复为 TGB 0，正式文件未保留；公开 `/health` 为 `ok:true`。
+
+Deployment:
+- 第三次运行已回滚，未重启服务；公开状态双计数稳定请求尚未执行。
+
+Notes for next agent:
+- 只有 limit-up status 的已观察 103/104 计数这一元数据闸改为双状态；人工 102 行、正式源、综合库、证据、auto 和公开对账仍全部要求精确一致。

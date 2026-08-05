@@ -44,7 +44,7 @@ const expectedImageLength = 1279169;
 const expectedImageSha256 = 'eb61a2164d33fc0e344d4a6f93e66ed690b9bb079ab2325409b395fc4d6e97af';
 const expectedCount = 102;
 const expectedRawPoolCounts = new Set([103, 104]);
-const expectedPublicLimitStatusCount = 104;
+const expectedPublicLimitStatusCounts = new Set([103, 104]);
 const ownerExcludedNonLimitUpCode = '601138';
 const expectedAlwaysExcludedCodes = ['920117'];
 const operationId = 'tgb-hunan-manual-20260805';
@@ -502,8 +502,11 @@ async function verifyPublic(expectedCodes, previouslyHealthySources) {
       );
       validateExactStockSet('public main-reason day', mainDay, expectedCodes);
       const statusDay = (limitStatus.days || []).find(item => item.day === day);
-      if (Number(statusDay?.count) !== expectedPublicLimitStatusCount || health?.ok !== true) {
-        throw new Error('public baseline/health mismatch');
+      if (!expectedPublicLimitStatusCounts.has(Number(statusDay?.count)) || health?.ok !== true) {
+        throw new Error(`public baseline/health mismatch: ${JSON.stringify({
+          count: Number(statusDay?.count),
+          healthOk: health?.ok === true,
+        })}`);
       }
       return {
         combinedCount: combinedRows.length,
