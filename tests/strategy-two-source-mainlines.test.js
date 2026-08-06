@@ -129,7 +129,7 @@ const multiFormalReviewHTML = renderMainlineReviewHTML({
       eastmoney: { available: true, status: 'mainline', theme: '光通信', noMainline: false,
         formalMainlines: [
           { theme: '光通信', rank: 1, gateQualified: true, mainlineQualified: true, mainlineQualification: { limitUpCount: 15 },
-            stars: [{ code: '600101', name: '光明星', predictLevel: 'confirmed', nextHighGain: 8, nextCloseGain: 5, threeDayGain: null,
+            stars: [{ code: '600101', name: '光明星', predictLevel: 'confirmed', sealedSameDay: true, sealStatus: 'sealed', nextHighGain: 8, nextCloseGain: 5, threeDayGain: null,
               nextPerformancePending: false, nextPerformanceStatus: 'final', threeDayPerformancePending: true, threeDayPerformanceStatus: 'awaiting-trading-day' }],
             leaders: [{ code: '600102', name: '光龙头', nextHighGain: 2, nextCloseGain: -1, threeDayGain: null,
               nextPerformancePending: false, nextPerformanceStatus: 'final', threeDayPerformancePending: true, threeDayPerformanceStatus: 'awaiting-trading-day' }],
@@ -138,7 +138,7 @@ const multiFormalReviewHTML = renderMainlineReviewHTML({
         ] },
       ths: { available: true, status: 'mainline', theme: '算力AI', noMainline: false,
         formalMainlines: [{ theme: '算力AI', rank: 2, gateQualified: true, mainlineQualified: true, mainlineQualification: { limitUpCount: 15 },
-          stars: [{ code: '600201', name: '算力明星', predictLevel: 'confirmed', nextHighGain: 15, nextCloseGain: 10, threeDayGain: null,
+          stars: [{ code: '600201', name: '算力明星', predictLevel: 'confirmed', sealedSameDay: true, sealStatus: 'sealed', nextHighGain: 15, nextCloseGain: 10, threeDayGain: null,
             nextPerformancePending: false, nextPerformanceStatus: 'final', threeDayPerformancePending: true, threeDayPerformanceStatus: 'awaiting-trading-day' }],
           leaders: [{ code: '600202', name: '算力龙头', nextHighGain: 7.5, nextCloseGain: 5, threeDayGain: null,
             nextPerformancePending: false, nextPerformanceStatus: 'final', threeDayPerformancePending: true, threeDayPerformanceStatus: 'awaiting-trading-day' }],
@@ -160,11 +160,42 @@ A(multiFormalSummary.includes('>光明星</span>') && multiFormalSummary.include
   && multiFormalSummary.includes('+5%') && multiFormalSummary.includes('+10%')
   && (multiFormalSummary.match(/待交易日/g) || []).length === 2,
   '多主线摘要逐股对齐展示两只明星的次高、次收与3日等待状态');
+const july31ReviewHTML = renderMainlineReviewHTML({
+  days: [{
+    day: '2026-07-31', phase: '尾盘', sampleValid: true, pendingReview: false,
+    noMainline: false, theme: '短剧游戏', mainlineQualified: true, mainlineStarQualified: true,
+    star: { code: '300058', name: '蓝色光标', predictLevel: 'confirmed', sealedSameDay: true, sealStatus: 'sealed',
+      nextHighGain: 7.11, nextCloseGain: 2.58, threeDayGain: 9.62 },
+    leaders: [], expectedStars: [{ code: '300182', name: '捷成股份', sealStatus: 'notSealed' }], actualTop: [],
+    bySource: {
+      eastmoney: { available: true, status: 'mainline', theme: '短剧游戏', noMainline: false,
+        formalMainlines: [{ theme: '短剧游戏', gateQualified: true, mainlineQualified: true, mainlineQualification: { limitUpCount: 28 },
+          stars: [
+            { code: '300058', name: '蓝色光标', predictLevel: 'confirmed', sealedSameDay: true, sealStatus: 'sealed', nextHighGain: 7.11, nextCloseGain: 2.58, threeDayGain: 9.62 },
+            { code: '300182', name: '捷成股份', predictLevel: 'expected', sealedSameDay: false, sealStatus: 'notSealed', nextHighGain: 2.75, nextCloseGain: 0.2, threeDayGain: 10 },
+          ] }] },
+      ths: { available: true, status: 'mainline', theme: '短剧游戏', noMainline: false,
+        formalMainlines: [{ theme: '短剧游戏', gateQualified: true, mainlineQualified: true, mainlineQualification: { limitUpCount: 28 },
+          stars: [
+            { code: '300058', name: '蓝色光标', predictLevel: 'confirmed', sealedSameDay: true, sealStatus: 'sealed', nextHighGain: 7.11, nextCloseGain: 2.58, threeDayGain: 9.62 },
+            { code: '300063', name: '天龙集团', predictLevel: 'expected', sealedSameDay: false, sealStatus: 'notSealed', nextHighGain: 1.76, nextCloseGain: -0.55, threeDayGain: 6.37 },
+          ] }] },
+    },
+  }],
+  stats: {},
+});
+const july31Summary = (july31ReviewHTML.match(/<summary class="mlr-line-sum">([\s\S]*?)<\/summary>/) || [])[1] || '';
+A(july31Summary.includes('蓝色光标') && !july31Summary.includes('捷成股份') && !july31Summary.includes('天龙集团'),
+  '7月31日摘要的明星列只显示终盘确认明星，未封预期股不得混入');
+A(july31ReviewHTML.includes('<label>确认明星</label>') && july31ReviewHTML.includes('<label>预期跟踪</label>')
+  && july31ReviewHTML.includes('捷成股份') && july31ReviewHTML.includes('天龙集团')
+  && july31ReviewHTML.includes('预期明星当日最终未封板'),
+  '7月31日展开层把确认明星与预期未兑现分区展示，保留候选审计证据但不冒充明星');
 const finalStarMetricsHTML = renderMainlineReviewHTML({
   days: [{
     day: '2026-07-14', phase: '尾盘', sampleValid: true, pendingReview: false,
     noMainline: false, theme: 'PCB', mainlineQualified: true, mainlineStarQualified: true,
-    star: { code: '600183', name: '生益科技', predictLevel: 'confirmed',
+    star: { code: '600183', name: '生益科技', predictLevel: 'confirmed', sealedSameDay: true, sealStatus: 'sealed',
       nextHighGain: 8.38, nextCloseGain: 3.06, threeDayGain: -10.55 },
     leaders: [], expectedStars: [], actualTop: [{ theme: '机器人', count: 10 }],
     finalConfirmedMainline: {
@@ -189,7 +220,7 @@ const pendingFollowupHTML = renderMainlineReviewHTML({
     day: '2026-07-31', nextDay: '2026-08-03', nextDayFinal: false,
     phase: '尾盘', sampleValid: true, pendingReview: false,
     noMainline: false, theme: '短剧游戏', mainlineQualified: true, mainlineStarQualified: true,
-    star: { code: '300058', name: '蓝色光标', predictLevel: 'confirmed',
+    star: { code: '300058', name: '蓝色光标', predictLevel: 'confirmed', sealedSameDay: true, sealStatus: 'sealed',
       nextHighGain: null, nextCloseGain: null, threeDayGain: null, nextPerformancePending: true },
     leaders: [], expectedStars: [], actualTop: [{ theme: 'AI应用', count: 28 }],
   }],
@@ -202,7 +233,7 @@ const correctedStarMetricsHTML = renderMainlineReviewHTML({
   days: [{
     day: '2026-07-27', phase: '尾盘', sampleValid: true, pendingReview: false,
     noMainline: false, theme: 'PCB', mainlineQualified: true, mainlineStarQualified: true,
-    star: { code: '600183', name: '生益科技', predictLevel: 'confirmed',
+    star: { code: '600183', name: '生益科技', predictLevel: 'confirmed', sealedSameDay: true, sealStatus: 'sealed',
       nextHighGain: 8.38, nextCloseGain: 3.06, threeDayGain: -10.55 },
     leaders: [], expectedStars: [], actualTop: [{ theme: '机器人', count: 20 }],
     finalConfirmedMainline: {
@@ -295,9 +326,9 @@ const missedOutcomeWithStarHTML = renderMainlineReviewHTML({
 A(missedOutcomeWithStarHTML.includes('<div class="mlr-row hit-miss')
   && !missedOutcomeWithStarHTML.includes('star-confirmed')
   && !missedOutcomeWithStarHTML.includes('明星确认</i><b>神州数码')
-  && missedOutcomeWithStarHTML.includes('预期未兑现</i><b>协创数据')
+  && missedOutcomeWithStarHTML.includes('盘中曾确认·终盘未封</i><b>神州数码')
   && missedOutcomeWithStarHTML.includes('<span class="mlr-label">预期候选</span>'),
-  'Owner 2026-07-24:没有来源命中第一家族时，盘中L2候选不得继续显示为明星确认');
+  'Owner 2026-07-24:盘中曾确认但终盘未封时必须降级，不得继续显示为明星确认');
 const legacyReviewHTML = renderMainlineReviewHTML({
   days: [{ day: '2026-07-10', phase: '尾盘', sampleValid: true, noMainline: true, leaders: [], expectedStars: [], actualTop: [] }],
   stats: { mainlineTotal: 0 },
@@ -312,7 +343,7 @@ A(!legacyReviewHTML.includes('候选未通过 L2 明星验证，不计正式主�
 const starVisualReviewHTML = renderMainlineReviewHTML({
   days: [
     { day: '2026-07-08', phase: '已收盘', sampleValid: false, sampleInvalidReason: 'phase:已收盘', noMainline: false, theme: '算力AI', mainlineQualified: true, mainlineHitTop1: true,
-      star: { code: '000938', name: '紫光股份', predictLevel: 'confirmed' }, leaders: [], expectedStars: [], actualTop: [] },
+      star: { code: '000938', name: '紫光股份', predictLevel: 'confirmed', sealedSameDay: true, sealStatus: 'sealed' }, leaders: [], expectedStars: [], actualTop: [] },
     { day: '2026-07-14', phase: '盘中', sampleValid: true, noMainline: false, theme: '创新药', mainlineQualified: true, mainlineHitTop3: true,
       star: { code: '300760', name: '迈瑞医疗', predictLevel: 'expected', sealStatus: 'sealed' }, leaders: [],
       expectedStars: [{ code: '300760', name: '迈瑞医疗', sealStatus: 'sealed' }], actualTop: [] },
