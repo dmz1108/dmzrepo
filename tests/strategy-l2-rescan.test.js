@@ -62,6 +62,15 @@ const strategyMainlineScanPriorityCodes = () => ['600099'];
 const strategyMainlineBoardAutoScanEligibility = board => ({
   eligible: Number(board?.netInflow) >= 5e8 && Number(board?.zt) >= 2 && Array.isArray(board?.memberRows) && board.memberRows.length > 0,
 });
+const STRATEGY_MAINLINE_STYLE_BOARD_NAMES = new Set([
+  '大盘成长', '大盘价值', '基金重仓', '机构重仓', '证金持股', '茅指数', '宁组合',
+  '漂亮100', '同花顺漂亮100', '上证50', '上证180', '沪深300', '中证500', '权重股',
+  '融资融券', 'MSCI概念', '富时罗素', '标普道琼斯', 'QFII重仓', '社保重仓', '险资重仓',
+  '百元股', '低价股', '小盘股',
+  '昨日高振幅', '昨日连板', '昨日连板含一字', '最近多板',
+]);
+const STRATEGY_MAINLINE_STYLE_BOARD_IDS = new Set(['BK1633', 'BK1638', 'BK1643', 'BK1051']);
+eval(extractFn('strategyMainlineIsStyleBoard'));
 
 eval(extractFn('strategyMainlineBoardScanStrength'));
 eval(extractFn('strategyMainlineAutoScanDecision'));
@@ -154,6 +163,14 @@ const localL2TaskQueue = {
   },
 };
 eval(extractFn('strategyMainlineMaybeAutoScan'));
+strategyMainlineMaybeAutoScan([
+  { ...baseBoard, plateId: 'BK1633', name: '昨日高振幅' },
+  { ...baseBoard, plateId: 'BK1638', name: '最近多板' },
+  { ...baseBoard, plateId: 'BK1643', name: '小盘股' },
+  { ...baseBoard, plateId: 'BK1051', name: '昨日连板_含一字' },
+], '2026-08-06', true, '上午盘', null);
+A(dispatched.length === 0,
+  '最终派单防线:2026-08-06 四个东财统计/风格集合即使资金和涨停达标也不生成L2任务');
 strategyMainlineMaybeAutoScan([{ ...baseBoard, zt: 3 }], '2026-07-23', true, '上午盘', null);
 A(dispatched.length === 1 && dispatched[0].scanStage === 'strengthening'
   && dispatched[0].scanSequence === 2

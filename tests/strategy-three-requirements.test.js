@@ -35,8 +35,10 @@ const STRATEGY_MAINLINE_STYLE_BOARD_NAMES = new Set([
   '大盘成长', '大盘价值', '基金重仓', '机构重仓', '证金持股', '茅指数', '宁组合',
   '漂亮100', '同花顺漂亮100', '上证50', '上证180', '沪深300', '中证500', '权重股',
   '融资融券', 'MSCI概念', '富时罗素', '标普道琼斯', 'QFII重仓', '社保重仓', '险资重仓',
-  '百元股', '低价股',
+  '百元股', '低价股', '小盘股',
+  '昨日高振幅', '昨日连板', '昨日连板含一字', '最近多板',
 ]);
+const STRATEGY_MAINLINE_STYLE_BOARD_IDS = new Set(['BK1633', 'BK1638', 'BK1643', 'BK1051']);
 eval(extractFn('strategyMainlineIsStyleBoard'));
 eval(extractFn('strategyMainlineHasQiStarEvidence'));
 eval(extractFn('strategyMainlineHasConfirmedStar'));
@@ -56,6 +58,12 @@ A(!strategyMainlineUsesThreeRequirements('2026-07-20') && !strategyMainlineUsesT
 A(strategyMainlineIsStyleBoard('大盘成长') && strategyMainlineIsStyleBoard('基金重仓')
   && strategyMainlineIsStyleBoard('上证50_') && strategyMainlineIsStyleBoard('同花顺漂亮100'),
   '风格板:黑名单命中(含尾缀下划线与漂亮100系,2026-07-21 实盘两卡在列)');
+A(strategyMainlineIsStyleBoard('昨日高振幅', 'BK1633')
+  && strategyMainlineIsStyleBoard('最近多板', 'BK1638')
+  && strategyMainlineIsStyleBoard('小盘股', 'BK1643')
+  && strategyMainlineIsStyleBoard('昨日连板_含一字', 'BK1051')
+  && strategyMainlineIsStyleBoard('上游改名', 'bk1051'),
+  '风格板:2026-08-06 四个误扫统计集合按名称和稳定板块ID双重拦截');
 A(!strategyMainlineIsStyleBoard('半导体') && !strategyMainlineIsStyleBoard('消费电子')
   && !strategyMainlineIsStyleBoard('中字头基建') && !strategyMainlineIsStyleBoard(''),
   '风格板:真题材(含中字头基建)不误伤,空名不判');
@@ -371,8 +379,10 @@ A(strategyMainlineReserveStarOutcomes(legacyPredictNoTier).length === 0,
   '回看:旧档案无 qiTier 标记时一律不产出——不把历史第4~10名正式候选猜成预备层(不追溯)');
 
 // ---- 6. 静态接线 ----
-A(/boardPayload\.boards = boardPayload\.boards\.filter\(b => !strategyMainlineIsStyleBoard\(b\?\.name\)\)/.test(src),
+A(/boardPayload\.boards = boardPayload\.boards\.filter\(b => !strategyMainlineIsStyleBoard\(b\?\.name, b\?\.plateId\)\)/.test(src),
   '静态:风格板在种子/扫描消费前统一剔除(不占扫描配额)');
+A(/\.filter\(board => !strategyMainlineIsStyleBoard\(board\?\.name, board\?\.plateId\)\)\s*\.map\(board =>/.test(src),
+  '静态:自动派单口保留第二道风格板防线,上游旁路也不能产生L2任务');
 A(/strategyMainlineApplyL2StarGate\(inflowGate\.kept, \{ threeRequirements: useThreeRequirements \}\)/.test(src),
   '静态:正式构建按日切界启用三要件');
 A(/reason: 'no-confirmed-mainline'/.test(src) && /条预备主线待条件补齐/.test(src),
