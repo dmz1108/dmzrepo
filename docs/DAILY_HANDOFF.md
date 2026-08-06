@@ -14838,3 +14838,35 @@ Notes for next agent:
   confirmation requires `sealedSameDay=true` or `sealStatus=sealed`.
 - Never put `expected/notSealed` or `confirmed/notSealed` rows back into the compact
   `明星` column. They belong only in the expanded tracking/audit section.
+
+## 2026-08-06 - Codex - Deploy PR #408 review star-state correction
+
+Changed:
+- Deployed the merged PR #408 strategy review renderer from exact `main@c3e31cd`.
+- Approved the protected `production` environment after the owner instructed Codex to
+  continue, then allowed the tracked production workflow to perform the deployment.
+
+Files:
+- `kpl-dashboard_17_apple.html`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- GitHub Actions production run `31063605604` completed successfully.
+- Production SHA-256 for `kpl-dashboard_17_apple.html` is
+  `515be938161e9f0cef480f1a3a13f232d901f7d471e574eb842293dc820c7fbd`, exactly matching
+  `main@c3e31cd`.
+- Public `https://market.dreamerqi.com/health` returned `{"ok":true}`.
+- The production `/kpl` response contains the new `确认明星`, `预期跟踪`, and
+  `盘中曾确认·终盘未封` state labels.
+
+Deployment:
+- Deployed to cloud production through workflow run `31063605604`.
+- No service was restarted; only the static strategy dashboard file changed.
+- Automatic rollback backup:
+  `C:\PandaDashboard\_deploy-backups\github-31063605604-1`.
+- The tracked workflow appended the operation to both cloud operation logs.
+
+Notes for next agent:
+- PR #408 is live. The 2026-07-31 review summary must show only 蓝色光标、利欧股份、
+  昆仑万维 as confirmed stars; 捷成股份 and 天龙集团 remain visible only as unsealed
+  expected tracking evidence.
