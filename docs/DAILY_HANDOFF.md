@@ -14909,3 +14909,42 @@ Notes for next agent:
 - Statistical/style/index/holding collections may be shown elsewhere as market context,
   but they must never enter strategy mainline selection or consume automatic L2 capacity.
 - Preserve the final dispatch guard even if the upstream board-building path is refactored.
+
+## 2026-08-06 - Codex - Deploy statistical-board L2 exclusion
+
+Changed:
+- Merged PR #410 and deployed the automatic L2 eligibility correction from exact
+  `main@40173930cfb2675d867a9bd97aa1ac18b57e70c9`.
+- Production now excludes 昨日高振幅 (`BK1633`), 最近多板 (`BK1638`), 小盘股
+  (`BK1643`), and 昨日连板_含一字 (`BK1051`) at both the candidate and final
+  automatic-dispatch boundaries. Manual administrator scans remain available.
+
+Files:
+- Runtime `kpl-stats-server.js`
+- Cloud logs: `panda-cloud-ops-2026-06-19.md`, `_cloud-change-log-20260705.md`
+
+Validated:
+- GitHub Actions production run `31087899833` completed successfully and restarted the
+  main service.
+- Production `kpl-stats-server.js` SHA-256 is
+  `88bace4510454d935dcf058f94dc1703e03a4a9998c306ce509f771ee578e9b7`, exactly
+  matching `main@4017393`; port 8765 is listening and the public `/health` endpoint
+  returned `{"ok":true}`.
+- Existing style-board jobs have pre-deployment `createdAt` values. Their `latest.json`
+  files may have a 17:12 +08:00 `savedAt` because the restarted process persisted the
+  in-memory queue; this is not a new scan dispatch.
+
+Deployment:
+- PR: `https://github.com/dmz1108/dmzrepo/pull/410`, merge commit
+  `40173930cfb2675d867a9bd97aa1ac18b57e70c9`.
+- Workflow: `https://github.com/dmz1108/dmzrepo/actions/runs/31087899833`.
+- Automatic rollback backup:
+  `C:\PandaDashboard\_deploy-backups\github-31087899833-1`.
+- The tracked workflow appended this operation to both cloud operation logs. No runtime
+  database, historical prediction, frozen snapshot, or existing L2 audit record was
+  rewritten.
+
+Notes for next agent:
+- Do not remove the historical 2026-08-06 style-board jobs; they document the defect.
+- Future statistical collections must be added to the shared style classifier by stable
+  plate ID and guarded at the final automatic-dispatch boundary.
