@@ -1,0 +1,17 @@
+{
+  "files": [
+    {
+      "source": "kpl-stats-server.js",
+      "destination": "kpl-stats-server.js"
+    },
+    {
+      "source": "theme-taxonomy.json",
+      "destination": "theme-taxonomy.json"
+    },
+    {
+      "source": "theme-taxonomy.legacy-preB.json",
+      "destination": "theme-taxonomy.legacy-preB.json"
+    }
+  ],
+  "restart": "main"
+}
