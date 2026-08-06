@@ -14870,3 +14870,42 @@ Notes for next agent:
 - PR #408 is live. The 2026-07-31 review summary must show only 蓝色光标、利欧股份、
   昆仑万维 as confirmed stars; 捷成股份 and 天龙集团 remain visible only as unsealed
   expected tracking evidence.
+
+## 2026-08-06 - Codex - Exclude statistical style boards from automatic L2 scans
+
+Changed:
+- Extended the existing non-thematic/style-board classifier with the four Eastmoney
+  statistical collections observed in production: 昨日高振幅 (`BK1633`), 最近多板
+  (`BK1638`), 小盘股 (`BK1643`), and 昨日连板_含一字 (`BK1051`).
+- Match both normalized names and stable plate IDs so an upstream display-name change
+  cannot silently re-enable these collections.
+- Added a second fail-closed guard at the final automatic L2 dispatch boundary, in
+  addition to the existing pre-seed filter. Manual administrator scans remain available.
+
+Files:
+- `kpl-stats-server.js`
+- `tests/strategy-three-requirements.test.js`
+- `tests/strategy-l2-rescan.test.js`
+- `tests/strategy-board-zt-backfill.test.js`
+- `tests/strategy-two-source-mainlines.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Cloud `strategy-data/local-l2-jobs/2026-08-06` proves all four collections produced
+  `strategy-auto` jobs before this fix even though they have no mainline-theme meaning.
+- Dynamic regression proves all four are rejected even when their mock fund flow,
+  limit-up count, and member rows satisfy the normal automatic-scan gate.
+- Existing thematic scan scheduling, strengthening rescans, confirmation rescans, and
+  cross-source fairness tests remain green.
+- Full repository test suite: **85/85** files passed; `node --check kpl-stats-server.js`
+  and `git diff --check` passed.
+
+Deployment:
+- GitHub only in this entry; not yet merged or deployed. No service was restarted.
+- Existing 2026-08-06 L2 job files are retained as truthful audit evidence and must not
+  be rewritten or hidden. The fix prevents subsequent automatic dispatches.
+
+Notes for next agent:
+- Statistical/style/index/holding collections may be shown elsewhere as market context,
+  but they must never enter strategy mainline selection or consume automatic L2 capacity.
+- Preserve the final dispatch guard even if the upstream board-building path is refactored.

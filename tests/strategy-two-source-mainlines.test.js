@@ -433,6 +433,7 @@ eval(extractFn('strategyMainlineAutoScanDecision'));
 const l2jobs = {};
 let l2seq = 0;
 const dispatched = [];
+const strategyMainlineIsStyleBoard = () => false;
 const localL2TaskQueue = {
   configured: () => true,
   get: (id) => l2jobs[id] || null,

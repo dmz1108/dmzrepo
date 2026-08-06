@@ -97,6 +97,7 @@ eval(extractFn('strategyMainlineAutoScanDecision'));
 const noMemberSummary = strategyMainlineAutoScanEligibilitySummary([{ plateId: 'BKNOM', name: '成分未就绪', netInflow: 6e8, zt: 2, memberRows: [] }]);
 A(noMemberSummary.eligible === true && noMemberSummary.dispatchable === false, '门槛达标但成分未就绪:资格保留,执行前置条件明确不足');
 const dispatched = [];
+const strategyMainlineIsStyleBoard = () => false;
 const localL2TaskQueue = {
   configured: () => true, get: () => null, latest: () => null,
   start: (job) => { const rec = { jobId: 'J' + (dispatched.length + 1), ...job, status: 'queued' }; dispatched.push(rec); return rec; },

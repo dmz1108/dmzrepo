@@ -22743,7 +22743,7 @@ async function strategyMainlineHydrateCatalogBoardsForScan(seedByKey, catalogBoa
   // 东财 catalog 的超大单净流入就是正式计分口径，因此允许资金已过 5 亿的正涨板独立补水；
   // 补水后仍必须用真实成分逐股得到 zt>=2，且实际派单仍要求 memberRows，不提供任何豁免。
   for (const board of (Array.isArray(catalogBoards) ? catalogBoards : [])) {
-    if (!board || Number(board?.zsType) !== 6 || strategyMainlineIsStyleBoard(board?.name)) continue;
+    if (!board || Number(board?.zsType) !== 6 || strategyMainlineIsStyleBoard(board?.name, board?.plateId)) continue;
     const gainPct = numOrNull(board?.gainPct ?? board?.gain);
     const netInflow = numOrNull(board?.netInflow);
     const netInflowMetric = String(board?.netInflowMetric || '');
@@ -23844,6 +23844,9 @@ function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase, prior
       ? { confirmation: 0, retry: 1, strengthening: 2, discovery: 3 }
       : { confirmation: 0, retry: 1, discovery: 2, strengthening: 3 };
     const candidateRows = (Array.isArray(boards) ? boards : [])
+      // 最终派单口再做一次非题材板防线。上游 catalog/快照即使新增旁路或改名，
+      // 行情统计集合也不能消耗公司端 L2 扫描配额，更不能产出伪主线明星。
+      .filter(board => !strategyMainlineIsStyleBoard(board?.name, board?.plateId))
       .map(board => {
         const eligibility = strategyMainlineBoardAutoScanEligibility(board, { requireMembers: true });
         const existing = localL2TaskQueue.latest(String(board.plateId), day);
@@ -28117,7 +28120,7 @@ async function buildStrategyMainlinesLiveImpl(day, options = {}, diagStore = nul
   // 三要件(2026-07-21):风格/指数/持仓聚合板不参与主线评选,也不消耗自动扫描配额——
   // 在种子/扫描消费之前统一剔除;看板/复盘等非策略调用不经此路径,不受影响。
   if (strategyMainlineUsesThreeRequirements(isoDay) && Array.isArray(boardPayload?.boards)) {
-    boardPayload.boards = boardPayload.boards.filter(b => !strategyMainlineIsStyleBoard(b?.name));
+    boardPayload.boards = boardPayload.boards.filter(b => !strategyMainlineIsStyleBoard(b?.name, b?.plateId));
   }
   const seedByKey = new Map();
   const risingStockByCode = new Map();
@@ -28847,12 +28850,23 @@ const STRATEGY_MAINLINE_STYLE_BOARD_NAMES = new Set([
   '大盘成长', '大盘价值', '基金重仓', '机构重仓', '证金持股', '茅指数', '宁组合',
   '漂亮100', '同花顺漂亮100', '上证50', '上证180', '沪深300', '中证500', '权重股',
   '融资融券', 'MSCI概念', '富时罗素', '标普道琼斯', 'QFII重仓', '社保重仓', '险资重仓',
-  '百元股', '低价股',
+  '百元股', '低价股', '小盘股',
+  // 东财行情统计集合：描述昨日形态/近期板数，不是可持续题材方向。
+  '昨日高振幅', '昨日连板', '昨日连板含一字', '最近多板',
 ]);
-function strategyMainlineIsStyleBoard(name) {
-  const n = String(name || '').trim().replace(/[_＿]+$/, '');
+const STRATEGY_MAINLINE_STYLE_BOARD_IDS = new Set([
+  'BK1633', // 昨日高振幅
+  'BK1638', // 最近多板
+  'BK1643', // 小盘股
+  'BK1051', // 昨日连板_含一字
+]);
+function strategyMainlineIsStyleBoard(name, plateId = '') {
+  const id = String(plateId || '').trim().toUpperCase();
+  const n = String(name || '').trim().replace(/[\s_＿]+/g, '');
+  if (STRATEGY_MAINLINE_STYLE_BOARD_IDS.has(id)) return true;
   if (!n) return false;
-  return STRATEGY_MAINLINE_STYLE_BOARD_NAMES.has(n) || n.includes('漂亮100');
+  return STRATEGY_MAINLINE_STYLE_BOARD_NAMES.has(n)
+    || n.includes('漂亮100');
 }
 function strategyMainlineHasConfirmedStar(item) {
   return (Array.isArray(item?.starStocks) ? item.starStocks : []).some(star => star?.level === 'confirmed');
@@ -29682,7 +29696,7 @@ function strategyMainlineRestrictToQiPayload(payload, options = {}) {
     // 返回层同样剔除,否则会以预备主线身份复活;剔除项记入 excluded 供观测。
     const rows = Array.isArray(list) ? list : [];
     const themed = threeReq ? rows.filter(item => {
-      if (!strategyMainlineIsStyleBoard(item?.theme)) return true;
+      if (!strategyMainlineIsStyleBoard(item?.theme, item?.plateId)) return true;
       excluded.push({
         theme: String(item?.theme || ''),
         familyKey: String(item?.familyKey || item?.key || ''),
@@ -29716,7 +29730,7 @@ function strategyMainlineRestrictToQiPayload(payload, options = {}) {
   const originalMainlines = Array.isArray(payload.mainlines) ? payload.mainlines : [];
   const rootGate = filterList(unionRows(originalMainlines, payload.reserveMainlines));
   const mainlines = rootGate.kept;
-  const mergeReserve = (fromGate) => (fromGate || []).filter(row => !strategyMainlineIsStyleBoard(row?.theme))
+  const mergeReserve = (fromGate) => (fromGate || []).filter(row => !strategyMainlineIsStyleBoard(row?.theme, row?.plateId))
     .slice(0, 6).map((row, index) => ({ ...row, rank: index + 1 }));
   const reserveMainlines = threeReq ? mergeReserve(rootGate.reserve) : [];
   const restrictSource = (sourcePayload, source) => {
