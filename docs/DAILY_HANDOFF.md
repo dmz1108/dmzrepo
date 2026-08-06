@@ -13922,6 +13922,39 @@ Notes for next agent:
 - 必须以只读请求返回的生产终盘池原文件为最终对账依据；若总数、missing/extra、名称或排除规则不一致，
   停止正式写入并明确列出阻断项。
 
+## 2026-08-06 - Codex - TGB 湖南人 79 行正式写入请求
+
+Changed:
+- 受保护只读运行 `31100180531` 已确认生产终盘原始池和过滤池均为 79/79、排除项为空、正式 TGB
+  文件不存在；人工候选代码集 SHA-256 与终盘池完全一致。
+- 第二遍人工复核中回原图纠正首遍误读：`000908` 为石药景峰、`002180` 为奔图科技；唯一显式名称差异
+  是原图 `688549` 中巨芯对应终盘中巨芯-U。
+- 新增加密日期绑定的 79 行正式写入请求：固定人工 payload、官方文章与原图哈希，重验 13 块、代码名称、
+  missing/extra/重复/弱字段；写前备份全部受影响文件，原子写入后重折当天综合主因并核验落盘与公开状态，
+  任一写后闸失败自动回滚。
+- 生产工作流只对这一个精确脚本路径上传 `DREAMERQI_TGB_20260806_PAYLOAD_B64`，payload 不进入 Git 或日志。
+
+Files:
+- `.github/workflows/production-ops.yml`
+- `ops/production/requests/2026-08-06-tgb-hunan-write.ps1`
+- `tests/tgb-20260806-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 人工 payload：79 行/79 唯一代码，13 块合计 79，`missingCodes=[]`、`extraCodes=[]`、重复 0、
+  `weakCount=0`；SHA-256 `20771c8cb9aeea543d2f3a2b89c28a9ee8ae643975d354432c91f4284db5cbe1`。
+- 终盘池代码集 SHA-256 `23d760c5ac3dbabdf04c20e698cd827ec7d31c8abd74a23f9216e66f4a276a0e`；
+  正式文件写入前必须保持不变。
+- 官方文章 `https://www.tgb.cn/a/2u2El7xRP2c`；原图 `image-01-06.png`，891844 字节，
+  SHA-256 `f5987489d0b923d35bb94f2c64be25ae45eda1e6c53822753e4d0034b47e4799`。
+
+Deployment:
+- 本条记录时正式写入请求尚未执行；正式入库仍为 0，综合主因未重折，服务未重启。
+
+Notes for next agent:
+- 只有本日期绑定脚本在 `main` 合并并经 `production` 环境批准后才可执行；公开淘股吧与综合归纳均须
+  精确为 79/79、覆盖率 100%、低质量 0、`sourceErrors=[]`，否则回滚并报告阻断。
+
 ## 2026-08-05 - Codex - TGB 人工转录写前终盘池检查请求
 
 Changed:
