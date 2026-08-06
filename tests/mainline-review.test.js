@@ -48,8 +48,6 @@ eval(extractFn('consensusKey'));
 eval(extractFn('strategyResonanceTopicKey'));
 eval(extractFn('strategyThemeTaxonomyInfo'));
 eval(extractFn('strategyMainlineTopicKey'));
-const STRATEGY_MAINLINE_MERGE_GROUPS = extractSet('STRATEGY_MAINLINE_MERGE_GROUPS');
-const STRATEGY_MAINLINE_KEEP_FINE_THEMES = extractSet('STRATEGY_MAINLINE_KEEP_FINE_THEMES');
 eval(extractFn('strategyMainlineFamilyInfo'));
 eval(extractFn('normalizeReasonSourceCode'));
 const isExcludedFromReview = (code) => String(code || '').startsWith('8');  // 夹具:8 开头视作北交所剔除
@@ -59,6 +57,9 @@ const STRATEGY_MAINLINE_FORMAL_MIN_ZT = 3;
 eval(extractFn('strategyMainlineIsTradingSessionObservation'));
 eval(extractFn('strategyMainlineReviewFrozenFamilyEvidence'));
 eval(extractFn('strategyMainlineReviewSampleStatus'));
+// 历史族口径纪元在本测试中置为空操作:本文件验证回看机制本身(资格/领先/时段),
+// 纪元冻结的旧词典行为由 family-declarative-equivalence.test.js §13 专项覆盖。
+const strategyFamilyEraEnterForDay = () => () => {};
 
 // ---- 待测函数 + 可控 IO/时钟 stub ----
 eval(extractFn('strategyMainlineActualFamilyRanking'));
@@ -77,6 +78,7 @@ eval(extractFn('strategyMainlineReserveStarOutcomes'));   // 三要件预备层�
 eval(extractFn('strategyMainlineReviewReserveSummaries'));
 eval(extractFn('strategyMainlineReviewFormalTop'));
 eval(extractFn('strategyMainlineReviewFormalConclusions'));
+eval(extractFn('strategyMainlineReviewPlanFormalEvidence'));
 eval(extractFn('strategyMainlineReviewEnrichFormalConclusions'));
 eval(extractFn('strategyMainlineReviewAggregateQualification'));
 eval(extractFn('strategyMainlineReviewHasRecord'));
@@ -862,8 +864,11 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   const multiLineReview = await getStrategyMainlineReview(10);
   const multi04 = multiLineReview.days.find(row => row.day === '2026-08-04');
   const eastLight = multi04?.bySource?.eastmoney?.formalMainlines?.find(row => row.familyKey === 'group:光通信');
-  const eastAi = multi04?.bySource?.eastmoney?.formalMainlines?.find(row => row.familyKey === 'group:算力AI');
-  const thsAi = multi04?.bySource?.ths?.formalMainlines?.find(row => row.familyKey === 'group:算力AI');
+  // 夹具沿用旧档案键 group:算力AI(真实历史档就是这样存的);PR B 后它解析为 group:算力硬件,
+  // 这里按解析后的族键取行,顺带验证旧键档案在新词典下仍能正确落族。
+  const aiFamilyKey = strategyMainlineFamilyInfo({ key: 'group:算力AI', theme: '算力AI' }).key;
+  const eastAi = multi04?.bySource?.eastmoney?.formalMainlines?.find(row => row.familyKey === aiFamilyKey);
+  const thsAi = multi04?.bySource?.ths?.formalMainlines?.find(row => row.familyKey === aiFamilyKey);
   A(eastLight?.stars?.[0]?.code === '600101' && eastLight.stars[0].nextCloseGain === 5
     && eastLight?.leaders?.[0]?.code === '600102' && eastLight.leaders[0].nextCloseGain === -5,
   '8月4日东财光通信逐条保留自己的明星、龙头和次日表现');
@@ -878,6 +883,15 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   '第三个后续交易日尚未到来时明确标为等待，不再以空白伪装数据缺失');
   A(multi04?.star?.code === '600101' && multi04?.mainlineLeadStatus !== undefined,
     '兼容层第一主线字段保持不变，既有统计口径不被多主线明细改写');
+  // 不变量:逐源结论(分母)在纪元段内用 conclusions 计算,必须与用异步补全后的行计算等值。
+  // 一旦 enrich 覆盖了 mainlineQualified,这条会立刻失败——分母与展示明细就此绑死。
+  for (const skey of ['eastmoney', 'ths']) {
+    const blk = multi04?.bySource?.[skey];
+    if (!blk || blk.status !== 'mainline') continue;
+    A(blk.mainlineQualified === strategyMainlineReviewAggregateQualification(blk.formalMainlines)
+      && blk.formalMainlineCount === (blk.formalMainlines || []).length,
+    `${skey}:来源资格分母与逐条明细聚合值一致,条数与明细长度一致(拆分不改分母)`);
+  }
 
   const ambiguousFamilyRows = [
     { key: 'theme:光模块', theme: '光模块', leaders: [{ code: '600301', name: '光模块龙头' }] },
@@ -887,15 +901,29 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
     candidates: ambiguousFamilyRows.map(row => ({ ...row, stars: [] })),
     starTransitions: [],
   };
-  const ambiguousFamilyReview = await strategyMainlineReviewEnrichFormalConclusions(
+  // 逐条证据分两段(issue #375 PR B 纪元接缝):Plan 同步定绑定(读词典,须在纪元内),
+  // Enrich 异步补收益(不读词典,须在纪元外)。歧义 fail closed 属于 Plan 段职责。
+  const ambiguousFamilyPlans = strategyMainlineReviewPlanFormalEvidence(
     ambiguousFamilyPredict,
     ambiguousFamilyRows,
     [{ key: 'theme:CPO', theme: 'CPO', mainlineQualified: true }],
+  );
+  const ambiguousFamilyReview = await strategyMainlineReviewEnrichFormalConclusions(
+    ambiguousFamilyPlans,
     async row => ({ ...row, nextCloseGain: 0, nextHighGain: 0, threeDayGain: 0 }),
   );
   A(strategyMainlineFamilyInfo({ theme: '光模块' }).key === strategyMainlineFamilyInfo({ theme: 'CPO' }).key
+    && ambiguousFamilyPlans[0]?.rawLeaders?.length === 0
     && ambiguousFamilyReview[0]?.leaders?.length === 0,
   '精确键缺失且同家族存在多条主线时拒绝猜测龙头归属，不再取第一条');
+  A(ambiguousFamilyReview[0]?.mainlineQualified === true && ambiguousFamilyReview[0]?.key === 'theme:CPO',
+    '拆分后 conclusion 原字段(资格/键)仍被完整回填,不因分两段而丢失');
+  // 静态:纪元段内不得出现 await(段内让出会把旧词典快照暴露给并发请求)。
+  const eraStart = src.indexOf('const familyEraExit = strategyFamilyEraEnterForDay(day);');
+  const eraEnd = src.indexOf('} finally { familyEraExit(); }');
+  const eraBody = eraStart >= 0 && eraEnd > eraStart ? src.slice(eraStart, eraEnd) : '';
+  A(!!eraBody && !/\bawait\b/.test(eraBody.replace(/\/\/[^\n]*/g, '')),
+    '族口径纪元段内无 await:逐条证据的异步补全已移出段外回填');
 
   if (process.exitCode) console.error('\nSOME MAINLINE-REVIEW CHECKS FAILED');
   else console.log('\nALL MAINLINE-REVIEW CHECKS PASSED');

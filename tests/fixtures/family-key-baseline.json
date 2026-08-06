@@ -1,5 +1,5 @@
 {
- "generatedFrom": "main@5f004d8 (pre-declarative-refactor)",
+ "generatedFrom": "PR B family re-partition (issue #375): 电力发电侧合族 + 算力硬件/AI软件应用分家",
  "wordCount": 1102,
  "families": {
   "4680": {
@@ -118,29 +118,29 @@
    "group": "PCB与连接"
   },
   "AIDC": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "AIGC": {
-   "key": "theme:AI应用",
-   "label": "AI应用",
-   "group": ""
+   "key": "group:AI软件应用",
+   "label": "AI软件应用",
+   "group": "AI软件应用"
   },
   "AIPC": {
-   "key": "theme:AI应用",
-   "label": "AI应用",
-   "group": ""
+   "key": "group:AI软件应用",
+   "label": "AI软件应用",
+   "group": "AI软件应用"
   },
   "AI医疗": {
-   "key": "theme:AI应用",
-   "label": "AI应用",
-   "group": ""
+   "key": "group:AI软件应用",
+   "label": "AI软件应用",
+   "group": "AI软件应用"
   },
   "AI大模型": {
-   "key": "theme:AI应用",
-   "label": "AI应用",
-   "group": ""
+   "key": "group:AI软件应用",
+   "label": "AI软件应用",
+   "group": "AI软件应用"
   },
   "AI存储": {
    "key": "group:半导体",
@@ -148,54 +148,54 @@
    "group": "半导体"
   },
   "AI应用": {
-   "key": "theme:AI应用",
-   "label": "AI应用",
-   "group": ""
+   "key": "group:AI软件应用",
+   "label": "AI软件应用",
+   "group": "AI软件应用"
   },
   "AI应用/AI大模型": {
-   "key": "theme:AI应用",
-   "label": "AI应用",
-   "group": ""
+   "key": "group:AI软件应用",
+   "label": "AI软件应用",
+   "group": "AI软件应用"
   },
   "AI教育": {
-   "key": "theme:AI应用",
-   "label": "AI应用",
-   "group": ""
+   "key": "group:AI软件应用",
+   "label": "AI软件应用",
+   "group": "AI软件应用"
   },
   "AI散热": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "AI数据中心": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "AI智能体": {
-   "key": "theme:AI应用",
-   "label": "AI应用",
-   "group": ""
+   "key": "group:AI软件应用",
+   "label": "AI软件应用",
+   "group": "AI软件应用"
   },
   "AI服务器": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "AI概念": {
-   "key": "theme:人工智能",
-   "label": "人工智能",
-   "group": ""
+   "key": "group:AI软件应用",
+   "label": "AI软件应用",
+   "group": "AI软件应用"
   },
   "AI电源": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "AI电源/AI配电": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "AI眼镜": {
    "key": "group:消费电子/显示",
@@ -208,14 +208,14 @@
    "group": ""
   },
   "AI硬件": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "AI硬件/服务器": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "AI芯片": {
    "key": "group:半导体",
@@ -233,9 +233,9 @@
    "group": ""
   },
   "AI配电": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "ALD": {
    "key": "group:半导体",
@@ -278,9 +278,9 @@
    "group": "半导体"
   },
   "BBU": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "BC电池": {
    "key": "theme:锂电池",
@@ -373,9 +373,9 @@
    "group": "医药"
   },
   "ChatGPT": {
-   "key": "theme:AI应用",
-   "label": "AI应用",
-   "group": ""
+   "key": "group:AI软件应用",
+   "label": "AI软件应用",
+   "group": "AI软件应用"
   },
   "Chiplet": {
    "key": "group:半导体",
@@ -423,14 +423,14 @@
    "group": "半导体"
   },
   "DeepSeek": {
-   "key": "theme:AI应用",
-   "label": "AI应用",
-   "group": ""
+   "key": "group:AI软件应用",
+   "label": "AI软件应用",
+   "group": "AI软件应用"
   },
   "DeepSeek概念": {
-   "key": "theme:AI应用",
-   "label": "AI应用",
-   "group": ""
+   "key": "group:AI软件应用",
+   "label": "AI软件应用",
+   "group": "AI软件应用"
   },
   "EAST": {
    "key": "theme:核聚变",
@@ -538,9 +538,9 @@
    "group": ""
   },
   "HVDC": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "Hybrid Bonding": {
    "key": "group:半导体",
@@ -558,9 +558,9 @@
    "group": "半导体"
   },
   "IDC": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "IGBT": {
    "key": "group:半导体",
@@ -998,9 +998,9 @@
    "group": "机器人"
   },
   "东数西算": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "丝杠": {
    "key": "group:机器人",
@@ -1058,14 +1058,14 @@
    "group": ""
   },
   "云计算": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "云计算数据中心": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "互感器": {
    "key": "theme:电网设备",
@@ -1078,9 +1078,9 @@
    "group": ""
   },
   "人工智能": {
-   "key": "theme:人工智能",
-   "label": "人工智能",
-   "group": ""
+   "key": "group:AI软件应用",
+   "label": "AI软件应用",
+   "group": "AI软件应用"
   },
   "人形机器人": {
    "key": "group:机器人",
@@ -1193,9 +1193,9 @@
    "group": ""
   },
   "储能温控": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "储能电池": {
    "key": "theme:锂电池",
@@ -1568,9 +1568,9 @@
    "group": ""
   },
   "分布式发电": {
-   "key": "theme:绿电新能源运营",
-   "label": "分布式发电",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "分散染料": {
    "key": "group:化工材料",
@@ -2168,14 +2168,14 @@
    "group": ""
   },
   "大模型": {
-   "key": "theme:AI应用",
-   "label": "AI应用",
-   "group": ""
+   "key": "group:AI软件应用",
+   "label": "AI软件应用",
+   "group": "AI软件应用"
   },
   "大水电": {
-   "key": "theme:水电",
-   "label": "大水电",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "大消费": {
    "key": "group:消费",
@@ -2223,9 +2223,9 @@
    "group": "消费"
   },
   "字节": {
-   "key": "theme:AI应用",
-   "label": "AI应用",
-   "group": ""
+   "key": "group:AI软件应用",
+   "label": "AI软件应用",
+   "group": "AI软件应用"
   },
   "存储": {
    "key": "group:半导体",
@@ -2253,14 +2253,14 @@
    "group": "半导体"
   },
   "存算": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "存算基地": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "宠物经济": {
    "key": "group:消费",
@@ -2518,19 +2518,19 @@
    "group": "半导体"
   },
   "抽水蓄能": {
-   "key": "theme:水电",
-   "label": "抽水蓄能",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "抽蓄": {
-   "key": "theme:水电",
-   "label": "抽蓄",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "换流阀": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "换电": {
    "key": "theme:充电桩",
@@ -2563,9 +2563,9 @@
    "group": "半导体"
   },
   "散热": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "数字电网": {
    "key": "theme:电网设备",
@@ -2573,34 +2573,34 @@
    "group": ""
   },
   "数据中心": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "数据中心供冷": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "数据中心供电": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "数据中心散热": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "数据中心算力": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "整县推进": {
-   "key": "theme:绿电新能源运营",
-   "label": "整县推进",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "文化传媒": {
    "key": "theme:短剧游戏",
@@ -2623,14 +2623,14 @@
    "group": ""
   },
   "新能源装机": {
-   "key": "theme:绿电新能源运营",
-   "label": "新能源装机",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "新能源运营": {
-   "key": "theme:绿电新能源运营",
-   "label": "新能源运营",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "新零售": {
    "key": "group:消费",
@@ -2718,9 +2718,9 @@
    "group": "半导体"
   },
   "智算中心": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "智能制造": {
    "key": "group:机器人",
@@ -2773,9 +2773,9 @@
    "group": "机器人"
   },
   "智谱": {
-   "key": "theme:AI应用",
-   "label": "AI应用",
-   "group": ""
+   "key": "group:AI软件应用",
+   "label": "AI软件应用",
+   "group": "AI软件应用"
   },
   "曝光机": {
    "key": "group:半导体",
@@ -2803,9 +2803,9 @@
    "group": ""
   },
   "服务器": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "服务器PCB": {
    "key": "group:PCB与连接",
@@ -2813,9 +2813,9 @@
    "group": "PCB与连接"
   },
   "服务器电源": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "服装": {
    "key": "group:消费",
@@ -2868,9 +2868,9 @@
    "group": "机器人"
   },
   "板卡": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "构网型储能": {
    "key": "theme:储能",
@@ -3073,9 +3073,9 @@
    "group": "消费"
   },
   "水力发电": {
-   "key": "theme:水电",
-   "label": "水力发电",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "水泥": {
    "key": "theme:地产链",
@@ -3083,9 +3083,9 @@
    "group": ""
   },
   "水电": {
-   "key": "theme:水电",
-   "label": "水电",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "永磁": {
    "key": "theme:稀土永磁",
@@ -3128,9 +3128,9 @@
    "group": ""
   },
   "泵": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "洁净室": {
    "key": "group:半导体",
@@ -3183,14 +3183,14 @@
    "group": ""
   },
   "浸没": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "浸没式液冷": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "涂胶显影": {
    "key": "group:半导体",
@@ -3218,29 +3218,29 @@
    "group": "化工材料"
   },
   "液冷": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "液冷/数据中心散热": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "液冷服务器": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "液冷概念": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "液冷超充": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "液化天然气": {
    "key": "theme:天然气",
@@ -3278,14 +3278,14 @@
    "group": "半导体"
   },
   "温控": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "温控散热": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "港口": {
    "key": "theme:航运",
@@ -3313,9 +3313,9 @@
    "group": "半导体"
   },
   "源网荷储": {
-   "key": "theme:绿电新能源运营",
-   "label": "源网荷储",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "滚柱丝杠": {
    "key": "group:机器人",
@@ -3333,24 +3333,24 @@
    "group": "机器人"
   },
   "火力发电": {
-   "key": "theme:火电热电",
-   "label": "火力发电",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "火电": {
-   "key": "theme:火电热电",
-   "label": "火电",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "火电灵活性改造": {
-   "key": "theme:火电热电",
-   "label": "火电灵活性改造",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "火电热电": {
-   "key": "theme:火电热电",
-   "label": "火电热电",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "火箭": {
    "key": "theme:商业航天",
@@ -3383,14 +3383,14 @@
    "group": ""
   },
   "热电": {
-   "key": "theme:火电热电",
-   "label": "热电",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "热电联产": {
-   "key": "theme:火电热电",
-   "label": "热电联产",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "热管理金刚石": {
    "key": "group:化工材料",
@@ -3428,14 +3428,14 @@
    "group": ""
   },
   "煤电": {
-   "key": "theme:火电热电",
-   "label": "煤电",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "煤电联营": {
-   "key": "theme:火电热电",
-   "label": "煤电联营",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "燃料电池": {
    "key": "theme:锂电池",
@@ -3463,9 +3463,9 @@
    "group": ""
   },
   "燃煤": {
-   "key": "theme:火电热电",
-   "label": "燃煤",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "片式电容": {
    "key": "group:被动元件",
@@ -3593,14 +3593,14 @@
    "group": "消费"
   },
   "电力": {
-   "key": "theme:电力",
+   "key": "group:电力",
    "label": "电力",
-   "group": ""
+   "group": "电力"
   },
   "电力现货": {
-   "key": "theme:绿电新能源运营",
-   "label": "电力现货",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "电力电子": {
    "key": "theme:电网设备",
@@ -3608,9 +3608,9 @@
    "group": ""
   },
   "电力股": {
-   "key": "theme:电力",
-   "label": "电力股",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "电力设备": {
    "key": "theme:电网设备",
@@ -3618,9 +3618,9 @@
    "group": ""
   },
   "电力运营": {
-   "key": "theme:火电热电",
-   "label": "电力运营",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "电子化学品": {
    "key": "group:PCB与连接",
@@ -3753,9 +3753,9 @@
    "group": ""
   },
   "电源管理": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "电网": {
    "key": "theme:电网设备",
@@ -4113,9 +4113,9 @@
    "group": "机器人"
   },
   "端侧AI": {
-   "key": "theme:AI应用",
-   "label": "AI应用",
-   "group": ""
+   "key": "group:AI软件应用",
+   "label": "AI软件应用",
+   "group": "AI软件应用"
   },
   "端到端": {
    "key": "group:机器人",
@@ -4138,34 +4138,34 @@
    "group": ""
   },
   "算力": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "算力/数据中心": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "算力概念": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "算力模组": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "算力硬件": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "算力租赁": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "算力芯片": {
    "key": "group:半导体",
@@ -4173,9 +4173,9 @@
    "group": "半导体"
   },
   "算电一体": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "类载板": {
    "key": "group:半导体",
@@ -4253,29 +4253,29 @@
    "group": ""
   },
   "绿电": {
-   "key": "theme:绿电新能源运营",
-   "label": "绿电",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "绿电新能源运营": {
-   "key": "theme:绿电新能源运营",
-   "label": "绿电新能源运营",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "绿色电力": {
-   "key": "theme:绿电新能源运营",
-   "label": "绿色电力",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "绿色电力交易": {
-   "key": "theme:绿电新能源运营",
-   "label": "绿色电力交易",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "绿证": {
-   "key": "theme:绿电新能源运营",
-   "label": "绿证",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "职业装": {
    "key": "group:消费",
@@ -4433,9 +4433,9 @@
    "group": "被动元件"
   },
   "虚拟电厂": {
-   "key": "theme:绿电新能源运营",
-   "label": "虚拟电厂",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "行星滚柱丝杠": {
    "key": "group:机器人",
@@ -4523,9 +4523,9 @@
    "group": "机器人"
   },
   "豆包": {
-   "key": "theme:AI应用",
-   "label": "AI应用",
-   "group": ""
+   "key": "group:AI软件应用",
+   "label": "AI软件应用",
+   "group": "AI软件应用"
   },
   "负极": {
    "key": "theme:锂电池",
@@ -4728,9 +4728,9 @@
    "group": "化工材料"
   },
   "金刚石散热": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "金刚线": {
    "key": "theme:光伏",
@@ -5148,9 +5148,9 @@
    "group": "半导体"
   },
   "阀": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "阴极铜": {
    "key": "theme:铜",
@@ -5193,14 +5193,14 @@
    "group": ""
   },
   "雅下水电": {
-   "key": "theme:水电",
-   "label": "雅下水电",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "雅鲁藏布江": {
-   "key": "theme:水电",
-   "label": "雅鲁藏布江",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "集成电路": {
    "key": "group:半导体",
@@ -5288,29 +5288,29 @@
    "group": "化工材料"
   },
   "风光储": {
-   "key": "theme:绿电新能源运营",
-   "label": "风光储",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "风光储一体化": {
-   "key": "theme:绿电新能源运营",
-   "label": "风光储一体化",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "风光大基地": {
-   "key": "theme:绿电新能源运营",
-   "label": "风光大基地",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "风光火储": {
-   "key": "theme:绿电新能源运营",
-   "label": "风光火储",
-   "group": ""
+   "key": "group:电力",
+   "label": "电力",
+   "group": "电力"
   },
   "风冷": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "风机": {
    "key": "theme:风电",
@@ -5413,9 +5413,9 @@
    "group": "医药"
   },
   "高压直流": {
-   "key": "group:算力AI",
-   "label": "算力AI",
-   "group": "算力AI"
+   "key": "group:算力硬件",
+   "label": "算力硬件",
+   "group": "算力硬件"
   },
   "高多层板": {
    "key": "group:PCB与连接",

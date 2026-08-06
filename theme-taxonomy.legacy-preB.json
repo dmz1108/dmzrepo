@@ -671,7 +671,7 @@
   },
   {
    "standard": "液冷/数据中心散热",
-   "group": "算力硬件",
+   "group": "算力AI",
    "keywords": [
     "液冷",
     "散热",
@@ -700,7 +700,7 @@
   },
   {
    "standard": "AI电源/AI配电",
-   "group": "算力硬件",
+   "group": "算力AI",
    "keywords": [
     "AI电源",
     "AI配电",
@@ -721,7 +721,7 @@
   },
   {
    "standard": "AI硬件/服务器",
-   "group": "算力硬件",
+   "group": "算力AI",
    "keywords": [
     "AI硬件",
     "AI服务器",
@@ -740,7 +740,7 @@
   },
   {
    "standard": "算力/数据中心",
-   "group": "算力硬件",
+   "group": "算力AI",
    "keywords": [
     "算力",
     "数据中心",
@@ -822,7 +822,7 @@
   },
   {
    "standard": "AI应用/AI大模型",
-   "group": "AI软件应用",
+   "group": "算力AI",
    "keywords": [
     "AI应用",
     "大模型",
@@ -852,14 +852,14 @@
     "ChatGPT"
    ],
    "broad": true,
-   "familyUnit": "group",
+   "familyUnit": "standard",
    "broadFallbackFamilies": [
     "短剧游戏"
    ]
   },
   {
    "standard": "人工智能",
-   "group": "AI软件应用",
+   "group": "算力AI",
    "keywords": [
     "人工智能",
     "AI概念"
@@ -868,7 +868,7 @@
     "人工智能"
    ],
    "broad": true,
-   "familyUnit": "group"
+   "familyUnit": "standard"
   },
   {
    "standard": "减速器",
@@ -1507,7 +1507,7 @@
   },
   {
    "standard": "绿电新能源运营",
-   "group": "电力",
+   "group": "电力设备",
    "keywords": [
     "绿电",
     "绿色电力",
@@ -1537,11 +1537,13 @@
     "电力现货",
     "整县推进"
    ],
-   "familyUnit": "group"
+   "compatibleParents": [
+    "电力"
+   ]
   },
   {
    "standard": "火电热电",
-   "group": "电力",
+   "group": "电力设备",
    "keywords": [
     "火电",
     "热电",
@@ -1561,11 +1563,13 @@
     "热电联产",
     "火电灵活性改造"
    ],
-   "familyUnit": "group"
+   "compatibleParents": [
+    "电力"
+   ]
   },
   {
    "standard": "水电",
-   "group": "电力",
+   "group": "电力设备",
    "keywords": [
     "水电",
     "抽水蓄能",
@@ -1581,7 +1585,9 @@
     "抽蓄",
     "水力发电"
    ],
-   "familyUnit": "group"
+   "compatibleParents": [
+    "电力"
+   ]
   },
   {
    "standard": "稀土永磁",
@@ -2544,7 +2550,7 @@
   },
   {
    "standard": "电力",
-   "group": "电力",
+   "group": "电力设备",
    "keywords": [
     "电力",
     "电力股"
@@ -2552,8 +2558,7 @@
    "members": [
     "电力"
    ],
-   "broad": true,
-   "familyUnit": "group"
+   "broad": true
   }
  ],
  "dropped": [

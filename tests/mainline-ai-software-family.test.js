@@ -38,11 +38,6 @@ function extractArr(name) {
   return src.slice(declaration, index + 2).replace('const ', 'var ');
 }
 
-function extractSet(name) {
-  const match = src.match(new RegExp(`const ${name} = new Set\\(\\[([\\s\\S]*?)\\]\\)`));
-  if (!match) throw new Error('not found set: ' + name);
-  return new Set(eval('[' + match[1] + ']'));
-}
 
 const assert = (condition, message) => {
   if (!condition) {
@@ -66,9 +61,9 @@ eval(extractFn('consensusKey'));
 eval(extractFn('strategyResonanceTopicKey'));
 eval(extractFn('strategyMainlineTopicKey'));
 eval(extractFn('strategyThemeTaxonomyInfo'));
-const STRATEGY_MAINLINE_MERGE_GROUPS = extractSet('STRATEGY_MAINLINE_MERGE_GROUPS');
-const STRATEGY_MAINLINE_KEEP_FINE_THEMES = extractSet('STRATEGY_MAINLINE_KEEP_FINE_THEMES');
 eval(extractFn('strategyMainlineFamilyInfo'));
+eval(extractFn('strategyMainlineCompatEntryKey'));
+eval(extractFn('strategyMainlineFamilyCompat'));
 eval(extractFn('strategyMainlineBoardThemeRelated'));
 eval(extractFn('strategyMainlineStarAttributionDecision'));
 eval(extractFn('strategyMainlineReviewFamilyKeys'));
@@ -120,13 +115,13 @@ function candidate(theme, codes, score, boardName) {
   };
 }
 
-assert(strategyMainlineFamilyInfo({ theme: 'AI应用' }).key === 'theme:AI应用',
-  'AI应用保持软件细分族，不落入算力AI');
-assert(strategyMainlineFamilyInfo({ theme: '人工智能' }).key === 'theme:人工智能',
-  '宽口径人工智能保持独立，不落入硬件算力族');
-assert(strategyMainlineFamilyInfo({ theme: '算力' }).key === 'group:算力AI'
-  && strategyMainlineFamilyInfo({ theme: '液冷' }).key === 'group:算力AI',
-  '算力与液冷仍属硬件算力族');
+assert(strategyMainlineFamilyInfo({ theme: 'AI应用' }).key === 'group:AI软件应用',
+  'AI应用落 AI软件应用族，不落入算力硬件(PR B 分家)');
+assert(strategyMainlineFamilyInfo({ theme: '人工智能' }).key === 'group:AI软件应用',
+  '宽口径人工智能与AI应用同属软件族，不落入硬件算力族');
+assert(strategyMainlineFamilyInfo({ theme: '算力' }).key === 'group:算力硬件'
+  && strategyMainlineFamilyInfo({ theme: '液冷' }).key === 'group:算力硬件',
+  '算力与液冷仍属硬件算力族(group:算力硬件)');
 assert(!strategyMainlineBoardThemeRelated('AI应用', '算力')
   && !strategyMainlineBoardThemeRelated('ChatGPT概念', '液冷')
   && !strategyMainlineBoardThemeRelated('智谱AI', 'AI硬件'),
@@ -143,7 +138,7 @@ const merged = strategyMergeMainlineFamilies([
 ]);
 
 const software = merged.find(row => row.familyKey === 'theme:短剧游戏');
-const hardware = merged.find(row => row.familyKey === 'group:算力AI');
+const hardware = merged.find(row => row.familyKey === 'group:算力硬件');
 assert(software && software.theme === '短剧游戏',
   'AI应用 + AI视频同时出现时归并为软件方向');
 assert(software?.mergedThemes.includes('AI应用') && software?.mergedThemes.includes('AI视频'),
@@ -152,7 +147,7 @@ const softwareLeaderFamilies = new Set([
   software?.theme,
   ...(software?.mergedThemes || []),
 ].map(theme => strategyMainlineFamilyInfo({ theme }).key));
-assert(softwareLeaderFamilies.has('theme:AI应用') && softwareLeaderFamilies.has('theme:短剧游戏'),
+assert(softwareLeaderFamilies.has('group:AI软件应用') && softwareLeaderFamilies.has('theme:短剧游戏'),
   '龙头池同时消费 AI应用与 AI视频/短剧两族历史主因');
 assert(software?.todayCodes.length === 5 && software.todayCodes.includes('300058'),
   '软件方向按股票去重，蓝色光标只计一次');
@@ -167,7 +162,7 @@ const priorAttribution = new Map([
     currentFamilies: new Set(),
     currentTopics: [],
     currentBroadOnly: false,
-    priorFamilies: new Set(['group:算力AI']),
+    priorFamilies: new Set(['group:算力硬件']),
     priorTopics: ['算力'],
     priorBroadOnly: false,
   }],
@@ -264,8 +259,8 @@ const appOnly = strategyMergeMainlineFamilies([
   candidate('AI应用', ['300058'], 50, 'AI应用'),
   candidate('算力', ['603629'], 40, '算力'),
 ]);
-assert(appOnly.some(row => row.familyKey === 'theme:AI应用')
-  && appOnly.some(row => row.familyKey === 'group:算力AI'),
+assert(appOnly.some(row => row.familyKey === 'group:AI软件应用')
+  && appOnly.some(row => row.familyKey === 'group:算力硬件'),
   '没有 AI视频/短剧佐证时，AI应用与算力仍分开展示');
 
 const softwarePredict = {
@@ -284,22 +279,22 @@ const softwareTop = {
 };
 const reviewKeys = strategyMainlineReviewFamilyKeys(softwarePredict, softwareTop);
 const reviewCount = strategyMainlineReviewActualFamilyCount(softwarePredict, softwareTop, [
-  { familyKey: 'theme:AI应用', count: 28 },
-  { familyKey: 'group:算力AI', count: 18 },
+  { familyKey: 'group:AI软件应用', count: 28 },
+  { familyKey: 'group:算力硬件', count: 18 },
 ]);
-assert(reviewKeys.has('theme:AI应用') && reviewKeys.has('theme:短剧游戏')
-  && !reviewKeys.has('group:算力AI'),
+assert(reviewKeys.has('group:AI软件应用') && reviewKeys.has('theme:短剧游戏')
+  && !reviewKeys.has('group:算力硬件'),
   '回看只在预测档明确合并时把 AI应用 与 AI视频/短剧视为同一软件族');
 assert(reviewCount.count === 28
   && reviewCount.familyKeys.length === 1
-  && reviewCount.familyKeys[0] === 'theme:AI应用',
+  && reviewCount.familyKeys[0] === 'group:AI软件应用',
   '7月31日盘后 AI应用 28 家可验证软件主线，但算力 18 家不混入');
 const qualification = strategyMainlineReviewQualification(
   softwarePredict,
   softwareTop,
   [
-    { familyKey: 'theme:AI应用', count: 28 },
-    { familyKey: 'group:算力AI', count: 18 },
+    { familyKey: 'group:AI软件应用', count: 28 },
+    { familyKey: 'group:算力硬件', count: 18 },
   ],
   new Set(['300058']),
   true,
@@ -317,7 +312,7 @@ const shortOnlyPredict = {
     mergedThemes: ['AI视频'],
   }],
 };
-assert(!strategyMainlineReviewFamilyKeys(shortOnlyPredict, softwareTop).has('theme:AI应用'),
+assert(!strategyMainlineReviewFamilyKeys(shortOnlyPredict, softwareTop).has('group:AI软件应用'),
   '只有 AI视频/短剧证据时不擅自吸收独立 AI应用 家族');
 
 if (!process.exitCode) console.log('ALL CHECKS PASSED');

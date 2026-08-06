@@ -14552,3 +14552,186 @@ Deployment:
 
 Notes for next agent:
 - 后续若增加明星数量，折叠摘要会按最终确认顺序继续逐股对齐；不得恢复单个 `.find()` 取值。
+## 2026-08-04(Local Claude)issue #375 PR B:首批交易族划分(有意行为变更)
+
+What changed:
+- `theme-taxonomy.json` 按 Owner 确认清单重划族(资金一致性原则):
+  - **电力发电侧合族**:电力(宽词)/火电热电/绿电新能源运营/水电 → `group:电力`
+    (familyUnit=group);三条 `compatibleParents:["电力"]` 声明随合族移除
+    (父子兼容边被族内精确匹配取代)。
+  - **算力硬件/AI软件应用分家**:原 `算力AI` 组(液冷、AI电源、AI硬件、算力)
+    更名为 `group:算力硬件`;AI应用/人工智能 从独立细族改为 `group:AI软件应用`。
+    AI应用 的 `broadFallbackFamilies:["短剧游戏"]` 保留(蓝色光标口径不变)。
+  - **核电、电网设备/特高压等仍留在 `电力设备` 组**,无 familyUnit,维持词级
+    细键独立观察;**短剧游戏维持独立细族**(familyUnit=standard)。
+- `kpl-stats-server.js`:
+  - 退役历史字面集合 `STRATEGY_MAINLINE_MERGE_GROUPS` / `STRATEGY_MAINLINE_KEEP_FINE_THEMES`、
+    校验中的正向一致性检查与反向孤儿检查、`_ready` 门闩及集合声明后的显式首检
+    调用——词典声明式字段成为唯一判定来源;校验(结构+兼容引用+遮蔽回环)在
+    `loadThemeTaxonomy` 交换前对候选完整执行,另在首次加载后以已加载词典无参
+    复检一次(候选校验期全局词典尚空,topicKey 回环走不到 standardTheme 分支)。
+  - `strategyMergeMainlineFamilies` 的 AI 软件方向合并硬编码(theme:AI应用 与
+    theme:短剧游戏 同现才合并)泛化为词典 `broadFallbackFamilies` 边驱动:宽词族
+    与其兜底目标族同现时按目标族合并,行为语义与 #342 定稿一致,键随词典迁移。
+  - `strategyMainlineReviewFamilyKeys` 的同一硬编码同样泛化为 broadFallback 边。
+
+行为对照(fixture 旧→新逐词 diff,共 104 词 / 7 类迁移,全部符合确认清单,无意外迁移):
+- `group:算力AI → group:算力硬件`(51 词):AIDC、AI散热、AI服务器、AI电源、液冷、算力 等
+- `theme:AI应用 → group:AI软件应用`(16 词):AIGC、AIPC、AI大模型、AI智能体 等
+- `theme:人工智能 → group:AI软件应用`(2 词):AI概念、人工智能
+- `theme:火电热电 → group:电力`(10 词):火电、热电、煤电、火电灵活性改造 等
+- `theme:绿电新能源运营 → group:电力`(16 词):绿电、新能源运营、源网荷储、电力现货 等
+- `theme:水电 → group:电力`(7 词):水电、抽水蓄能、雅下水电 等
+- `theme:电力 → group:电力`(2 词):电力、电力股
+
+Files:
+- `theme-taxonomy.json`
+- `kpl-stats-server.js`
+- `tests/fixtures/family-key-baseline.json`(按新行为重生成,1102 词)
+- `tests/family-declarative-equivalence.test.js`(迁移到 PR B 语义 + 新增族划分定稿断言)
+- `tests/leader-pool-debug.test.js`、`tests/mainline-attribution.test.js`、
+  `tests/mainline-ai-software-family.test.js`、`tests/strategy-star-attribution.test.js`
+  (族键断言迁移)、`tests/leader-family-metrics.test.js`、`tests/mainline-review.test.js`
+  (仅删除已退役集合的提取)
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- fixture 逐词比对零差异(1102 词);旧→新 diff 104 词逐类核对与确认清单一致。
+- 既有归因案例全量回归:华电辽能(火电证据×电力候选,由 child-compatible 变
+  **精确匹配** `current-limit-reason`;历史绿色电力主因同理)、发电侧同族互认
+  (火电证据支撑绿电候选,合族目标行为)、蓝色光标(宽词AI应用兜底归短剧,
+  basis 不变)、雅克科技/太极实业(半导体口径不变)、润建(硬件主因不得替软件板
+  凑涨停门槛)、电网设备/核电证据不得支撑发电侧电力。
+- `node --check`;全仓 80/81 通过,唯一失败 `board-snapshot-contamination` 为
+  issue #379 既有真实时钟裁剪缺陷(Codex 修复中),与本变更无关。
+
+Deployment:
+- GitHub only;未部署、未重启、未改任何生产数据。
+- **部署须收盘后进行**:族键属日内轨迹键,盘中变更会打断 expectedStarHistory /
+  L2 任务 / 预判记录的族键连续性(kpl-stats-server.js 轨迹注释所述风险)。
+
+Notes for next agent:
+- 华电辽能类案例的拒绝理由从"族键粒度不符"彻底消失:发电侧四细分现在同键。
+- ~~回看按档案自身键匹配,不受影响~~——此表述**有误**(Codex #381 复审 P1-3 证伪:
+  回看链每次请求都用当前词典重算)。已按 Owner 裁定实现"历史族口径冻结",见下一条目。
+- Codex 复审关注点:①合并/回看两处 broadFallback 泛化是否与 #342 语义完全一致;
+  ②validate 的 shadowProblem 中 topicKey 仍读全局词典(非候选作用域),Codex 上轮
+  已标记非阻断,仅在扩展热加载编辑时需要收紧。
+
+## 2026-08-04(Local Claude)PR #381 复审修复:Codex 三项 P1(含历史口径冻结)
+
+What changed(全部先独立复现属实再修):
+- **P1-1 板块关联包含兜底越界**:`strategyMainlineBoardThemeRelated` 在双方都被词典
+  识别、standard 与 group 均不同后,不再落入字符串包含兜底(修前 `电力设备~电力=true`
+  会把电力设备板块带进发电侧,违反"电网设备/特高压首期独立"边界)。正反 6 例断言锁死。
+- **P1-2 familyUnit 白名单**:结构校验新增——familyUnit 只允许空/'group'/'standard',
+  'group' 必须携非空 group;拼错值(如 'groups')此前会被静默归一为空、整族降为细键。
+  负例 3 条 + 热加载"抛错不交换"断言。
+- **P1-3 历史族口径冻结(Owner 裁定:历史预测保持原口径,新词典不得倒溯改变旧日
+  主线结论)**:
+  - 新增 `theme-taxonomy.legacy-preB.json`(main@94481a9 的 PR A 时代词典快照,随代码
+    同版本发布,启动时校验,缺失/损坏即启动失败)。
+  - 新增 `STRATEGY_FAMILY_RECUT_EFFECTIVE_DAY = '2026-08-05'`(新口径首个生效交易日;
+    **若部署延后,合并前必须改此值为实际部署后首个交易日**)。
+  - 新增 `strategyFamilyEraEnterForDay(day)`:生效日前的日子把 THEME_* 词典与兼容图
+    缓存临时切换到旧快照,退出即恢复;只包裹**同步**段(段内 await 会让并发请求读错
+    纪元,代码注释已注明),try/finally 保证异常路径恢复。
+  - 接入点:回看构建的"实际族排名→回看族键→正式主线资格→逐源结论→明星资格"同步段、
+    最终确认资格段、归因审计的上下文构建与过滤(缓存键含日期,新旧纪元不串)。
+  - 行为测试:纪元内 火电→theme:火电热电、AI应用→theme:AI应用、算力→group:算力AI,
+    发电侧三条父子边恢复,华电辽能旧日裁决重放 `child-compatible`;退出后立即恢复新口径;
+    生效日起为空操作。
+
+Files:
+- `kpl-stats-server.js`、`theme-taxonomy.legacy-preB.json`(新增)
+- `tests/family-declarative-equivalence.test.js`(P1-1 六例、P1-2 负例、§13 纪元冻结)
+- `tests/mainline-review.test.js`(注入纪元空操作桩,注明专项覆盖位置)
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 三项 P1 修复前均先独立复现(探针脚本);修复后探针全部转为期望行为。
+- 全仓 **81/81**。受影响窗口抽样(2026-07-21..08-04 回看档案):每日均含受影响旧键,
+  冻结后旧日结论与部署前一致。
+
+Deployment:
+- GitHub only;未部署、未重启。部署仍须收盘后,且部署时核对生效日常量与实际日期一致。
+
+Notes for next agent:
+- 若未来再做第二批族划分,需要把当时的词典再快照一份并把纪元机制升级为多段
+  (day→快照版本的映射),当前实现是单边界两纪元。
+- 词典热加载(管理员加词)只作用于当前纪元;旧快照文件不参与热加载。
+
+## 2026-08-05(Local Claude)PR #381 rebase:#401 逐条证据与族纪元的接缝拆分
+
+What changed:
+- #401(逐条正式主线证据)合并后,其 `strategyMainlineReviewEnrichFormalConclusions`
+  是 async,调用点恰在 #381 族口径纪元段内——**段内 await 会在让出期间把临时换出的
+  旧词典快照暴露给并发请求**,违反纪元机制前提。按 Owner/Codex 要求拆为两段:
+  - `strategyMainlineReviewPlanFormalEvidence(predict, formalRows, conclusions)`
+    **同步**,读词典:结论行↔主线行↔候选绑定、同族明星、预期明星轨迹,
+    含 #401 的"同族多条 fail closed"(`uniqueFamilyMatch`)。**在纪元段内执行**,
+    生效日前按旧词典分族。
+  - `strategyMainlineReviewEnrichFormalConclusions(plans, evalStock, options)`
+    **保持 async**,只做收益/封板/领先时长/完整性标注,全程不读词典。
+    **在纪元段外 await 回填**(顶层 + 逐源各一次),不改同步、不吞 Promise。
+- 逐源资格聚合改用纪元内已算好的 `sourceFormalConclusions`(而非 enrich 结果):
+  两者 `mainlineQualified` 逐条相同,聚合值不变,但让**分母不再依赖异步补全**。
+- `formalMainlineCount` 同样取 conclusions 长度,与回填后的明细长度由断言绑死。
+
+Files:
+- `kpl-stats-server.js`(拆分 + 两处调用点 + 纪元段外回填)
+- `tests/mainline-review.test.js`(Plan/Enrich 分段调用;新增三条断言)
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 新增断言:①纪元段内**静态无 await**(从源码切片正则校验,防回归);
+  ②逐源 `mainlineQualified` 必须等于 `AggregateQualification(formalMainlines)`
+  且 `formalMainlineCount === formalMainlines.length`——一旦 enrich 覆盖了
+  `mainlineQualified`,分母与明细立即失配报错;③拆分后 conclusion 原字段完整回填。
+- 08-04 多主线夹具:东财光通信/算力硬件、同花顺算力硬件逐条各带自己的明星与龙头,
+  领先时长逐条独立(measured),未跨线借数。
+- 全仓 **85/85**;Codex 点名的 `mainline-review`(102 ok)、
+  `family-declarative-equivalence`(62 ok)、`strategy-two-source-mainlines`(92 ok)全绿。
+- 夹具中 `group:算力AI` 作为**旧档案键**保留,断言改按解析后的族键取行,
+  顺带验证旧键档案在新词典下仍正确落族。
+
+Deployment:
+- GitHub only;未部署、未重启。保持 Draft 待 Codex 复审。
+- 部署仍须收盘后,且合并前核对 `STRATEGY_FAMILY_RECUT_EFFECTIVE_DAY`
+  (现为 2026-08-05)与实际部署后首个交易日一致——**今日已是 08-05,
+  若部署落在 08-05 收盘后,须改为 2026-08-06**。
+
+Notes for next agent:
+- 纪元段的硬约束现在有测试守着:任何人想在段内加 await 都会被 mainline-review 拦下。
+- 若后续再有"逐条主线证据"类扩展,遵循同一分层:读词典的绑定进 Plan(纪元内),
+  取数/算收益进 Enrich(纪元外)。
+
+## 2026-08-05(Local Claude)PR #381 转 Ready:同步 main + 生效日定为 08-06
+
+What changed:
+- 同步到最新 `main`(`2afca81`,含 #401 及其部署回执 #403);#401 接缝拆分
+  (Plan 同步绑定在纪元内 / Enrich 异步补全在纪元外)随 rebase 无冲突带过。
+- **`STRATEGY_FAMILY_RECUT_EFFECTIVE_DAY`: `2026-08-05` → `2026-08-06`**。
+  理由:08-05 收盘后才具备合并/部署条件,新口径首个生效交易日即 08-06;
+  08-05 及更早继续走 `LEGACY_FAMILY_ERA` 旧词典,当天回看结论不被倒溯改写。
+- 新增生效日**边界断言**:取生效日前一自然日(现为 2026-08-05)进入纪元,
+  必须仍解析为 `theme:火电热电` / `group:算力AI`——把"部署当天不被新口径倒溯"
+  这条钉死,且断言按常量自动推导,日后改生效日无需改测试。
+
+Files:
+- `kpl-stats-server.js`(生效日常量 + 说明注释)
+- `tests/family-declarative-equivalence.test.js`(边界断言)
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 全仓 **85/85**;`family-declarative-equivalence` 64 ok / 0 fail
+  (含生效日=2026-08-06 自动识别、前一日仍旧口径、退出即恢复)。
+- `node --check` 通过。
+
+Deployment:
+- GitHub only;**未合并、未部署、未重启**。PR 已由 Draft 转 Ready(按 Owner 指示)。
+- 部署仍须收盘后。**若部署未能在 08-05 收盘后进行,合并前必须再次上调生效日**
+  (= 实际部署后首个交易日),否则被跳过的交易日会按新口径重算历史结论。
+
+Notes for next agent:
+- 生效日是本 PR 唯一与"部署时点"耦合的值,改它只需改常量,测试会自动跟随。
