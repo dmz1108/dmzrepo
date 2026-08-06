@@ -13889,6 +13889,16 @@ function renderMainlineReviewHTML(d) {
   const rows = (d && d.days) || [];
   if (!rows.length) return '';
   const stats = d.stats || {};
+  // 盘后“明星确认”只认终盘涨停事实。predictLevel 记录盘中曾达到的阶段，
+  // 不能单独作为回看确认结论；曾确认但终盘未封同样归为未兑现。
+  const reviewStarTerminalState = (s) => {
+    if (!s) return 'none';
+    if (s.sealedSameDay === true || s.sealStatus === 'sealed') return 'confirmed';
+    if (s.sealedSameDay === false || s.sealStatus === 'notSealed') return 'unfulfilled';
+    if (s.sealStatus === 'pending') return 'pending';
+    if (s.sealStatus === 'noData') return 'no-data';
+    return 'unverified';
+  };
   // 明星等级标签:expected=预期明星(进入封板验证);confirmed=预测时已封板(当时已确认,不算预判);
   // active=仅资金活跃(不进统计);无 level 的旧记录=等级未知(不进统计)。
   const starLevelChip = (s) => {
@@ -13986,14 +13996,19 @@ function renderMainlineReviewHTML(d) {
         .map(row => {
           const stars = (Array.isArray(row?.stars) ? row.stars : [])
             .filter(stock => stock?.code && ['expected', 'confirmed'].includes(String(stock?.predictLevel || stock?.level || '')));
+          const confirmedStars = stars.filter(stock => reviewStarTerminalState(stock) === 'confirmed');
+          const trackedStars = stars.filter(stock => reviewStarTerminalState(stock) !== 'confirmed');
           const leaders = (Array.isArray(row?.leaders) ? row.leaders : (row?.leader ? [row.leader] : []))
             .filter(stock => stock?.code).slice(0, 2);
           const result = row.mainlineQualified === true ? '<span class="mlr-formal-status ok">主线成立</span>'
             : row.mainlineQualified === false ? '<span class="mlr-formal-status miss">盘后未成立</span>'
               : '<span class="mlr-formal-status wait">待核验</span>';
-          const starHTML = stars.length
-            ? stars.map(stock => gainCell(stock, true)).join('')
-            : '<span class="mlr-na">未保存明星证据</span>';
+          const confirmedStarHTML = confirmedStars.length
+            ? confirmedStars.map(stock => gainCell(stock, true)).join('')
+            : '<span class="mlr-na">无终盘确认明星</span>';
+          const trackedStarHTML = trackedStars.length
+            ? trackedStars.map(stock => gainCell(stock, true)).join('')
+            : '';
           const leaderHTML = leaders.length
             ? leaders.map((stock, index) => `<span class="mlr-formal-leader"><i>龙头${index + 1}</i>${gainCell(stock, false)}</span>`).join('')
             : '<span class="mlr-na">未保存龙头候选</span>';
@@ -14012,7 +14027,8 @@ function renderMainlineReviewHTML(d) {
           return `<article class="mlr-formal-item${row.mainlineQualified === true ? ' is-qualified' : ''}">
             <header><span class="mlr-formal-source">${sourceLabel}</span><strong>${escapeHTML(row.theme || '')}</strong>${result}</header>
             <div class="mlr-formal-meta"><span>${limitCount == null ? '涨停数待核验' : `同家族 ${Number(limitCount) || 0} 只涨停`}</span><span>${escapeHTML(leadText)}</span><span>${escapeHTML(followupText)}</span></div>
-            <section><label>明星证据</label><div class="mlr-formal-stocks">${starHTML}</div></section>
+            <section><label>确认明星</label><div class="mlr-formal-stocks">${confirmedStarHTML}</div></section>
+            ${trackedStarHTML ? `<section><label>预期跟踪</label><div class="mlr-formal-stocks">${trackedStarHTML}</div></section>` : ''}
             <section><label>龙头候选</label><div class="mlr-formal-stocks leaders">${leaderHTML}</div></section>
           </article>`;
         });
@@ -14128,24 +14144,26 @@ function renderMainlineReviewHTML(d) {
     // 盘中 L2 确认不等于盘后真主线明星。正式主线条件未满足时，
     // 原始候选证据继续保留，但不能显示“明星确认”或进入红色真主线分组。
     const mayBeMainlineStar = r?.mainlineStarQualified !== false;
-    if (mayBeMainlineStar && star && star.predictLevel === 'confirmed') {
-      return { key: 'confirmed', rowClass: 'star-confirmed', label: '明星确认', name: star.name || star.code || '', stock: star };
+    if (mayBeMainlineStar && star && reviewStarTerminalState(star) === 'confirmed') {
+      const label = star.predictLevel === 'expected' ? '预期转明星' : '明星确认';
+      return { key: 'confirmed', rowClass: 'star-confirmed', label, name: star.name || star.code || '', stock: star };
     }
     const expectedRows = [];
-    if (star && star.predictLevel === 'expected') expectedRows.push(star);
+    if (star && ['expected', 'confirmed'].includes(String(star.predictLevel || ''))
+      && reviewStarTerminalState(star) !== 'confirmed') expectedRows.push(star);
     for (const row of expected) {
       if (!expectedRows.some(item => String(item?.code || '') === String(row?.code || ''))) {
         expectedRows.push({ ...row, predictLevel: 'expected' });
       }
     }
-    const sealed = expectedRows.find(row => row?.sealStatus === 'sealed');
+    const sealed = expectedRows.find(row => reviewStarTerminalState(row) === 'confirmed');
     if (mayBeMainlineStar && sealed) {
       return { key: 'confirmed', rowClass: 'star-confirmed', label: '预期转明星', name: sealed.name || sealed.code || '', stock: sealed };
     }
     if (!mayBeMainlineStar && sealed) {
       return { key: 'missed', rowClass: 'star-expected star-missed', label: '未成主线', name: sealed.name || sealed.code || '', stock: sealed };
     }
-    const unresolved = expectedRows.find(row => row?.sealStatus !== 'notSealed');
+    const unresolved = expectedRows.find(row => ['pending', 'no-data', 'unverified'].includes(reviewStarTerminalState(row)));
     if (unresolved) {
       const noData = unresolved?.sealStatus === 'noData';
       return {
@@ -14158,7 +14176,8 @@ function renderMainlineReviewHTML(d) {
     }
     if (expectedRows.length) {
       const missed = expectedRows[0];
-      return { key: 'missed', rowClass: 'star-expected star-missed', label: '预期未兑现', name: missed.name || missed.code || '', stock: missed };
+      const label = missed.predictLevel === 'confirmed' ? '盘中曾确认·终盘未封' : '预期未兑现';
+      return { key: 'missed', rowClass: 'star-expected star-missed', label, name: missed.name || missed.code || '', stock: missed };
     }
     // 三要件预备层(2026-07-21 起,非正式):正式行无明星信号时,用预备明星结果给该日分组——
     // 纯预备日不再只显示"今日无主线"。标签一律带"预备·"前缀,绝不冒充正式真主线;
@@ -14237,7 +14256,10 @@ function renderMainlineReviewHTML(d) {
           - ({ confirmed: 0, expected: 1 }[String(b?.predictLevel || b?.level || '')] ?? 9))
         .reduce((stocks, stock) => stocks.some(item => String(item.code) === String(stock.code)) ? stocks : [...stocks, stock], [])]
       : [];
-    const reviewStarStock = starVisual.stock || formalStarStocks[0] || (r.mainlineStarQualified === false ? null : r.star);
+    const formalConfirmedStars = formalStarStocks.filter(stock => reviewStarTerminalState(stock) === 'confirmed');
+    // 展开层仍保留预期未兑现/待验证候选供审计；只有上方摘要“明星”列要求终盘确认。
+    const reviewStarStock = starVisual.stock || formalConfirmedStars[0]
+      || (r.mainlineStarQualified === false ? null : r.star);
     const leaderCells = leaders.slice(0, 2).map((leader, index) =>
       `<span class="mlr-slot"><span class="mlr-label">${r.bySource ? '东财' : ''}龙头${index + 1}</span> ${gainCell(leader, false)}</span>`
     );
@@ -14340,12 +14362,15 @@ function renderMainlineReviewHTML(d) {
       ...(Array.isArray(r.expectedStars) ? r.expectedStars : []),
       ...leaders,
     ].filter(stock => stock?.code);
-    const rawLineStocks = finalStars.length
-      ? finalStars.map(star => {
+    const finalStarEvidence = finalStars.map(star => {
         const evidence = performancePool.find(stock => String(stock.code) === String(star.code));
         return evidence ? { ...star, ...evidence, name: evidence.name || star.name || star.code } : star;
-      })
-      : (formalStarStocks.length ? formalStarStocks : (reviewStarStock ? [reviewStarStock] : []));
+      }).filter(star => reviewStarTerminalState(star) === 'confirmed');
+    const rawLineStocks = finalStars.length
+      ? finalStarEvidence
+      : (formalConfirmedStars.length
+        ? formalConfirmedStars
+        : (reviewStarStock && reviewStarTerminalState(reviewStarStock) === 'confirmed' ? [reviewStarStock] : []));
     const lineStocks = rawLineStocks.reduce((stocks, stock) => {
       const code = String(stock?.code || '').trim();
       if (code && !stocks.some(item => String(item?.code || '') === code)) stocks.push(stock);
@@ -14358,7 +14383,7 @@ function renderMainlineReviewHTML(d) {
     };
     const lineStockNames = lineStocks.length
       ? lineStocks.map(stock => `<span class="mlr-line-stock-name" title="${escapeHTML(stock.name || stock.code || '')}">${escapeHTML(stock.name || stock.code || '')}</span>`).join('')
-      : (starVisual.name ? `<span class="mlr-line-stock-name">${escapeHTML(starVisual.name)}</span>` : '<i>—</i>');
+      : '<i>—</i>';
     const linePerformanceList = (valueKey, pendingKey, statusKey, label) => lineStocks.length
       ? lineStocks.map(stock => `<span class="mlr-line-perf-item" title="${escapeHTML(`${stock.name || stock.code || ''} · ${label}`)}">${linePerf(stock?.[valueKey], stock?.[pendingKey], stock?.[statusKey])}</span>`).join('')
       : `<span class="mlr-line-perf-item">${linePerf(null)}</span>`;
