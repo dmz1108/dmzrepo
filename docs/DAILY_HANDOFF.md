@@ -13955,6 +13955,42 @@ Notes for next agent:
 - 只有本日期绑定脚本在 `main` 合并并经 `production` 环境批准后才可执行；公开淘股吧与综合归纳均须
   精确为 79/79、覆盖率 100%、低质量 0、`sourceErrors=[]`，否则回滚并报告阻断。
 
+## 2026-08-06 - Codex - TGB 湖南人 79 行正式入库回执
+
+Changed:
+- PR #412、#413、#414 已合并；受保护生产运行 `31104841661` 成功写入 2026-08-06
+  淘股吧湖南人正式源 79 行，并重折当天综合主因库。
+- 正式写入前备份终盘池、正式源、综合/证据/质量/auto、其他三源、原始 manifest/图片和两份云端日志；
+  写入与重折后完成落盘、代码集、来源健康和公网接口多重校验，并把成功回执写入两份云端运维日志。
+- 首次运行 `31104099222` 因环境 secret 上传成占位值而在 payload 解压阶段失败，发生在备份/写入前；
+  仅纠正受保护 secret 的 stdin 传输后，以相同脚本和相同人工 payload SHA-256 重试成功。
+
+Files:
+- Runtime formal source: `C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-08-06.json`
+- Runtime combined/evidence/quality/auto data for `2026-08-06`
+- Cloud logs: `panda-cloud-ops-2026-06-19.md`, `_cloud-change-log-20260705.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 官方文章 `https://www.tgb.cn/a/2u2El7xRP2c`；原图 `image-01-06.png`，891844 字节，
+  SHA-256 `f5987489d0b923d35bb94f2c64be25ae45eda1e6c53822753e4d0034b47e4799`。
+- 人工正式行和落盘复核均为 79/79；`missingCodes=[]`、`extraCodes=[]`、`duplicateCodes=[]`、
+  `weakCount=0`，13 个题材块合计 79；唯一显式名称差异为 `688549` 中巨芯/中巨芯-U。
+- 综合、证据和 auto TGB 代码集均为 79/79，缺失/多余为空；复盘啦、选股宝既有健康状态未退化。
+- 独立公网复验：综合归纳、复盘啦、选股宝、韭研、淘股吧均为 79/79；TGB 覆盖率和主因覆盖率
+  均为 100%，低质量 0，`sourceErrors=[]`，`/health` 为 `ok:true`。
+- 正式文件 SHA-256 `47b12cdb0ff264f6202bbc2dace4edb5992c4511cec1c7b8b7fb4b05f20819dc`；
+  综合文件 SHA-256 `49cfaf0f2a9a29a89882403967cd42954d753b56d7c5063b8eac625305859f41`。
+
+Deployment:
+- Workflow: `https://github.com/dmz1108/dmzrepo/actions/runs/31104841661`。
+- 云端备份：`C:\PandaDashboard\backups\tgb-hunan-manual-20260806-20260806131424`。
+- 数据写入、综合主因重折和两份云端日志更新已完成；未部署服务代码，未重启服务。
+
+Notes for next agent:
+- 2026-08-06 的正式 TGB 口径固定为 79 只；市场连板股重复摘要和涨停炸板区不得补入正式行。
+- `688549` 必须继续保留湖南人原图名称“中巨芯”，终盘池别名“中巨芯-U”仅作为显式对账差异记录。
+
 ## 2026-08-05 - Codex - TGB 人工转录写前终盘池检查请求
 
 Changed:
