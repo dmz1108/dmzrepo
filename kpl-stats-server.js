@@ -21131,10 +21131,12 @@ const STRATEGY_MAINLINE_AUTO_RESCAN_MIN_GAIN_DELTA = 0.5;
 // 门槛无豁免——净流入≥5亿 且 涨停≥2;涨停数缺失由成份股精确回填解决,不再用金额直通绕过涨停腿。
 const STRATEGY_MAINLINE_AUTO_SCAN_LIMIT_STOCKS = 50;
 const strategyMainlineAutoScanState = {
+  day: '',
   windowStart: 0,
   dispatched: 0,
   lastJobId: '',
   lastNonUrgentStage: '',
+  lastError: '',
 };
 function strategyMainlineThsCompositeEligibility(record, options = {}) {
   const zsType = Number(options.zsType ?? record?.netInflowZsType ?? record?.zsType);
@@ -23822,6 +23824,17 @@ function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase, prior
     if (!['早盘', '上午盘', '午后', '尾盘'].includes(String(sessionPhase || ''))) return;
     if (typeof localL2TaskQueue?.configured === 'function' && !localL2TaskQueue.configured()) return;
     const st = strategyMainlineAutoScanState;
+    const scanDay = String(day || '');
+    // 串行锁只能约束同一交易日。上一交易日遗留的 queued/running 任务应保留给 worker
+    // 继续处理，但不能把新交易日的全部自动扫描永久堵住。
+    if (st.day !== scanDay) {
+      st.day = scanDay;
+      st.windowStart = 0;
+      st.dispatched = 0;
+      st.lastJobId = '';
+      st.lastNonUrgentStage = '';
+      st.lastError = '';
+    }
     const now = Date.now();
     if (now - st.windowStart >= STRATEGY_MAINLINE_AUTO_SCAN_WINDOW_MS) {
       st.windowStart = now;
@@ -23830,7 +23843,9 @@ function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase, prior
     if (st.dispatched >= STRATEGY_MAINLINE_AUTO_SCAN_MAX_PER_WINDOW) return;
     if (st.lastJobId) {
       const last = localL2TaskQueue.get(st.lastJobId);
-      if (last && (last.status === 'queued' || last.status === 'running')) return;
+      if (last && String(last.day || '') === scanDay
+        && (last.status === 'queued' || last.status === 'running')) return;
+      st.lastJobId = '';
     }
     // 板块级字典序:封板确认 > 错误重试；首次发现与增强复扫交替使用普通名额。
     // 同阶段优先尚未获得扫描机会的家族，再按补选来源 > 净流入 > 大涨数。
@@ -23919,7 +23934,10 @@ function strategyMainlineMaybeAutoScan(boards, day, isToday, sessionPhase, prior
       }
       break;
     }
-  } catch {}
+  } catch (err) {
+    strategyMainlineAutoScanState.lastError = String(err?.message || err).slice(0, 160);
+    console.error('strategy L2 auto-scan failed:', strategyMainlineAutoScanState.lastError);
+  }
 }
 
 // ===== 当日唯一主线确认（管理员）+ 预判记录（胜率回看用） =====

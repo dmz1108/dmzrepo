@@ -15183,3 +15183,43 @@ Deployment:
 
 Notes for next agent:
 - 2026-08-07 的正式 TGB 口径固定为 74 只；市场连板股重复摘要和涨停炸板 26 只不得补入正式行。
+
+## 2026-08-10 - Codex - Isolate automatic L2 serial lock by trading day
+
+Changed:
+- Added a trading-day key to the in-process automatic L2 scheduling state. A queued or
+  running job from an earlier trading day is preserved for the company worker but can no
+  longer block every automatic scan on a later trading day.
+- The serial guard now blocks only a queued/running job whose `job.day` equals the current
+  scan day; completed, missing, and cross-day jobs release the in-process guard.
+- Replaced the silent dispatch catch with a bounded server-side error log and diagnostic
+  state so future scheduling failures are observable.
+
+Files:
+- `kpl-stats-server.js`
+- `tests/strategy-l2-rescan.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Production read-only evidence: no `2026-08-10` L2 job directory was created although
+  same-day strategy candidates reported L2 `waiting-worker`; the queue config exists and
+  its token is configured without exposing the token value.
+- The final automatic job on 2026-08-07 was PCB strengthening scan
+  `85d7cf9e6806c0c0`, still `queued`; later completed jobs were manual and therefore did
+  not replace `strategyMainlineAutoScanState.lastJobId`. This reproduced the cross-day
+  global-lock failure.
+- Added a regression that keeps an earlier-day automatic job queued and proves the next
+  trading day still dispatches its first eligible scan.
+- `node --check kpl-stats-server.js`, five focused L2/strategy suites, `git diff --check`,
+  and the full repository suite passed (`87/87`).
+
+Deployment:
+- GitHub branch only at this entry; not merged or deployed. Production code and runtime
+  data were not changed, and no service was restarted.
+
+Notes for next agent:
+- Deployment requires restarting only the main service because the scheduler state is
+  process-local. Do not delete or rewrite the 2026-08-07 queued job; it is truthful audit
+  evidence and the company worker may still process it.
+- 2026-08-10 is already after market close, so this fix prevents recurrence but cannot
+  recreate intraday timing evidence by itself.
