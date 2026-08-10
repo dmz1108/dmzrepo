@@ -13951,6 +13951,39 @@ Notes for next agent:
 - 只有本日期绑定脚本在 `main` 合并并经 `production` 环境批准后才可执行；公开淘股吧与综合归纳均须
   精确为99、覆盖率100%、低质量0、`sourceErrors=[]`，否则回滚并报告阻断。
 
+## 2026-08-10 - Codex - TGB 湖南人 99 行正式入库回执
+
+Changed:
+- PR #422、#423、#424 已合并；受保护生产运行 `31391149759` 成功写入 2026-08-10 淘股吧湖南人
+  正式源 99 行，并重折当天综合主因库。
+- 正式写入前备份终盘池、正式源、综合/证据/质量/auto、其他三源、原始 manifest/图片和两份云端日志；
+  写入与重折后完成落盘、代码集、来源健康和公网接口多重校验，并把成功回执写入两份云端运维日志。
+
+Files:
+- Runtime formal source: `C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-08-10.json`
+- Runtime combined/evidence/quality/auto data for `2026-08-10`
+- Cloud logs: `panda-cloud-ops-2026-06-19.md`, `_cloud-change-log-20260705.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 官方文章 `https://www.tgb.cn/a/2u9gsG5ttv0`；原图 `image-01-06.png`，530×5827、874636 字节，
+  SHA-256 `6e6c3a709d5e48660348474cb830c64d7b8c879c5bc2cdd419f48a96d9012887`。
+- 人工正式行和落盘复核均为99/99；`missingCodes=[]`、`extraCodes=[]`、`duplicateCodes=[]`、
+  `weakCount=0`、名称差异0，12个题材标签合计99；原图两个连续同名“其他”区为18+10。
+- 综合、证据和 auto TGB 代码集均为99/99，缺失/多余为空；综合主因已按新正式源完成重折。
+- 独立公网复验：综合归纳、复盘啦、选股宝、淘股吧均99，韭研0；TGB覆盖率和主因覆盖率均100%，
+  低质量0，`sourceErrors=[]`，`/health` 为 `ok:true`。
+- 正式文件 SHA-256 `df10233cf27decb933740cdda3a608a46e346c8ed99e0df5094279a78f8a7fb6`；
+  综合文件 SHA-256 `a36a888f306072431351b505f59cf25a48186a4d4675206ba8c242faf70c858b`。
+
+Deployment:
+- Workflow: `https://github.com/dmz1108/dmzrepo/actions/runs/31391149759`。
+- 云端备份：`C:\PandaDashboard\backups\tgb-hunan-manual-20260810-20260810130709`。
+- 数据写入、综合主因重折和两份云端日志更新已完成；未部署服务代码，未重启服务。
+
+Notes for next agent:
+- 2026-08-10 的正式 TGB 口径固定为99只；市场连板股12行为重复摘要，涨停炸板14只不得补入正式行。
+
 ## 2026-08-06 - Codex - TGB 人工转录写前终盘池检查请求
 
 Changed:
