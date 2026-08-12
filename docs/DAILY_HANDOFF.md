@@ -15520,3 +15520,35 @@ Notes for next agent:
 - Cloud leases prevent one dead worker call from freezing all later scans, but the company runtime source is
   outside this repository. Add/verify bounded AXTICK login/download timeouts and a process supervisor under
   `D:\PandaLocalL2Worker`; otherwise the server recovers scheduling while the local process can still hang.
+
+## 2026-08-12 - Codex - Deploy and verify L2 stalled-task lease protection
+
+Changed:
+- Merged PR #431 and deployed the approved `local-l2-task-queue.js` from merged `main` using the protected
+  production workflow and manifest `ops/production/manifests/l2-running-lease-20260812.json`.
+- Restart recovery preserved all seven 2026-08-12 audit records: six are now `done`; the semiconductor
+  `50/50` job whose worker omitted `done` was recovered as complete, while the computing-power job stuck at
+  AXTICK login with `0/50` was closed as an explicit after-close error and was not recomputed from closing data.
+
+Files:
+- Runtime: `C:\PandaDashboard\local-l2-task-queue.js`
+- Cloud logs: `panda-cloud-ops-2026-06-19.md`, `_cloud-change-log-20260705.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Deployed SHA-256 matched merged `main` exactly.
+- Protected workflow and local/public health checks passed; `https://market.dreamerqi.com/health` returned
+  `{"ok":true}`.
+- Production persisted-job audit returned `7` jobs: `6 done`, `1 error`; no queued/running job remained.
+
+Deployment:
+- Workflow: `https://github.com/dmz1108/dmzrepo/actions/runs/31578771911`.
+- Backup: `C:\PandaDashboard\_deploy-backups\github-31578771911-1`.
+- Restarted only `Panda Dashboard Server`; no business database, strategy threshold, star rule, UI file,
+  Caddy service, entertainment service, or company L2 worker was changed.
+
+Notes for next agent:
+- The cloud lifecycle no longer remains blocked by a silent same-day worker call. The company computer still
+  needs bounded AXTICK login/download timeouts plus a supervisor around `D:\PandaLocalL2Worker\worker.js`;
+  this home environment has no saved controlled SSH endpoint for that computer, so that follow-up was not
+  performed here.
