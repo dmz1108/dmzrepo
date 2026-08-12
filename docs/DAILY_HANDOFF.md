@@ -13893,6 +13893,97 @@ Notes for next agent:
 - 生产刷新后只可从标题、日期、白底表格及 `@TGB湖南人` 水印均匹配的官方原图继续人工双遍转录；
   若文章、图片或字段不可辨认，必须停止且不得写正式库。
 
+## 2026-08-10 - Codex - TGB 人工转录写前终盘池检查请求
+
+Changed:
+- 受保护 raw-evidence 运行 `31384503393` 已保存官方文章及 16 张原始图片；人工选定
+  `image-01-06.png`，排除同花顺红图、非官方回帖表格、头像、小图、市场连板股摘要和涨停炸板区。
+- Codex 已按官方原图完成 99 行第一遍逐字段人工录入；新增日期绑定的只读写前检查，读取生产终盘池并
+  输出过滤后的 99 个代码/名称、排除项和代码集 SHA-256，不写任何文件。
+
+Files:
+- `ops/production/requests/2026-08-10-tgb-hunan-prewrite-inspect.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 官方文章 `https://www.tgb.cn/a/2u9gsG5ttv0`，标题 `8.10湖南人涨停复盘+晚间消息汇总`。
+- 官方白底表格原图 `image-01-06.png`，530×5827、874636 字节、SHA-256
+  `6e6c3a709d5e48660348474cb830c64d7b8c879c5bc2cdd419f48a96d9012887`。
+- 第一遍题材计数：医疗医药16、电力9、大消费8、基建8、机器人7、算力6、化工4、军工4、
+  AI应用3、黄金3、锂电池3、其他28（原图两个连续同名区 18+10），合计99。
+
+Deployment:
+- 原始证据强刷已执行并更新两份云端日志；正式 TGB 行尚未写入，综合主因未重折，服务未重启。
+
+Notes for next agent:
+- 只读检查必须确认正式文件尚不存在，终盘池与 99 行人工候选代码集完全一致后，才可进行第二遍原图
+  逐字段复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-08-10 - Codex - TGB 湖南人 99 行正式写入请求
+
+Changed:
+- 受保护只读运行 `31385922313` 确认生产终盘原始池和过滤池均为 99/99、排除项为空、正式 TGB
+  文件不存在；人工候选与终盘池代码和名称逐项一致，无名称别名差异。
+- 官方原图第二遍逐字段人工复核完成；新增加密日期绑定的 99 行正式写入请求，固定人工 payload、文章和
+  原图哈希，重验题材计数、代码名称、missing/extra/重复/弱字段，备份后原子写入、重折并验证公网状态，
+  任一写后闸失败自动回滚。
+
+Files:
+- `.github/workflows/production-ops.yml`
+- `ops/production/requests/2026-08-10-tgb-hunan-write.ps1`
+- `tests/tgb-20260810-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 人工 payload：99 行/99 唯一代码，12 个题材标签合计99，`missingCodes=[]`、`extraCodes=[]`、
+  重复0、`weakCount=0`、名称差异0；SHA-256
+  `ecd2961959cea9c5adf7bd4d39f4560a0e5232869a733edc94cae6e585d2aa14`。
+- 终盘池代码集 SHA-256 `db4559421c6d2bc0dc72538118acf0814dc6a3ab98ce85f61c11392f6e426842`；
+  正式文件写入前必须保持不变。
+- 官方文章 `https://www.tgb.cn/a/2u9gsG5ttv0`；原图 `image-01-06.png`，874636 字节，
+  SHA-256 `6e6c3a709d5e48660348474cb830c64d7b8c879c5bc2cdd419f48a96d9012887`。
+- `node tests/tgb-20260810-production-request.test.js` 和 `git diff --check` 通过。
+
+Deployment:
+- 本条记录时正式写入请求尚未执行；正式入库仍为0，综合主因未重折，服务未重启。
+
+Notes for next agent:
+- 只有本日期绑定脚本在 `main` 合并并经 `production` 环境批准后才可执行；公开淘股吧与综合归纳均须
+  精确为99、覆盖率100%、低质量0、`sourceErrors=[]`，否则回滚并报告阻断。
+
+## 2026-08-10 - Codex - TGB 湖南人 99 行正式入库回执
+
+Changed:
+- PR #422、#423、#424 已合并；受保护生产运行 `31391149759` 成功写入 2026-08-10 淘股吧湖南人
+  正式源 99 行，并重折当天综合主因库。
+- 正式写入前备份终盘池、正式源、综合/证据/质量/auto、其他三源、原始 manifest/图片和两份云端日志；
+  写入与重折后完成落盘、代码集、来源健康和公网接口多重校验，并把成功回执写入两份云端运维日志。
+
+Files:
+- Runtime formal source: `C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-08-10.json`
+- Runtime combined/evidence/quality/auto data for `2026-08-10`
+- Cloud logs: `panda-cloud-ops-2026-06-19.md`, `_cloud-change-log-20260705.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 官方文章 `https://www.tgb.cn/a/2u9gsG5ttv0`；原图 `image-01-06.png`，530×5827、874636 字节，
+  SHA-256 `6e6c3a709d5e48660348474cb830c64d7b8c879c5bc2cdd419f48a96d9012887`。
+- 人工正式行和落盘复核均为99/99；`missingCodes=[]`、`extraCodes=[]`、`duplicateCodes=[]`、
+  `weakCount=0`、名称差异0，12个题材标签合计99；原图两个连续同名“其他”区为18+10。
+- 综合、证据和 auto TGB 代码集均为99/99，缺失/多余为空；综合主因已按新正式源完成重折。
+- 独立公网复验：综合归纳、复盘啦、选股宝、淘股吧均99，韭研0；TGB覆盖率和主因覆盖率均100%，
+  低质量0，`sourceErrors=[]`，`/health` 为 `ok:true`。
+- 正式文件 SHA-256 `df10233cf27decb933740cdda3a608a46e346c8ed99e0df5094279a78f8a7fb6`；
+  综合文件 SHA-256 `a36a888f306072431351b505f59cf25a48186a4d4675206ba8c242faf70c858b`。
+
+Deployment:
+- Workflow: `https://github.com/dmz1108/dmzrepo/actions/runs/31391149759`。
+- 云端备份：`C:\PandaDashboard\backups\tgb-hunan-manual-20260810-20260810130709`。
+- 数据写入、综合主因重折和两份云端日志更新已完成；未部署服务代码，未重启服务。
+
+Notes for next agent:
+- 2026-08-10 的正式 TGB 口径固定为99只；市场连板股12行为重复摘要，涨停炸板14只不得补入正式行。
+
 ## 2026-08-06 - Codex - TGB 人工转录写前终盘池检查请求
 
 Changed:
@@ -15221,5 +15312,146 @@ Notes for next agent:
 - Deployment requires restarting only the main service because the scheduler state is
   process-local. Do not delete or rewrite the 2026-08-07 queued job; it is truthful audit
   evidence and the company worker may still process it.
+- Resetting `lastNonUrgentStage` at the trading-day boundary intentionally makes the first
+  ordinary automatic scan slot of each new trading day start from discovery again.
 - 2026-08-10 is already after market close, so this fix prevents recurrence but cannot
   recreate intraday timing evidence by itself.
+
+## 2026-08-10 - Codex - TGB 湖南人原始证据刷新请求
+
+Changed:
+- 确认北京时间 2026-08-10 为星期一交易日；新增日期绑定的受保护生产请求，只强制刷新
+  `@TGB湖南人` 官方文章和原始图片证据。
+- 请求会先备份同日既有 raw-evidence 目录，并严格校验 manifest 日期、官方文章链接、文章标题以
+  `8.10` 开头且包含 `湖南人涨停复盘`、至少一张图片成功下载。
+
+Files:
+- `ops/production/requests/2026-08-10-tgb-hunan-raw-evidence.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 公开 2026-08-10 source-view 已有当日综合归纳、复盘啦、选股宝各 99 行，淘股吧与韭研为 0，
+  `sourceErrors=[]`；公开 `/health` 为 `ok:true`。
+- 脚本只调用 `--tgb-hunan-raw-evidence --day=2026-08-10 --days=1 --force`，不会生成正式行、
+  重折综合主因或重启服务。
+
+Deployment:
+- GitHub only；本条记录时尚未执行生产刷新，未写正式 TGB 行，未重折综合主因库，未重启服务。
+
+Notes for next agent:
+- 生产刷新后只可从标题、日期、白底表格及 `@TGB湖南人` 水印均匹配的官方原图继续人工双遍转录；
+  若文章、图片或字段不可辨认，必须停止且不得写正式库。
+
+## 2026-08-11 - Codex - TGB 湖南人原始证据刷新请求
+
+Changed:
+- 确认北京时间 2026-08-11 为星期二交易日；新增日期绑定的受保护生产请求，只强制刷新
+  `@TGB湖南人` 官方文章和原始图片证据。
+- 请求会先备份同日既有 raw-evidence 目录，并严格校验 manifest 日期、官方文章链接、文章标题以
+  `8.11` 开头且包含 `湖南人涨停复盘`、至少一张图片成功下载。
+
+Files:
+- `ops/production/requests/2026-08-11-tgb-hunan-raw-evidence.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 公开 2026-08-11 source-view 已有当日综合归纳、复盘啦、选股宝各 58 行，淘股吧与韭研为 0，
+  `sourceErrors=[]`；公开 `/health` 为 `ok:true`。
+- 脚本只调用 `--tgb-hunan-raw-evidence --day=2026-08-11 --days=1 --force`，不会生成正式行、
+  重折综合主因或重启服务。
+
+Deployment:
+- GitHub only；本条记录时尚未执行生产刷新，未写正式 TGB 行，未重折综合主因库，未重启服务。
+
+Notes for next agent:
+- 生产刷新后只可从标题、日期、白底表格及 `@TGB湖南人` 水印均匹配的官方原图继续人工双遍转录；
+  若文章、图片或字段不可辨认，必须停止且不得写正式库。
+
+## 2026-08-11 - Codex - TGB 人工转录写前终盘池检查请求
+
+Changed:
+- 受保护 raw-evidence 运行 `31487378064` 已保存官方文章及 20 张原始图片；人工选定
+  `image-01-06.png`，排除同花顺红图、回帖表格、头像、小图、行情/统计图和账户截图。
+- Codex 已按官方原图完成 59 条涨停题材区候选的第一遍逐字段人工录入；新增日期绑定的只读写前检查，
+  读取生产终盘池并输出过滤后的 58 个代码/名称、排除项和代码集 SHA-256，不写任何文件。
+
+Files:
+- `ops/production/requests/2026-08-11-tgb-hunan-prewrite-inspect.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 官方文章 `https://www.tgb.cn/a/2uaVmOBLE3q`，标题 `8.11湖南人涨停复盘+晚间消息汇总`。
+- 官方白底表格原图 `image-01-06.png`，530×4099、664637 字节、SHA-256
+  `920f47c5e73c9b034e1c66caa7fea5873a691a078de6f1aa648f7fbb2c924f5c`。
+- 第一遍源图候选题材计数：机器人10、医疗医药8、算力7、大消费5、半导体4、电力3、影视3、
+  其他热点10、其他个股9，合计59；正式候选必须按终盘池排除非合格行后再全量对账。
+
+Deployment:
+- 原始证据强刷已执行并更新两份云端日志；正式 TGB 行尚未写入，综合主因未重折，服务未重启。
+
+Notes for next agent:
+- 只读检查必须确认正式文件尚不存在、解释 59 条源图候选与 58 条合格终盘池的唯一差异后，才可进行
+  第二遍原图逐字段复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-08-11 - Codex - TGB 湖南人 58 行正式写入请求
+
+Changed:
+- 受保护只读运行 `31488076025` 确认生产终盘原始池和过滤池均为 58/58、排除项为空、正式 TGB
+  文件不存在；重新逐块计数确认第一遍的 59 为 `002963` 被重复计入的人工计数笔误，正式源图共 58 行。
+- 官方原图第二遍逐字段人工复核完成；新增加密日期绑定的 58 行正式写入请求，固定人工 payload、文章和
+  原图哈希，重验题材计数、代码名称、missing/extra/重复/弱字段，备份后原子写入、重折并验证公网状态，
+  任一写后闸失败自动回滚。
+
+Files:
+- `.github/workflows/production-ops.yml`
+- `ops/production/requests/2026-08-11-tgb-hunan-write.ps1`
+- `tests/tgb-20260811-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 人工 payload：58 行/58 唯一代码，9 个题材块合计58，`missingCodes=[]`、`extraCodes=[]`、重复0、
+  `weakCount=0`、名称差异0；SHA-256 `ae38fff1ba9dc82f97e0da82974916640f12bb2a7086aa590524082caaff80bf`。
+- 终盘池代码集 SHA-256 `804afa3ff91d9ab09a9328d1be6c00c7990953403f8f3d4d8e9259fd2966e6f5`；
+  正式文件写入前必须保持不变。
+- 官方文章 `https://www.tgb.cn/a/2uaVmOBLE3q`；原图 `image-01-06.png`，664637 字节，
+  SHA-256 `920f47c5e73c9b034e1c66caa7fea5873a691a078de6f1aa648f7fbb2c924f5c`。
+
+Deployment:
+- 本条记录时正式写入请求尚未执行；正式入库仍为0，综合主因未重折，服务未重启。
+
+Notes for next agent:
+- 只有本日期绑定脚本在 `main` 合并并经 `production` 环境批准后才可执行；公开淘股吧与综合归纳均须
+  精确为58、覆盖率100%、低质量0、`sourceErrors=[]`，否则回滚并报告阻断。
+
+## 2026-08-11 - Codex - TGB 湖南人 58 行正式入库回执
+
+Changed:
+- PR #426、#427、#428 已合并；受保护生产运行 `31490153755` 成功写入 2026-08-11 淘股吧湖南人
+  正式源 58 行，并重折当天综合主因库。
+- 正式写入前备份终盘池、正式源、综合/证据/质量/auto、其他三源、原始 manifest/图片和两份云端日志；
+  写入与重折后完成落盘、代码集、来源健康和公网接口多重校验，并把成功回执写入两份云端运维日志。
+
+Files:
+- Runtime formal source: `C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-08-11.json`
+- Runtime combined/evidence/quality/auto data for `2026-08-11`
+- Cloud logs: `panda-cloud-ops-2026-06-19.md`, `_cloud-change-log-20260705.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 官方文章 `https://www.tgb.cn/a/2uaVmOBLE3q`；原图 `image-01-06.png`，530×4099、664637 字节，
+  SHA-256 `920f47c5e73c9b034e1c66caa7fea5873a691a078de6f1aa648f7fbb2c924f5c`。
+- 人工正式行和落盘复核均为58/58；`missingCodes=[]`、`extraCodes=[]`、`duplicateCodes=[]`、
+  `weakCount=0`、名称差异0，9个题材块合计58。
+- 综合、证据和 auto TGB 代码集均为58/58，缺失/多余为空；综合主因已按新正式源完成重折。
+- 独立公网复验：综合归纳、复盘啦、选股宝、淘股吧均58，韭研0；TGB覆盖率和主因覆盖率均100%，
+  低质量0，`sourceErrors=[]`，`/health` 为 `ok:true`。
+- 正式文件 SHA-256 `49963ad815a229dbd2f9dafa838dc5354f29d0eaa0151f5d8fc16063cecfa557`；
+  综合文件 SHA-256 `cc3cfef48fb954be16aeaf0fe34ca523ab6b71f1b115724c1fa48b74b8e0a717`。
+
+Deployment:
+- Workflow: `https://github.com/dmz1108/dmzrepo/actions/runs/31490153755`。
+- 云端备份：`C:\PandaDashboard\backups\tgb-hunan-manual-20260811-20260811121436`。
+- 数据写入、综合主因重折和两份云端日志更新已完成；未部署服务代码，未重启服务。
+
+Notes for next agent:
+- 2026-08-11 的正式 TGB 口径固定为58只；市场连板股16行为重复摘要，涨停炸板17只不得补入正式行。
