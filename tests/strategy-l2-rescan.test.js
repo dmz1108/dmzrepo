@@ -42,10 +42,12 @@ const STRATEGY_MAINLINE_AUTO_RESCAN_MIN_INFLOW_DELTA = 1e8;
 const STRATEGY_MAINLINE_AUTO_RESCAN_MIN_GAIN_DELTA = 0.5;
 const STRATEGY_MAINLINE_AUTO_SCAN_LIMIT_STOCKS = 50;
 const strategyMainlineAutoScanState = {
+  day: '',
   windowStart: 0,
   dispatched: 0,
   lastJobId: '',
   lastNonUrgentStage: '',
+  lastError: '',
 };
 const numOrNull = value => {
   if (value == null || value === '') return null;
@@ -152,9 +154,10 @@ A(strategyMainlineAutoScanDecision(baseBoard, {
 const dispatched = [];
 let latestJob = baselineJob;
 let latestJobsByPlate = null;
+let activeGlobalJob = null;
 const localL2TaskQueue = {
   configured: () => true,
-  get: () => null,
+  get: jobId => activeGlobalJob && activeGlobalJob.jobId === jobId ? activeGlobalJob : null,
   latest: plateId => latestJobsByPlate ? (latestJobsByPlate[plateId] || null) : latestJob,
   start: payload => {
     const job = { ...payload, jobId: `AUTO${dispatched.length + 1}`, status: 'queued' };
@@ -295,6 +298,28 @@ strategyMainlineMaybeAutoScan([
 ], '2026-07-29', true, '午后', null);
 A(dispatched.length === 1 && dispatched[0].plateId === 'TECH-NEW',
   '家族公平:先给零覆盖家族首扫机会，再回到已有覆盖家族的第二个板块');
+latestJobsByPlate = null;
+
+// 生产 2026-08-10 反例:上一交易日最后一张自动增强任务残留 queued，旧全局串行锁
+// 会让下一交易日整天一张任务都不派。跨日后必须重置窗口与串行锁，但保留旧任务本身。
+strategyMainlineAutoScanState.day = '2026-08-07';
+strategyMainlineAutoScanState.windowStart = Date.now();
+strategyMainlineAutoScanState.dispatched = 1;
+strategyMainlineAutoScanState.lastJobId = 'STALE-20260807';
+strategyMainlineAutoScanState.lastNonUrgentStage = 'strengthening';
+dispatched.length = 0;
+activeGlobalJob = {
+  jobId: 'STALE-20260807',
+  day: '2026-08-07',
+  status: 'queued',
+};
+latestJobsByPlate = {};
+strategyMainlineMaybeAutoScan([baseBoard], '2026-08-10', true, '早盘', null);
+A(dispatched.length === 1
+  && dispatched[0].day === '2026-08-10'
+  && strategyMainlineAutoScanState.day === '2026-08-10',
+  '跨日隔离:上一交易日 queued 自动任务不阻断新交易日首张扫描');
+activeGlobalJob = null;
 latestJobsByPlate = null;
 
 const queue = createLocalL2TaskQueue({ token: '0123456789abcdef', batchSize: 5 });
