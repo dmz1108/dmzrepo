@@ -8,6 +8,7 @@ const DEFAULT_BATCH_SIZE = 50;
 const DEFAULT_THRESHOLDS = [500000, 3000000, 5000000, 8000000, 10000000];
 const PICK_SIGNAL_MIN_AMOUNT = 500000;
 const DEFAULT_PERSIST_DAYS = 30;
+const DEFAULT_RUNNING_LEASE_MS = 5 * 60 * 1000;
 
 function isExcludedL2StockCode(code) {
   const text = String(code || '').replace(/\D/g, '').slice(0, 6);
@@ -122,6 +123,21 @@ function chinaIsoDay(nowMs = Date.now()) {
   return new Date(safeNow + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+function chinaClock(nowMs = Date.now()) {
+  const numericNow = Number(nowMs);
+  const safeNow = Number.isFinite(numericNow) ? numericNow : Date.now();
+  const shifted = new Date(safeNow + 8 * 60 * 60 * 1000);
+  return {
+    day: shifted.toISOString().slice(0, 10),
+    minutes: shifted.getUTCHours() * 60 + shifted.getUTCMinutes(),
+  };
+}
+
+function isChinaAutoL2Window(nowMs = Date.now()) {
+  const clock = chinaClock(nowMs);
+  return clock.minutes >= 9 * 60 + 15 && clock.minutes < 15 * 60;
+}
+
 function atomicWriteJson(file, value) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.tmp-${process.pid}-${Date.now()}`;
@@ -216,7 +232,12 @@ class LocalL2TaskQueue {
     this.queue = [];
     this.persistDir = String(options.persistDir || options.dataDir || '').trim();
     this.persistDays = Math.max(1, Number(options.persistDays || options.cleanupDays || DEFAULT_PERSIST_DAYS));
-    this.restoreNowMs = Number.isFinite(Number(options.nowMs)) ? Number(options.nowMs) : Date.now();
+    const fixedNowMs = Number(options.nowMs);
+    this.clock = typeof options.clock === 'function'
+      ? options.clock
+      : (Number.isFinite(fixedNowMs) ? () => fixedNowMs : () => Date.now());
+    this.runningLeaseMs = Math.max(60 * 1000, Number(options.runningLeaseMs || DEFAULT_RUNNING_LEASE_MS));
+    this.restoreNowMs = Number.isFinite(Number(options.nowMs)) ? Number(options.nowMs) : this.clock();
     this.resumeDay = isIsoDay(options.currentDay) ? String(options.currentDay) : chinaIsoDay(this.restoreNowMs);
     this.persistence = {
       enabled: !!this.persistDir,
@@ -232,6 +253,12 @@ class LocalL2TaskQueue {
       id: '',
       version: '',
       host: '',
+    };
+    this.lease = {
+      runningTimeoutMs: this.runningLeaseMs,
+      expiredCount: 0,
+      lastExpiredAt: '',
+      lastExpiredJobId: '',
     };
     this.cleanupPersistedJobs();
     this.restorePersistedJobs();
@@ -249,8 +276,43 @@ class LocalL2TaskQueue {
     }
   }
 
+  failJob(job, error, note, nowMs = this.clock(), marker = '') {
+    if (!job) return;
+    const endedAt = new Date(nowMs).toISOString();
+    job.status = 'error';
+    job.error = String(error || 'worker failed');
+    job.note = String(note || job.error);
+    job.updatedAt = endedAt;
+    job.endedAt = endedAt;
+    if (marker) job[marker] = endedAt;
+    this.persistJob(job);
+  }
+
+  expireStaleJobs(nowMs = this.clock()) {
+    let expired = 0;
+    for (const job of this.jobs.values()) {
+      const status = String(job?.status || '');
+      if (status !== 'running') continue;
+      const activityMs = Date.parse(job.updatedAt || job.startedAt || job.createdAt || '');
+      if (!Number.isFinite(activityMs) || nowMs - activityMs <= this.runningLeaseMs) continue;
+      this.failJob(
+        job,
+        'L2 worker progress timeout',
+        `本机计算助手超过${Math.round(this.runningLeaseMs / 60000)}分钟未回传进度，任务已释放等待重试`,
+        nowMs,
+        'leaseExpiredAt',
+      );
+      expired += 1;
+      this.lease.expiredCount += 1;
+      this.lease.lastExpiredAt = job.leaseExpiredAt;
+      this.lease.lastExpiredJobId = job.jobId;
+    }
+    return expired;
+  }
+
   status() {
-    const now = Date.now();
+    const now = this.clock();
+    this.expireStaleJobs(now);
     const lastSeenMs = this.worker.lastSeenAt ? Date.parse(this.worker.lastSeenAt) : 0;
     return {
       available: this.configured(),
@@ -262,6 +324,7 @@ class LocalL2TaskQueue {
       worker: this.worker,
       pending: this.queue.length,
       totalJobs: this.jobs.size,
+      lease: { ...this.lease },
       persistence: {
         enabled: this.persistence.enabled,
         dir: this.persistence.dir,
@@ -275,6 +338,7 @@ class LocalL2TaskQueue {
   }
 
   listDay(day) {
+    this.expireStaleJobs();
     const targetDay = String(day || '').trim();
     return [...this.jobs.values()]
       .filter(job => !targetDay || String(job?.day || '') === targetDay)
@@ -345,7 +409,8 @@ class LocalL2TaskQueue {
           const existing = this.jobs.get(job.jobId);
           if (existing && String(existing.updatedAt || '') > String(job.updatedAt || '')) continue;
           const unfinished = job.status === 'queued' || job.status === 'running';
-          const resumeEligible = unfinished && job.day === this.resumeDay;
+          const resumeEligible = unfinished && job.day === this.resumeDay
+            && (job.trigger !== 'strategy-auto' || isChinaAutoL2Window(this.restoreNowMs));
           if (unfinished && hasCompletePersistedResult(job)) {
             job.status = 'done';
             job.scanned = job.total;
@@ -364,8 +429,14 @@ class LocalL2TaskQueue {
             job.status = 'error';
             job.startedAt = '';
             job.endedAt = job.endedAt || payload?.savedAt || new Date().toISOString();
-            job.error = '历史未完成任务不会重新扫描';
-            job.note = '历史未完成任务仅恢复供查看；未使用当前盘口补扫';
+            job.queueExpiredAt = job.queueExpiredAt || job.endedAt;
+            const sameDayAutoAfterClose = job.day === this.resumeDay && job.trigger === 'strategy-auto';
+            job.error = sameDayAutoAfterClose
+              ? '当日自动扫描窗口已结束'
+              : '历史未完成任务不会重新扫描';
+            job.note = sameDayAutoAfterClose
+              ? '收盘后恢复时终止未完成自动任务；未使用收盘后盘口补扫'
+              : '历史未完成任务仅恢复供查看；未使用当前盘口补扫';
           }
           this.jobs.set(job.jobId, job);
           const key = latestJobKey(job.plateId, job.day);
@@ -405,9 +476,12 @@ class LocalL2TaskQueue {
   }
 
   start(payload = {}) {
+    this.expireStaleJobs();
     const lastSeenMs = this.worker.lastSeenAt ? Date.parse(this.worker.lastSeenAt) : 0;
-    const workerOnline = !!lastSeenMs && Date.now() - lastSeenMs < 45000;
-    const sortSnapshotAt = payload.sortSnapshotAt || new Date().toISOString();
+    const nowMs = this.clock();
+    const workerOnline = !!lastSeenMs && nowMs - lastSeenMs < 45000;
+    const createdAt = new Date(nowMs).toISOString();
+    const sortSnapshotAt = payload.sortSnapshotAt || createdAt;
     const limitStocks = Math.max(0, Math.floor(Number(payload.limitStocks || payload.maxStocks || 0)));
     const rawStocks = Array.isArray(payload.stocks) ? payload.stocks : [];
     const normalizedStocks = rawStocks
@@ -459,10 +533,10 @@ class LocalL2TaskQueue {
       note: this.configured()
         ? (workerOnline ? '等待本机计算助手领取任务' : 'L2本机计算助手未在线，任务已排队，启动助手后会继续计算')
         : '本机计算助手Token未配置',
-      createdAt: new Date().toISOString(),
+      createdAt,
       startedAt: '',
       endedAt: '',
-      updatedAt: new Date().toISOString(),
+      updatedAt: createdAt,
       sortSnapshotAt,
       sortBy: '实时涨幅快照',
       total: stocks.length,
@@ -488,17 +562,19 @@ class LocalL2TaskQueue {
     if (job.available && !stocks.length) {
       job.status = 'done';
       job.note = excludedStockCount ? '板块成分股已排除688和北交所，剩余没有可扫描股票' : '板块没有可扫描成分股';
-      job.endedAt = new Date().toISOString();
+      job.endedAt = createdAt;
     }
     this.persistJob(job);
     return publicJob(job);
   }
 
   get(jobId) {
+    this.expireStaleJobs();
     return publicJob(this.jobs.get(String(jobId || '')));
   }
 
   latest(plateId, day) {
+    this.expireStaleJobs();
     const id = this.latestByPlate.get(latestJobKey(plateId, day));
     if (id) return publicJob(this.jobs.get(id));
     let latest = null;
@@ -512,8 +588,11 @@ class LocalL2TaskQueue {
 
   claim(body = {}) {
     this.assertToken(body.token || body.workerToken);
+    const nowMs = this.clock();
+    const nowAt = new Date(nowMs).toISOString();
+    this.expireStaleJobs(nowMs);
     this.worker = {
-      lastSeenAt: new Date().toISOString(),
+      lastSeenAt: nowAt,
       id: String(body.workerId || body.id || ''),
       version: String(body.version || ''),
       host: String(body.host || ''),
@@ -522,8 +601,16 @@ class LocalL2TaskQueue {
       const jobId = this.queue.shift();
       const job = this.jobs.get(jobId);
       if (!job || job.status !== 'queued') continue;
+      if (String(job.day || '') !== chinaIsoDay(nowMs)) {
+        this.failJob(job, 'historical L2 task expired', '历史未完成任务不会使用当前盘口补扫', nowMs, 'queueExpiredAt');
+        continue;
+      }
+      if (job.trigger === 'strategy-auto' && !isChinaAutoL2Window(nowMs)) {
+        this.failJob(job, 'automatic L2 scan window closed', '当日自动扫描窗口已结束，任务未使用收盘后盘口补扫', nowMs, 'queueExpiredAt');
+        continue;
+      }
       job.status = 'running';
-      job.startedAt = new Date().toISOString();
+      job.startedAt = nowAt;
       job.updatedAt = job.startedAt;
       job.note = '本机计算助手已领取任务';
       job.claimedBy = this.worker.id || this.worker.host || 'local-worker';
@@ -536,13 +623,24 @@ class LocalL2TaskQueue {
 
   update(body = {}) {
     this.assertToken(body.token || body.workerToken);
+    const nowMs = this.clock();
+    const nowAt = new Date(nowMs).toISOString();
+    this.expireStaleJobs(nowMs);
     const job = this.jobs.get(String(body.jobId || ''));
     if (!job) {
       const err = new Error('job not found');
       err.status = 404;
       throw err;
     }
-    job.updatedAt = new Date().toISOString();
+    this.worker.lastSeenAt = nowAt;
+    if (body.workerId || body.id) this.worker.id = String(body.workerId || body.id);
+    if (body.host) this.worker.host = String(body.host);
+    if (job.leaseExpiredAt || job.queueExpiredAt) {
+      const err = new Error(job.leaseExpiredAt ? 'job lease expired' : 'job scan window expired');
+      err.status = 409;
+      throw err;
+    }
+    job.updatedAt = nowAt;
     if (Number.isFinite(Number(body.scanned))) job.scanned = Number(body.scanned);
     if (Number.isFinite(Number(body.currentBatch))) job.currentBatch = Number(body.currentBatch);
     if (body.note) job.note = String(body.note);
@@ -591,12 +689,14 @@ class LocalL2TaskQueue {
       job.status = 'error';
       job.error = String(body.error || body.note || 'worker failed');
       job.note = job.error;
-      job.endedAt = new Date().toISOString();
-    } else if (body.status === 'done') {
+      job.endedAt = nowAt;
+    } else if (body.status === 'done' || hasCompletePersistedResult(job)) {
       job.status = 'done';
       job.scanned = Number.isFinite(Number(body.scanned)) ? Number(body.scanned) : job.total;
-      job.note = body.note ? String(body.note) : '本机计算完成';
-      job.endedAt = new Date().toISOString();
+      job.note = body.status === 'done'
+        ? (body.note ? String(body.note) : '本机计算完成')
+        : '本机计算结果已完整回传；服务端自动确认完成';
+      job.endedAt = nowAt;
     } else {
       job.status = 'running';
     }

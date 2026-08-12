@@ -114,7 +114,11 @@ eval(extractFn('strategyNormRealtimeStocks'));
 
   // 3. 队列:分组后截断(评审修正1)——limitStocks=2,优先股原排第4 也必须入选
   const tmp = fsReal.mkdtempSync(pathReal.join(os.tmpdir(), 'l2q-'));
-  const q = createLocalL2TaskQueue({ token: 'x'.repeat(24), persistDir: tmp });
+  const q = createLocalL2TaskQueue({
+    token: 'x'.repeat(24),
+    persistDir: tmp,
+    nowMs: Date.parse('2026-07-11T02:00:00.000Z'), // 北京时间 10:00
+  });
   const jobT = q.start({
     plateId: 'pt', boardName: '截断板', day: '2026-07-11',
     stocks: [

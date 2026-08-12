@@ -10,7 +10,7 @@ const { createLocalL2TaskQueue } = require('../local-l2-task-queue');
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'panda-l2-persist-'));
 const token = 'test-local-l2-token-20260710';
-const restoreNowMs = Date.parse('2026-07-15T12:00:00.000Z');
+const restoreNowMs = Date.parse('2026-07-15T02:00:00.000Z'); // 北京时间 10:00，自动 L2 领取窗口内
 
 const chinaBoundaryQueue = createLocalL2TaskQueue({
   token,
@@ -27,6 +27,7 @@ function assertFile(file, message) {
 }
 
 try {
+  let queueNow = restoreNowMs;
   const oldDayDir = path.join(tempRoot, '2000-01-01', 'old-job');
   fs.mkdirSync(oldDayDir, { recursive: true });
   fs.writeFileSync(path.join(oldDayDir, 'latest.json'), JSON.stringify({
@@ -41,13 +42,14 @@ try {
     persistDir: tempRoot,
     persistDays: 30,
     nowMs: restoreNowMs,
+    clock: () => queueNow,
   });
   assert.ok(!fs.existsSync(path.join(tempRoot, '2000-01-01')), '30 天外的旧目录应被自动清理');
 
   const job = queue.start({
     plateId: 'BK_TEST',
     boardName: '测试板块',
-    day: '2026-07-10',
+    day: '2026-07-15',
     trigger: 'strategy-auto',
     familyKey: 'group:测试',
     stocks: [
@@ -95,8 +97,8 @@ try {
   assert.equal(updated.job.status, 'done', '更新后任务应完成');
   assert.equal(updated.job.pickedCount, 1, '强资金股票应进入 picked');
 
-  const latestFile = path.join(tempRoot, '2026-07-10', job.jobId, 'latest.json');
-  const samplesDir = path.join(tempRoot, '2026-07-10', job.jobId, 'samples');
+  const latestFile = path.join(tempRoot, '2026-07-15', job.jobId, 'latest.json');
+  const samplesDir = path.join(tempRoot, '2026-07-15', job.jobId, 'samples');
   assertFile(latestFile, 'latest.json 应存在');
   assert.ok(fs.readdirSync(samplesDir).some(name => name.endsWith('.json')), '回传结果时应保存样本文件');
 
@@ -110,17 +112,18 @@ try {
   assert.equal(latestPayload.job.trigger, 'strategy-auto', '自动扫描来源应落盘');
   assert.equal(latestPayload.job.familyKey, 'group:测试', '主线家族键应落盘');
 
+  queueNow += 1000;
   const emptyRetry = queue.start({
     plateId: 'BK_TEST',
     boardName: '测试板块',
-    day: '2026-07-10',
+    day: '2026-07-15',
     trigger: 'manual',
     stocks: [],
   });
   assert.equal(emptyRetry.status, 'done', '后一次空任务应正常结束');
-  assert.equal(queue.latest('BK_TEST', '2026-07-10').jobId, emptyRetry.jobId, 'latest 仍表示最后一次尝试');
-  assert.equal(queue.latestSuccessful('BK_TEST', '2026-07-10').jobId, job.jobId, '空任务不得遮蔽前一次有效结果');
-  assert.equal(queue.listDay('2026-07-10').length, 2, '按日任务列表应保留自动和手动历史');
+  assert.equal(queue.latest('BK_TEST', '2026-07-15').jobId, emptyRetry.jobId, 'latest 仍表示最后一次尝试');
+  assert.equal(queue.latestSuccessful('BK_TEST', '2026-07-15').jobId, job.jobId, '空任务不得遮蔽前一次有效结果');
+  assert.equal(queue.listDay('2026-07-15').length, 2, '按日任务列表应保留自动和手动历史');
 
   const restored = createLocalL2TaskQueue({
     token,
@@ -134,10 +137,10 @@ try {
   assert.equal(status.pending, 0, '恢复任务只用于读回放,不重新排队');
   assert.equal(status.persistence.restoredJobs, 2, '恢复计数应正确');
 
-  const restoredLatest = restored.latest('BK_TEST', '2026-07-10');
+  const restoredLatest = restored.latest('BK_TEST', '2026-07-15');
   assert.equal(restoredLatest.status, 'done', '恢复后的最新任务状态应保留');
   assert.equal(restoredLatest.jobId, emptyRetry.jobId, '恢复后 latest 仍指向最后一次空任务');
-  const restoredSuccessful = restored.latestSuccessful('BK_TEST', '2026-07-10');
+  const restoredSuccessful = restored.latestSuccessful('BK_TEST', '2026-07-15');
   assert.equal(restoredSuccessful.results[0].thresholds['10000000'].activeBuy, 350000000, '恢复后有效任务五档资金应完整');
   assert.equal(restoredSuccessful.results[0].price, 10.2, '恢复后有效任务现价应完整');
 
@@ -162,14 +165,21 @@ try {
         },
       }],
     });
-    assert.equal(beforeRestart.get(completeRunning.jobId).status, 'running', '模拟 worker 已回完整结果但漏发 done');
+    assert.equal(beforeRestart.get(completeRunning.jobId).status, 'done', 'worker 已回完整结果即使漏发 done，服务端也应自动完成');
+    assert.match(beforeRestart.get(completeRunning.jobId).note, /自动确认完成/, '自动完成应保留可审计说明');
 
     const historicalIncomplete = beforeRestart.start({
       plateId: 'BK_STALE', boardName: '历史残缺板块', day: '2026-06-20',
       stocks: [{ code: '600012', name: '历史残缺股', gainPct: 5.2, price: 9, priceSource: 'board-realtime' }],
     });
-    const historicalClaim = beforeRestart.claim({ token, workerId: 'worker-stale' });
-    assert.equal(historicalClaim.job.jobId, historicalIncomplete.jobId, '先模拟历史任务在重启前处于 running');
+    // 直接把落盘夹具改成历史 running，模拟旧版本在重启前留下的跨日残缺任务；
+    // 新版本 claim 会拒绝使用当前盘口领取历史任务，因此不能再通过公开领取路径构造。
+    const historicalFile = path.join(recoverRoot, '2026-06-20', historicalIncomplete.jobId, 'latest.json');
+    const historicalPayload = JSON.parse(fs.readFileSync(historicalFile, 'utf8'));
+    historicalPayload.job.status = 'running';
+    historicalPayload.job.startedAt = '2026-06-20T02:00:00.000Z';
+    historicalPayload.job.updatedAt = '2026-06-20T02:00:00.000Z';
+    fs.writeFileSync(historicalFile, JSON.stringify(historicalPayload, null, 2), 'utf8');
 
     const incompleteQueued = beforeRestart.start({
       plateId: 'BK_PENDING', boardName: '待续扫板块', day: '2026-07-15',
@@ -178,8 +188,8 @@ try {
 
     const afterRestart = createLocalL2TaskQueue({ token, batchSize: 2, persistDir: recoverRoot, persistDays: 30, nowMs: restoreNowMs });
     assert.equal(afterRestart.status().persistence.resumeDay, '2026-07-15', '恢复扫描日应按中国时区当天计算');
-    assert.equal(afterRestart.get(completeRunning.jobId).status, 'done', '完整落盘的 running 任务应在重启时恢复为 done');
-    assert.match(afterRestart.get(completeRunning.jobId).note, /自动恢复为完成/, '自动完成应保留可审计说明');
+    assert.equal(afterRestart.get(completeRunning.jobId).status, 'done', '服务端自动完成的任务重启后应保持 done');
+    assert.match(afterRestart.get(completeRunning.jobId).note, /自动确认完成/, '重启后应保留原始自动完成审计说明');
     assert.equal(afterRestart.status().pending, 1, '只有当天未完成任务应在重启后重新入队');
     assert.equal(afterRestart.get(historicalIncomplete.jobId).status, 'error', '历史未完成任务应终止，不得伪装成仍在排队');
     assert.match(afterRestart.get(historicalIncomplete.jobId).note, /仅恢复供查看/, '历史任务应保留不续扫的可审计说明');
@@ -189,6 +199,73 @@ try {
     assert.equal(noHistoricalClaim.job, null, '当天任务领取后不得继续领取历史残缺任务');
   } finally {
     fs.rmSync(recoverRoot, { recursive: true, force: true });
+  }
+
+  let leaseNow = Date.parse('2026-08-12T02:00:00.000Z'); // 北京时间 10:00
+  const leaseQueue = createLocalL2TaskQueue({
+    token,
+    clock: () => leaseNow,
+    runningLeaseMs: 5 * 60 * 1000,
+  });
+  const runningTimeout = leaseQueue.start({
+    plateId: 'BK_RUNNING_TIMEOUT', boardName: '运行超时板块', day: '2026-08-12',
+    trigger: 'strategy-auto',
+    stocks: [{ code: '600020', name: '运行超时股', gainPct: 6, price: 10 }],
+  });
+  leaseQueue.claim({ token, workerId: 'worker-timeout' });
+  leaseNow += 5 * 60 * 1000 + 1;
+  assert.equal(leaseQueue.get(runningTimeout.jobId).status, 'error', 'worker 超过运行租约未回传应自动失败并释放串行锁');
+  assert.match(leaseQueue.get(runningTimeout.jobId).note, /超过5分钟未回传进度/, '运行租约失败应保留明确原因');
+  assert.throws(() => leaseQueue.update({ token, jobId: runningTimeout.jobId, status: 'done' }), err => err?.status === 409,
+    '租约失效后的迟到结果不得把失败任务改回完成');
+
+  const autoComplete = leaseQueue.start({
+    plateId: 'BK_AUTO_DONE', boardName: '自动确认完成板块', day: '2026-08-12',
+    trigger: 'strategy-auto',
+    stocks: [{ code: '600022', name: '自动完成股', gainPct: 7, price: 12 }],
+  });
+  leaseQueue.claim({ token, workerId: 'worker-auto-done' });
+  const autoCompleted = leaseQueue.update({
+    token,
+    jobId: autoComplete.jobId,
+    scanned: 1,
+    results: [{
+      code: '600022', name: '自动完成股', price: 12,
+      thresholds: {
+        '500000': th(1, 1, 1, 1),
+        '3000000': th(1, 1, 1, 1),
+        '5000000': th(1, 1, 1, 1),
+        '8000000': th(1, 1, 1, 1),
+        '10000000': th(1, 1, 1, 1),
+      },
+    }],
+  });
+  assert.equal(autoCompleted.job.status, 'done', '50/50 完整结果即使 worker 漏发 done，也应由服务端自动完成');
+  assert.match(autoCompleted.job.note, /自动确认完成/, '服务端自动完成应可审计');
+
+  const afterCloseRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'panda-l2-after-close-'));
+  try {
+    let beforeCloseNow = Date.parse('2026-08-12T06:50:00.000Z'); // 北京时间 14:50
+    const beforeCloseQueue = createLocalL2TaskQueue({
+      token, persistDir: afterCloseRoot, persistDays: 30, clock: () => beforeCloseNow, nowMs: beforeCloseNow,
+    });
+    const unfinishedAuto = beforeCloseQueue.start({
+      plateId: 'BK_AFTER_CLOSE', boardName: '收盘恢复板块', day: '2026-08-12',
+      trigger: 'strategy-auto',
+      stocks: [{ code: '600023', name: '收盘恢复股', gainPct: 6, price: 13 }],
+    });
+    beforeCloseQueue.claim({ token, workerId: 'worker-before-close' });
+    const afterCloseNow = Date.parse('2026-08-12T07:05:00.000Z'); // 北京时间 15:05
+    const afterCloseQueue = createLocalL2TaskQueue({
+      token, persistDir: afterCloseRoot, persistDays: 30, nowMs: afterCloseNow,
+    });
+    assert.equal(afterCloseQueue.get(unfinishedAuto.jobId).status, 'error', '收盘后重启不得把当日自动任务重新排队');
+    assert.match(afterCloseQueue.get(unfinishedAuto.jobId).note, /收盘后恢复时终止/, '收盘后终止应说明未用盘后盘口补扫');
+    assert.equal(afterCloseQueue.status().pending, 0, '收盘后恢复的自动任务不进入 worker 队列');
+    assert.throws(() => afterCloseQueue.update({ token, jobId: unfinishedAuto.jobId, status: 'done' }), err => err?.status === 409,
+      '收盘后终止任务的迟到回执不得改写历史结果');
+  } finally {
+    fs.rmSync(afterCloseRoot, { recursive: true, force: true });
   }
 
   console.log('ALL LOCAL-L2-PERSISTENCE CHECKS PASSED');

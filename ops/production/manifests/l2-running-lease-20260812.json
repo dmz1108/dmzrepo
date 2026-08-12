@@ -1,0 +1,9 @@
+{
+  "files": [
+    {
+      "source": "local-l2-task-queue.js",
+      "destination": "local-l2-task-queue.js"
+    }
+  ],
+  "restart": "main"
+}

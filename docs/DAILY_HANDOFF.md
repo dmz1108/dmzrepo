@@ -15483,3 +15483,40 @@ Deployment:
 Notes for next agent:
 - 下一次出现达到自动扫描硬门槛的板块时，继续核对当天任务目录与公司 worker 回执；
   当前无合格板块时没有扫描记录属于正确行为。
+
+## 2026-08-12 - Codex - Diagnose same-day L2 worker stall and add task leases
+
+Changed:
+- Read production L2 task persistence for 2026-08-12 and confirmed the scheduler did create seven automatic
+  tasks. Five completed; one semiconductor task had full `50/50` evidence but remained `running`; the final
+  computing-power task stopped at `本机开始登录AXTICK` with `0/50` and blocked later serial dispatches.
+- Added a five-minute progress lease for claimed jobs. Expired jobs become explicit errors, keep their partial
+  evidence, reject late results, and release the scheduler for retry.
+- Complete row/price/five-bucket evidence now closes a job server-side when the worker omits its final `done`.
+- Prevented historical or after-close automatic jobs from being claimed/restored with current order-flow data.
+
+Files:
+- `local-l2-task-queue.js`
+- `tests/local-l2-persistence.test.js`
+- `tests/scan-priority.test.js`
+- `tests/strategy-l2-rescan.test.js`
+- `docs/ops/L2_WORKER_RUNBOOK.md`
+- `docs/DAILY_HANDOFF.md`
+- `ops/production/manifests/l2-running-lease-20260812.json`
+
+Validated:
+- Production evidence was inspected through SSH without exposing tokens or raw L2 rows. Cloud config remains
+  present and configured; the stalled jobs were lifecycle/worker failures, not missing strategy eligibility.
+- Added regressions for running timeout, late-result rejection, complete-result auto-close, and after-close
+  restart protection.
+- `node --check local-l2-task-queue.js` and `node --check kpl-stats-server.js` passed.
+- L2-focused regressions passed, the complete repository suite passed `89/89`, and `git diff --check` passed.
+
+Deployment:
+- Git branch only at this entry; not merged or deployed. Production files/data were not changed and no service
+  was restarted.
+
+Notes for next agent:
+- Cloud leases prevent one dead worker call from freezing all later scans, but the company runtime source is
+  outside this repository. Add/verify bounded AXTICK login/download timeouts and a process supervisor under
+  `D:\PandaLocalL2Worker`; otherwise the server recovers scheduling while the local process can still hang.
