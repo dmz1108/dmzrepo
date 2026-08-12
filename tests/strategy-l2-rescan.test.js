@@ -322,7 +322,8 @@ A(dispatched.length === 1
 activeGlobalJob = null;
 latestJobsByPlate = null;
 
-const queue = createLocalL2TaskQueue({ token: '0123456789abcdef', batchSize: 5 });
+const queueDayMs = Date.parse('2026-07-23T02:00:00.000Z'); // 北京时间 10:00
+const queue = createLocalL2TaskQueue({ token: '0123456789abcdef', batchSize: 5, nowMs: queueDayMs });
 const queued = queue.start({
   plateId: 'BK001',
   day: '2026-07-23',

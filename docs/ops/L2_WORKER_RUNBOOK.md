@@ -34,6 +34,14 @@ The queue records `resultRows`, `rowsWithPrice`, and `rowsWithAllBuckets`. A com
 - A worker heartbeat newer than 45 seconds is considered online.
 - An offline worker means the job remains queued. It does not mean “scan complete” and does not mean “no star stock”.
 - `queued` and `running` are pending evidence states.
+- A claimed `running` job has a five-minute progress lease. Any result/progress callback renews the lease;
+  if no callback arrives before expiry, the cloud marks the job `error`, preserves its partial evidence, and
+  releases automatic scheduling for a retry. A late callback to an expired lease is rejected instead of
+  silently changing the historical result.
+- When all requested rows, prices, and five threshold buckets have already arrived, the cloud marks the job
+  `done` even if the worker misses its final `status: done` callback.
+- Automatic tasks are claimed only during the China-time intraday scan window. A same-day unfinished automatic
+  task restored after 15:00 is retained as an error record and is never recomputed from after-close order flow.
 - Only `done` with adequate code and bucket coverage can support a negative conclusion.
 - `error`, incomplete rows, stale dates, or missing maximum-bucket data must remain explicit data-quality states.
 
@@ -103,6 +111,10 @@ tests/mainline-review.test.js
 ## Incident Triage
 
 - **No heartbeat:** inspect the company worker first; do not change strategy thresholds.
+- **Stuck at “开始登录AXTICK” or another unchanged running note:** the cloud lease will release the queue after
+  five minutes, but the company worker process still needs an explicit login/download timeout and supervisor
+  restart. The production worker lives outside this repository, so verify `D:\PandaLocalL2Worker\worker.js`
+  and its logs rather than assuming a cloud-only patch restarted it.
 - **Only two buckets returned:** confirm which worker binary/config actually claimed the job. Do not infer production behavior from the old helper file.
 - **Five bucket labels but empty high buckets:** distinguish legitimate zeros from absent fields and verify source-download completeness.
 - **Rows lack price:** inspect both worker output and task snapshot enrichment.
