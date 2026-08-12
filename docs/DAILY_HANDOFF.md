@@ -15455,3 +15455,31 @@ Deployment:
 
 Notes for next agent:
 - 2026-08-11 的正式 TGB 口径固定为58只；市场连板股16行为重复摘要，涨停炸板17只不得补入正式行。
+
+## 2026-08-12 - Codex - L2 自动扫描跨日锁修复上线回执
+
+Changed:
+- PR #421 已合并；受保护生产运行 `31553610322` 从 `main` 提交 `0311bb0` 部署
+  `kpl-stats-server.js`，旧交易日排队任务不再阻断新交易日自动 L2 调度。
+- 主服务完成重启；部署脚本已自动写入两份云端运维日志。
+
+Files:
+- Runtime: `C:\PandaDashboard\kpl-stats-server.js`
+- Cloud logs: `panda-cloud-ops-2026-06-19.md`, `_cloud-change-log-20260705.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 合并前 `node --check`、L2 专项回归和仓库完整测试集均通过（`89/89`）。
+- 部署运行返回 `restart:main`、`health:ok`；公网 `https://market.dreamerqi.com/health`
+  返回 `{"ok":true}`。
+- 北京时间 2026-08-12 09:34 后保温心跳为 `ok-empty:no-l2-qualified-mainline`，
+  `consecutiveFailures=0`；当天没有派单是因为实时 `hardQualified=0`，不是旧任务继续跨日阻塞。
+
+Deployment:
+- Workflow: `https://github.com/dmz1108/dmzrepo/actions/runs/31553610322`。
+- 云端备份：`C:\PandaDashboard\_deploy-backups\github-31553610322-1`。
+- 只部署主服务文件并重启主服务；未改写 L2 历史任务与业务数据。
+
+Notes for next agent:
+- 下一次出现达到自动扫描硬门槛的板块时，继续核对当天任务目录与公司 worker 回执；
+  当前无合格板块时没有扫描记录属于正确行为。
