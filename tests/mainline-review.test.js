@@ -282,7 +282,9 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   );
   A(correctedLegacyRecovery.recovered.includes(powerFamily)
     && correctedLegacyRecovery.predict.bySource.eastmoney.technicalRecovery?.basis
-      === 'audited-same-day-intraday-timeout-correction',
+      === 'audited-same-day-intraday-timeout-correction'
+    && correctedLegacyRecovery.predict.bySource.eastmoney.technicalRecovery?.correctionOperationId
+      === 'review-electricity-timeout-recovery-20260813-v1',
   '层级字段上线前的旧样本仅在审计纠正逐字段绑定原始证据后恢复');
 
   const multiFormal = strategyMainlineReviewFormalTop({

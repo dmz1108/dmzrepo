@@ -27214,6 +27214,9 @@ function strategyMainlineRecoverTechnicalTimeoutPrediction(day, predict, dailyEv
       : 'same-day-explicit-formal-intraday-observation',
     source: 'strategy-daily-events',
     sourceKey,
+    correctionOperationId: recovered
+      .map(row => String(row?.technicalRecovery?.correctionOperationId || ''))
+      .find(Boolean) || '',
     recoveredFamilies: recovered.map(row => strategyPredictCandidateKey(row)),
     observedAt: recovered.reduce((latest, row) => {
       const value = String(row?.technicalRecovery?.observedAt || '');
