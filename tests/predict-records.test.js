@@ -52,7 +52,9 @@ const fullMainline = {
   familyKey: 'fam-a', key: 'k-a', theme: '示例主线A', mergedThemes: ['细分1', '细分2'],
   rank: 1, score: 88.5, predictScore: 61.2,
   stage: { label: '发酵期' }, certainty: { label: '较高' }, isNewTheme: false,
-  netInflow: 12.3e8, boardCount: 3, count: 5, bigGainCount: 9, nearLimitCount: 4,
+  netInflow: 12.3e8, boardGainPct: 3.6, boardGainName: '示例板块',
+  sourcePairs: { eastmoney: { board: '示例板块', netInflow: 12.3e8, gainPct: 3.6, metric: 'eastmoney-super-large-net-inflow' } },
+  boardCount: 3, count: 5, bigGainCount: 9, nearLimitCount: 4,
   leaderBasisMode: 'pool-rank', leaderNote: '',
   mainLeader: { code: '600001', name: '龙一' },
   leaders: [
@@ -93,6 +95,9 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
   A(JSON.stringify(c0.todayLimitCodes) === JSON.stringify(['600001','600005']), '当日贡献股票');
   A(c0.lowConfidence === null, '低置信占位为 null(通道未上线)');
   A(c0.limitUpCount === 5 && c0.bigGainCount === 9 && c0.nearLimitCount === 4, '盘面上下文信号');
+  A(c0.boardGainPct === 3.6 && c0.boardGainName === '示例板块'
+    && c0.sourcePairs.eastmoney.netInflow === 12.3e8,
+  'candidate 持久化板块涨幅、代表板与同源资金配对，历史卡不再丢展示指标');
   A(c0.lastObservedAt && c0.intradaySticky === false, '当前候选记录观测时点且不标为粘性恢复');
   const c1 = out.candidates[1];
   A(c1.theme === '示例主线B' && c1.leaders.length === 0 && c1.stars.length === 0, '最小主线不报错、空数组');

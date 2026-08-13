@@ -21872,6 +21872,280 @@ function strategyMainlineSourcePairs(boards) {
   };
   return { eastmoney: pick(6), ths: pick(5) };
 }
+
+// 正式主线可能由盘中预测轨迹恢复，而收盘快照只保留了明星/涨停证据，未必保留该板
+// 当时的涨幅和资金字段。对“中国今天”的返回结果，只用同日、同源、同族板块补齐展示
+// 指标；不改分数/排序，不写回冻结快照，也绝不拿今天的行情补历史日期。
+const STRATEGY_MAINLINE_VISIBLE_METRIC_CACHE_MS = 60 * 1000;
+const strategyMainlineVisibleMetricRankCache = new Map();
+function strategyMainlineVisibleMetricSource(source) {
+  const key = String(source || '').trim().toLowerCase();
+  if (key === 'eastmoney') return { source: key, zsType: 6 };
+  if (key === 'ths') return { source: key, zsType: 5 };
+  return null;
+}
+function strategyMainlineVisibleMetricIdMatchesSource(plateId, zsType) {
+  const id = String(plateId || '').trim();
+  if (!id) return false;
+  return Number(zsType) === 6 ? /^BK\d+$/i.test(id) : (Number(zsType) === 5 ? /^\d+$/.test(id) : false);
+}
+function strategyMainlineVisibleMetricFamilyKey(mainline) {
+  const explicit = String(mainline?.familyKey || mainline?.key || '').trim();
+  return explicit || String(strategyMainlineFamilyInfo({ theme: mainline?.theme || '' })?.key || '');
+}
+function strategyMainlineVisibleMetricBoardMatches(mainline, board) {
+  const lineKey = strategyMainlineVisibleMetricFamilyKey(mainline);
+  if (!lineKey || !board?.name) return false;
+  return String(strategyMainlineFamilyInfo({ theme: board.name })?.key || '') === lineKey
+    || strategyMainlineBoardThemeRelated(board.name, mainline?.theme);
+}
+function strategyMainlineVisibleMetricCandidateIds(mainline, zsType) {
+  const ids = new Set();
+  for (const board of (Array.isArray(mainline?.resonanceBoards) ? mainline.resonanceBoards : [])) {
+    const id = String(board?.plateId || '').trim();
+    if (id && (board?.zsType == null || Number(board.zsType) === Number(zsType))
+      && strategyMainlineVisibleMetricIdMatchesSource(id, zsType)) ids.add(id);
+  }
+  const stars = [
+    ...(Array.isArray(mainline?.starStocks) ? mainline.starStocks : []),
+    ...(Array.isArray(mainline?.expectedStarHistory) ? mainline.expectedStarHistory : []),
+  ];
+  for (const star of stars) {
+    const id = String(star?.scanPlateId || '').trim();
+    if (strategyMainlineVisibleMetricIdMatchesSource(id, zsType)) ids.add(id);
+  }
+  return ids;
+}
+function strategyMainlineVisibleMetricSelectBoards(mainline, rows, zsType) {
+  const all = Array.isArray(rows) ? rows : [];
+  const directIds = strategyMainlineVisibleMetricCandidateIds(mainline, zsType);
+  const direct = all.filter(board => {
+    const id = String(board?.plateId || '').trim();
+    if (!directIds.has(id)) return false;
+    // 冻结卡和明星扫描板都必须重新通过同族校验，防止旧错误归属或“沪股通/昨日连板”
+    // 这类扫描载体被误当成主线代表板。
+    return strategyMainlineVisibleMetricBoardMatches(mainline, board);
+  });
+  const exactNames = new Set([
+    String(mainline?.theme || '').trim(),
+    ...(Array.isArray(mainline?.mergedThemes) ? mainline.mergedThemes.map(x => String(x || '').trim()) : []),
+  ].filter(Boolean));
+  const exact = all.filter(board => exactNames.has(String(board?.name || '').trim()));
+  const family = all.filter(board => strategyMainlineVisibleMetricBoardMatches(mainline, board))
+    .sort((a, b) => (Number(b?.gainPct) || -999) - (Number(a?.gainPct) || -999));
+  const candidates = direct.length || exact.length ? [...direct, ...exact] : family;
+  const seen = new Set();
+  return candidates.filter(board => {
+    const id = String(board?.plateId || board?.name || '').trim();
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  }).slice(0, Math.max(3, direct.length));
+}
+function strategyMainlineVisibleMetricNormalizeBoard(board, zsType) {
+  const source = Number(zsType);
+  const storedMetric = String(board?.netInflowMetric || '').trim();
+  const storedValue = numOrNull(board?.netInflow);
+  // board-fund-flow 事实库把原始字段统一保存为 netInflow，同时保留口径标签。
+  // 只有标签与当前来源的正式口径完全一致时才信任统一字段；不能把东财 f62 或
+  // 同花顺 zjjlr 冒充成策略卡片要求的 f66 / DDE。
+  const storedOfficial = (
+    source === 6 && storedMetric === 'eastmoney-super-large-net-inflow'
+  ) || (
+    source === 5 && storedMetric === 'ths-dde-big-order-amount'
+  );
+  const fund = storedOfficial && storedValue != null
+    ? { value: storedValue, metric: storedMetric, legacy: false }
+    : strategyBoardFundFlowForSource(board, source, { allowLegacyEastmoney: false });
+  return {
+    name: String(board?.name || ''),
+    plateId: String(board?.plateId || ''),
+    zsType: Number(zsType),
+    ztCount: numOrNull(board?.ztCount ?? board?.zt),
+    gainPct: numOrNull(board?.gainPct ?? board?.gain),
+    netInflow: fund.value,
+    netInflowZjjlr: source === 5
+      ? numOrNull(board?.netInflowZjjlr ?? (fund.metric === 'ths-net-inflow' ? fund.value : null))
+      : null,
+    netInflowMetric: String(fund.metric || storedMetric || ''),
+    netInflowLegacy: !!fund.legacy,
+    metricSourceDay: isoFromCompactDate(board?.sourceDay || chinaNowParts().day),
+  };
+}
+function strategyMainlineVisibleMetricUsable(board, zsType) {
+  const normalized = strategyMainlineVisibleMetricNormalizeBoard(board, zsType);
+  return normalized.gainPct != null || normalized.netInflow != null;
+}
+function strategyMainlineVisibleMetricMergeLine(mainline, quoteBoards, zsType) {
+  if (!mainline || typeof mainline !== 'object') return mainline;
+  const selected = strategyMainlineVisibleMetricSelectBoards(mainline, quoteBoards, zsType)
+    .filter(board => strategyMainlineVisibleMetricUsable(board, zsType))
+    .map(board => strategyMainlineVisibleMetricNormalizeBoard(board, zsType));
+  if (!selected.length) return mainline;
+  const selectedById = new Map(selected.map(board => [String(board.plateId), board]));
+  const selectedByName = new Map(selected.map(board => [String(board.name), board]));
+  const existing = Array.isArray(mainline.resonanceBoards) ? mainline.resonanceBoards : [];
+  const hydrated = existing.map(raw => {
+    const quote = selectedById.get(String(raw?.plateId || '')) || selectedByName.get(String(raw?.name || ''));
+    if (!quote) return raw;
+    return {
+      ...raw,
+      zsType: raw?.zsType ?? quote.zsType,
+      gainPct: isFiniteNumeric(raw?.gainPct) ? Number(raw.gainPct) : quote.gainPct,
+      netInflow: isFiniteNumeric(raw?.netInflow) ? Number(raw.netInflow) : quote.netInflow,
+      netInflowZjjlr: isFiniteNumeric(raw?.netInflowZjjlr) ? Number(raw.netInflowZjjlr) : quote.netInflowZjjlr,
+      netInflowMetric: String(raw?.netInflowMetric || quote.netInflowMetric || ''),
+      netInflowLegacy: raw?.netInflowLegacy === true || quote.netInflowLegacy === true,
+      metricSourceDay: raw?.metricSourceDay || quote.metricSourceDay,
+    };
+  });
+  const used = new Set(hydrated.map(board => String(board?.plateId || board?.name || '')).filter(Boolean));
+  for (const quote of selected) {
+    const key = String(quote.plateId || quote.name || '');
+    if (!key || used.has(key)) continue;
+    used.add(key);
+    hydrated.push(quote);
+  }
+  const net = strategyMainlineRepresentativeBoardInflow(hydrated);
+  const gain = hydrated.filter(board => isFiniteNumeric(board?.gainPct))
+    .slice().sort((a, b) => Number(b.gainPct) - Number(a.gainPct))[0] || null;
+  const hydratedPairs = strategyMainlineSourcePairs(hydrated);
+  const hadNet = isFiniteNumeric(mainline.netInflow);
+  const hadGain = isFiniteNumeric(mainline.boardGainPct);
+  return {
+    ...mainline,
+    resonanceBoards: hydrated.slice(0, 8),
+    netInflow: hadNet ? Number(mainline.netInflow) : net.value,
+    netInflowBoard: hadNet ? String(mainline.netInflowBoard || '') : net.boardName,
+    netInflowZsType: hadNet ? (mainline.netInflowZsType ?? null) : net.zsType,
+    netInflowZjjlr: hadNet ? (mainline.netInflowZjjlr ?? null) : net.netInflowZjjlr,
+    netInflowMetric: hadNet ? String(mainline.netInflowMetric || '') : net.metric,
+    netInflowLegacy: hadNet ? !!mainline.netInflowLegacy : !!net.legacy,
+    boardGainPct: hadGain ? Number(mainline.boardGainPct) : (gain ? Number(gain.gainPct) : null),
+    boardGainName: hadGain ? String(mainline.boardGainName || '') : String(gain?.name || ''),
+    sourcePairs: {
+      ...(mainline?.sourcePairs || {}),
+      ...(Number(zsType) === 6 && !mainline?.sourcePairs?.eastmoney && hydratedPairs.eastmoney
+        ? { eastmoney: hydratedPairs.eastmoney } : {}),
+      ...(Number(zsType) === 5 && !mainline?.sourcePairs?.ths && hydratedPairs.ths
+        ? { ths: hydratedPairs.ths } : {}),
+    },
+    displayMetricsHydrated: (!hadNet && net.value != null) || (!hadGain && gain != null),
+    displayMetricsSourceDay: isoFromCompactDate(chinaNowParts().day),
+  };
+}
+async function strategyMainlineVisibleMetricRanking(sourceInfo, day) {
+  const key = `${sourceInfo.source}:${day}`;
+  const cached = strategyMainlineVisibleMetricRankCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.rows;
+  let rows = [];
+  // 收盘冻结后的首选是同日板块资金事实库：它保存盘中/收盘前的同源值，来源日期可校验，
+  // 不受 15:00 后外部实时接口是否继续更新影响。缺档时才请求当前同日行情。
+  const fact = await strategyBoardFundFlowStore.read(sourceInfo.source, day).catch(() => null);
+  if (fact?.verification?.ok && fact?.payload?.sourceDay === day && Array.isArray(fact.payload.rows)) {
+    rows = fact.payload.rows;
+  }
+  if (!rows.length) rows = await fetchBoardRankingForSnapshot(String(sourceInfo.zsType), '', { count: 500 });
+  let normalized = (Array.isArray(rows) ? rows : []).map(row => ({ ...row, zsType: sourceInfo.zsType }));
+  if (Number(sourceInfo.zsType) === 5) {
+    // 同花顺事实库可能保存了完整目录(383 板)但部分行无实时指标；另取实时榜补同 plateId
+    // 的涨幅/zjjlr，随后 DDE overlay 再补 527198。只在同日生效。
+    const liveRows = await fetchBoardRankingForSnapshot('5', '', { count: 500 }).catch(() => []);
+    const liveById = new Map((Array.isArray(liveRows) ? liveRows : [])
+      .map(row => [String(row?.plateId || ''), row]).filter(([id]) => !!id));
+    normalized = normalized.map(row => {
+      const live = liveById.get(String(row?.plateId || ''));
+      if (!live) return row;
+      return {
+        ...row,
+        ...live,
+        plateId: row.plateId,
+        name: live.name || row.name,
+        zsType: 5,
+      };
+    });
+  }
+  // 同花顺实时榜分页只覆盖前排；正式卡已保存的 resonance/扫描板可能在完整目录但不在
+  // 该批榜单里。目录只补 plateId/name/指数代码，真实涨幅和 DDE 仍由随后 realhead 同日
+  // 请求填写，目录自身不冒充实时行情。
+  if (Number(sourceInfo.zsType) === 5) {
+    const catalog = await readThsConceptCatalog().catch(() => null);
+    const catalogById = new Map((Array.isArray(catalog?.boards) ? catalog.boards : [])
+      .map(board => [String(board?.plateId || '').trim(), board]).filter(([id]) => !!id));
+    normalized = normalized.map(row => {
+      const catalogBoard = catalogById.get(String(row?.plateId || '').trim());
+      return catalogBoard?.thsPlateCode && !row?.thsPlateCode
+        ? { ...row, thsPlateCode: String(catalogBoard.thsPlateCode) }
+        : row;
+    });
+    const seen = new Set(normalized.map(row => String(row?.plateId || '')).filter(Boolean));
+    for (const board of (Array.isArray(catalog?.boards) ? catalog.boards : [])) {
+      const plateId = String(board?.plateId || '').trim();
+      if (!plateId || seen.has(plateId)) continue;
+      seen.add(plateId);
+      normalized.push({
+        plateId,
+        name: String(board?.name || ''),
+        thsPlateCode: String(board?.thsPlateCode || ''),
+        gainPct: null,
+        netInflow: null,
+        zsType: 5,
+      });
+    }
+  }
+  strategyMainlineVisibleMetricRankCache.set(key, {
+    expiresAt: Date.now() + STRATEGY_MAINLINE_VISIBLE_METRIC_CACHE_MS,
+    rows: normalized,
+  });
+  return normalized;
+}
+async function strategyMainlineHydrateVisibleMetrics(day, payload) {
+  const isoDay = isoFromCompactDate(day);
+  if (!payload || typeof payload !== 'object' || isoDay !== isoFromCompactDate(chinaNowParts().day)) return payload;
+  const bySource = payload.mainlinesBySource;
+  if (!bySource || typeof bySource !== 'object') return payload;
+  const output = { ...bySource };
+  let changed = false;
+  for (const source of ['eastmoney', 'ths']) {
+    const block = bySource[source];
+    const sourceInfo = strategyMainlineVisibleMetricSource(source);
+    if (!block || !sourceInfo) continue;
+    const allLines = [
+      ...(Array.isArray(block.mainlines) ? block.mainlines : []),
+      ...(Array.isArray(block.reserveMainlines) ? block.reserveMainlines : []),
+    ];
+    const needsMetrics = allLines.some(line => !isFiniteNumeric(line?.boardGainPct) || !isFiniteNumeric(line?.netInflow));
+    if (!needsMetrics) continue;
+    let rows = await strategyMainlineVisibleMetricRanking(sourceInfo, isoDay).catch(() => []);
+    if (source === 'ths' && rows.length) {
+      const selectedMap = new Map();
+      for (const line of allLines) {
+        for (const board of strategyMainlineVisibleMetricSelectBoards(line, rows, sourceInfo.zsType)) {
+          const metric = String(board?.netInflowMetric || 'ths-net-inflow');
+          selectedMap.set(String(board?.plateId || board?.name || ''), { ...board, zsType: 5,
+            netInflowZjjlr: numOrNull(board?.netInflowZjjlr
+              ?? (metric === 'ths-dde-big-order-amount' ? null : board?.netInflow)),
+            netInflowMetric: metric });
+        }
+      }
+      const selectedRows = [...selectedMap.values()];
+      // 策略卡同时需要 DDE 活跃度和 zjjlr 方向。严格 overlay 会校验 realhead
+      // sourceDay；跨日/无日期即保持缺失，绝不把陈旧 DDE 填进今天。
+      await applyThsDdeFundFlowToRealtimeBoards(selectedRows, isoDay).catch(() => {});
+      const selectedById = new Map(selectedRows.map(board => [String(board?.plateId || ''), board]));
+      rows = rows.map(board => selectedById.get(String(board?.plateId || '')) || board);
+    }
+    const mapLines = list => (Array.isArray(list) ? list : []).map(line =>
+      strategyMainlineVisibleMetricMergeLine(line, rows, sourceInfo.zsType));
+    output[source] = {
+      ...block,
+      mainlines: mapLines(block.mainlines),
+      reserveMainlines: mapLines(block.reserveMainlines),
+    };
+    changed = true;
+  }
+  return changed ? { ...payload, mainlinesBySource: output } : payload;
+}
 function strategyMainlineNormalizeRisingStock(row) {
   const code = normalizeReasonSourceCode(row?.code || row?.dm || row?.stockCode);
   if (!code) return null;
@@ -24478,6 +24752,9 @@ function strategyPredictCandidateRecord(m, observedAt = '') {
     netInflowZjjlr: isFiniteNumeric(m.netInflowZjjlr) ? Number(m.netInflowZjjlr) : null,
     netInflowMetric: String(m.netInflowMetric || ''),
     ddeBigOrderAmount: isFiniteNumeric(m.ddeBigOrderAmount) ? Number(m.ddeBigOrderAmount) : null,
+    boardGainPct: isFiniteNumeric(m.boardGainPct) ? Number(m.boardGainPct) : null,
+    boardGainName: String(m.boardGainName || ''),
+    sourcePairs: m.sourcePairs && typeof m.sourcePairs === 'object' ? m.sourcePairs : null,
     fundDirection: m.fundDirection && typeof m.fundDirection === 'object' ? m.fundDirection : null,
     thsEligibilityGate: m.thsEligibilityGate && typeof m.thsEligibilityGate === 'object' ? m.thsEligibilityGate : null,
     boardCount: Number(m.boardCount) || 0,
@@ -27964,7 +28241,10 @@ async function buildStrategyMainlinesLive(day, options = {}) {
   }
   // 临时字段用后即删,绝不进入缓存/合并载体。
   for (const p of [em, th]) { if (p) { delete p.__autoScanBoards; delete p.__autoScanPriorByCode; } }
-  const composed = strategyMainlineComposeBySourcePayload(em, th);
+  const composedRaw = strategyMainlineComposeBySourcePayload(em, th);
+  const composed = composedRaw && requestedDay === today
+    ? await strategyMainlineHydrateVisibleMetrics(requestedDay, composedRaw)
+    : composedRaw;
   if (!composed) return em || th || strategyMainlineEmptyPayload(isoFromCompactDate(day || chinaNowParts().day), isoFromCompactDate(day || chinaNowParts().day), 'strategy-mainline-unavailable', '今日主线榜暂不可用。', '');
   if (composed.ok && requestedDay === today && options.writePredict !== false) {
     const confirm = await readMainlineConfirm(requestedDay).catch(() => null);
@@ -29580,7 +29860,14 @@ function strategyMainlineHistoricalPredictRow(row, predictBlock, options = {}) {
     historicalPredictionSummary: true,
     historicalPredictionSavedAt: String(options.savedAt || ''),
     netInflow: isFiniteNumeric(candidate?.netInflow) ? Number(candidate.netInflow) : null,
+    netInflowBoard: String(candidate?.netInflowBoard || ''),
     netInflowZsType: sourceZsType,
+    netInflowZjjlr: isFiniteNumeric(candidate?.netInflowZjjlr) ? Number(candidate.netInflowZjjlr) : null,
+    netInflowMetric: String(candidate?.netInflowMetric || ''),
+    boardGainPct: isFiniteNumeric(candidate?.boardGainPct) ? Number(candidate.boardGainPct) : null,
+    boardGainName: String(candidate?.boardGainName || ''),
+    sourcePairs: candidate?.sourcePairs && typeof candidate.sourcePairs === 'object' ? candidate.sourcePairs : null,
+    resonanceBoards: (Array.isArray(candidate?.resonanceBoards) ? candidate.resonanceBoards : []).slice(0, 8),
     boardCount: Number(candidate?.boardCount) || 0,
     count: Number(candidate?.limitUpCount) || 0,
     bigGainCount: Number(candidate?.bigGainCount) || 0,
@@ -29911,7 +30198,10 @@ async function getStrategyMainlinesVisible(day) {
     finalSealedCodes,
     attributionByCode,
   });
-  return strategyMainlineAnnotatePayload(visible, payload.confirmedMainline || null);
+  const annotated = strategyMainlineAnnotatePayload(visible, payload.confirmedMainline || null);
+  // 返回层只补“同日、同源”展示指标。该步骤不改冻结快照/预测档，不影响主线资格、
+  // 分数和顺序；历史请求因日期守卫不会触发当前行情取数。
+  return strategyMainlineHydrateVisibleMetrics(predictDay, annotated);
 }
 
 async function readAiReadOnlyToken() {
