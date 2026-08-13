@@ -183,6 +183,7 @@ const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
   const generationEquipmentReason = {
     code: '600001', name: '发电设备样本', finalBoardTopic: '电网设备', fallbackReason: '电网设备',
     allTopics: ['绿色电力', '发电设备', '电网设备'], finalDetailReason: '公司主营发电设备及控制系统制造',
+    sourceEvidence: { candidates: [{ source: 'kpl-zt-reason', primaryTopic: '绿色电力' }] },
   };
   A(strategyMainlineReasonFamilyInfo(huaDianReason).key === powerFamily
     && strategyMainlineReasonFamilyInfo(daTangReason).key === powerFamily,

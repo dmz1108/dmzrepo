@@ -330,5 +330,21 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
   A(preserved.bySource.eastmoney.candidates.find(row => row.familyKey === 'group:电力')?.qiTier === 'formal',
     '当前候选与被保留正式主线保持同一分层，回看不会被候选 reserve 再次过滤');
 
+  existingPredict = {
+    ...existingPredict,
+    savedAt: new Date(Date.now() - 60 * 1000).toISOString(),
+  };
+  await writeMainlinePredictBySource('2026-08-13', '尾盘', {
+    eastmoney: { available: true, hasMainlines: false, reason: 'leader-rework-incomplete',
+      zsType: 6, mainlines: [], reserveMainlines: [{
+        ...timedOutPower,
+        reserveReasons: ['no-qualified-leader', 'negative-net-inflow'],
+      }] },
+    ths: { available: true, hasMainlines: false, reason: 'no-qualified-mainline', zsType: 5, mainlines: [] },
+  }, { key: '' });
+  const notPreserved = written['/fake/mainline-predict-2026-08-13.json'];
+  A(notPreserved.bySource.eastmoney.hasMainlines === false && notPreserved.bySource.eastmoney.top.length === 0,
+    '当前候选还有资金闸等其他失败原因时不得借技术超时保留旧主线');
+
   console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL P1-C CHECKS PASSED');
 })();

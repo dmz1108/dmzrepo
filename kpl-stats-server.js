@@ -21397,12 +21397,6 @@ function strategyMainlineReasonFamilyInfo(stock) {
   ].map(value => String(value || '').trim()).filter(Boolean);
   const specificGeneration = rawTerms.some(term =>
     /^(?:电力\(火电\)|火电|火力发电|热电|热力|供热|绿色电力|绿电|水电|大水电|电力运营)$/u.test(term));
-  const fallbackGeneration = candidates
-    .filter(candidate => /^(?:multi-source-consensus|kpl-zt-reason)$/u.test(String(candidate?.source || '')))
-    .flatMap(candidate => [candidate?.primaryRawTopic, candidate?.primaryTopic, candidate?.boardTopic])
-    .map(value => String(value || '').trim())
-    .filter(Boolean)
-    .some(theme => strategyMainlineFamilyInfo({ theme }).key === generation.key);
   const detailText = [
     stock?.finalDetailReason,
     stock?.finalReason,
@@ -21410,8 +21404,8 @@ function strategyMainlineReasonFamilyInfo(stock) {
     stock?.reasonHeadline,
     ...candidates.map(candidate => candidate?.detailReason),
   ].map(value => String(value || '').trim()).filter(Boolean).join(' ');
-  const generationOperator = /(?:(?:主营|主要业务(?:为|包括)|从事).{0,24}(?:(?:水力|火力)?发电(?!设备|装备|机组|零部件|材料)|热力供应|供热(?:业务)?)|热电联产(?!设备|装备)|发电及集中供热|发电、供热|供热公司|供热运营商|发电运营商|发电业务|电厂)/u.test(detailText);
-  if (!specificGeneration || (!fallbackGeneration && !generationOperator)) return base;
+  const generationOperator = /(?:(?:主营|主要业务(?:为|包括)|从事).{0,24}(?:(?:水力|火力)?发电(?!设备|装备|机组|零部件|材料)|热力供应|供热(?:业务)?)|(?:水力|火力)发电(?:和|及|、).{0,12}(?:水力|火力)?发电(?:业务|运营)?|热电联产(?!设备|装备)|发电及集中供热|发电、供热|供热公司|供热运营商|发电运营商|发电业务|电厂)/u.test(detailText);
+  if (!specificGeneration || !generationOperator) return base;
   return {
     ...generation,
     originalTheme: finalTheme,
@@ -25340,7 +25334,10 @@ function strategyPredictPreserveFormalOnLeaderTimeout(
   for (const previous of existingFormal) {
     const key = strategyPredictCandidateKey(previous);
     const candidate = candidateByKey.get(key);
+    const reserveReasons = Array.isArray(candidate?.reserveReasons)
+      ? candidate.reserveReasons.map(String).filter(Boolean) : [];
     if (!candidate || !strategyPredictCandidateHasConfirmedStar(candidate)
+      || reserveReasons.length !== 1 || reserveReasons[0] !== 'no-qualified-leader'
       || Number(candidate?.limitUpCount) < STRATEGY_MAINLINE_FORMAL_MIN_ZT) continue;
     preserved.push(strategyPredictTopFromCandidate(candidate, previous));
   }
