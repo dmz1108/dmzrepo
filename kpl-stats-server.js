@@ -21988,15 +21988,18 @@ function strategyMainlineVisibleMetricMergeLine(mainline, quoteBoards, zsType) {
   const hydrated = existing.map(raw => {
     const quote = selectedById.get(String(raw?.plateId || '')) || selectedByName.get(String(raw?.name || ''));
     if (!quote) return raw;
+    const hadRawNet = isFiniteNumeric(raw?.netInflow);
     return {
       ...raw,
       zsType: raw?.zsType ?? quote.zsType,
       gainPct: isFiniteNumeric(raw?.gainPct) ? Number(raw.gainPct) : quote.gainPct,
-      netInflow: isFiniteNumeric(raw?.netInflow) ? Number(raw.netInflow) : quote.netInflow,
+      netInflow: hadRawNet ? Number(raw.netInflow) : quote.netInflow,
       netInflowZjjlr: isFiniteNumeric(raw?.netInflowZjjlr) ? Number(raw.netInflowZjjlr) : quote.netInflowZjjlr,
-      netInflowMetric: String(raw?.netInflowMetric || quote.netInflowMetric || ''),
-      netInflowLegacy: raw?.netInflowLegacy === true || quote.netInflowLegacy === true,
-      metricSourceDay: raw?.metricSourceDay || quote.metricSourceDay,
+      // 冻结卡可能只留下旧口径标签却没有对应数值；当实际数值来自 quote 时，
+      // 标签/日期也必须跟随 quote，不能把 DDE 金额标成旧 zjjlr。
+      netInflowMetric: String((hadRawNet ? raw?.netInflowMetric : quote.netInflowMetric) || ''),
+      netInflowLegacy: hadRawNet ? raw?.netInflowLegacy === true : quote.netInflowLegacy === true,
+      metricSourceDay: hadRawNet ? raw?.metricSourceDay : quote.metricSourceDay,
     };
   });
   const used = new Set(hydrated.map(board => String(board?.plateId || board?.name || '')).filter(Boolean));

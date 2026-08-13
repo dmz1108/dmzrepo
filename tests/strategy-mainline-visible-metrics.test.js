@@ -103,7 +103,8 @@ assert.strictEqual(crossFamilyScan.netInflow, null);
 
 const ths = strategyMainlineVisibleMetricMergeLine({
   theme: '光模块', familyKey: 'group:光通信', boardGainPct: null, netInflow: null,
-  resonanceBoards: [{ plateId: '309049', name: '共封装光学(CPO)', zsType: 5, gainPct: null, netInflow: null }],
+  resonanceBoards: [{ plateId: '309049', name: '共封装光学(CPO)', zsType: 5, gainPct: null,
+    netInflow: null, netInflowMetric: 'ths-net-inflow' }],
 }, [
   { plateId: '309049', name: '共封装光学(CPO)', gainPct: -0.97, ddeBigOrderAmount: 4889286700,
     netInflow: 4889286700, netInflowZjjlr: 130000000, netInflowMetric: 'ths-dde-big-order-amount', sourceDay: '2026-08-13' },
@@ -111,6 +112,8 @@ const ths = strategyMainlineVisibleMetricMergeLine({
 assert.strictEqual(ths.boardGainPct, -0.97);
 assert.strictEqual(ths.netInflow, 4889286700);
 assert.strictEqual(ths.netInflowZjjlr, 130000000);
+assert.strictEqual(ths.netInflowMetric, 'ths-dde-big-order-amount',
+  'metric label must follow the hydrated DDE value, not an empty frozen-row label');
 assert.strictEqual(ths.sourcePairs.ths.board, '共封装光学(CPO)');
 
 const rich = strategyMainlineVisibleMetricMergeLine({
