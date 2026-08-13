@@ -13921,6 +13921,34 @@ Notes for next agent:
 - 标签修正部署后再次核对同花顺人形机器人/光模块卡片的 `netInflowMetric`，应为
   `ths-dde-big-order-amount`；卡片数、排序、明星和龙头必须保持不变。
 
+## 2026-08-13 - Codex - 主线卡片展示指标生产验收回执
+
+Changed:
+- PR #437 与口径标签跟进 PR #440 均已合并并部署；云端运行代码来自已审核 `main`。
+- 公开 2026-08-13 主线接口中，原来缺值的五张来源卡已补齐，且只使用各自来源的同日同族板块。
+
+Files:
+- Runtime: `C:\PandaDashboard\kpl-stats-server.js`
+- Cloud logs: `panda-cloud-ops-2026-06-19.md`, `_cloud-change-log-20260705.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `https://market.dreamerqi.com/health` 返回 `{"ok":true}`。
+- 东财：人形机器人 `-1.41% / 4.46亿`、光模块 `-0.02% / 22.17亿`、电力
+  `-0.29% / 27.39亿`；原有算力硬件 `0.29% / 36.79亿` 保持不变。
+- 同花顺：人形机器人 `-1.50% / 51.64亿`、光模块 `-0.97% / 48.89亿`，两项均明确标为
+  `ths-dde-big-order-amount`。
+- 部署前后主线主题、来源内顺序、明星列表和龙头列表的签名逐项一致。
+
+Deployment:
+- Workflow `31696284985`，backup `C:\PandaDashboard\_deploy-backups\github-31696284985-1`。
+- Workflow `31697903035`，backup `C:\PandaDashboard\_deploy-backups\github-31697903035-1`。
+- 两次均只部署 `kpl-stats-server.js` 并重启 `Panda Dashboard Server`；未修改冻结快照、业务数据库、
+  L2 worker、前端文件或策略门槛。
+
+Notes for next agent:
+- 后续预测档会直接保存涨幅、代表板和同源资金配对；不要删除这些字段或让返回层跨日补值。
+
 ## 2026-08-12 - Codex - TGB 人工转录写前终盘池检查请求
 
 Changed:
