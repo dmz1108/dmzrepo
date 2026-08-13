@@ -15824,6 +15824,7 @@ Files:
 - `tests/strategy-daily-events.test.js`
 - `tests/strategy-star-attribution.test.js`
 - `tests/review-electricity-20260813-production-request.test.js`
+- `ops/production/manifests/strategy-electricity-review-timeout-recovery-20260813.json`
 - `ops/production/requests/2026-08-13-review-electricity-timeout-recovery.ps1`
 - `docs/DAILY_HANDOFF.md`
 

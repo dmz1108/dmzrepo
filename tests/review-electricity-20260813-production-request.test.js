@@ -13,6 +13,14 @@ const requestPath = path.join(
   '2026-08-13-review-electricity-timeout-recovery.ps1',
 );
 const request = fs.readFileSync(requestPath, 'utf8');
+const manifestPath = path.join(
+  root,
+  'ops',
+  'production',
+  'manifests',
+  'strategy-electricity-review-timeout-recovery-20260813.json',
+);
+const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 const embeddedJs = request.match(/\$js = @'\r?\n([\s\S]*?)\r?\n'@/);
 
 assert(embeddedJs, 'request must contain one extractable JavaScript program');
@@ -57,5 +65,12 @@ assert(!request.includes('kpl-limitup-main-reason-overrides'), 'operation must n
 assert(!request.includes('mainline-predict-${TARGET_DAY}.json`);\n  const frozenPath'), 'operation must not write a frozen snapshot');
 assert(!request.includes("sha256(eventsPath) !== EXPECTED_EVENTS_SHA256"),
   'daily-events envelope hash must not block an exact sample match after a legitimate service rebuild');
+assert.deepStrictEqual(manifest, {
+  files: [
+    { source: 'kpl-stats-server.js', destination: 'kpl-stats-server.js' },
+    { source: 'strategy-daily-events.js', destination: 'strategy-daily-events.js' },
+  ],
+  restart: 'main',
+}, 'server and daily-events module must deploy and roll back atomically with one main-service restart');
 
 console.log('2026-08-13 Electricity timeout recovery request tests passed');
