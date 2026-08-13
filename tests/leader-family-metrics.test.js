@@ -46,6 +46,7 @@ eval(extractFn('strategyResonanceTopicKey'));
 eval(extractFn('strategyThemeTaxonomyInfo'));
 eval(extractFn('strategyMainlineTopicKey'));
 eval(extractFn('strategyMainlineFamilyInfo'));
+eval(extractFn('strategyMainlineReasonFamilyInfo'));
 
 const normalizeReasonSourceCode = value => String(value || '').trim();
 const numOrNull = value => value === null || value === undefined || value === '' ? null : (Number.isFinite(Number(value)) ? Number(value) : null);

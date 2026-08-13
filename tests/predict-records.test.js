@@ -20,6 +20,7 @@ function extractFn(name) {
 
 const written = {};
 let existingPredict = null;
+const recordedObservations = [];
 const stubs = `
 const isFiniteNumeric = v => Number.isFinite(Number(v)) && v !== null && v !== '' && v !== undefined;
 const normalizeReasonSourceCode = v => String(v || '').replace(/\\D/g, '').trim();
@@ -32,19 +33,24 @@ const strategyMainlineFamilyInfo = item => {
   };
 };
 const STRATEGY_MAINLINE_DATA_DIR = '/fake';
+const STRATEGY_MAINLINE_FORMAL_MIN_ZT = 3;
 const strategyMainlinePredictPath = d => '/fake/mainline-predict-' + d + '.json';
 const fs = {
   mkdir: async () => {},
   writeFile: async (p, content) => { written[p] = JSON.parse(content); },
 };
 async function readMainlinePredict(day) { return existingPredict; }
-async function recordStrategyDailyIntradayObservation() {}
+async function recordStrategyDailyIntradayObservation(...args) { recordedObservations.push(args); }
 `;
 const code = stubs + extractFn('strategyPredictCandidateRecord') + '\n' +
   extractFn('strategyPredictStarTransitions') + '\n' +
   extractFn('strategyPredictCandidateKey') + '\n' +
   extractFn('strategyPredictMergeStickyCandidates') + '\n' +
   extractFn('strategyPredictPickTop') + '\n' + extractFn('strategyPredictBuildBlock') + '\n' +
+  extractFn('strategyPredictCandidateHasConfirmedStar') + '\n' +
+  extractFn('strategyPredictTopFromCandidate') + '\n' +
+  extractFn('strategyPredictPreserveFormalOnLeaderTimeout') + '\n' +
+  extractFn('strategyMainlineObservationRowsBySource') + '\n' +
   extractFn('writeMainlinePredict') + '\n' + extractFn('writeMainlinePredictBySource');
 eval(code);
 
@@ -229,6 +235,11 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
   // 顶层兼容层=东财单源(非跨源并集),不出现"算力AI×2"的重复占位
   A(p.top.map(t => t.theme).join(',') === '算力AI,医药', '顶层兼容层=东财单源,不是跨源并集(无同题材重复占位)');
   A(p.top.length === 2 && !p.top.some((t, i) => p.top.findIndex(x => x.theme === t.theme) !== i), '顶层无重复题材占位');
+  const sourceObservation = recordedObservations.at(-1)?.[2] || [];
+  A(sourceObservation.some(row => row.theme === '算力AI'
+      && row.observationSource === 'eastmoney' && row.qiTier === 'formal')
+    && !sourceObservation.some(row => row.theme === '算力AI' && row.observationSource === 'ths'),
+  '盘中事件按东财优先去重并显式保存来源/formal层级，不借同花顺同题材资格');
 
   // 4b. 粘性候选严格按来源保存：同花顺 AI视频归入短剧游戏后仍不能串入东财块。
   existingPredict = {
@@ -277,6 +288,47 @@ for (let i = 0; i < 15; i++) manyMainlines.push({ key: 'k-x' + i, theme: '填充
     && noMainline.bySource.eastmoney.hasMainlines === false
     && noMainline.bySource.ths.available === true
     && noMainline.bySource.ths.hasMainlines === false, '无主线档案保留两源可用性，不借值也不伪造主题');
+
+  // 7. 最后一次龙头重算超时不得覆盖同日上一份已经过闸的正式主线。
+  const previousValidAt = new Date(Date.now() - 60 * 1000).toISOString();
+  existingPredict = {
+    day: '2026-08-13', savedAt: previousValidAt, schemaVersion: 3,
+    bySource: {
+      eastmoney: {
+        available: true, hasMainlines: true,
+        top: [{ key: 'group:电力', theme: '电力', rank: 2, leader: { code: '605286', name: '参考龙头' },
+          leaders: [{ code: '605286', name: '参考龙头', leadScore: 120 }],
+          star: { code: '601991', name: '大唐发电', level: 'confirmed' } }],
+        qualifiedMainlines: [{ key: 'group:电力', theme: '电力', rank: 2,
+          leaders: [{ code: '605286', name: '参考龙头', leadScore: 120 }],
+          star: { code: '601991', name: '大唐发电', level: 'confirmed' } }],
+        candidates: [], starTransitions: [],
+      },
+      ths: { available: true, hasMainlines: false, top: [], qualifiedMainlines: [], candidates: [], starTransitions: [] },
+    },
+  };
+  const timedOutPower = {
+    familyKey: 'group:电力', key: 'group:电力', theme: '电力', rank: 4, count: 5,
+    qiTier: 'reserve', reserveReasons: ['no-qualified-leader'],
+    leaders: [{ code: '000595', name: '本轮未完成龙头', leadScore: 80 }],
+    starStocks: [{ code: '601991', name: '大唐发电', level: 'confirmed' }],
+  };
+  await writeMainlinePredictBySource('2026-08-13', '尾盘', {
+    eastmoney: { available: true, hasMainlines: false, reason: 'leader-rework-incomplete',
+      message: '本轮超时', zsType: 6, mainlines: [], reserveMainlines: [timedOutPower] },
+    ths: { available: true, hasMainlines: false, reason: 'no-qualified-mainline', zsType: 5, mainlines: [] },
+  }, { key: '' });
+  const preserved = written['/fake/mainline-predict-2026-08-13.json'];
+  A(preserved.bySource.eastmoney.hasMainlines === true
+    && preserved.bySource.eastmoney.top[0].theme === '电力'
+    && preserved.bySource.eastmoney.top[0].leader.code === '605286',
+  '龙头重算超时保留同日上一份正式电力主线及已验证龙头');
+  A(preserved.bySource.eastmoney.reason === ''
+    && preserved.bySource.eastmoney.transientReason === 'leader-rework-incomplete'
+    && preserved.bySource.eastmoney.technicalFallback?.basis === 'same-day-last-validated-formal-mainline',
+  '超时保留有显式技术降级元数据，不冒充本轮成功');
+  A(preserved.bySource.eastmoney.candidates.find(row => row.familyKey === 'group:电力')?.qiTier === 'formal',
+    '当前候选与被保留正式主线保持同一分层，回看不会被候选 reserve 再次过滤');
 
   console.log(process.exitCode ? 'SOME CHECKS FAILED' : 'ALL P1-C CHECKS PASSED');
 })();

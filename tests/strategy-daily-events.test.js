@@ -38,6 +38,7 @@ record = mergeIntradayObservation(record, {
   familyInfo,
   mainlines: [{
     theme: '算力', familyKey: 'group:算力AI', rank: 1, score: 92,
+    observationSource: 'eastmoney', qiTier: 'formal', reserveReasons: [],
     netInflow: 500000000, count: 2, bigGainCount: 4, nearLimitCount: 2,
     l2VerificationStatus: 'qi',
     starStocks: [{ code: '000001', name: '星一', level: 'expected' }],
@@ -46,6 +47,10 @@ record = mergeIntradayObservation(record, {
 });
 A(record.ruleVersion === STRATEGY_DAILY_EVENT_RULE_VERSION, '盘中记录携带固定规则版本');
 A(record.intradayObservation.sampleCount === 2, '两个盘中时点都被持久化,不是只保留最后状态');
+const secondIntradayFamily = record.intradayObservation.samples[1].families[0];
+A(secondIntradayFamily.source === 'eastmoney' && secondIntradayFamily.qiTier === 'formal'
+  && secondIntradayFamily.reserveReasons.length === 0,
+'盘中样本保存来源和正式/预备层级，技术超时恢复不再猜历史资格');
 const intradayFamily = record.intradayObservation.families[0];
 A(intradayFamily.firstResonanceAt === '2026-07-13T01:35:00.000Z', '首次有效共振时间保留');
 A(intradayFamily.firstExpectedStarAt === '2026-07-13T01:40:00.000Z', '首次预期明星时间保留');
@@ -129,6 +134,35 @@ A(record.stockEvents.events.filter(row => row.code === '000001').length === 1, '
 A(record.eventCoverageComplete === true && record.stockEvents.familyCoveragePct === 100, '来源完整与逐股家族覆盖分别可诊断');
 A(record.historyUsableFrom === 'next-trading-day', '盘后答案明确只能从下一交易日起使用');
 
+const generationAware = buildPostCloseRecord(null, {
+  day: '2026-08-13', generatedAt: '2026-08-13T08:10:00.000Z',
+  snapshot: { mainlines: [{
+    theme: '电力', familyKey: 'group:电力', netInflow: 100000000,
+    priorReasonCodes: [], resonanceBoards: [],
+  }] },
+  predict: { candidates: [{ familyKey: 'group:电力', l2VerificationStatus: 'qi',
+    stars: [{ code: '601991', name: '大唐发电', level: 'confirmed' }] }] },
+  limitDb: { stocks: [{ code: '601991', name: '大唐发电' }, { code: '600726', name: '华电能源' }, { code: '000692', name: '惠天热电' }] },
+  mainReasonDb: { stocks: [
+    { code: '601991', name: '大唐发电', finalBoardTopic: '电网设备' },
+    { code: '600726', name: '华电能源', finalBoardTopic: '电网设备' },
+    { code: '000692', name: '惠天热电', finalBoardTopic: '电网设备' },
+  ] },
+  closeDb: { stocks: [
+    { code: '601991', gain: 10 }, { code: '600726', gain: 10 }, { code: '000692', gain: 10 },
+  ] },
+  familyInfo,
+  reasonFamilyInfo: reason => ({ key: 'group:电力', label: '电力', raw: reason.finalBoardTopic }),
+  isExcluded: () => false,
+  quality: {
+    limitUpComplete: true, mainReasonComplete: true, closeComplete: true, missingMainReasonCodes: [],
+    snapshotStatus: 'ok', snapshotUsable: true, snapshotEvidence: [],
+  },
+});
+A(generationAware.postCloseConfirmed.confirmedMainlines[0]?.familyKey === 'group:电力'
+  && generationAware.stockEvents.events.every(row => row.familyKey === 'group:电力'),
+'每日事件档案消费策略层发电侧归因，不再把大唐发电等写回电网设备族');
+
 const noMainline = buildPostCloseRecord(null, {
   day: '2026-07-13', generatedAt: '2026-07-13T08:10:00.000Z',
   snapshot: { mainlines: [] }, predict, limitDb, mainReasonDb, closeDb, familyInfo,
@@ -160,7 +194,12 @@ A(missing.stockEvents.events.every(row => row.points === null), '缺主因家族
 A(missing.stockEvents.complete === false && missing.eventCoverageComplete === false, '来源缺失和逐股归属缺失分别保持false');
 
 A(serverSource.includes("require('./strategy-daily-events')"), '主服务原子依赖每日事件模块');
-A(serverSource.includes('await recordStrategyDailyIntradayObservation(day, sessionPhase, mainlines, savedAt)'), '盘中预测写盘后同步记录观察样本');
+A(serverSource.includes('const obsList = strategyMainlineObservationRowsBySource({ eastmoney: emSource, ths: thSource });')
+  && serverSource.includes('await recordStrategyDailyIntradayObservation(day, sessionPhase, obsList, savedAt)'),
+'盘中预测按来源/formal-reserve层级同步记录观察样本');
+A(serverSource.includes('const observedMainlines = live?.mainlinesBySource')
+  && serverSource.includes('strategyMainlineObservationRowsBySource(live.mainlinesBySource)'),
+'三分钟自动观察也从两套来源真值记录层级，不退回合并列表猜资格');
 A(serverSource.includes('runAutoStrategyDailyEventsIfDue().catch'), '服务分钟任务接入16点后盘后定稿与重试');
 A(serverSource.includes("'strategy-daily-events.js',") && serverSource.includes("'strategy-evidence.js',"), '每日事件及证据模块包含在后台程序同步清单');
 A(serverSource.match(/'strategy-data',[\s\S]{0,180}'kpl-permanent-hidden-boards\.json'/), '每日事件运行文件包含在数据库同步清单');

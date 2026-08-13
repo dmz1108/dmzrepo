@@ -72,6 +72,7 @@ eval(extractFn('strategyResonanceTopicKey'));
 eval(extractFn('strategyThemeTaxonomyInfo'));
 eval(extractFn('strategyMainlineTopicKey'));
 eval(extractFn('strategyMainlineFamilyInfo'));
+eval(extractFn('strategyMainlineReasonFamilyInfo'));
 eval(extractFn('normalizeReasonSourceCode'));
 eval(src.match(/const THS_EVENT_NOISE = [^\n]+/)[0].replace('const ', 'var '));
 eval(extractFn('thsReasonTokens'));

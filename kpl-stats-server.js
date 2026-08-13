@@ -6690,9 +6690,7 @@ async function enrichReviewLeaderMetrics(rows, isoDay, apiKey) {
     for (const s of (mdb?.stocks || [])) {
       const c = normalizeReasonSourceCode(s.code);
       if (!codes.has(c)) continue;
-      const theme = String(s.finalBoardTopic || '').trim();
-      if (!theme) continue;
-      const familyKey = strategyMainlineFamilyInfo({ theme }).key;
+      const familyKey = strategyMainlineReasonFamilyInfo(s)?.key;
       if (!familyKey) continue;
       if (!mainZtByCodeFamily.has(c)) mainZtByCodeFamily.set(c, new Map());
       const byFamily = mainZtByCodeFamily.get(c);
@@ -21371,6 +21369,55 @@ function strategyMainlineFamilyInfo(item) {
   }
   return { key: fineKey, label: theme, group: '', taxonomy: info };
 }
+
+// 四源底层库必须保留各来源原始归纳，但策略层还要识别一种明确冲突：股票被复盘共识
+// 贴成“智能电网/电网设备”，而发电运营证据同时明确指向火电、绿电、水电或热电。
+// 这里只返回策略使用的家族，不改写 finalBoardTopic，也不把风电设备等制造环节并入发电侧。
+function strategyMainlineReasonFamilyInfo(stock) {
+  const finalTheme = String(stock?.finalBoardTopic || stock?.mainReasonSummary?.boardTopic || '').trim();
+  const base = strategyMainlineFamilyInfo({ theme: finalTheme });
+  if (!base?.key) return base;
+  const grid = strategyMainlineFamilyInfo({ theme: '电网设备' });
+  const generation = strategyMainlineFamilyInfo({ theme: '电力' });
+  if (!grid?.key || !generation?.key || grid.key === generation.key || base.key !== grid.key) return base;
+
+  const candidates = Array.isArray(stock?.sourceEvidence?.candidates)
+    ? stock.sourceEvidence.candidates
+    : [];
+  const rawTerms = [
+    ...(Array.isArray(stock?.allTopics) ? stock.allTopics : []),
+    ...(Array.isArray(stock?.allRawTopics) ? stock.allRawTopics : []),
+    ...(Array.isArray(stock?.reasonNames) ? stock.reasonNames : []),
+    stock?.fallbackReason,
+    ...candidates.flatMap(candidate => [
+      candidate?.primaryRawTopic,
+      candidate?.primaryTopic,
+      candidate?.boardTopic,
+    ]),
+  ].map(value => String(value || '').trim()).filter(Boolean);
+  const specificGeneration = rawTerms.some(term =>
+    /^(?:电力\(火电\)|火电|火力发电|热电|热力|供热|绿色电力|绿电|水电|大水电|电力运营)$/u.test(term));
+  const fallbackGeneration = candidates
+    .filter(candidate => /^(?:multi-source-consensus|kpl-zt-reason)$/u.test(String(candidate?.source || '')))
+    .flatMap(candidate => [candidate?.primaryRawTopic, candidate?.primaryTopic, candidate?.boardTopic])
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+    .some(theme => strategyMainlineFamilyInfo({ theme }).key === generation.key);
+  const detailText = [
+    stock?.finalDetailReason,
+    stock?.finalReason,
+    stock?.reasonText,
+    stock?.reasonHeadline,
+    ...candidates.map(candidate => candidate?.detailReason),
+  ].map(value => String(value || '').trim()).filter(Boolean).join(' ');
+  const generationOperator = /(?:(?:主营|主要业务(?:为|包括)|从事).{0,24}(?:(?:水力|火力)?发电(?!设备|装备|机组|零部件|材料)|热力供应|供热(?:业务)?)|热电联产(?!设备|装备)|发电及集中供热|发电、供热|供热公司|供热运营商|发电运营商|发电业务|电厂)/u.test(detailText);
+  if (!specificGeneration || (!fallbackGeneration && !generationOperator)) return base;
+  return {
+    ...generation,
+    originalTheme: finalTheme,
+    strategyFamilyBasis: 'generation-side-evidence-over-grid-label',
+  };
+}
 // 词典声明式字段的结构与语义校验:启动/热加载即失败(fail-fast)。
 // PR B 已退役历史字面集合(MERGE_GROUPS/KEEP_FINE)与 _ready 门闩:词典为唯一来源,
 // 校验在 loadThemeTaxonomy 交换前对候选完整执行(Codex PR #378 P2)。
@@ -23577,9 +23624,17 @@ function strategyMainlineMainReasonDbAttribution(day, payload, codes) {
   const out = new Map();
   for (const stock of (Array.isArray(payload?.stocks) ? payload.stocks : [])) {
     const code = normalizeReasonSourceCode(stock?.code);
-    const reason = String(stock?.finalBoardTopic || '').trim();
+    const strategyFamily = strategyMainlineReasonFamilyInfo(stock);
+    const rawReason = String(stock?.finalBoardTopic || '').trim();
+    const reason = String(strategyFamily?.strategyFamilyBasis ? strategyFamily.label : rawReason).trim();
     if (!code || !reason || (wanted.size && !wanted.has(code))) continue;
-    out.set(code, { code, reason, source: 'four-source-main-reason-db' });
+    out.set(code, {
+      code,
+      reason,
+      source: 'four-source-main-reason-db',
+      rawReason,
+      strategyFamilyBasis: String(strategyFamily?.strategyFamilyBasis || ''),
+    });
   }
   return out;
 }
@@ -24439,6 +24494,10 @@ function strategyDailyFamilyInfo(theme) {
   const family = strategyMainlineFamilyInfo({ theme: raw });
   return family?.key ? { key: family.key, label: family.label || raw } : null;
 }
+function strategyDailyReasonFamilyInfo(record) {
+  const family = strategyMainlineReasonFamilyInfo(record);
+  return family?.key ? { key: family.key, label: family.label || String(record?.finalBoardTopic || '') } : null;
+}
 async function recordStrategyDailyIntradayObservation(day, sessionPhase, mainlines, observedAt = new Date().toISOString(), realtimeContext = null) {
   return updateStrategyDailyEvents(day, existing => mergeIntradayObservation(existing, {
     day: isoFromCompactDate(day),
@@ -25205,6 +25264,139 @@ function strategyPredictBuildBlock(
   };
 }
 
+function strategyPredictCandidateHasConfirmedStar(candidate) {
+  return (Array.isArray(candidate?.stars) ? candidate.stars : [])
+    .some(star => String(star?.level || '').trim() === 'confirmed'
+      && normalizeReasonSourceCode(star?.code));
+}
+
+function strategyPredictTopFromCandidate(candidate, fallback = null) {
+  if (!candidate) return fallback;
+  const leaders = (Array.isArray(candidate?.leaders) ? candidate.leaders : [])
+    .filter(stock => normalizeReasonSourceCode(stock?.code))
+    .slice(0, 2)
+    .map(stock => ({
+      code: normalizeReasonSourceCode(stock?.code),
+      name: String(stock?.name || stock?.code || ''),
+      leadScore: isFiniteNumeric(stock?.leadScore) ? Number(stock.leadScore) : null,
+    }));
+  const stars = (Array.isArray(candidate?.stars) ? candidate.stars : [])
+    .filter(star => normalizeReasonSourceCode(star?.code));
+  const star = stars.find(item => String(item?.level || '') === 'confirmed')
+    || stars.find(item => String(item?.level || '') === 'expected')
+    || null;
+  const chosenLeaders = Array.isArray(fallback?.leaders) && fallback.leaders.length
+    ? fallback.leaders : leaders;
+  return {
+    ...(fallback || {}),
+    key: strategyPredictCandidateKey(candidate),
+    theme: String(candidate?.theme || fallback?.theme || ''),
+    rank: Number(candidate?.rank) || Number(fallback?.rank) || 0,
+    score: isFiniteNumeric(candidate?.score) ? Number(candidate.score) : (fallback?.score ?? null),
+    predictScore: isFiniteNumeric(candidate?.predictScore)
+      ? Number(candidate.predictScore) : (fallback?.predictScore ?? null),
+    stage: String(candidate?.stage || fallback?.stage || ''),
+    certainty: String(candidate?.certainty || fallback?.certainty || ''),
+    l2VerificationStatus: String(candidate?.l2VerificationStatus || fallback?.l2VerificationStatus || ''),
+    l2ScanState: String(candidate?.l2ScanState || fallback?.l2ScanState || ''),
+    // 龙头重算超时时，candidate 里的 leaders 是未完成的本轮结果；优先保留上一份已经过闸的正式龙头。
+    leader: fallback?.leader || chosenLeaders[0] || null,
+    leaders: chosenLeaders,
+    star: star ? {
+      code: normalizeReasonSourceCode(star.code),
+      name: String(star?.name || star?.code || ''),
+      level: String(star?.level || '') || null,
+    } : (fallback?.star || null),
+  };
+}
+
+// 龙头池重算超时是一次技术失败，不是市场结论变化。同日上一份正式主线仍在当前候选池、
+// 仍有确认明星且至少3只涨停时，保留上一份已验证龙头，防止最后一次轮询把有效预判覆写为空。
+function strategyPredictPreserveFormalOnLeaderTimeout(
+  block,
+  existingBlock,
+  source,
+  savedAt,
+  existingSavedAt = '',
+  maxAgeMs = 5 * 60 * 1000,
+) {
+  const savedAtMs = Date.parse(String(savedAt || ''));
+  const existingSavedAtMs = Date.parse(String(existingSavedAt || ''));
+  if (String(source?.reason || '') !== 'leader-rework-incomplete'
+    || !block || (Array.isArray(block.top) && block.top.length)
+    || !existingBlock || !Number.isFinite(savedAtMs) || !Number.isFinite(existingSavedAtMs)
+    || existingSavedAtMs > savedAtMs || savedAtMs - existingSavedAtMs > maxAgeMs) {
+    return { block, preserved: [] };
+  }
+  const existingFormal = (Array.isArray(existingBlock.qualifiedMainlines) && existingBlock.qualifiedMainlines.length)
+    ? existingBlock.qualifiedMainlines
+    : (Array.isArray(existingBlock.top) ? existingBlock.top : []);
+  if (!existingFormal.length) return { block, preserved: [] };
+  const candidates = Array.isArray(block.candidates) ? block.candidates : [];
+  const candidateByKey = new Map(candidates
+    .map(row => [strategyPredictCandidateKey(row), row])
+    .filter(([key]) => key));
+  const preserved = [];
+  for (const previous of existingFormal) {
+    const key = strategyPredictCandidateKey(previous);
+    const candidate = candidateByKey.get(key);
+    if (!candidate || !strategyPredictCandidateHasConfirmedStar(candidate)
+      || Number(candidate?.limitUpCount) < STRATEGY_MAINLINE_FORMAL_MIN_ZT) continue;
+    preserved.push(strategyPredictTopFromCandidate(candidate, previous));
+  }
+  if (!preserved.length) return { block, preserved: [] };
+  const preservedKeys = new Set(preserved.map(strategyPredictCandidateKey).filter(Boolean));
+  const technicalFallback = {
+    active: true,
+    reason: 'leader-rework-incomplete',
+    basis: 'same-day-last-validated-formal-mainline',
+    preservedFromAt: String(existingSavedAt || ''),
+    observedAt: String(savedAt || ''),
+    maxAgeMs,
+  };
+  const nextCandidates = candidates.map(candidate => preservedKeys.has(strategyPredictCandidateKey(candidate))
+    ? { ...candidate, qiTier: 'formal', reserveReasons: [], technicalFallback }
+    : candidate);
+  return {
+    block: {
+      ...block,
+      top: preserved.slice().sort((a, b) => (Number(a?.rank) || 999) - (Number(b?.rank) || 999)).slice(0, 3),
+      qualifiedMainlines: preserved,
+      candidates: nextCandidates,
+      technicalFallback,
+    },
+    preserved: [...preservedKeys],
+  };
+}
+
+// 盘中事实必须同时保留来源与 formal/reserve 层级。东财优先只用于同家族观测去重，
+// 不代表跨源借用资格；自动观察和预测写入共用这一函数，避免两条落盘路径再次分叉。
+function strategyMainlineObservationRowsBySource(mainlinesBySource) {
+  const seen = new Set();
+  const rows = [];
+  const eastmoney = mainlinesBySource?.eastmoney || {};
+  const ths = mainlinesBySource?.ths || {};
+  const groups = [
+    ['eastmoney', 'formal', eastmoney.mainlines],
+    ['eastmoney', 'reserve', eastmoney.reserveMainlines],
+    ['ths', 'formal', ths.mainlines],
+    ['ths', 'reserve', ths.reserveMainlines],
+  ];
+  for (const [observationSource, defaultTier, sourceRows] of groups) {
+    for (const row of (Array.isArray(sourceRows) ? sourceRows : [])) {
+      const key = String(row?.familyKey || row?.key || row?.theme || '');
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      rows.push({
+        ...row,
+        observationSource,
+        qiTier: String(row?.qiTier || defaultTier),
+      });
+    }
+  }
+  return rows;
+}
+
 function strategyMainlineIntradayStickyCandidateRow(candidate, source, predictSavedAt = '') {
   const key = strategyPredictCandidateKey(candidate);
   const rawTheme = String(candidate?.theme || '').trim();
@@ -25509,8 +25701,33 @@ async function writeMainlinePredictBySource(day, sessionPhase, mainlinesBySource
     const thSource = mainlinesBySource && mainlinesBySource.ths;
     const emList = (emSource && Array.isArray(emSource.mainlines)) ? emSource.mainlines : [];
     const thList = (thSource && Array.isArray(thSource.mainlines)) ? thSource.mainlines : [];
-    const eastBlock = sourceBlock(emSource, existing?.bySource?.eastmoney, 6);
-    const thBlock = sourceBlock(thSource, existing?.bySource?.ths, 5);
+    const eastBuilt = sourceBlock(emSource, existing?.bySource?.eastmoney, 6);
+    const thBuilt = sourceBlock(thSource, existing?.bySource?.ths, 5);
+    const eastPreserved = strategyPredictPreserveFormalOnLeaderTimeout(
+      eastBuilt,
+      existing?.bySource?.eastmoney,
+      emSource,
+      savedAt,
+      existing?.savedAt,
+    );
+    const thPreserved = strategyPredictPreserveFormalOnLeaderTimeout(
+      thBuilt,
+      existing?.bySource?.ths,
+      thSource,
+      savedAt,
+      existing?.savedAt,
+    );
+    const normalizePreservedBlock = (built, preserved) => ({
+      ...preserved.block,
+      available: built.available,
+      hasMainlines: preserved.preserved.length ? true : built.hasMainlines,
+      reason: preserved.preserved.length ? '' : built.reason,
+      message: preserved.preserved.length ? '本轮龙头重算超时；继续使用同日上一份已验证正式主线。' : built.message,
+      ...(preserved.preserved.length ? { transientReason: 'leader-rework-incomplete' } : {}),
+      zsType: built.zsType,
+    });
+    const eastBlock = normalizePreservedBlock(eastBuilt, eastPreserved);
+    const thBlock = normalizePreservedBlock(thBuilt, thPreserved);
     // “来源成功返回零结果”是有效结论，必须持久化供回看显示“今日无主线”。
     // 两源都不可用时仍不写，避免把取数故障冒充无主线。
     const hasResolvedSource = [eastBlock, thBlock].some(block => block.available === true);
@@ -25527,15 +25744,8 @@ async function writeMainlinePredictBySource(day, sessionPhase, mainlinesBySource
       top: eastBlock.top, qualifiedMainlines: eastBlock.qualifiedMainlines,
       candidates: eastBlock.candidates, starTransitions: eastBlock.starTransitions,
     }, null, 2), 'utf8');
-    // 盘中观测:按 family 去重的两源并集(mergeIntradayObservation 本身按 familyKey 聚合,东财优先)。
-    const seen = new Set();
-    const obsList = [];
-    const emReserve = (emSource && Array.isArray(emSource.reserveMainlines)) ? emSource.reserveMainlines : [];
-    const thReserve = (thSource && Array.isArray(thSource.reserveMainlines)) ? thSource.reserveMainlines : [];
-    for (const m of [...emList, ...emReserve, ...thList, ...thReserve]) {
-      const k = String(m?.familyKey || m?.key || m?.theme || '');
-      if (k && !seen.has(k)) { seen.add(k); obsList.push(m); }
-    }
+    // 盘中观测按来源/层级落档；同家族只保留东财优先的一份，不跨源借正式资格。
+    const obsList = strategyMainlineObservationRowsBySource({ eastmoney: emSource, ths: thSource });
     await recordStrategyDailyIntradayObservation(day, sessionPhase, obsList, savedAt);
   } catch {}
 }
@@ -25806,9 +26016,7 @@ async function strategyMainlineReworkLeaders(mainlines, isoDay, options = {}) {
     for (const s of (db?.stocks || [])) {
       const code = normalizeReasonSourceCode(s?.code);
       if (!code || isExcludedFromReview(s?.code, s?.name)) continue;
-      const theme = String(s.finalBoardTopic || '').trim();
-      if (!theme) continue;
-      const familyKey = strategyMainlineFamilyInfo({ theme }).key;
+      const familyKey = strategyMainlineReasonFamilyInfo(s)?.key;
       if (!familyKey) continue;
       if (!familyDayHits.has(familyKey)) familyDayHits.set(familyKey, new Map());
       const cur = familyDayHits.get(familyKey).get(code) || { name: String(s.name || ''), lastIdx: -1 };
@@ -26009,10 +26217,18 @@ function strategyMainlineActualFamilyRanking(mainReasonDb) {
     if (isExcludedFromReview(s?.code, s?.name)) continue;
     const theme = String(s.finalBoardTopic || '').trim();
     if (!theme || /其他/.test(theme) || isDroppedThemeWord(theme)) continue;
-    const fam = strategyMainlineFamilyInfo({ theme });
+    const fam = strategyMainlineReasonFamilyInfo(s);
     if (!fam?.key) continue;
-    const cur = byFamily.get(fam.key) || { familyKey: fam.key, label: fam.label || theme, count: 0 };
+    const cur = byFamily.get(fam.key) || {
+      familyKey: fam.key,
+      label: fam.label || theme,
+      count: 0,
+      codes: [],
+      strategyFamilyReclassifiedCount: 0,
+    };
     cur.count += 1;
+    cur.codes.push(normalizeReasonSourceCode(s?.code));
+    if (fam.strategyFamilyBasis) cur.strategyFamilyReclassifiedCount += 1;
     byFamily.set(fam.key, cur);
   }
   return [...byFamily.values()].sort((a, b) =>
@@ -26811,6 +27027,231 @@ async function strategyMainlineReviewPredictionAttribution(day, predict) {
   try { return strategyMainlineReviewFilterPredictionAttribution(predict, attributionByCode); }
   finally { eraExit(); }
 }
+
+function strategyMainlineTechnicalTimeoutRecoveryCorrection(
+  predict,
+  day,
+  sourceKey,
+  familyKey,
+  sample,
+  family,
+) {
+  const normalizedFamily = strategyPredictCandidateKey({
+    familyKey: family?.familyKey,
+    theme: family?.displayTheme || family?.theme,
+  });
+  const observedAt = String(sample?.observedAt || '').trim();
+  const confirmedStarCodes = (Array.isArray(family?.stars) ? family.stars : [])
+    .filter(star => String(star?.level || '') === 'confirmed')
+    .map(star => normalizeReasonSourceCode(star?.code)).filter(Boolean).sort();
+  const leaderCodes = (Array.isArray(family?.leaderCodes) ? family.leaderCodes : [])
+    .map(normalizeReasonSourceCode).filter(Boolean).sort();
+  return (Array.isArray(predict?.reviewCorrections) ? predict.reviewCorrections : [])
+    .find(correction => {
+      const evidence = correction?.evidence || {};
+      const correctionStars = (Array.isArray(evidence.confirmedStarCodes) ? evidence.confirmedStarCodes : [])
+        .map(normalizeReasonSourceCode).filter(Boolean).sort();
+      const correctionLeaders = (Array.isArray(evidence.leaderCodes) ? evidence.leaderCodes : [])
+        .map(normalizeReasonSourceCode).filter(Boolean).sort();
+      return String(correction?.correctionType || '') === 'intraday-technical-timeout-recovery'
+        && String(correction?.day || '') === day
+        && String(correction?.source || '') === sourceKey
+        && String(correction?.originalSavedAt || '') === String(predict?.savedAt || '')
+        && String(correction?.failureReason || '') === 'leader-rework-incomplete'
+        && strategyPredictCandidateKey({ familyKey: correction?.familyKey, theme: correction?.theme }) === familyKey
+        && correction?.originalPredictionPreserved === true
+        && normalizedFamily === familyKey
+        && String(correction?.observationAt || '') === observedAt
+        && Number(evidence?.limitUpCount) === Number(family?.limitUpCount)
+        && Number(evidence?.netInflow) === Number(family?.netInflow)
+        && correctionStars.join(',') === confirmedStarCodes.join(',')
+        && correctionLeaders.join(',') === leaderCodes.join(',');
+    }) || null;
+}
+
+// 旧预测档案可能被同日最后一次 leader-rework-incomplete 覆盖成“无正式主线”。回看只在
+// 同日盘中观测保存了该来源的显式 formal 层级时做内存恢复：不改原档、不读取盘后答案，也不放宽
+// 明星、资金、涨停或龙头门槛。层级字段上线前的旧样本一律不猜；只有逐字段绑定的审计纠正可恢复。
+// intradayObservation 按东财优先去重，故这里只恢复东财块。
+function strategyMainlineRecoverTechnicalTimeoutPrediction(day, predict, dailyEvents, maxAgeMs = 5 * 60 * 1000) {
+  const isoDay = isoFromCompactDate(day);
+  const savedAt = String(predict?.savedAt || '').trim();
+  const savedAtMs = Date.parse(savedAt);
+  const sourceKey = 'eastmoney';
+  const block = predict?.bySource?.[sourceKey];
+  const failureReason = String(block?.reason || block?.transientReason || '').trim();
+  if (!isoDay || !Number.isFinite(savedAtMs) || failureReason !== 'leader-rework-incomplete'
+    || !block || strategyMainlineReviewFormalTop({ ...block, schemaVersion: predict?.schemaVersion }).length
+    || String(dailyEvents?.day || '') !== isoDay) {
+    return { predict, recovered: [], source: '' };
+  }
+  const samples = (Array.isArray(dailyEvents?.intradayObservation?.samples)
+    ? dailyEvents.intradayObservation.samples : [])
+    .filter(sample => {
+      const observedAt = String(sample?.observedAt || '').trim();
+      const observedAtMs = Date.parse(observedAt);
+      const sourceStatus = sample?.realtimeData?.sourceStatus?.eastmoney;
+      return Number.isFinite(observedAtMs)
+        && observedAtMs <= savedAtMs
+        && savedAtMs - observedAtMs <= maxAgeMs
+        && isoFromCompactDate(chinaNowParts(new Date(observedAtMs)).day) === isoDay
+        && sample?.realtimeData?.readyFor?.intradayRanking === true
+        && sourceStatus?.scoreEligible === true
+        && sourceStatus?.stale !== true
+        && isoFromCompactDate(sourceStatus?.sourceDay) === isoDay;
+    })
+    .sort((a, b) => Date.parse(String(b?.observedAt || '')) - Date.parse(String(a?.observedAt || '')));
+  if (!samples.length) return { predict, recovered: [], source: '' };
+
+  const sampleRows = [];
+  for (const sample of samples) {
+    for (const family of (Array.isArray(sample?.families) ? sample.families : [])) {
+      const key = strategyPredictCandidateKey({
+        familyKey: family?.familyKey,
+        theme: family?.displayTheme || family?.theme,
+      });
+      if (key) sampleRows.push({ sample, family, key });
+    }
+  }
+  const recovered = [];
+  const recoveredCandidates = new Map();
+  for (const candidate of (Array.isArray(block?.candidates) ? block.candidates : [])) {
+    const key = strategyPredictCandidateKey(candidate);
+    const reserveReasons = Array.isArray(candidate?.reserveReasons)
+      ? candidate.reserveReasons.map(String).filter(Boolean) : [];
+    if (!key || reserveReasons.length !== 1 || reserveReasons[0] !== 'no-qualified-leader'
+      || !strategyPredictCandidateHasConfirmedStar(candidate)
+      || Number(candidate?.limitUpCount) < STRATEGY_MAINLINE_FORMAL_MIN_ZT) continue;
+    const candidateStars = new Set((candidate?.stars || [])
+      .filter(star => String(star?.level || '') === 'confirmed')
+      .map(star => normalizeReasonSourceCode(star?.code)).filter(Boolean));
+    const candidateLeaders = new Map((candidate?.leaders || [])
+      .map(leader => [normalizeReasonSourceCode(leader?.code), leader])
+      .filter(([code]) => code));
+    const evidence = sampleRows.find(({ sample, family, key: sampleKey }) => {
+      const sampleStars = (Array.isArray(family?.stars) ? family.stars : [])
+        .filter(star => String(star?.level || '') === 'confirmed')
+        .map(star => normalizeReasonSourceCode(star?.code)).filter(Boolean);
+      const sampleLeaders = (Array.isArray(family?.leaderCodes) ? family.leaderCodes : [])
+        .map(normalizeReasonSourceCode).filter(Boolean);
+      const tierIsFormal = String(family?.qiTier || '') === 'formal'
+        && String(family?.source || '') === sourceKey
+        && !(Array.isArray(family?.reserveReasons) && family.reserveReasons.length);
+      const correction = tierIsFormal ? null : strategyMainlineTechnicalTimeoutRecoveryCorrection(
+        predict,
+        isoDay,
+        sourceKey,
+        key,
+        sample,
+        family,
+      );
+      return sampleKey === key
+        && (tierIsFormal || !!correction)
+        && String(family?.l2VerificationStatus || '') === 'qi'
+        && Number(family?.limitUpCount) >= STRATEGY_MAINLINE_FORMAL_MIN_ZT
+        && isFiniteNumeric(family?.netInflow) && Number(family.netInflow) > 0
+        && family?.resonanceSignal === true
+        && sampleStars.some(code => candidateStars.has(code))
+        && sampleLeaders.some(code => candidateLeaders.has(code));
+    });
+    if (!evidence) continue;
+    const validLeaders = (evidence.family.leaderCodes || [])
+      .map(code => candidateLeaders.get(normalizeReasonSourceCode(code)))
+      .filter(Boolean);
+    const correction = strategyMainlineTechnicalTimeoutRecoveryCorrection(
+      predict,
+      isoDay,
+      sourceKey,
+      key,
+      evidence.sample,
+      evidence.family,
+    );
+    const technicalRecovery = {
+      active: true,
+      reason: 'leader-rework-incomplete',
+      basis: correction
+        ? 'audited-same-day-intraday-timeout-correction'
+        : 'same-day-explicit-formal-intraday-observation',
+      source: 'strategy-daily-events',
+      sourceKey,
+      correctionOperationId: String(correction?.operationId || ''),
+      observedAt: String(evidence.sample?.observedAt || ''),
+      overwrittenAt: savedAt,
+      maxAgeMs,
+    };
+    const restoredCandidate = {
+      ...candidate,
+      rank: Number(evidence.family?.rank) || Number(candidate?.rank) || 0,
+      score: isFiniteNumeric(evidence.family?.score) ? Number(evidence.family.score) : candidate?.score,
+      predictScore: isFiniteNumeric(evidence.family?.predictScore)
+        ? Number(evidence.family.predictScore) : candidate?.predictScore,
+      netInflow: Number(evidence.family.netInflow),
+      boardGainPct: isFiniteNumeric(evidence.family?.boardGainPct)
+        ? Number(evidence.family.boardGainPct) : candidate?.boardGainPct,
+      boardCount: Number(evidence.family?.boardCount) || 0,
+      limitUpCount: Number(evidence.family?.limitUpCount) || 0,
+      bigGainCount: Number(evidence.family?.bigGainCount) || 0,
+      nearLimitCount: Number(evidence.family?.nearLimitCount) || 0,
+      leaders: validLeaders,
+      qiTier: 'formal',
+      reserveReasons: [],
+      technicalRecovery,
+    };
+    const top = strategyPredictTopFromCandidate(restoredCandidate);
+    if (!top?.key || !top?.leaders?.length || !top?.star) continue;
+    recoveredCandidates.set(key, restoredCandidate);
+    recovered.push({ ...top, technicalRecovery });
+  }
+  if (!recovered.length) return { predict, recovered: [], source: '' };
+  recovered.sort((a, b) => (Number(a?.rank) || 999) - (Number(b?.rank) || 999));
+  const candidates = (Array.isArray(block.candidates) ? block.candidates : [])
+    .map(candidate => recoveredCandidates.get(strategyPredictCandidateKey(candidate)) || candidate);
+  const technicalRecovery = {
+    active: true,
+    reason: 'leader-rework-incomplete',
+    basis: recovered.some(row => row?.technicalRecovery?.correctionOperationId)
+      ? 'audited-same-day-intraday-timeout-correction'
+      : 'same-day-explicit-formal-intraday-observation',
+    source: 'strategy-daily-events',
+    sourceKey,
+    recoveredFamilies: recovered.map(row => strategyPredictCandidateKey(row)),
+    observedAt: recovered.reduce((latest, row) => {
+      const value = String(row?.technicalRecovery?.observedAt || '');
+      return value > latest ? value : latest;
+    }, ''),
+    overwrittenAt: savedAt,
+  };
+  const eastmoney = {
+    ...block,
+    top: recovered.slice(0, 3),
+    qualifiedMainlines: recovered.map(row => ({ ...row, qiTier: 'formal' })),
+    candidates,
+    available: true,
+    hasMainlines: true,
+    reason: '',
+    message: '尾盘龙头重算超时；回看使用同日最后一份来源可计分盘中观测恢复。',
+    transientReason: 'leader-rework-incomplete',
+    technicalRecovery,
+  };
+  const bySource = { ...predict.bySource, eastmoney };
+  const hasMainlines = [bySource.eastmoney, bySource.ths]
+    .some(source => strategyMainlineReviewFormalTop({ ...source, schemaVersion: predict?.schemaVersion }).length > 0);
+  return {
+    predict: {
+      ...predict,
+      bySource,
+      top: eastmoney.top,
+      qualifiedMainlines: eastmoney.qualifiedMainlines,
+      candidates: eastmoney.candidates,
+      starTransitions: eastmoney.starTransitions,
+      hasMainlines,
+      recordState: hasMainlines ? 'mainline' : 'no-mainline',
+      technicalRecovery,
+    },
+    recovered: technicalRecovery.recoveredFamilies,
+    source: sourceKey,
+  };
+}
 // 管理员最终确认与盘中预测是两类事实：前者可在收盘后修正，后者必须冻结用于命中率审计。
 // 回看同时返回二者，但绝不拿最终确认覆盖 predict.top，也不把它计入预测命中率分母。
 function strategyMainlineReviewConfirmedConclusion(payload, confirm, predictedMain = null) {
@@ -27117,9 +27558,10 @@ async function getStrategyMainlineReview(days = 10) {
     const day = tradingDays[i];
     const nextDay = i + 1 < tradingDays.length ? tradingDays[i + 1] : null;
     const thirdDay = i + 3 < tradingDays.length ? tradingDays[i + 3] : null;
-    const [rawPredict, confirm] = await Promise.all([
+    const [rawPredict, confirm, dailyEvents] = await Promise.all([
       readMainlinePredict(day),
       readMainlineConfirm(day).catch(() => null),
+      readStrategyDailyEvents(day).catch(() => null),
     ]);
     // 两套独立预测(schema v3):有主题与明确“来源可用但无主线”都属于有效回看记录。
     // 不能再用 top 非空作日期门槛，否则双源都无主线的交易日会整天消失。
@@ -27128,7 +27570,12 @@ async function getStrategyMainlineReview(days = 10) {
     // 回看计算只在内存副本上复用 PR #304 的主因归因规则：明确家族冲突的明星证据
     // 不得进入正式主线、封板率或领先时长；没有主因证据的旧记录继续保留为未知。
     const attributionReview = await strategyMainlineReviewPredictionAttribution(day, rawPredict);
-    const predict = attributionReview.predict;
+    const technicalRecovery = strategyMainlineRecoverTechnicalTimeoutPrediction(
+      day,
+      attributionReview.predict,
+      dailyEvents,
+    );
+    const predict = technicalRecovery.predict;
     const phase = String(predict.sessionPhase || '');
     const frozenSampleSnapshot = !STRATEGY_MAINLINE_INTRADAY_PHASES.has(phase)
       && Array.isArray(predict?.reviewCorrections) && predict.reviewCorrections.length
@@ -27453,6 +27900,7 @@ async function getStrategyMainlineReview(days = 10) {
           formalMainlineCount: sourceFormalConclusions.length,
           hasReserveMainlines: reserveMainlines.length > 0,
           reserveMainlines,
+          technicalRecovery: block?.technicalRecovery || null,
           sampleValid: sourceSampleValid,
           sampleBasis: sourceSampleStatus.basis,
           sampleInvalidReason: sourceSampleStatus.invalidReason,
@@ -27528,6 +27976,18 @@ async function getStrategyMainlineReview(days = 10) {
           filtered: true,
           rejectedCount: attributionReview.rejected.length,
           rejected: attributionReview.rejected.slice(0, 12),
+        },
+      } : {}),
+      ...(technicalRecovery.recovered.length ? {
+        technicalPredictionRecovery: {
+          recovered: true,
+          source: technicalRecovery.source,
+          familyKeys: technicalRecovery.recovered,
+          basis: String(predict?.technicalRecovery?.basis || ''),
+          correctionOperationId: String(
+            predict?.bySource?.[technicalRecovery.source]?.technicalRecovery?.correctionOperationId || '',
+          ),
+          originalPredictionPreserved: true,
         },
       } : {}),
       ...(finalConfirmedMainline ? { finalConfirmedMainline } : {}),
@@ -29394,6 +29854,7 @@ async function finalizeStrategyDailyEvents(day, snapshotOverride = null) {
     closeDb,
     quality,
     familyInfo: strategyDailyFamilyInfo,
+    reasonFamilyInfo: strategyDailyReasonFamilyInfo,
     isExcluded: stock => isExcludedFromReview(stock?.code, stock?.name),
   }));
   return { ok: !!payload, day: isoDay, complete: !!payload?.complete, payload };
@@ -29425,10 +29886,13 @@ async function runAutoStrategyRealtimeObservationIfDue() {
     const live = await readStrategyMainlineLiveCache(day, Number.POSITIVE_INFINITY).catch(() => null);
     const phase = strategyMainlineSessionPhase(now);
     if (['早盘', '上午盘', '午间休市', '午后', '尾盘'].includes(phase)) {
+      const observedMainlines = live?.mainlinesBySource
+        ? strategyMainlineObservationRowsBySource(live.mainlinesBySource)
+        : (Array.isArray(live?.mainlines) ? live.mainlines : []);
       await recordStrategyDailyIntradayObservation(
         day,
         phase,
-        Array.isArray(live?.mainlines) ? live.mainlines : [],
+        observedMainlines,
         new Date().toISOString(),
         context
       );
