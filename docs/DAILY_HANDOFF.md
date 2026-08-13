@@ -15843,3 +15843,36 @@ Deployment:
 Notes for next agent:
 - 上线验收必须看到 2026-08-13 东财回看状态为主线、主题为电力、正式资格成立、同族涨停不少于3只，
   且正式明星包含大唐发电；技术恢复 basis 必须为 `audited-same-day-intraday-timeout-correction`。
+
+## 2026-08-13 - Codex - 电力主线回看生产上线回执
+
+Changed:
+- PR #444 已合并至 `main`，合并提交 `1f62c9802f4b524ad5ca1aade2f44e4403b6f2dc`。
+- 生产运行 `31729855330` 通过原子清单部署 `kpl-stats-server.js` 与 `strategy-daily-events.js`，
+  重启主服务并通过健康检查。
+- 生产运行 `31730648516` 通过日期和证据绑定脚本，仅向 2026-08-13 原预测档追加审计纠正元数据；
+  原预测内容、冻结快照、四源主因底库、L2 数据与原每日事件均未被改写。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 公开 `/health` 返回 `{"ok":true}`。
+- 公开预判回看中，2026-08-13 东财状态为 `mainline`、主题为电力、资格成立、同族涨停3只；
+  正式确认明星为华电能源与大唐发电。
+- 技术恢复 basis 为 `audited-same-day-intraday-timeout-correction`，纠正操作 ID 为
+  `review-electricity-timeout-recovery-20260813-v1`，且 `originalPredictionPreserved=true`。
+- 原预测 SHA-256 为 `6f7163558d764b7248fc604ae2cf1013293a612e241be2454897e6e516a754e7`；
+  追加纠正元数据后的 SHA-256 为 `8bb5929b7f71e14501ed9abac3e40aed8219f07a6d06646133317861808fb66c`。
+
+Deployment:
+- 代码部署备份：`C:\\PandaDashboard\\_deploy-backups\\github-31729855330-1`；主服务已重启。
+- 日期纠正备份：`C:\\PandaDashboard\\_deploy-backups\\review-electricity-timeout-recovery-20260813-v1-20260813182642`；
+  纠正脚本未重启服务，并已写入两份云端操作日志。
+- 运行 `31730335847` 因输入哈希长度错误在 GitHub 本地校验阶段被拒绝，未配置 SSH、未连接云端、
+  未产生任何生产写入；随后用 `main` 上精确哈希重新执行并成功。
+
+Notes for next agent:
+- 以后若正式主线写入遇到 `leader-rework-incomplete`，只能按同日、同源、5分钟内、来源日一致、
+  正资金、共振、确认明星和龙头交集等严格条件保留上一份已验证结果；不得泛化到其他失败类型。
+- 四源底层主因必须继续忠实保存来源原文；发电运营股的电力归因纠偏只发生在策略派生层。
