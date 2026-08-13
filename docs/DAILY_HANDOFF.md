@@ -15745,3 +15745,32 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件尚不存在且合格终盘池精确为59，才可进行第二遍原图逐字段复核和受保护写入；
   任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-08-13 - Codex - TGB 湖南人59行正式写入请求
+
+Changed:
+- 受保护只读运行 `31697396082` 确认生产终盘原始池和过滤池均为59/59、排除项为空、正式 TGB
+  文件不存在；官方原图第二遍逐块逐字段人工复核完成。
+- 新增日期绑定的59行正式写入请求，固定加密人工 payload、文章和原图哈希，重验题材计数、代码名称、
+  missing/extra/重复/弱字段，备份后原子写入、重折并验证公网状态，任一写后闸失败自动回滚。
+
+Files:
+- `.github/workflows/production-ops.yml`
+- `ops/production/requests/2026-08-13-tgb-hunan-write.ps1`
+- `tests/tgb-20260813-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 人工 payload：59行/59唯一代码，8个题材块合计59，`missingCodes=[]`、`extraCodes=[]`、重复0、
+  `weakCount=0`；SHA-256 `3e76d4cc38e0b97955b73748a2b1f4f01a4f17a9f3c08279c331e7438f5b4b80`。
+- 终盘池代码集 SHA-256 `20925b8d6015e1c1e535db237352df1e4f760ad85f3e0534c2a69e14ad6e1c97`；
+  名称仅有原图 `深振业A`/终盘 `深振业Ａ` 与原图 `金螳螂`/终盘 `金 螳 螂` 两处已声明规范化差异。
+- 官方文章 `https://www.tgb.cn/a/2uec4Zbbvhb`；原图 `image-01-06.png`，817029字节，
+  SHA-256 `90afc9e94f7b2f65d18be2c7760b4b4b7c661b7afa8f27adb1758b9a026d723b`。
+
+Deployment:
+- 本条记录时正式写入请求尚未执行；正式入库仍为0，综合主因未重折，服务未重启。
+
+Notes for next agent:
+- 只有本日期绑定脚本在 `main` 合并并经 `production` 环境批准后才可执行；公开淘股吧与综合归纳均须
+  精确为59、覆盖率100%、低质量0、`sourceErrors=[]`，否则回滚并报告阻断。
