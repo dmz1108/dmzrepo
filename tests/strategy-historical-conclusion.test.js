@@ -73,6 +73,12 @@ const candidate = {
   predictScore: 186,
   l2VerificationStatus: 'qi',
   netInflow: 1680000000,
+  netInflowBoard: '电网设备',
+  netInflowMetric: 'eastmoney-super-large-net-inflow',
+  boardGainPct: 2.35,
+  boardGainName: '电网设备',
+  sourcePairs: { eastmoney: { board: '电网设备', netInflow: 1680000000, gainPct: 2.35, metric: 'eastmoney-super-large-net-inflow' } },
+  resonanceBoards: [{ name: '电网设备', plateId: 'BK0968', zsType: 6, gainPct: 2.35, netInflow: 1680000000, netInflowMetric: 'eastmoney-super-large-net-inflow' }],
   boardCount: 3,
   limitUpCount: 12,
   bigGainCount: 22,
@@ -148,8 +154,10 @@ assert.strictEqual(restored.mainlines[0].starStocks[0].level, 'confirmed');
 assert.deepStrictEqual(restored.mainlines[0].leaders.map(row => row.name), ['立新能源', '长缆科技']);
 assert.strictEqual(restored.mainlines[0].count, 12);
 assert.strictEqual(restored.mainlines[0].netInflow, 1680000000);
-assert.strictEqual(restored.mainlines[0].boardGainPct, undefined);
-assert.strictEqual(restored.mainlines[0].resonanceBoards, undefined);
+assert.strictEqual(restored.mainlines[0].boardGainPct, 2.35);
+assert.strictEqual(restored.mainlines[0].boardGainName, '电网设备');
+assert.strictEqual(restored.mainlines[0].sourcePairs.eastmoney.netInflow, 1680000000);
+assert.strictEqual(restored.mainlines[0].resonanceBoards[0].plateId, 'BK0968');
 
 for (const source of ['eastmoney', 'ths']) {
   const block = restored.mainlinesBySource[source];

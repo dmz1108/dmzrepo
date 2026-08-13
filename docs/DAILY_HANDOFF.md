@@ -15633,3 +15633,38 @@ Notes for next agent:
   needs bounded AXTICK login/download timeouts plus a supervisor around `D:\PandaLocalL2Worker\worker.js`;
   this home environment has no saved controlled SSH endpoint for that computer, so that follow-up was not
   performed here.
+
+## 2026-08-13 - Codex - 补齐主线预测卡片板块涨幅和资金指标
+
+Changed:
+- 生产证据确认 2026-08-13 收盘冻结结果中，东财人形机器人、光模块、电力及同花顺
+  人形机器人、光模块主线卡存在，但 `boardGainPct` / `netInflow` 为空；同日东财事实库和
+  同花顺板块源仍有可核验行情，问题属于预测/冻结载荷没有保留展示指标，不是前端隐藏。
+- 返回层仅对中国当天、同来源、同题材家族的空指标补水；优先使用同日已校验资金事实库，
+  同花顺仅用 sourceDay 匹配的 realhead DDE。已有值不覆盖，不改资格、分数、排序或冻结文件，
+  历史日期绝不借用当前行情。
+- 实时构建在写预测档前执行同一补水；预测候选开始持久化板块涨幅、代表板、同源资金配对和
+  resonance board，今后历史恢复不再丢失这些字段。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/strategy-mainline-visible-metrics.test.js`
+- `tests/predict-records.test.js`
+- `tests/strategy-historical-conclusion.test.js`
+- `ops/production/manifests/strategy-card-visible-metrics-20260813.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 生产只读基线：东财算力硬件原有 `0.29% / 36.79亿` 保持不动；其余上述卡片为空；
+  东财完整目录可核验 CPO、绿色电力、机器人板块的同日涨幅及超大单净流入，同花顺
+  CPO/人形机器人 realhead 可核验同日涨幅和 DDE。
+- 新增回归覆盖：同族补值、跨族扫描板拒绝借值、东财事实库 f66 标签兼容、同花顺 DDE/zjjlr
+  分离、已有快照值不覆盖、空目录不造数、预测与历史恢复字段持久化。
+- `node --check kpl-stats-server.js`、专项测试、仓库完整测试集 `91/91` 与 `git diff --check` 通过。
+
+Deployment:
+- 本条记录时尚未部署，未重启服务，未修改任何冻结快照或运行时市场数据库。
+
+Notes for next agent:
+- 部署后核对公开 2026-08-13 主线接口：空指标卡应只从各自来源的同日代表板获得值；
+  东财算力硬件原值、主线数量、顺序、明星和龙头必须保持不变。
