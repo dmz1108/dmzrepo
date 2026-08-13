@@ -1,0 +1,9 @@
+{
+  "files": [
+    {
+      "source": "kpl-stats-server.js",
+      "destination": "kpl-stats-server.js"
+    }
+  ],
+  "restart": "main"
+}

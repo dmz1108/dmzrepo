@@ -13893,6 +13893,34 @@ Notes for next agent:
 - 生产刷新后只可从标题、日期、白底表格及 `@TGB湖南人` 水印均匹配的官方原图继续人工双遍转录；
   若文章、图片或字段不可辨认，必须停止且不得写正式库。
 
+## 2026-08-13 - Codex - 部署并校正主线卡片展示指标口径
+
+Changed:
+- PR #437 已合并并通过受保护生产流程部署；同日缺失的东财人形机器人、光模块、电力及
+  同花顺人形机器人、光模块卡片已获得同源涨幅和资金值，主线数量、顺序、明星和龙头不变。
+- 生产验收发现同花顺补入的数值是 DDE 大单金额，但空值冻结行遗留的 `ths-net-inflow` 标签
+  会被保留；修正为当数值来自同日 quote 时，口径标签和来源日期也跟随 quote。
+
+Files:
+- `kpl-stats-server.js`
+- `tests/strategy-mainline-visible-metrics.test.js`
+- `ops/production/manifests/strategy-card-metric-label-20260813.json`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 首次部署 workflow `31696284985` 成功，公开 `/health` 返回 `{"ok":true}`。
+- 生产验收确认东财原有算力硬件 `0.29% / 36.79亿` 未改变；新补卡片均从同日同源同族代表板取值。
+- 标签修正新增回归：冻结行只有旧标签而无资金值时，补入 DDE 后必须显示
+  `ths-dde-big-order-amount`，不得继续标成 zjjlr。
+
+Deployment:
+- PR #437 备份由受保护 workflow 自动创建，仅重启 `Panda Dashboard Server`；未修改冻结快照、
+  业务数据库、L2 worker 或策略门槛。本条标签修正记录时尚未部署。
+
+Notes for next agent:
+- 标签修正部署后再次核对同花顺人形机器人/光模块卡片的 `netInflowMetric`，应为
+  `ths-dde-big-order-amount`；卡片数、排序、明星和龙头必须保持不变。
+
 ## 2026-08-12 - Codex - TGB 人工转录写前终盘池检查请求
 
 Changed:
