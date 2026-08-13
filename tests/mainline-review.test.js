@@ -49,6 +49,7 @@ eval(extractFn('strategyResonanceTopicKey'));
 eval(extractFn('strategyThemeTaxonomyInfo'));
 eval(extractFn('strategyMainlineTopicKey'));
 eval(extractFn('strategyMainlineFamilyInfo'));
+eval(extractFn('strategyMainlineReasonFamilyInfo'));
 eval(extractFn('normalizeReasonSourceCode'));
 const isExcludedFromReview = (code) => String(code || '').startsWith('8');  // 夹具:8 开头视作北交所剔除
 function isDroppedThemeWord(raw) { return /测试剔除词/.test(String(raw || '')); }
@@ -82,6 +83,9 @@ eval(extractFn('strategyMainlineReviewPlanFormalEvidence'));
 eval(extractFn('strategyMainlineReviewEnrichFormalConclusions'));
 eval(extractFn('strategyMainlineReviewAggregateQualification'));
 eval(extractFn('strategyMainlineReviewHasRecord'));
+eval(extractFn('strategyPredictCandidateKey'));
+eval(extractFn('strategyPredictCandidateHasConfirmedStar'));
+eval(extractFn('strategyPredictTopFromCandidate'));
 eval(extractFn('strategyMainlineStarAttributionDecision'));
 eval(extractFn('strategyMainlineReviewPredictionStarCodes'));
 eval(extractFn('strategyMainlineReviewFilterAttributionBlock'));
@@ -118,6 +122,8 @@ const SNAPSHOTS = {};
 const readStrategyMainlineSnapshot = async d => SNAPSHOTS[d] || null;
 const CONFIRMS = {};
 const readMainlineConfirm = async d => CONFIRMS[d] || null;
+const DAILY_EVENTS = {};
+const readStrategyDailyEvents = async d => DAILY_EVENTS[d] || null;
 const VISIBLE_MAINLINES = {};
 const getStrategyMainlinesVisible = async d => VISIBLE_MAINLINES[d] || null;
 const MAIN_REASON = {};
@@ -143,6 +149,8 @@ const strategyMainlineAttributionContextForCodes = async () => ATTRIBUTION_CONTE
 eval(extractFn('strategyKlineBarForDay'));
 eval(extractFn('strategyKlineCoversDay'));
 eval(extractFn('strategyMainlineReviewPredictionAttribution'));
+eval(extractFn('strategyMainlineTechnicalTimeoutRecoveryCorrection'));
+eval(extractFn('strategyMainlineRecoverTechnicalTimeoutPrediction'));
 eval(extractFn('getStrategyMainlineReview'));
 
 const finalLimitDb = (codes) => ({
@@ -155,6 +163,131 @@ const finalLimitDb = (codes) => ({
 const reasonDb = (rows) => ({ ruleVersion: 'vOK', stocks: rows });
 
 (async () => {
+  const powerFamily = strategyMainlineFamilyInfo({ theme: '电力' }).key;
+  const equipmentFamily = strategyMainlineFamilyInfo({ theme: '电网设备' }).key;
+  const huaDianReason = {
+    code: '600726', name: '华电能源', finalBoardTopic: '电网设备', fallbackReason: '电力',
+    allTopics: ['绿色电力', '煤炭', '电力', '电网设备'],
+    finalDetailReason: '黑龙江区域发电、供热运营企业',
+    sourceEvidence: { candidates: [{ source: 'kpl-zt-reason', primaryRawTopic: '绿色电力' }] },
+  };
+  const daTangReason = {
+    code: '601991', name: '大唐发电', finalBoardTopic: '电网设备', fallbackReason: '电力',
+    allTopics: ['电力(火电)', '火电', '电力', '电网设备'], finalDetailReason: '水力发电和火力发电运营',
+    sourceEvidence: { candidates: [{ source: 'multi-source-consensus', primaryRawTopic: '火电' }] },
+  };
+  const windEquipmentReason = {
+    code: '601026', name: '道生天合', finalBoardTopic: '电网设备', fallbackReason: '风电设备',
+    allTopics: ['次新', '风电', '风电设备', '电网设备'], finalDetailReason: '风电设备制造',
+  };
+  const generationEquipmentReason = {
+    code: '600001', name: '发电设备样本', finalBoardTopic: '电网设备', fallbackReason: '电网设备',
+    allTopics: ['绿色电力', '发电设备', '电网设备'], finalDetailReason: '公司主营发电设备及控制系统制造',
+    sourceEvidence: { candidates: [{ source: 'kpl-zt-reason', primaryTopic: '绿色电力' }] },
+  };
+  A(strategyMainlineReasonFamilyInfo(huaDianReason).key === powerFamily
+    && strategyMainlineReasonFamilyInfo(daTangReason).key === powerFamily,
+  '明确发电运营证据把华电能源/大唐发电归入发电侧电力族，不改底层原始主因');
+  A(strategyMainlineReasonFamilyInfo(windEquipmentReason).key === equipmentFamily,
+    '风电设备制造不被宽泛“电力”词误并入发电侧，仍属于电力设备族');
+  A(strategyMainlineReasonFamilyInfo(generationEquipmentReason).key === equipmentFamily,
+    '只有绿色电力概念但主营发电设备制造的公司仍属于设备族，运营证据闸不误放');
+  const powerRanking = strategyMainlineActualFamilyRanking(reasonDb([
+    huaDianReason,
+    daTangReason,
+    { code: '000692', name: '惠天热电', finalBoardTopic: '电网设备', fallbackReason: '电力',
+      allTopics: ['热力', '电力', '电网设备'], finalDetailReason: '热电联产及供热运营' },
+    windEquipmentReason,
+  ]));
+  const rankedPower = powerRanking.find(row => row.familyKey === powerFamily);
+  A(rankedPower?.count === 3 && rankedPower.codes.includes('601991')
+    && powerRanking.find(row => row.familyKey === equipmentFamily)?.count === 1,
+  '盘后主线资格按策略族得到电力3家、电力设备1家，达到正式主线涨停下限且不混制造股');
+
+  const timeoutPredict = {
+    day: '2026-08-13', savedAt: '2026-08-13T06:59:24.116Z', sessionPhase: '尾盘', schemaVersion: 3,
+    hasMainlines: false, recordState: 'no-mainline',
+    bySource: {
+      eastmoney: {
+        available: true, hasMainlines: false, reason: 'leader-rework-incomplete', top: [], qualifiedMainlines: [],
+        candidates: [{ key: powerFamily, familyKey: powerFamily, theme: '电力', rank: 4, score: 162,
+          predictScore: 122, netInflow: null, boardGainPct: null, boardCount: 0, limitUpCount: 4,
+          l2VerificationStatus: 'qi', qiTier: 'reserve', reserveReasons: ['no-qualified-leader'],
+          stars: [{ code: '600726', name: '华电能源', level: 'confirmed' },
+            { code: '601991', name: '大唐发电', level: 'confirmed' }],
+          leaders: [{ code: '000595', name: '参考龙头', leadScore: 88 },
+            { code: '001258', name: '次龙头', leadScore: 77 },
+            { code: '000692', name: '候选龙头', leadScore: 66 }] }],
+        starTransitions: [],
+      },
+      ths: { available: true, hasMainlines: false, reason: 'no-qualified-mainline', top: [], qualifiedMainlines: [], candidates: [], starTransitions: [] },
+    },
+    top: [], qualifiedMainlines: [], candidates: [], starTransitions: [],
+  };
+  const timeoutEvents = {
+    day: '2026-08-13', intradayObservation: { samples: [{
+      observedAt: '2026-08-13T06:57:54.992Z', sessionPhase: '尾盘',
+      realtimeData: { readyFor: { intradayRanking: true }, sourceStatus: { eastmoney: {
+        scoreEligible: true, stale: false, sourceDay: '2026-08-13',
+      } } },
+      families: [{ familyKey: powerFamily, theme: '电力', displayTheme: '电力', rank: 2,
+        source: 'eastmoney', qiTier: 'formal', reserveReasons: [],
+        score: 252, predictScore: 202, netInflow: 2735110656, boardGainPct: -0.34,
+        boardCount: 1, limitUpCount: 5, bigGainCount: 0, nearLimitCount: 0,
+        l2VerificationStatus: 'qi', resonanceSignal: true,
+        stars: [{ code: '600726', name: '华电能源', level: 'confirmed' },
+          { code: '601991', name: '大唐发电', level: 'confirmed' }],
+        leaderCodes: ['605286', '000595', '000692'] }],
+    }] },
+  };
+  const recoveredTimeout = strategyMainlineRecoverTechnicalTimeoutPrediction(
+    '2026-08-13', timeoutPredict, timeoutEvents,
+  );
+  A(recoveredTimeout.recovered.includes(powerFamily)
+    && recoveredTimeout.predict.bySource.eastmoney.top[0].theme === '电力'
+    && recoveredTimeout.predict.bySource.eastmoney.top[0].star.code === '600726',
+  '尾盘技术超时可从5分钟内同日来源可计分盘中观测恢复电力正式主线和确认明星');
+  A(recoveredTimeout.predict.bySource.eastmoney.top[0].leaders[0].code === '000595'
+    && recoveredTimeout.predict.bySource.eastmoney.technicalRecovery?.originalPredictionPreserved !== false,
+  '技术恢复必须有候选龙头交集，仅保留交集候选并记录透明恢复元数据');
+  const staleRecovery = strategyMainlineRecoverTechnicalTimeoutPrediction('2026-08-13', timeoutPredict, {
+    ...timeoutEvents,
+    intradayObservation: { samples: [{ ...timeoutEvents.intradayObservation.samples[0], observedAt: '2026-08-13T06:40:00.000Z' }] },
+  });
+  A(staleRecovery.recovered.length === 0,
+    '超过5分钟的旧观测不得恢复，防止盘后用陈旧状态伪造预判');
+
+  const legacyEvents = JSON.parse(JSON.stringify(timeoutEvents));
+  delete legacyEvents.intradayObservation.samples[0].families[0].source;
+  delete legacyEvents.intradayObservation.samples[0].families[0].qiTier;
+  delete legacyEvents.intradayObservation.samples[0].families[0].reserveReasons;
+  A(strategyMainlineRecoverTechnicalTimeoutPrediction(
+    '2026-08-13', timeoutPredict, legacyEvents,
+  ).recovered.length === 0,
+  '旧盘中样本没有显式 formal/source 层级时不得自动猜成正式主线');
+  const correctedTimeoutPredict = JSON.parse(JSON.stringify(timeoutPredict));
+  correctedTimeoutPredict.reviewCorrections = [{
+    operationId: 'review-electricity-timeout-recovery-20260813-v1',
+    day: '2026-08-13', correctionType: 'intraday-technical-timeout-recovery',
+    source: 'eastmoney', originalSavedAt: timeoutPredict.savedAt,
+    failureReason: 'leader-rework-incomplete', familyKey: powerFamily, theme: '电力',
+    observationAt: '2026-08-13T06:57:54.992Z', originalPredictionPreserved: true,
+    evidence: {
+      limitUpCount: 5, netInflow: 2735110656,
+      confirmedStarCodes: ['600726', '601991'],
+      leaderCodes: ['605286', '000595', '000692'],
+    },
+  }];
+  const correctedLegacyRecovery = strategyMainlineRecoverTechnicalTimeoutPrediction(
+    '2026-08-13', correctedTimeoutPredict, legacyEvents,
+  );
+  A(correctedLegacyRecovery.recovered.includes(powerFamily)
+    && correctedLegacyRecovery.predict.bySource.eastmoney.technicalRecovery?.basis
+      === 'audited-same-day-intraday-timeout-correction'
+    && correctedLegacyRecovery.predict.bySource.eastmoney.technicalRecovery?.correctionOperationId
+      === 'review-electricity-timeout-recovery-20260813-v1',
+  '层级字段上线前的旧样本仅在审计纠正逐字段绑定原始证据后恢复');
+
   const multiFormal = strategyMainlineReviewFormalTop({
     schemaVersion: 3,
     top: [

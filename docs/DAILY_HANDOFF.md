@@ -15802,3 +15802,44 @@ Deployment:
 Notes for next agent:
 - 只有本日期绑定脚本在 `main` 合并并经 `production` 环境批准后才可执行；公开淘股吧与综合归纳均须
   精确为59、覆盖率100%、低质量0、`sourceErrors=[]`，否则回滚并报告阻断。
+
+## 2026-08-13 - Codex - 恢复电力主线回看并防止尾盘超时覆盖
+
+Changed:
+- 生产只读证据确认 14:57 东财电力为第2名，超大单净流入27.351亿元、5只涨停，华电能源与
+  大唐发电均为确认明星；14:59 的 `leader-rework-incomplete` 技术超时却把该来源正式主线覆写为空。
+- 写预测时若同日5分钟内上一份正式主线仍在当前候选、仍有确认明星且涨停不少于3只，只保留
+  上一份已经过闸的龙头和正式层级，并显式标记技术降级；市场结论不再被一次超时反转。
+- 盘中事件以后同步保存来源、formal/reserve 层级和同一时点的数据质量；回看只允许从同日、同源、
+  不陈旧且龙头有交集的正式观测恢复。旧样本不猜，2026-08-13 仅允许日期绑定审计纠正恢复。
+- 四源底层库保持原样；策略归因层仅在“电网设备”标签同时具有明确火电/绿电/水电/热电主题和
+  发电/供热运营证据时并入发电侧电力。风电材料、发电设备等制造股继续留在设备族。
+
+Files:
+- `kpl-stats-server.js`
+- `strategy-daily-events.js`
+- `tests/leader-family-metrics.test.js`
+- `tests/mainline-review.test.js`
+- `tests/predict-records.test.js`
+- `tests/strategy-daily-events.test.js`
+- `tests/strategy-star-attribution.test.js`
+- `tests/review-electricity-20260813-production-request.test.js`
+- `ops/production/manifests/strategy-electricity-review-timeout-recovery-20260813.json`
+- `ops/production/requests/2026-08-13-review-electricity-timeout-recovery.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 生产原预测 SHA-256 `6f7163558d764b7248fc604ae2cf1013293a612e241be2454897e6e516a754e7`；
+  原每日事件 SHA-256 `d6b5ff4b741206e16045a8cb1a02f014434c96df40370c7afc74944157097cf9`。
+- 回归覆盖同日超时保留、超过5分钟拒绝、来源/层级缺失拒绝、审计纠正逐字段绑定、龙头部分交集、
+  发电运营纠偏、制造股不误并、每日事件归因和生产请求备份/回滚/幂等闸。
+- `node --check`、专项测试、全仓 `93/93` 个测试文件与 `git diff --check` 通过。
+
+Deployment:
+- 本条记录时尚未部署，未重启服务，未修改生产预测档、冻结快照、主因底库或 L2 数据。
+- 合并后需原子部署 `kpl-stats-server.js` 与 `strategy-daily-events.js`、重启主服务，再执行日期绑定纠正；
+  纠正脚本自身不重启服务，并自动备份、校验公网回看及写入两份云端操作日志。
+
+Notes for next agent:
+- 上线验收必须看到 2026-08-13 东财回看状态为主线、主题为电力、正式资格成立、同族涨停不少于3只，
+  且正式明星包含大唐发电；技术恢复 basis 必须为 `audited-same-day-intraday-timeout-correction`。

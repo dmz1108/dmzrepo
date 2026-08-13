@@ -63,6 +63,10 @@ function compactIntradayFamily(mainline, familyInfo) {
     familyKey: family.key,
     theme: family.label,
     displayTheme: text(mainline?.theme) || family.label,
+    source: text(mainline?.observationSource || mainline?.source),
+    qiTier: text(mainline?.qiTier),
+    reserveReasons: (Array.isArray(mainline?.reserveReasons) ? mainline.reserveReasons : [])
+      .map(text).filter(Boolean).slice(0, 4),
     rank: Math.max(0, Number(mainline?.rank) || 0),
     score: num(mainline?.score),
     predictScore: num(mainline?.predictScore),
@@ -347,7 +351,12 @@ function buildFamilyEvidence(input, reasonByCode, limitCodes, starEvidence) {
 
   for (const code of limitCodes) {
     const reason = reasonByCode.get(code);
-    const family = reason ? familyForTheme(reason.finalBoardTopic, familyInfo) : null;
+    const resolvedReasonFamily = reason && typeof input.reasonFamilyInfo === 'function'
+      ? input.reasonFamilyInfo(reason)
+      : null;
+    const family = resolvedReasonFamily?.key
+      ? { key: text(resolvedReasonFamily.key), label: text(resolvedReasonFamily.label) || text(reason?.finalBoardTopic) }
+      : (reason ? familyForTheme(reason.finalBoardTopic, familyInfo) : null);
     if (!family?.key) continue;
     // 当日主因库出现、但盘中快照从未识别到的家族也必须出现在诊断中。
     // 它没有盘中资金/广度证据,因此会明确 dataMissing,不会被静默漏掉或误确认。
@@ -462,8 +471,14 @@ function buildStockEvents(input, confirmedFamilies, reasonByCode, limitCodes, st
       const code = codeOf(row?.code);
       if (!code || input.isExcluded?.(row)) continue;
       const reason = reasonByCode.get(code);
-      const family = !missingReasonSet.has(code) && reason
-        ? familyForTheme(reason.finalBoardTopic, input.familyInfo) : null;
+      const resolvedReasonFamily = !missingReasonSet.has(code) && reason
+        && typeof input.reasonFamilyInfo === 'function'
+        ? input.reasonFamilyInfo(reason)
+        : null;
+      const family = resolvedReasonFamily?.key
+        ? { key: text(resolvedReasonFamily.key), label: text(resolvedReasonFamily.label) || text(reason?.finalBoardTopic) }
+        : (!missingReasonSet.has(code) && reason
+            ? familyForTheme(reason.finalBoardTopic, input.familyInfo) : null);
       if (!family?.key) {
         missingReasonCodes.push(code);
         events.push({

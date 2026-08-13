@@ -51,6 +51,7 @@ const A = (cond, msg) => { if (!cond) { console.error('FAIL: ' + msg); process.e
   eval(extractFn('strategyThemeTaxonomyInfo'));
   eval(extractFn('strategyMainlineTopicKey'));
   eval(extractFn('strategyMainlineFamilyInfo'));
+  eval(extractFn('strategyMainlineReasonFamilyInfo'));
   A(strategyMainlineFamilyInfo({ theme: '算力AI' }).key === 'group:算力硬件', '算力AI 词经关键词归位 group:算力硬件(PR B 分家后的硬件族)');
   A(strategyMainlineFamilyInfo({ theme: '云计算' }).key === 'group:算力硬件', '云计算与算力归入同一生产家族(group:算力硬件)');
   A(strategyMainlineFamilyInfo({ theme: '光模块' }).key === 'group:光通信', '光模块按生产口径保持独立的光通信家族');
