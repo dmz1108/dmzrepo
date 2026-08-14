@@ -15876,3 +15876,33 @@ Notes for next agent:
 - 以后若正式主线写入遇到 `leader-rework-incomplete`，只能按同日、同源、5分钟内、来源日一致、
   正资金、共振、确认明星和龙头交集等严格条件保留上一份已验证结果；不得泛化到其他失败类型。
 - 四源底层主因必须继续忠实保存来源原文；发电运营股的电力归因纠偏只发生在策略派生层。
+
+## 2026-08-14 - Codex - 诊断当日 L2 全量失败为公司 worker 零进度挂起
+
+Changed:
+- 只读检查云端当日 `strategy-data/local-l2-jobs/2026-08-14`，确认共44个自动任务，全部为
+  `L2 worker progress timeout`，每个任务均为 `scanned=0`、无 `firstResultAt`、无结果行。
+- 云端派单和 Token 正常；`qi-local-l2-worker` 版本 `0.1.0` 确实逐个领取任务，但领取后没有发送
+  首次进度，5分钟租约到期后云端如实释放任务。当前 worker 最后心跳为北京时间16:50:54，随后离线。
+- 对照历史：8月12日正常任务1.3–2.1秒返回首批、10–32秒完成；8月13日正常任务1.2–5.1秒
+  返回首批、约11–46秒完成。今天不是正常任务略慢，而是公司端在首批结果前整体挂起。
+- 不放宽策略门槛、不延长云端租约、不把超时改成“无明星”；下一修复点明确为公司电脑
+  `D:\PandaLocalL2Worker\worker.js` 的 AXTICK 登录/下载超时和进程监督。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 云端主服务 `/health` 返回 `{"ok":true}`；L2 配置 `available/configured=true`，持久化无错误。
+- 队列状态为 `expiredCount=44`、`pending=0`；全部失败都精确发生在领取后约300–303秒。
+- `down.l2api.cn:9090` 从当前网络可建立 TCP 连接，未认证 HTTP 探针约1.1秒返回200；这只能证明
+  服务端口当前可达，不能替代公司端账号登录、下载和本机日志检查。
+
+Deployment:
+- 只读诊断与 Git 交接；未改云端文件、运行数据库、L2 历史任务、策略门槛或前端，未重启任何服务。
+
+Notes for next agent:
+- 在公司电脑先检查 `D:\PandaLocalL2Worker\logs\worker.log` 与 `worker.err.log`，确认领取任务后卡在
+  登录、下载还是解析；随后为登录和每次下载加有限超时，并用 supervisor 在进程无进度时自动重启。
+- 不要只重启云端 Node：云端生命周期保护已经正确工作，重启主服务不能修复公司 worker 的 AXTICK
+  调用挂起。修完公司端后，用一个实时板块任务验收首批回传小于10秒且完整五档结果落盘。
