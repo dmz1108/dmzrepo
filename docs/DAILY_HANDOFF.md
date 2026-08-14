@@ -15955,3 +15955,36 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件尚不存在、62 条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段复核
   和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-08-14 - Codex - TGB 湖南人62行正式写入请求
+
+Changed:
+- 受保护只读运行 `31797860890` 确认生产终盘原始池63/63，排除北交所 `920083` 后合格池62/62，
+  正式 TGB 文件不存在；人工候选代码集与合格终盘池完全一致。
+- 官方原图第二遍逐块、逐行、逐字段人工复核完成；新增加密日期绑定的62行正式写入请求，固定人工
+  payload、文章和原图哈希，重验题材计数、代码名称、missing/extra/重复/弱字段，备份后原子写入、
+  重折并验证公网状态，任一写后闸失败自动回滚。
+
+Files:
+- `.github/workflows/production-ops.yml`
+- `ops/production/requests/2026-08-14-tgb-hunan-write.ps1`
+- `tests/tgb-20260814-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 人工 payload：62行/62唯一代码，8个题材块合计62，`missingCodes=[]`、`extraCodes=[]`、重复0、
+  `weakCount=0`；唯一名称差异为 `002081` 源图 `金螳螂` 与终盘池 `金 螳 螂` 的空格规范化差异，
+  无实质名称不匹配；payload SHA-256 `f09bc66c7d4c76b30bae9146678cbc85292534d2529cc35cd77f00c8d3ea375c`。
+- 终盘池代码集 SHA-256 `dacc4927fac7bb487e4260f5484721e2c98bb2a134711254e63fd662564a235b`；
+  正式写入前必须保持不变。
+- 官方文章 `https://www.tgb.cn/a/2ug1eFTWduG`；原图 `image-01-06.png`，680547字节，
+  SHA-256 `aeb1a552f77c48f819eadd481acd24664aa09afff219d9f1fdcf8d6ef6c51271`。
+- 写前公网为综合归纳、复盘啦、选股宝、韭研各62行，淘股吧0，`sourceErrors=[]`，`/health` 为
+  `ok:true`；日期绑定专项测试、全仓94/94个测试文件与 `git diff --check` 通过。
+
+Deployment:
+- 本条记录时正式写入请求尚未执行；正式入库仍为0，综合主因未重折，服务未重启。
+
+Notes for next agent:
+- 只有本日期绑定脚本在 `main` 合并并经 `production` 环境批准后才可执行；公开淘股吧与综合归纳均须
+  精确为62、覆盖率100%、低质量0、`sourceErrors=[]`，否则回滚并报告阻断。
