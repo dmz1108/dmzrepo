@@ -13941,6 +13941,33 @@ Notes for next agent:
 - 复查输出后必须计算人工54行与终盘55行的 `missingCodes`/`extraCodes`，并回看官方原图判断差异；
   不得为数量对齐从市场连板摘要或炸板区补入正式行。
 
+## 2026-08-21 - Codex - TGB 对账阻断日志请求
+
+Changed:
+- 第二次只读运行 `32479116361` 成功输出终盘池55行/55唯一代码；人工54行与终盘池集合差异精确为
+  `missingCodes=[688185]`、`extraCodes=[]`。
+- `688185` 康希诺在官方原图只位于“涨停炸板”区，按专项 SOP 禁止补入正式 TGB 行；新增日期绑定、
+  幂等、备份优先的云端阻断日志请求，不写正式库、不重折、不重启。
+
+Files:
+- `ops/production/requests/2026-08-21-tgb-hunan-reconciliation-blocked-log.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 终盘池代码集 SHA-256 `73c9c1007e1940c96d587540caf7bdee8bbe7397e32fdd1d94fe4716e8e2ca10`；
+  人工候选代码集 SHA-256 `49f794045677525f72b6709ea60f70b9ba0590c8e5fca79d5aeaf4c7f3cfd8df`。
+- 人工候选54行/54唯一代码，重复0、`weakCount=0`，9块合计54；正式文件不存在。
+- 写前公开 source-view：综合归纳55、复盘啦54、选股宝54、韭研0、淘股吧0，`sourceErrors=[]`；
+  公开 `/health` 为 `ok:true`。
+
+Deployment:
+- 本条记录时阻断日志请求尚未执行；正式 TGB 入库0，综合主因未重折，服务未重启。
+
+Notes for next agent:
+- 只有终盘池被纠正为不含炸板 `688185` 的54只，或获得新的可审计真实涨停池证据，才可重新强刷、
+  完成第二遍逐字段人工复核并进入正式写入；当前不得补行或重折。
+
+
 
 
 ## 2026-08-20 - Codex - TGB 人工转录写前终盘池检查请求
