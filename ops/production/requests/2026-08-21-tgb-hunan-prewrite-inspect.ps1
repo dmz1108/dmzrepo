@@ -9,7 +9,7 @@ $ErrorActionPreference = 'Stop'
 
 $project = 'C:\PandaDashboard'
 $day = '2026-08-21'
-$expectedEligibleCount = 54
+$expectedEligibleCount = 55
 $baselineFile = Join-Path $project 'kpl-limitup-db\2026-08-21.json'
 $formalFile = Join-Path $project 'kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-08-21.json'
 $retiredMarker = [string][char]0x9000
@@ -78,4 +78,3 @@ $codeSetSha256 = ([System.BitConverter]::ToString(
   filesWritten = $false
   serviceRestarted = $false
 } | ConvertTo-Json -Depth 5
-
