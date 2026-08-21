@@ -13919,6 +13919,29 @@ Notes for next agent:
 - 只读检查必须确认正式文件尚不存在、54条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
 
+## 2026-08-21 - Codex - TGB 写前终盘池计数阻断与只读复查
+
+Changed:
+- 首次只读写前运行 `32478814424` 在任何文件写入前安全阻断：生产终盘合格池为55行/55唯一代码，
+  而官方原图正式题材区人工候选为54行。
+- 将同一日期绑定请求的预期合格池计数改为实际55，仅用于输出完整代码/名称清单并定位差异；仍不写文件、
+  不重折综合主因、不重启服务。
+
+Files:
+- `ops/production/requests/2026-08-21-tgb-hunan-prewrite-inspect.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 失败信息精确为 `Unexpected review-eligible pool: rows=55; unique=55`；正式 TGB 写入尚未开始。
+
+Deployment:
+- 只读检查触达生产但未改变生产文件；无正式行、无综合主因重折、无服务重启。
+
+Notes for next agent:
+- 复查输出后必须计算人工54行与终盘55行的 `missingCodes`/`extraCodes`，并回看官方原图判断差异；
+  不得为数量对齐从市场连板摘要或炸板区补入正式行。
+
+
 
 ## 2026-08-20 - Codex - TGB 人工转录写前终盘池检查请求
 
