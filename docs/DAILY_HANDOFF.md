@@ -16512,3 +16512,34 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件尚不存在、46条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-08-24 - Codex - TGB 湖南人46行正式写入请求
+
+Changed:
+- 受保护只读运行 `32723903119` 确认生产终盘原始池/合格池均46/46，无排除项，正式 TGB 文件
+  不存在；人工候选代码集与合格终盘池完全一致。
+- 官方原图第二遍逐块、逐行、逐字段人工复核完成；新增加密日期绑定的46行正式写入请求，固定人工
+  payload、文章和原图哈希，重验题材计数、代码名称、missing/extra/重复/弱字段，备份后原子写入、
+  重折并验证公网状态，任一写后闸失败自动回滚。
+
+Files:
+- `.github/workflows/production-ops.yml`
+- `ops/production/requests/2026-08-24-tgb-hunan-write.ps1`
+- `tests/tgb-20260824-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 人工 payload：46行/46唯一代码，10个题材块合计46，`missingCodes=[]`、`extraCodes=[]`、重复0、
+  `weakCount=0`；唯一名称格式差异为 `000931` 中关村/中 关 村，NFKC/去空格一致；payload
+  SHA-256 `5111ba4722637df742609d8c04251e77a1a68f4bb37fb1433c55f4e43cbaa675`。
+- 终盘池代码集 SHA-256 `9d622810fb2e496038750242470224453bad78cb2a003d22a606ad0fca47619c`；
+  正式写入前必须保持不变。
+- 官方文章 `https://www.tgb.cn/a/2uwthn6EfR5`；原图 `image-01-06.png`，559319字节，
+  SHA-256 `ca7433198be529fa7c75567e501b88e6d59aece70dde1c5b2f2b3b26e46f464f`。
+
+Deployment:
+- 本条记录时正式写入请求尚未执行；正式入库仍为0，综合主因未重折，服务未重启。
+
+Notes for next agent:
+- 只有本日期绑定脚本在 `main` 合并并经 `production` 环境批准后才可执行；公开淘股吧与综合归纳均须
+  精确为46、覆盖率100%、低质量0、`sourceErrors=[]`，否则回滚并报告阻断。
