@@ -16621,3 +16621,29 @@ Deployment:
 Notes for next agent:
 - 只有本日期绑定脚本在 `main` 合并并经 `production` 环境批准后才可执行；公开淘股吧与综合归纳均须
   精确为65、覆盖率100%、低质量0、`sourceErrors=[]`，否则回滚并报告阻断。
+
+## 2026-08-25 - Codex - TGB 湖南人正式入库与公开验收回执
+
+Changed:
+- 原始证据 PR `#476`、写前只读检查 PR `#477`、正式写入 PR `#478` 均已合并到 `main`；对应受保护
+  生产运行 `32843257305`、`32844761403`、`32852214990` 全部成功。
+- 正式运行先备份云端旧文件，再原子写入 `review/tgb-hunan-structured` 当日65行正式文件，重折当日
+  综合主因库，并更新两份云端变更日志；所有写后闸均通过，未触发回滚。
+
+Validated:
+- 官方文章 `https://www.tgb.cn/a/2uy7Jgoa8l6`，标题 `8.25湖南人涨停复盘+晚间消息汇总`；官方白底表格
+  原图 `image-01-06.png`，719980字节，SHA-256
+  `44ad0bdd1001811e65b0645e0bf99f885807dad494b1f8fa631e4a029cfdb6e4`。
+- 正式文件与写后存储复验均为65行/65唯一代码；`missingCodes=[]`、`extraCodes=[]`、重复0、
+  `weakCount=0`，10个题材块计数合计65；唯一已登记名称空格差异 `002081` 经 NFKC/去空格一致。
+- 正式文件 SHA-256 `08d620c16ef057791fd84d93369a316c685ce3104d8107d99581c368ca4f8dd9`；
+  重折综合主因 SHA-256 `c7dfa39f1e99f512ed0f98953b4d8f200129a27378c9d047b5be8573e05e52d5`。
+- 公网独立复验：综合归纳、复盘啦、选股宝、韭研、淘股吧均65行；淘股吧主因覆盖率100%、低置信0、
+  `sourceErrors=[]`，公开 `/health` 为 `ok:true`。
+
+Deployment:
+- 云端备份目录 `C:\\PandaDashboard\\backups\\tgb-hunan-manual-20260825-20260825131543`。
+- 本次仅写数据并重折综合主因，没有服务代码部署，`serviceRestarted=false`，无需重启。
+
+Notes for next agent:
+- 2026-08-25 当日任务已闭环；后续只需保留本回执 PR 的审阅/合并记录，不要重复执行日期绑定写入脚本。
