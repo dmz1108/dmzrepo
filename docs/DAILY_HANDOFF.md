@@ -13937,7 +13937,8 @@ Files:
 
 Validated:
 - 人工 payload：81行/81唯一代码，13个题材块合计81，`missingCodes=[]`、`extraCodes=[]`、重复0、
-  `weakCount=0`；唯一名称格式差异为 `002165` 红宝丽/红 宝 丽，NFKC/去空格一致；payload
+  `weakCount=0`；名称格式差异为 `000565` 渝三峡A/渝三峡Ａ、`002165` 红宝丽/红 宝 丽，均按
+  NFKC/去空格一致；payload
   SHA-256 `6755e6a95605b6791de79dfc441c59d1257f442217e11598097cfbefe37cab06`。
 - 终盘池代码集 SHA-256 `cc89679f67f77f1c38d62140b67f8205bdfd7d408eefa840ba2f6d22c5196b13`；
   正式写入前必须保持不变。
@@ -16868,3 +16869,27 @@ Deployment:
 Notes for next agent:
 - 生产刷新后只可从标题、日期、白底表格及 `@TGB湖南人` 水印均匹配的官方原图继续人工双遍转录；
   若文章、图片或字段不可辨认，必须停止且不得写正式库。
+
+## 2026-08-28 - Codex - TGB 正式写入名称差异闸修正
+
+Changed:
+- 首次正式运行 `33169802270` 在写入前名称差异闸安全阻断；除已声明的 `002165` 红宝丽/红 宝 丽外，
+  终盘池还使用 `000565` 渝三峡Ａ，而官方原图为渝三峡A。
+- 写入请求新增这一全角/半角 NFKC 格式差异声明；人工 payload、官方文章、原图、代码集、题材块和
+  其他质量闸均不变。
+
+Files:
+- `ops/production/requests/2026-08-28-tgb-hunan-write.ps1`
+- `tests/tgb-20260828-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 失败日志显示81行/81唯一、`missingCodes=[]`、`extraCodes=[]`、重复0、`weakCount=0`、题材合计81、
+  实质名称不匹配0；仅 `nameDifferencesMatch=false`，实际差异精确为上述两项。
+- 阻断发生在备份和正式写文件之前；公开正式 TGB 仍为0，综合主因未重折，服务未重启。
+
+Deployment:
+- GitHub only；修正后的请求尚未执行。
+
+Notes for next agent:
+- 修正合并后须重新运行完整受保护写入闸；不得绕过名称差异精确匹配或复用失败结果声称完成。
