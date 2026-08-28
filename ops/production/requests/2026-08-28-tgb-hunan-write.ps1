@@ -51,6 +51,12 @@ const fixedQualityNote = 'Manual transcription from @TGB\u6e56\u5357\u4eba offic
 const publicRequestTimeoutMs = 25000;
 const expectedNameDifferences = [
   {
+    code: '000565',
+    sourceName: '\u6e1d\u4e09\u5ce1A',
+    baselineName: '\u6e1d\u4e09\u5ce1\uff21',
+    normalization: 'NFKC+remove-whitespace',
+  },
+  {
     code: '002165',
     sourceName: '\u7ea2\u5b9d\u4e3d',
     baselineName: '\u7ea2 \u5b9d \u4e3d',

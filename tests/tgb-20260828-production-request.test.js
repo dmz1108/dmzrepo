@@ -37,6 +37,8 @@ assert(request.includes("['\\u5316\\u5de5', 4]"), 'request must pin the chemical
 assert(request.includes("['\\u6c1f\\u5316\\u5de5/PTFE', 3]"), 'request must pin the fluorochemical/PTFE block');
 assert(request.includes("['\\u5176\\u4ed6\\u70ed\\u70b9', 12]"), 'request must pin the other-hotspot block');
 assert(request.includes("['\\u5176\\u4ed6\\u4e2a\\u80a1', 11]"), 'request must pin the other-stock block');
+assert(request.includes("code: '000565'"), 'request must declare the Yu San Xia A width difference');
+assert(request.includes("baselineName: '\\u6e1d\\u4e09\\u5ce1\\uff21'"), 'request must pin the full-width terminal-pool suffix');
 assert(request.includes("code: '002165'"), 'request must declare the Hong Bao Li source-name formatting difference');
 assert(request.includes("baselineName: '\\u7ea2 \\u5b9d \\u4e3d'"), 'request must pin the spaced terminal-pool name');
 assert(request.includes("normalization: 'NFKC+remove-whitespace'"), 'request must declare name normalization');
