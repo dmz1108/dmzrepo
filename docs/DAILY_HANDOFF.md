@@ -16893,3 +16893,28 @@ Deployment:
 
 Notes for next agent:
 - 修正合并后须重新运行完整受保护写入闸；不得绕过名称差异精确匹配或复用失败结果声称完成。
+
+## 2026-09-01 - Codex - TGB 湖南人原始证据盘中刷新请求
+
+Changed:
+- 北京时间 2026-09-01 11:05 为星期二交易日但尚未收盘；新增日期绑定的受保护生产请求，只强制刷新
+  `@TGB湖南人` 当日官方文章和原始图片证据。
+- 请求会先备份同日既有 raw-evidence 目录，并严格校验 manifest 日期、官方文章链接、文章标题以
+  `9.1` 开头且包含 `湖南人涨停复盘`、至少一张图片成功下载；未发布时安全失败，不继续正式入库。
+
+Files:
+- `ops/production/requests/2026-09-01-tgb-hunan-raw-evidence.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 公网 `/api/latest-trading-day` 仍为 2026-08-31；2026-09-01 source-view 的综合归纳、复盘啦、选股宝、
+  韭研、淘股吧均为0，`sourceErrors=[]`；公开 `/health` 为 `ok:true`。
+- 请求只调用 `--tgb-hunan-raw-evidence --day=2026-09-01 --days=1 --force`，不会生成正式行、
+  重折综合主因或重启服务。
+
+Deployment:
+- GitHub only；本条记录时尚未执行生产刷新，未写正式 TGB 行，未重折综合主因库，未重启服务。
+
+Notes for next agent:
+- 生产请求必须先确认官方文章和图片是否已发布；若盘中尚无官方原图，须保留阻断并在盘后重新运行，
+  不得改用上一交易日、自动视觉或行情知识生成正式行。
