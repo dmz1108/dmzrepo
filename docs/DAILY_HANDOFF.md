@@ -16918,3 +16918,29 @@ Deployment:
 Notes for next agent:
 - 生产请求必须先确认官方文章和图片是否已发布；若盘中尚无官方原图，须保留阻断并在盘后重新运行，
   不得改用上一交易日、自动视觉或行情知识生成正式行。
+
+## 2026-09-01 - Codex - TGB 湖南人盘中未发布阻断
+
+Changed:
+- 受保护 raw-evidence 运行 `33465213095` 已按北京时间目标交易日 2026-09-01 强制刷新；生产命令
+  明确返回 `article-not-found`，官方文章0、图片0、正式文件不存在。
+- 新增日期绑定、幂等、备份优先的云端阻断日志请求；只验证 raw manifest 和正式文件缺失状态并追加
+  两份安全运维日志，不写正式行、不重折、不重启。
+
+Files:
+- `ops/production/requests/2026-09-01-tgb-hunan-article-not-found-log.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 强刷运行校验通过 `officialTgbOnly=true`、`ocrDisabled=true`、`manualRequired=true`、
+  `automaticStructuringDisabled=true`；结果为 `saved=0`、raw status `article-not-found`。
+- 2026-09-01 正式 TGB 0行；无文章链接、无可选官方原图，因此人工转录、第二遍人工复核、终盘池
+  对账和综合主因重折均未开始。
+
+Deployment:
+- 原始证据流程在生产保存了 `article-not-found` manifest 后按质量闸失败；正式库未写、综合主因未重折、
+  服务未重启。本条记录时云端阻断日志请求尚未执行。
+
+Notes for next agent:
+- 盘后官方文章发布后重新运行同一 raw-evidence 请求；只有标题、日期、官方白底表格和 `@TGB湖南人`
+  水印全部匹配，才可开始 Codex 人工双遍转录。不得从其他图片或自动视觉补全。
