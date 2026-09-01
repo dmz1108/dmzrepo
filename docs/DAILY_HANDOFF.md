@@ -14231,6 +14231,32 @@ Notes for next agent:
 - 只有本日期绑定脚本在 `main` 合并并经 `production` 环境批准后才可执行；公开淘股吧与综合归纳均须
   精确为36、覆盖率100%、低质量0、`sourceErrors=[]`，否则回滚并报告阻断。
 
+## 2026-08-19 - Codex - TGB 湖南人36行生产回执
+
+Changed:
+- 受保护正式写入运行 `32251557769` 成功写入36条官方原图人工双重复核行，并重折当天综合主因库。
+- 写入前完整备份所有触及文件；写入后再次验证正式 TGB、综合、证据和 auto 代码集及公网数据源健康，
+  并把生产结果追加到两份云端运维日志。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 正式/落盘后二次 gate 均为36行、36唯一代码；`missingCodes=[]`、`extraCodes=[]`、重复0、
+  `weakCount=0`、名称不匹配0，8个题材块合计36。
+- 备份目录 `C:\PandaDashboard\backups\tgb-hunan-manual-20260819-20260819121432`；正式 TGB
+  SHA-256 `ae661baadbbe280d13420f47c03a528b2bfa5a88cff4f375b20392d9165447a4`；重折综合 SHA-256
+  `d9dbeb259f278f5de1e22e22f6d464be171919b2165174485a7ae1587630f174`。
+- 独立公网复验：综合归纳、复盘啦、选股宝、淘股吧均36，韭研0；TGB覆盖率/主因覆盖率100%，
+  低质量0，`sourceErrors=[]`，`/health` 为 `ok:true`。
+
+Deployment:
+- 生产运行只更新当天数据文件与两份云端日志；未部署服务代码，未重启服务。
+
+Notes for next agent:
+- 官方文章 `https://www.tgb.cn/a/2uonRBBKYdH`；原图 `image-01-06.png`，SHA-256
+  `256192d194c725dd7b2c5502a347e5ea0e0b1982b605bd617bcb983a387bda8a`。
+
 ## 2026-08-17 - Codex - TGB 人工转录写前终盘池检查请求
 
 Changed:
