@@ -16944,3 +16944,28 @@ Deployment:
 Notes for next agent:
 - 盘后官方文章发布后重新运行同一 raw-evidence 请求；只有标题、日期、官方白底表格和 `@TGB湖南人`
   水印全部匹配，才可开始 Codex 人工双遍转录。不得从其他图片或自动视觉补全。
+
+## 2026-08-31 - Codex - TGB 湖南人补录原始证据刷新请求
+
+Changed:
+- 根据 Owner 补做北京时间 2026-08-31 星期一交易日复盘；新增日期绑定的受保护生产请求，只强制刷新
+  `@TGB湖南人` 官方文章和原始图片证据。
+- 请求会先备份同日既有 raw-evidence 目录，并严格校验 manifest 日期、官方文章链接、文章标题以
+  `8.31` 开头且包含 `湖南人涨停复盘`、至少一张图片成功下载。
+
+Files:
+- `ops/production/requests/2026-08-31-tgb-hunan-raw-evidence.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 公开 2026-08-31 source-view 当前综合归纳、复盘啦、选股宝、韭研各86行，淘股吧0，
+  `sourceErrors=[]`；公开 `/health` 为 `ok:true`。
+- 请求只调用 `--tgb-hunan-raw-evidence --day=2026-08-31 --days=1 --force`，不会生成正式行、
+  重折综合主因或重启服务。
+
+Deployment:
+- GitHub only；本条记录时尚未执行生产刷新，未写正式 TGB 行，未重折综合主因库，未重启服务。
+
+Notes for next agent:
+- 强刷后只可选择标题、日期、白底表格及 `@TGB湖南人` 水印均匹配的官方原图；若文章、图片或字段
+  不可辨认，必须停止且不得写正式库。
