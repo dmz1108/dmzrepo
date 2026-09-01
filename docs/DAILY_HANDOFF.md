@@ -16944,3 +16944,32 @@ Deployment:
 Notes for next agent:
 - 盘后官方文章发布后重新运行同一 raw-evidence 请求；只有标题、日期、官方白底表格和 `@TGB湖南人`
   水印全部匹配，才可开始 Codex 人工双遍转录。不得从其他图片或自动视觉补全。
+
+## 2026-09-01 - Codex - TGB 湖南人盘中未发布生产回执
+
+Changed:
+- PR #493、#494 已合并；受保护运行 `33465213095` 强刷官方 raw evidence，结果因
+  `article-not-found` 在正式写入前安全阻断；运行 `33465668438` 完成两份云端阻断日志回执。
+- 云端日志写入前均已备份，记录了目标日、强刷运行、官方文章/图片均未发布、正式库未写、对账未开始、
+  综合主因未重折和服务未重启。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 北京时间目标日 2026-09-01 为交易日，但执行时约11:15、尚未收盘；raw manifest 为
+  `article-not-found`，官方文章0、下载图片0、正式 TGB 0行。
+- 无文章链接、无合格官方图片文件名；因此未选图、未人工转录、未做第二遍逐字段人工复核，也未进入
+  终盘池对账闸，`missingCodes/extraCodes/重复/weakCount/题材合计` 均不得声称通过。
+- 独立公网复验：`/api/latest-trading-day` 仍为 2026-08-31；2026-09-01 source-view `ok=false`、
+  综合归纳/复盘啦/选股宝/韭研/淘股吧均0、`sourceErrors=[]`；服务 `/health` 为 `ok:true`。
+
+Deployment:
+- 生产只保存了 `article-not-found` raw manifest 并追加安全阻断日志；正式 TGB 文件未写，综合主因未重折，
+  未部署代码，未重启主服务或其他服务。
+- 云端日志备份路径：
+  `C:\PandaDashboard\backups\tgb-hunan-blocked-20260901-20260901-111757`。
+
+Notes for next agent:
+- 这是等待官方盘后发布的外部阻断，不是非交易日跳过。盘后应重新强刷 2026-09-01 原始证据，再从
+  标题、日期、白底表格和 `@TGB湖南人` 水印均匹配的官方原图开始完整 SOP；当前不得写正式库。
