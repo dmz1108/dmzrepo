@@ -17053,3 +17053,42 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-09-03 - Codex - TGB 湖南人44行直连云端入库完成
+
+Changed:
+- 北京时间 2026-09-03 星期四交易日完成后，按受保护生产流程强制刷新官方原文与16张原始图片；
+  官方文章为 `https://www.tgb.cn/a/2uN68AMZjdr`，标题 `9.3湖南人涨停复盘+晚间消息汇总`。
+- 人工选定唯一标题、日期、官方白底表格及 `@TGB湖南人` 水印均匹配的 `image-01-06.png`；排除行情图、
+  统计图、头像/小图、同花顺红图、回帖汇总图、9行市场连板重复摘要和33行涨停炸板区。
+- Codex 按原图逐块、逐行、逐字段完成两遍人工转录与复核；未使用 OCR、Qwen 或自动视觉结果生成、
+  补全、猜测或校验正式行。受保护脚本备份相关旧文件后原子写入44行，并重折当天综合主因库。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 生产运行时：`C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-09-03.json`
+- 生产运行时：`C:\PandaDashboard\kpl-limitup-main-reason-db\2026-09-03.json`
+
+Evidence:
+- 官方白底表格原图 `image-01-06.png`，530x3685、616371字节、SHA-256
+  `d0af664de2920135ecc3d99555ea1750b81729d4978356e62914cb07c38b1a6c`。
+- 人工 payload SHA-256 `306ec7e4235a70f1b4f585782a634c95bd702426ecac0ed223a6036f06987a8b`；
+  7个正式题材块为液冷7、机器人7、大消费5、AI应用3、医药3、其他热点6、其他个股13，合计44。
+
+Validated:
+- 生产终盘原始池44/44；无 ST、北交所或新股前缀排除项，合格池44/44，正式文件写前不存在。
+- 正式行44、唯一代码44，`missingCodes=[]`、`extraCodes=[]`、`duplicateCodes=[]`、`weakCount=0`；
+  代码与名称逐行匹配，名称差异0，题材块人工计数与正式总数一致。
+- 正式 TGB SHA-256 `63a641b9f1c0570ae997e952b8860579b6b7a4c7ba450272934f496fd8146c07`；
+  综合主因 SHA-256 `a45354e75670852f1f2c06128ed89c1c9af1b6260029cfbea4de7dc228197314`。
+- 独立公网复验：综合归纳44、复盘啦44、选股宝44、韭研0、淘股吧44；淘股吧覆盖率与主因覆盖率
+  均100%、低置信0，`sourceErrors=[]`；综合主因44股、复盘覆盖率100%，`/health` 为 `ok:true`。
+
+Deployment:
+- 生产备份为 `C:\PandaDashboard\backups\tgb-hunan-manual-20260903-20260903115132`；两份云端运维日志已更新。
+- `combinedReasonRebuilt=true`，`serviceRestarted=false`。仅运行时数据和云端日志更新，无代码部署或服务重启；
+  上传到 Windows 临时目录的原始刷新、写前检查、正式写入脚本及人工 payload 均已删除并复验不存在。
+
+Notes for next agent:
+- 2026-09-03 正式文件已受人工来源保护，普通同步与 `force` 不得覆盖；如需更正，必须先备份并重新执行
+  原图双遍人工复核、终盘池全量对账、同日重折和公网验收。
