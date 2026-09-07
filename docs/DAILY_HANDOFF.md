@@ -17097,3 +17097,4 @@ Deployment:
 Notes for next agent:
 - 2026-09-07 正式文件已受人工来源保护，普通同步与 `force` 不得覆盖；若需更正，必须先备份并重新执行
   官方原图人工双遍复核及全部终盘池质量闸。
+- 文档回执 PR：`https://github.com/dmz1108/dmzrepo/pull/506`。
