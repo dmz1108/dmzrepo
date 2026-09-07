@@ -17053,3 +17053,48 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-09-07 - Codex - TGB 湖南人92行正式入库完成
+
+Changed:
+- 按北京时间 2026-09-07 星期一交易日执行每日复盘；通过直接云端受保护流程强制刷新
+  `@TGB湖南人` 官方文章及21张原始图片，旧同日 raw 目录不存在，因此无旧 raw 备份。
+- Codex 只查看官方原图，逐题材块、逐行、逐字段完成第一遍人工转录和第二遍人工复核；未使用
+  Qwen、OCR 或任何自动视觉结果生成、补全、猜测或校验正式行。
+- 受保护写入流程备份全部受影响运行时文件，写入92行正式 TGB 来源，并重折当天综合主因库；两份
+  云端运维日志均已记录，远端一次性脚本和 payload 已清理并确认不存在。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 生产运行时：`C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-raw\2026-09-07\`
+- 生产运行时：`C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-09-07.json`
+- 生产运行时：`C:\PandaDashboard\kpl-limitup-main-reason-db\2026-09-07.json`
+- 云端日志：`C:\PandaDashboard\panda-cloud-ops-2026-06-19.md`
+- 云端日志：`C:\PandaDashboard\_cloud-change-log-20260705.md`
+
+Validated:
+- 官方文章 `https://www.tgb.cn/a/2uTO6N3jOuV`，标题 `9.7湖南人涨停复盘+晚间消息汇总`；选定
+  官方白底表格 `image-01-06.png`，530×5187、878828字节、SHA-256
+  `2772423cb0de9e3bd7e2b9da374899fb1b8bfb1d4e15b05d3308edc3656cd7a9`，标题日期和
+  `@TGB湖南人` 水印均匹配。
+- 排除头像、小图、行情统计图、无水印红头汇总表、回帖图、13行重复“市场连板股”摘要以及19行
+  “涨停炸板”；正式题材计数为机器人15、光通信14、PCB13、农业12、大消费11、液冷4、短剧3、
+  其他热点12、其他个股8，合计92。
+- 终盘原始池93/93唯一；排除北交所 `920821 则成电子` 后合格池92/92。正式候选92/92唯一，
+  `missingCodes=[]`、`extraCodes=[]`、重复0、`weakCount=0`；唯一名称格式差异为 `000735`
+  罗牛山/罗 牛 山，NFKC去空格一致；人工 payload SHA-256
+  `bc25f4934895c31aab2b08ffb2f619d61f3a702703826978e8cdcd04b4b6003a`。
+- 写入备份 `C:\PandaDashboard\backups\tgb-hunan-manual-20260907-20260907115428`；正式文件
+  SHA-256 `e319fdd2efa8a2dfc9c331d60e11b8a792ae5e3269e8496f41c1d3942ac46c54`，综合主因库
+  SHA-256 `c5dd6d2da7c20a7c7ec13e76bc903d2ca50b83adeff50de38ef7262427938d96`。
+- 独立公网复验：综合归纳92、复盘啦92、选股宝92、韭研0、淘股吧92；TGB覆盖率100%、主因覆盖率
+  100%、低置信0，`sourceErrors=[]`；综合主因当天92行，公开 `/health` 为 `ok:true`。
+
+Deployment:
+- 生产运行时数据已写入并重折综合主因库；没有部署应用代码，没有重启主服务、娱乐服务、Caddy、
+  SSH 或公司端 L2 worker。
+
+Notes for next agent:
+- 2026-09-07 正式文件已受人工来源保护，普通同步与 `force` 不得覆盖；若需更正，必须先备份并重新执行
+  官方原图人工双遍复核及全部终盘池质量闸。
+- 文档回执 PR：`https://github.com/dmz1108/dmzrepo/pull/506`。
