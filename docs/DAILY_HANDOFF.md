@@ -17053,3 +17053,48 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-09-10 - Codex - TGB 湖南人34行正式入库完成
+
+Changed:
+- 按北京时间 2026-09-10 星期四交易日执行每日复盘；通过直接云端受保护流程强制刷新
+  `@TGB湖南人` 官方文章及19张原始图片，旧同日 raw 目录不存在，因此无旧 raw 备份。
+- Codex 只查看官方原图，逐题材块、逐行、逐字段完成第一遍人工转录和第二遍人工复核；未使用
+  Qwen、OCR 或任何自动视觉结果生成、补全、猜测或校验正式行。
+- 受保护写入流程备份全部受影响运行时文件，写入34行正式 TGB 来源并重折当天综合主因库；两份
+  云端运维日志均已记录，远端一次性脚本、过滤结果和 payload 已清理并确认不存在。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 生产运行时：`C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-raw\2026-09-10\`
+- 生产运行时：`C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-09-10.json`
+- 生产运行时：`C:\PandaDashboard\kpl-limitup-main-reason-db\2026-09-10.json`
+- 云端日志：`C:\PandaDashboard\panda-cloud-ops-2026-06-19.md`
+- 云端日志：`C:\PandaDashboard\_cloud-change-log-20260705.md`
+
+Validated:
+- 官方文章 `https://www.tgb.cn/a/2uYHu0t8ztH`，标题 `9.10湖南人涨停复盘+晚间消息汇总`；选定
+  官方白底表格 `image-01-06.png`，530×2772、473925字节、SHA-256
+  `90945fb5ec134e0aa761c43777f558b963346bfbb6894d55bb878728b0dc5ae2`，标题日期和
+  `@TGB湖南人` 水印均匹配。
+- 排除头像、小图、行情统计图、同花顺红色可视化图、回帖图、9行重复“市场连板股”摘要以及
+  22行“涨停炸板”；正式题材计数为电力9、大消费5、半导体3、玻纤3、其他热点8、其他个股6，
+  合计34。
+- 终盘原始池35/35唯一，排除北交所 `920268` 后合格池34/34；合格代码集 SHA-256
+  `66196513f4f397beaae66044d5885900bb38c192e279f48ab1089e58e292d116`。正式候选34/34唯一，
+  `missingCodes=[]`、`extraCodes=[]`、重复0、`weakCount=0`；名称格式差异仅为 `000565`
+  渝三峡A/渝三峡Ａ，NFKC去空格一致；人工 payload SHA-256
+  `cfaf35e13926a0e4d10b67b452a57df29e8bacc4320cffcf210e893e3bc2881b`。
+- 成功写入备份 `C:\PandaDashboard\backups\tgb-hunan-manual-20260910-20260910115225`；正式文件
+  SHA-256 `974b6886dfcbaae1bab099b59167299a668df6488f9f8af35c63198a944e38da`，综合主因库
+  SHA-256 `7e799dc2df8113cf1b4a9a2ffc233386d1e440922856e58c69bbe22c56ec7ef8`。
+- 独立公网复验：综合归纳34、复盘啦34、选股宝34、韭研0、淘股吧34；TGB覆盖率100%、主因覆盖率
+  100%、低置信0，`sourceErrors=[]`；综合主因当天34行，公开 `/health` 为 `ok:true`。
+
+Deployment:
+- 生产运行时数据已写入并重折综合主因库；没有部署应用代码，没有手动重启主服务、娱乐服务、Caddy、
+  SSH 或公司端 L2 worker。
+
+Notes for next agent:
+- 2026-09-10 正式文件已受人工来源保护，普通同步与 `force` 不得覆盖；若需更正，必须先备份并重新执行
+  官方原图人工双遍复核及全部终盘池质量闸。
