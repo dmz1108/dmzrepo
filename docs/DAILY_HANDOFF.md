@@ -17053,3 +17053,48 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-09-16 - Codex - TGB 湖南人89行正式入库完成
+
+Changed:
+- 按北京时间 2026-09-16 星期三交易日执行每日复盘；通过直接云端受保护流程强制刷新
+  `@TGB湖南人` 官方文章及16张原始图片，旧同日 raw 目录不存在，因此无旧 raw 备份。
+- Codex 只查看官方原图，逐题材块、逐行、逐字段完成第一遍人工转录和第二遍人工复核；未使用
+  Qwen、OCR 或任何自动视觉结果生成、补全、猜测或校验正式行。
+- 受保护写入流程备份全部受影响运行时文件，写入89行正式 TGB 来源并重折当天综合主因库；两份
+  云端运维日志均已记录，远端一次性脚本和加密 payload 已清理并确认不存在。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 生产运行时：`C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-raw\2026-09-16\`
+- 生产运行时：`C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-09-16.json`
+- 生产运行时：`C:\PandaDashboard\kpl-limitup-main-reason-db\2026-09-16.json`
+- 云端日志：`C:\PandaDashboard\panda-cloud-ops-2026-06-19.md`
+- 云端日志：`C:\PandaDashboard\_cloud-change-log-20260705.md`
+
+Validated:
+- 官方文章 `https://www.tgb.cn/a/2v8Hp4qCHnA`，标题 `9.16湖南人涨停复盘+晚间消息汇总`；选定
+  官方白底表格 `image-01-06.png`，530×4662、819553字节、SHA-256
+  `b5f50653dbf511bdcc690ca351437d4df283872081c235be5ad8a74495040f0e`，标题日期和
+  `@TGB湖南人` 水印均匹配。
+- 排除头像、小图、行情统计图、同花顺红色可视化图、回帖图、12行重复“市场连板股”摘要以及
+  11行“涨停炸板”；正式题材计数为光通信15、半导体13、PCB11、AI硬件6、海峡两岸6、
+  大消费5、电池产业链4、机器人4、液冷散热4、大农业3、黄酒3、其他热点6、其他个股9，合计89。
+- 终盘原始池89/89唯一，无排除项，合格池89/89；合格代码集 SHA-256
+  `9d78050237d57235705616e6c20e0d6e213b9c3d6f71db962bbc9e8b11d7f08a`。正式候选89/89唯一，
+  `missingCodes=[]`、`extraCodes=[]`、重复0、`weakCount=0`；名称格式差异仅为 `002095`
+  生意宝/生 意 宝和 `002161` 远望谷/远 望 谷，NFKC去空格一致；人工 payload SHA-256
+  `f40c733ddb845f90c35743b40085c7e788f3bef15f8363133fe6516fb7c9cd8b`。
+- 成功写入备份 `C:\PandaDashboard\backups\tgb-hunan-manual-20260916-20260916101911`；正式文件
+  SHA-256 `2bb96013aa28a0e2f98e7f6d1f8bf3ff3dcc834035808d13df165d10f84e751f`，综合主因库
+  SHA-256 `2b0fd588a5806e75faa23aecb846bbd327b90a4a5e7b8616b015004e3aced1e2`。
+- 独立公网复验：综合归纳89、复盘啦89、选股宝89、韭研0、淘股吧89；TGB覆盖率100%、主因覆盖率
+  100%、低置信0，`sourceErrors=[]`；综合主因当天89行，公开 `/health` 为 `ok:true`。
+
+Deployment:
+- 生产运行时数据已写入并重折综合主因库；没有部署应用代码，没有手动重启主服务、娱乐服务、Caddy、
+  SSH 或公司端 L2 worker。
+
+Notes for next agent:
+- 2026-09-16 正式文件已受人工来源保护，普通同步与 `force` 不得覆盖；若需更正，必须先备份并重新执行
+  官方原图人工双遍复核及全部终盘池质量闸。
