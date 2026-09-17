@@ -17053,3 +17053,47 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-09-17 - Codex - TGB 湖南人47行正式入库完成
+
+Changed:
+- 按北京时间 2026-09-17 星期四交易日执行每日复盘；通过直接云端受保护流程强制刷新
+  `@TGB湖南人` 官方文章及13张原始图片，旧同日 raw 目录不存在，因此无旧 raw 备份。
+- Codex 只查看官方原图，逐题材块、逐行、逐字段完成第一遍人工转录和第二遍人工复核；未使用
+  Qwen、OCR 或任何自动视觉结果生成、补全、猜测或校验正式行。
+- 受保护写入流程备份全部受影响运行时文件，写入47行正式 TGB 来源并重折当天综合主因库；两份
+  云端运维日志均已记录，远端一次性脚本和加密 payload 已清理并确认不存在。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 生产运行时：`C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-raw\2026-09-17\`
+- 生产运行时：`C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-09-17.json`
+- 生产运行时：`C:\PandaDashboard\kpl-limitup-main-reason-db\2026-09-17.json`
+- 云端日志：`C:\PandaDashboard\panda-cloud-ops-2026-06-19.md`
+- 云端日志：`C:\PandaDashboard\_cloud-change-log-20260705.md`
+
+Validated:
+- 官方文章 `https://www.tgb.cn/a/2vak0rEI4OV`，标题 `9.17湖南人涨停复盘+晚间消息汇总`；选定
+  官方白底表格 `image-01-06.png`，530×3351、563419字节、SHA-256
+  `725c2d7dcff9a503ee01d6a2306502cbd4bdb9f883ff9e429ddd1be9f067ea2d`，标题日期和
+  `@TGB湖南人` 水印均匹配。
+- 排除头像、小图、行情统计图、同花顺红色可视化图、回帖图、9行重复“市场连板股”摘要以及
+  20行“涨停炸板”；正式题材计数为机器人7、新能源汽车6、半导体4、大农业4、出口降税3、
+  烟草3、医药3、其他热点10、其他个股7，合计47。
+- 终盘原始池47/47唯一，无排除项，合格池47/47；合格代码集 SHA-256
+  `864c081bdaa7f8564fd105b19f8551b3e10e01a3d5bc9bb204a2b47685070a74`。正式候选47/47唯一，
+  `missingCodes=[]`、`extraCodes=[]`、重复0、`weakCount=0`、名称差异0；人工 payload SHA-256
+  `64c31643f85f8d1c7fb272c6d202bcd48dc3a973d06ced1e06873bea31a476a4`。
+- 成功写入备份 `C:\PandaDashboard\backups\tgb-hunan-manual-20260917-20260917101050`；正式文件
+  SHA-256 `e868482164aeb6f9229f7f332f9bc3e53991a4e988fd77c9fc16591b25904de6`，综合主因库
+  SHA-256 `5ac99f1db85f523bb931e9259901bf6076a4f0796449fec2aaefbabde6145cd4`。
+- 独立公网复验：综合归纳47、复盘啦47、选股宝47、韭研0、淘股吧47；TGB覆盖率100%、主因覆盖率
+  100%、低置信0，`sourceErrors=[]`；综合主因当天47行，公开 `/health` 为 `ok:true`。
+
+Deployment:
+- 生产运行时数据已写入并重折综合主因库；没有部署应用代码，没有手动重启主服务、娱乐服务、Caddy、
+  SSH 或公司端 L2 worker。
+
+Notes for next agent:
+- 2026-09-17 正式文件已受人工来源保护，普通同步与 `force` 不得覆盖；若需更正，必须先备份并重新执行
+  官方原图人工双遍复核及全部终盘池质量闸。
