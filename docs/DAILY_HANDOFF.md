@@ -17097,3 +17097,51 @@ Deployment:
 Notes for next agent:
 - 2026-09-17 正式文件已受人工来源保护，普通同步与 `force` 不得覆盖；若需更正，必须先备份并重新执行
   官方原图人工双遍复核及全部终盘池质量闸。
+
+## 2026-09-18 - Codex - TGB 湖南人77行正式入库完成
+
+Changed:
+- 按北京时间 2026-09-18 星期五交易日执行每日复盘；通过直接云端受保护流程强制刷新
+  `@TGB湖南人` 官方文章及9张原始图片，旧同日 raw 目录不存在，因此无旧 raw 备份。
+- Codex 只查看官方白底表格原图，逐题材块、逐行、逐字段完成第一遍人工转录和第二遍人工复核；未使用
+  Qwen、OCR 或任何自动视觉结果生成、补全、猜测或校验正式行。
+- 受保护写入流程先备份受影响运行时文件，写入77行正式 TGB 来源并重折当天综合主因库；两份
+  云端运维日志均已记录，远端一次性脚本和压缩 payload 已清理并确认不存在。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- 生产运行时：`C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-raw\2026-09-18\`
+- 生产运行时：`C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-09-18.json`
+- 生产运行时：`C:\PandaDashboard\kpl-limitup-main-reason-db\2026-09-18.json`
+- 云端日志：`C:\PandaDashboard\panda-cloud-ops-2026-06-19.md`
+- 云端日志：`C:\PandaDashboard\_cloud-change-log-20260705.md`
+
+Validated:
+- 官方文章 `https://www.tgb.cn/a/2vc3o05kxaL`，标题 `9.18湖南人涨停复盘+晚间消息汇总`；选定
+  官方白底表格 `image-01-06.png`，530×4737、841803字节、SHA-256
+  `ab417a3934ac8de07f1e99e72d191aa52e82c5d1ff6782098f15516ac19b81e8`，标题日期和
+  `@TGB湖南人` 水印均匹配。
+- 排除头像、小图、行情统计图、同花顺红色可视化图、回帖图、12行重复“市场连板股”摘要以及
+  25行“涨停炸板”；正式题材计数为半导体10、外贸出口9、次新股6、大消费6、机器人6、
+  电力4、光通信4、医药医疗4、AI安全3、AI硬件3、PCB3、房地产3、算力3、其他热点8、其他个股5，合计77。
+- 终盘原始池78/78唯一，排除北交所 `920298` 后合格池77/77；合格代码集 SHA-256
+  `41f17b23448fdf19ad1334d4e8aa8dd15e52e19c1ea2e5dd7026f9043dc40dad`。正式候选77/77唯一，
+  `missingCodes=[]`、`extraCodes=[]`、重复0、`weakCount=0`；`000002`、`002029`、`002161` 与终盘池
+  仅有空格或全半角名称差异，已显式记录且规范化后相同。人工 payload SHA-256
+  `aab1ed702e2ae65d35c6d99c95ff6ac0fd0cc7b4a0809570e6df15c1748603f9`。
+- 成功写入备份 `C:\PandaDashboard\backups\tgb-hunan-manual-20260918-20260921002907`；正式文件
+  SHA-256 `8fa1a62a42bec49f5d5083b5e138d0d0280ea6b2a2597148b5b10fcaf0cb8e71`。重折时综合库
+  SHA-256 为 `9180feb40c298e88b7adb797d2b55ebd0d4aff73ee17f3aba6b265f0cd5ffaf2`；随后公开
+  `force=1` 复验后观察到综合库同日重新生成，最终观察到的 SHA-256 为
+  `300e314179f950c8515e5925df144a42be737cbc7d5ec5da22fb60642caa71b1`，仍为77行。
+- 独立公网复验：综合归纳77、复盘啦77、选股宝77、韭研0、淘股吧77；TGB覆盖率100%、主因覆盖率
+  100%、低置信0，`sourceErrors=[]`；公开 `/health` 为 `ok:true`。
+
+Deployment:
+- 生产运行时数据已写入并重折综合主因库；没有部署应用代码，没有手动重启主服务、娱乐服务、Caddy、
+  SSH 或公司端 L2 worker。
+
+Notes for next agent:
+- 2026-09-18 正式文件已受人工来源保护，普通同步与 `force` 不得覆盖；若需更正，必须先备份并重新执行
+  官方原图人工双遍复核及全部终盘池质量闸。此项在原目标交易日的自动化任务中完成，操作收据时间为
+  2026-09-21 08:29 北京时间；不要将该收据误记为 9月21日行情。
