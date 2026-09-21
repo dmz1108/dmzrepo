@@ -17053,3 +17053,34 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-09-21 - Codex - TGB 湖南人盘前原文未发布阻断
+
+Changed:
+- 北京时间 2026-09-21 08:27（星期一交易日）通过日期绑定、备份优先的云端 raw-only 流程强制刷新
+  `@TGB湖南人` 官方原文和原始图片证据。脚本传输前后 SHA-256 一致：
+  `b5bb7ecf97e8576bd77d246c82bf32b3fb10c619990c5a6ca0a2da76df7820c9`。
+- 目标日 manifest 为 `article-not-found`，官方文章0、原始图片0、抓取错误0。云端两份运维日志已追加
+  阻断记录；远端一次性脚本已清理。
+
+Files:
+- `ops/production/requests/2026-09-21-tgb-hunan-raw-evidence.ps1`
+- `docs/DAILY_HANDOFF.md`
+- 生产运行时：`C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-raw\2026-09-21\manifest.json`
+- 云端日志：`C:\PandaDashboard\panda-cloud-ops-2026-06-19.md`、`C:\PandaDashboard\_cloud-change-log-20260705.md`
+
+Validated:
+- 目标日 raw manifest 日期为 `2026-09-21`、状态为 `article-not-found`；无官方文章链接和合格原图文件名。
+  因此人工双遍转录、终盘池对账均无法开始；入库数量0，`missingCodes/extraCodes`、重复、`weakCount`
+  和题材块总和均未进入写前校验，不能视为通过。
+- 2026-09-21 正式 TGB 文件不存在；公开 source-view 返回 `ok=false`、`count=0`、淘股吧0、
+  `error=main reason evidence not found`。公开 `/health` 返回 `ok=true`。
+- 原始目录和云端日志已备份到 `C:\PandaDashboard\backups\tgb-hunan-raw-20260921-20260921-082705`；
+  两份云端日志均包含本次记录，临时脚本已删除。
+
+Deployment:
+- 只刷新生产原始证据并写云端日志；未写正式 TGB 文件，未重折综合主因库，未部署应用代码，未重启服务。
+
+Notes for next agent:
+- 仅在 9 月 21 日官方文章和可辨认白底表格原图发布后重跑同日强刷，再按 SOP 人工双遍转录并
+  完成全部终盘池质量闸；不得改用 9 月 18 日或自动视觉结果补全。
