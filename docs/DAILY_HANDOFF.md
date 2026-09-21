@@ -17053,3 +17053,84 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-09-21 - Codex - TGB 湖南人盘前原文未发布阻断
+
+Changed:
+- 北京时间 2026-09-21 08:27（星期一交易日）通过日期绑定、备份优先的云端 raw-only 流程强制刷新
+  `@TGB湖南人` 官方原文和原始图片证据。脚本传输前后 SHA-256 一致：
+  `b5bb7ecf97e8576bd77d246c82bf32b3fb10c619990c5a6ca0a2da76df7820c9`。
+- 目标日 manifest 为 `article-not-found`，官方文章0、原始图片0、抓取错误0。云端两份运维日志已追加
+  阻断记录；远端一次性脚本已清理。
+
+Files:
+- `ops/production/requests/2026-09-21-tgb-hunan-raw-evidence.ps1`
+- `docs/DAILY_HANDOFF.md`
+- 生产运行时：`C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-raw\2026-09-21\manifest.json`
+- 云端日志：`C:\PandaDashboard\panda-cloud-ops-2026-06-19.md`、`C:\PandaDashboard\_cloud-change-log-20260705.md`
+
+Validated:
+- 目标日 raw manifest 日期为 `2026-09-21`、状态为 `article-not-found`；无官方文章链接和合格原图文件名。
+  因此人工双遍转录、终盘池对账均无法开始；入库数量0，`missingCodes/extraCodes`、重复、`weakCount`
+  和题材块总和均未进入写前校验，不能视为通过。
+- 2026-09-21 正式 TGB 文件不存在；公开 source-view 返回 `ok=false`、`count=0`、淘股吧0、
+  `error=main reason evidence not found`。公开 `/health` 返回 `ok=true`。
+- 原始目录和云端日志已备份到 `C:\PandaDashboard\backups\tgb-hunan-raw-20260921-20260921-082705`；
+  两份云端日志均包含本次记录，临时脚本已删除。
+
+Deployment:
+- 只刷新生产原始证据并写云端日志；未写正式 TGB 文件，未重折综合主因库，未部署应用代码，未重启服务。
+
+Notes for next agent:
+- 仅在 9 月 21 日官方文章和可辨认白底表格原图发布后重跑同日强刷，再按 SOP 人工双遍转录并
+  完成全部终盘池质量闸；不得改用 9 月 18 日或自动视觉结果补全。
+
+## 2026-09-21 - Codex - TGB 湖南人101行盘后正式入库完成
+
+Changed:
+- 北京时间 2026-09-21 星期一盘后再次执行日期绑定的 raw-only 强刷，先备份同日旧证据与两份云端日志。
+  首次刷新已抓到文章，但保护脚本解析中文 CLI 输出时遇到 Windows 编码错误；加 UTF-8 输出设置后重跑，
+  完成 manifest 校验并追加云端 raw 记录。全程未使用 Qwen、OCR 或自动视觉结果。
+- Codex 对官方白底表格原图按 15 个题材块逐行逐字段人工转录，并二次回看原图复核101行；首遍误读的
+  华锡有色代码已按原图纠正为 `600301`。受保护写入先通过全部质量闸、备份受影响运行时文件，再写入
+  TGB 正式库并重折当天综合主因库。两份云端日志已追加收据，一次性云端脚本和 payload 已删除。
+
+Files:
+- `ops/production/requests/2026-09-21-tgb-hunan-raw-evidence.ps1`
+- `ops/production/requests/2026-09-21-tgb-hunan-write.ps1`
+- `docs/DAILY_HANDOFF.md`
+- 生产运行时：`C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-raw\2026-09-21\`
+- 生产运行时：`C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-09-21.json`
+- 生产运行时：`C:\PandaDashboard\kpl-limitup-main-reason-db\2026-09-21.json`
+- 云端日志：`C:\PandaDashboard\panda-cloud-ops-2026-06-19.md`、
+  `C:\PandaDashboard\_cloud-change-log-20260705.md`
+
+Validated:
+- 官方文章 `https://www.tgb.cn/a/2vh089euxrD`，标题 `9.21湖南人涨停复盘+晚间消息汇总`。
+  选定原图 `image-01-06.png`，530×6157、1063566字节、SHA-256
+  `c7ef69d1f9e4e51a42d049311e67f22d37ad344063aeceee65fc06ebaede48ed`；标题日期、
+  白底表格和 `@TGB湖南人` 水印一致。9张引用图中8张下载成功，`image-01-05.png` 返回404，
+  不影响选定的完整表格；排除头像、小图、统计图、重复的21行“市场连板股”摘要及25行“涨停炸板”。
+- 人工题材块计数：医药20、房地产12、大消费10、机器人5、PCB4、大农业4、外贸出口3、
+  AI硬件3、传媒3、军工3、算力3、养老3、公告3、其他热点8、其他个股17，合计101。
+- 终盘原始池103/103唯一，排除北交所 `920427`、`920478` 后合格池101/101；合格代码集 SHA-256
+  `98be9623de3e627f43d15a9bd5889a0d9037665cede36589c86662ce112b554e`。正式候选101/101唯一，
+  `missingCodes=[]`、`extraCodes=[]`、重复0、`weakCount=0`、题材块总和101。代码 `000020`
+  全半角和 `000402` 空格为显式记录的名称展示差异，规范化后相同。人工 payload SHA-256
+  `58207c8bf0903824f535f5ea595551e813672a8a5b4df5ef1e3223a4bd717d34`。
+- 云端实际执行的写入脚本 SHA-256 为 `d5c260702c093e543b648f742261465d452b1c7d37b0313c351fe88aa75f542e`；
+  仓库留存版本仅将原有 GitHub Secret 描述改为本次实际采用的 SSH 临时传输方式，执行逻辑未改。
+- raw 备份：`C:\PandaDashboard\backups\tgb-hunan-raw-20260921-20260921-180711`；正式写入备份：
+  `C:\PandaDashboard\backups\tgb-hunan-manual-20260921-20260921101723`。正式文件 SHA-256
+  `7dc90964cfce0d031a05920475ec37cfe142ec4eb31849f4341eb2450b6954f6`；综合主因库 SHA-256
+  `bfb7c3d2165582d5081c1870b741505dcb8a1db87ca3511d03574a779bb52bac`。
+- 独立公网复验：综合归纳101、复盘啦101、选股宝101、韭研0、淘股吧101；TGB覆盖率和主因覆盖率
+  均100%、低置信0、`sourceErrors=[]`；综合主因当天101行，公开 `/health` 为 `ok:true`。
+  两份云端日志均有 raw 与正式写入记录，远端三个一次性文件已删除。
+
+Deployment:
+- 生产运行时数据已写入并重折综合主因库；未部署应用代码，未重启服务。
+
+Notes for next agent:
+- 2026-09-21 正式文件已受人工来源保护；如需更正，先备份现有文件，再重新完成官方原图人工双遍复核
+  与终盘池质量闸。盘前阻断记录仍保留，盘后收据是同日后续完成状态。
