@@ -1,6 +1,7 @@
 # Date-bound, raw-only @TGB Hunan evidence refresh for 2026-09-21.
 # No OCR, vision, formal rows, combined-reason rebuild, or service restart.
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $project = 'C:\PandaDashboard'
 $day = '2026-09-21'
 $rawRoot = Join-Path $project 'kpl-limitup-main-reason-sources\tgb-hunan-raw'
