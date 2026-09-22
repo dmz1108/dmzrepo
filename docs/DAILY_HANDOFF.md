@@ -17053,3 +17053,30 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-09-22 - Codex - TGB 湖南人官方原图裁切阻断
+
+Changed:
+- 按北京时间 2026-09-22 星期二交易日执行日期绑定的受保护原始证据强刷，保存官方文章及13张原始图片，来源错误为0；两份云端日志已记录强刷和阻断结果。
+- Codex 人工确认 image-01-06.png 是标题、日期、水印匹配的官方白底题材表格；同花顺红图、行情统计图、头像和回帖图均未用于正式行。
+- 官方原图右边缘将半导体块 605178、600641 的细分原因截断；同一图片的官方 max 地址返回完全相同的字节。因此停止转录，不生成或写入正式行。
+
+Files:
+- ops/production/requests/2026-09-22-tgb-hunan-raw-evidence.ps1
+- ops/production/requests/2026-09-22-tgb-hunan-clipped-image-blocked-log.ps1
+- docs/DAILY_HANDOFF.md
+- 生产原始证据：C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-raw\2026-09-22\
+- 云端日志：C:\PandaDashboard\panda-cloud-ops-2026-06-19.md、C:\PandaDashboard\_cloud-change-log-20260705.md
+
+Validated:
+- 官方文章 https://www.tgb.cn/a/2viF9KUNi4A，标题 9.22湖南人涨停复盘+晚间消息汇总。
+- 官方白底表格 image-01-06.png，530×4221、775955字节、SHA-256 e84f0322f89fb1716d955dbdde5d8d8d5ebde9da6f888cdf7bdff8820fa24a73；官网 max 图与抓取图哈希相同。
+- 云端阻断日志执行成功并确认正式文件不存在。因来源字段不完整，未执行逐行双遍复核、终盘池对账或写前质量闸；missingCodes、extraCodes、weakCount 均无可宣称的通过结果。
+- 公网只读复验：source-view 的 2026-09-22 淘股吧为0、综合归纳为62，淘股吧未达健康状态；另有复盘啦串日来源错误，与本次 TGB 原图阻断分别记录。公开 /health 为 ok=true。
+- 原始证据备份：C:\PandaDashboard\backups\tgb-hunan-raw-20260922-20260922-180559；云端日志备份：C:\PandaDashboard\backups\tgb-hunan-blocked-20260922-20260922-180935。
+
+Deployment:
+- 仅生产原始证据与云端日志发生变化；正式 TGB 入库0行，综合主因库未重折，未部署应用代码，未重启服务。
+
+Notes for next agent:
+- 只有官方发布可读且完整的同日 @TGB湖南人 表格后，才能重新人工逐字段转录、二次人工复核并执行完整终盘池质量闸；不得用红图、行情资料或推测补齐裁切内容。
