@@ -9926,6 +9926,8 @@
       grid-column: 1 / -1;
     }
   }
+  .kpi-source-status { flex: 0 0 auto; max-width: 7em; font-size: 11px; line-height: 1.35; color: var(--text-secondary); white-space: nowrap; }
+  .kpi-source-status[hidden] { display: none; }
 </style>
 <link href="/vendor/strategy-workbench.css?v=20260805b" rel="stylesheet">
 <link href="/vendor/review-workbench.css?v=20260718d" rel="stylesheet">
@@ -9936,6 +9938,7 @@
 <div class="topbar">
   <div class="kpi-strip kpi-corner">
     <button class="kpi-home-btn" type="button" onclick="goHome()">主页</button>
+    <span id="kpi-source-status" class="kpi-source-status" role="status" hidden></span>
     <div class="kpi-sep"></div>
     <div class="kpi-item">
       <span class="kpi-label">涨停</span>
@@ -11636,15 +11639,15 @@ function isExternalConceptType(zsType = state.zsType) {
 function isDisabledType(zsType = state.zsType) {
   return EMPTY_ZS_TYPES.has(Number(zsType));
 }
-async function fetchIndexInfo() {
-  if (isDisabledType()) return { DaBanList: {} };
-  if (isExternalConceptType()) {
-    const res = await fetch(`${KPL_STATS_BASE}/api/eastmoney-index-info?day=${encodeURIComponent(state.date)}&_=${Date.now()}`, {
+async function fetchIndexInfo(day = state.date, zsType = state.zsType) {
+  if (isDisabledType(zsType)) return { DaBanList: {} };
+  if (isExternalConceptType(zsType)) {
+    const res = await fetch(`${KPL_STATS_BASE}/api/eastmoney-index-info?day=${encodeURIComponent(day)}&_=${Date.now()}`, {
       cache: 'no-store',
+      signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(`东财指数信息 ${res.status}: ${text.substring(0, 160)}`);
+      throw new Error('东财指数服务暂时不可用');
     }
     return res.json();
   }
@@ -15244,10 +15247,20 @@ async function calcRecentZtCount(stock, day) {
 function renderKPI(info) {
   const db = info?.DaBanList || {};
   state.lastKpi = info;
-  document.getElementById('kpi-zt').textContent = db.tZhangTing ?? '--';
-  document.getElementById('kpi-dt').textContent = db.tDieTing ?? '--';
-  document.getElementById('kpi-up').textContent = db.SZJS ?? '--';
-  document.getElementById('kpi-down').textContent = db.XDJS ?? '--';
+  for (const [id, field] of [['kpi-zt', 'tZhangTing'], ['kpi-dt', 'tDieTing'], ['kpi-up', 'SZJS'], ['kpi-down', 'XDJS']]) {
+    const element = document.getElementById(id);
+    const metric = info?.metrics?.[field];
+    element.textContent = db[field] == null ? '--' : `${db[field]}${metric?.state === 'stale' ? '*' : ''}`;
+    element.title = metric?.state === 'stale' ? `同日缓存，采集时间 ${metric.fetchedAt || ''}`
+      : metric?.state === 'missing' ? (info.message || '数据暂缺') : '';
+  }
+  const status = document.getElementById('kpi-source-status');
+  if (status) {
+    status.hidden = !info?.message;
+    status.textContent = info?.status === 'pending' ? '等待开盘' : info?.stale ? '部分延迟'
+      : info?.message ? '数据暂缺' : '';
+    status.title = info?.message || '';
+  }
   renderBreadthDial(db.SZJS, db.XDJS);
 }
 
@@ -15256,10 +15269,7 @@ function restoreKPIFromSnapshot(info) {
     renderKPI(info);
     return;
   }
-  ['kpi-zt', 'kpi-dt', 'kpi-up', 'kpi-down'].forEach(id => {
-    document.getElementById(id).textContent = '--';
-  });
-  renderBreadthDial(0, 0);
+  renderKPI({ DaBanList: {} });
 }
 
 function polarToPoint(cx, cy, r, deg) {
@@ -16982,11 +16992,15 @@ function loadPublicSmartPicks(boards = []) {
 
 // ====================== Load Flow ======================
 async function loadIndexInfo() {
+  const requestDay = state.date;
+  const requestType = state.zsType;
   try {
-    const info = await fetchIndexInfo();
+    const info = await fetchIndexInfo(requestDay, requestType);
+    if (state.date !== requestDay || state.zsType !== requestType) return;
     renderKPI(info);
   } catch (e) {
-    showError('指数信息加载失败: ' + e.message);
+    if (state.date !== requestDay || state.zsType !== requestType) return;
+    renderKPI({ DaBanList: {}, status: 'unavailable', message: '指数信息暂时不可用，请稍后刷新' });
   }
 }
 
