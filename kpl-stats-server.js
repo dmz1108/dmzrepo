@@ -583,7 +583,8 @@ let eastmoneyConceptSyncState = {
   status: 'idle',
   source: 'eastmoney',
 };
-let eastmoneyIndexInfoCache = null;
+const eastmoneyIndexInfoCache = new Map();
+const eastmoneyIndexInfoInflight = new Map();
 let autoThsConceptSyncDay = '';
 let thsConceptSyncTask = null;
 let thsConceptSyncState = {
@@ -12361,6 +12362,7 @@ async function fetchEastmoneyTopicPoolCount(endpoint, day) {
     date: compactDate(day || chinaNowParts().day),
   });
   const res = await fetch(`https://push2ex.eastmoney.com/${endpoint}?${params}`, {
+    signal: AbortSignal.timeout(6000),
     headers: {
       'User-Agent': 'Mozilla/5.0',
       Referer: 'https://quote.eastmoney.com/ztb/detail',
@@ -12368,63 +12370,116 @@ async function fetchEastmoneyTopicPoolCount(endpoint, day) {
   });
   if (!res.ok) throw new Error(`Eastmoney ${endpoint} ${res.status}`);
   const data = await res.json();
-  return Number(data?.data?.tc) || 0;
+  const count = numOrNull(data?.data?.tc);
+  if (data?.rc !== 0 || !Number.isInteger(count) || count < 0) {
+    throw new Error('invalid-topic-count');
+  }
+  if (compactDate(data?.data?.qdate) !== compactDate(day)) {
+    throw new Error('topic-source-day-mismatch');
+  }
+  return count;
 }
 
-async function fetchEastmoneyBreadthCounts() {
+async function fetchEastmoneyBreadthCounts(day) {
   const secids = ['1.000001', '0.399001', '0.899050'];
   const rows = await mapLimit(secids, 3, async secid => {
     const data = await eastmoneyFetchJson('api/qt/stock/get', {
       fltt: 2,
       invt: 2,
       secid,
-      fields: 'f57,f58,f113,f114',
+      fields: 'f57,f58,f113,f114,f124',
       ut: 'b2884a393a59ad64002292a3e90d46a5',
-    });
-    return data?.data || {};
+    }, { timeoutMs: 6000 });
+    const row = data?.data;
+    const up = numOrNull(row?.f113), down = numOrNull(row?.f114);
+    const timestamp = numOrNull(row?.f124);
+    if (data?.rc !== 0 || row?.f57 !== secid.split('.')[1]
+      || !Number.isInteger(up) || up < 0 || !Number.isInteger(down) || down < 0
+      || !(timestamp > 0)) throw new Error('invalid-breadth');
+    const sourceDay = new Date(timestamp * 1000 + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    if (compactDate(sourceDay) !== compactDate(day)) throw new Error('breadth-source-day-mismatch');
+    return { up, down, asOf: new Date(timestamp * 1000).toISOString() };
   });
-  return rows.reduce((acc, row) => {
-    acc.up += Number(row.f113) || 0;
-    acc.down += Number(row.f114) || 0;
-    return acc;
-  }, { up: 0, down: 0 });
+  return {
+    up: rows.reduce((n, row) => n + row.up, 0),
+    down: rows.reduce((n, row) => n + row.down, 0),
+    asOf: rows.map(row => row.asOf).sort()[0],
+  };
 }
 
 async function fetchEastmoneyIndexInfo(day = chinaNowParts().day) {
   const cacheDay = compactDate(day);
+  if (!/^\d{8}$/.test(cacheDay)) throw new Error('invalid-index-day');
   const now = Date.now();
-  if (
-    eastmoneyIndexInfoCache &&
-    eastmoneyIndexInfoCache.day === cacheDay &&
-    now - eastmoneyIndexInfoCache.savedAtMs < 30 * 1000
-  ) {
-    return eastmoneyIndexInfoCache.data;
-  }
-  const [breadth, limitUpCount, limitDownCount] = await Promise.all([
-    fetchEastmoneyBreadthCounts(),
-    fetchEastmoneyTopicPoolCount('getTopicZTPool', day).catch(() => 0),
-    fetchEastmoneyTopicPoolCount('getTopicDTPool', day).catch(() => 0),
-  ]);
-  const data = {
-    source: 'eastmoney',
-    savedAt: new Date().toISOString(),
-    DaBanList: {
-      tZhangTing: limitUpCount,
-      tDieTing: limitDownCount,
-      SZJS: breadth.up,
-      XDJS: breadth.down,
-    },
-  };
-  eastmoneyIndexInfoCache = {
-    day: cacheDay,
-    savedAtMs: now,
-    data,
-  };
-  return data;
+  const cached = eastmoneyIndexInfoCache.get(cacheDay);
+  if (cached && now - cached.savedAtMs < 30 * 1000
+    && !Object.values(cached.data.metrics).some(metric => metric.state === 'stale'
+      && now - Date.parse(metric.fetchedAt) >= 90 * 1000)) return cached.data;
+  if (eastmoneyIndexInfoInflight.has(cacheDay)) return eastmoneyIndexInfoInflight.get(cacheDay);
+  const pending = (async () => {
+    const targetDay = `${cacheDay.slice(0, 4)}-${cacheDay.slice(4, 6)}-${cacheDay.slice(6)}`;
+    const china = chinaNowParts();
+    const today = compactDate(china.day);
+    const beforeOpen = cacheDay === today && china.hour * 60 + china.minute < 9 * 60 + 25;
+    const unavailable = reason => Promise.reject(new Error(reason));
+    const results = await Promise.allSettled([
+      cacheDay === today && !beforeOpen ? fetchEastmoneyBreadthCounts(day) : unavailable('not-current-session'),
+      !beforeOpen && cacheDay <= today ? fetchEastmoneyTopicPoolCount('getTopicZTPool', day) : unavailable('not-current-session'),
+      !beforeOpen && cacheDay <= today ? fetchEastmoneyTopicPoolCount('getTopicDTPool', day) : unavailable('not-current-session'),
+    ]);
+    const fetchedAtMs = Date.now();
+    const fetchedAt = new Date(fetchedAtMs).toISOString();
+    const data = { source: 'eastmoney', targetDay, savedAt: fetchedAt, fetchedAt,
+      status: 'available', complete: false, stale: false, message: '', DaBanList: {}, metrics: {} };
+    const lastGood = { ...(cached?.lastGood || {}) };
+    const fields = [['SZJS', 0, 'up'], ['XDJS', 0, 'down'], ['tZhangTing', 1], ['tDieTing', 2]];
+    for (const [field, index, member] of fields) {
+      const result = results[index];
+      if (result.status === 'fulfilled') {
+        const value = member ? result.value[member] : result.value;
+        lastGood[field] = { value, fetchedAtMs, fetchedAt, sourceDay: targetDay,
+          asOf: member ? result.value.asOf : null };
+        data.DaBanList[field] = value;
+        data.metrics[field] = { state: 'available', sourceDay: targetDay,
+          asOf: lastGood[field].asOf, fetchedAt };
+      } else {
+        const previous = lastGood[field];
+        // Keep original observation times; failed refreshes must not renew stale values.
+        const canReuse = !beforeOpen && cacheDay === today && previous?.sourceDay === targetDay
+          && fetchedAtMs - previous.fetchedAtMs < 90 * 1000;
+        data.DaBanList[field] = canReuse ? previous.value : null;
+        data.metrics[field] = { state: canReuse ? 'stale' : 'missing',
+          sourceDay: canReuse ? previous.sourceDay : null,
+          asOf: canReuse ? previous.asOf : null, fetchedAt: canReuse ? previous.fetchedAt : null,
+          reason: /source-day-mismatch/.test(result.reason?.message || '') ? 'source-day-mismatch'
+            : result.reason?.message === 'not-current-session' ? 'not-current-session' : 'upstream-unavailable' };
+      }
+    }
+    const metrics = Object.values(data.metrics);
+    data.complete = metrics.every(metric => metric.state === 'available');
+    data.stale = metrics.some(metric => metric.state === 'stale');
+    data.status = beforeOpen ? 'pending' : data.complete ? 'available'
+      : Object.values(data.DaBanList).some(value => value !== null) ? 'partial' : 'unavailable';
+    data.message = beforeOpen ? '等待开盘数据' : data.complete ? ''
+      : data.stale ? '东财部分数据延迟，带 * 数值为同日短时缓存'
+        : cacheDay !== today ? '历史指数信息部分暂缺' : '东财指数数据暂缺，正在等待上游恢复';
+    eastmoneyIndexInfoCache.set(cacheDay, { savedAtMs: fetchedAtMs, data, lastGood });
+    while (eastmoneyIndexInfoCache.size > 4) eastmoneyIndexInfoCache.delete(eastmoneyIndexInfoCache.keys().next().value);
+    return data;
+  })();
+  eastmoneyIndexInfoInflight.set(cacheDay, pending);
+  try { return await pending; }
+  finally { eastmoneyIndexInfoInflight.delete(cacheDay); }
 }
 
 async function eastmoneyIndexInfo(url, req, res) {
   const day = url.searchParams.get('day') || chinaNowParts().day;
+  const isoDay = isoFromCompactDate(day);
+  const timestamp = Date.parse(`${isoDay}T00:00:00Z`);
+  if (!/^(\d{8}|\d{4}-\d{2}-\d{2})$/.test(String(day)) || !Number.isFinite(timestamp)
+    || new Date(timestamp).toISOString().slice(0, 10) !== isoDay) {
+    return send(res, 400, { error: 'invalid day; expected YYYY-MM-DD' });
+  }
   return send(res, 200, await fetchEastmoneyIndexInfo(day));
 }
 
