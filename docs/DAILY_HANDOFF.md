@@ -17053,3 +17053,48 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-09-23 - Codex - TGB 湖南人51行正式入库与公网验收
+
+Changed:
+- 按北京时间 2026-09-23 周三交易日执行日期绑定的受保护 raw-only 强刷；官方文章和22张原始图片
+  全部保存，来源错误为0，云端原始证据与两份日志已在写前备份。
+- Codex 人工选定官方白底 `@TGB湖南人` 表格 `image-01-06.png`，逐题材块完成51行第一遍人工
+  转录和第二遍逐字段人工复核；未使用 Qwen、OCR 或任何自动视觉结果。
+- 排除12行重复的市场连板摘要和26行涨停炸板区；通过终盘池全部质量闸后，备份生产文件、原子写入
+  正式 TGB 来源，重折当日综合主因库，并更新两份云端运维日志。
+
+Files:
+- `ops/production/requests/2026-09-23-tgb-hunan-raw-evidence.ps1`
+- `ops/production/requests/2026-09-23-tgb-hunan-prewrite-inspect.ps1`
+- `ops/production/requests/2026-09-23-tgb-hunan-write.ps1`
+- `tests/tgb-20260923-production-request.test.js`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 官方文章 `https://www.tgb.cn/a/2vkiqZe1mF4`，标题 `9.23湖南人涨停复盘+晚间消息汇总`。
+- 官方原图 `image-01-06.png`，530x3649、642372字节、SHA-256
+  `d5eb63b259ec5af7f93f295f17b0d8a99e498d9f3d18a4a607c437529d20715f`。
+- 题材块：PCB7、房地产7、国产芯片5、仪器仪表4、纺织3、光通信3、其他热点16、其他个股6，
+  8块合计51。
+- 终盘原始池与合格池均为51/51唯一代码，无排除项；人工候选51/51唯一，`missingCodes=[]`、
+  `extraCodes=[]`、重复0、`weakCount=0`。代码集 SHA-256
+  `8353b1b33ece98eb66e2f01d15eb9086b4d7fbefd726cb5581d4e86f79487949`；唯一显式名称差异为
+  `688512` 原图“慧智微”/终盘池“慧智微-U”，按来源忠实保留并登记。
+- 人工 payload SHA-256 `59dc1dc67e097c380b401ca2d64f1402f05c18b19cf6d74dc3fd3a3a2b1eaad6`；
+  正式文件 SHA-256 `1d3e180d42e0d3fcc8b119e31e99f136a292913cef887b57c32ad044a5936e8a`；
+  综合主因 SHA-256 `b10e7c9017ae2f6f96e5abbdd46f17cd0d20fd0e38cc9bc4f80845579afccf4f`。
+- 独立公网复验：综合归纳51、复盘啦51、选股宝51、韭研0、淘股吧51；TGB覆盖率与主因覆盖率
+  100%，低质量0，`sourceErrors=[]`，`/health` 为 `ok=true`。
+- `node tests/tgb-20260923-production-request.test.js`、`node tests/tgb-manual-only.test.js`、
+  `node tests/production-ops-workflow.test.js` 和 `git diff --check` 通过。
+
+Deployment:
+- 原始证据备份：`C:\PandaDashboard\backups\tgb-hunan-raw-20260923-20260923-180731`。
+- 正式写入备份：`C:\PandaDashboard\backups\tgb-hunan-manual-20260923-20260923103700`。
+- 已写入生产运行时数据并重折当日综合主因；未部署应用代码，未重启任何服务。两个云端日志均含
+  正式写入回执，远端临时脚本和 payload 已删除。
+
+Notes for next agent:
+- 当日 TGB 正式来源已受人工来源保护；普通同步和 `force` 不得覆盖。如需纠正，必须先备份当前正式
+  文件、重新人工双遍复核并执行同等终盘池与公网质量闸。
