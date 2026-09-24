@@ -732,4 +732,3 @@ try {
 } finally {
   Remove-Item -LiteralPath $nodeScript -Force -ErrorAction SilentlyContinue
 }
-
