@@ -17070,6 +17070,8 @@ Validated:
   9月25日至9月27日休市，9月28日起照常开市。
 - 公网 `GET /api/latest-trading-day` 仍返回 `2026-09-24`；`source-view?day=2026-09-25&force=1`
   的综合归纳、复盘啦、选股宝、韭研和淘股吧均为0。
+- 独立分支 `codex/tgb-hunan-skip-20260925` 已推送；PR #521：
+  `https://github.com/dmz1108/dmzrepo/pull/521`。仓库无 `codex` 或 `codex-automation` 标签，使用 `documentation`。
 
 Deployment:
 - 未修改任何生产文件或云端运维日志；未写入 TGB 正式库，未重折综合主因库。
