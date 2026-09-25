@@ -17053,3 +17053,28 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-09-25 - Codex - TGB 湖南人中秋节休市跳过
+
+Changed:
+- 按北京时间确认 2026-09-25（周五）为中秋节休市日，依 TGB 湖南人每日复盘 SOP 记录
+  `not-required` 并直接跳过当日入库。
+- 未触发生产 raw-evidence 强刷，未选图、未运行 OCR/Qwen/自动视觉，未进行人工转录或终盘池对账。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 上交所公告 `https://www.sse.com.cn/disclosure/announcement/general/c/c_20260915_10832273.shtml`
+  和深交所通知 `https://www.szse.cn/www/disclosure/notice/general/t20260917_622911.html` 均明确：
+  9月25日至9月27日休市，9月28日起照常开市。
+- 公网 `GET /api/latest-trading-day` 仍返回 `2026-09-24`；`source-view?day=2026-09-25&force=1`
+  的综合归纳、复盘啦、选股宝、韭研和淘股吧均为0。
+
+Deployment:
+- 未修改任何生产文件或云端运维日志；未写入 TGB 正式库，未重折综合主因库。
+- 未部署应用代码，未重启任何服务。
+
+Notes for next agent:
+- 下一个交易日为 2026-09-28（周一）；到时须从当日官方原文强刷开始，不得为 2026-09-25
+  生成占位正式行，也不得沿用 2026-09-24 数据。
