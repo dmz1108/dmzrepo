@@ -17053,3 +17053,31 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-09-26 - Codex - TGB 湖南人中秋休市日跳过
+
+Changed:
+- 北京时间 2026-09-26 为星期六，且沪深交易所中秋节公告均明确 9 月 25 日至 27 日休市、
+  9 月 28 日起恢复交易；按 TGB 湖南人 SOP 记录为 `not-required` 并直接跳过当日入库。
+- 未启动生产 raw-evidence 强制刷新，未搜索或选择文章/图片，未运行 OCR、Qwen 或其他自动视觉，
+  也未开始人工转录、终盘池对账、正式写入或综合主因重折。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 上海证券交易所公告：`https://www.sse.com.cn/disclosure/announcement/general/c/c_20260915_10832273.shtml`。
+- 深圳证券交易所通知：`https://www.szse.cn/www/disclosure/notice/general/t20260917_622911.html`。
+- 公开 `latest-trading-day` 仍为 2026-09-24；2026-09-26 `source-view` 的综合归纳、复盘啦、选股宝、
+  韭研、淘股吧均为0，`sourceErrors=[]`；公开 `/health` 为 `ok=true`。
+- 未生成当日 TGB 正式行；因非交易日，`missingCodes`/`extraCodes`/重复/`weakCount`/题材块合计
+  等写前质量闸不适用。
+- 独立分支 `codex/tgb-hunan-skip-20260926` 已推送；PR #522 为 OPEN/MERGEABLE：
+  `https://github.com/dmz1108/dmzrepo/pull/522`。仓库无 `codex` 或 `codex-automation` 标签，已应用 `documentation`。
+
+Deployment:
+- GitHub 文档记录而已；未触碰云端生产文件或两份云端运维日志。
+- 未部署应用代码，未重启任何服务。
+
+Notes for next agent:
+- 下一次应按北京时间目标日重新判定交易日；不得用 2026-09-24 的文章、图片或正式行代替休市日数据。
