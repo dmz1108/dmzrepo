@@ -17072,6 +17072,8 @@ Validated:
   韭研、淘股吧均为0，`sourceErrors=[]`；公开 `/health` 为 `ok=true`。
 - 未生成当日 TGB 正式行；因非交易日，`missingCodes`/`extraCodes`/重复/`weakCount`/题材块合计
   等写前质量闸不适用。
+- 独立分支 `codex/tgb-hunan-skip-20260926` 已推送；PR #522 为 OPEN/MERGEABLE：
+  `https://github.com/dmz1108/dmzrepo/pull/522`。仓库无 `codex` 或 `codex-automation` 标签，已应用 `documentation`。
 
 Deployment:
 - GitHub 文档记录而已；未触碰云端生产文件或两份云端运维日志。
