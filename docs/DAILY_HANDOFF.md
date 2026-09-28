@@ -17086,6 +17086,9 @@ Deployment:
 - 已写入生产运行时数据并重折 2026-09-28 综合主因库；未部署应用代码，未重启任何服务。
 - 生产回退备份：`C:\PandaDashboard\backups\tgb-hunan-manual-20260928-20260928102314`；原始证据此前
   不存在，因此强制刷新未产生旧 raw 目录备份。
+- 独立分支 `codex/tgb-hunan-20260928` 已推送；PR #524 为 OPEN/MERGEABLE：
+  `https://github.com/dmz1108/dmzrepo/pull/524`。仓库无 `codex` 或 `codex-automation` 标签，已应用
+  `documentation`。
 
 Notes for next agent:
 - 当日 TGB 正式来源及综合主因已通过全部质量闸和独立公网验证；后续不得用普通同步或 force 覆盖受保护
