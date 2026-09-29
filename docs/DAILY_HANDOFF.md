@@ -17053,3 +17053,48 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-09-29 - Codex - TGB 湖南人56行人工复盘完成
+
+Changed:
+- 按北京时间交易日 2026-09-29 强制刷新 `@TGB湖南人` 官方原文和原始图片；raw-only 流程明确
+  `ocrDisabled=true`、`manualRequired=true`、`automaticStructuringDisabled=true`，未使用 Qwen、OCR
+  或其他自动视觉结果生成、补全、猜测或校验正式行。
+- Codex 人工选定官方白底表格 `image-01-06.png`，逐题材块、逐行、逐字段完成56行第一遍转录和第二遍
+  原图人工复核；排除10行重复“市场连板股”摘要、8行“涨停炸板”、同花顺红图、回帖图、头像、
+  二维码、广告和其他非官方主图。
+- 备份现有受影响生产文件后原子写入 `review/tgb-hunan-structured` 当日正式文件，重折当天综合主因库，
+  并把安全回执追加到两份云端运维日志；远端临时脚本和临时 payload 已删除。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 官方文章：`https://www.tgb.cn/a/2vugcQvJe8u`，标题 `9.29湖南人涨停复盘+晚间消息汇总`；raw manifest
+  记录12个图片引用、成功保存11张、`sourceErrors=[]`，唯一404图片不是选定表格证据。
+- 官方原图：`image-01-06.png`，530×3309、570308字节、SHA-256
+  `be6099805ce14296208c39fdcbdd7a4f630c86c82957fa94927fda636a5e0343`。
+- 题材块计数：电池产业链10、PCB 7、AI应用5、大消费6、房地产6、传媒5、分散染料3、其他10、
+  其他个股4，9块合计56。
+- 终盘原始池57/57唯一；排除北交所 `920779` 后合格池56/56；正式行56/56唯一，
+  `missingCodes=[]`、`extraCodes=[]`、`duplicateCodes=[]`、`weakCount=0`、题材块合计56。
+- 唯一来源忠实名称格式差异为 `000002` 万科A/万  科Ａ，经 NFKC+去空格一致；合格池代码集 SHA-256
+  `0c9e09ffa1d7bf4507e2f0dddabef73ce5cad14edbe64b73aa0fe39c847d7c4d`，人工 payload SHA-256
+  `fb7c65152f3dd164a0138aa61ca206a178d5d86ee2fa2548a8f6fd08aac9ae99`。
+- 正式 TGB SHA-256 `689aa5c54bbd5204f1adde2bcdd499db93be559e4e3911cc5170d5afda525a63`；综合主因 SHA-256
+  `5d7344b6089499416fb3fc9fe0446dbf695c7dbf245fa72839029d3a9ec37fc9`。
+- 独立公网复验：综合归纳56、复盘啦56、选股宝56、韭研0、淘股吧56；TGB 行/股票/覆盖率/主因覆盖率
+  为56/56/100%/100%，低置信0，`sourceErrors=[]`；综合库56，复盘覆盖与多源覆盖均100%，
+  `/health` 为 `ok=true`。
+
+Deployment:
+- 已写入生产运行时数据并重折 2026-09-29 综合主因库；未部署应用代码，未重启任何服务。
+- 生产回退备份：`C:\PandaDashboard\backups\tgb-hunan-manual-20260929-20260929101955`；写前正式
+  TGB 文件不存在，备份目录保存了其余11个受影响或证据文件。
+- 独立分支 `codex/tgb-hunan-20260929` 已推送；PR #525 为 OPEN/MERGEABLE：
+  `https://github.com/dmz1108/dmzrepo/pull/525`。仓库无 `codex` 或 `codex-automation` 标签，已应用
+  `documentation`。
+
+Notes for next agent:
+- 2026-09-29 正式 TGB 文件现受人工来源保护；普通同步和 `force` 均不得覆盖。若需更正，须重新备份、
+  重新逐字段人工复核并重跑全部终盘池门禁后再受控替换。
