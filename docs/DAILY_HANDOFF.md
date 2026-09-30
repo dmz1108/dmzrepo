@@ -17053,3 +17053,40 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-09-30 - Codex - 策略L2栏目消失与AXTICK登录失败只读诊断
+
+Changed:
+- 只读核对生产代码、云端操作日志、AI实时摘要和任务持久化文件，未修改应用或扫描条件。
+- 北京时间09:51时当天任务目录尚不存在；09:55:31系统自动派发同花顺医药电商任务，09:55:35
+  返回 `AXTICK /Login business failed: code -2`，worker版本0.1.1，扫描0/50，结果0。
+- 09-29任务共87个且全部error，其中86个为同样的AXTICK登录错误，1个为当日自动扫描窗口已结束。
+  日期目录下真实结构为 `<jobId>/latest.json`，文件包装为 `{version,savedAt,job}`；不得只数日目录
+  的.json文件或漏解job包装而误报历史任务为0。
+- 公司worker在线、configured=true、pending=0，只能证明可接收任务，不能证明AXTICK登录成功。
+  初期“公司在线因此问题不在公司电脑”的推断已被新任务错误否定；当前直接故障是数据服务登录失败。
+- 另有独立上游问题：东财本轮策略响应 `today-realtime-not-ready`；同花顺补选记录一度没有过门槛的
+  候选。不能将这些事实当成全天不派单的结论，也不能将未扫描当作无明星。
+- 前端 `renderStrategyL2History` 在jobs为空时返回空HTML，`loadStrategyL2History` 在HTTP/网络错误时
+  也清空栏目，只有管理员可看。因此无任务/请求失败容易被用户理解为L2功能被移除；代码实际仍在。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 正常Git fetch后main仍为 `7ea037c`；云端主服务 `/health` 为200/ok。
+- 云端主文件 SHA-256 `afd859523fd2d2acaff69e181c083e014ef78c7a6dfa22bbe1316661d4eb98ff`，
+  行情HTML SHA-256 `515be938161e9f0cef480f1a3a13f232d901f7d471e574eb842293dc820c7fbd`。
+- AI只读参数：`/api/ai/strategy-live?day=2026-09-30`；Token在云端安全读取并只放请求头，未打印。
+- 任务证据：09-29、09-30的 `strategy-data/local-l2-jobs/<day>/<jobId>/latest.json`，只汇总状态、
+  扫描数和错误；未导出或提交原始任务、账号、Token、Cookie或L2数据。
+- 未登录历史接口返回403符合权限预期；没有用户当前浏览器会话，未假称已确认其实际登录状态。
+
+Deployment:
+- 仅Git文档交接与生产只读检查；未部署、未重启、未手动派单、未修改生产文件或历史任务。
+
+Notes for next agent:
+- 首先在公司端核对AXTICK登录响应、授权状态和worker实际读取的配置；错误码-2的具体含义尚未
+  获得服务商证据，不得直接断言密码错误或账号到期。不要仅重启云端、放宽门槛或掩盖失败。
+- 恢复后用当日合格板块验证领取、登录、首批结果、完整五档及页面历史响应；没有真实扫描结果前
+  不得声称L2已恢复或当天无明星。另行修复空/失败状态的可见性，保留管理员权限。
