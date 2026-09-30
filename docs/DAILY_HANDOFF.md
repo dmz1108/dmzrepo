@@ -17053,3 +17053,47 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-09-30 - Codex - TGB 湖南人52行人工复盘完成
+
+Changed:
+- 按北京时间交易日 2026-09-30 强制刷新 `@TGB湖南人` 官方原文和原始图片；raw-only 流程明确
+  `ocrDisabled=true`、`manualRequired=true`、`automaticStructuringDisabled=true`，未使用 Qwen、OCR
+  或其他自动视觉结果生成、补全、猜测或校验正式行。
+- Codex 人工选定官方白底表格 `image-01-06.png`，逐题材块、逐行、逐字段完成52行第一遍转录和第二遍
+  原图人工复核；排除12行重复“市场连板股”摘要、12行“涨停炸板”、同花顺红图、其他作者汇总图、
+  行情统计图、头像、二维码和广告。
+- 备份现有受影响生产文件后原子写入 `review/tgb-hunan-structured` 当日正式文件，重折当天综合主因库，
+  并把安全回执追加到两份云端运维日志；远端临时脚本和临时 payload 已删除并确认不存在。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 官方文章：`https://www.tgb.cn/a/2vvUvrQRnAv`，标题 `9.30湖南人涨停复盘+晚间消息汇总`；raw manifest
+  记录14个图片引用且全部保存，`sourceErrors=[]`。
+- 官方原图：`image-01-06.png`，530×3387、568606字节、SHA-256
+  `144d96fd527b907178801658bbf060aa9c9d74a88ebc68d9ae531da4b95774fd`。
+- 题材块计数：医药9、大消费7、电池产业链7、电力6、半导体4、机器人4、地产3、其他热点6、
+  其他个股6，9块合计52。
+- 终盘原始池52/52唯一且无排除项；正式行52/52唯一，`missingCodes=[]`、`extraCodes=[]`、
+  `duplicateCodes=[]`、`weakCount=0`、题材块合计52。
+- 唯一来源忠实名称差异为 `688806` 泰诺麦博/泰诺麦博-U，已显式记录为来源别名；合格池代码集
+  SHA-256 `b16b49e3d353b4823090b563e65bea5327dae748d4982a7456cc841e39bbd40e`，人工 payload
+  SHA-256 `faea54e2582201c5dad09cb50842292628b1d0ad2d609f71cbb53630b658b6cd`。
+- 正式 TGB SHA-256 `b2eb5eb471250589283c08ed94d2ecea42c57874e39ef8c1ef06b43cd1e751ea`；综合主因
+  SHA-256 `d259527dda7aeebca7e99f9c509e3d864f99420db992fa067ba7465897c6de62`。
+- 独立公网复验：综合归纳52、复盘啦52、选股宝52、韭研0、淘股吧52；TGB 行/股票/覆盖率/主因覆盖率
+  为52/52/100%/100%，低置信0，`sourceErrors=[]`；综合库52，复盘覆盖与多源覆盖均100%，
+  `/health` 为 `ok=true`。
+
+Deployment:
+- 已写入生产运行时数据并重折 2026-09-30 综合主因库；未部署应用代码，未重启任何服务。
+- 生产回退备份：`C:\PandaDashboard\backups\tgb-hunan-manual-20260930-20260930102014`，共11个文件。
+- 独立分支 `codex/tgb-hunan-20260930` 已推送；PR #527 为 OPEN/MERGEABLE：
+  `https://github.com/dmz1108/dmzrepo/pull/527`。仓库无 `codex` 或 `codex-automation` 标签，已应用
+  `documentation`。
+
+Notes for next agent:
+- 2026-09-30 正式 TGB 文件现受人工来源保护；普通同步和 `force` 均不得覆盖。若需更正，须重新备份、
+  重新逐字段人工复核并重跑全部终盘池门禁后再受控替换。
