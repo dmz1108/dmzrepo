@@ -17053,3 +17053,30 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-10-11 - Codex - TGB 湖南人周末休市日跳过
+
+Changed:
+- 北京时间目标日 2026-10-11 为星期日；按 TGB 湖南人 SOP 记录为 `not-required` 并直接跳过当日入库。
+- 未启动生产 raw-evidence 强制刷新，未搜索或选择文章/图片，未运行 OCR、Qwen 或其他自动视觉，
+  也未开始人工转录、终盘池对账、正式写入或综合主因重折。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 上海证券交易所 2026 年休市安排列明周末休市：
+  `https://www.sse.com.cn/disclosure/dealinstruc/closed/`。
+- 深圳证券交易所交易日历列明周末休市：
+  `https://www.szse.cn/www/English/services/trading/calendar/index.html`。
+- 公开 `latest-trading-day` 为 2026-10-09；2026-10-11 `source-view` 返回 `error=weekend`，综合归纳、
+  复盘啦、选股宝、韭研、淘股吧均为0，`sourceErrors=[]`；公开 `/health` 为 `ok=true`。
+- 未生成当日 TGB 正式行；因非交易日，`missingCodes`/`extraCodes`/重复/`weakCount`/题材块合计
+  等写前质量闸不适用。
+
+Deployment:
+- GitHub 文档记录而已；未触碰云端生产文件或两份云端运维日志。
+- 未部署应用代码，未重启任何服务。
+
+Notes for next agent:
+- 下一次应按北京时间目标日重新判定交易日；不得用 2026-10-09 的文章、图片或正式行代替周末数据。
