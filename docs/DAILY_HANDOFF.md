@@ -17053,3 +17053,47 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-10-12 - Codex - TGB 湖南人46行人工复盘入库
+
+Changed:
+- 按北京时间 2026-10-12（星期一交易日）执行受保护 raw-evidence 强制刷新；官方文章发布后保存
+  1篇原文和12张原始图片，OCR、Qwen及其他自动视觉结构化始终关闭。
+- Codex 人工选择标题、日期、白底表格和 `@TGB湖南人` 水印均匹配的 `image-01-06.png`，逐题材块、
+  逐行、逐字段完成46行第一遍转录及第二遍原图人工复核；排除同花顺红图、行情/统计图、头像、回帖图、
+  重复市场摘要和25行涨停炸板区。
+- 备份相关生产文件后原子写入当日 `review/tgb-hunan-structured` 正式文件，重折当天综合主因库，
+  并把完整成功回执写入两份云端运维日志；远端临时脚本与人工 payload 已删除。
+- 18:07首次流式强刷在文章未发布时产生一条不准确的0图成功式日志，已紧接追加
+  `tgb-hunan-raw-evidence-blocked-correction` 明确该条不是成功回执；18:15的正式 raw 刷新和18:21的
+  正式写入回执均完整有效。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- Production runtime only: `C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-10-12.json`
+- Production runtime only: same-day combined reason/evidence/quality/auto artifacts and both cloud operation logs
+
+Validated:
+- 官方文章：`https://www.tgb.cn/a/2vPUe28ffoc`，标题 `10.12湖南人涨停复盘+晚间消息汇总`。
+- 官方白底原图：`image-01-06.png`，530×3958、648706字节、SHA-256
+  `5e701c512d71df8c6210885e12b8ed3e9b4e3fdc3248123a7f37f533d1cd3079`。
+- 人工题材块计数：AI短剧9、传媒4、智能电网4、AI应用3、大农业3、大消费3、锂电池3、医药3、
+  其他热点8、其他个股6，合计46；忠实保留 `603533` 的来源文本 `2//5天3板`。
+- 终盘原始池46/46、合格池46/46、无排除项；正式行46/46唯一，`missingCodes=[]`、`extraCodes=[]`、
+  重复0、`weakCount=0`、名称实质不匹配0、题材块合计46。唯一来源格式差异为
+  `002264` 新华都/新 华 都，NFKC加去空格一致；合格代码集 SHA-256
+  `076efb8704c53d81839b30eabcf83d67c93a57bfe8784afaa20c40d128e5762d`。
+- 人工 payload SHA-256 `3f7ba4a15ad197107bd7f554276d5a8fc6e593e95d1ff086533883fa557c9841`；
+  正式 TGB SHA-256 `b8d3bba885f975c6939325ae7b19513cf399b6400a9eafd45c84f108e74c006d`；
+  综合主因 SHA-256 `1184a5ee604c2fb9d2a6b1688dacbb6348a2e90743d3dbc762ad1ef3939d74eb`。
+- 公网独立复核：综合归纳46、复盘啦46、选股宝46、韭研0、淘股吧46；TGB覆盖率和主因覆盖率均100%，
+  低质量0，`sourceErrors=[]`；`/health` 返回 `ok=true`。
+
+Deployment:
+- 已更新生产正式 TGB 数据并重折当天综合主因库；备份目录
+  `C:\PandaDashboard\backups\tgb-hunan-manual-20261012-20261012102158`。
+- 未部署应用代码，未重启任何服务。
+
+Notes for next agent:
+- 下一交易日继续只使用标题、日期、水印均匹配的官方白底原图人工双遍转录；不得把同花顺红图、
+  炸板区、OCR/Qwen或任何自动视觉结果用于正式行。
