@@ -17088,6 +17088,9 @@ Validated:
   综合主因 SHA-256 `1184a5ee604c2fb9d2a6b1688dacbb6348a2e90743d3dbc762ad1ef3939d74eb`。
 - 公网独立复核：综合归纳46、复盘啦46、选股宝46、韭研0、淘股吧46；TGB覆盖率和主因覆盖率均100%，
   低质量0，`sourceErrors=[]`；`/health` 返回 `ok=true`。
+- 独立分支 `codex/tgb-hunan-20261012` 已推送；PR #529 为 OPEN/MERGEABLE：
+  `https://github.com/dmz1108/dmzrepo/pull/529`。仓库无 `codex` 或 `codex-automation` 标签，已应用
+  `documentation`。
 
 Deployment:
 - 已更新生产正式 TGB 数据并重折当天综合主因库；备份目录
