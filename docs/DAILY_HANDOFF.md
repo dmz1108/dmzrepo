@@ -17053,3 +17053,46 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-10-13 - Codex - TGB 湖南人67行人工复盘入库
+
+Changed:
+- 按北京时间 2026-10-13（星期二交易日）执行受保护 raw-evidence 强制刷新；官方文章保存1篇原文和
+  13张原始图片，OCR、Qwen及其他自动视觉结构化始终关闭。
+- Codex 人工选择标题、日期、白底表格和 `@TGB湖南人` 水印均匹配的 `image-01-06.png`，逐题材块、
+  逐行、逐字段完成67行第一遍转录及第二遍原图人工复核；排除同花顺红图、头像、回帖图、广告、
+  10行重复市场连板摘要和19行涨停炸板区。
+- 备份全部受影响的生产文件后原子写入当日 `review/tgb-hunan-structured` 正式文件，重折当天综合
+  主因库，并把 raw 刷新和正式写入回执写入两份云端运维日志；远端临时脚本与人工 payload 已删除。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- Production runtime only: `C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-10-13.json`
+- Production runtime only: same-day combined reason/evidence/quality/auto artifacts and both cloud operation logs
+
+Validated:
+- 官方文章：`https://www.tgb.cn/a/2vRwt5saKig`，标题 `10.13湖南人涨停复盘+晚间消息汇总`。
+- 官方白底原图：`image-01-06.png`，530×4143、688466字节、SHA-256
+  `0ce3f0e6bd710c2203886a16dabd922aec66ef84cd0c9ad2eb14d86ceeeab443`。
+- 人工题材块计数：冰雪经济11、PCB9、大消费6、AI影视5、染料5、医药3、其他热点18、其他个股10，
+  合计67。
+- 终盘原始池67/67、合格池67/67、无排除项；正式行67/67唯一，`missingCodes=[]`、`extraCodes=[]`、
+  重复0、`weakCount=0`、名称差异0、题材块合计67；合格代码集 SHA-256
+  `0eb8e1c11dc462045b29540f0e96799a13816a55726b515f3ad68d3864e8d124`。
+- 人工 payload SHA-256 `bf1281077a49a6df447fd7ec7abd776128a77a13cbaa6e90a75d90c37c5c6616`；
+  正式 TGB SHA-256 `976a6b31aecf12e7442acb6150a6887ef6fa92af4ff6e159bd481822ee052604`；
+  综合主因 SHA-256 `c6611b4a098ad66ad781bf553669083c779f47437d344dcfe0d11dcc1582d5f8`。
+- 公网独立复核：综合归纳67、复盘啦67、选股宝67、韭研0、淘股吧67；TGB覆盖率和主因覆盖率均100%，
+  低质量0，`sourceErrors=[]`；`/health` 返回 `ok=true`。
+- 独立分支 `codex/tgb-hunan-20261013` 已推送；PR #530 为 OPEN/MERGEABLE：
+  `https://github.com/dmz1108/dmzrepo/pull/530`。仓库无 `codex` 或 `codex-automation` 标签，已应用
+  `documentation`。
+
+Deployment:
+- 已更新生产正式 TGB 数据并重折当天综合主因库；备份目录
+  `C:\PandaDashboard\backups\tgb-hunan-manual-20261013-20261013121333`。
+- 未部署应用代码，未重启任何服务。
+
+Notes for next agent:
+- 下一交易日继续只使用标题、日期、水印均匹配的官方白底原图人工双遍转录；不得把同花顺红图、
+  炸板区、OCR/Qwen或任何自动视觉结果用于正式行。
