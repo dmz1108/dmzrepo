@@ -17053,3 +17053,33 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-10-15 - Codex - TGB 湖南人官方文章未发布阻断
+
+Changed:
+- 按北京时间 2026-10-15（星期四交易日）执行日期绑定的受保护 raw-only 强制刷新；命令仅抓取官方
+  原文和原始图片，OCR、Qwen及其他自动视觉结构化均保持关闭。
+- 官方文章尚未发布，raw manifest 明确返回 `article-not-found`；按 SOP 在选图、人工转录、终盘池
+  对账和正式写入前安全停止，并将阻断回执追加到两份云端运维日志。
+- 删除并验证远端日期绑定临时脚本已不存在；没有创建正式 TGB 文件。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- Production runtime only: `C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-raw\2026-10-15\manifest.json`
+- Production runtime only: both cloud operation logs
+
+Validated:
+- 公网 `latest-trading-day` 为 2026-10-15；强刷发生于北京时间 15:43，官方文章数0、下载图片数0，
+  因此文章链接和合格白底原图文件名均不可用。
+- 当日正式文件不存在；本次正式入库0行。由于无官方原图，`missingCodes`、`extraCodes`、重复、
+  `weakCount` 和题材块计数闸均未运行，也没有生成、补全、猜测或校验任何正式行。
+- 公网 source-view 当时为综合归纳36、复盘啦0、选股宝0、韭研0、淘股吧0；复盘啦被串日闸拒收，
+  选股宝上游返回错误；`/health` 为 `ok=true`。
+
+Deployment:
+- 生产仅刷新原始证据 manifest 并追加两份云端阻断日志；未写正式 TGB 库，未重折综合主因库。
+- 未部署应用代码，未重启任何服务。
+
+Notes for next agent:
+- 2026-10-15 尚未完成。官方文章发布后必须重新执行 raw-only 强刷，并且只在标题、日期、白底表格和
+  `@TGB湖南人` 水印全部匹配时，才可开始逐题材块、逐行、逐字段人工双遍转录及完整对账。
