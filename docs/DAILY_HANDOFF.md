@@ -17053,3 +17053,51 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-10-16 - Codex - TGB 湖南人官方图右缘字段截断阻断
+
+Changed:
+- 北京时间 18:01 对 2026-10-16（星期五交易日）执行日期绑定、备份优先的 raw-only 强制刷新；
+  OCR、Qwen 和其他自动视觉结构化均关闭。官方文章及20张原始图片全部保存，两份云端运维日志各追加
+  1条 raw 刷新回执。
+- Codex 人工逐张排除头像、小图、行情/统计图、回帖图、同花顺红色可视化、二维码和广告；唯一正式候选
+  为官方白底 `image-01-06.png`，标题、目标日期和 `@TGB湖南人` 水印均匹配。
+- Codex 按原图逐题材块完成59行第一遍人工转录；只读终盘池检查通过代码集闸。第二遍逐行逐字段人工
+  复核在 `605178 时空科技` 的右缘截断 `detailReason` 处停止，未从同花顺红图或行情知识补全、猜测或校验。
+- 阻断回执在重新确认原图、终盘池和正式文件缺失状态后追加到两份云端日志；所有远端日期绑定临时脚本
+  均已删除并验证不存在。
+
+Files:
+- `ops/production/requests/2026-10-16-tgb-hunan-raw-evidence-aftermarket.ps1`
+- `ops/production/requests/2026-10-16-tgb-hunan-prewrite-inspect.ps1`
+- `ops/production/requests/2026-10-16-tgb-hunan-clipped-field-blocked-log.ps1`
+- `docs/DAILY_HANDOFF.md`
+- Production runtime only: `C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-raw\2026-10-16\`
+- Production runtime only: both cloud operation logs
+
+Validated:
+- 官方文章：`https://www.tgb.cn/a/2vWuvTJBwkA`，标题 `10.16湖南人涨停复盘+晚间消息汇总`；raw manifest
+  为 `raw-evidence-saved`，SHA-256 `660d223a7e7033136d8fb8608875f8b38b28493e7c5a125e73516d2db93a3534`，
+  `sourceErrors=[]`。
+- 官方白底图 `image-01-06.png` 为530×4616、853657字节，SHA-256
+  `f7418ae8ba0577666272ec5cc79474c648a630d5bc59193f4627ce7e2efcab37`；无后缀原图 URL 返回403，
+  文章引用的 `_760w.png` 与已保存文件哈希一致，未发现同一官方表格的完整可辨认替代版本。
+- 人工题材计数：低空经济20、机器人9、半导体5、军工5、AI影视4、资产重组4、大消费3、其他热点6、
+  其他个股3，合计59；顶部市场连板股6行为重复摘要，底部涨停炸板49行排除。
+- 生产终盘原始池61/61唯一，排除北交所 `920006`、`920690` 后合格池59/59唯一；首遍候选与合格池
+  `missingCodes=[]`、`extraCodes=[]`、重复0、题材合计59，代码集 SHA-256
+  `35ced4c2ff587cccf6b545850e3406c601fa368463169a7d8ea12c64adbad093`；唯一名称格式差异为
+  `000573` 粤宏远A/粤宏远Ａ，NFKC一致。
+- 正式质量闸未通过：`605178` 右侧文字在“拟并购嘉合劲威（存储芯片”之后被原图边缘裁断，完整字段
+  无法人工辨认；因此正式入库0行，`weakCount=0` 只代表首遍候选非空，不构成正式通过。
+- 阻断日志备份 `C:\PandaDashboard\backups\tgb-hunan-blocked-20261016-20261016-181513`；两份云端日志
+  均精确包含1条阻断回执。最终正式文件不存在，公网综合归纳/复盘啦/选股宝各59、韭研0、淘股吧0，
+  `sourceErrors=[]`，`/health` 为 `ok=true`。
+
+Deployment:
+- 生产只刷新官方 raw evidence、创建备份并追加两份云端回执；未写正式 TGB 文件，未重折当天综合主因库。
+- 未部署应用代码，未重启主服务、娱乐服务、Caddy 或其他服务。
+
+Notes for next agent:
+- 2026-10-16 TGB 尚未完成。除非官方重新发布完整可辨认的同一白底表格原图，或 Owner 对该日期该字段
+  给出明确一次性人工补全授权，否则不得写入首遍59行候选，不得使用同花顺红图、OCR/Qwen 或行情知识补齐。
