@@ -17123,3 +17123,36 @@ Notes for next agent:
   明确为false。近跌停判定、竞价全额成交及未成交撤单仍是参考模型假设。
 - L2登录故障仍需单独修复并复测后才能开始依赖L2的前瞻观察。本轮不声称已修复。
 - 先做独立方法复核与真实时间/成交模拟；Owner确认前不可把研究工具挂入生产或交易账户。
+
+## 2026-10-16 - Codex - Owner同意模拟方向并锁定研究契约
+
+Changed:
+- Owner回复“同意”后，锁定mainline-leader-paper-v1机器契约，原有数值不变；回放默认值直接
+  引用契约，非默认参数在结果中明确标为覆盖，不能伪装锁定基线。
+- 新增本地原始观察日志准备工具：登记规则哈希和实际时间，原文/元数据双摘要、拒绝覆盖，
+  区分候选/无信号证据/数据故障/执行反馈及历史/迟到记录；不自动接受任何样本或成交。
+- Owner同意不被扩大为实盘、合并、部署或定时任务授权。当前未开始60个交易日的自动观察。
+
+Files:
+- `research/mainline-leader-paper-v1.contract.json`
+- `tools/paper-mainline-observations.js`
+- `tools/research-mainline-portfolio.js`
+- `tests/paper-mainline-observations.test.js`
+- `docs/strategy/2026-10-16-mainline-quant-strategy-v1.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 与原回放套件共同验证规则一致性、参数覆盖披露、登记幂等/漂移拒绝、北京时间跨日及截止点、
+  原始文件完整性、不自动确认信号/成交、CLI不可回填自己的观察时间。
+- 共28项测试通过；同一生产形状输入下6组回放的summary/trades/orders/equity/skipped/issues
+  与上一提交逐字段一致，没有借锁定规则改收益。规则SHA为
+  `657c89daf73096c21efda7f279dd172255b2b3713ee4eeedfabf7a5782811b5a`。
+- 原始记录只写本地忽略目录，不入Git、不送云端、不发送给其他agent。
+
+Deployment:
+- 仅研究Draft PR与本地准备；未合并、未部署、未重启、未改生产、未下单，未创建自动化。
+
+Notes for next agent:
+- 仍需独立方法复核、L2采集恢复验证、完整时点候选/交易状态与执行反馈适配；观察工具只保存
+  原始证据，不自行判定交易日、接口字段真实或可成交性。哈希不等于可信时间戳或授权签名。
+- 不要把experiment.json的登记时间当作模拟交易启动日；有效信号/成交计数尚未启动。

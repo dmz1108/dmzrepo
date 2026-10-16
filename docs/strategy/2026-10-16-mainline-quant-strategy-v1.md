@@ -147,3 +147,25 @@ Owner要求：研究一套可行的量化交易策略。
 - [上交所程序化交易实施细则](https://www.sse.com.cn/lawandrules/sselawsrules2025/trade/universal/c/c_20250612_10781696.shtml)。
 
 本轮无生产修改、无部署、无重启；离线工具不读密钥、不访问网络、不触碰正式v2/v3排序。
+
+## Owner同意后的锁定与准备
+
+2026-10-16 Owner回复“同意”，按上述方向继续准备模拟验证。这不是授权实盘、合并、部署、
+改正式榜或启动定时任务。独立方法复核及数据/成交适配仍待完成。
+
+- `research/mainline-leader-paper-v1.contract.json` 是本轮机器可读契约；回放默认参数直接读取它，
+  数值不变。研究工具若另传参数，会显示parameterOverrides和matchesLockedParameters=false，
+  不把另一组阈值冒充已锁定基线。成本压力情景同样显式标记。
+- `tools/paper-mainline-observations.js register` 在本地忽略目录登记规则哈希、真实登记时间，
+  重复登记不覆盖；规则漂移则拒绝继续。默认路径为tmp/quant-paper/mainline-leader-paper-v1。
+- `record --day=YYYY-MM-DD --kind=candidate-capture --input=捕获文件` 保存原始JSON及校验摘要。
+  kind还支持no-signal-evidence、data-failure和execution-feedback，互不混装。
+- CLI不接受自报采集时间；按北京时间和16:00截止点区分同日、迟到、历史补录和未来日期。
+  该分类不是交易日历校验，也不证明接口内sourceDay/asOf可靠，更不是可信硬件时间戳。
+- `verify --day=YYYY-MM-DD --id=记录ID` 重算原文和元数据哈希。文件仅防静默覆盖和普通损坏，
+  不宣称能抵抗拥有本机完整权限的人修改全部内容。中断造成的不完整文件不得自动当作有效记录。
+- 所有原始记录初始都是unvalidated-evidence，不自动计为合格信号、成交或观察交易日；
+  连候选为零的文件也不能未经验证就判为“当日无主线”。实际记录器、原始时间/规则校验、
+  券商/盘口反馈适配及独立复核通过后，才另行批准有效样本与模拟交易开始。
+- 当前阶段是“规则已登记、前瞻准备中”，不是已开始60日自动观察。未创建自动化、未联网采集、
+  未产生新候选或委托，不会补造7/8月的前瞻记录。原始记录不入Git、不上传公开站点。

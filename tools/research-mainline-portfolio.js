@@ -3,13 +3,8 @@
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 
-const DEFAULTS = Object.freeze({
-  initialCash: 100000, stockWeight: 0.20, grossWeight: 0.60, familyWeight: 0.40,
-  maxPositions: 3, entryPremium: 0.03, stopLoss: 0.06,
-  pauseDailyLoss: 0.02, pauseDrawdown: 0.06,
-  commissionRate: 0.0003, minimumCommission: 5, sellTaxRate: 0.0005,
-  frictionBpsPerSide: 10,
-});
+const CONTRACT = require('../research/mainline-leader-paper-v1.contract.json');
+const DEFAULTS = Object.freeze({ ...CONTRACT.simulationParameters });
 
 const validBar = bar => bar && ['open', 'close', 'high', 'low'].every(key => Number.isFinite(bar[key]) && bar[key] > 0)
   && bar.high >= Math.max(bar.open, bar.close) && bar.low <= Math.min(bar.open, bar.close);
@@ -190,7 +185,10 @@ function simulate(signals, history, config, adjusted) {
     }
   }
   const closedWins = trades.filter(trade => trade.netPnl > 0).length;
-  return { version: 'mainline-leader-paper-v1', options,
+  const parameterOverrides = Object.fromEntries(Object.keys(DEFAULTS)
+    .filter(key => options[key] !== DEFAULTS[key]).map(key => [key, options[key]]));
+  return { version: CONTRACT.strategyVersion, options, parameterOverrides,
+    matchesLockedParameters: Object.keys(parameterOverrides).length === 0,
     summary: { signalEvents: signals.length, signalDays: new Set(signals.map(signal => signal.day)).size,
       closedTrades: trades.length, tradedSignalDays: new Set(trades.map(trade => trade.signalDay)).size,
       startDay: options.startDay, endDay: options.endDay,
