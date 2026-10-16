@@ -17086,3 +17086,40 @@ Deployment:
 Notes for next agent:
 - 优先验证主线龙头短持候选；原明星封板瞬间模型须另有真实时间/成交证据，本轮次日再买变体
   不能代替它。历史归因、修正与选择偏差尚未完全排除，先核验再做样本外/模拟交易。
+
+## 2026-10-16 - Codex - 主线龙头量化研究规则及资金受限模拟
+
+Changed:
+- Owner要求完整量化方案；提出确认主线龙头短持研究版，写明前瞻信号、限价/数量、仓位、
+  时间退出、T+1防守、成本、数据故障停用及推广门槛，没有批准实盘或改现行评分。
+- 新增纯离线现金/持仓回放，股数在前一晚按限价和费用预留，不能看开盘后重选，不能提前
+  用收盘卖出所得；不强制卖出跌停持仓，缺值与公司行为告警保留。
+- 对原规范池取未复权价格重算：7月条件性净值-3.750%（3笔/2信号日），8月+7.126%
+  （13笔/7信号日）；每边50bp摩擦压力下分别-4.171%、+5.121%。8月前两笔盈利占净利润84.99%。
+- 坚持保留7月失败结果，不再调参把它修成盈利。旧候选时点、全量性、实际成交均未证实；
+  特别记录历史formal池不等于严格前瞻准入池，不称无偏回测或完整月收益。
+
+Files:
+- `tools/research-mainline-portfolio.js`
+- `tests/research-mainline-portfolio.test.js`
+- `docs/strategy/2026-10-16-mainline-quant-strategy-v1.md`
+- `docs/strategy/2026-10-16-july-august-candidate-study.md`（补后续规则与反例指引）
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 新旧研究工具共21项测试通过，覆盖现金对账、整手、限价不递补、T+1、不能预支卖款、跌停
+  延期/未平仓、缺值不移日、同日未知OHLC不影响开盘准入、公司行为退出日检查和风险停用。
+- 65条未复权日K请求成功；仅云端进程查询公开行情，未写生产运行库。
+- 规范信号SHA `03fba1cfcc71690853abaf2410369c18ec74353f5d4a1fc3aca9e80b2efecb5d`。
+- 未复权价SHA `3b6535da4fcf4848c58b9f8540dfde2640fa9fdf6266a79f4180bd3ce84b02cf`。
+- 输出SHA `837d4bb59640e8ac3e267de03d2f377fc4ef7ede6340e688cd09c7957e52fb52`。
+- 原始JSON、逐笔账本和计算输出仅在忽略目录，不入Git；公开交易制度以交易所/税务机关为依据。
+
+Deployment:
+- 延续研究Draft PR；未合并、未部署、未重启、未修改云端配置或正式榜、未下单。
+
+Notes for next agent:
+- 不把mechanicsComplete误解为策略有效：signalTimingVerified/signalUniverseComplete/fillsVerified
+  明确为false。近跌停判定、竞价全额成交及未成交撤单仍是参考模型假设。
+- L2登录故障仍需单独修复并复测后才能开始依赖L2的前瞻观察。本轮不声称已修复。
+- 先做独立方法复核与真实时间/成交模拟；Owner确认前不可把研究工具挂入生产或交易账户。
