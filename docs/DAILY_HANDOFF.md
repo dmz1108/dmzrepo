@@ -17053,3 +17053,37 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-10-16 - Codex - TGB 湖南人盘中官方文章未发布阻断
+
+Changed:
+- 按北京时间 2026-10-16（星期五交易日）执行日期绑定的受保护 raw-only 强制刷新；命令仅抓取官方
+  原文和原始图片，OCR、Qwen 及其他自动视觉结构化均保持关闭。
+- 强刷于北京时间 15:10 完成，raw manifest 返回 `article-not-found`；按 SOP 在选图、人工转录、终盘池
+  对账和正式写入前安全停止，并将阻断回执追加到两份云端运维日志。
+- 远端日期绑定临时脚本已删除并验证不存在；没有创建正式 TGB 文件。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+- Production runtime only: `C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-raw\2026-10-16\manifest.json`
+- Production runtime only: both cloud operation logs
+
+Validated:
+- 强刷结果为官方文章0、下载图片0，正式文件不存在；manifest SHA-256
+  `5dc9afe50310b0fd94c96c8796fc60ce7c155cc9b98e28c8661877a3ac414b47`。
+- 两份云端运维日志均精确包含1条本次回执；刷新前证据与两份日志已备份到
+  `C:\PandaDashboard\backups\tgb-hunan-raw-20261016-20261016-151031`。
+- 公网 `latest-trading-day` 当时仍为 2026-10-15；2026-10-16 `source-view` 为综合归纳0、复盘啦0、选股宝0、
+  韭研0、淘股吧0，`error=main reason evidence not found`、`sourceErrors=[]`；`/health` 为 `ok=true`。
+- 因无官方原图，本次正式入库0行；`missingCodes`、`extraCodes`、重复、`weakCount` 和题材块计数闸
+  均未运行，也没有生成、补全、猜测或校验任何正式行。
+
+Deployment:
+- 生产仅刷新原始证据 manifest、创建安全备份并追加两份云端阻断日志；未写正式 TGB 库，
+  未重折综合主因库。
+- 未部署应用代码，未重启任何服务。
+
+Notes for next agent:
+- 2026-10-16 尚未完成；本次运行早于收盘与官方复盘常规发布时间。盘后官方文章发布后必须重新执行
+  raw-only 强刷，并且只在标题、日期、官方白底表格和 `@TGB湖南人` 水印全部匹配时，才可开始逐题材块、
+  逐行、逐字段人工双遍转录及完整终盘池对账。
