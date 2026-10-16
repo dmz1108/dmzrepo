@@ -17053,3 +17053,106 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-10-16 - Codex - 7月8月主线龙头与明星首轮候选研究
+
+Changed:
+- 对7月旧回看、9月18日保存的8月逐源回看做去重分析；确认7月5个代表明星中有3个confirmed、
+  2个expected，禁止混算。8月有22个confirmed和36个龙头事件，分布在7个信号日。
+- 读取64股及上证指数07-01至09-08日K，65请求成功；固定D0收盘/D1开盘、D1/D2/D3退出，
+  独立记录成本、行情差异和执行不确定性，未改变正式策略。
+- 主要基线为D+1开盘参考价至D+2收盘：7月严格同日同族confirmed主线龙头6事件/3日均值
+  +1.089%，8月龙头36事件/7日+2.836%；这不是实际成交或组合收益，更非盈利承诺。
+- 7月宽口径10龙头包含expected主线，结果单独保留；7/8月数据版本不同，不合并总胜率。
+
+Files:
+- `tools/research-star-leader-events.js`
+- `tests/research-star-leader-events.test.js`
+- `docs/strategy/2026-10-16-july-august-candidate-study.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 6项聚焦测试通过；缺失不填零、按交易日对齐、同日股票去重、同族confirmed约束均有回归。
+- 旧回看与新行情有4处大于0.055个百分点差异（600547、601991），保留双方数值，不覆盖旧记录。
+- 信号输入SHA-256 `03fba1cfcc71690853abaf2410369c18ec74353f5d4a1fc3aca9e80b2efecb5d`；
+  行情SHA-256 `7404f035a2c1827accc21811dc034be5c06fe1d2be76f8925b3dd51d9aa651b8`；
+  输出SHA-256 `1a22f0269bc8a78882f140112cf9d9956981b9e7a82f262bdf6ac0bdb1cb03d2`。
+- 运行时输入、逐股数据和结果仅保存在本机忽略目录，未入Git。
+
+Deployment:
+- 只读研究：云端只读缓存/公开行情，本地离线计算；未改生产代码、运行库、云端日志，未部署、
+  未重启、未下单。新增工具不被主服务引用。
+
+Notes for next agent:
+- 优先验证主线龙头短持候选；原明星封板瞬间模型须另有真实时间/成交证据，本轮次日再买变体
+  不能代替它。历史归因、修正与选择偏差尚未完全排除，先核验再做样本外/模拟交易。
+
+## 2026-10-16 - Codex - 主线龙头量化研究规则及资金受限模拟
+
+Changed:
+- Owner要求完整量化方案；提出确认主线龙头短持研究版，写明前瞻信号、限价/数量、仓位、
+  时间退出、T+1防守、成本、数据故障停用及推广门槛，没有批准实盘或改现行评分。
+- 新增纯离线现金/持仓回放，股数在前一晚按限价和费用预留，不能看开盘后重选，不能提前
+  用收盘卖出所得；不强制卖出跌停持仓，缺值与公司行为告警保留。
+- 对原规范池取未复权价格重算：7月条件性净值-3.750%（3笔/2信号日），8月+7.126%
+  （13笔/7信号日）；每边50bp摩擦压力下分别-4.171%、+5.121%。8月前两笔盈利占净利润84.99%。
+- 坚持保留7月失败结果，不再调参把它修成盈利。旧候选时点、全量性、实际成交均未证实；
+  特别记录历史formal池不等于严格前瞻准入池，不称无偏回测或完整月收益。
+
+Files:
+- `tools/research-mainline-portfolio.js`
+- `tests/research-mainline-portfolio.test.js`
+- `docs/strategy/2026-10-16-mainline-quant-strategy-v1.md`
+- `docs/strategy/2026-10-16-july-august-candidate-study.md`（补后续规则与反例指引）
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 新旧研究工具共21项测试通过，覆盖现金对账、整手、限价不递补、T+1、不能预支卖款、跌停
+  延期/未平仓、缺值不移日、同日未知OHLC不影响开盘准入、公司行为退出日检查和风险停用。
+- 65条未复权日K请求成功；仅云端进程查询公开行情，未写生产运行库。
+- 规范信号SHA `03fba1cfcc71690853abaf2410369c18ec74353f5d4a1fc3aca9e80b2efecb5d`。
+- 未复权价SHA `3b6535da4fcf4848c58b9f8540dfde2640fa9fdf6266a79f4180bd3ce84b02cf`。
+- 输出SHA `837d4bb59640e8ac3e267de03d2f377fc4ef7ede6340e688cd09c7957e52fb52`。
+- 原始JSON、逐笔账本和计算输出仅在忽略目录，不入Git；公开交易制度以交易所/税务机关为依据。
+
+Deployment:
+- 延续研究Draft PR；未合并、未部署、未重启、未修改云端配置或正式榜、未下单。
+
+Notes for next agent:
+- 不把mechanicsComplete误解为策略有效：signalTimingVerified/signalUniverseComplete/fillsVerified
+  明确为false。近跌停判定、竞价全额成交及未成交撤单仍是参考模型假设。
+- L2登录故障仍需单独修复并复测后才能开始依赖L2的前瞻观察。本轮不声称已修复。
+- 先做独立方法复核与真实时间/成交模拟；Owner确认前不可把研究工具挂入生产或交易账户。
+
+## 2026-10-16 - Codex - Owner同意模拟方向并锁定研究契约
+
+Changed:
+- Owner回复“同意”后，锁定mainline-leader-paper-v1机器契约，原有数值不变；回放默认值直接
+  引用契约，非默认参数在结果中明确标为覆盖，不能伪装锁定基线。
+- 新增本地原始观察日志准备工具：登记规则哈希和实际时间，原文/元数据双摘要、拒绝覆盖，
+  区分候选/无信号证据/数据故障/执行反馈及历史/迟到记录；不自动接受任何样本或成交。
+- Owner同意不被扩大为实盘、合并、部署或定时任务授权。当前未开始60个交易日的自动观察。
+
+Files:
+- `research/mainline-leader-paper-v1.contract.json`
+- `tools/paper-mainline-observations.js`
+- `tools/research-mainline-portfolio.js`
+- `tests/paper-mainline-observations.test.js`
+- `docs/strategy/2026-10-16-mainline-quant-strategy-v1.md`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 与原回放套件共同验证规则一致性、参数覆盖披露、登记幂等/漂移拒绝、北京时间跨日及截止点、
+  原始文件完整性、不自动确认信号/成交、CLI不可回填自己的观察时间。
+- 共28项测试通过；同一生产形状输入下6组回放的summary/trades/orders/equity/skipped/issues
+  与上一提交逐字段一致，没有借锁定规则改收益。规则SHA为
+  `657c89daf73096c21efda7f279dd172255b2b3713ee4eeedfabf7a5782811b5a`。
+- 原始记录只写本地忽略目录，不入Git、不送云端、不发送给其他agent。
+
+Deployment:
+- 仅研究Draft PR与本地准备；未合并、未部署、未重启、未改生产、未下单，未创建自动化。
+
+Notes for next agent:
+- 仍需独立方法复核、L2采集恢复验证、完整时点候选/交易状态与执行反馈适配；观察工具只保存
+  原始证据，不自行判定交易日、接口字段真实或可成交性。哈希不等于可信时间戳或授权签名。
+- 不要把experiment.json的登记时间当作模拟交易启动日；有效信号/成交计数尚未启动。

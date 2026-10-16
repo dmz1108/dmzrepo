@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "strategyVersion": "mainline-leader-paper-v1",
+  "approval": {
+    "ownerDecisionDay": "2026-10-16",
+    "scope": "offline-research-and-paper-validation-preparation",
+    "independentReview": "pending",
+    "productionDeploymentApproved": false,
+    "liveTradingApproved": false
+  },
+  "timezone": "Asia/Shanghai",
+  "signalCutoff": "16:00:00+08:00",
+  "simulationParameters": {
+    "initialCash": 100000,
+    "stockWeight": 0.2,
+    "grossWeight": 0.6,
+    "familyWeight": 0.4,
+    "maxPositions": 3,
+    "entryPremium": 0.03,
+    "stopLoss": 0.06,
+    "pauseDailyLoss": 0.02,
+    "pauseDrawdown": 0.06,
+    "commissionRate": 0.0003,
+    "minimumCommission": 5,
+    "sellTaxRate": 0.0005,
+    "frictionBpsPerSide": 10
+  },
+  "signalRequirements": {
+    "familyLimitUpMinimum": 3,
+    "confirmedStarMinimum": 1,
+    "expectedStarAloneIsTradable": false,
+    "leaderRanks": [1, 2],
+    "sameDaySourceEvidenceRequired": true,
+    "positiveSourceFundFlowRequired": true,
+    "l2SuccessRequired": true,
+    "attributionValidationRequired": true,
+    "unadjustedExecutionPriceRequired": true
+  },
+  "reviewMilestones": {
+    "observedTradingDaysMinimum": 60,
+    "closedTradesMinimum": 100,
+    "independentSignalDaysMinimum": 30,
+    "milestonesDoNotAutomaticallyApproveLiveTrading": true
+  },
+  "restrictions": [
+    "No production dependency, scheduler, broker connection or trading orders.",
+    "No automatic acceptance of raw captures as point-in-time signals or executed fills.",
+    "Missing data, no signal, late captures and retrospective material remain distinct.",
+    "Threshold changes require a new strategy version and owner review."
+  ]
+}
