@@ -17053,3 +17053,29 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-10-18 - Codex - TGB 湖南人非交易日跳过
+
+Changed:
+- 使用北京时间确认 2026-10-18 为星期日；按 `docs/ops/TGB_HUNAN_DAILY_SOP.md` 将当日任务记为
+  `not-required`，在生产 raw-evidence 刷新之前停止。
+- 官方文章链接与图片文件名均为不适用；未检索或选用文章、图片，未运行 OCR、Qwen 或其他自动视觉，
+  未创建人工正式行。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 北京时间检查为 `2026-10-18 17:58:40 CST`、`Sunday`；公开 `/api/latest-trading-day` 返回 `2026-10-16`。
+- 公开 2026-10-18 source-view 返回 `error=weekend`；综合归纳、复盘啦、选股宝、韭研、淘股吧均为0，
+  `sourceErrors=[]`。
+- 公开 `/health` 返回 `ok=true`。
+- 正式入库数为0；`missingCodes`、`extraCodes`、重复、`weakCount` 和题材块合计校验均不适用。
+
+Deployment:
+- 未触发受保护生产原文刷新，未写正式 TGB 文件，未备份云端旧文件，未重折综合主因库，未改云端运维日志。
+- 未部署应用代码，未重启主服务、娱乐服务、Caddy 或其他服务。
+
+Notes for next agent:
+- 下一个交易日从 raw-only 强制刷新开始；只有标题、日期、官方白底表格与 `@TGB湖南人` 水印均匹配时，
+  才能进行 Codex 原图人工双遍转录和终盘池质量闸。
