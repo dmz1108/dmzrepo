@@ -17053,3 +17053,53 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-10-21 - Codex - 完成 TGB 湖南人 10.21 人工复盘
+
+Changed:
+- 北京时间 18:07 对 2026-10-21（星期三交易日）执行日期绑定、备份优先的官方 raw-only 强制刷新；
+  OCR、Qwen 和其他自动视觉结构化均关闭。官方文章 `10.21湖南人涨停复盘+晚间消息汇总`
+  （https://www.tgb.cn/a/2w4LEthwhEN）及22张原始图片全部保存。
+- 人工确认 `image-01-06.png` 是标题、日期、白底表格和 `@TGB湖南人` 水印均匹配的官方图；
+  图片 530x4032、672992 字节、SHA-256
+  `112dce2678c13bbd8d780aa35d73449a79d95ec34ac501dbfc4883c24cef5fba`。排除市场连板重复摘要16行、
+  涨停炸板19行、同花顺红图、回帖图、头像、二维码和广告。
+- Codex 对官方原图逐题材块、逐行、逐字段人工转录并进行第二遍人工复核，共50行：短剧传媒7、
+  机器人7、数据要素7、大消费5、算力5、医药4、福建3、冰雪经济2、其他个股10。未使用 OCR、
+  Qwen 或其他自动视觉结果生成、补全、猜测或校验正式行。
+- 写前及写后闸均通过：终盘池 raw=50、eligible=50，无排除项；正式行50且唯一，
+  `missingCodes=[]`、`extraCodes=[]`、`duplicateCodes=[]`、`weakCount=0`、题材块合计50。显式保留
+  原图名称格式差异 `002181` 粤传媒 / 终盘库粤 传 媒（NFKC+去空格一致）。
+- 已备份后写入当日 `review/tgb-hunan-structured` 正式文件并重折当天综合主因库；两份云端日志均追加
+  唯一回执，所有远端临时脚本和负载已删除。
+
+Files:
+- `ops/production/requests/2026-10-21-tgb-hunan-raw-evidence.ps1`
+- `ops/production/requests/2026-10-21-tgb-hunan-prewrite-inspect.ps1`
+- `ops/production/requests/2026-10-21-tgb-hunan-write.ps1`
+- `docs/DAILY_HANDOFF.md`
+- Production runtime only: `C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-raw\2026-10-21\`
+- Production runtime only: `C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-structured\2026-10-21.json`
+- Production runtime only: 当日综合主因相关文件和两份云端运维日志
+
+Validated:
+- Raw manifest SHA-256：`c0481ec86e8dc11fb9ca76fd06c2de723a5d7ee8ee09297a63e65cb491b9a0a5`；
+  eligible code-set SHA-256：`3d2c7f2ce413d650621651566596f7fc69fc09992c397feccfd4ca9decbfab5d`；
+  人工负载 SHA-256：`bff41778a593f42266e329ad4b717e5eca2bba10a02417a3678ed7e0623ab0f2`。
+- 原始证据备份：`C:\PandaDashboard\backups\tgb-hunan-raw-20261021-20261021-180750`；正式写入备份：
+  `C:\PandaDashboard\backups\tgb-hunan-manual-20261021-20261021101508`；正式 TGB SHA-256：
+  `cf4362e0677fa8ed165e744d9d049a412e1c740da7ece46d8cd99b6324fb8665`；重折后综合主因 SHA-256：
+  `fb40728bd2f5df3029cdd4e87d2929eaf74ab6168d91d8c5e82cd3321932ce83`。
+- 公网 `source-view`：综合归纳50、复盘啦50、选股宝50、韭研0、淘股吧50；TGB 覆盖和主因覆盖
+  均为100%、低置信0、`sourceErrors=[]`。公网主因 day 接口为50行，质量接口覆盖率100%，
+  `latest-trading-day=2026-10-21`，`/health` 返回 `ok=true`。
+- 两份云端日志回执各1条；四个远端临时文件均不存在；写入请求内建回滚闸、嵌入 JavaScript
+  `node --check` 和 `git diff --check` 均通过。
+
+Deployment:
+- 只更新生产运行时复盘数据、备份和云端日志；未部署应用代码。
+- 只执行当日综合主因重折；未重启主服务、娱乐服务、Caddy 或其他服务。
+
+Notes for next agent:
+- 2026-10-21 TGB 湖南人正式复盘已经完成，不应重复覆盖。后续仍必须使用官方白底原图人工双遍复核，
+  并在 missing/extra/duplicate/weak、排除集合和题材块合计全部通过后才可写正式库。
