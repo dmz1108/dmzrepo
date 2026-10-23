@@ -17053,3 +17053,40 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-10-23 - Codex - TGB 湖南人官方文章未发布阻断
+
+Changed:
+- 北京时间 18:07 和 18:15 对 2026-10-23（星期五交易日）执行日期绑定、备份优先的官方 raw-only
+  强制刷新；OCR、Qwen 和其他自动视觉结构化均关闭。两次结果均为 `article-not-found`，官方文章0、
+  原始图片0、`sourceErrors=[]`；官方博客实时页面仍只列到 10.22。
+- 两次刷新均先备份当时的 raw 目录和两份云端日志，再把唯一审计回执追加到两份云端日志；第二次
+  manifest SHA-256 为 `f13eff9b07d2954c0e8597df7de157bfc0b3b1088790f218c3770d74c9146085`。
+- 只读写前池检查通过：终盘池 raw=82、唯一=82；排除北交所 `920091`、`920207` 后 eligible=80、
+  唯一=80，代码集 SHA-256 为 `b1da11fa3385978c7033f0fe2fde631da5109aaf2b39b3f1f814e81c18d664c1`；
+  当日正式 TGB 文件不存在。
+- 因无当日官方文章、无标题/日期/水印匹配的官方白底表格原图，按 SOP 阻断。未转录、未写正式行，
+  未用其他来源替代、补全、猜测或校验。
+
+Files:
+- `ops/production/requests/2026-10-23-tgb-hunan-raw-evidence.ps1`
+- `ops/production/requests/2026-10-23-tgb-hunan-prewrite-inspect.ps1`
+- `docs/DAILY_HANDOFF.md`
+- Production runtime only: `C:\PandaDashboard\kpl-limitup-main-reason-sources\tgb-hunan-raw\2026-10-23\manifest.json`
+- Production runtime only: 两份云端运维日志及 raw/log 备份目录
+
+Validated:
+- 第二次 raw/log 备份：`C:\PandaDashboard\backups\tgb-hunan-raw-20261023-20261023-181558`；
+  manifest 状态为 `article-not-found`，正式文件不存在，正式行0。
+- 公网 source-view：综合归纳80、复盘啦80、选股宝80、韭研0、淘股吧0，`sourceErrors=[]`；
+  `/health` 返回 `ok=true`。
+- 远端日期绑定 raw/inspect 临时脚本均已清理并验证不存在；`git diff --check` 通过。
+
+Deployment:
+- 只更新生产 raw manifest、备份和两份云端日志；未创建或覆盖正式 TGB 文件。
+- 未重折当天综合主因库，未部署应用代码，未重启主服务、娱乐服务、Caddy 或其他服务。
+
+Notes for next agent:
+- 当 `@TGB湖南人` 发布 10.23 官方文章后，必须重新执行 raw-only 强刷，确认文章标题/日期及官方白底
+  表格水印，Codex 人工逐块逐行逐字段转录并二次人工复核，再以本日80只 eligible 终盘池重跑全部
+  missing/extra/duplicate/weak/题材计数闸门；当前缺少官方原图，严禁提前写正式库。
