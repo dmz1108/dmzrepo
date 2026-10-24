@@ -17053,3 +17053,28 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-10-24 - Codex - TGB 湖南人周末非交易日跳过
+
+Changed:
+- 以北京时间确认 2026-10-24 为星期六，按 `docs/ops/TGB_HUNAN_DAILY_SOP.md` 和
+  `docs/ops/REVIEW_SOURCE_HEALTH_SOP.md` 记录当日 TGB 湖南人复盘为 `not-required`。
+- 因目标日为非交易日，未触发生产 raw-evidence 强制刷新，未查找或选择文章/图片，未使用
+  OCR、Qwen 或其他自动视觉，未执行人工转录、终盘池对账、正式写入或综合主因重折。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 北京时间为 2026-10-24 18:07 CST；目标日是星期六。
+- 公网 `/api/latest-trading-day` 仍为 2026-10-23；2026-10-24 source-view 的综合归纳、复盘啦、
+  选股宝、韭研、淘股吧均为0行，`sourceErrors=[]`；公网 `/health` 返回 `ok=true`。
+- 当日文章链接、原图文件名和正式入库数量均为不适用；正式行写入为0。
+
+Deployment:
+- GitHub 文档记录 only；未触碰云端运行时文件或云端变更日志。
+- 未部署应用代码，未重启主服务、娱乐服务、Caddy 或其他服务。
+
+Notes for next agent:
+- 下一北京时间交易日再从受保护的官方 raw-only 强刷开始；本次周末跳过不需要补抓、
+  补写正式 TGB 文件或重折综合主因库。
