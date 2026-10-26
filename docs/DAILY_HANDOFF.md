@@ -17053,3 +17053,47 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-10-26 - Codex - TGB 湖南人55行人工复盘完成
+
+Changed:
+- 按北京时间 2026-10-26 交易日执行受保护 raw-only 强制刷新；官方文章及10张原始图片保存成功，
+  `ocrDisabled=true`、`automaticStructuringDisabled=true`，并在两份云端日志各写入一条原始证据 receipt。
+- Codex 人工选定官方白底 `@TGB湖南人` 表格 `image-01-06.png`，排除同花顺红图
+  `image-01-09.png`、头像、小图、广告、重复市场摘要和23行涨停炸板；按题材块逐行人工转录并完成第二遍逐字段人工复核。
+- 受保护写入先固定人工 payload、文章和原图哈希，重验终盘池、名称差异和全部质量闸；备份后原子写入
+  `tgb-hunan-structured` 当日正式文件，重折当日综合主因库，并在两份云端日志各写入一条正式写入 receipt。
+
+Files:
+- `ops/production/requests/2026-10-26-tgb-hunan-raw-evidence.ps1`
+- `ops/production/requests/2026-10-26-tgb-hunan-prewrite-inspect.ps1`
+- `ops/production/requests/2026-10-26-tgb-hunan-write.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 官方文章 `https://www.tgb.cn/a/2wd41EDkVhp`，标题 `10.26湖南人涨停复盘+晚间消息汇总`；官方原图
+  `image-01-06.png`，530x3658、690249字节、SHA-256
+  `97d0f6241706e3827042ddb648fe4d0b4c710e1a12deaf0c982c77593d1aec30`；raw manifest SHA-256
+  `516da82f0c390e8ef81d788a0edc73e223d4c0fbfa4cc69983cae66bb59ee8c8`。
+- 终盘原始池55/55唯一，无 ST、北交所或新股前缀排除项；正式55/55唯一，`missingCodes=[]`、
+  `extraCodes=[]`、重复0、`weakCount=0`；题材块机器人30、大消费9、数据要素6、其他10，合计55。
+- 名称格式差异显式记录：`000635` 英力特/英 力 特、`002095` 生意宝/生 意 宝，均按
+  NFKC+去空格一致；合格代码集 SHA-256
+  `b2c4fdc8650aa6298ed2731b03a05cf9ec801deddb2998844fe704ea810189c2`，人工 payload SHA-256
+  `20801cc5de0089b329ff7d11cf456c4374df37c8f764c1dcb57e4165dd6798b0`。
+- 正式文件 SHA-256 `88612b43c1a6d331406b99034a801e8f0d6cb60c37cfe49aeb96adb389cb66e8`；综合主因库
+  SHA-256 `2a69b575a055ffd48a6ed5f62b2577a5a0af1b6ce161d465e1493ed5f296330a`。
+- 公网验证：最新交易日为2026-10-26；综合归纳55、复盘啦55、选股宝55、韭研0、淘股吧55，
+  TGB覆盖率/主因覆盖率100%、低质量0、`sourceErrors=[]`；主因 day 55/55唯一、quality总数55且覆盖率100%；`/health` 为 `ok=true`。
+
+Deployment:
+- 生产 raw 备份 `C:\PandaDashboard\backups\tgb-hunan-raw-20261026-20261026-180335`；正式写入备份
+  `C:\PandaDashboard\backups\tgb-hunan-manual-20261026-20261026100945`。
+- 已写入生产运行时数据并重折综合主因库；未部署应用代码，未重启任何服务。首次写入调用因远端环境变量
+  引用错误在读取 payload、备份或写入前安全失败；修正调用方式后同一脚本和同一 payload 哈希成功。
+- 远端临时 raw/prewrite/write 脚本和 payload 均已删除并验证不存在；原工作区未跟踪
+  `panda-discovery-db.json` 保持不变。
+
+Notes for next agent:
+- 本日正式 TGB 与综合主因已完成；后续不得用普通同步或 `force` 覆盖人工来源。若需更正，必须先备份
+  当前正式文件、重新人工双遍复核并通过全部55股质量闸，再受控替换和重折。
