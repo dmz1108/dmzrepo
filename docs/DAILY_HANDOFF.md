@@ -17053,3 +17053,51 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-10-29 - Codex - TGB 湖南人39行人工复盘完成
+
+Changed:
+- 按北京时间 2026-10-29 交易日执行受保护 raw-only 强制刷新；官方文章及37张原始图片保存成功，
+  `ocrDisabled=true`、`automaticStructuringDisabled=true`，两份云端日志各写入一条原始证据 receipt。
+- Codex 人工选定标题、日期和 `@TGB湖南人` 水印均匹配的官方白底表格 `image-01-06.png`；排除
+  行情图、统计图、`题材为王` 回帖表、回帖重复转发图、头像、小图、10行市场连板摘要和25行涨停炸板区，
+  按题材块逐行逐字段人工转录并完成第二遍原图人工复核，未使用 OCR、Qwen 或其他自动视觉结果生成、
+  补全、猜测或校验正式行。
+- 受保护写入固定人工 payload、文章和原图哈希，重验终盘池、名称差异和全部质量闸；备份后原子写入
+  `tgb-hunan-structured` 当日正式文件，重折当日综合主因库，两份云端日志各写入一条正式写入 receipt。
+
+Files:
+- `ops/production/requests/2026-10-29-tgb-hunan-raw-evidence.ps1`
+- `ops/production/requests/2026-10-29-tgb-hunan-prewrite-inspect.ps1`
+- `ops/production/requests/2026-10-29-tgb-hunan-write.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 官方文章 `https://www.tgb.cn/a/2wi4VQpNgkB`，标题 `10.29湖南人涨停复盘+晚间消息汇总`；官方原图
+  `image-01-06.png`，530x3377、561006字节、SHA-256
+  `5e7eea7efab725f31b7c559b1390769321053270769589dfd5ae4debda27a481`；raw manifest SHA-256
+  `a5a2c7d645d55fad957c01934223ef23c271ed1d473a47c82689bf7bc9dbf6d1`。
+- 终盘原始池39/39唯一，无排除项；正式39/39唯一，`missingCodes=[]`、`extraCodes=[]`、重复0、
+  `weakCount=0`，无名称差异；题材块业绩增长10、商业航天9、机器人7、大消费6、冰雪经济3、
+  AI影视2、其他个股2，合计39。
+- 合格代码集 SHA-256 `6609bf9dfde9c80301d7801fcf560036f5b1548d69ef992283c59af259a2ba33`；
+  人工 payload SHA-256 `233fd151d7bf098e1ccff18a68776953530e7243ecab96cebb93d44dabe916fe`。
+- 正式文件 SHA-256 `96de33e4bf01875c1e3401e01d27d986e704a4ec0908927769758d1980bfee8a`；综合主因库
+  SHA-256 `56a4ba4e2675f02016cf36ccbbb3d067db5da4794641b8faf3f0f99b2234fd58`。
+- 公网强制刷新验证：综合归纳39、复盘啦39、选股宝39、韭研0、淘股吧39；TGB 39/39唯一，
+  弱字段0，覆盖率/主因覆盖率100%、低置信0、`sourceErrors=[]`；主因 day 与 quality 均为39，
+  review coverage/main-reason coverage/clear-main-reason coverage 均为100%，`/health` 为 `ok=true`。
+  综合质量层另有7只低置信项，属于多源综合结果，不是 TGB 正式行弱项。
+- 第一次只读写前检查调用因调用方传入错误脚本哈希，在执行脚本前安全失败；相同脚本按实际哈希重试通过，
+  未造成生产写入或状态变化。
+
+Deployment:
+- 生产 raw 备份 `C:\PandaDashboard\backups\tgb-hunan-raw-20261029-20261029-181011`；正式写入备份
+  `C:\PandaDashboard\backups\tgb-hunan-manual-20261029-20261029102153`。
+- 已写入生产运行时数据并重折综合主因库；未部署应用代码，未重启任何服务。
+- 远端临时 raw/prewrite/write 脚本和 payload 均已删除并验证不存在；原工作区未跟踪
+  `panda-discovery-db.json` 保持不变。
+
+Notes for next agent:
+- 本日正式 TGB 与综合主因已完成；后续不得用普通同步或 `force` 覆盖人工来源。若需更正，必须先备份
+  当前正式文件、重新人工双遍复核并通过全部39股质量闸，再受控替换和重折。
