@@ -17053,3 +17053,30 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-11-04 - Codex - TGB 湖南人盘中原始证据请求
+
+Changed:
+- 北京时间 2026-11-04 10:57 为星期三交易日但仍在盘中；新增日期绑定、备份优先的受保护生产请求，
+  只强制刷新 `@TGB湖南人` 当日官方文章与原始图片证据。
+- 请求严格限定官方文章链接和 `11.4湖南人涨停复盘` 标题；允许安全记录 `article-not-found`，但绝不调用
+  OCR、Qwen 或自动视觉，也不生成正式行、不重折综合主因、不重启服务。
+
+Files:
+- `ops/production/requests/2026-11-04-tgb-hunan-raw-evidence.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 公开 `latest-trading-day` 仍为 2026-11-03；2026-11-04 source-view 当前综合归纳、复盘啦、选股宝、
+  韭研、淘股吧均为0，返回 `main reason evidence not found`，`sourceErrors=[]`；公开 `/health` 为 `ok=true`。
+- 当前无可供人工选择、逐行转录和第二遍复核的同日官方白底表格证据，因此正式行保持0；未执行终盘池
+  对账、正式写入或综合主因重折。
+
+Deployment:
+- GitHub only；受保护生产请求需在合并到 `main` 并经 `production` 环境批准后才能执行。
+- 本条记录时未改变生产运行时数据，未部署应用代码，未重启任何服务，云端日志未改变。
+
+Notes for next agent:
+- 先执行本日期绑定 raw-only 请求；若返回 `article-not-found`，保留明确阻断并在盘后重新运行。
+- 只有文章日期、标题、官方白底表格和 `@TGB湖南人` 水印全部匹配后，才可由 Codex 人工双遍转录；
+  任一图片或字段不可辨认都不得写正式库。
