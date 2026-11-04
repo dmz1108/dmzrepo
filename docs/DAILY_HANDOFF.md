@@ -17080,3 +17080,28 @@ Notes for next agent:
 - 先执行本日期绑定 raw-only 请求；若返回 `article-not-found`，保留明确阻断并在盘后重新运行。
 - 只有文章日期、标题、官方白底表格和 `@TGB湖南人` 水印全部匹配后，才可由 Codex 人工双遍转录；
   任一图片或字段不可辨认都不得写正式库。
+
+## 2026-11-04 - Codex - TGB 湖南人收盘后审批阻断复核
+
+Changed:
+- 北京时间 2026-11-04 18:07 收盘后重新检查受保护原始证据请求和公开数据状态；PR #550 仍为
+  `OPEN/CLEAN`，无评审、无评论，日期绑定请求尚未合并到 `main`，因此没有绕过审批派发生产工作流。
+- 保留同一 raw-only 请求作为唯一审批入口；未创建重复请求，未使用 OCR、Qwen 或任何自动视觉，
+  也没有从公开搜索结果生成、补全或校验正式行。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 公开 `/api/latest-trading-day` 已为 2026-11-04；当日 source-view 为综合归纳116、复盘啦0、
+  选股宝116、韭研0、淘股吧0，淘股吧无同日正式行；`sourceErrors` 仅报告复盘啦抓取失败。
+- 公开 `/health` 为 `ok:true`。未发现已运行的 2026-11-04 受保护生产工作流；无 manifest、官方文章
+  链接或原图文件名可供本轮按 SOP 人工双遍转录。
+
+Deployment:
+- GitHub documentation only；生产运行时未改变，云端日志未改变，正式 TGB 行仍为0，综合主因未因
+  TGB 重折，未部署应用代码，未重启服务。
+
+Notes for next agent:
+- 先由独立评审合并 PR #550，并由 Owner 批准 `production` 环境运行；随后派发日期绑定 raw-only
+  请求。若 manifest 为 `article-not-found` 或官方白底表格/水印/字段不可辨认，继续阻断且不得写正式库。
