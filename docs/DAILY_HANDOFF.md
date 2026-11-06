@@ -17053,3 +17053,35 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-11-06 - Codex - TGB 湖南人原始证据审批阻断
+
+Changed:
+- 北京时间 2026-11-06 18:06 为星期五交易日且已经收盘；新增日期绑定、备份优先的受保护生产请求，
+  只强制刷新 `@TGB湖南人` 当日官方文章与原始图片证据。
+- 请求严格限定官方文章链接和 `11.6湖南人涨停复盘` 标题；允许安全记录 `article-not-found`，但绝不调用
+  OCR、Qwen 或自动视觉，也不生成正式行、不重折综合主因、不重启服务。
+- 2026-11-04 的 PR #550 和 2026-11-05 的 PR #551 仍为 `OPEN/MERGEABLE`、无评审且未进入 `main`；
+  本轮没有绕过独立评审和 `production` 环境审批来派发生产工作流。
+
+Files:
+- `ops/production/requests/2026-11-06-tgb-hunan-raw-evidence.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 公开 `latest-trading-day` 已为 2026-11-06；当日 source-view 为综合归纳32、复盘啦0、选股宝32、
+  韭研0、淘股吧0，`sourceErrors` 仅报告复盘啦抓取失败；公开 `/health` 为 `ok=true`。
+- 当前没有经受保护强刷生成的同日 manifest、官方文章链接或原图文件名，因此正式行保持0；未执行终盘池
+  对账、正式写入或综合主因重折，也未使用公开搜索代替受保护原始证据。
+
+Deployment:
+- GitHub only；受保护生产请求需由独立评审合并到 `main`，并经 Owner 批准 `production` 环境运行。
+- 本条记录时未改变生产运行时数据，云端日志未改变，未部署应用代码，未重启任何服务。
+- 独立分支 `codex/tgb-hunan-20261106`，首个提交 `cc849fd`；PR #552：
+  `https://github.com/dmz1108/dmzrepo/pull/552`。已应用 `documentation` 标签；仓库没有 `codex` 或
+  `codex-automation` 标签。
+
+Notes for next agent:
+- 先合并并批准本日期绑定 raw-only 请求；若 manifest 为 `article-not-found`，保留明确阻断并稍后重试。
+- 只有文章日期、标题、官方白底表格和 `@TGB湖南人` 水印全部匹配后，才可由 Codex 人工双遍转录；
+  任一图片或字段不可辨认都不得写正式库。
