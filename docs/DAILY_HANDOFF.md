@@ -17053,3 +17053,26 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-11-07 - Codex - TGB 湖南人非交易日跳过
+
+Changed:
+- 北京时间 2026-11-07 18:02 为星期六，公开 `latest-trading-day` 仍为 2026-11-06；按
+  `docs/ops/TGB_HUNAN_DAILY_SOP.md` 的非交易日规则直接跳过当日 TGB 湖南人复盘。
+- 未触发受保护 raw-evidence 强刷，也未选择图片、人工转录、终盘池对账、写正式库或重折综合主因库。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `https://market.dreamerqi.com/api/latest-trading-day` 返回 `2026-11-06`，确认目标日
+  2026-11-07 不是交易日；公开 `/health` 返回 `ok=true`。
+- 当日文章链接、图片文件名和正式入库数量均为不适用；`missingCodes`、`extraCodes`、重复、
+  `weakCount` 和题材块计数校验均未启动，未产生任何正式候选行。
+
+Deployment:
+- GitHub only；未触碰生产运行时数据或云端运维日志，未部署应用代码，未重启任何服务。
+
+Notes for next agent:
+- 下一个北京时间交易日重新从交易日确认和受保护官方原始证据强刷开始；不得把 2026-11-06 的文章或
+  图片复用于本日，也不得为非交易日创建正式 TGB 文件。
