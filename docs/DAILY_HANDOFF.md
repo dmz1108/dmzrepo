@@ -17059,8 +17059,8 @@ Notes for next agent:
 Changed:
 - 确认北京时间 2026-11-11 为星期三交易日，公开 `latest-trading-day` 同为 2026-11-11；通过
   日期绑定、备份优先的受保护生产请求强制刷新 `@TGB湖南人` 官方原文和原始图片证据。
-- 生产 raw-only 流程明确返回 `article-not-found`：官方文章0、图片0、同日正式文件不存在；18:09
-  复查官方博客仍未发布，因此按 `docs/ops/TGB_HUNAN_DAILY_SOP.md` 停止，不选图、不转录、
+- 生产 raw-only 流程明确返回 `article-not-found`：官方文章0、图片0、同日正式文件不存在；截至18:18:50
+  连续复查官方博客仍未发布，因此按 `docs/ops/TGB_HUNAN_DAILY_SOP.md` 停止，不选图、不转录、
   不做写前终盘池对账、不写正式库、不重折。
 - 两份云端运维日志各追加一条幂等 receipt；远端临时脚本已删除并验证不存在。
 
