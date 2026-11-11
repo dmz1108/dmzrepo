@@ -17053,3 +17053,38 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-11-11 - Codex - TGB 湖南人官方文章未发布阻断
+
+Changed:
+- 确认北京时间 2026-11-11 为星期三交易日，公开 `latest-trading-day` 同为 2026-11-11；通过
+  日期绑定、备份优先的受保护生产请求强制刷新 `@TGB湖南人` 官方原文和原始图片证据。
+- 生产 raw-only 流程明确返回 `article-not-found`：官方文章0、图片0、同日正式文件不存在；18:09
+  复查官方博客仍未发布，因此按 `docs/ops/TGB_HUNAN_DAILY_SOP.md` 停止，不选图、不转录、
+  不做写前终盘池对账、不写正式库、不重折。
+- 两份云端运维日志各追加一条幂等 receipt；远端临时脚本已删除并验证不存在。
+
+Files:
+- `ops/production/requests/2026-11-11-tgb-hunan-raw-evidence.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- raw 请求 SHA-256 `7ed9b1849e5bc196fb97e11b7ced54efbf23ad1b0f4f5259d0ce9e2667d364ff`；运行结果
+  `officialTgbOnly=true`、`ocrDisabled=true`、`manualRequired=true`、
+  `automaticStructuringDisabled=true`，raw manifest SHA-256
+  `e40a077ec63189a6ec6d10ca02353af9d9c06b52d3ccec043977949a60502b49`。
+- 云端备份 `C:\PandaDashboard\backups\tgb-hunan-raw-20261111-20261111-180902`；两份日志中的
+  receipt `tgb-hunan-raw-evidence-2026-11-11-e40a077ec63189a6` 均精确出现1次。
+- 公开 source-view 强制刷新后：综合归纳84/84唯一、复盘啦0、选股宝84/84唯一、韭研0、淘股吧0；
+  淘股吧正式统计不存在，另有复盘啦抓取失败的 `sourceErrors`；公开 `/health` 为 `ok=true`。
+- 文章链接、官方白底表格文件名和正式入库数量分别为不适用、不适用、0；`missingCodes`、
+  `extraCodes`、重复、`weakCount`、题材块计数和名称差异校验均未启动，不能声明通过。
+
+Deployment:
+- 生产只保存了 `article-not-found` raw manifest 并更新两份云端运维日志；未部署应用代码，未写正式
+  TGB 行，未重折综合主因库，未重启任何服务。
+
+Notes for next agent:
+- 官方文章发布后必须重新执行同日受保护强刷；只有标题、日期、官方白底表格和 `@TGB湖南人` 水印
+  全部匹配，才可由 Codex 开始逐题材块、逐行、逐字段人工双遍转录。不得从84股行情池、其他来源、
+  OCR、Qwen 或任何自动视觉结果生成、补全、猜测或校验正式行。
