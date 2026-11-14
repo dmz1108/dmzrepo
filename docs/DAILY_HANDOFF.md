@@ -17053,3 +17053,28 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-11-14 - Codex - TGB 湖南人复盘非交易日跳过
+
+Changed:
+- 按北京时间核验目标日 2026-11-14；公开 `latest-trading-day` 返回 2026-11-13，目标日
+  source-view 明确返回 `error=weekend`，因此依据 TGB 湖南人每日 SOP 记录为非交易日并直接跳过。
+- 未运行 TGB raw-evidence 强制刷新，未选择或读取图片，未执行人工转录、二次人工复核、终盘池对账、
+  正式写入或综合主因重折。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- `GET /api/latest-trading-day?day=2026-11-14` 返回 `day=2026-11-13`、`source=limit-up-db`。
+- `GET /api/limit-up-main-reason-db/source-view?day=2026-11-14&force=1` 返回 `ok=false`、
+  `error=weekend`，综合归纳、复盘啦、选股宝、韭研、淘股吧均为0；公开 `/health` 返回 `ok=true`。
+- 文章链接、官方白底表格图片文件名和正式入库数量分别为不适用、不适用、0；`missingCodes`、
+  `extraCodes`、重复、`weakCount`、题材块计数和名称差异校验因非交易日不适用，不能声明通过。
+
+Deployment:
+- 未触碰生产运行时文件，未更新云端运维日志，未部署代码，未重折综合主因库，未重启任何服务。
+
+Notes for next agent:
+- 下一个北京时间交易日重新从交易日核验开始；只有交易日才进入受保护 raw-evidence 强刷和官方原图
+  人工双遍转录流程，禁止用 OCR、Qwen 或任何自动视觉结果生成、补全、猜测或校验正式行。
