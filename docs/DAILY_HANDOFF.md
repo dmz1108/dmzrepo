@@ -17053,3 +17053,25 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-11-15 - Codex - TGB 湖南人周末跳过
+
+Changed:
+- 北京时间目标日 2026-11-15 为星期日；按 `docs/ops/TGB_HUNAN_DAILY_SOP.md` 非交易日规则直接记录跳过。
+- 未运行受保护 raw-evidence 强刷，未选择官方原图，未人工转录或二次复核，未启动终盘池对账，未写正式库，未重折综合主因库。
+
+Files:
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- 公开 `latest-trading-day?day=2026-11-15` 返回 2026-11-13。
+- 公开 2026-11-15 source-view 返回 `ok=false`、`error=weekend`；综合归纳、复盘啦、选股宝、韭研、淘股吧均为0，`sourceErrors=[]`。
+- 公开 `/health` 返回 `ok=true`。
+- 文章链接与官方白底表格图片文件名不适用；正式入库0。`missingCodes`、`extraCodes`、重复、`weakCount`、题材块计数和名称差异校验因非交易日不适用，未声明通过。
+
+Deployment:
+- 未部署；未触碰生产正式数据，未重启服务，未更新云端运维日志。
+
+Notes for next agent:
+- 下一个北京时间交易日从交易日核验重新开始；只有交易日才进入受保护 raw-evidence 强刷、官方白底 `@TGB湖南人` 原图人工双遍转录和全量对账门禁。
+- 当前仓库及 `origin/main` 未提供 `AGENTS.md`；本次按 `CLAUDE.md`、执行 SOP、协作规范和 TGB 专项 SOP 执行。
