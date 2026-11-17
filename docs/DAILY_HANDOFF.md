@@ -17053,3 +17053,24 @@ Deployment:
 Notes for next agent:
 - 只读检查必须确认正式文件不存在、80条候选与过滤终盘池完全一致后，才可进行第二遍原图逐字段
   复核和受保护写入；任一 missing/extra/重复/弱字段或未记录名称差异都必须阻断。
+
+## 2026-11-17 - Codex - Prepared TGB Hunan raw-evidence refresh
+
+Changed:
+- Added the date-bound, backup-first protected production request for the 2026-11-17 official `@TGB湖南人` raw evidence refresh.
+- The request is raw-only: it cannot invoke OCR/Qwen, write formal rows, rebuild combined reasons, or restart services.
+
+Files:
+- `ops/production/requests/2026-11-17-tgb-hunan-raw-evidence.ps1`
+- `docs/DAILY_HANDOFF.md`
+
+Validated:
+- Confirmed 2026-11-17 is a Beijing trading-day Tuesday.
+- Reviewed the request against the prior raw-evidence template and protected-operation requirements.
+
+Deployment:
+- Not yet deployed; the protected workflow may run only after this request is reviewed and merged to `main`.
+- No service restart.
+
+Notes for next agent:
+- After raw evidence succeeds, inspect only the matching white table image with `@TGB湖南人` watermark; manually transcribe and reconcile all rows before a separate protected write request.
